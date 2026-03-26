@@ -81,8 +81,11 @@ export class EditorScene extends Phaser.Scene {
     // Listen for EventBus events from React
     this.registerEventListeners();
 
-    // Emit ready event so React knows to send map data
-    EventBus.emit("editor:scene-ready");
+    // Emit ready event on next frame — ensures create() is fully complete
+    // and if scene is destroyed (React Strict Mode), the timer won't fire
+    this.time.delayedCall(0, () => {
+      EventBus.emit("editor:scene-ready");
+    });
   }
 
   // ---------------------------------------------------------------------------
