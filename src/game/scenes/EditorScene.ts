@@ -97,19 +97,40 @@ export class EditorScene extends Phaser.Scene {
       this.loadMap(data as EditorMapData);
     });
 
-    listen("editor:set-tool", (tool: unknown) => {
-      this.currentTool = tool as EditorTool;
+    listen("editor:set-tool", (data: unknown) => {
+      const payload = data as { tool?: string } | string;
+      const tool = typeof payload === "string" ? payload : (payload as { tool: string }).tool;
+      if (tool) this.currentTool = tool as EditorTool;
     });
 
-    listen("editor:set-layer", (layer: unknown) => {
-      this.activeLayer = layer as EditorLayer;
+    listen("editor:set-layer", (data: unknown) => {
+      const payload = data as { layer?: string } | string;
+      const layer = typeof payload === "string" ? payload : (payload as { layer: string }).layer;
+      if (layer === "objects") {
+        // "Objects" layer in palette maps to "object" tool in Phaser
+        this.currentTool = "object";
+      } else if (layer === "floor" || layer === "walls") {
+        this.activeLayer = layer;
+        // Switch back to paint tool if coming from object mode
+        if (this.currentTool === "object") {
+          this.currentTool = "paint";
+        }
+      }
     });
 
-    listen("editor:set-tile", (tile: unknown) => {
-      if (typeof tile === "number") {
-        this.selectedTile = tile;
-      } else if (typeof tile === "string") {
-        this.selectedObjectType = tile;
+    listen("editor:set-tile", (data: unknown) => {
+      const payload = data as Record<string, unknown>;
+      if (payload && typeof payload === "object") {
+        if ("tileId" in payload && typeof payload.tileId === "number") {
+          this.selectedTile = payload.tileId;
+        }
+        if ("objectType" in payload && typeof payload.objectType === "string") {
+          this.selectedObjectType = payload.objectType;
+        }
+      } else if (typeof data === "number") {
+        this.selectedTile = data;
+      } else if (typeof data === "string") {
+        this.selectedObjectType = data;
       }
     });
 
@@ -327,8 +348,8 @@ export class EditorScene extends Phaser.Scene {
         EventBus.emit("editor:tile-hover", { col: coords.col, row: coords.row });
       }
 
-      // Paint while dragging (only for paint/erase tools)
-      if (this.isPainting && (this.currentTool === "paint" || this.currentTool === "erase")) {
+      // Paint/place while dragging
+      if (this.isPainting && (this.currentTool === "paint" || this.currentTool === "erase" || this.currentTool === "object")) {
         this.applyTool(pointer);
       }
     });
