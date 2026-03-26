@@ -1,0 +1,44 @@
+// scripts/seed-map-templates.ts — Seed built-in map templates into DB
+import { getDb, mapTemplates, jsonForDb } from "../src/db";
+import { MAP_TEMPLATES } from "../src/lib/map-templates";
+import { eq } from "drizzle-orm";
+
+async function seed() {
+  const db = getDb();
+
+  for (const template of Object.values(MAP_TEMPLATES)) {
+    // Check if already seeded (by name match)
+    const existing = await db
+      .select({ id: mapTemplates.id })
+      .from(mapTemplates)
+      .where(eq(mapTemplates.name, template.name))
+      .limit(1);
+
+    if (existing.length > 0) {
+      console.log(`[seed] Skipping "${template.name}" — already exists`);
+      continue;
+    }
+
+    await db.insert(mapTemplates).values({
+      name: template.name,
+      icon: template.icon,
+      description: template.description,
+      cols: template.cols,
+      rows: template.rows,
+      layers: jsonForDb({ floor: template.layers.floor, walls: template.layers.walls }),
+      objects: jsonForDb(template.objects),
+      spawnCol: template.spawnCol,
+      spawnRow: template.spawnRow,
+      createdBy: null,
+    });
+
+    console.log(`[seed] Inserted template: "${template.name}"`);
+  }
+
+  console.log("[seed] Map templates seeded successfully");
+}
+
+seed().catch((err) => {
+  console.error("[seed] Failed:", err);
+  process.exit(1);
+});
