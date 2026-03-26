@@ -1,12 +1,12 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { NPC_PRESETS } from "@/lib/npc-presets";
 import { PERSONA_PRESETS, applyPresetName } from "@/lib/npc-persona-presets";
 import { useT } from "@/lib/i18n";
-import { Building2, Coffee, GraduationCap, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 export default function CreateChannelPage() {
   return (
@@ -31,7 +31,8 @@ function CreateChannelPageInner() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(true);
-  const [mapTemplate, setMapTemplate] = useState("office");
+  const [mapTemplateId, setMapTemplateId] = useState("");
+  const [templateList, setTemplateList] = useState<{ id: string; name: string; icon: string; description: string | null; cols: number; rows: number }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [password, setPassword] = useState("");
@@ -55,6 +56,18 @@ function CreateChannelPageInner() {
   const [npcSoul, setNpcSoul] = useState("");
   const [npcAdvancedOpen, setNpcAdvancedOpen] = useState(false);
   const [npcAppearancePreset, setNpcAppearancePreset] = useState("receptionist");
+
+  useEffect(() => {
+    fetch("/api/map-templates")
+      .then((r) => r.json())
+      .then((data) => {
+        const templates = data.templates || [];
+        setTemplateList(templates);
+        if (templates.length > 0 && !mapTemplateId) {
+          setMapTemplateId(templates[0].id);
+        }
+      });
+  }, []);
 
   const hasGatewayUrl = gatewayUrl.trim().length > 0;
   const hasTestAgents = testResult?.ok && testResult.agents && testResult.agents.length > 0;
@@ -131,7 +144,7 @@ function CreateChannelPageInner() {
         name: name.trim(),
         description: description.trim() || null,
         isPublic,
-        mapTemplate,
+        mapTemplateId,
         password: isPublic ? undefined : password,
       };
 
@@ -272,23 +285,20 @@ function CreateChannelPageInner() {
           <div>
             <label className="block text-sm font-semibold mb-2">{t("channels.create.mapTemplate")} *</label>
             <div className="grid grid-cols-3 gap-3">
-              {[
-                { id: "office", icon: <Building2 className="w-6 h-6" />, nameKey: "channels.create.map.office", descKey: "channels.create.map.officeDesc" },
-                { id: "cafe", icon: <Coffee className="w-6 h-6" />, nameKey: "channels.create.map.cafe", descKey: "channels.create.map.cafeDesc" },
-                { id: "classroom", icon: <GraduationCap className="w-6 h-6" />, nameKey: "channels.create.map.classroom", descKey: "channels.create.map.classroomDesc" },
-              ].map((tpl) => (
+              {templateList.map((tpl) => (
                 <button
-                  key={tpl.id} type="button"
-                  onClick={() => setMapTemplate(tpl.id)}
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => setMapTemplateId(tpl.id)}
                   className={`p-3 rounded-lg border text-center transition flex flex-col items-center ${
-                    mapTemplate === tpl.id
+                    mapTemplateId === tpl.id
                       ? "border-primary-light bg-primary-muted text-primary-light"
                       : "border-border bg-surface hover:border-border text-text-muted"
                   }`}
                 >
-                  <div className="mb-1">{tpl.icon}</div>
-                  <div className="font-semibold text-sm text-white">{t(tpl.nameKey)}</div>
-                  <div className="text-xs text-text-muted mt-1">{t(tpl.descKey)}</div>
+                  <div className="mb-1 text-xl">{tpl.icon}</div>
+                  <div className="font-semibold text-sm text-white">{tpl.name}</div>
+                  <div className="text-xs text-text-muted mt-1">{tpl.cols}x{tpl.rows}</div>
                 </button>
               ))}
             </div>
