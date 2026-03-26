@@ -1,6 +1,6 @@
 // scripts/seed-map-templates.ts — Seed built-in map templates into DB
 import { getDb, mapTemplates, jsonForDb } from "../src/db";
-import { MAP_TEMPLATES } from "../src/lib/map-templates";
+import { MAP_TEMPLATES } from "./map-template-data";
 import { eq } from "drizzle-orm";
 
 async function seed() {
