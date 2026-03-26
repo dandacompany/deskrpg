@@ -15,6 +15,7 @@ export async function GET() {
         description: mapTemplates.description,
         cols: mapTemplates.cols,
         rows: mapTemplates.rows,
+        tags: mapTemplates.tags,
         createdAt: mapTemplates.createdAt,
       })
       .from(mapTemplates)
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, icon, description, cols, rows, layers, objects, spawnCol, spawnRow } = body;
+    const { name, icon, description, cols, rows, layers, objects, spawnCol, spawnRow, tags } = body;
 
     const validationError = validateMapTemplate({ name, cols, rows, layers, spawnCol, spawnRow });
     if (validationError) {
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
         objects: jsonForDb(objects || []),
         spawnCol,
         spawnRow,
+        tags: tags?.trim() || null,
         createdBy: userId,
       })
       .returning();

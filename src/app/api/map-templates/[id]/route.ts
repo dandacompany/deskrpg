@@ -35,7 +35,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   try {
     const body = await req.json();
-    const { name, icon, description, cols, rows, layers, objects, spawnCol, spawnRow } = body;
+    const { name, icon, description, cols, rows, layers, objects, spawnCol, spawnRow, tags } = body;
 
     const validationError = validateMapTemplate({ name, cols, rows, layers, spawnCol, spawnRow });
     if (validationError) {
@@ -54,6 +54,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         objects: jsonForDb(objects || []),
         spawnCol,
         spawnRow,
+        tags: tags?.trim() || null,
         updatedAt: new Date(),
       })
       .where(eq(mapTemplates.id, id))

@@ -80,6 +80,7 @@ export const mapTemplates = pgTable("map_templates", {
   objects: jsonb("objects").notNull().default([]),
   spawnCol: integer("spawn_col").notNull(),
   spawnRow: integer("spawn_row").notNull(),
+  tags: varchar("tags", { length: 500 }),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),

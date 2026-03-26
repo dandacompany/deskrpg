@@ -28,6 +28,7 @@ export default function MapEditorEditPage() {
   const [templateName, setTemplateName] = useState("");
   const [icon, setIcon] = useState("🗺️");
   const [description, setDescription] = useState("");
+  const [tags, setTags] = useState("");
   const [cols, setCols] = useState(15);
   const [rows, setRows] = useState(11);
   const [mapData, setMapData] = useState<{
@@ -61,6 +62,7 @@ export default function MapEditorEditPage() {
         setTemplateName(t.name);
         setIcon(t.icon);
         setDescription(t.description || "");
+        setTags(t.tags || "");
         setCols(t.cols);
         setRows(t.rows);
         setSpawnCol(t.spawnCol);
@@ -254,6 +256,7 @@ export default function MapEditorEditPage() {
           name: templateName,
           icon,
           description,
+          tags,
           cols,
           rows,
           layers: freshData.layers,
@@ -293,6 +296,12 @@ export default function MapEditorEditPage() {
           onChange={(e) => setTemplateName(e.target.value)}
           className="bg-transparent border-b border-border text-lg font-semibold focus:outline-none focus:border-primary-light px-1"
           placeholder="Map name"
+        />
+        <input
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          className="bg-transparent border-b border-border text-xs text-text-muted focus:outline-none focus:border-primary-light px-1 w-40"
+          placeholder="Tags (comma separated)"
         />
         <div className="relative flex items-center gap-2 text-xs text-text-muted">
           <span>{cols}&times;{rows}</span>

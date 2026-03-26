@@ -80,6 +80,7 @@ export const mapTemplates = sqliteTable("map_templates", {
   objects: text("objects").notNull().default("[]"),
   spawnCol: integer("spawn_col").notNull(),
   spawnRow: integer("spawn_row").notNull(),
+  tags: text("tags"),
   createdBy: text("created_by").references(() => users.id),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
