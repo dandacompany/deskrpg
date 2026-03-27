@@ -120,6 +120,48 @@ export default function MapEditorListPage() {
       if (res.ok) {
         const { template } = await res.json();
         setTemplates((prev) => [template, ...prev]);
+
+        // Generate thumbnail for uploaded template
+        try {
+          const detailRes = await fetch(`/api/map-templates/${template.id}`);
+          const detail = await detailRes.json();
+          const tmpl = detail.template;
+          const { generateMapThumbnail } = await import("@/lib/map-thumbnail");
+
+          if (tmpl.tiledJson) {
+            const tiled = typeof tmpl.tiledJson === "string" ? JSON.parse(tmpl.tiledJson) : tmpl.tiledJson;
+            const layers = { floor: [] as number[][], walls: [] as number[][] };
+            for (const layer of tiled.layers || []) {
+              if (layer.type === "tilelayer" && layer.data) {
+                const w = tiled.width;
+                const rows2d: number[][] = [];
+                for (let r = 0; r < tiled.height; r++) {
+                  const row: number[] = [];
+                  for (let c = 0; c < w; c++) {
+                    const gid = layer.data[r * w + c] || 0;
+                    row.push(gid > 0 ? gid - 1 : 0);
+                  }
+                  rows2d.push(row);
+                }
+                if (layer.name === "floor") layers.floor = rows2d;
+                else if (layer.name === "walls") layers.walls = rows2d;
+              }
+            }
+            const objects: { type: string; col: number; row: number }[] = [];
+            for (const layer of tiled.layers || []) {
+              if (layer.type === "objectgroup") {
+                for (const obj of layer.objects || []) {
+                  if (obj.type && obj.type !== "spawn") {
+                    objects.push({ type: obj.type, col: Math.floor(obj.x / 32), row: Math.floor(obj.y / 32) });
+                  }
+                }
+              }
+            }
+            if (layers.floor.length > 0) {
+              setThumbnails((prev) => ({ ...prev, [template.id]: generateMapThumbnail(layers, objects, tiled.width, tiled.height, 6) }));
+            }
+          }
+        } catch { /* skip thumbnail */ }
       } else {
         const err = await res.json();
         alert(err.error || "Upload failed");
