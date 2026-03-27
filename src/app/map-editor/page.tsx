@@ -23,6 +23,14 @@ export default function MapEditorListPage() {
   const [search, setSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Upload dialog state
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadName, setUploadName] = useState("");
+  const [uploadIcon, setUploadIcon] = useState("🗺️");
+  const [uploadDescription, setUploadDescription] = useState("");
+  const [uploadTags, setUploadTags] = useState("");
+
   useEffect(() => {
     fetch("/api/map-templates")
       .then((r) => r.json())
@@ -102,15 +110,29 @@ export default function MapEditorListPage() {
     return t.name.toLowerCase().includes(q) || (t.tags?.toLowerCase().includes(q) ?? false);
   });
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadFile(file);
+    setUploadName(file.name.replace(/\.tmj$/i, "").replace(/[-_]/g, " "));
+    setUploadIcon("🗺️");
+    setUploadDescription("");
+    setUploadTags("");
+    setShowUploadDialog(true);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleUpload = async () => {
+    if (!uploadFile || !uploadName.trim()) return;
 
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append("tmjFile", file);
-      formData.append("name", file.name.replace(/\.tmj$/i, ""));
+      formData.append("tmjFile", uploadFile);
+      formData.append("name", uploadName.trim());
+      formData.append("icon", uploadIcon);
+      if (uploadDescription.trim()) formData.append("description", uploadDescription.trim());
+      if (uploadTags.trim()) formData.append("tags", uploadTags.trim());
 
       const res = await fetch("/api/map-templates/upload", {
         method: "POST",
@@ -170,7 +192,8 @@ export default function MapEditorListPage() {
       alert("Upload failed");
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setShowUploadDialog(false);
+      setUploadFile(null);
     }
   };
 
@@ -231,7 +254,7 @@ export default function MapEditorListPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold">Map Templates</h1>
           <div className="flex items-center gap-2">
-            <input ref={fileInputRef} type="file" accept=".tmj,.json" onChange={handleUpload} className="hidden" />
+            <input ref={fileInputRef} type="file" accept=".tmj,.json" onChange={handleFileSelect} className="hidden" />
             <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
               className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold text-sm disabled:opacity-50">
               <Upload className="w-4 h-4" /> {uploading ? "Uploading..." : "Upload .tmj"}
@@ -311,6 +334,55 @@ export default function MapEditorListPage() {
           </div>
         )}
       </div>
+
+      {/* Upload Dialog */}
+      {showUploadDialog && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => !uploading && setShowUploadDialog(false)}>
+          <div className="bg-surface border border-border rounded-lg p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold mb-4">Upload Map Template</h2>
+            <div className="space-y-3">
+              <div className="text-sm text-text-muted bg-surface-raised rounded px-3 py-2">
+                File: <span className="text-text font-medium">{uploadFile?.name}</span>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Name *</label>
+                <input type="text" value={uploadName} onChange={(e) => setUploadName(e.target.value)} maxLength={200}
+                  className="w-full px-3 py-2 bg-bg border border-border rounded text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary-light"
+                  placeholder="My Office Map" autoFocus />
+              </div>
+              <div className="flex gap-3">
+                <div className="w-20">
+                  <label className="block text-sm font-semibold mb-1">Icon</label>
+                  <input type="text" value={uploadIcon} onChange={(e) => setUploadIcon(e.target.value)} maxLength={10}
+                    className="w-full px-3 py-2 bg-bg border border-border rounded text-text text-center text-xl focus:outline-none focus:ring-2 focus:ring-primary-light" />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-semibold mb-1">Tags</label>
+                  <input type="text" value={uploadTags} onChange={(e) => setUploadTags(e.target.value)} maxLength={500}
+                    className="w-full px-3 py-2 bg-bg border border-border rounded text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary-light"
+                    placeholder="office, modern" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Description</label>
+                <textarea value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} maxLength={500} rows={2}
+                  className="w-full px-3 py-2 bg-bg border border-border rounded text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary-light resize-none"
+                  placeholder="A description of the map" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={handleUpload} disabled={uploading || !uploadName.trim()}
+                  className="flex-1 px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold text-sm disabled:opacity-50">
+                  {uploading ? "Uploading..." : "Upload"}
+                </button>
+                <button onClick={() => setShowUploadDialog(false)} disabled={uploading}
+                  className="px-4 py-2 bg-surface-raised border border-border rounded text-sm text-text-muted hover:text-text disabled:opacity-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
