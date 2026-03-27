@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import type { Socket } from "socket.io-client";
-import { MapObject, MapData, OBJECT_TYPES, OBJECT_TYPE_LIST, computeOccupiedTiles, detectAndConvertMapData, generateObjectId, canPlaceObject } from "@/lib/object-types";
+import { MapObject, MapData, OBJECT_TYPES, OBJECT_TYPE_LIST, computeOccupiedTiles, detectAndConvertMapData, generateObjectId, canPlaceObject, getObjectDimensions } from "@/lib/object-types";
 
 // ---------------------------------------------------------------------------
 // Map constants
@@ -1745,11 +1745,14 @@ export class GameScene extends Phaser.Scene {
     for (const obj of this.mapObjects) {
       const def = OBJECT_TYPES[obj.type];
       if (!def) continue;
-      const texKey = `obj-${obj.type}`;
+      const dir = obj.direction || "down";
+      let texKey = `obj-${obj.type}-${dir}`;
+      if (!this.textures.exists(texKey)) {
+        texKey = `obj-${obj.type}`; // fallback
+      }
       if (!this.textures.exists(texKey)) continue;
 
-      const w = def.width || 1;
-      const h = def.height || 1;
+      const { width: w, height: h } = getObjectDimensions(obj.type, obj.direction);
       const x = (obj.col + w / 2) * TILE_SIZE;
       const y = (obj.row + h) * TILE_SIZE;
 

@@ -12,15 +12,17 @@ interface MapEditorPaletteProps {
   currentTool: EditorTool;
   selectedTileId: number;
   selectedObjectType: string;
+  currentDirection: "down" | "left" | "right" | "up";
   onLayerChange: (layer: EditorLayer) => void;
   onToolChange: (tool: EditorTool) => void;
   onTileSelect: (tileId: number) => void;
   onObjectSelect: (objectType: string) => void;
+  onDirectionChange: (dir: "down" | "left" | "right" | "up") => void;
 }
 
 export default function MapEditorPalette({
-  currentLayer, currentTool, selectedTileId, selectedObjectType,
-  onLayerChange, onToolChange, onTileSelect, onObjectSelect,
+  currentLayer, currentTool, selectedTileId, selectedObjectType, currentDirection,
+  onLayerChange, onToolChange, onTileSelect, onObjectSelect, onDirectionChange,
 }: MapEditorPaletteProps) {
   const handleLayerChange = (layer: EditorLayer) => {
     onLayerChange(layer);
@@ -37,6 +39,10 @@ export default function MapEditorPalette({
   const handleObjectSelect = (objectType: string) => {
     onObjectSelect(objectType);
     EventBus.emit("editor:set-tile", { objectType });
+  };
+  const handleDirectionChange = (dir: "down" | "left" | "right" | "up") => {
+    onDirectionChange(dir);
+    EventBus.emit("editor:set-direction", { direction: dir });
   };
 
   const palette = currentLayer === "floor" ? FLOOR_PALETTE : WALL_PALETTE;
@@ -90,6 +96,26 @@ export default function MapEditorPalette({
               ))}
         </div>
       </div>
+      {/* Direction (Objects mode only) */}
+      {currentLayer === "objects" && (
+        <div>
+          <div className="text-xs font-semibold text-text-muted mb-2 uppercase">Direction</div>
+          <div className="flex gap-1">
+            {(["down", "right", "up", "left"] as const).map((dir) => {
+              const arrows: Record<string, string> = { down: "\u2193", right: "\u2192", up: "\u2191", left: "\u2190" };
+              return (
+                <button key={dir} onClick={() => handleDirectionChange(dir)}
+                  className={`flex-1 px-2 py-1.5 rounded text-xs font-semibold transition ${
+                    currentDirection === dir
+                      ? "bg-primary text-white"
+                      : "bg-surface-raised text-text-muted hover:text-text"
+                  }`}>{arrows[dir]}</button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-text-dim mt-1">R: rotate / Shift+R: reverse</p>
+        </div>
+      )}
       {/* Tools */}
       <div>
         <div className="text-xs font-semibold text-text-muted mb-2 uppercase">Tools</div>

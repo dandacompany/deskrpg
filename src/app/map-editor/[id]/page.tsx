@@ -42,6 +42,7 @@ export default function MapEditorEditPage() {
   const [currentTool, setCurrentTool] = useState<EditorTool>("paint");
   const [selectedTileId, setSelectedTileId] = useState(1);
   const [selectedObjectType, setSelectedObjectType] = useState("desk");
+  const [currentDirection, setCurrentDirection] = useState<"down" | "left" | "right" | "up">("down");
   const [hoverCol, setHoverCol] = useState(-1);
   const [hoverRow, setHoverRow] = useState(-1);
   const [showResize, setShowResize] = useState(false);
@@ -198,6 +199,14 @@ export default function MapEditorEditPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const handler = (data: { direction: string }) => {
+      setCurrentDirection(data.direction as "down" | "left" | "right" | "up");
+    };
+    EventBus.on("editor:direction-changed", handler);
+    return () => { EventBus.off("editor:direction-changed", handler); };
+  }, []);
+
   // Sync resize inputs when cols/rows load from API
   useEffect(() => {
     setNewCols(cols);
@@ -339,10 +348,12 @@ export default function MapEditorEditPage() {
           currentTool={currentTool}
           selectedTileId={selectedTileId}
           selectedObjectType={selectedObjectType}
+          currentDirection={currentDirection}
           onLayerChange={setCurrentLayer}
           onToolChange={setCurrentTool}
           onTileSelect={setSelectedTileId}
           onObjectSelect={setSelectedObjectType}
+          onDirectionChange={setCurrentDirection}
         />
         <div className="flex-1">
           <MapEditorPhaser

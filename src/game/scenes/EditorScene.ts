@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { EventBus } from "../EventBus";
-import { OBJECT_TYPES, canPlaceObject, generateObjectId } from "@/lib/object-types";
+import { OBJECT_TYPES, canPlaceObject, generateObjectId, getObjectDimensions } from "@/lib/object-types";
 import type { MapObject } from "@/lib/object-types";
 
 const TILE_SIZE = 32;
@@ -48,6 +48,7 @@ export class EditorScene extends Phaser.Scene {
   private activeLayer: EditorLayer = "floor";
   private selectedTile = 1; // floor tile by default
   private selectedObjectType = "desk";
+  private currentDirection: "down" | "left" | "right" | "up" = "down";
 
   // Mouse state
   private isPainting = false;
@@ -139,6 +140,14 @@ export class EditorScene extends Phaser.Scene {
         this.selectedTile = data;
       } else if (typeof data === "string") {
         this.selectedObjectType = data;
+      }
+    });
+
+    listen("editor:set-direction", (data: unknown) => {
+      const payload = data as { direction?: string } | string;
+      const dir = typeof payload === "string" ? payload : (payload as { direction: string }).direction;
+      if (dir === "down" || dir === "left" || dir === "right" || dir === "up") {
+        this.currentDirection = dir;
       }
     });
 
@@ -336,11 +345,14 @@ export class EditorScene extends Phaser.Scene {
     for (const obj of this.mapObjects) {
       const def = OBJECT_TYPES[obj.type];
       if (!def) continue;
-      const texKey = `obj-${obj.type}`;
+      const dir = obj.direction || "down";
+      let texKey = `obj-${obj.type}-${dir}`;
+      if (!this.textures.exists(texKey)) {
+        texKey = `obj-${obj.type}`; // fallback
+      }
       if (!this.textures.exists(texKey)) continue;
 
-      const w = def.width || 1;
-      const h = def.height || 1;
+      const { width: w, height: h } = getObjectDimensions(obj.type, obj.direction);
       const x = (obj.col + w / 2) * TILE_SIZE;
       const y = (obj.row + h) * TILE_SIZE;
 
@@ -477,6 +489,18 @@ export class EditorScene extends Phaser.Scene {
       const newZoom = Phaser.Math.Clamp(cam.zoom + (dy > 0 ? -0.1 : 0.1), 0.25, 3);
       cam.setZoom(newZoom);
     });
+
+    // R key to rotate direction
+    this.input.keyboard?.on("keydown-R", (event: KeyboardEvent) => {
+      const dirs: ("down" | "right" | "up" | "left")[] = ["down", "right", "up", "left"];
+      const idx = dirs.indexOf(this.currentDirection);
+      if (event.shiftKey) {
+        this.currentDirection = dirs[(idx - 1 + 4) % 4];
+      } else {
+        this.currentDirection = dirs[(idx + 1) % 4];
+      }
+      EventBus.emit("editor:direction-changed", { direction: this.currentDirection });
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -506,9 +530,8 @@ export class EditorScene extends Phaser.Scene {
     if (this.currentTool === "object") {
       const def = OBJECT_TYPES[this.selectedObjectType];
       if (def) {
-        const w = def.width || 1;
-        const h = def.height || 1;
-        const canPlace = canPlaceObject(this.selectedObjectType, col, row, this.mapObjects, this.wallsData);
+        const { width: w, height: h } = getObjectDimensions(this.selectedObjectType, this.currentDirection);
+        const canPlace = canPlaceObject(this.selectedObjectType, col, row, this.mapObjects, this.wallsData, this.currentDirection);
         const color = canPlace ? 0x44ff44 : 0xff4444;
         this.hoverGraphics.lineStyle(2, color, 0.8);
         this.hoverGraphics.strokeRect(col * TILE_SIZE, row * TILE_SIZE, w * TILE_SIZE, h * TILE_SIZE);
@@ -568,8 +591,7 @@ export class EditorScene extends Phaser.Scene {
       const existingIdx = this.mapObjects.findIndex((obj) => {
         const def = OBJECT_TYPES[obj.type];
         if (!def) return false;
-        const w = def.width || 1;
-        const h = def.height || 1;
+        const { width: w, height: h } = getObjectDimensions(obj.type, obj.direction);
         return col >= obj.col && col < obj.col + w && row >= obj.row && row < obj.row + h;
       });
       if (existingIdx >= 0) {
@@ -682,8 +704,7 @@ export class EditorScene extends Phaser.Scene {
     const existingIdx = this.mapObjects.findIndex((obj) => {
       const def = OBJECT_TYPES[obj.type];
       if (!def) return false;
-      const w = def.width || 1;
-      const h = def.height || 1;
+      const { width: w, height: h } = getObjectDimensions(obj.type, obj.direction);
       return col >= obj.col && col < obj.col + w && row >= obj.row && row < obj.row + h;
     });
 
@@ -696,7 +717,7 @@ export class EditorScene extends Phaser.Scene {
     }
 
     // Try to place new object
-    if (!canPlaceObject(this.selectedObjectType, col, row, this.mapObjects, this.wallsData)) {
+    if (!canPlaceObject(this.selectedObjectType, col, row, this.mapObjects, this.wallsData, this.currentDirection)) {
       return;
     }
 
@@ -705,6 +726,7 @@ export class EditorScene extends Phaser.Scene {
       type: this.selectedObjectType,
       col,
       row,
+      direction: this.currentDirection,
     };
 
     this.mapObjects.push(newObj);
