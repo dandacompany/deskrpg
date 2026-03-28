@@ -950,14 +950,16 @@ function GamePageInner() {
 
                 {/* Exit section */}
                 <div className="border-t border-border my-1" />
-                <Link
-                  href={`/channels?characterId=${characterId}`}
-                  className="block px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-white flex items-center gap-2"
-                  onClick={() => setShowUserMenu(false)}
+                <button
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    window.location.href = `/channels?characterId=${characterId}`;
+                  }}
+                  className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-white flex items-center gap-2"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   {t("game.leaveChannel")}
-                </Link>
+                </button>
                 <button
                   onClick={() => {
                     document.cookie = "token=; path=/; max-age=0";
