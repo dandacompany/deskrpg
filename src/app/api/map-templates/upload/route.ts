@@ -1,6 +1,7 @@
 import { db, mapTemplates, jsonForDb } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { getUserId } from "@/lib/internal-rpc";
+import { tmxToJson } from "@/lib/tmx-parser";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -20,13 +21,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "tmjFile is required" }, { status: 400 });
     }
 
-    // Parse TMJ
-    const tmjText = await tmjFile.text();
+    // Parse file — support both TMJ (JSON) and TMX (XML)
+    const fileText = await tmjFile.text();
+    const fileName = tmjFile.name.toLowerCase();
     let tiledJson: Record<string, unknown>;
-    try {
-      tiledJson = JSON.parse(tmjText);
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON in .tmj file" }, { status: 400 });
+
+    if (fileName.endsWith(".tmx") || fileName.endsWith(".xml") || fileText.trimStart().startsWith("<?xml") || fileText.trimStart().startsWith("<map")) {
+      // TMX (XML) → convert to JSON
+      try {
+        tiledJson = tmxToJson(fileText);
+      } catch (e) {
+        return NextResponse.json({ error: `TMX parse error: ${e instanceof Error ? e.message : "unknown"}` }, { status: 400 });
+      }
+    } else {
+      // TMJ (JSON)
+      try {
+        tiledJson = JSON.parse(fileText);
+      } catch {
+        return NextResponse.json({ error: "Invalid JSON in .tmj file" }, { status: 400 });
+      }
     }
 
     // Extract metadata from Tiled JSON
