@@ -1817,7 +1817,13 @@ export class GameScene extends Phaser.Scene {
       const name = tileLayerNames[i];
       if (name === floorLayerName || name === wallsLayerName) continue;
       const extraLayer = map.createLayer(name, map.tilesets);
-      if (extraLayer) extraLayer.setDepth(i + 2);
+      if (extraLayer) {
+        extraLayer.setDepth(i + 2);
+        // Hide collision layer — it's processed separately for collision data
+        if (name.toLowerCase() === "collision") {
+          extraLayer.setVisible(false);
+        }
+      }
     }
 
     // Extract floor/walls data arrays for the legacy collision system
@@ -1841,10 +1847,57 @@ export class GameScene extends Phaser.Scene {
       this.wallsData.push(wallsRow);
     }
 
-    // Process object layers
+    // Process object layers + Collision layer
     this.mapObjects = [];
+    const collisionCells = new Set<string>();
     const allLayers = tiledJson.layers as Array<Record<string, unknown>> | undefined;
     for (const layer of allLayers || []) {
+      const layerName = ((layer.name as string) || "").toLowerCase();
+
+      // --- Collision layer (objectgroup): all objects become collision rects ---
+      if (layer.type === "objectgroup" && layerName === "collision") {
+        const objects = layer.objects as Array<Record<string, unknown>> | undefined;
+        for (const obj of objects || []) {
+          const ox = (obj.x as number) || 0;
+          const oy = (obj.y as number) || 0;
+          const ow = (obj.width as number) || TILE_SIZE;
+          const oh = (obj.height as number) || TILE_SIZE;
+          // Convert pixel rect to tile cells
+          const startCol = Math.floor(ox / TILE_SIZE);
+          const startRow = Math.floor(oy / TILE_SIZE);
+          const endCol = Math.ceil((ox + ow) / TILE_SIZE);
+          const endRow = Math.ceil((oy + oh) / TILE_SIZE);
+          for (let r = startRow; r < endRow; r++) {
+            for (let c = startCol; c < endCol; c++) {
+              collisionCells.add(`${c},${r}`);
+            }
+          }
+        }
+        continue; // Don't process collision layer as regular objects
+      }
+
+      // --- Collision layer (tilelayer): any non-zero tile is collision ---
+      if (layer.type === "tilelayer" && layerName === "collision") {
+        const data = layer.data as number[] | undefined;
+        if (data) {
+          for (let r = 0; r < mapHeight; r++) {
+            for (let c = 0; c < mapWidth; c++) {
+              const gid = data[r * mapWidth + c] || 0;
+              if (gid !== 0) {
+                collisionCells.add(`${c},${r}`);
+              }
+            }
+          }
+        }
+        // Hide the collision tile layer if it was created
+        const collisionTileLayer = map.getLayer(layer.name as string);
+        if (collisionTileLayer?.tilemapLayer) {
+          collisionTileLayer.tilemapLayer.setVisible(false);
+        }
+        continue;
+      }
+
+      // --- Regular object layers ---
       if (layer.type === "objectgroup") {
         const objects = layer.objects as Array<Record<string, unknown>> | undefined;
         for (const obj of objects || []) {
@@ -1871,6 +1924,10 @@ export class GameScene extends Phaser.Scene {
 
     this.renderObjects();
     this.objectOccupiedTiles = computeOccupiedTiles(this.mapObjects);
+    // Merge collision layer cells into objectOccupiedTiles
+    for (const cell of collisionCells) {
+      this.objectOccupiedTiles.add(cell);
+    }
   }
 
   // ---------------------------------------------------------------------------
