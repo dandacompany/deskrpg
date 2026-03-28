@@ -607,6 +607,9 @@ function GamePageInner() {
           mapConfig: typeof channelData.channel.mapConfig === "string"
             ? JSON.parse(channelData.channel.mapConfig)
             : (channelData.channel.mapConfig || null),
+          savedPosition: channelData.channel.lastX != null && channelData.channel.lastY != null
+            ? { x: channelData.channel.lastX, y: channelData.channel.lastY }
+            : null,
         });
 
         // Composite character sprite

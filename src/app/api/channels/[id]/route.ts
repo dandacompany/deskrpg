@@ -43,12 +43,14 @@ export async function GET(
 
     // Check membership
     const memberRows = await db
-      .select({ role: channelMembers.role })
+      .select({ role: channelMembers.role, lastX: channelMembers.lastX, lastY: channelMembers.lastY })
       .from(channelMembers)
       .where(and(eq(channelMembers.channelId, id), eq(channelMembers.userId, userId)))
       .limit(1);
 
     const memberRole = memberRows[0]?.role ?? null;
+    const lastX = memberRows[0]?.lastX ?? null;
+    const lastY = memberRows[0]?.lastY ?? null;
     const isOwner = channel.ownerId === userId;
     const isMember = !!memberRole || isOwner;
 
@@ -64,6 +66,8 @@ export async function GET(
         isOwner,
         isMember,
         hasGateway: !!(gatewayConfig as { url?: string } | null)?.url,
+        lastX,
+        lastY,
       },
     });
   } catch (err) {

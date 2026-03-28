@@ -2,7 +2,7 @@ import { Server, Socket } from "socket.io";
 import { jwtVerify } from "jose";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import * as schema from "../db/schema";
 
 // ---------------------------------------------------------------------------
@@ -665,6 +665,31 @@ export function setupSocketHandlers(io: Server) {
       const player = players.get(socket.id);
       if (player) {
         socket.to(player.mapId).emit("player:left", { id: socket.id });
+
+        // Save last position to DB
+        try {
+          const db = getDb();
+          db.update(schema.channelMembers)
+            .set({
+              lastX: Math.round(player.x),
+              lastY: Math.round(player.y),
+            })
+            .where(
+              and(
+                eq(schema.channelMembers.channelId, player.mapId),
+                eq(schema.channelMembers.userId, player.userId),
+              )
+            )
+            .then(() => {
+              console.log(`[socket] Saved position for ${player.characterName}: (${Math.round(player.x)}, ${Math.round(player.y)})`);
+            })
+            .catch((err: Error) => {
+              console.warn("[socket] Failed to save position:", err.message);
+            });
+        } catch {
+          // DB not available, skip
+        }
+
         players.delete(socket.id);
         console.log(
           `[socket] Player disconnected: ${user.nickname} (${socket.id})`,

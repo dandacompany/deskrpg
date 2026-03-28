@@ -1081,6 +1081,7 @@ export class GameScene extends Phaser.Scene {
   private channelMapData: MapData | null = null;
   private tiledSpawnCol: number | null = null;
   private tiledSpawnRow: number | null = null;
+  private savedPosition: { x: number; y: number } | null = null;
 
   // Player name label
   private playerNameLabel: Phaser.GameObjects.Text | null = null;
@@ -1206,6 +1207,11 @@ export class GameScene extends Phaser.Scene {
         const config = pendingChannelData.mapConfig;
         if (typeof config.spawnCol === "number") this.tiledSpawnCol = config.spawnCol;
         if (typeof config.spawnRow === "number") this.tiledSpawnRow = config.spawnRow;
+      }
+
+      // Restore saved position from last session
+      if (pendingChannelData.savedPosition) {
+        this.savedPosition = pendingChannelData.savedPosition;
       }
 
       setPendingChannelData(null); // consumed
@@ -2671,12 +2677,22 @@ export class GameScene extends Phaser.Scene {
   private createPlayer(): void {
     if (this.playerReady) return; // prevent double creation
 
-    // Find a free spawn position, checking NPCs, remote players, AND object occupied tiles
-    const preferSpawnCol = this.tiledSpawnCol ?? 8;
-    const preferSpawnRow = this.tiledSpawnRow ?? 3;
-    const { col: spawnCol, row: spawnRow } = this.findFreeSpawn(preferSpawnCol, preferSpawnRow);
-    const spawnX = spawnCol * TILE_SIZE + TILE_SIZE / 2;
-    const spawnY = spawnRow * TILE_SIZE + TILE_SIZE / 2;
+    let spawnX: number;
+    let spawnY: number;
+
+    if (this.savedPosition) {
+      // Restore saved position from last session (pixel coordinates)
+      spawnX = this.savedPosition.x;
+      spawnY = this.savedPosition.y;
+      this.savedPosition = null; // consumed
+    } else {
+      // Find a free spawn position, checking NPCs, remote players, AND object occupied tiles
+      const preferSpawnCol = this.tiledSpawnCol ?? 8;
+      const preferSpawnRow = this.tiledSpawnRow ?? 3;
+      const { col: spawnCol, row: spawnRow } = this.findFreeSpawn(preferSpawnCol, preferSpawnRow);
+      spawnX = spawnCol * TILE_SIZE + TILE_SIZE / 2;
+      spawnY = spawnRow * TILE_SIZE + TILE_SIZE / 2;
+    }
 
     const playerTex = this.textures.exists("player") ? "player" : "fallback-char";
     this.player = this.physics.add.sprite(spawnX, spawnY, playerTex, playerTex === "player" ? DIR_DOWN * SPRITE_COLS : 0);

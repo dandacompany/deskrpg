@@ -43,6 +43,8 @@ export const channelMembers = pgTable("channel_members", {
   channelId: uuid("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   role: varchar("role", { length: 20 }).notNull().default("member"),
+  lastX: integer("last_x"),
+  lastY: integer("last_y"),
   joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow(),
 }, (table) => [
   index("idx_channel_members_channel_id").on(table.channelId),

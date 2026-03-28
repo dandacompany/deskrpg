@@ -51,6 +51,7 @@ export let pendingChannelData: {
   mapData: any;
   tiledJson?: any;
   mapConfig?: any;
+  savedPosition?: { x: number; y: number } | null;
 } | null = null;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,6 +60,7 @@ export function setPendingChannelData(data: {
   mapData: any;
   tiledJson?: any;
   mapConfig?: any;
+  savedPosition?: { x: number; y: number } | null;
 } | null) {
   pendingChannelData = data;
 }

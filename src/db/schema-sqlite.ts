@@ -43,6 +43,8 @@ export const channelMembers = sqliteTable("channel_members", {
   channelId: text("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   role: text("role").notNull().default("member"),
+  lastX: integer("last_x"),
+  lastY: integer("last_y"),
   joinedAt: text("joined_at").$defaultFn(() => new Date().toISOString()),
 }, (table) => [
   index("idx_channel_members_channel_id").on(table.channelId),
