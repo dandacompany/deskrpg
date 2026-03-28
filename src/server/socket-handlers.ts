@@ -666,18 +666,18 @@ export function setupSocketHandlers(io: Server) {
       if (player) {
         socket.to(player.mapId).emit("player:left", { id: socket.id });
 
-        // Save last position to DB
+        // Save last position to DB (use shared db proxy that supports both PG and SQLite)
         try {
-          const db = getDb();
-          db.update(schema.channelMembers)
+          const { db: sharedDb, channelMembers } = require("../db");
+          sharedDb.update(channelMembers)
             .set({
               lastX: Math.round(player.x),
               lastY: Math.round(player.y),
             })
             .where(
               and(
-                eq(schema.channelMembers.channelId, player.mapId),
-                eq(schema.channelMembers.userId, player.userId),
+                eq(channelMembers.channelId, player.mapId),
+                eq(channelMembers.userId, player.userId),
               )
             )
             .then(() => {
@@ -686,8 +686,8 @@ export function setupSocketHandlers(io: Server) {
             .catch((err: Error) => {
               console.warn("[socket] Failed to save position:", err.message);
             });
-        } catch {
-          // DB not available, skip
+        } catch (e) {
+          console.warn("[socket] Failed to save position:", e instanceof Error ? e.message : e);
         }
 
         players.delete(socket.id);
