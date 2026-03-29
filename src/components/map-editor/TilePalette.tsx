@@ -58,7 +58,7 @@ function TilesetSection({
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(name);
+  const [editName, setEditName] = useState('');
   const editRef = useRef<HTMLInputElement>(null);
 
   const { img, firstgid, columns, tilewidth, tileheight, tilecount, name } = info;
