@@ -126,11 +126,15 @@ export default function PixelEditorModal({
     if (!open || !region || !tilesetInfo) return;
     initEditCanvas();
 
-    // Calculate auto-fit zoom after a tick (container needs to render)
-    requestAnimationFrame(() => {
-      if (!containerRef.current) return;
+    // Calculate auto-fit zoom after container renders (may need multiple frames)
+    const tryAutoFit = (attempts = 0) => {
+      if (!containerRef.current || attempts > 10) return;
       const cw = containerRef.current.clientWidth;
       const ch = containerRef.current.clientHeight;
+      if (ch < 50 && attempts < 10) {
+        requestAnimationFrame(() => tryAutoFit(attempts + 1));
+        return;
+      }
       const fitZoom = Math.min((cw * 0.8) / regionPxW, (ch * 0.8) / regionPxH);
       const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.floor(fitZoom)));
       setZoom(clamped);
@@ -138,7 +142,8 @@ export default function PixelEditorModal({
         x: (cw - regionPxW * clamped) / 2,
         y: (ch - regionPxH * clamped) / 2,
       });
-    });
+    };
+    requestAnimationFrame(() => tryAutoFit());
 
     // Reset tool state
     setTool('pen');
@@ -510,7 +515,8 @@ export default function PixelEditorModal({
 
   return (
     <Modal open={open} onClose={onClose} title="Pixel Editor" size="full">
-      <Modal.Body className="flex flex-col gap-3 p-0 !px-0 !py-0 overflow-hidden">
+      {/* Custom body: fixed height to fill modal, flex col so canvas area stretches */}
+      <div className="flex flex-col overflow-hidden" style={{ height: 'calc(85vh - 120px)' }}>
         {/* Toolbar row */}
         <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-surface flex-shrink-0">
           {/* Tool buttons */}
@@ -597,7 +603,7 @@ export default function PixelEditorModal({
         {/* Canvas area */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-hidden bg-bg-deep relative"
+          className="flex-1 min-h-0 overflow-hidden bg-bg-deep relative"
           style={{ cursor: cursorStyle }}
         >
           <canvas
@@ -610,7 +616,7 @@ export default function PixelEditorModal({
             onContextMenu={(e) => e.preventDefault()}
           />
         </div>
-      </Modal.Body>
+      </div>
 
       <Modal.Footer>
         <Button variant="ghost" size="sm" onClick={onClose}>
