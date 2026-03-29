@@ -725,7 +725,8 @@ export default function MapEditorLayout({
     const handleMouseMove = (ev: MouseEvent) => {
       if (!isResizing.current) return;
       const delta = ev.clientX - startX;
-      setPanelWidth(Math.max(200, Math.min(500, startWidth + delta)));
+      const maxWidth = Math.floor(window.innerWidth / 2);
+      setPanelWidth(Math.max(200, Math.min(maxWidth, startWidth + delta)));
     };
 
     const handleMouseUp = () => {
