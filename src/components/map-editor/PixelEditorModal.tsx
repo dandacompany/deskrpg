@@ -1365,6 +1365,55 @@ export default function PixelEditorModal({
             onWheel={handleWheel}
             onContextMenu={(e) => e.preventDefault()}
           />
+
+          {/* Edge hover buttons */}
+          {hoveredEdge && (() => {
+            const ec = editCanvasRef.current;
+            if (!ec) return null;
+            const imgW = ec.width * zoom;
+            const imgH = ec.height * zoom;
+            const btnOffset = 4;
+
+            const buttons: React.ReactNode[] = [];
+
+            if (hoveredEdge.top) {
+              buttons.push(
+                <div key="top" className="absolute flex gap-0.5" style={{ left: pan.x + imgW / 2, top: pan.y - 24, transform: 'translateX(-50%)' }}>
+                  <button onClick={() => { deleteEdge('top'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-red-500/90 hover:bg-red-400 text-white text-xs font-bold flex items-center justify-center shadow-md">-</button>
+                  <button onClick={() => { addEdge('top'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-green-500/90 hover:bg-green-400 text-white text-xs font-bold flex items-center justify-center shadow-md">+</button>
+                </div>
+              );
+            }
+
+            if (hoveredEdge.bottom) {
+              buttons.push(
+                <div key="bottom" className="absolute flex gap-0.5" style={{ left: pan.x + imgW / 2, top: pan.y + imgH + btnOffset, transform: 'translateX(-50%)' }}>
+                  <button onClick={() => { addEdge('bottom'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-green-500/90 hover:bg-green-400 text-white text-xs font-bold flex items-center justify-center shadow-md">+</button>
+                  <button onClick={() => { deleteEdge('bottom'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-red-500/90 hover:bg-red-400 text-white text-xs font-bold flex items-center justify-center shadow-md">-</button>
+                </div>
+              );
+            }
+
+            if (hoveredEdge.left) {
+              buttons.push(
+                <div key="left" className="absolute flex flex-col gap-0.5" style={{ left: pan.x - 24, top: pan.y + imgH / 2, transform: 'translateY(-50%)' }}>
+                  <button onClick={() => { deleteEdge('left'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-red-500/90 hover:bg-red-400 text-white text-xs font-bold flex items-center justify-center shadow-md">-</button>
+                  <button onClick={() => { addEdge('left'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-green-500/90 hover:bg-green-400 text-white text-xs font-bold flex items-center justify-center shadow-md">+</button>
+                </div>
+              );
+            }
+
+            if (hoveredEdge.right) {
+              buttons.push(
+                <div key="right" className="absolute flex flex-col gap-0.5" style={{ left: pan.x + imgW + btnOffset, top: pan.y + imgH / 2, transform: 'translateY(-50%)' }}>
+                  <button onClick={() => { addEdge('right'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-green-500/90 hover:bg-green-400 text-white text-xs font-bold flex items-center justify-center shadow-md">+</button>
+                  <button onClick={() => { deleteEdge('right'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-red-500/90 hover:bg-red-400 text-white text-xs font-bold flex items-center justify-center shadow-md">-</button>
+                </div>
+              );
+            }
+
+            return <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 10 }}><div className="pointer-events-auto">{buttons}</div></div>;
+          })()}
         </div>
       </div>
 
