@@ -197,7 +197,9 @@ type EditorAction =
   | { type: 'CLEAR_SELECTION' }
   | { type: 'SET_CLIPBOARD'; clipboard: { width: number; height: number; gids: number[][]; layerIndex: number } }
   | { type: 'DELETE_SELECTION' }
-  | { type: 'PASTE_CLIPBOARD'; x: number; y: number };
+  | { type: 'PASTE_CLIPBOARD'; x: number; y: number }
+  | { type: 'REORDER_TILESETS'; fromFirstgid: number; toFirstgid: number }
+  | { type: 'REMOVE_UNUSED_TILESETS'; firstgids: number[] };
 
 export type { EditorAction };
 
@@ -446,6 +448,37 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         mapData: { ...state.mapData, layers: newLayers },
         undoStack,
         redoStack: [],
+        dirty: true,
+      };
+    }
+    case 'REORDER_TILESETS': {
+      if (!state.mapData) return state;
+      const tilesets = [...state.mapData.tilesets];
+      const fromIndex = tilesets.findIndex(ts => ts.firstgid === action.fromFirstgid);
+      const toIndex = tilesets.findIndex(ts => ts.firstgid === action.toFirstgid);
+      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return state;
+      const [moved] = tilesets.splice(fromIndex, 1);
+      tilesets.splice(toIndex, 0, moved);
+      return {
+        ...state,
+        mapData: { ...state.mapData, tilesets },
+        dirty: true,
+      };
+    }
+    case 'REMOVE_UNUSED_TILESETS': {
+      if (!state.mapData || action.firstgids.length === 0) return state;
+      const removeSet = new Set(action.firstgids);
+      const newTilesets = state.mapData.tilesets.filter(ts => !removeSet.has(ts.firstgid));
+      const newImages = { ...state.tilesetImages };
+      for (const fgid of action.firstgids) {
+        delete newImages[fgid];
+      }
+      const sortedGids = Object.keys(newImages).map(Number).sort((a, b) => b - a);
+      return {
+        ...state,
+        mapData: { ...state.mapData, tilesets: newTilesets },
+        tilesetImages: newImages,
+        sortedGids,
         dirty: true,
       };
     }

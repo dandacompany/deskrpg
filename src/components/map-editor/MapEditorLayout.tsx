@@ -540,13 +540,175 @@ export default function MapEditorLayout({
     [state.tilesetImages, state.mapData, dispatch],
   );
 
+  // === Remove Background (Selection) ===
+
+  const handleRemoveBgSelection = useCallback(
+    async (firstgid: number, region: TileRegion) => {
+      const tsInfo = state.tilesetImages[firstgid];
+      if (!tsInfo?.img || !state.mapData) return;
+
+      const totalTiles = region.width * region.height;
+      setRemoveBgProgress({ firstgid, progress: 0, detail: `0/${totalTiles} tiles` });
+
+      try {
+        // Create an offscreen canvas to compose the result
+        const tileW = tsInfo.tilewidth;
+        const tileH = tsInfo.tileheight;
+        const resultCanvas = document.createElement('canvas');
+        resultCanvas.width = region.width * tileW;
+        resultCanvas.height = region.height * tileH;
+        const resultCtx = resultCanvas.getContext('2d')!;
+
+        let processed = 0;
+
+        for (let r = 0; r < region.height; r++) {
+          for (let c = 0; c < region.width; c++) {
+            // Crop the individual tile from the tileset image
+            const srcCol = region.col + c;
+            const srcRow = region.row + r;
+            const tileCanvas = document.createElement('canvas');
+            tileCanvas.width = tileW;
+            tileCanvas.height = tileH;
+            const tileCtx = tileCanvas.getContext('2d')!;
+            tileCtx.drawImage(
+              tsInfo.img,
+              srcCol * tileW,
+              srcRow * tileH,
+              tileW,
+              tileH,
+              0,
+              0,
+              tileW,
+              tileH,
+            );
+
+            // Convert tile to blob for removeBg
+            const tileBlob = await new Promise<Blob>((resolve) => {
+              tileCanvas.toBlob((blob) => resolve(blob!), 'image/png');
+            });
+
+            // Remove background
+            const bgRemovedDataUrl = await removeBgToDataUrl(tileBlob);
+
+            // Draw the bg-removed tile onto the result canvas
+            const bgRemovedImg = await loadImage(bgRemovedDataUrl);
+            resultCtx.drawImage(bgRemovedImg, c * tileW, r * tileH, tileW, tileH);
+
+            processed++;
+            const pct = Math.round((processed / totalTiles) * 100);
+            setRemoveBgProgress({ firstgid, progress: pct, detail: `${processed}/${totalTiles} tiles` });
+          }
+        }
+
+        // Convert result canvas to data URL
+        const resultDataUrl = resultCanvas.toDataURL('image/png');
+
+        // Calculate new firstgid
+        let newFirstgid = 1;
+        for (const ts of state.mapData!.tilesets) {
+          const end = ts.firstgid + ts.tilecount;
+          if (end > newFirstgid) newFirstgid = end;
+        }
+
+        // Find original tileset name
+        const originalTs = state.mapData!.tilesets.find((t) => t.firstgid === firstgid);
+        const originalName = originalTs?.name ?? tsInfo.name;
+
+        const newTileset: TiledTileset = {
+          firstgid: newFirstgid,
+          name: `${originalName} (selection no bg)`,
+          tilewidth: tileW,
+          tileheight: tileH,
+          tilecount: region.width * region.height,
+          columns: region.width,
+          image: resultDataUrl,
+          imagewidth: region.width * tileW,
+          imageheight: region.height * tileH,
+        };
+
+        const newImg = await loadImage(resultDataUrl);
+        const newImageInfo: TilesetImageInfo = {
+          img: newImg,
+          firstgid: newFirstgid,
+          columns: region.width,
+          tilewidth: tileW,
+          tileheight: tileH,
+          tilecount: region.width * region.height,
+          name: `${originalName} (selection no bg)`,
+        };
+
+        dispatch({ type: 'ADD_TILESET', tileset: newTileset, imageInfo: newImageInfo });
+        setRemoveBgProgress(null);
+      } catch (err) {
+        console.error('Background removal (selection) failed:', err);
+        setRemoveBgProgress(null);
+      }
+    },
+    [state.tilesetImages, state.mapData, dispatch],
+  );
+
+  // === Reorder Tilesets ===
+
+  const handleReorderTileset = useCallback(
+    (fromFirstgid: number, toFirstgid: number) => {
+      dispatch({ type: 'REORDER_TILESETS', fromFirstgid, toFirstgid });
+    },
+    [dispatch],
+  );
+
+  // === Used GIDs (for detecting unused tilesets) ===
+
+  const usedGids = useMemo(() => {
+    const gids = new Set<number>();
+    if (!state.mapData) return gids;
+    for (const layer of state.mapData.layers) {
+      if (layer.type === 'tilelayer' && layer.data) {
+        for (const gid of layer.data) {
+          if (gid > 0) gids.add(gid);
+        }
+      }
+    }
+    return gids;
+  }, [state.mapData]);
+
+  // === Clean Up Unused Tilesets ===
+
+  const handleCleanUpUnused = useCallback(() => {
+    if (!state.mapData) return;
+    const unusedFirstgids: number[] = [];
+    for (const ts of state.mapData.tilesets) {
+      if (ts.name === 'collision-tileset') continue;
+      const maxGid = ts.firstgid + ts.tilecount - 1;
+      let isUsed = false;
+      for (let gid = ts.firstgid; gid <= maxGid; gid++) {
+        if (usedGids.has(gid)) {
+          isUsed = true;
+          break;
+        }
+      }
+      if (!isUsed) unusedFirstgids.push(ts.firstgid);
+    }
+    if (unusedFirstgids.length === 0) return;
+    const names = unusedFirstgids
+      .map((fgid) => state.mapData!.tilesets.find((t) => t.firstgid === fgid)?.name ?? `firstgid=${fgid}`)
+      .join(', ');
+    if (!window.confirm(`Remove ${unusedFirstgids.length} unused tileset(s)?\n${names}`)) return;
+    dispatch({ type: 'REMOVE_UNUSED_TILESETS', firstgids: unusedFirstgids });
+  }, [state.mapData, usedGids, dispatch]);
+
   // === Sorted tileset list for palette ===
 
   const sortedTilesets = useMemo(() => {
-    return Object.values(state.tilesetImages).sort(
-      (a, b) => a.firstgid - b.firstgid,
-    );
-  }, [state.tilesetImages]);
+    if (!state.mapData) {
+      return Object.values(state.tilesetImages).sort(
+        (a, b) => a.firstgid - b.firstgid,
+      );
+    }
+    // Follow mapData.tilesets order (supports drag reorder)
+    return state.mapData.tilesets
+      .map((ts) => state.tilesetImages[ts.firstgid])
+      .filter(Boolean);
+  }, [state.tilesetImages, state.mapData]);
 
   // === Selection Operations ===
 
@@ -740,7 +902,11 @@ export default function MapEditorLayout({
               onImportTileset={() => setShowImportTileset(true)}
               onDeleteTileset={handleDeleteTileset}
               onRemoveBg={handleRemoveBg}
+              onRemoveBgSelection={handleRemoveBgSelection}
               removeBgProgress={removeBgProgress}
+              onReorderTileset={handleReorderTileset}
+              usedGids={usedGids}
+              onCleanUpUnused={handleCleanUpUnused}
             />
           </div>
         </div>

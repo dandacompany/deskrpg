@@ -1,12 +1,14 @@
 'use client';
 
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { Button } from '@/components/ui';
 import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
 
 export interface RemoveBgProgress {
   firstgid: number;
   progress: number;
+  /** e.g. "3/12 tiles" for per-tile progress */
+  detail?: string;
 }
 
 export interface TilePaletteProps {
@@ -16,7 +18,11 @@ export interface TilePaletteProps {
   onImportTileset: () => void;
   onDeleteTileset: (firstgid: number) => void;
   onRemoveBg?: (firstgid: number) => void;
+  onRemoveBgSelection?: (firstgid: number, region: TileRegion) => void;
   removeBgProgress?: RemoveBgProgress | null;
+  onReorderTileset?: (fromFirstgid: number, toFirstgid: number) => void;
+  usedGids?: Set<number>;
+  onCleanUpUnused?: () => void;
 }
 
 interface DragState {
@@ -33,14 +39,30 @@ function TilesetSection({
   onSelectRegion,
   onDelete,
   onRemoveBg,
+  onRemoveBgSelection,
   removeBgProgress,
+  removeBgDetail,
+  isUnused,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  isDragOver,
 }: {
   info: TilesetImageInfo;
   selectedRegion: TileRegion | null;
   onSelectRegion: (region: TileRegion) => void;
   onDelete: () => void;
   onRemoveBg?: () => void;
+  onRemoveBgSelection?: () => void;
   removeBgProgress?: number | null;
+  removeBgDetail?: string | null;
+  isUnused?: boolean;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
+  isDragOver?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -219,28 +241,66 @@ function TilesetSection({
     draw(drag);
   }, [selectedRegion, draw, drag]);
 
+  // Check if selection is in this tileset for showing "Remove BG (Selection)" button
+  const hasSelectionInThisTileset = selectedRegion && selectedRegion.firstgid === firstgid;
+
   return (
-    <div className="mb-3">
-      <div className="flex items-center justify-between px-1 py-1">
+    <div
+      className={`mb-3 ${isDragOver ? 'border-t-2 border-primary-light' : 'border-t-2 border-transparent'}`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        onDragOver(e);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop();
+      }}
+    >
+      <div
+        className="flex items-center justify-between px-1 py-1 cursor-grab active:cursor-grabbing"
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move';
+          onDragStart();
+        }}
+        onDragEnd={onDragEnd}
+      >
         <span className="text-caption text-text-secondary truncate" title={name}>
           {name}
+          {isUnused && (
+            <span className="ml-1 text-micro text-warning bg-warning/10 px-1 py-0.5 rounded">
+              unused
+            </span>
+          )}
         </span>
         <div className="flex items-center gap-1 flex-shrink-0">
           {removeBgProgress != null ? (
             <span className="text-caption text-primary-light px-1">
-              Removing BG... {removeBgProgress}%
+              {removeBgDetail ? `Removing BG... ${removeBgDetail}` : `Removing BG... ${removeBgProgress}%`}
             </span>
           ) : (
-            onRemoveBg && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onRemoveBg}
-                title="Remove background (creates new tileset)"
-              >
-                Remove BG
-              </Button>
-            )
+            <>
+              {onRemoveBg && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRemoveBg}
+                  title="Remove background (creates new tileset)"
+                >
+                  Remove BG
+                </Button>
+              )}
+              {onRemoveBgSelection && hasSelectionInThisTileset && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRemoveBgSelection}
+                  title="Remove BG for selected tiles only"
+                >
+                  BG Sel
+                </Button>
+              )}
+            </>
           )}
           <button
             onClick={onDelete}
@@ -278,8 +338,16 @@ export default function TilePalette({
   onImportTileset,
   onDeleteTileset,
   onRemoveBg,
+  onRemoveBgSelection,
   removeBgProgress,
+  onReorderTileset,
+  usedGids,
+  onCleanUpUnused,
 }: TilePaletteProps) {
+  // Drag reorder state
+  const [dragFromFirstgid, setDragFromFirstgid] = useState<number | null>(null);
+  const [dragOverFirstgid, setDragOverFirstgid] = useState<number | null>(null);
+
   // Compute selection info text
   let selectionInfo = '';
   if (selectedRegion) {
@@ -291,14 +359,48 @@ export default function TilePalette({
     }
   }
 
+  // Compute which tilesets are unused
+  const unusedFirstgids = useMemo(() => {
+    const unused = new Set<number>();
+    if (!usedGids) return unused;
+    for (const ts of tilesets) {
+      // Skip collision-tileset from unused detection
+      if (ts.name === 'collision-tileset') continue;
+      const maxGid = ts.firstgid + ts.tilecount - 1;
+      let isUsed = false;
+      for (let gid = ts.firstgid; gid <= maxGid; gid++) {
+        if (usedGids.has(gid)) {
+          isUsed = true;
+          break;
+        }
+      }
+      if (!isUsed) unused.add(ts.firstgid);
+    }
+    return unused;
+  }, [tilesets, usedGids]);
+
+  const hasUnused = unusedFirstgids.size > 0;
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
         <span className="text-title text-text">Tilesets</span>
-        <Button variant="ghost" size="sm" onClick={onImportTileset} title="Import Tileset (I)">
-          Import (I)
-        </Button>
+        <div className="flex items-center gap-1">
+          {hasUnused && onCleanUpUnused && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onCleanUpUnused}
+              title={`Remove ${unusedFirstgids.size} unused tileset(s)`}
+            >
+              Clean Up
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={onImportTileset} title="Import Tileset (I)">
+            Import (I)
+          </Button>
+        </div>
       </div>
 
       {/* Selection info */}
@@ -323,11 +425,41 @@ export default function TilePalette({
             onSelectRegion={onSelectRegion}
             onDelete={() => onDeleteTileset(info.firstgid)}
             onRemoveBg={onRemoveBg ? () => onRemoveBg(info.firstgid) : undefined}
+            onRemoveBgSelection={
+              onRemoveBgSelection && selectedRegion && selectedRegion.firstgid === info.firstgid
+                ? () => onRemoveBgSelection(info.firstgid, selectedRegion!)
+                : undefined
+            }
             removeBgProgress={
               removeBgProgress?.firstgid === info.firstgid
                 ? removeBgProgress.progress
                 : null
             }
+            removeBgDetail={
+              removeBgProgress?.firstgid === info.firstgid
+                ? removeBgProgress.detail ?? null
+                : null
+            }
+            isUnused={unusedFirstgids.has(info.firstgid)}
+            onDragStart={() => setDragFromFirstgid(info.firstgid)}
+            onDragOver={(e: React.DragEvent) => {
+              e.preventDefault();
+              if (dragFromFirstgid != null && dragFromFirstgid !== info.firstgid) {
+                setDragOverFirstgid(info.firstgid);
+              }
+            }}
+            onDrop={() => {
+              if (dragFromFirstgid != null && dragFromFirstgid !== info.firstgid && onReorderTileset) {
+                onReorderTileset(dragFromFirstgid, info.firstgid);
+              }
+              setDragFromFirstgid(null);
+              setDragOverFirstgid(null);
+            }}
+            onDragEnd={() => {
+              setDragFromFirstgid(null);
+              setDragOverFirstgid(null);
+            }}
+            isDragOver={dragOverFirstgid === info.firstgid}
           />
         ))}
       </div>
