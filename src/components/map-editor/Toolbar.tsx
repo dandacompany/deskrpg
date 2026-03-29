@@ -155,9 +155,14 @@ export default function Toolbar({
 
   return (
     <div className="flex items-center h-10 bg-surface border-b border-border px-1 select-none flex-shrink-0">
+      {/* Title */}
+      <div className="px-3 flex items-center">
+        <span className="text-body font-bold text-primary-light tracking-wide select-none">DeskRPG Map Editor</span>
+      </div>
+
       {/* File Menu */}
       <ToolGroup>
-        <Dropdown label={<>{dirty && <span className="text-warning mr-1">●</span>}File</>}>
+        <Dropdown label="File">
           <DropdownItem onClick={onNewMap} shortcut="⌘N">New Map</DropdownItem>
           <DropdownItem onClick={onLoad} shortcut="⌘O">Open</DropdownItem>
           <DropdownItem onClick={onSaveToDeskRPG} shortcut="⌘S">Save</DropdownItem>
@@ -221,9 +226,6 @@ export default function Toolbar({
 
       {/* Spacer */}
       <div className="flex-1" />
-
-      {/* Title */}
-      <span className="text-caption text-text-dim tracking-wide mr-2 select-none">DeskRPG Map Editor</span>
 
       {/* Help */}
       <div className="px-2">
