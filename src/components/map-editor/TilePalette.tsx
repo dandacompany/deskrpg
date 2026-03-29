@@ -304,10 +304,8 @@ function TilesetSection({
           className="cursor-crosshair"
           style={{
             width: '100%',
-            minWidth: '200px',
-            maxHeight: isCompact ? '48px' : '300px',
-            objectFit: 'contain',
             imageRendering: 'pixelated',
+            ...(isCompact ? { maxHeight: '48px', objectFit: 'contain' as const } : {}),
           }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
