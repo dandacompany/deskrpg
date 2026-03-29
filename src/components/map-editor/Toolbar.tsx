@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui';
 import { Undo2, Redo2, HelpCircle, ChevronDown, Paintbrush, Eraser, MousePointer2, Move } from 'lucide-react';
+import Tooltip from './Tooltip';
 import type { Tool } from './hooks/useMapEditor';
 
 export interface ToolbarProps {
@@ -179,39 +180,43 @@ export default function Toolbar({
       {/* Tools */}
       <ToolGroup>
         {tools.map(({ tool, icon, label, shortcut }) => (
-          <Button
-            key={tool}
-            variant={activeTool === tool ? 'primary' : 'ghost'}
-            size="sm"
-            onClick={() => onToolChange(tool)}
-            title={`${label} (${shortcut})`}
-          >
-            {icon}
-          </Button>
+          <Tooltip key={tool} label={label} shortcut={shortcut}>
+            <Button
+              variant={activeTool === tool ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => onToolChange(tool)}
+            >
+              {icon}
+            </Button>
+          </Tooltip>
         ))}
       </ToolGroup>
 
       {/* Zoom Controls */}
       <ToolGroup>
-        <Button variant="ghost" size="sm" onClick={onZoomOut} title="Zoom Out (-)">
-          −
-        </Button>
+        <Tooltip label="Zoom Out" shortcut="−">
+          <Button variant="ghost" size="sm" onClick={onZoomOut}>−</Button>
+        </Tooltip>
         <span className="text-caption text-text-secondary w-12 text-center tabular-nums">
           {Math.round(zoom * 100)}%
         </span>
-        <Button variant="ghost" size="sm" onClick={onZoomIn} title="Zoom In (+)">
-          +
-        </Button>
+        <Tooltip label="Zoom In" shortcut="+">
+          <Button variant="ghost" size="sm" onClick={onZoomIn}>+</Button>
+        </Tooltip>
       </ToolGroup>
 
       {/* Undo / Redo */}
       <ToolGroup>
-        <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo} title="Undo (⌘Z)">
-          <Undo2 className="w-4 h-4" />
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo} title="Redo (⌘⇧Z)">
-          <Redo2 className="w-4 h-4" />
-        </Button>
+        <Tooltip label="Undo" shortcut="⌘Z">
+          <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo}>
+            <Undo2 className="w-4 h-4" />
+          </Button>
+        </Tooltip>
+        <Tooltip label="Redo" shortcut="⌘⇧Z">
+          <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo}>
+            <Redo2 className="w-4 h-4" />
+          </Button>
+        </Tooltip>
       </ToolGroup>
 
       {/* Spacer */}
@@ -219,9 +224,11 @@ export default function Toolbar({
 
       {/* Help */}
       <div className="px-2">
-        <Button variant="ghost" size="sm" onClick={onHelp} title="Keyboard Shortcuts (?)">
-          <HelpCircle className="w-4 h-4" />
-        </Button>
+        <Tooltip label="Keyboard Shortcuts" shortcut="?">
+          <Button variant="ghost" size="sm" onClick={onHelp}>
+            <HelpCircle className="w-4 h-4" />
+          </Button>
+        </Tooltip>
       </div>
     </div>
   );
