@@ -687,6 +687,83 @@ export default function PixelEditorModal({
     renderCanvas();
   }, [tilesetInfo, resizeTargetCols, resizeTargetRows, pushUndo, zoom, buildCheckerboard, renderCanvas]);
 
+  // --- Trim fully transparent edge rows/columns ---
+  const trimEdges = useCallback(() => {
+    const ec = editCanvasRef.current;
+    if (!ec || !tilesetInfo) return;
+    const ctx = ec.getContext('2d')!;
+    const tw = tilesetInfo.tilewidth;
+    const th = tilesetInfo.tileheight;
+    const cols = Math.round(ec.width / tw);
+    const rows = Math.round(ec.height / th);
+
+    // Check which edge tile-columns/rows are fully transparent
+    const isColEmpty = (col: number) => {
+      const id = ctx.getImageData(col * tw, 0, tw, ec.height);
+      for (let i = 3; i < id.data.length; i += 4) if (id.data[i] > 0) return false;
+      return true;
+    };
+    const isRowEmpty = (row: number) => {
+      const id = ctx.getImageData(0, row * th, ec.width, th);
+      for (let i = 3; i < id.data.length; i += 4) if (id.data[i] > 0) return false;
+      return true;
+    };
+
+    let trimLeft = 0, trimRight = 0, trimTop = 0, trimBottom = 0;
+    while (trimLeft < cols - 1 && isColEmpty(trimLeft)) trimLeft++;
+    while (trimRight < cols - 1 - trimLeft && isColEmpty(cols - 1 - trimRight)) trimRight++;
+    while (trimTop < rows - 1 && isRowEmpty(trimTop)) trimTop++;
+    while (trimBottom < rows - 1 - trimTop && isRowEmpty(rows - 1 - trimBottom)) trimBottom++;
+
+    if (trimLeft === 0 && trimRight === 0 && trimTop === 0 && trimBottom === 0) return;
+
+    pushUndo();
+    const newCols = cols - trimLeft - trimRight;
+    const newRows = rows - trimTop - trimBottom;
+    const newCanvas = document.createElement('canvas');
+    newCanvas.width = newCols * tw;
+    newCanvas.height = newRows * th;
+    const newCtx = newCanvas.getContext('2d')!;
+    newCtx.drawImage(ec, trimLeft * tw, trimTop * th, newCanvas.width, newCanvas.height, 0, 0, newCanvas.width, newCanvas.height);
+
+    editCanvasRef.current = newCanvas;
+    setExpandedCols(newCols);
+    setExpandedRows(newRows);
+    buildCheckerboard(newCanvas.width, newCanvas.height, zoom);
+    renderCanvas();
+  }, [tilesetInfo, pushUndo, zoom, buildCheckerboard, renderCanvas]);
+
+  // --- Delete edge row/column ---
+  const deleteEdge = useCallback((edge: 'left' | 'right' | 'top' | 'bottom') => {
+    const ec = editCanvasRef.current;
+    if (!ec || !tilesetInfo) return;
+    const tw = tilesetInfo.tilewidth;
+    const th = tilesetInfo.tileheight;
+    const cols = Math.round(ec.width / tw);
+    const rows = Math.round(ec.height / th);
+    if ((edge === 'left' || edge === 'right') && cols <= 1) return;
+    if ((edge === 'top' || edge === 'bottom') && rows <= 1) return;
+
+    pushUndo();
+    let sx = 0, sy = 0, newCols = cols, newRows = rows;
+    if (edge === 'left') { sx = tw; newCols--; }
+    if (edge === 'right') { newCols--; }
+    if (edge === 'top') { sy = th; newRows--; }
+    if (edge === 'bottom') { newRows--; }
+
+    const newCanvas = document.createElement('canvas');
+    newCanvas.width = newCols * tw;
+    newCanvas.height = newRows * th;
+    const newCtx = newCanvas.getContext('2d')!;
+    newCtx.drawImage(ec, sx, sy, newCanvas.width, newCanvas.height, 0, 0, newCanvas.width, newCanvas.height);
+
+    editCanvasRef.current = newCanvas;
+    setExpandedCols(newCols);
+    setExpandedRows(newRows);
+    buildCheckerboard(newCanvas.width, newCanvas.height, zoom);
+    renderCanvas();
+  }, [tilesetInfo, pushUndo, zoom, buildCheckerboard, renderCanvas]);
+
   // --- Guard: don't render if no data ---
   if (!region || !tilesetInfo) {
     return (
@@ -771,6 +848,28 @@ export default function PixelEditorModal({
             />
             <Button variant="ghost" size="sm" onClick={applyResize}>
               Apply
+            </Button>
+          </div>
+
+          {/* Separator */}
+          <div className="w-px h-6 bg-border" />
+
+          {/* Trim & edge delete */}
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={trimEdges} title="Remove fully transparent edge tiles">
+              Trim
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => deleteEdge('left')} title="Delete left column">
+              -L
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => deleteEdge('right')} title="Delete right column">
+              -R
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => deleteEdge('top')} title="Delete top row">
+              -T
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => deleteEdge('bottom')} title="Delete bottom row">
+              -B
             </Button>
           </div>
 
