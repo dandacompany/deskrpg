@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import { Button } from '@/components/ui';
+import { CheckSquare, X } from 'lucide-react';
 import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
 import { BUILTIN_TILESET_NAME } from './hooks/useMapEditor';
 
@@ -14,8 +15,6 @@ export interface TilePaletteProps {
   onRenameTileset?: (firstgid: number, name: string) => void;
   onEditPixels?: (firstgid: number, region: TileRegion) => void;
   onReorderTileset?: (fromFirstgid: number, toFirstgid: number) => void;
-  usedGids?: Set<number>;
-  onCleanUpUnused?: () => void;
   hideHeader?: boolean;
 }
 
@@ -34,7 +33,6 @@ function TilesetSection({
   onDelete,
   onRename,
   onEditPixels,
-  isUnused,
   onDragStart,
   onDragOver,
   onDrop,
@@ -47,7 +45,6 @@ function TilesetSection({
   onDelete: () => void;
   onRename: (newName: string) => void;
   onEditPixels?: () => void;
-  isUnused?: boolean;
   onDragStart: () => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: () => void;
@@ -278,33 +275,30 @@ function TilesetSection({
               {name}
             </span>
           )}
-          {isUnused && !isEditing && (
-            <span className="text-micro text-warning bg-warning/10 px-1 py-0.5 rounded flex-shrink-0">
-              unused
-            </span>
-          )}
         </span>
         <div className="flex items-center gap-1 flex-shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              const region: TileRegion = {
-                firstgid,
-                col: 0,
-                row: 0,
-                width: columns,
-                height: rows,
-                gids: Array.from({ length: rows }, (_, r) =>
-                  Array.from({ length: columns }, (_, c) => firstgid + r * columns + c),
-                ),
-              };
-              onSelectRegion(region);
-            }}
-            title="Select all tiles in this tileset"
-          >
-            Select All
-          </Button>
+          {name !== BUILTIN_TILESET_NAME && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const region: TileRegion = {
+                  firstgid,
+                  col: 0,
+                  row: 0,
+                  width: columns,
+                  height: rows,
+                  gids: Array.from({ length: rows }, (_, r) =>
+                    Array.from({ length: columns }, (_, c) => firstgid + r * columns + c),
+                  ),
+                };
+                onSelectRegion(region);
+              }}
+              title="Select all tiles"
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+            </Button>
+          )}
           {onEditPixels && hasSelectionInThisTileset && (
             <Button
               variant="ghost"
@@ -321,7 +315,7 @@ function TilesetSection({
               className="text-text-dim hover:text-danger text-body transition-colors px-1"
               title="Remove tileset"
             >
-              &times;
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
@@ -354,8 +348,6 @@ export default function TilePalette({
   onRenameTileset,
   onEditPixels,
   onReorderTileset,
-  usedGids,
-  onCleanUpUnused,
   hideHeader,
 }: TilePaletteProps) {
   // Drag reorder state
@@ -373,49 +365,15 @@ export default function TilePalette({
     }
   }
 
-  // Compute which tilesets are unused
-  const unusedFirstgids = useMemo(() => {
-    const unused = new Set<number>();
-    if (!usedGids) return unused;
-    for (const ts of tilesets) {
-      // Skip built-in tileset from unused detection
-      if (ts.name === BUILTIN_TILESET_NAME) continue;
-      const maxGid = ts.firstgid + ts.tilecount - 1;
-      let isUsed = false;
-      for (let gid = ts.firstgid; gid <= maxGid; gid++) {
-        if (usedGids.has(gid)) {
-          isUsed = true;
-          break;
-        }
-      }
-      if (!isUsed) unused.add(ts.firstgid);
-    }
-    return unused;
-  }, [tilesets, usedGids]);
-
-  const hasUnused = unusedFirstgids.size > 0;
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       {!hideHeader && (
         <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
           <span className="text-title text-text">Tilesets</span>
-          <div className="flex items-center gap-1">
-            {hasUnused && onCleanUpUnused && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onCleanUpUnused}
-                title={`Remove ${unusedFirstgids.size} unused tileset(s)`}
-              >
-                Clean Up
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" onClick={onImportTileset} title="Import Tileset (I)">
-              Import (I)
-            </Button>
-          </div>
+          <Button variant="ghost" size="sm" onClick={onImportTileset} title="Import Tileset (I)">
+            Import (I)
+          </Button>
         </div>
       )}
 
@@ -446,7 +404,6 @@ export default function TilePalette({
                 ? () => onEditPixels(info.firstgid, selectedRegion!)
                 : undefined
             }
-            isUnused={unusedFirstgids.has(info.firstgid)}
             onDragStart={() => setDragFromFirstgid(info.firstgid)}
             onDragOver={(e: React.DragEvent) => {
               e.preventDefault();

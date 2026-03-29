@@ -951,8 +951,6 @@ export default function MapEditorLayout({
                       onRenameTileset={(firstgid, name) => dispatch({ type: 'RENAME_TILESET', firstgid, name })}
                       onEditPixels={handleEditPixels}
                       onReorderTileset={handleReorderTileset}
-                      usedGids={usedGids}
-                      onCleanUpUnused={handleCleanUpUnused}
                       hideHeader
                     />
                   </div>
