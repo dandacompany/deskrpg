@@ -407,6 +407,40 @@ export default function MapEditorLayout({
     downloadString(xml, `${state.projectName}.tmx`, 'application/xml');
   }, [state.mapData, state.projectName]);
 
+  const handleExportPNG = useCallback(() => {
+    if (!state.mapData) return;
+    const mapData = state.mapData;
+    const tw = mapData.tilewidth;
+    const th = mapData.tileheight;
+    const canvas = document.createElement('canvas');
+    canvas.width = mapData.width * tw;
+    canvas.height = mapData.height * th;
+    const ctx = canvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+
+    for (const layer of mapData.layers) {
+      if (layer.type !== 'tilelayer' || !layer.data || !layer.visible) continue;
+      if (layer.name.toLowerCase() === 'collision') continue;
+      for (let y = 0; y < mapData.height; y++) {
+        for (let x = 0; x < mapData.width; x++) {
+          const gid = layer.data[y * mapData.width + x];
+          if (gid === 0) continue;
+          const tsInfo = findTileset(gid);
+          if (!tsInfo) continue;
+          const localId = gid - tsInfo.firstgid;
+          const sx = (localId % tsInfo.columns) * tsInfo.tilewidth;
+          const sy = Math.floor(localId / tsInfo.columns) * tsInfo.tileheight;
+          ctx.drawImage(tsInfo.img, sx, sy, tsInfo.tilewidth, tsInfo.tileheight, x * tw, y * th, tw, th);
+        }
+      }
+    }
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      downloadBlob(blob, `${state.projectName}.png`);
+    }, 'image/png');
+  }, [state.mapData, state.projectName, findTileset]);
+
   // === Layer Operations ===
 
   const handleAddLayer = useCallback(() => {
@@ -815,6 +849,7 @@ export default function MapEditorLayout({
         onSaveToDeskRPG={handleSaveToDeskRPG}
         onExportTMJ={handleExportTMJ}
         onExportTMX={handleExportTMX}
+        onExportPNG={handleExportPNG}
         onZoomIn={() => dispatch({ type: 'SET_ZOOM', zoom: Math.round((state.zoom + 0.1) * 10) / 10 })}
         onZoomOut={() => dispatch({ type: 'SET_ZOOM', zoom: Math.round((state.zoom - 0.1) * 10) / 10 })}
         onToggleGrid={() => dispatch({ type: 'TOGGLE_GRID' })}

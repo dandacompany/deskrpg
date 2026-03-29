@@ -20,6 +20,7 @@ export interface ToolbarProps {
   onSaveToDeskRPG: () => void;
   onExportTMJ: () => void;
   onExportTMX: () => void;
+  onExportPNG: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onToggleGrid: () => void;
@@ -123,6 +124,33 @@ function DropdownSeparator() {
   return <div className="my-1 border-t border-border" />;
 }
 
+function DropdownSubmenu({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <div className="w-full flex items-center justify-between px-3 py-1.5 text-caption text-text-secondary hover:bg-surface-raised hover:text-text transition-colors cursor-default">
+        <span>{label}</span>
+        <ChevronDown className="w-3 h-3 -rotate-90" />
+      </div>
+      {open && (
+        <div className="absolute left-full top-0 ml-0.5 bg-surface border border-border rounded-lg shadow-xl z-50 min-w-[130px] py-1">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Toolbar({
   activeTool,
   zoom,
@@ -137,6 +165,7 @@ export default function Toolbar({
   onSaveToDeskRPG,
   onExportTMJ,
   onExportTMX,
+  onExportPNG,
   onZoomIn,
   onZoomOut,
   onToggleGrid,
@@ -169,8 +198,11 @@ export default function Toolbar({
           <DropdownItem onClick={onLoad} shortcut="⌘O">Open</DropdownItem>
           <DropdownItem onClick={onSaveToDeskRPG} shortcut="⌘S">Save</DropdownItem>
           <DropdownSeparator />
-          <DropdownItem onClick={onExportTMJ}>Export .tmj</DropdownItem>
-          <DropdownItem onClick={onExportTMX}>Export .tmx</DropdownItem>
+          <DropdownSubmenu label="Export">
+            <DropdownItem onClick={onExportTMJ}>.tmj (Tiled JSON)</DropdownItem>
+            <DropdownItem onClick={onExportTMX}>.tmx (Tiled XML)</DropdownItem>
+            <DropdownItem onClick={onExportPNG}>.png (Image)</DropdownItem>
+          </DropdownSubmenu>
           <DropdownSeparator />
           <DropdownItem onClick={onGoBack}>Back to DeskRPG</DropdownItem>
         </Dropdown>
