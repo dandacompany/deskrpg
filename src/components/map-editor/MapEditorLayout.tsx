@@ -18,6 +18,8 @@ import type {
   TiledLayer,
 } from './hooks/useMapEditor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { Plus } from 'lucide-react';
+import Tooltip from './Tooltip';
 import Toolbar from './Toolbar';
 import LayerPanel from './LayerPanel';
 import TilePalette from './TilePalette';
@@ -878,17 +880,24 @@ export default function MapEditorLayout({
                 </button>
                 {/* Section-specific header actions */}
                 {sectionId === 'layers' && !isCollapsed && (
-                  <button
-                    className="text-caption text-text-secondary hover:text-text"
-                    onClick={handleAddLayer}
-                  >
-                    +
-                  </button>
+                  <Tooltip label="Add Layer">
+                    <button
+                      className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
+                      onClick={handleAddLayer}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
                 )}
                 {sectionId === 'tilesets' && !isCollapsed && (
-                  <button className="text-caption text-text-secondary hover:text-text" onClick={() => setShowImportTileset(true)}>
-                    +
-                  </button>
+                  <Tooltip label="Import Tileset" shortcut="I">
+                    <button
+                      className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
+                      onClick={() => setShowImportTileset(true)}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
                 )}
               </div>
             );
