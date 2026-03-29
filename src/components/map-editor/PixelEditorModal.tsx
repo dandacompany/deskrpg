@@ -625,35 +625,41 @@ export default function PixelEditorModal({
     };
   }, [handlePanMove, handlePanEnd]);
 
-  // --- Wheel zoom (cursor-anchored) ---
+  // --- Wheel: scroll=pan vertical, shift+scroll=pan horizontal, cmd/ctrl+scroll=zoom ---
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       e.preventDefault();
-      const canvas = canvasRef.current;
-      if (!canvas) return;
 
-      const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
+      if (e.ctrlKey || e.metaKey) {
+        // Cmd/Ctrl + scroll = zoom
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
 
-      const oldZoom = zoom;
-      const currentIdx = ZOOM_LEVELS.indexOf(oldZoom as (typeof ZOOM_LEVELS)[number]);
-      const idx = currentIdx === -1
-        ? ZOOM_LEVELS.findIndex((z) => z >= oldZoom)
-        : currentIdx;
-      const direction = e.deltaY < 0 ? 1 : -1;
-      const nextIdx = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, idx + direction));
-      const newZoom = ZOOM_LEVELS[nextIdx];
-      if (newZoom === oldZoom) return;
+        const oldZoom = zoom;
+        const currentIdx = ZOOM_LEVELS.indexOf(oldZoom as (typeof ZOOM_LEVELS)[number]);
+        const idx = currentIdx === -1
+          ? ZOOM_LEVELS.findIndex((z) => z >= oldZoom)
+          : currentIdx;
+        const direction = e.deltaY < 0 ? 1 : -1;
+        const nextIdx = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, idx + direction));
+        const newZoom = ZOOM_LEVELS[nextIdx];
+        if (newZoom === oldZoom) return;
 
-      // Anchor zoom on cursor position
-      const wx = (mx - pan.x) / oldZoom;
-      const wy = (my - pan.y) / oldZoom;
-      const newPanX = mx - wx * newZoom;
-      const newPanY = my - wy * newZoom;
-
-      setZoom(newZoom);
-      setPan({ x: newPanX, y: newPanY });
+        const wx = (mx - pan.x) / oldZoom;
+        const wy = (my - pan.y) / oldZoom;
+        setPan({ x: mx - wx * newZoom, y: my - wy * newZoom });
+        setZoom(newZoom);
+      } else if (e.shiftKey) {
+        // Shift + scroll = pan horizontal
+        const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+        setPan((p) => ({ ...p, x: p.x - delta }));
+      } else {
+        // Scroll = pan vertical
+        setPan((p) => ({ ...p, y: p.y - e.deltaY }));
+      }
     },
     [zoom, pan],
   );
