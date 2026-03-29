@@ -25,20 +25,26 @@ export function usePanZoom(state: EditorState, dispatch: Dispatch) {
   const handleWheel = useCallback(
     (e: React.WheelEvent | WheelEvent, canvasRect: DOMRect) => {
       e.preventDefault();
-      const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-      const newZoom = Math.max(0.5, Math.min(8, state.zoom * zoomFactor));
 
-      // Zoom toward cursor position
-      const mouseX = e.clientX - canvasRect.left;
-      const mouseY = e.clientY - canvasRect.top;
-
-      // Adjust pan so the point under cursor stays fixed
-      const scale = newZoom / state.zoom;
-      const newPanX = mouseX - scale * (mouseX - state.panX);
-      const newPanY = mouseY - scale * (mouseY - state.panY);
-
-      dispatch({ type: 'SET_ZOOM', zoom: newZoom });
-      dispatch({ type: 'SET_PAN', panX: newPanX, panY: newPanY });
+      if (e.ctrlKey || e.metaKey) {
+        // Cmd/Ctrl + scroll = zoom (cursor-anchored)
+        const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        const newZoom = Math.max(0.5, Math.min(8, state.zoom * zoomFactor));
+        const mouseX = e.clientX - canvasRect.left;
+        const mouseY = e.clientY - canvasRect.top;
+        const scale = newZoom / state.zoom;
+        const newPanX = mouseX - scale * (mouseX - state.panX);
+        const newPanY = mouseY - scale * (mouseY - state.panY);
+        dispatch({ type: 'SET_ZOOM', zoom: newZoom });
+        dispatch({ type: 'SET_PAN', panX: newPanX, panY: newPanY });
+      } else if (e.shiftKey) {
+        // Shift + scroll = pan horizontal
+        const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+        dispatch({ type: 'SET_PAN', panX: state.panX - delta, panY: state.panY });
+      } else {
+        // Scroll = pan vertical
+        dispatch({ type: 'SET_PAN', panX: state.panX, panY: state.panY - e.deltaY });
+      }
     },
     [state.zoom, state.panX, state.panY, dispatch],
   );
