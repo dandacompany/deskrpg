@@ -30,7 +30,7 @@ const WALK_INTERVAL_MS = 120;
 
 // === Component ===
 
-export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerOverlayMap }: MapCanvasProps) {
+export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerOverlayMap, onEditSelectionPixels, onCopySelection, onSaveAsStamp, activeStamp, onPlaceStamp }: MapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -57,6 +57,9 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
   const walkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastDragPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPasteMode, setIsPasteMode] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [stampCursorTile, setStampCursorTile] = useState<{ x: number; y: number } | null>(null);
+  const stampPreviewImgRef = useRef<HTMLImageElement | null>(null);
 
   // Hooks
   const { render } = useCanvasRenderer(state, findTileset);
@@ -128,7 +131,17 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         canvas.style.height = `${height}px`;
         const ctx = canvas.getContext('2d');
         if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        render(canvas, characterSheetRef.current ?? undefined, characterState, { layerOverlayMap });
+        render(canvas, characterSheetRef.current ?? undefined, characterState, {
+          layerOverlayMap,
+          // TODO(Task 9): uncomment when renderer options type is updated
+          // stampPreview: activeStamp && stampCursorTile ? {
+          //   tileX: stampCursorTile.x,
+          //   tileY: stampCursorTile.y,
+          //   cols: activeStamp.cols,
+          //   rows: activeStamp.rows,
+          //   previewImage: stampPreviewImgRef.current ?? undefined,
+          // } : undefined,
+        });
       }
     });
 
@@ -141,8 +154,18 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    render(canvas, characterSheetRef.current ?? undefined, characterState, { layerOverlayMap });
-  }, [state, characterState, characterLoaded, render]);
+    render(canvas, characterSheetRef.current ?? undefined, characterState, {
+      layerOverlayMap,
+      // TODO(Task 9): uncomment when renderer options type is updated
+      // stampPreview: activeStamp && stampCursorTile ? {
+      //   tileX: stampCursorTile.x,
+      //   tileY: stampCursorTile.y,
+      //   cols: activeStamp.cols,
+      //   rows: activeStamp.rows,
+      //   previewImage: stampPreviewImgRef.current ?? undefined,
+      // } : undefined,
+    });
+  }, [state, characterState, characterLoaded, render, stampCursorTile, activeStamp]);
 
   // === Coordinate conversion ===
 
@@ -326,6 +349,13 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         }
       }
 
+      // Stamp placement mode
+      if (activeStamp && e.button === 0) {
+        const tile = screenToTile(mx, my);
+        onPlaceStamp?.(tile.x, tile.y);
+        return;
+      }
+
       // 3. Select tool
       if (state.tool === 'select' && e.button === 0) {
         const tile = screenToTile(mx, my);
@@ -461,6 +491,12 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         return;
       }
 
+      // Stamp cursor tracking
+      if (activeStamp) {
+        const tile = screenToTile(mx, my);
+        setStampCursorTile(tile);
+      }
+
       // 4. Status bar update
       if (onStatusUpdate) {
         const tile = screenToTile(mx, my);
@@ -536,20 +572,98 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
     [panZoom],
   );
 
+  const renderSelectionToDataUrl = useCallback((): string | null => {
+    if (!state.mapData || !state.selection) return null;
+    const sel = state.selection;
+    const tw = state.mapData.tilewidth;
+    const th = state.mapData.tileheight;
+    const pw = sel.width * tw;
+    const ph = sel.height * th;
+
+    const offscreen = document.createElement('canvas');
+    offscreen.width = pw;
+    offscreen.height = ph;
+    const ctx = offscreen.getContext('2d');
+    if (!ctx) return null;
+
+    for (const layer of state.mapData.layers) {
+      if (!layer.visible || layer.type !== 'tilelayer' || !layer.data) continue;
+      if (layer.name.toLowerCase() === 'collision') continue;
+
+      const prevAlpha = ctx.globalAlpha;
+      ctx.globalAlpha = layer.opacity;
+
+      for (let row = 0; row < sel.height; row++) {
+        for (let col = 0; col < sel.width; col++) {
+          const mapCol = sel.x + col;
+          const mapRow = sel.y + row;
+          if (mapCol < 0 || mapCol >= state.mapData!.width || mapRow < 0 || mapRow >= state.mapData!.height) continue;
+
+          const gid = layer.data[mapRow * state.mapData!.width + mapCol];
+          if (gid === 0) continue;
+
+          const tsInfo = findTileset(gid);
+          if (!tsInfo || !tsInfo.img.complete) continue;
+
+          const localId = gid - tsInfo.firstgid;
+          const srcCol = localId % tsInfo.columns;
+          const srcRow = Math.floor(localId / tsInfo.columns);
+
+          ctx.drawImage(
+            tsInfo.img,
+            srcCol * tsInfo.tilewidth, srcRow * tsInfo.tileheight,
+            tsInfo.tilewidth, tsInfo.tileheight,
+            col * tw, row * th, tw, th,
+          );
+        }
+      }
+      ctx.globalAlpha = prevAlpha;
+    }
+
+    return offscreen.toDataURL('image/png');
+  }, [state.mapData, state.selection, findTileset]);
+
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-  }, []);
+    if (state.tool === 'select' && state.selection) {
+      setContextMenu({ x: e.clientX, y: e.clientY });
+    } else {
+      setContextMenu(null);
+    }
+  }, [state.tool, state.selection]);
+
+  const handleEditSelectionPixels = useCallback(() => {
+    if (!state.selection || !state.mapData || !onEditSelectionPixels) return;
+    const dataUrl = renderSelectionToDataUrl();
+    if (!dataUrl) return;
+    const tw = state.mapData.tilewidth;
+    const th = state.mapData.tileheight;
+    onEditSelectionPixels(dataUrl, state.selection.width, state.selection.height, tw, th);
+    setContextMenu(null);
+  }, [state.selection, state.mapData, onEditSelectionPixels, renderSelectionToDataUrl]);
 
   // === Escape key to exit paste mode ===
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isPasteMode) {
-        setIsPasteMode(false);
+      if (e.key === 'Escape') {
+        if (isPasteMode) setIsPasteMode(false);
+        setStampCursorTile(null);
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [isPasteMode]);
+
+  // === Load stamp preview image ===
+  useEffect(() => {
+    if (activeStamp?.thumbnail) {
+      const img = new Image();
+      img.onload = () => { stampPreviewImgRef.current = img; };
+      img.src = activeStamp.thumbnail;
+    } else {
+      stampPreviewImgRef.current = null;
+    }
+  }, [activeStamp?.thumbnail]);
 
   // === Enter paste mode when Ctrl+V sets clipboard ===
   useEffect(() => {
@@ -582,6 +696,61 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         onWheel={handleWheel}
         onContextMenu={handleContextMenu}
       />
+      {/* Context Menu */}
+      {contextMenu && state.selection && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
+          <div
+            className="fixed z-50 bg-surface border border-border rounded-md shadow-lg py-1 min-w-[160px]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button
+              className="w-full text-left px-3 py-1.5 text-caption text-text hover:bg-surface-raised transition-colors flex items-center gap-2"
+              onClick={handleEditSelectionPixels}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                <path d="m15 5 4 4" />
+              </svg>
+              Edit Pixels
+            </button>
+            <button
+              className="w-full text-left px-3 py-1.5 text-caption text-text hover:bg-surface-raised transition-colors flex items-center gap-2"
+              onClick={() => { onCopySelection?.(); setContextMenu(null); }}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+              </svg>
+              Copy
+            </button>
+            <button
+              className="w-full text-left px-3 py-1.5 text-caption text-text hover:bg-surface-raised transition-colors flex items-center gap-2"
+              onClick={() => { dispatch({ type: 'DELETE_SELECTION' }); setContextMenu(null); }}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+              </svg>
+              Delete
+            </button>
+            <div className="border-t border-border my-1" />
+            <button
+              className="w-full text-left px-3 py-1.5 text-caption text-text hover:bg-surface-raised transition-colors flex items-center gap-2"
+              onClick={() => {
+                const dataUrl = renderSelectionToDataUrl();
+                onSaveAsStamp?.(dataUrl);
+                setContextMenu(null);
+              }}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                <path d="M3 9h18" /><path d="M9 21V9" />
+              </svg>
+              Save as Stamp
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
