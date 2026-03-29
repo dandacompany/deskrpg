@@ -19,7 +19,8 @@ export default function Tooltip({ label, shortcut, children }: TooltipProps) {
     timeout.current = setTimeout(() => {
       if (triggerRef.current) {
         const rect = triggerRef.current.getBoundingClientRect();
-        setPos({ x: rect.left + rect.width / 2, y: rect.bottom + 6 });
+        // Show above the trigger element
+        setPos({ x: rect.left + rect.width / 2, y: rect.top - 6 });
       }
       setShow(true);
     }, 400);
@@ -41,7 +42,7 @@ export default function Tooltip({ label, shortcut, children }: TooltipProps) {
       {show && createPortal(
         <div
           className="fixed z-[9999] pointer-events-none whitespace-nowrap"
-          style={{ left: pos.x, top: pos.y, transform: 'translateX(-50%)' }}
+          style={{ left: pos.x, top: pos.y, transform: 'translate(-50%, -100%)' }}
         >
           <div className="bg-bg border border-border rounded-md px-2 py-1 shadow-lg flex items-center gap-2">
             <span className="text-micro text-text">{label}</span>
