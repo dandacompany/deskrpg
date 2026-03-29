@@ -85,6 +85,8 @@ export default function PixelEditorModal({
     top: boolean; bottom: boolean; left: boolean; right: boolean;
     screenX: number; screenY: number;
   } | null>(null);
+  const hoveredEdgeRef = useRef(hoveredEdge);
+  hoveredEdgeRef.current = hoveredEdge;
   const [resizeTargetCols, setResizeTargetCols] = useState(1);
   const [resizeTargetRows, setResizeTargetRows] = useState(1);
   const [brushSize, setBrushSize] = useState(1);
@@ -362,6 +364,24 @@ export default function PixelEditorModal({
           ctx.lineTo(w, y);
           ctx.stroke();
         }
+      }
+    }
+
+    // Edge hover highlight overlay
+    {
+      const he = hoveredEdgeRef.current;
+      if (he) {
+        const w = ec.width * zoom;
+        const h = ec.height * zoom;
+        const tw = effectiveTileWidth * zoom;
+        const th = effectiveTileHeight * zoom;
+        const cols = Math.round(ec.width / effectiveTileWidth);
+        const rows = Math.round(ec.height / effectiveTileHeight);
+        ctx.fillStyle = 'rgba(100, 180, 255, 0.12)';
+        if (he.top) ctx.fillRect(0, 0, w, th);
+        if (he.bottom) ctx.fillRect(0, (rows - 1) * th, w, th);
+        if (he.left) ctx.fillRect(0, 0, tw, h);
+        if (he.right) ctx.fillRect((cols - 1) * tw, 0, tw, h);
       }
     }
 
