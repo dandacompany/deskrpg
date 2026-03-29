@@ -1,8 +1,9 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { Pencil, X } from 'lucide-react';
 import Tooltip from './Tooltip';
 import { LAYER_COLORS } from './hooks/useMapEditor';
+import { useT } from '@/lib/i18n';
 import type { StampListItem } from '@/lib/stamp-utils';
 
 function getBadgeColor(layerName: string): string {
@@ -14,6 +15,7 @@ export interface StampPanelProps {
   stamps: StampListItem[];
   activeStampId: string | null;
   onSelectStamp: (id: string) => void;
+  onEditStamp?: (id: string) => void;
   onDeleteStamp: (id: string) => void;
   hideHeader?: boolean;
 }
@@ -22,15 +24,17 @@ export default function StampPanel({
   stamps,
   activeStampId,
   onSelectStamp,
+  onEditStamp,
   onDeleteStamp,
   hideHeader,
 }: StampPanelProps) {
+  const t = useT();
   if (stamps.length === 0) {
     return (
       <div className="px-3 py-4 text-center">
-        <p className="text-caption text-text-dim">No stamps yet</p>
+        <p className="text-caption text-text-dim">{t('mapEditor.stamps.noStamps')}</p>
         <p className="text-micro text-text-dim mt-1">
-          Select a region on the map and right-click → Save as Stamp
+          {t('mapEditor.stamps.noStampsHint')}
         </p>
       </div>
     );
@@ -82,8 +86,23 @@ export default function StampPanel({
                 </div>
               </div>
 
+              {/* Edit button */}
+              {onEditStamp && (
+                <Tooltip label={t('mapEditor.stamps.editStamp')}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEditStamp(stamp.id);
+                    }}
+                    className="text-text-dim hover:text-primary-light opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </Tooltip>
+              )}
+
               {/* Delete button */}
-              <Tooltip label="Delete stamp">
+              <Tooltip label={t('mapEditor.stamps.deleteStamp')}>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
