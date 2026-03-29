@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { Button, Badge } from '@/components/ui';
+import { Button } from '@/components/ui';
 import { isCoreLayer, getDeskRPGRole } from './hooks/useMapEditor';
 import type { TiledLayer } from './hooks/useMapEditor';
 
@@ -139,18 +139,13 @@ function LayerItem({
         )}
       </div>
 
-      {/* Type badge */}
-      <Badge variant="default" size="sm">
-        {layer.type === 'tilelayer' ? 'tile' : 'obj'}
-      </Badge>
-
-      {/* DeskRPG role badge */}
+      {/* Info tooltip */}
       {role && (
         <span
-          className={`text-micro font-bold px-1.5 py-0.5 rounded ${role.color}`}
-          title={role.desc}
+          className="text-micro text-text-dim hover:text-text-secondary cursor-help flex-shrink-0"
+          title={`${layer.type === 'tilelayer' ? 'Tile' : 'Object'} layer | ${role.label} | ${role.desc}`}
         >
-          {role.label}
+          ?
         </span>
       )}
 
