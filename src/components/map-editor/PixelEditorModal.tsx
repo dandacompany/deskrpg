@@ -26,12 +26,13 @@ interface PixelEditorModalProps {
 
 // === Constants ===
 
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 32;
 const MAX_UNDO = 50;
 const CHECKER_SIZE = 8;
 const CHECKER_LIGHT = '#cccccc';
 const CHECKER_DARK = '#999999';
+const ZOOM_LEVELS = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32] as const;
+const MIN_ZOOM = ZOOM_LEVELS[0];
+const MAX_ZOOM = ZOOM_LEVELS[ZOOM_LEVELS.length - 1];
 
 // === Component ===
 
@@ -54,15 +55,47 @@ export default function PixelEditorModal({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const editCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const checkerCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const undoStackRef = useRef<ImageData[]>([]);
   const redoStackRef = useRef<ImageData[]>([]);
   const isPanningRef = useRef(false);
   const lastPanRef = useRef({ x: 0, y: 0 });
   const isDrawingRef = useRef(false);
 
+  // --- Memory cleanup on modal close ---
+  useEffect(() => {
+    if (!open) {
+      editCanvasRef.current = null;
+      checkerCanvasRef.current = null;
+      undoStackRef.current = [];
+      redoStackRef.current = [];
+    }
+  }, [open]);
+
   // Pixel dimensions of the region being edited
   const regionPxW = region && tilesetInfo ? region.width * tilesetInfo.tilewidth : 0;
   const regionPxH = region && tilesetInfo ? region.height * tilesetInfo.tileheight : 0;
+
+  // --- Pre-render checkerboard pattern for given zoom level ---
+  const buildCheckerboard = useCallback(
+    (pixelW: number, pixelH: number, z: number) => {
+      const cc = document.createElement('canvas');
+      cc.width = pixelW * z;
+      cc.height = pixelH * z;
+      const ctx = cc.getContext('2d')!;
+      const blockSize = CHECKER_SIZE * z;
+      const cols = Math.ceil(cc.width / blockSize);
+      const rows = Math.ceil(cc.height / blockSize);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          ctx.fillStyle = (r + c) % 2 === 0 ? CHECKER_LIGHT : CHECKER_DARK;
+          ctx.fillRect(c * blockSize, r * blockSize, blockSize, blockSize);
+        }
+      }
+      checkerCanvasRef.current = cc;
+    },
+    [],
+  );
 
   // --- Initialize edit canvas from region ---
   const initEditCanvas = useCallback(() => {
@@ -113,6 +146,12 @@ export default function PixelEditorModal({
     setAlpha(255);
   }, [open, region, tilesetInfo, initEditCanvas, regionPxW, regionPxH]);
 
+  // --- Rebuild checkerboard when zoom or dimensions change ---
+  useEffect(() => {
+    if (!open || regionPxW === 0 || regionPxH === 0) return;
+    buildCheckerboard(regionPxW, regionPxH, zoom);
+  }, [open, regionPxW, regionPxH, zoom, buildCheckerboard]);
+
   // --- Render display canvas ---
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -130,13 +169,10 @@ export default function PixelEditorModal({
     const w = ec.width * zoom;
     const h = ec.height * zoom;
 
-    // Checkerboard behind transparent pixels
-    for (let y = 0; y < ec.height; y++) {
-      for (let x = 0; x < ec.width; x++) {
-        const isLight = (Math.floor(x / CHECKER_SIZE) + Math.floor(y / CHECKER_SIZE)) % 2 === 0;
-        ctx.fillStyle = isLight ? CHECKER_LIGHT : CHECKER_DARK;
-        ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
-      }
+    // Checkerboard behind transparent pixels (pre-rendered offscreen canvas)
+    const cc = checkerCanvasRef.current;
+    if (cc) {
+      ctx.drawImage(cc, 0, 0);
     }
 
     // Draw edited image scaled
@@ -300,13 +336,30 @@ export default function PixelEditorModal({
   );
 
   // --- Mouse handlers ---
+
+  // Document-level pan listeners (attached on middle-click, removed on mouseup)
+  const handlePanMove = useCallback((e: MouseEvent) => {
+    const dx = e.clientX - lastPanRef.current.x;
+    const dy = e.clientY - lastPanRef.current.y;
+    lastPanRef.current = { x: e.clientX, y: e.clientY };
+    setPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+  }, []);
+
+  const handlePanEnd = useCallback(() => {
+    isPanningRef.current = false;
+    document.removeEventListener('mousemove', handlePanMove);
+    document.removeEventListener('mouseup', handlePanEnd);
+  }, [handlePanMove]);
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      // Middle-click: start panning
+      // Middle-click: start panning with document-level listeners
       if (e.button === 1) {
         e.preventDefault();
         isPanningRef.current = true;
         lastPanRef.current = { x: e.clientX, y: e.clientY };
+        document.addEventListener('mousemove', handlePanMove);
+        document.addEventListener('mouseup', handlePanEnd);
         return;
       }
 
@@ -324,21 +377,12 @@ export default function PixelEditorModal({
       isDrawingRef.current = true;
       paintPixel(coord.x, coord.y);
     },
-    [getPixelCoord, tool, pickColor, pushUndo, paintPixel],
+    [getPixelCoord, tool, pickColor, pushUndo, paintPixel, handlePanMove, handlePanEnd],
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      // Panning
-      if (isPanningRef.current) {
-        const dx = e.clientX - lastPanRef.current.x;
-        const dy = e.clientY - lastPanRef.current.y;
-        lastPanRef.current = { x: e.clientX, y: e.clientY };
-        setPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
-        return;
-      }
-
-      // Drawing
+      // Drawing (pan is handled at document level now)
       if (!isDrawingRef.current) return;
       const coord = getPixelCoord(e);
       if (!coord) return;
@@ -348,9 +392,16 @@ export default function PixelEditorModal({
   );
 
   const handleMouseUp = useCallback(() => {
-    isPanningRef.current = false;
     isDrawingRef.current = false;
   }, []);
+
+  // Cleanup document listeners on unmount
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handlePanMove);
+      document.removeEventListener('mouseup', handlePanEnd);
+    };
+  }, [handlePanMove, handlePanEnd]);
 
   // --- Wheel zoom (cursor-anchored) ---
   const handleWheel = useCallback(
@@ -364,8 +415,13 @@ export default function PixelEditorModal({
       const my = e.clientY - rect.top;
 
       const oldZoom = zoom;
+      const currentIdx = ZOOM_LEVELS.indexOf(oldZoom as (typeof ZOOM_LEVELS)[number]);
+      const idx = currentIdx === -1
+        ? ZOOM_LEVELS.findIndex((z) => z >= oldZoom)
+        : currentIdx;
       const direction = e.deltaY < 0 ? 1 : -1;
-      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, oldZoom + direction));
+      const nextIdx = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, idx + direction));
+      const newZoom = ZOOM_LEVELS[nextIdx];
       if (newZoom === oldZoom) return;
 
       // Anchor zoom on cursor position
@@ -550,7 +606,6 @@ export default function PixelEditorModal({
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
             onWheel={handleWheel}
             onContextMenu={(e) => e.preventDefault()}
           />
