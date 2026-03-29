@@ -435,15 +435,9 @@ export default function MapEditorLayout({
 
   const handleToggleLayerVisibility = useCallback(
     (index: number) => {
-      if (!state.mapData) return;
-      const layer = state.mapData.layers[index];
-      if (!layer) return;
-      setLayerVisibility((prev) => ({
-        ...prev,
-        [layer.name]: !(prev[layer.name] ?? layer.visible),
-      }));
+      dispatch({ type: 'TOGGLE_LAYER_VISIBILITY', index });
     },
-    [state.mapData],
+    [dispatch],
   );
 
   // === Tileset Operations ===

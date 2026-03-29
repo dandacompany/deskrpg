@@ -213,6 +213,7 @@ type EditorAction =
   | { type: 'ADD_LAYER'; layer: TiledLayer }
   | { type: 'DELETE_LAYER'; index: number }
   | { type: 'RENAME_LAYER'; index: number; name: string }
+  | { type: 'TOGGLE_LAYER_VISIBILITY'; index: number }
   | { type: 'REORDER_LAYERS'; fromIndex: number; toIndex: number }
   | { type: 'ADD_TILESET'; tileset: TiledTileset; imageInfo: TilesetImageInfo }
   | { type: 'DELETE_TILESET'; firstgid: number }
@@ -342,6 +343,12 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       const newLayers = [...state.mapData.layers];
       newLayers[action.index] = { ...newLayers[action.index], name: action.name };
       return { ...state, mapData: { ...state.mapData, layers: newLayers }, dirty: true };
+    }
+    case 'TOGGLE_LAYER_VISIBILITY': {
+      if (!state.mapData) return state;
+      const newLayers = [...state.mapData.layers];
+      newLayers[action.index] = { ...newLayers[action.index], visible: !newLayers[action.index].visible };
+      return { ...state, mapData: { ...state.mapData, layers: newLayers } };
     }
     case 'REORDER_LAYERS': {
       if (!state.mapData) return state;
