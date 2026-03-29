@@ -226,6 +226,7 @@ type EditorAction =
   | { type: 'DELETE_SELECTION' }
   | { type: 'PASTE_CLIPBOARD'; x: number; y: number }
   | { type: 'MOVE_TILES'; fromX: number; fromY: number; toX: number; toY: number; width: number; height: number }
+  | { type: 'RENAME_TILESET'; firstgid: number; name: string }
   | { type: 'REORDER_TILESETS'; fromFirstgid: number; toFirstgid: number }
   | { type: 'REMOVE_UNUSED_TILESETS'; firstgids: number[] };
 
@@ -558,6 +559,17 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         dirty: true,
         selection: { x: toX, y: toY, width, height },
       };
+    }
+    case 'RENAME_TILESET': {
+      if (!state.mapData) return state;
+      const newTilesets = state.mapData.tilesets.map(ts =>
+        ts.firstgid === action.firstgid ? { ...ts, name: action.name } : ts,
+      );
+      const newImages = { ...state.tilesetImages };
+      if (newImages[action.firstgid]) {
+        newImages[action.firstgid] = { ...newImages[action.firstgid], name: action.name };
+      }
+      return { ...state, mapData: { ...state.mapData, tilesets: newTilesets }, tilesetImages: newImages, dirty: true };
     }
     case 'REORDER_TILESETS': {
       if (!state.mapData) return state;

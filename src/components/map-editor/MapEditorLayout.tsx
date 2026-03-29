@@ -961,6 +961,7 @@ export default function MapEditorLayout({
                       onSelectRegion={handleSelectRegion}
                       onImportTileset={() => setShowImportTileset(true)}
                       onDeleteTileset={handleDeleteTileset}
+                      onRenameTileset={(firstgid, name) => dispatch({ type: 'RENAME_TILESET', firstgid, name })}
                       onEditPixels={handleEditPixels}
                       onReorderTileset={handleReorderTileset}
                       usedGids={usedGids}

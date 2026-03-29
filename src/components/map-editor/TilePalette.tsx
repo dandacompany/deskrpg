@@ -11,6 +11,7 @@ export interface TilePaletteProps {
   onSelectRegion: (region: TileRegion) => void;
   onImportTileset: () => void;
   onDeleteTileset: (firstgid: number) => void;
+  onRenameTileset?: (firstgid: number, name: string) => void;
   onEditPixels?: (firstgid: number, region: TileRegion) => void;
   onReorderTileset?: (fromFirstgid: number, toFirstgid: number) => void;
   usedGids?: Set<number>;
@@ -31,6 +32,7 @@ function TilesetSection({
   selectedRegion,
   onSelectRegion,
   onDelete,
+  onRename,
   onEditPixels,
   isUnused,
   onDragStart,
@@ -43,6 +45,7 @@ function TilesetSection({
   selectedRegion: TileRegion | null;
   onSelectRegion: (region: TileRegion) => void;
   onDelete: () => void;
+  onRename: (newName: string) => void;
   onEditPixels?: () => void;
   isUnused?: boolean;
   onDragStart: () => void;
@@ -54,6 +57,9 @@ function TilesetSection({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(name);
+  const editRef = useRef<HTMLInputElement>(null);
 
   const { img, firstgid, columns, tilewidth, tileheight, tilecount, name } = info;
   const rows = Math.ceil(tilecount / columns);
@@ -252,10 +258,28 @@ function TilesetSection({
         }}
         onDragEnd={onDragEnd}
       >
-        <span className="text-caption text-text-secondary truncate" title={name}>
-          {name}
-          {isUnused && (
-            <span className="ml-1 text-micro text-warning bg-warning/10 px-1 py-0.5 rounded">
+        <span className="text-caption text-text-secondary truncate flex items-center gap-1 min-w-0">
+          {isEditing ? (
+            <input
+              ref={editRef}
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={() => { const t = editName.trim(); if (t && t !== name) onRename(t); setIsEditing(false); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { const t = editName.trim(); if (t && t !== name) onRename(t); setIsEditing(false); } if (e.key === 'Escape') setIsEditing(false); }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-surface text-caption text-text px-1 py-0 rounded border border-border outline-none focus:border-primary-light w-full"
+            />
+          ) : (
+            <span
+              className="truncate"
+              title={`${name} — double-click to rename`}
+              onDoubleClick={() => { setEditName(name); setIsEditing(true); setTimeout(() => editRef.current?.select(), 0); }}
+            >
+              {name}
+            </span>
+          )}
+          {isUnused && !isEditing && (
+            <span className="text-micro text-warning bg-warning/10 px-1 py-0.5 rounded flex-shrink-0">
               unused
             </span>
           )}
@@ -327,6 +351,7 @@ export default function TilePalette({
   onSelectRegion,
   onImportTileset,
   onDeleteTileset,
+  onRenameTileset,
   onEditPixels,
   onReorderTileset,
   usedGids,
@@ -415,6 +440,7 @@ export default function TilePalette({
             selectedRegion={selectedRegion}
             onSelectRegion={onSelectRegion}
             onDelete={() => onDeleteTileset(info.firstgid)}
+            onRename={(newName) => onRenameTileset?.(info.firstgid, newName)}
             onEditPixels={
               onEditPixels && selectedRegion && selectedRegion.firstgid === info.firstgid
                 ? () => onEditPixels(info.firstgid, selectedRegion!)
