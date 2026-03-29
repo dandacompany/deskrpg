@@ -81,6 +81,20 @@ export default function PixelEditorModal({
     shiftOffsetRef.current = shiftOffset;
   }, [shiftOffset]);
 
+  // --- Auto-fit zoom to current editCanvas ---
+  const autoFit = useCallback(() => {
+    const ec = editCanvasRef.current;
+    if (!ec || !containerRef.current) return;
+    const cw = containerRef.current.clientWidth;
+    const ch = containerRef.current.clientHeight;
+    if (ch < 50) return;
+    const fitZoom = Math.min((cw * 0.8) / ec.width, (ch * 0.8) / ec.height);
+    const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.floor(fitZoom)));
+    setZoom(clamped);
+    setPan({ x: (cw - ec.width * clamped) / 2, y: (ch - ec.height * clamped) / 2 });
+    buildCheckerboard(ec.width, ec.height, clamped);
+  }, [buildCheckerboard]);
+
   // --- Memory cleanup on modal close ---
   useEffect(() => {
     if (!open) {
@@ -694,10 +708,8 @@ export default function PixelEditorModal({
     editCanvasRef.current = newCanvas;
     setExpandedCols(resizeTargetCols);
     setExpandedRows(resizeTargetRows);
-
-    buildCheckerboard(targetW, targetH, zoom);
-    renderCanvas();
-  }, [tilesetInfo, resizeTargetCols, resizeTargetRows, pushUndo, zoom, buildCheckerboard, renderCanvas]);
+    requestAnimationFrame(() => { autoFit(); renderCanvas(); });
+  }, [tilesetInfo, resizeTargetCols, resizeTargetRows, pushUndo, autoFit, renderCanvas]);
 
   // --- Remove background from current edit canvas ---
   const handleRemoveBg = useCallback(async () => {
@@ -777,9 +789,8 @@ export default function PixelEditorModal({
     editCanvasRef.current = newCanvas;
     setExpandedCols(newCols);
     setExpandedRows(newRows);
-    buildCheckerboard(newCanvas.width, newCanvas.height, zoom);
-    renderCanvas();
-  }, [tilesetInfo, pushUndo, zoom, buildCheckerboard, renderCanvas]);
+    requestAnimationFrame(() => { autoFit(); renderCanvas(); });
+  }, [tilesetInfo, pushUndo, autoFit, renderCanvas]);
 
   // --- Delete edge row/column ---
   const deleteEdge = useCallback((edge: 'left' | 'right' | 'top' | 'bottom') => {
@@ -808,9 +819,8 @@ export default function PixelEditorModal({
     editCanvasRef.current = newCanvas;
     setExpandedCols(newCols);
     setExpandedRows(newRows);
-    buildCheckerboard(newCanvas.width, newCanvas.height, zoom);
-    renderCanvas();
-  }, [tilesetInfo, pushUndo, zoom, buildCheckerboard, renderCanvas]);
+    requestAnimationFrame(() => { autoFit(); renderCanvas(); });
+  }, [tilesetInfo, pushUndo, autoFit, renderCanvas]);
 
   // --- Add edge tile row/column ---
   const addEdge = useCallback((edge: 'left' | 'right' | 'top' | 'bottom') => {
@@ -837,9 +847,8 @@ export default function PixelEditorModal({
     editCanvasRef.current = newCanvas;
     setExpandedCols(newCols);
     setExpandedRows(newRows);
-    buildCheckerboard(newCanvas.width, newCanvas.height, zoom);
-    renderCanvas();
-  }, [tilesetInfo, pushUndo, zoom, buildCheckerboard, renderCanvas]);
+    requestAnimationFrame(() => { autoFit(); renderCanvas(); });
+  }, [tilesetInfo, pushUndo, autoFit, renderCanvas]);
 
   // --- Guard: don't render if no data ---
   if (!region || !tilesetInfo) {
