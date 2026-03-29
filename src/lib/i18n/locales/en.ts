@@ -1344,6 +1344,32 @@ const en: Record<string, string> = {
   "settings.gatewayUrlPlaceholder": "http://your-server:18789",
   "settings.gatewayTokenPlaceholder": "Bearer token",
 
+  // Map Editor - Toolbar
+  "mapEditor.toolbar.title": "DeskRPG Map Editor",
+  "mapEditor.toolbar.file": "File",
+  "mapEditor.toolbar.newMap": "New Map",
+  "mapEditor.toolbar.open": "Open",
+  "mapEditor.toolbar.export": "Export",
+  "mapEditor.toolbar.exportTmj": ".tmj (Tiled JSON)",
+  "mapEditor.toolbar.exportTmx": ".tmx (Tiled XML)",
+  "mapEditor.toolbar.exportPng": ".png (Image)",
+  "mapEditor.toolbar.backToDeskRPG": "Back to DeskRPG",
+  "mapEditor.toolbar.view": "View",
+  "mapEditor.toolbar.grid": "Grid",
+  "mapEditor.toolbar.collision": "Collision",
+  "mapEditor.toolbar.layersPanel": "Layers Panel",
+  "mapEditor.toolbar.tilesetsPanel": "Tilesets Panel",
+  "mapEditor.toolbar.minimapPanel": "Minimap Panel",
+  "mapEditor.toolbar.paint": "Paint",
+  "mapEditor.toolbar.erase": "Erase",
+  "mapEditor.toolbar.select": "Select",
+  "mapEditor.toolbar.pan": "Pan",
+  "mapEditor.toolbar.zoomOut": "Zoom Out",
+  "mapEditor.toolbar.zoomIn": "Zoom In",
+  "mapEditor.toolbar.undo": "Undo",
+  "mapEditor.toolbar.redo": "Redo",
+  "mapEditor.toolbar.keyboardShortcuts": "Keyboard Shortcuts",
+
   // Session
   "session.kicked": "You were disconnected because another session was opened.",
 };

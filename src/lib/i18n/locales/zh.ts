@@ -1344,6 +1344,32 @@ const zh: Record<string, string> = {
   "settings.gatewayUrlPlaceholder": "http://your-server:18789",
   "settings.gatewayTokenPlaceholder": "Bearer令牌",
 
+  // Map Editor - Toolbar
+  "mapEditor.toolbar.title": "DeskRPG 地图编辑器",
+  "mapEditor.toolbar.file": "文件",
+  "mapEditor.toolbar.newMap": "新建地图",
+  "mapEditor.toolbar.open": "打开",
+  "mapEditor.toolbar.export": "导出",
+  "mapEditor.toolbar.exportTmj": ".tmj (Tiled JSON)",
+  "mapEditor.toolbar.exportTmx": ".tmx (Tiled XML)",
+  "mapEditor.toolbar.exportPng": ".png (图片)",
+  "mapEditor.toolbar.backToDeskRPG": "返回DeskRPG",
+  "mapEditor.toolbar.view": "视图",
+  "mapEditor.toolbar.grid": "网格",
+  "mapEditor.toolbar.collision": "碰撞区域",
+  "mapEditor.toolbar.layersPanel": "图层面板",
+  "mapEditor.toolbar.tilesetsPanel": "图块集面板",
+  "mapEditor.toolbar.minimapPanel": "小地图面板",
+  "mapEditor.toolbar.paint": "画笔",
+  "mapEditor.toolbar.erase": "橡皮擦",
+  "mapEditor.toolbar.select": "选择",
+  "mapEditor.toolbar.pan": "平移",
+  "mapEditor.toolbar.zoomOut": "缩小",
+  "mapEditor.toolbar.zoomIn": "放大",
+  "mapEditor.toolbar.undo": "撤销",
+  "mapEditor.toolbar.redo": "重做",
+  "mapEditor.toolbar.keyboardShortcuts": "键盘快捷键",
+
   // Session
   "session.kicked": "由于在其他位置登录，当前会话已断开。",
 };
