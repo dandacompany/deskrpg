@@ -80,7 +80,7 @@ export default function MapEditorLayout({
   const [panelWidth, setPanelWidth] = useState(300);
 
   // Left panel section order & collapsed state
-  const [sectionOrder, setSectionOrder] = useState<string[]>(['layers', 'minimap', 'tilesets']);
+  const [sectionOrder, setSectionOrder] = useState<string[]>(['layers', 'tilesets', 'minimap']);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const dragSectionRef = useRef<string | null>(null);
   const [dragOverSection, setDragOverSection] = useState<string | null>(null);
