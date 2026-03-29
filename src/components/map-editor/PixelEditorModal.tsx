@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Modal } from '@/components/ui';
+import { useT } from '@/lib/i18n';
 import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
 import { removeBgToDataUrl } from '@/lib/remove-bg';
 
@@ -50,6 +51,8 @@ export default function PixelEditorModal({
   onSaveAsNew,
   onOverwrite,
 }: PixelEditorModalProps) {
+  const t = useT();
+
   // --- State ---
   const [tool, setTool] = useState<Tool>('pen');
   const [color, setColor] = useState('#000000');
@@ -870,7 +873,7 @@ export default function PixelEditorModal({
     if (!ec) return;
 
     pushUndo();
-    setRemovingBg('Removing background...');
+    setRemovingBg(t('mapEditor.pixel.removingBg'));
 
     try {
       const blob = await new Promise<Blob>((resolve) => {
@@ -878,7 +881,7 @@ export default function PixelEditorModal({
       });
 
       const resultDataUrl = await removeBgToDataUrl(blob, (p) => {
-        setRemovingBg(`Removing background... ${Math.round(p * 100)}%`);
+        setRemovingBg(t('mapEditor.pixel.removingBgProgress', { percent: Math.round(p * 100) }));
       });
 
       // Load result and replace edit canvas
@@ -898,7 +901,7 @@ export default function PixelEditorModal({
       console.error('Background removal failed:', err);
       setRemovingBg(null);
     }
-  }, [pushUndo, renderCanvas]);
+  }, [pushUndo, renderCanvas, t]);
 
   // --- Trim fully transparent edge rows/columns ---
   const trimEdges = useCallback(() => {
@@ -1006,9 +1009,9 @@ export default function PixelEditorModal({
   // --- Guard: don't render if no data ---
   if (!region || !tilesetInfo) {
     return (
-      <Modal open={open} onClose={onClose} title="Pixel Editor" size="full" disableEscapeClose>
+      <Modal open={open} onClose={onClose} title={t('mapEditor.pixel.title')} size="full" disableEscapeClose>
         <Modal.Body>
-          <p className="text-text-secondary">No region selected.</p>
+          <p className="text-text-secondary">{t('mapEditor.pixel.noRegion')}</p>
         </Modal.Body>
       </Modal>
     );
@@ -1021,7 +1024,7 @@ export default function PixelEditorModal({
   const isExpanded = region && (expandedCols !== region.width || expandedRows !== region.height);
 
   return (
-    <Modal open={open} onClose={onClose} title="Pixel Editor" size="full" disableEscapeClose>
+    <Modal open={open} onClose={onClose} title={t('mapEditor.pixel.title')} size="full" disableEscapeClose>
       {/* Custom body: fixed height to fill modal, flex col so canvas area stretches */}
       <div className="flex flex-col overflow-hidden" style={{ height: 'calc(85vh - 120px)' }}>
         {/* Toolbar row */}
@@ -1032,41 +1035,41 @@ export default function PixelEditorModal({
               variant={tool === 'pen' ? 'primary' : 'ghost'}
               size="sm"
               onClick={() => setTool('pen')}
-              title="Pen (P)"
+              title={t('mapEditor.pixel.penTooltip')}
             >
-              Pen
+              {t('mapEditor.pixel.pen')}
             </Button>
             <Button
               variant={tool === 'eraser' ? 'primary' : 'ghost'}
               size="sm"
               onClick={() => setTool('eraser')}
-              title="Eraser (E)"
+              title={t('mapEditor.pixel.eraserTooltip')}
             >
-              Eraser
+              {t('mapEditor.pixel.eraser')}
             </Button>
             <Button
               variant={tool === 'eyedropper' ? 'primary' : 'ghost'}
               size="sm"
               onClick={() => setTool('eyedropper')}
-              title="Eyedropper (I)"
+              title={t('mapEditor.pixel.eyedropperTooltip')}
             >
-              Pick
+              {t('mapEditor.pixel.eyedropper')}
             </Button>
             <Button
               variant={tool === 'shift' ? 'primary' : 'ghost'}
               size="sm"
               onClick={() => setTool('shift')}
-              title="Shift image (V)"
+              title={t('mapEditor.pixel.shiftTooltip')}
             >
-              Shift
+              {t('mapEditor.pixel.shift')}
             </Button>
             <Button
               variant={tool === 'rect-select' ? 'primary' : 'ghost'}
               size="sm"
               onClick={() => { setTool('rect-select'); setIsPixelPasteMode(false); }}
-              title="Select region (M) — Ctrl+C copy, Ctrl+V paste"
+              title={t('mapEditor.pixel.selectTooltip')}
             >
-              Select
+              {t('mapEditor.pixel.select')}
             </Button>
           </div>
 
@@ -1075,7 +1078,7 @@ export default function PixelEditorModal({
 
           {/* Resize controls */}
           <div className="flex items-center gap-1">
-            <label className="text-caption text-text-secondary">Resize</label>
+            <label className="text-caption text-text-secondary">{t('mapEditor.pixel.resize')}</label>
             <input
               type="number"
               min={1}
@@ -1094,7 +1097,7 @@ export default function PixelEditorModal({
               className="w-10 h-6 text-center text-caption bg-surface-raised border border-border rounded text-text"
             />
             <Button variant="ghost" size="sm" onClick={applyResize}>
-              Apply
+              {t('mapEditor.pixel.apply')}
             </Button>
           </div>
 
@@ -1106,37 +1109,37 @@ export default function PixelEditorModal({
             {removingBg ? (
               <span className="text-caption text-primary-light px-1">{removingBg}</span>
             ) : (
-              <Button variant="ghost" size="sm" onClick={handleRemoveBg} title="AI background removal (applies to current canvas)">
-                Erase BG
+              <Button variant="ghost" size="sm" onClick={handleRemoveBg} title={t('mapEditor.pixel.eraseBgTooltip')}>
+                {t('mapEditor.pixel.eraseBg')}
               </Button>
             )}
-            <Button variant="ghost" size="sm" onClick={trimEdges} title="Remove transparent edge tiles (T)">
-              Trim
+            <Button variant="ghost" size="sm" onClick={trimEdges} title={t('mapEditor.pixel.trimTooltip')}>
+              {t('mapEditor.pixel.trim')}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => deleteEdge('left')} title="Delete left column">
-              -L
+            <Button variant="ghost" size="sm" onClick={() => deleteEdge('left')} title={t('mapEditor.pixel.deleteLeftColTooltip')}>
+              {t('mapEditor.pixel.deleteLeftCol')}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => deleteEdge('right')} title="Delete right column">
-              -R
+            <Button variant="ghost" size="sm" onClick={() => deleteEdge('right')} title={t('mapEditor.pixel.deleteRightColTooltip')}>
+              {t('mapEditor.pixel.deleteRightCol')}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => deleteEdge('top')} title="Delete top row">
-              -T
+            <Button variant="ghost" size="sm" onClick={() => deleteEdge('top')} title={t('mapEditor.pixel.deleteTopRowTooltip')}>
+              {t('mapEditor.pixel.deleteTopRow')}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => deleteEdge('bottom')} title="Delete bottom row">
-              -B
+            <Button variant="ghost" size="sm" onClick={() => deleteEdge('bottom')} title={t('mapEditor.pixel.deleteBottomRowTooltip')}>
+              {t('mapEditor.pixel.deleteBottomRow')}
             </Button>
             <div className="w-px h-4 bg-border mx-0.5" />
-            <Button variant="ghost" size="sm" onClick={() => addEdge('left')} title="Add column to left">
-              +L
+            <Button variant="ghost" size="sm" onClick={() => addEdge('left')} title={t('mapEditor.pixel.addLeftColTooltip')}>
+              {t('mapEditor.pixel.addLeftCol')}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => addEdge('right')} title="Add column to right">
-              +R
+            <Button variant="ghost" size="sm" onClick={() => addEdge('right')} title={t('mapEditor.pixel.addRightColTooltip')}>
+              {t('mapEditor.pixel.addRightCol')}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => addEdge('top')} title="Add row to top">
-              +T
+            <Button variant="ghost" size="sm" onClick={() => addEdge('top')} title={t('mapEditor.pixel.addTopRowTooltip')}>
+              {t('mapEditor.pixel.addTopRow')}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => addEdge('bottom')} title="Add row to bottom">
-              +B
+            <Button variant="ghost" size="sm" onClick={() => addEdge('bottom')} title={t('mapEditor.pixel.addBottomRowTooltip')}>
+              {t('mapEditor.pixel.addBottomRow')}
             </Button>
           </div>
 
@@ -1145,7 +1148,7 @@ export default function PixelEditorModal({
 
           {/* Brush size */}
           <div className="flex items-center gap-1">
-            <label className="text-caption text-text-secondary" title="Brush size ([ / ])">Size</label>
+            <label className="text-caption text-text-secondary" title={t('mapEditor.pixel.brushSizeTooltip')}>{t('mapEditor.pixel.brushSize')}</label>
             <input
               type="range"
               min={1}
@@ -1162,7 +1165,7 @@ export default function PixelEditorModal({
 
           {/* Color picker */}
           <div className="flex items-center gap-2">
-            <label className="text-caption text-text-secondary">Color</label>
+            <label className="text-caption text-text-secondary">{t('mapEditor.pixel.color')}</label>
             <input
               type="color"
               value={color}
@@ -1173,7 +1176,7 @@ export default function PixelEditorModal({
 
           {/* Alpha slider */}
           <div className="flex items-center gap-2">
-            <label className="text-caption text-text-secondary">Alpha</label>
+            <label className="text-caption text-text-secondary">{t('mapEditor.pixel.alpha')}</label>
             <input
               type="range"
               min={0}
@@ -1190,11 +1193,11 @@ export default function PixelEditorModal({
 
           {/* Undo/Redo */}
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={undo} title="Undo (Cmd/Ctrl+Z)">
-              Undo
+            <Button variant="ghost" size="sm" onClick={undo} title={t('mapEditor.pixel.undoTooltip')}>
+              {t('mapEditor.pixel.undo')}
             </Button>
-            <Button variant="ghost" size="sm" onClick={redo} title="Redo (Cmd/Ctrl+Y or Cmd/Ctrl+Shift+Z)">
-              Redo
+            <Button variant="ghost" size="sm" onClick={redo} title={t('mapEditor.pixel.redoTooltip')}>
+              {t('mapEditor.pixel.redo')}
             </Button>
           </div>
 
@@ -1202,18 +1205,18 @@ export default function PixelEditorModal({
           <div className="w-px h-6 bg-border" />
 
           {/* Zoom display */}
-          <span className="text-caption text-text-secondary" title="Zoom (Mouse wheel)">{zoom}x</span>
+          <span className="text-caption text-text-secondary" title={t('mapEditor.pixel.zoomTooltip')}>{zoom}x</span>
 
           {/* Help */}
-          <Button variant="ghost" size="sm" onClick={() => setShowHelp(true)} title="Keyboard shortcuts (?)">
+          <Button variant="ghost" size="sm" onClick={() => setShowHelp(true)} title={t('mapEditor.pixel.shortcutsTooltip')}>
             ?
           </Button>
 
           {/* Region info */}
           <span className="text-caption text-text-secondary ml-auto">
-            {editPxW} x {editPxH} px &middot; {expandedCols} x {expandedRows} tiles
+            {t('mapEditor.pixel.dimensions', { w: editPxW, h: editPxH, cols: expandedCols, rows: expandedRows })}
             {isExpanded && (
-              <span className="text-amber-400 ml-1">(expanded)</span>
+              <span className="text-amber-400 ml-1">{t('mapEditor.pixel.expanded')}</span>
             )}
           </span>
         </div>
@@ -1248,28 +1251,28 @@ export default function PixelEditorModal({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-heading text-text">Keyboard Shortcuts</h3>
+              <h3 className="text-heading text-text">{t('mapEditor.pixel.keyboardShortcuts')}</h3>
               <button onClick={() => setShowHelp(false)} className="text-text-muted hover:text-text">&times;</button>
             </div>
             <div className="grid grid-cols-2 gap-y-1 gap-x-6 text-caption">
               {[
-                ['P', 'Pen tool'],
-                ['E', 'Eraser tool'],
-                ['I', 'Eyedropper (Pick)'],
-                ['V', 'Shift (move image)'],
-                ['M', 'Select region'],
-                ['Cmd/Ctrl+C', 'Copy → paste mode (click to place)'],
-                ['Escape', 'Cancel paste / clear selection'],
-                ['T', 'Trim transparent edges'],
-                ['[ / ]', 'Brush size -/+'],
-                ['Cmd/Ctrl+Z', 'Undo'],
-                ['Cmd/Ctrl+Y', 'Redo'],
-                ['Cmd/Ctrl+Shift+Z', 'Redo (alt)'],
-                ['?', 'Toggle this help'],
-                ['Mouse wheel', 'Zoom in/out'],
-                ['Middle-click drag', 'Pan canvas'],
-                ['Shift + draw', 'Constrain to axis'],
-                ['Escape', 'Close editor'],
+                ['P', t('mapEditor.pixel.shortcutPen')],
+                ['E', t('mapEditor.pixel.shortcutEraser')],
+                ['I', t('mapEditor.pixel.shortcutEyedropper')],
+                ['V', t('mapEditor.pixel.shortcutShift')],
+                ['M', t('mapEditor.pixel.shortcutSelect')],
+                ['Cmd/Ctrl+C', t('mapEditor.pixel.shortcutCopy')],
+                ['Escape', t('mapEditor.pixel.shortcutEscape')],
+                ['T', t('mapEditor.pixel.shortcutTrim')],
+                ['[ / ]', t('mapEditor.pixel.shortcutBrushSize')],
+                ['Cmd/Ctrl+Z', t('mapEditor.pixel.shortcutUndo')],
+                ['Cmd/Ctrl+Y', t('mapEditor.pixel.shortcutRedo')],
+                ['Cmd/Ctrl+Shift+Z', t('mapEditor.pixel.shortcutRedoAlt')],
+                ['?', t('mapEditor.pixel.shortcutHelp')],
+                ['Mouse wheel', t('mapEditor.pixel.shortcutZoom')],
+                ['Middle-click drag', t('mapEditor.pixel.shortcutPan')],
+                ['Shift + draw', t('mapEditor.pixel.shortcutConstrain')],
+                ['Escape', t('mapEditor.pixel.shortcutClose')],
               ].map(([key, desc]) => (
                 <div key={key} className="contents">
                   <span className="text-text font-mono bg-surface-raised px-1.5 py-0.5 rounded border border-border text-center">
@@ -1285,19 +1288,19 @@ export default function PixelEditorModal({
 
       <Modal.Footer>
         <Button variant="ghost" size="sm" onClick={onClose}>
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button variant="secondary" size="sm" onClick={handleSaveAsNew}>
-          Save as New Tileset
+          {t('mapEditor.pixel.saveAsNew')}
         </Button>
         <Button
           variant="primary"
           size="sm"
           onClick={handleOverwrite}
           disabled={!!isExpanded}
-          title={isExpanded ? 'Cannot overwrite: grid dimensions changed. Use "Save as New Tileset" instead.' : undefined}
+          title={isExpanded ? t('mapEditor.pixel.overwriteDisabled') : undefined}
         >
-          Overwrite Original
+          {t('mapEditor.pixel.overwrite')}
         </Button>
       </Modal.Footer>
     </Modal>
