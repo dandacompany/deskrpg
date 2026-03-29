@@ -15,18 +15,20 @@ export interface ModalProps {
   onClose: () => void;
   title?: string;
   size?: "sm" | "md" | "lg" | "full";
+  /** If true, Escape key will NOT close the modal */
+  disableEscapeClose?: boolean;
   children: ReactNode;
 }
 
-function ModalRoot({ open, onClose, title, size = "md", children }: ModalProps) {
+function ModalRoot({ open, onClose, title, size = "md", disableEscapeClose, children }: ModalProps) {
   useEffect(() => {
-    if (!open) return;
+    if (!open || disableEscapeClose) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [open, onClose]);
+  }, [open, onClose, disableEscapeClose]);
 
   if (!open) return null;
 
