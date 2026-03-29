@@ -114,8 +114,9 @@ export default function MapEditorLayout({
 
 
 
-  // File input ref
+  // File input refs
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const tilesetFileInputRef = useRef<HTMLInputElement>(null);
 
   // Track initialization
   const initialized = useRef(false);
@@ -501,6 +502,65 @@ export default function MapEditorLayout({
     [dispatch],
   );
 
+  const handleQuickImportTileset = useCallback(() => {
+    tilesetFileInputRef.current?.click();
+  }, []);
+
+  const handleTilesetFileSelected = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !state.mapData) return;
+      e.target.value = '';
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const tw = state.mapData!.tilewidth;
+          const th = state.mapData!.tileheight;
+          const columns = Math.max(1, Math.floor(img.naturalWidth / tw));
+          const rows = Math.max(1, Math.floor(img.naturalHeight / th));
+          const tilecount = columns * rows;
+          const name = file.name.replace(/\.[^.]+$/, '');
+
+          let firstgid = 1;
+          for (const ts of state.mapData!.tilesets) {
+            const end = ts.firstgid + ts.tilecount;
+            if (end > firstgid) firstgid = end;
+          }
+
+          const tileset: TiledTileset = {
+            firstgid,
+            name,
+            tilewidth: tw,
+            tileheight: th,
+            tilecount,
+            columns,
+            image: dataUrl,
+            imagewidth: img.naturalWidth,
+            imageheight: img.naturalHeight,
+          };
+
+          const imageInfo: TilesetImageInfo = {
+            img,
+            firstgid,
+            columns,
+            tilewidth: tw,
+            tileheight: th,
+            tilecount,
+            name,
+          };
+
+          dispatch({ type: 'ADD_TILESET', tileset, imageInfo });
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    },
+    [state.mapData, dispatch],
+  );
+
   const handleDeleteTileset = useCallback(
     (firstgid: number) => {
       if (!state.mapData) return;
@@ -757,7 +817,7 @@ export default function MapEditorLayout({
     },
     onSave: handleSaveToDeskRPG,
     onLoad: handleLoad,
-    onImportTileset: () => setShowImportTileset(true),
+    onImportTileset: () => handleQuickImportTileset(),
     onHelp: () => setShowHelp((prev) => !prev),
     onDeleteLayer: () => handleDeleteLayer(),
     onSpaceDown: handleSpaceDown,
@@ -929,7 +989,7 @@ export default function MapEditorLayout({
                   <Tooltip label="Import Tileset" shortcut="I">
                     <button
                       className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
-                      onClick={() => setShowImportTileset(true)}
+                      onClick={() => handleQuickImportTileset()}
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
@@ -991,7 +1051,7 @@ export default function MapEditorLayout({
                       tilesets={sortedTilesets}
                       selectedRegion={state.selectedRegion}
                       onSelectRegion={handleSelectRegion}
-                      onImportTileset={() => setShowImportTileset(true)}
+                      onImportTileset={() => handleQuickImportTileset()}
                       onDeleteTileset={handleDeleteTileset}
                       onRenameTileset={(firstgid, name) => dispatch({ type: 'RENAME_TILESET', firstgid, name })}
                       onEditPixels={handleEditPixels}
@@ -1047,13 +1107,20 @@ export default function MapEditorLayout({
         </span>
       </div>
 
-      {/* Hidden file input */}
+      {/* Hidden file inputs */}
       <input
         ref={fileInputRef}
         type="file"
         accept=".tmj,.tmx,.json,.zip"
         className="hidden"
         onChange={handleFileSelected}
+      />
+      <input
+        ref={tilesetFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleTilesetFileSelected}
       />
 
       {/* Modals */}
