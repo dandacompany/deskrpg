@@ -2,9 +2,10 @@
 
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { Button } from '@/components/ui';
-import { CheckSquare, X } from 'lucide-react';
+import { CheckSquare, X, Pencil } from 'lucide-react';
 import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
 import { BUILTIN_TILESET_NAME } from './hooks/useMapEditor';
+import Tooltip from './Tooltip';
 
 export interface TilePaletteProps {
   tilesets: TilesetImageInfo[];
@@ -278,6 +279,7 @@ function TilesetSection({
         </span>
         <div className="flex items-center gap-1 flex-shrink-0">
           {name !== BUILTIN_TILESET_NAME && (
+            <Tooltip label="Select All">
             <Button
               variant="ghost"
               size="sm"
@@ -294,29 +296,31 @@ function TilesetSection({
                 };
                 onSelectRegion(region);
               }}
-              title="Select all tiles"
             >
               <CheckSquare className="w-3.5 h-3.5" />
             </Button>
+            </Tooltip>
           )}
           {onEditPixels && hasSelectionInThisTileset && (
+            <Tooltip label="Edit Pixels">
             <Button
               variant="ghost"
               size="sm"
               onClick={onEditPixels}
-              title="Edit selected tiles pixel-by-pixel"
             >
-              Edit Pixels
+              <Pencil className="w-3.5 h-3.5" />
             </Button>
+            </Tooltip>
           )}
           {name !== BUILTIN_TILESET_NAME && (
+            <Tooltip label="Remove Tileset">
             <button
               onClick={onDelete}
               className="text-text-dim hover:text-danger text-body transition-colors px-1"
-              title="Remove tileset"
             >
               <X className="w-3.5 h-3.5" />
             </button>
+            </Tooltip>
           )}
         </div>
       </div>
