@@ -16,8 +16,8 @@ export interface LayerPanelProps {
   onReorderLayers: (fromIndex: number, toIndex: number) => void;
   onAddLayer: () => void;
   onToggleVisibility: (index: number) => void;
-  showOverlay?: boolean;
-  onToggleOverlay?: () => void;
+  layerOverlayMap?: Record<number, boolean>;
+  onToggleLayerOverlay?: (index: number) => void;
   hideHeader?: boolean;
 }
 
@@ -30,7 +30,7 @@ function LayerItem({
   onRename,
   onDelete,
   onToggleVisibility,
-  showOverlay,
+  showOverlay = true,
   onToggleOverlay,
   onDragStart,
   onDragOver,
@@ -133,7 +133,19 @@ function LayerItem({
         )}
       </div>
 
-      {/* Color chip — click to toggle overlay */}
+      {/* Info tooltip — right after name */}
+      {role && (
+        <Tooltip label={`${layer.type === 'tilelayer' ? 'Tile' : 'Object'} · ${role.desc}`} shortcut={role.label}>
+          <span className="cursor-default flex-shrink-0">
+            <Info className="w-3.5 h-3.5 text-text-dim hover:text-text-secondary" />
+          </span>
+        </Tooltip>
+      )}
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Color chip — click to toggle overlay (right side) */}
       <Tooltip label={showOverlay ? 'Hide layer overlay' : 'Show layer overlay'}>
         <button
           className="w-2.5 h-2.5 rounded-sm flex-shrink-0 transition-opacity"
@@ -144,13 +156,6 @@ function LayerItem({
           onClick={(e) => { e.stopPropagation(); onToggleOverlay?.(); }}
         />
       </Tooltip>
-      {role && (
-        <Tooltip label={`${layer.type === 'tilelayer' ? 'Tile' : 'Object'} · ${role.desc}`} shortcut={role.label}>
-          <span className="cursor-default flex-shrink-0">
-            <Info className="w-3.5 h-3.5 text-text-dim hover:text-text-secondary" />
-          </span>
-        </Tooltip>
-      )}
 
       {/* Delete button (hidden for core layers) */}
       {!isCore && (
@@ -178,8 +183,8 @@ export default function LayerPanel({
   onReorderLayers,
   onAddLayer,
   onToggleVisibility,
-  showOverlay,
-  onToggleOverlay,
+  layerOverlayMap,
+  onToggleLayerOverlay,
   hideHeader,
 }: LayerPanelProps) {
   const dragIndexRef = useRef<number | null>(null);
@@ -232,8 +237,8 @@ export default function LayerPanel({
             onRename={(name) => onRenameLayer(index, name)}
             onDelete={() => onDeleteLayer(index)}
             onToggleVisibility={() => onToggleVisibility(index)}
-            showOverlay={showOverlay}
-            onToggleOverlay={onToggleOverlay}
+            showOverlay={layerOverlayMap?.[index] ?? true}
+            onToggleOverlay={() => onToggleLayerOverlay?.(index)}
             onDragStart={handleDragStart(index)}
             onDragOver={handleDragOver}
             onDrop={handleDrop(index)}

@@ -14,7 +14,7 @@ interface MapCanvasProps {
   dispatch: React.Dispatch<EditorAction>;
   findTileset: (gid: number) => TilesetImageInfo | null;
   onStatusUpdate?: (info: { tileX: number; tileY: number; gid: number }) => void;
-  showLayerOverlay?: boolean;
+  layerOverlayMap?: Record<number, boolean>;
 }
 
 // === Constants ===
@@ -25,7 +25,7 @@ const WALK_INTERVAL_MS = 120;
 
 // === Component ===
 
-export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, showLayerOverlay }: MapCanvasProps) {
+export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerOverlayMap }: MapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -123,7 +123,7 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, showLa
         canvas.style.height = `${height}px`;
         const ctx = canvas.getContext('2d');
         if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        render(canvas, characterSheetRef.current ?? undefined, characterState, { showLayerOverlay });
+        render(canvas, characterSheetRef.current ?? undefined, characterState, { layerOverlayMap });
       }
     });
 
@@ -136,7 +136,7 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, showLa
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    render(canvas, characterSheetRef.current ?? undefined, characterState, { showLayerOverlay });
+    render(canvas, characterSheetRef.current ?? undefined, characterState, { layerOverlayMap });
   }, [state, characterState, characterLoaded, render]);
 
   // === Coordinate conversion ===

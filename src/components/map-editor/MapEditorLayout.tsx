@@ -73,7 +73,7 @@ export default function MapEditorLayout({
   const [showImportTileset, setShowImportTileset] = useState(false);
   const [droppedTilesetFile, setDroppedTilesetFile] = useState<File | null>(null);
   const [isDroppingTileset, setIsDroppingTileset] = useState(false);
-  const [showLayerOverlay, setShowLayerOverlay] = useState(true);
+  const [layerOverlayMap, setLayerOverlayMap] = useState<Record<number, boolean>>({});
   const [showHelp, setShowHelp] = useState(false);
   const [showPixelEditor, setShowPixelEditor] = useState(false);
 
@@ -1041,8 +1041,8 @@ export default function MapEditorLayout({
                         }
                         onAddLayer={handleAddLayer}
                         onToggleVisibility={handleToggleLayerVisibility}
-                        showOverlay={showLayerOverlay}
-                        onToggleOverlay={() => setShowLayerOverlay((v) => !v)}
+                        layerOverlayMap={layerOverlayMap}
+                        onToggleLayerOverlay={(idx) => setLayerOverlayMap((prev) => ({ ...prev, [idx]: !(prev[idx] ?? true) }))}
                         hideHeader
                       />
                     )}
@@ -1106,7 +1106,7 @@ export default function MapEditorLayout({
               dispatch={dispatch}
               findTileset={findTileset}
               onStatusUpdate={setStatusInfo}
-              showLayerOverlay={showLayerOverlay}
+              layerOverlayMap={layerOverlayMap}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-text-dim text-body">
