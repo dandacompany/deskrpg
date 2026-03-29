@@ -132,16 +132,42 @@ export function getDeskRPGRole(layer: TiledLayer, idx: number, layers: TiledLaye
 }
 
 // === Collision Tileset Generator ===
-export function generateCollisionTilesetDataUrl(tileSize: number = 32): string {
+export const BUILTIN_TILESET_NAME = 'color-palette';
+
+const PALETTE_COLORS = [
+  '#ef4444', '#f97316', '#eab308', '#22c55e',
+  '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899',
+  '#ffffff', '#d1d5db', '#9ca3af', '#6b7280',
+  '#374151', '#1f2937', '#000000', '#00000000',
+];
+
+export function generateBuiltinTilesetDataUrl(tileSize: number = 32): string {
+  const cols = 4;
+  const rows = Math.ceil(PALETTE_COLORS.length / cols);
   const canvas = document.createElement('canvas');
-  canvas.width = tileSize * 2;
-  canvas.height = tileSize;
+  canvas.width = tileSize * cols;
+  canvas.height = tileSize * rows;
   const ctx = canvas.getContext('2d')!;
-  // Tile 0: transparent
-  // Tile 1: semi-transparent red
-  ctx.fillStyle = 'rgba(255, 50, 50, 180)';
-  ctx.fillRect(tileSize, 0, tileSize, tileSize);
+
+  PALETTE_COLORS.forEach((color, i) => {
+    const x = (i % cols) * tileSize;
+    const y = Math.floor(i / cols) * tileSize;
+    if (color === '#00000000') {
+      // Transparent tile — leave empty
+      return;
+    }
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, tileSize, tileSize);
+  });
+
   return canvas.toDataURL('image/png');
+}
+
+export function getBuiltinTilesetInfo(tileSize: number = 32) {
+  const cols = 4;
+  const count = PALETTE_COLORS.length;
+  const rows = Math.ceil(count / cols);
+  return { columns: cols, tilecount: count, rows, imagewidth: cols * tileSize, imageheight: rows * tileSize };
 }
 
 // === Default Map (DeskRPG Policy) ===
