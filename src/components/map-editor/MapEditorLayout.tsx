@@ -35,6 +35,7 @@ import { buildProjectZip, loadProjectZip } from '@/lib/map-project';
 import { exportTmx } from '@/lib/tmx-exporter';
 import StampPanel from './StampPanel';
 import SaveStampModal from './SaveStampModal';
+import StampEditorModal from './StampEditorModal';
 import type { StampListItem, StampData } from '@/lib/stamp-utils';
 import { buildGidRemapTable, findLayerByName } from '@/lib/stamp-utils';
 
@@ -82,10 +83,20 @@ export default function MapEditorLayout({
   const [layerOverlayMap, setLayerOverlayMap] = useState<Record<number, boolean>>({});
   const [showHelp, setShowHelp] = useState(false);
   const [showPixelEditor, setShowPixelEditor] = useState(false);
+  const [selectionPixelData, setSelectionPixelData] = useState<{
+    dataUrl: string;
+    cols: number;
+    rows: number;
+    tileWidth: number;
+    tileHeight: number;
+  } | null>(null);
   const [stamps, setStamps] = useState<StampListItem[]>([]);
   const [activeStamp, setActiveStamp] = useState<StampData | null>(null);
   const [showSaveStamp, setShowSaveStamp] = useState(false);
   const [savingStamp, setSavingStamp] = useState(false);
+  const [editingStamp, setEditingStamp] = useState<StampData | null>(null);
+  const [showStampEditor, setShowStampEditor] = useState(false);
+  const pixelEditorStampCallbackRef = useRef<((dataUrl: string) => void) | null>(null);
 
   // Pan (space-held) state
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -96,13 +107,30 @@ export default function MapEditorLayout({
 
   // Left panel section order & collapsed state
   const [sectionOrder, setSectionOrder] = useState<string[]>(() => {
-    try { const v = localStorage.getItem('mapEditor.sectionOrder'); return v ? JSON.parse(v) : ['layers', 'tilesets', 'stamps', 'minimap']; } catch { return ['layers', 'tilesets', 'stamps', 'minimap']; }
+    const def = ['layers', 'tilesets', 'stamps', 'minimap'];
+    try {
+      const v = localStorage.getItem('mapEditor.sectionOrder');
+      if (!v) return def;
+      const parsed = JSON.parse(v) as string[];
+      if (!parsed.includes('stamps')) {
+        const idx = parsed.indexOf('tilesets');
+        parsed.splice(idx >= 0 ? idx + 1 : parsed.length, 0, 'stamps');
+      }
+      return parsed;
+    } catch { return def; }
   });
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
     try { const v = localStorage.getItem('mapEditor.collapsedSections'); return v ? JSON.parse(v) : {}; } catch { return {}; }
   });
   const [sectionVisibility, setSectionVisibility] = useState<Record<string, boolean>>(() => {
-    try { const v = localStorage.getItem('mapEditor.sectionVisibility'); return v ? JSON.parse(v) : { layers: true, tilesets: true, stamps: true, minimap: true }; } catch { return { layers: true, tilesets: true, stamps: true, minimap: true }; }
+    const def = { layers: true, tilesets: true, stamps: true, minimap: true };
+    try {
+      const v = localStorage.getItem('mapEditor.sectionVisibility');
+      if (!v) return def;
+      const parsed = JSON.parse(v) as Record<string, boolean>;
+      if (parsed.stamps === undefined) parsed.stamps = true;
+      return parsed;
+    } catch { return def; }
   });
   // Persist view settings to localStorage
   useEffect(() => { localStorage.setItem('mapEditor.sectionOrder', JSON.stringify(sectionOrder)); }, [sectionOrder]);
@@ -604,9 +632,18 @@ export default function MapEditorLayout({
 
   // === Pixel Editor ===
 
+  const handleEditSelectionPixels = useCallback(
+    (dataUrl: string, cols: number, rows: number, tileWidth: number, tileHeight: number) => {
+      setSelectionPixelData({ dataUrl, cols, rows, tileWidth, tileHeight });
+      setShowPixelEditor(true);
+    },
+    [],
+  );
+
   const handleEditPixels = useCallback(
     (firstgid: number, region: TileRegion) => {
       if (!state.tilesetImages[firstgid]) return;
+      setSelectionPixelData(null);
       setShowPixelEditor(true);
     },
     [state.tilesetImages],
@@ -799,6 +836,7 @@ export default function MapEditorLayout({
   // === Stamp Functions ===
 
   const stampThumbnailRef = useRef<string | null>(null);
+  const stampSelectionRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const fetchStamps = useCallback(async () => {
     try {
@@ -810,10 +848,10 @@ export default function MapEditorLayout({
   useEffect(() => { fetchStamps(); }, [fetchStamps]);
 
   const handleSaveStamp = useCallback(async (name: string) => {
-    if (!state.mapData || !state.selection) return;
+    const sel = stampSelectionRef.current ?? state.selection;
+    if (!state.mapData || !sel) return;
     setSavingStamp(true);
     try {
-      const sel = state.selection;
       const tw = state.mapData.tilewidth;
       const th = state.mapData.tileheight;
       const mapW = state.mapData.width;
@@ -822,7 +860,8 @@ export default function MapEditorLayout({
       const usedGids = new Set<number>();
 
       for (const layer of state.mapData.layers) {
-        if (layer.type !== 'tilelayer' || !layer.data || !layer.visible) continue;
+        if (layer.type !== 'tilelayer' || !layer.data) continue;
+        if (layer.name.toLowerCase() === 'collision') continue;
 
         const data: number[] = [];
         const depthProp = layer.properties?.find((p: any) => p.name === 'depth');
@@ -890,6 +929,7 @@ export default function MapEditorLayout({
       setSavingStamp(false);
       setShowSaveStamp(false);
       stampThumbnailRef.current = null;
+      stampSelectionRef.current = null;
     }
   }, [state.mapData, state.selection, state.tilesetImages, fetchStamps]);
 
@@ -910,6 +950,33 @@ export default function MapEditorLayout({
     if (activeStamp?.id === id) setActiveStamp(null);
     fetchStamps();
   }, [activeStamp, fetchStamps]);
+
+  const handleEditStamp = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/stamps/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setEditingStamp(data);
+        setShowStampEditor(true);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleSaveStampEdit = useCallback(async (updated: { layers: any[]; tilesets: any[]; thumbnail: string | null }) => {
+    if (!editingStamp) return;
+    try {
+      const res = await fetch(`/api/stamps/${editingStamp.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+      if (res.ok) {
+        await fetchStamps();
+        setShowStampEditor(false);
+        setEditingStamp(null);
+      }
+    } catch { /* ignore */ }
+  }, [editingStamp, fetchStamps]);
 
   const handlePlaceStamp = useCallback(async (targetX: number, targetY: number) => {
     if (!activeStamp || !state.mapData) return;
@@ -1165,7 +1232,7 @@ export default function MapEditorLayout({
           {sectionOrder.filter((id) => sectionVisibility[id] !== false).map((sectionId) => {
             const isCollapsed = !!collapsedSections[sectionId];
             const isDragOver = dragOverSection === sectionId;
-            const sectionLabel = sectionId === 'layers' ? t('mapEditor.layers.title') : sectionId === 'minimap' ? t('mapEditor.minimap.title') : sectionId === 'stamps' ? 'Stamps' : t('mapEditor.tilesets.title');
+            const sectionLabel = sectionId === 'layers' ? t('mapEditor.layers.title') : sectionId === 'minimap' ? t('mapEditor.minimap.title') : sectionId === 'stamps' ? t('mapEditor.stamps.title') : t('mapEditor.tilesets.title');
 
             // Section header (shared for all sections)
             const header = (
@@ -1249,6 +1316,9 @@ export default function MapEditorLayout({
                         onReorderLayers={(from, to) =>
                           dispatch({ type: 'REORDER_LAYERS', fromIndex: from, toIndex: to })
                         }
+                        onSetLayerDepth={(index, depth) =>
+                          dispatch({ type: 'SET_LAYER_DEPTH', index, depth })
+                        }
                         onAddLayer={handleAddLayer}
                         onToggleVisibility={handleToggleLayerVisibility}
                         layerOverlayMap={layerOverlayMap}
@@ -1271,6 +1341,7 @@ export default function MapEditorLayout({
                       activeStampId={activeStamp?.id ?? null}
                       onSelectStamp={handleSelectStamp}
                       onDeleteStamp={handleDeleteStamp}
+                      onEditStamp={handleEditStamp}
                       hideHeader
                     />
                   )}
@@ -1334,8 +1405,11 @@ export default function MapEditorLayout({
               findTileset={findTileset}
               onStatusUpdate={setStatusInfo}
               layerOverlayMap={layerOverlayMap}
+              onEditSelectionPixels={handleEditSelectionPixels}
+              onCopySelection={handleCopy}
               onSaveAsStamp={(thumbnail: string | null) => {
                 stampThumbnailRef.current = thumbnail;
+                stampSelectionRef.current = state.selection ? { ...state.selection } : null;
                 setShowSaveStamp(true);
               }}
               activeStamp={activeStamp}
@@ -1409,14 +1483,57 @@ export default function MapEditorLayout({
         saving={savingStamp}
       />
 
-      {showPixelEditor && state.selectedRegion && state.tilesetImages[state.selectedRegion.firstgid] && (
+      {showPixelEditor && (selectionPixelData || (state.selectedRegion && state.tilesetImages[state.selectedRegion.firstgid])) && (
         <PixelEditorModal
           open={showPixelEditor}
-          onClose={() => setShowPixelEditor(false)}
-          region={state.selectedRegion}
-          tilesetInfo={state.tilesetImages[state.selectedRegion.firstgid]}
+          onClose={() => { setShowPixelEditor(false); setSelectionPixelData(null); }}
+          region={selectionPixelData ? null : state.selectedRegion}
+          tilesetInfo={selectionPixelData ? null : (state.selectedRegion ? state.tilesetImages[state.selectedRegion.firstgid] : null)}
           onSaveAsNew={handlePixelSaveAsNew}
           onOverwrite={handlePixelOverwrite}
+          initialImageDataUrl={selectionPixelData?.dataUrl}
+          initialTileWidth={selectionPixelData?.tileWidth}
+          initialTileHeight={selectionPixelData?.tileHeight}
+          initialCols={selectionPixelData?.cols}
+          initialRows={selectionPixelData?.rows}
+          onSaveAsStamp={async (thumbnail, cols, rows, tileWidth, tileHeight) => {
+            if (pixelEditorStampCallbackRef.current) {
+              pixelEditorStampCallbackRef.current(thumbnail);
+              pixelEditorStampCallbackRef.current = null;
+              setShowPixelEditor(false);
+              setSelectionPixelData(null);
+              return;
+            }
+            if (!state.mapData) return;
+            const layerName = state.mapData.layers[state.activeLayerIndex]?.name || 'Layer';
+            // Build single-layer stamp from the pixel editor canvas
+            // The thumbnail IS the tileset image; tiles are laid out in grid order
+            const tileCount = cols * rows;
+            const data = Array.from({ length: tileCount }, (_, i) => i + 1); // gids 1..N
+            const stampBody = {
+              name: `${layerName}-stamp`,
+              cols, rows, tileWidth, tileHeight,
+              layers: [{ name: layerName, type: 'tilelayer', depth: 0, data }],
+              tilesets: [{ name: `stamp-tileset`, firstgid: 1, tilewidth: tileWidth, tileheight: tileHeight, columns: cols, tilecount: tileCount, image: thumbnail }],
+              thumbnail,
+            };
+            const res = await fetch('/api/stamps', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(stampBody) });
+            if (res.ok) await fetchStamps();
+          }}
+        />
+      )}
+
+      {showStampEditor && editingStamp && (
+        <StampEditorModal
+          open={showStampEditor}
+          onClose={() => { setShowStampEditor(false); setEditingStamp(null); }}
+          stamp={editingStamp}
+          onSave={handleSaveStampEdit}
+          onOpenPixelEditor={(imageDataUrl, cols, rows, tileWidth, tileHeight, onResult) => {
+            pixelEditorStampCallbackRef.current = onResult;
+            setSelectionPixelData({ dataUrl: imageDataUrl, tileWidth, tileHeight, cols, rows });
+            setShowPixelEditor(true);
+          }}
         />
       )}
     </div>
