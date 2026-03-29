@@ -6,7 +6,7 @@ import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
 
 // === Types ===
 
-type Tool = 'pen' | 'eraser' | 'eyedropper';
+type Tool = 'pen' | 'eraser' | 'eyedropper' | 'shift';
 
 interface PixelEditorModalProps {
   open: boolean;
@@ -50,6 +50,9 @@ export default function PixelEditorModal({
   const [alpha, setAlpha] = useState(255);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [shiftOffset, setShiftOffset] = useState({ dx: 0, dy: 0 });
+  const [expandedCols, setExpandedCols] = useState(0);
+  const [expandedRows, setExpandedRows] = useState(0);
 
   // --- Refs ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -61,6 +64,14 @@ export default function PixelEditorModal({
   const isPanningRef = useRef(false);
   const lastPanRef = useRef({ x: 0, y: 0 });
   const isDrawingRef = useRef(false);
+  const isShiftDraggingRef = useRef(false);
+  const shiftStartRef = useRef({ x: 0, y: 0 });
+  const shiftOffsetRef = useRef({ dx: 0, dy: 0 });
+
+  // Keep shiftOffsetRef in sync to avoid stale closures in renderCanvas
+  useEffect(() => {
+    shiftOffsetRef.current = shiftOffset;
+  }, [shiftOffset]);
 
   // --- Memory cleanup on modal close ---
   useEffect(() => {
@@ -69,6 +80,10 @@ export default function PixelEditorModal({
       checkerCanvasRef.current = null;
       undoStackRef.current = [];
       redoStackRef.current = [];
+      isShiftDraggingRef.current = false;
+      setShiftOffset({ dx: 0, dy: 0 });
+      setExpandedCols(0);
+      setExpandedRows(0);
     }
   }, [open]);
 
@@ -95,6 +110,32 @@ export default function PixelEditorModal({
       checkerCanvasRef.current = cc;
     },
     [],
+  );
+
+  // --- Calculate expanded grid from shift offset ---
+  const calcExpandedGrid = useCallback(
+    (dx: number, dy: number) => {
+      if (!tilesetInfo || !editCanvasRef.current) {
+        return { cols: expandedCols, rows: expandedRows, originX: 0, originY: 0 };
+      }
+      const { tilewidth, tileheight } = tilesetInfo;
+      const ec = editCanvasRef.current;
+      const currentCols = Math.round(ec.width / tilewidth);
+      const currentRows = Math.round(ec.height / tileheight);
+
+      const extraLeft = dx < 0 ? Math.ceil(Math.abs(dx) / tilewidth) : 0;
+      const extraRight = dx > 0 ? Math.ceil(dx / tilewidth) : 0;
+      const extraTop = dy < 0 ? Math.ceil(Math.abs(dy) / tileheight) : 0;
+      const extraBottom = dy > 0 ? Math.ceil(dy / tileheight) : 0;
+
+      const cols = currentCols + extraLeft + extraRight;
+      const rows = currentRows + extraTop + extraBottom;
+      const originX = extraLeft * tilewidth + dx;
+      const originY = extraTop * tileheight + dy;
+
+      return { cols, rows, originX, originY };
+    },
+    [tilesetInfo, expandedCols, expandedRows],
   );
 
   // --- Initialize edit canvas from region ---
@@ -149,13 +190,20 @@ export default function PixelEditorModal({
     setTool('pen');
     setColor('#000000');
     setAlpha(255);
+    setShiftOffset({ dx: 0, dy: 0 });
+    setExpandedCols(region.width);
+    setExpandedRows(region.height);
   }, [open, region, tilesetInfo, initEditCanvas, regionPxW, regionPxH]);
+
+  // Pixel dimensions of the current edit canvas (may be expanded)
+  const editPxW = tilesetInfo ? expandedCols * tilesetInfo.tilewidth : regionPxW;
+  const editPxH = tilesetInfo ? expandedRows * tilesetInfo.tileheight : regionPxH;
 
   // --- Rebuild checkerboard when zoom or dimensions change ---
   useEffect(() => {
-    if (!open || regionPxW === 0 || regionPxH === 0) return;
-    buildCheckerboard(regionPxW, regionPxH, zoom);
-  }, [open, regionPxW, regionPxH, zoom, buildCheckerboard]);
+    if (!open || editPxW === 0 || editPxH === 0) return;
+    buildCheckerboard(editPxW, editPxH, zoom);
+  }, [open, editPxW, editPxH, zoom, buildCheckerboard]);
 
   // --- Render display canvas ---
   const renderCanvas = useCallback(() => {
@@ -171,59 +219,103 @@ export default function PixelEditorModal({
     ctx.save();
     ctx.translate(pan.x, pan.y);
 
-    const w = ec.width * zoom;
-    const h = ec.height * zoom;
+    const so = shiftOffsetRef.current;
+    const isShifting = so.dx !== 0 || so.dy !== 0;
 
-    // Checkerboard behind transparent pixels (pre-rendered offscreen canvas)
-    const cc = checkerCanvasRef.current;
-    if (cc) {
-      ctx.drawImage(cc, 0, 0);
-    }
+    if (isShifting && tilesetInfo) {
+      // During shift drag preview: show expanded grid
+      const { cols, rows, originX, originY } = calcExpandedGrid(so.dx, so.dy);
+      const expandedW = cols * tilesetInfo.tilewidth * zoom;
+      const expandedH = rows * tilesetInfo.tileheight * zoom;
 
-    // Draw edited image scaled
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(ec, 0, 0, w, h);
-
-    // Pixel grid lines at zoom >= 4x
-    if (zoom >= 4) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-      ctx.lineWidth = 0.5;
-      for (let x = 0; x <= ec.width; x++) {
-        ctx.beginPath();
-        ctx.moveTo(x * zoom, 0);
-        ctx.lineTo(x * zoom, h);
-        ctx.stroke();
+      // Checkerboard at expanded size
+      const blockSize = CHECKER_SIZE * zoom;
+      const cCols = Math.ceil(expandedW / blockSize);
+      const cRows = Math.ceil(expandedH / blockSize);
+      for (let r = 0; r < cRows; r++) {
+        for (let c = 0; c < cCols; c++) {
+          ctx.fillStyle = (r + c) % 2 === 0 ? CHECKER_LIGHT : CHECKER_DARK;
+          ctx.fillRect(c * blockSize, r * blockSize, blockSize, blockSize);
+        }
       }
-      for (let y = 0; y <= ec.height; y++) {
-        ctx.beginPath();
-        ctx.moveTo(0, y * zoom);
-        ctx.lineTo(w, y * zoom);
-        ctx.stroke();
-      }
-    }
 
-    // Tile boundary grid lines (green, always visible)
-    if (tilesetInfo) {
+      // Draw edited image at offset position
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(ec, originX * zoom, originY * zoom, ec.width * zoom, ec.height * zoom);
+
+      // Tile boundary grid lines (green)
       ctx.strokeStyle = 'rgba(0,255,100,0.5)';
       ctx.lineWidth = 1;
       const tw = tilesetInfo.tilewidth * zoom;
       const th = tilesetInfo.tileheight * zoom;
-      for (let x = 0; x <= w; x += tw) {
+      for (let x = 0; x <= expandedW; x += tw) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
-        ctx.lineTo(x, h);
+        ctx.lineTo(x, expandedH);
         ctx.stroke();
       }
-      for (let y = 0; y <= h; y += th) {
+      for (let y = 0; y <= expandedH; y += th) {
         ctx.beginPath();
         ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
+        ctx.lineTo(expandedW, y);
         ctx.stroke();
+      }
+    } else {
+      // Normal render (no shift)
+      const w = ec.width * zoom;
+      const h = ec.height * zoom;
+
+      // Checkerboard behind transparent pixels (pre-rendered offscreen canvas)
+      const cc = checkerCanvasRef.current;
+      if (cc) {
+        ctx.drawImage(cc, 0, 0);
+      }
+
+      // Draw edited image scaled
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(ec, 0, 0, w, h);
+
+      // Pixel grid lines at zoom >= 4x
+      if (zoom >= 4) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 0.5;
+        for (let x = 0; x <= ec.width; x++) {
+          ctx.beginPath();
+          ctx.moveTo(x * zoom, 0);
+          ctx.lineTo(x * zoom, h);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= ec.height; y++) {
+          ctx.beginPath();
+          ctx.moveTo(0, y * zoom);
+          ctx.lineTo(w, y * zoom);
+          ctx.stroke();
+        }
+      }
+
+      // Tile boundary grid lines (green, always visible)
+      if (tilesetInfo) {
+        ctx.strokeStyle = 'rgba(0,255,100,0.5)';
+        ctx.lineWidth = 1;
+        const tw = tilesetInfo.tilewidth * zoom;
+        const th = tilesetInfo.tileheight * zoom;
+        for (let x = 0; x <= w; x += tw) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, h);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= h; y += th) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
       }
     }
 
     ctx.restore();
-  }, [pan, zoom, tilesetInfo]);
+  }, [pan, zoom, tilesetInfo, calcExpandedGrid]);
 
   useEffect(() => {
     renderCanvas();
@@ -281,16 +373,17 @@ export default function PixelEditorModal({
   const getPixelCoord = useCallback(
     (e: React.MouseEvent) => {
       const canvas = canvasRef.current;
-      if (!canvas) return null;
+      const ec = editCanvasRef.current;
+      if (!canvas || !ec) return null;
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left - pan.x;
       const my = e.clientY - rect.top - pan.y;
       const px = Math.floor(mx / zoom);
       const py = Math.floor(my / zoom);
-      if (px < 0 || py < 0 || px >= regionPxW || py >= regionPxH) return null;
+      if (px < 0 || py < 0 || px >= ec.width || py >= ec.height) return null;
       return { x: px, y: py };
     },
-    [pan, zoom, regionPxW, regionPxH],
+    [pan, zoom],
   );
 
   // --- Parse hex color to RGBA ---
@@ -356,6 +449,48 @@ export default function PixelEditorModal({
     document.removeEventListener('mouseup', handlePanEnd);
   }, [handlePanMove]);
 
+  // --- Apply shift: create expanded canvas ---
+  const applyShift = useCallback(
+    (dx: number, dy: number) => {
+      const ec = editCanvasRef.current;
+      if (!ec || !tilesetInfo) return;
+      if (dx === 0 && dy === 0) {
+        isShiftDraggingRef.current = false;
+        setShiftOffset({ dx: 0, dy: 0 });
+        return;
+      }
+
+      const { cols, rows, originX, originY } = calcExpandedGrid(dx, dy);
+      const { tilewidth, tileheight } = tilesetInfo;
+
+      // Push undo snapshot before modifying
+      pushUndo();
+
+      // Create new canvas with expanded size
+      const newCanvas = document.createElement('canvas');
+      newCanvas.width = cols * tilewidth;
+      newCanvas.height = rows * tileheight;
+      const newCtx = newCanvas.getContext('2d')!;
+
+      // Draw existing content at offset position
+      newCtx.drawImage(ec, originX, originY);
+
+      // Replace edit canvas
+      editCanvasRef.current = newCanvas;
+      setExpandedCols(cols);
+      setExpandedRows(rows);
+      setShiftOffset({ dx: 0, dy: 0 });
+      isShiftDraggingRef.current = false;
+
+      // Rebuild checkerboard for new dimensions
+      buildCheckerboard(newCanvas.width, newCanvas.height, zoom);
+
+      // Re-render
+      renderCanvas();
+    },
+    [tilesetInfo, calcExpandedGrid, pushUndo, buildCheckerboard, zoom, renderCanvas],
+  );
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       // Middle-click: start panning with document-level listeners
@@ -369,6 +504,13 @@ export default function PixelEditorModal({
       }
 
       if (e.button !== 0) return;
+
+      // Shift tool: start shift drag
+      if (tool === 'shift') {
+        isShiftDraggingRef.current = true;
+        shiftStartRef.current = { x: e.clientX, y: e.clientY };
+        return;
+      }
 
       const coord = getPixelCoord(e);
       if (!coord) return;
@@ -387,18 +529,34 @@ export default function PixelEditorModal({
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      // Shift dragging
+      if (isShiftDraggingRef.current) {
+        const dx = Math.round((e.clientX - shiftStartRef.current.x) / zoom);
+        const dy = Math.round((e.clientY - shiftStartRef.current.y) / zoom);
+        const newOffset = { dx, dy };
+        shiftOffsetRef.current = newOffset;
+        setShiftOffset(newOffset);
+        renderCanvas();
+        return;
+      }
+
       // Drawing (pan is handled at document level now)
       if (!isDrawingRef.current) return;
       const coord = getPixelCoord(e);
       if (!coord) return;
       paintPixel(coord.x, coord.y);
     },
-    [getPixelCoord, paintPixel],
+    [getPixelCoord, paintPixel, zoom, renderCanvas],
   );
 
   const handleMouseUp = useCallback(() => {
+    if (isShiftDraggingRef.current) {
+      const so = shiftOffsetRef.current;
+      applyShift(so.dx, so.dy);
+      return;
+    }
     isDrawingRef.current = false;
-  }, []);
+  }, [applyShift]);
 
   // Cleanup document listeners on unmount
   useEffect(() => {
@@ -457,6 +615,9 @@ export default function PixelEditorModal({
       } else if (e.key === 'i' || e.key === 'I') {
         e.preventDefault();
         setTool('eyedropper');
+      } else if (e.key === 'v' || e.key === 'V') {
+        e.preventDefault();
+        setTool('shift');
       } else if (e.ctrlKey && e.key === 'z') {
         e.preventDefault();
         undo();
@@ -483,13 +644,13 @@ export default function PixelEditorModal({
     onSaveAsNew(
       dataUrl,
       name,
-      region.width,
+      expandedCols,
       tilesetInfo.tilewidth,
       tilesetInfo.tileheight,
-      region.width * region.height,
+      expandedCols * expandedRows,
     );
     onClose();
-  }, [tilesetInfo, region, getDataUrl, onSaveAsNew, onClose]);
+  }, [tilesetInfo, region, expandedCols, expandedRows, getDataUrl, onSaveAsNew, onClose]);
 
   const handleOverwrite = useCallback(() => {
     if (!region) return;
@@ -511,7 +672,9 @@ export default function PixelEditorModal({
 
   // --- Cursor style ---
   const cursorStyle =
-    tool === 'eyedropper' ? 'crosshair' : tool === 'eraser' ? 'cell' : 'default';
+    tool === 'shift' ? 'move' : tool === 'eyedropper' ? 'crosshair' : tool === 'eraser' ? 'cell' : 'default';
+
+  const isExpanded = region && (expandedCols !== region.width || expandedRows !== region.height);
 
   return (
     <Modal open={open} onClose={onClose} title="Pixel Editor" size="full">
@@ -544,6 +707,14 @@ export default function PixelEditorModal({
               title="Eyedropper (I)"
             >
               Pick
+            </Button>
+            <Button
+              variant={tool === 'shift' ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setTool('shift')}
+              title="Shift image (V)"
+            >
+              Shift
             </Button>
           </div>
 
@@ -596,7 +767,10 @@ export default function PixelEditorModal({
 
           {/* Region info */}
           <span className="text-caption text-text-secondary ml-auto">
-            {regionPxW} x {regionPxH} px &middot; {region.width} x {region.height} tiles
+            {editPxW} x {editPxH} px &middot; {expandedCols} x {expandedRows} tiles
+            {isExpanded && (
+              <span className="text-amber-400 ml-1">(expanded)</span>
+            )}
           </span>
         </div>
 
@@ -625,7 +799,13 @@ export default function PixelEditorModal({
         <Button variant="secondary" size="sm" onClick={handleSaveAsNew}>
           Save as New Tileset
         </Button>
-        <Button variant="primary" size="sm" onClick={handleOverwrite}>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handleOverwrite}
+          disabled={!!isExpanded}
+          title={isExpanded ? 'Cannot overwrite: grid dimensions changed. Use "Save as New Tileset" instead.' : undefined}
+        >
           Overwrite Original
         </Button>
       </Modal.Footer>
