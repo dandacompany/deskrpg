@@ -15,6 +15,7 @@ export interface ImportTilesetModalProps {
   onClose: () => void;
   existingTilesets: TiledTileset[];
   onImport: (result: ImportTilesetResult) => void;
+  initialFile?: File | null;
 }
 
 interface SelectionRect {
@@ -29,6 +30,7 @@ export default function ImportTilesetModal({
   onClose,
   existingTilesets,
   onImport,
+  initialFile,
 }: ImportTilesetModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -191,6 +193,22 @@ export default function ImportTilesetModal({
       setDragging(false);
     }
   }, [open]);
+
+  // Load initial file (from drag-and-drop)
+  useEffect(() => {
+    if (!open || !initialFile) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        setImage(img);
+        setFileName(initialFile.name);
+        setName(initialFile.name.replace(/\.[^.]+$/, ''));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(initialFile);
+  }, [open, initialFile]);
 
   // Import handler
   const handleImport = useCallback(() => {

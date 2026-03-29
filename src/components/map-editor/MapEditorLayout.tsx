@@ -71,6 +71,8 @@ export default function MapEditorLayout({
   // Modal visibility
   const [showNewMap, setShowNewMap] = useState(false);
   const [showImportTileset, setShowImportTileset] = useState(false);
+  const [droppedTilesetFile, setDroppedTilesetFile] = useState<File | null>(null);
+  const [isDroppingTileset, setIsDroppingTileset] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showPixelEditor, setShowPixelEditor] = useState(false);
 
@@ -926,8 +928,28 @@ export default function MapEditorLayout({
       <div className="flex-1 flex min-h-0">
         {/* Left Panel */}
         <div
-          className="bg-surface border-r border-border flex-shrink-0 overflow-y-auto"
+          className={`bg-surface border-r border-border flex-shrink-0 overflow-y-auto relative ${isDroppingTileset ? 'ring-2 ring-primary-light ring-inset' : ''}`}
           style={{ width: panelWidth }}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes('Files')) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'copy';
+              setIsDroppingTileset(true);
+            }
+          }}
+          onDragLeave={(e) => {
+            if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+            setIsDroppingTileset(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDroppingTileset(false);
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+              setDroppedTilesetFile(file);
+              setShowImportTileset(true);
+            }
+          }}
         >
           {sectionOrder.filter((id) => sectionVisibility[id] !== false).map((sectionId) => {
             const isCollapsed = !!collapsedSections[sectionId];
@@ -1132,9 +1154,10 @@ export default function MapEditorLayout({
 
       <ImportTilesetModal
         open={showImportTileset}
-        onClose={() => setShowImportTileset(false)}
+        onClose={() => { setShowImportTileset(false); setDroppedTilesetFile(null); }}
         existingTilesets={state.mapData?.tilesets ?? []}
         onImport={handleImportTileset}
+        initialFile={droppedTilesetFile}
       />
 
       <HelpModal
