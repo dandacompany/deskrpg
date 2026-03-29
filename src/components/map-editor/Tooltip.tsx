@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, type ReactNode } from 'react';
+import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 interface TooltipProps {
   label: string;
@@ -10,22 +11,38 @@ interface TooltipProps {
 
 export default function Tooltip({ label, shortcut, children }: TooltipProps) {
   const [show, setShow] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
   const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
 
   const handleEnter = () => {
-    timeout.current = setTimeout(() => setShow(true), 400);
+    timeout.current = setTimeout(() => {
+      if (triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        setPos({ x: rect.left + rect.width / 2, y: rect.bottom + 6 });
+      }
+      setShow(true);
+    }, 400);
   };
+
   const handleLeave = () => {
     if (timeout.current) clearTimeout(timeout.current);
     timeout.current = null;
     setShow(false);
   };
 
+  useEffect(() => {
+    return () => { if (timeout.current) clearTimeout(timeout.current); };
+  }, []);
+
   return (
-    <div className="relative inline-flex" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+    <div ref={triggerRef} className="inline-flex" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
       {children}
-      {show && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-[60] pointer-events-none whitespace-nowrap">
+      {show && createPortal(
+        <div
+          className="fixed z-[9999] pointer-events-none whitespace-nowrap"
+          style={{ left: pos.x, top: pos.y, transform: 'translateX(-50%)' }}
+        >
           <div className="bg-bg border border-border rounded-md px-2 py-1 shadow-lg flex items-center gap-2">
             <span className="text-micro text-text">{label}</span>
             {shortcut && (
@@ -34,7 +51,8 @@ export default function Tooltip({ label, shortcut, children }: TooltipProps) {
               </span>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
