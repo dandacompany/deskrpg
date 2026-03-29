@@ -49,6 +49,16 @@ function LayerItem({
   const isCore = isCoreLayer(layer);
   const role = getDeskRPGRole(layer, index, allLayers);
 
+  // Layer color tint based on role
+  const layerColors: Record<string, string> = {
+    'D:0': 'rgba(34, 197, 94, 0.08)',     // Floor — green
+    'D:1': 'rgba(59, 130, 246, 0.08)',     // Walls — blue
+    'D:10K': 'rgba(234, 179, 8, 0.08)',    // Foreground — yellow
+    'COL': 'rgba(239, 68, 68, 0.08)',      // Collision — red
+    'OBJ': 'rgba(139, 92, 246, 0.08)',     // Objects — purple
+  };
+  const tintColor = role ? (layerColors[role.label] ?? 'transparent') : 'transparent';
+
   const handleDoubleClick = useCallback(() => {
     setEditName(layer.name);
     setEditing(true);
@@ -79,8 +89,9 @@ function LayerItem({
       onDrop={onDrop}
       className={`
         group flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer transition-colors
-        ${isActive ? 'bg-primary-muted border border-primary-light/30' : 'hover:bg-surface-raised border border-transparent'}
+        ${isActive ? 'border border-primary-light/30' : 'hover:bg-surface-raised border border-transparent'}
       `.trim().replace(/\s+/g, ' ')}
+      style={{ backgroundColor: isActive ? tintColor : undefined }}
       onClick={onSelect}
     >
       {/* Visibility toggle */}
@@ -89,12 +100,20 @@ function LayerItem({
           e.stopPropagation();
           onToggleVisibility();
         }}
-        className="text-body flex-shrink-0 w-4 text-center hover:text-text transition-colors"
+        className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-surface-raised transition-colors"
         title={layer.visible ? 'Hide layer' : 'Show layer'}
       >
-        <span className={layer.visible ? 'text-primary-light' : 'text-text-dim'}>
-          {layer.visible ? '\u25C9' : '\u25CB'}
-        </span>
+        {layer.visible ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary-light">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-dim">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+            <line x1="1" y1="1" x2="23" y2="23" />
+          </svg>
+        )}
       </button>
 
       {/* Layer name */}
