@@ -53,6 +53,8 @@ export default function PixelEditorModal({
   const [shiftOffset, setShiftOffset] = useState({ dx: 0, dy: 0 });
   const [expandedCols, setExpandedCols] = useState(0);
   const [expandedRows, setExpandedRows] = useState(0);
+  const [resizeTargetCols, setResizeTargetCols] = useState(1);
+  const [resizeTargetRows, setResizeTargetRows] = useState(1);
 
   // --- Refs ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -659,6 +661,32 @@ export default function PixelEditorModal({
     onClose();
   }, [region, getDataUrl, onOverwrite, onClose]);
 
+  // --- Resize handler ---
+  const applyResize = useCallback(() => {
+    const ec = editCanvasRef.current;
+    if (!ec || !tilesetInfo) return;
+
+    const targetW = resizeTargetCols * tilesetInfo.tilewidth;
+    const targetH = resizeTargetRows * tilesetInfo.tileheight;
+    if (targetW === ec.width && targetH === ec.height) return;
+
+    pushUndo();
+
+    const newCanvas = document.createElement('canvas');
+    newCanvas.width = targetW;
+    newCanvas.height = targetH;
+    const ctx = newCanvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(ec, 0, 0, ec.width, ec.height, 0, 0, targetW, targetH);
+
+    editCanvasRef.current = newCanvas;
+    setExpandedCols(resizeTargetCols);
+    setExpandedRows(resizeTargetRows);
+
+    buildCheckerboard(targetW, targetH, zoom);
+    renderCanvas();
+  }, [tilesetInfo, resizeTargetCols, resizeTargetRows, pushUndo, zoom, buildCheckerboard, renderCanvas]);
+
   // --- Guard: don't render if no data ---
   if (!region || !tilesetInfo) {
     return (
@@ -715,6 +743,34 @@ export default function PixelEditorModal({
               title="Shift image (V)"
             >
               Shift
+            </Button>
+          </div>
+
+          {/* Separator */}
+          <div className="w-px h-6 bg-border" />
+
+          {/* Resize controls */}
+          <div className="flex items-center gap-1">
+            <label className="text-caption text-text-secondary">Resize</label>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={resizeTargetCols}
+              onChange={(e) => setResizeTargetCols(Math.max(1, Number(e.target.value)))}
+              className="w-10 h-6 text-center text-caption bg-surface-raised border border-border rounded text-text"
+            />
+            <span className="text-caption text-text-dim">x</span>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={resizeTargetRows}
+              onChange={(e) => setResizeTargetRows(Math.max(1, Number(e.target.value)))}
+              className="w-10 h-6 text-center text-caption bg-surface-raised border border-border rounded text-text"
+            />
+            <Button variant="ghost" size="sm" onClick={applyResize}>
+              Apply
             </Button>
           </div>
 
