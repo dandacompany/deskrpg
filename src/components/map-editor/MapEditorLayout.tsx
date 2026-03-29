@@ -830,7 +830,7 @@ export default function MapEditorLayout({
       <div className="flex-1 flex min-h-0">
         {/* Left Panel */}
         <div
-          className="flex flex-col bg-surface border-r border-border flex-shrink-0 overflow-y-auto"
+          className="bg-surface border-r border-border flex-shrink-0 overflow-y-auto"
           style={{ width: panelWidth }}
         >
           {sectionOrder.filter((id) => sectionVisibility[id] !== false).map((sectionId) => {
@@ -907,9 +907,9 @@ export default function MapEditorLayout({
             // Section content
             if (sectionId === 'layers') {
               return (
-                <div key={sectionId} className="flex flex-col">
+                <div key={sectionId}>
                   {header}
-                  <div className="max-h-[280px] overflow-y-auto">
+                  <div>
                     {state.mapData && (
                       <LayerPanel
                         layers={state.mapData.layers}
@@ -932,7 +932,7 @@ export default function MapEditorLayout({
 
             if (sectionId === 'minimap') {
               return (
-                <div key={sectionId} className="flex flex-col">
+                <div key={sectionId}>
                   {header}
                   <Minimap
                     state={state}
@@ -948,9 +948,9 @@ export default function MapEditorLayout({
 
             if (sectionId === 'tilesets') {
               return (
-                <div key={sectionId} className="flex flex-col flex-1 min-h-0">
+                <div key={sectionId}>
                   {header}
-                  <div className="flex-1 min-h-0 overflow-hidden">
+                  <div>
                     <TilePalette
                       tilesets={sortedTilesets}
                       selectedRegion={state.selectedRegion}

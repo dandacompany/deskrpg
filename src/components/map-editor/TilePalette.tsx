@@ -370,7 +370,7 @@ export default function TilePalette({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div>
       {/* Header */}
       {!hideHeader && (
         <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
@@ -389,7 +389,7 @@ export default function TilePalette({
       )}
 
       {/* Tileset list */}
-      <div className="flex-1 overflow-y-auto px-2 py-2">
+      <div className="px-2 py-2">
         {tilesets.length === 0 && (
           <p className="text-caption text-text-dim text-center py-8">
             No tilesets imported yet.
