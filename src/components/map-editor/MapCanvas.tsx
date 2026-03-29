@@ -4,6 +4,8 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import type { EditorState, TileRegion, TilesetImageInfo, EditorAction } from './hooks/useMapEditor';
 import { useCanvasRenderer, type CharacterState } from './hooks/useCanvasRenderer';
 import { usePanZoom } from './hooks/usePanZoom';
+import { compositeCharacter } from '@/lib/sprite-compositor';
+import { getDefaultLayers } from '@/hooks/useCharacterAppearance';
 
 // === Props ===
 
@@ -16,7 +18,6 @@ interface MapCanvasProps {
 
 // === Constants ===
 
-const CHARACTER_SPRITE_PATH = '/assets/spritesheets/body/bodies/male/walk/fur_tan.png';
 const CHARACTER_DRAW_SIZE = 48;
 const CHARACTER_FRAME_COUNT = 9; // 0 = idle, 1-8 = walk
 const WALK_INTERVAL_MS = 120;
@@ -51,18 +52,24 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate }: MapC
   const { render } = useCanvasRenderer(state, findTileset);
   const panZoom = usePanZoom(state, dispatch);
 
-  // === Load character spritesheet ===
+  // === Load character spritesheet (composited from default appearance) ===
 
   useEffect(() => {
-    const img = new Image();
-    img.src = CHARACTER_SPRITE_PATH;
-    img.onload = () => {
-      characterSheetRef.current = img;
-      setCharacterLoaded(true);
-    };
-    img.onerror = () => {
-      characterSheetRef.current = null;
-    };
+    const canvas = document.createElement('canvas');
+    const appearance = { bodyType: 'male', layers: getDefaultLayers('male') };
+    compositeCharacter(canvas, appearance)
+      .then(() => {
+        // Convert composited canvas to an Image for the renderer
+        const img = new Image();
+        img.onload = () => {
+          characterSheetRef.current = img;
+          setCharacterLoaded(true);
+        };
+        img.src = canvas.toDataURL('image/png');
+      })
+      .catch(() => {
+        characterSheetRef.current = null;
+      });
   }, []);
 
   // === Place character at spawn point on map init ===
