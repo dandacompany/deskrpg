@@ -7,7 +7,12 @@ import { removeBgToDataUrl } from '@/lib/remove-bg';
 
 // === Types ===
 
-type Tool = 'pen' | 'eraser' | 'eyedropper' | 'shift';
+type Tool = 'pen' | 'eraser' | 'eyedropper' | 'shift' | 'rect-select';
+
+interface PixelSelection {
+  x: number; y: number; width: number; height: number;
+}
+
 
 interface PixelEditorModalProps {
   open: boolean;
@@ -58,7 +63,12 @@ export default function PixelEditorModal({
   const [resizeTargetRows, setResizeTargetRows] = useState(1);
   const [brushSize, setBrushSize] = useState(1);
   const [showHelp, setShowHelp] = useState(false);
-  const [removingBg, setRemovingBg] = useState<string | null>(null); // progress text or null
+  const [removingBg, setRemovingBg] = useState<string | null>(null);
+  const [pixelSelection, setPixelSelection] = useState<PixelSelection | null>(null);
+  const [pixelClipboard, setPixelClipboard] = useState<ImageData | null>(null);
+  const [isPixelPasteMode, setIsPixelPasteMode] = useState(false);
+  const isRectSelectingRef = useRef(false);
+  const rectSelectStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // --- Refs ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -318,8 +328,40 @@ export default function PixelEditorModal({
       }
     }
 
+    // Pixel selection rectangle
+    const ps = pixelSelection;
+    if (ps && tool === 'rect-select' && !isPixelPasteMode) {
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
+      ctx.fillRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
+      ctx.save();
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.7)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
+      ctx.restore();
+    }
+
+    // Paste preview at hover position
+    if (isPixelPasteMode && pixelClipboard && hp) {
+      // Draw clipboard content semi-transparent at hover position
+      const previewCanvas = document.createElement('canvas');
+      previewCanvas.width = pixelClipboard.width;
+      previewCanvas.height = pixelClipboard.height;
+      previewCanvas.getContext('2d')!.putImageData(pixelClipboard, 0, 0);
+      ctx.globalAlpha = 0.5;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(previewCanvas, hp.x * zoom, hp.y * zoom, pixelClipboard.width * zoom, pixelClipboard.height * zoom);
+      ctx.globalAlpha = 1;
+      ctx.save();
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.7)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(hp.x * zoom, hp.y * zoom, pixelClipboard.width * zoom, pixelClipboard.height * zoom);
+      ctx.restore();
+    }
+
     ctx.restore();
-  }, [pan, zoom, tilesetInfo, tool, brushSize, color]);
+  }, [pan, zoom, tilesetInfo, tool, brushSize, color, pixelSelection, isPixelPasteMode, pixelClipboard]);
 
   useEffect(() => {
     renderCanvas();
@@ -518,6 +560,26 @@ export default function PixelEditorModal({
       const coord = getPixelCoord(e);
       if (!coord) return;
 
+      // Rect-select tool
+      if (tool === 'rect-select') {
+        // Paste mode: click to place clipboard
+        if (isPixelPasteMode && pixelClipboard) {
+          const ec = editCanvasRef.current;
+          if (ec) {
+            pushUndo();
+            const ctx = ec.getContext('2d')!;
+            ctx.putImageData(pixelClipboard, coord.x, coord.y);
+            renderCanvas();
+          }
+          return;
+        }
+        // Start selection drag
+        isRectSelectingRef.current = true;
+        rectSelectStartRef.current = { x: coord.x, y: coord.y };
+        setPixelSelection({ x: coord.x, y: coord.y, width: 1, height: 1 });
+        return;
+      }
+
       if (tool === 'eyedropper') {
         pickColor(coord.x, coord.y);
         return;
@@ -528,7 +590,7 @@ export default function PixelEditorModal({
       drawStartRef.current = { x: coord.x, y: coord.y };
       paintPixel(coord.x, coord.y);
     },
-    [getPixelCoord, tool, pickColor, pushUndo, paintPixel, handlePanMove, handlePanEnd],
+    [getPixelCoord, tool, pickColor, pushUndo, paintPixel, handlePanMove, handlePanEnd, isPixelPasteMode, pixelClipboard, renderCanvas],
   );
 
   const handleMouseMove = useCallback(
@@ -540,6 +602,20 @@ export default function PixelEditorModal({
         const newOffset = { dx, dy };
         shiftOffsetRef.current = newOffset;
         setShiftOffset(newOffset);
+        renderCanvas();
+        return;
+      }
+
+      // Rect-select drag
+      if (isRectSelectingRef.current && rectSelectStartRef.current) {
+        const coord = getPixelCoord(e);
+        if (coord) {
+          const sx = Math.min(rectSelectStartRef.current.x, coord.x);
+          const sy = Math.min(rectSelectStartRef.current.y, coord.y);
+          const ex = Math.max(rectSelectStartRef.current.x, coord.x);
+          const ey = Math.max(rectSelectStartRef.current.y, coord.y);
+          setPixelSelection({ x: sx, y: sy, width: ex - sx + 1, height: ey - sy + 1 });
+        }
         renderCanvas();
         return;
       }
@@ -573,6 +649,11 @@ export default function PixelEditorModal({
   );
 
   const handleMouseUp = useCallback(() => {
+    if (isRectSelectingRef.current) {
+      isRectSelectingRef.current = false;
+      rectSelectStartRef.current = null;
+      return;
+    }
     if (isShiftDraggingRef.current) {
       const so = shiftOffsetRef.current;
       applyShift(so.dx, so.dy);
@@ -646,20 +727,38 @@ export default function PixelEditorModal({
       } else if (mod && (e.key === 'y' || e.key === 'Y')) {
         e.preventDefault();
         redo();
+      } else if (mod && (e.key === 'c' || e.key === 'C')) {
+        // Copy pixel selection
+        e.preventDefault();
+        const ec = editCanvasRef.current;
+        if (ec && pixelSelection) {
+          const ctx = ec.getContext('2d')!;
+          const id = ctx.getImageData(pixelSelection.x, pixelSelection.y, pixelSelection.width, pixelSelection.height);
+          setPixelClipboard(id);
+        }
+      } else if (mod && (e.key === 'v' || e.key === 'V')) {
+        // Paste mode
+        e.preventDefault();
+        if (pixelClipboard) {
+          setIsPixelPasteMode(true);
+          setTool('rect-select');
+        }
       } else if (!mod) {
         if (e.key === 'e' || e.key === 'E') { e.preventDefault(); setTool('eraser'); }
         else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); setTool('pen'); }
         else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setTool('eyedropper'); }
         else if (e.key === 'v' || e.key === 'V') { e.preventDefault(); setTool('shift'); }
+        else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); setTool('rect-select'); }
         else if (e.key === 't' || e.key === 'T') { e.preventDefault(); trimEdges(); }
         else if (e.key === '[') { e.preventDefault(); setBrushSize((s) => Math.max(1, s - 1)); }
         else if (e.key === ']') { e.preventDefault(); setBrushSize((s) => Math.min(16, s + 1)); }
         else if (e.key === '?') { e.preventDefault(); setShowHelp((v) => !v); }
+        else if (e.key === 'Escape') { setPixelSelection(null); setIsPixelPasteMode(false); }
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [open, undo, redo]);
+  }, [open, undo, redo, pixelSelection, pixelClipboard]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Save handlers ---
   const getDataUrl = useCallback(() => {
@@ -885,7 +984,7 @@ export default function PixelEditorModal({
 
   // --- Cursor style ---
   const cursorStyle =
-    tool === 'shift' ? 'move' : tool === 'eyedropper' ? 'crosshair' : tool === 'eraser' ? 'cell' : 'default';
+    tool === 'shift' ? 'move' : tool === 'rect-select' ? 'crosshair' : tool === 'eyedropper' ? 'crosshair' : tool === 'eraser' ? 'cell' : 'default';
 
   const isExpanded = region && (expandedCols !== region.width || expandedRows !== region.height);
 
@@ -928,6 +1027,14 @@ export default function PixelEditorModal({
               title="Shift image (V)"
             >
               Shift
+            </Button>
+            <Button
+              variant={tool === 'rect-select' ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => { setTool('rect-select'); setIsPixelPasteMode(false); }}
+              title="Select region (M) — Ctrl+C copy, Ctrl+V paste"
+            >
+              Select
             </Button>
           </div>
 
@@ -1118,6 +1225,9 @@ export default function PixelEditorModal({
                 ['E', 'Eraser tool'],
                 ['I', 'Eyedropper (Pick)'],
                 ['V', 'Shift (move image)'],
+                ['M', 'Select region'],
+                ['Cmd/Ctrl+C', 'Copy selection'],
+                ['Cmd/Ctrl+V', 'Paste clipboard'],
                 ['T', 'Trim transparent edges'],
                 ['[ / ]', 'Brush size -/+'],
                 ['Cmd/Ctrl+Z', 'Undo'],
