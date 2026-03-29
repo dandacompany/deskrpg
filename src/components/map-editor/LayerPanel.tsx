@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui';
 import { Info, Eye, EyeOff } from 'lucide-react';
-import { isCoreLayer, getDeskRPGRole } from './hooks/useMapEditor';
+import { isCoreLayer, getDeskRPGRole, getLayerColor } from './hooks/useMapEditor';
 import Tooltip from './Tooltip';
 import type { TiledLayer } from './hooks/useMapEditor';
 
@@ -51,15 +51,7 @@ function LayerItem({
   const isCore = isCoreLayer(layer);
   const role = getDeskRPGRole(layer, index, allLayers);
 
-  // Layer color tint based on role
-  const layerColors: Record<string, string> = {
-    'D:0': 'rgba(34, 197, 94, 0.08)',     // Floor — green
-    'D:1': 'rgba(59, 130, 246, 0.08)',     // Walls — blue
-    'D:10K': 'rgba(234, 179, 8, 0.08)',    // Foreground — yellow
-    'COL': 'rgba(239, 68, 68, 0.08)',      // Collision — red
-    'OBJ': 'rgba(139, 92, 246, 0.08)',     // Objects — purple
-  };
-  const tintColor = role ? (layerColors[role.label] ?? 'transparent') : 'transparent';
+  const layerColor = getLayerColor(layer);
 
   const handleDoubleClick = useCallback(() => {
     setEditName(layer.name);
@@ -93,7 +85,7 @@ function LayerItem({
         group flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer transition-colors
         ${isActive ? 'border border-primary-light/30' : 'hover:bg-surface-raised border border-transparent'}
       `.trim().replace(/\s+/g, ' ')}
-      style={{ backgroundColor: isActive ? tintColor : undefined }}
+      style={{ backgroundColor: isActive ? layerColor.overlay : undefined }}
       onClick={onSelect}
     >
       {/* Visibility toggle */}
@@ -135,7 +127,11 @@ function LayerItem({
         )}
       </div>
 
-      {/* Info tooltip */}
+      {/* Color chip + Info tooltip */}
+      <span
+        className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+        style={{ backgroundColor: layerColor.solid }}
+      />
       {role && (
         <Tooltip label={`${layer.type === 'tilelayer' ? 'Tile' : 'Object'} · ${role.desc}`} shortcut={role.label}>
           <span className="cursor-default flex-shrink-0">
