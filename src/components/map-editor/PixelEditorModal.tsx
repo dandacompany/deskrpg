@@ -330,34 +330,49 @@ export default function PixelEditorModal({
 
     // Pixel selection rectangle
     const ps = pixelSelection;
-    if (ps && tool === 'rect-select' && !isPixelPasteMode) {
-      ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
-      ctx.fillRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
-      ctx.save();
-      ctx.setLineDash([3, 3]);
-      ctx.strokeStyle = 'rgba(59, 130, 246, 0.7)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
-      ctx.restore();
+    if (ps) {
+      if (isPixelPasteMode) {
+        // Copied state: animated marching ants border on source selection
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+        ctx.fillRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
+        ctx.save();
+        const dashOffset = (Date.now() / 80) % 12;
+        ctx.setLineDash([4, 4]);
+        ctx.lineDashOffset = -dashOffset;
+        ctx.strokeStyle = 'rgba(59, 130, 246, 0.9)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
+        // Second pass with white for contrast
+        ctx.lineDashOffset = -dashOffset + 4;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.strokeRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
+        ctx.restore();
+      } else if (tool === 'rect-select') {
+        // Normal selection: static dashed border
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
+        ctx.fillRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = 'rgba(59, 130, 246, 0.7)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
+        ctx.restore();
+      }
     }
 
-    // Paste preview at hover position
+    // Paste preview: clipboard image follows cursor (opaque)
     if (isPixelPasteMode && pixelClipboard && hp) {
-      // Draw clipboard content semi-transparent at hover position
       const previewCanvas = document.createElement('canvas');
       previewCanvas.width = pixelClipboard.width;
       previewCanvas.height = pixelClipboard.height;
       previewCanvas.getContext('2d')!.putImageData(pixelClipboard, 0, 0);
-      ctx.globalAlpha = 0.5;
       ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = 0.8;
       ctx.drawImage(previewCanvas, hp.x * zoom, hp.y * zoom, pixelClipboard.width * zoom, pixelClipboard.height * zoom);
       ctx.globalAlpha = 1;
-      ctx.save();
-      ctx.setLineDash([3, 3]);
-      ctx.strokeStyle = 'rgba(59, 130, 246, 0.7)';
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.9)';
       ctx.lineWidth = 1;
       ctx.strokeRect(hp.x * zoom, hp.y * zoom, pixelClipboard.width * zoom, pixelClipboard.height * zoom);
-      ctx.restore();
     }
 
     ctx.restore();
@@ -366,6 +381,18 @@ export default function PixelEditorModal({
   useEffect(() => {
     renderCanvas();
   }, [renderCanvas]);
+
+  // --- Marching ants animation loop for paste mode ---
+  useEffect(() => {
+    if (!isPixelPasteMode || !open) return;
+    let raf: number;
+    const animate = () => {
+      renderCanvas();
+      raf = requestAnimationFrame(animate);
+    };
+    raf = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(raf);
+  }, [isPixelPasteMode, open, renderCanvas]);
 
   // --- Resize display canvas to container ---
   useEffect(() => {
@@ -560,19 +587,20 @@ export default function PixelEditorModal({
       const coord = getPixelCoord(e);
       if (!coord) return;
 
+      // Paste mode: click to place clipboard (works regardless of tool)
+      if (isPixelPasteMode && pixelClipboard) {
+        const ec = editCanvasRef.current;
+        if (ec) {
+          pushUndo();
+          const ctx = ec.getContext('2d')!;
+          ctx.putImageData(pixelClipboard, coord.x, coord.y);
+          renderCanvas();
+        }
+        return;
+      }
+
       // Rect-select tool
       if (tool === 'rect-select') {
-        // Paste mode: click to place clipboard
-        if (isPixelPasteMode && pixelClipboard) {
-          const ec = editCanvasRef.current;
-          if (ec) {
-            pushUndo();
-            const ctx = ec.getContext('2d')!;
-            ctx.putImageData(pixelClipboard, coord.x, coord.y);
-            renderCanvas();
-          }
-          return;
-        }
         // Start selection drag
         isRectSelectingRef.current = true;
         rectSelectStartRef.current = { x: coord.x, y: coord.y };
@@ -728,37 +756,41 @@ export default function PixelEditorModal({
         e.preventDefault();
         redo();
       } else if (mod && (e.key === 'c' || e.key === 'C')) {
-        // Copy pixel selection
+        // Copy pixel selection → auto enter paste mode
         e.preventDefault();
         const ec = editCanvasRef.current;
         if (ec && pixelSelection) {
           const ctx = ec.getContext('2d')!;
           const id = ctx.getImageData(pixelSelection.x, pixelSelection.y, pixelSelection.width, pixelSelection.height);
           setPixelClipboard(id);
-        }
-      } else if (mod && (e.key === 'v' || e.key === 'V')) {
-        // Paste mode
-        e.preventDefault();
-        if (pixelClipboard) {
           setIsPixelPasteMode(true);
-          setTool('rect-select');
         }
       } else if (!mod) {
-        if (e.key === 'e' || e.key === 'E') { e.preventDefault(); setTool('eraser'); }
-        else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); setTool('pen'); }
-        else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setTool('eyedropper'); }
-        else if (e.key === 'v' || e.key === 'V') { e.preventDefault(); setTool('shift'); }
-        else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); setTool('rect-select'); }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (isPixelPasteMode) {
+            // Escape in paste mode → exit paste mode, keep selection
+            setIsPixelPasteMode(false);
+            setPixelClipboard(null);
+          } else {
+            // Escape normally → clear selection
+            setPixelSelection(null);
+          }
+        }
+        else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); setTool('eraser'); setIsPixelPasteMode(false); }
+        else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); setTool('pen'); setIsPixelPasteMode(false); }
+        else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setTool('eyedropper'); setIsPixelPasteMode(false); }
+        else if (e.key === 'v' || e.key === 'V') { e.preventDefault(); setTool('shift'); setIsPixelPasteMode(false); }
+        else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); setTool('rect-select'); setIsPixelPasteMode(false); }
         else if (e.key === 't' || e.key === 'T') { e.preventDefault(); trimEdges(); }
         else if (e.key === '[') { e.preventDefault(); setBrushSize((s) => Math.max(1, s - 1)); }
         else if (e.key === ']') { e.preventDefault(); setBrushSize((s) => Math.min(16, s + 1)); }
         else if (e.key === '?') { e.preventDefault(); setShowHelp((v) => !v); }
-        else if (e.key === 'Escape') { setPixelSelection(null); setIsPixelPasteMode(false); }
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [open, undo, redo, pixelSelection, pixelClipboard]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, undo, redo, pixelSelection, pixelClipboard, isPixelPasteMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Save handlers ---
   const getDataUrl = useCallback(() => {
@@ -1226,8 +1258,8 @@ export default function PixelEditorModal({
                 ['I', 'Eyedropper (Pick)'],
                 ['V', 'Shift (move image)'],
                 ['M', 'Select region'],
-                ['Cmd/Ctrl+C', 'Copy selection'],
-                ['Cmd/Ctrl+V', 'Paste clipboard'],
+                ['Cmd/Ctrl+C', 'Copy → paste mode (click to place)'],
+                ['Escape', 'Cancel paste / clear selection'],
                 ['T', 'Trim transparent edges'],
                 ['[ / ]', 'Brush size -/+'],
                 ['Cmd/Ctrl+Z', 'Undo'],
