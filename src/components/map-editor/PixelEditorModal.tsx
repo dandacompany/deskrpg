@@ -55,6 +55,7 @@ export default function PixelEditorModal({
   const [expandedRows, setExpandedRows] = useState(0);
   const [resizeTargetCols, setResizeTargetCols] = useState(1);
   const [resizeTargetRows, setResizeTargetRows] = useState(1);
+  const [brushSize, setBrushSize] = useState(1);
 
   // --- Refs ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -396,27 +397,39 @@ export default function PixelEditorModal({
     return [r, g, b, alpha];
   }, [color, alpha]);
 
-  // --- Paint a single pixel ---
+  // --- Paint pixels with brush size ---
   const paintPixel = useCallback(
     (px: number, py: number) => {
       const ec = editCanvasRef.current;
       if (!ec) return;
       const ctx = ec.getContext('2d')!;
+      const half = Math.floor(brushSize / 2);
 
       if (tool === 'eraser') {
-        ctx.clearRect(px, py, 1, 1);
+        for (let dy = -half; dy < brushSize - half; dy++) {
+          for (let dx = -half; dx < brushSize - half; dx++) {
+            const x = px + dx, y = py + dy;
+            if (x >= 0 && x < ec.width && y >= 0 && y < ec.height) {
+              ctx.clearRect(x, y, 1, 1);
+            }
+          }
+        }
       } else if (tool === 'pen') {
         const [r, g, b, a] = colorToRGBA();
-        const id = ctx.createImageData(1, 1);
-        id.data[0] = r;
-        id.data[1] = g;
-        id.data[2] = b;
-        id.data[3] = a;
-        ctx.putImageData(id, px, py);
+        for (let dy = -half; dy < brushSize - half; dy++) {
+          for (let dx = -half; dx < brushSize - half; dx++) {
+            const x = px + dx, y = py + dy;
+            if (x >= 0 && x < ec.width && y >= 0 && y < ec.height) {
+              const id = ctx.createImageData(1, 1);
+              id.data[0] = r; id.data[1] = g; id.data[2] = b; id.data[3] = a;
+              ctx.putImageData(id, x, y);
+            }
+          }
+        }
       }
       renderCanvas();
     },
-    [tool, colorToRGBA, renderCanvas],
+    [tool, brushSize, colorToRGBA, renderCanvas],
   );
 
   // --- Pick color from pixel (eyedropper) ---
@@ -871,6 +884,23 @@ export default function PixelEditorModal({
             <Button variant="ghost" size="sm" onClick={() => deleteEdge('bottom')} title="Delete bottom row">
               -B
             </Button>
+          </div>
+
+          {/* Separator */}
+          <div className="w-px h-6 bg-border" />
+
+          {/* Brush size */}
+          <div className="flex items-center gap-1">
+            <label className="text-caption text-text-secondary">Size</label>
+            <input
+              type="range"
+              min={1}
+              max={16}
+              value={brushSize}
+              onChange={(e) => setBrushSize(Number(e.target.value))}
+              className="w-16"
+            />
+            <span className="text-caption text-text-secondary w-5 text-right">{brushSize}</span>
           </div>
 
           {/* Separator */}
