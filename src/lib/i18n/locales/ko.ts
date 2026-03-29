@@ -1347,6 +1347,32 @@ const ko: Record<string, string> = {
 
   // Session
   "session.kicked": "다른 위치에서 접속하여 현재 세션이 종료되었습니다.",
+
+  // Map Editor - Panels
+  "mapEditor.layers.title": "레이어",
+  "mapEditor.layers.addLayer": "+ 레이어",
+  "mapEditor.layers.addLayerTooltip": "레이어 추가",
+  "mapEditor.layers.hideLayer": "레이어 숨기기",
+  "mapEditor.layers.showLayer": "레이어 표시",
+  "mapEditor.layers.doubleClickToRename": "더블클릭하여 이름 변경",
+  "mapEditor.layers.hideOverlay": "레이어 오버레이 숨기기",
+  "mapEditor.layers.showOverlay": "레이어 오버레이 표시",
+  "mapEditor.layers.deleteLayer": "레이어 삭제",
+  "mapEditor.tilesets.title": "타일셋",
+  "mapEditor.tilesets.importButton": "가져오기 (I)",
+  "mapEditor.tilesets.importTooltip": "타일셋 가져오기 (I)",
+  "mapEditor.tilesets.importTilesetTooltip": "타일셋 가져오기",
+  "mapEditor.tilesets.doubleClickToRename": "더블클릭하여 이름 변경",
+  "mapEditor.tilesets.selectAll": "전체 선택",
+  "mapEditor.tilesets.editPixels": "픽셀 편집",
+  "mapEditor.tilesets.removeTileset": "타일셋 제거",
+  "mapEditor.tilesets.noTilesets": "아직 가져온 타일셋이 없습니다.",
+  "mapEditor.minimap.title": "미니맵",
+  "mapEditor.emptyState": "맵을 생성하거나 불러오세요.",
+  "mapEditor.statusBar.tile": "타일:",
+  "mapEditor.statusBar.layer": "레이어:",
+  "mapEditor.statusBar.tool": "도구:",
+  "mapEditor.statusBar.noMap": "맵 없음",
 };
 
 export default ko;
