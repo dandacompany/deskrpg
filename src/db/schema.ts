@@ -150,3 +150,17 @@ export const tasks = pgTable("tasks", {
   index("idx_tasks_npc").on(table.npcId),
   uniqueIndex("idx_tasks_npc_task_id").on(table.npcId, table.npcTaskId),
 ]);
+
+export const stamps = pgTable("stamps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 200 }).notNull(),
+  cols: integer("cols").notNull(),
+  rows: integer("rows").notNull(),
+  tileWidth: integer("tile_width").notNull().default(32),
+  tileHeight: integer("tile_height").notNull().default(32),
+  layers: jsonb("layers").notNull(),
+  tilesets: jsonb("tilesets").notNull(),
+  thumbnail: text("thumbnail"),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
