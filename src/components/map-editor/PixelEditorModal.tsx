@@ -637,10 +637,13 @@ export default function PixelEditorModal({
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key === 'z') {
+      if (mod && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        redo();
+      } else if (mod && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         undo();
-      } else if (mod && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+      } else if (mod && (e.key === 'y' || e.key === 'Y')) {
         e.preventDefault();
         redo();
       } else if (!mod) {
