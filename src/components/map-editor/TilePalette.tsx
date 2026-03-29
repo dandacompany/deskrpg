@@ -4,22 +4,13 @@ import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { Button } from '@/components/ui';
 import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
 
-export interface RemoveBgProgress {
-  firstgid: number;
-  progress: number;
-  /** e.g. "3/12 tiles" for per-tile progress */
-  detail?: string;
-}
-
 export interface TilePaletteProps {
   tilesets: TilesetImageInfo[];
   selectedRegion: TileRegion | null;
   onSelectRegion: (region: TileRegion) => void;
   onImportTileset: () => void;
   onDeleteTileset: (firstgid: number) => void;
-  onRemoveBgSelection?: (firstgid: number, region: TileRegion) => void;
   onEditPixels?: (firstgid: number, region: TileRegion) => void;
-  removeBgProgress?: RemoveBgProgress | null;
   onReorderTileset?: (fromFirstgid: number, toFirstgid: number) => void;
   usedGids?: Set<number>;
   onCleanUpUnused?: () => void;
@@ -38,10 +29,7 @@ function TilesetSection({
   selectedRegion,
   onSelectRegion,
   onDelete,
-  onRemoveBgSelection,
   onEditPixels,
-  removeBgProgress,
-  removeBgDetail,
   isUnused,
   onDragStart,
   onDragOver,
@@ -53,10 +41,7 @@ function TilesetSection({
   selectedRegion: TileRegion | null;
   onSelectRegion: (region: TileRegion) => void;
   onDelete: () => void;
-  onRemoveBgSelection?: () => void;
   onEditPixels?: () => void;
-  removeBgProgress?: number | null;
-  removeBgDetail?: string | null;
   isUnused?: boolean;
   onDragStart: () => void;
   onDragOver: (e: React.DragEvent) => void;
@@ -274,33 +259,35 @@ function TilesetSection({
           )}
         </span>
         <div className="flex items-center gap-1 flex-shrink-0">
-          {removeBgProgress != null ? (
-            <span className="text-caption text-primary-light px-1">
-              {removeBgDetail ? `${removeBgDetail}` : `Removing BG... ${removeBgProgress}%`}
-            </span>
-          ) : (
-            <>
-              {onRemoveBgSelection && hasSelectionInThisTileset && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onRemoveBgSelection}
-                  title="Remove background from selected tiles (creates new tileset)"
-                >
-                  Remove BG
-                </Button>
-              )}
-              {onEditPixels && hasSelectionInThisTileset && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onEditPixels}
-                  title="Edit selected tiles pixel-by-pixel"
-                >
-                  Edit Pixels
-                </Button>
-              )}
-            </>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const region: TileRegion = {
+                firstgid,
+                col: 0,
+                row: 0,
+                width: columns,
+                height: rows,
+                gids: Array.from({ length: rows }, (_, r) =>
+                  Array.from({ length: columns }, (_, c) => firstgid + r * columns + c),
+                ),
+              };
+              onSelectRegion(region);
+            }}
+            title="Select all tiles in this tileset"
+          >
+            Select All
+          </Button>
+          {onEditPixels && hasSelectionInThisTileset && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onEditPixels}
+              title="Edit selected tiles pixel-by-pixel"
+            >
+              Edit Pixels
+            </Button>
           )}
           <button
             onClick={onDelete}
@@ -338,9 +325,7 @@ export default function TilePalette({
   onSelectRegion,
   onImportTileset,
   onDeleteTileset,
-  onRemoveBgSelection,
   onEditPixels,
-  removeBgProgress,
   onReorderTileset,
   usedGids,
   onCleanUpUnused,
@@ -425,25 +410,10 @@ export default function TilePalette({
             selectedRegion={selectedRegion}
             onSelectRegion={onSelectRegion}
             onDelete={() => onDeleteTileset(info.firstgid)}
-            onRemoveBgSelection={
-              onRemoveBgSelection && selectedRegion && selectedRegion.firstgid === info.firstgid
-                ? () => onRemoveBgSelection(info.firstgid, selectedRegion!)
-                : undefined
-            }
             onEditPixels={
               onEditPixels && selectedRegion && selectedRegion.firstgid === info.firstgid
                 ? () => onEditPixels(info.firstgid, selectedRegion!)
                 : undefined
-            }
-            removeBgProgress={
-              removeBgProgress?.firstgid === info.firstgid
-                ? removeBgProgress.progress
-                : null
-            }
-            removeBgDetail={
-              removeBgProgress?.firstgid === info.firstgid
-                ? removeBgProgress.detail ?? null
-                : null
             }
             isUnused={unusedFirstgids.has(info.firstgid)}
             onDragStart={() => setDragFromFirstgid(info.firstgid)}
