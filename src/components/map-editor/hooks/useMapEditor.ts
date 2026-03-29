@@ -90,6 +90,13 @@ export interface UndoAction {
   changes: Array<{ index: number; oldGid: number; newGid: number }>;
 }
 
+export interface PlaceStampUndoAction {
+  type: 'PLACE_STAMP';
+  stampLayers: Array<{ layerIndex: number; changes: Array<{ index: number; oldGid: number; newGid: number }> }>;
+}
+
+export type AnyUndoAction = UndoAction | PlaceStampUndoAction;
+
 export type Tool = 'paint' | 'erase' | 'pan' | 'select';
 
 export interface EditorState {
@@ -105,8 +112,8 @@ export interface EditorState {
   zoom: number;
   panX: number;
   panY: number;
-  undoStack: UndoAction[];
-  redoStack: UndoAction[];
+  undoStack: AnyUndoAction[];
+  redoStack: AnyUndoAction[];
   sortedGids: number[];
   showGrid: boolean;
   showCollision: boolean;
@@ -242,7 +249,8 @@ type EditorAction =
   | { type: 'MOVE_TILES'; fromX: number; fromY: number; toX: number; toY: number; width: number; height: number }
   | { type: 'RENAME_TILESET'; firstgid: number; name: string }
   | { type: 'REORDER_TILESETS'; fromFirstgid: number; toFirstgid: number }
-  | { type: 'REMOVE_UNUSED_TILESETS'; firstgids: number[] };
+  | { type: 'REMOVE_UNUSED_TILESETS'; firstgids: number[] }
+  | { type: 'PLACE_STAMP'; stampLayers: Array<{ layerIndex: number; changes: Array<{ index: number; oldGid: number; newGid: number }> }> };
 
 export type { EditorAction };
 
@@ -297,7 +305,32 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     }
     case 'UNDO': {
       if (state.undoStack.length === 0 || !state.mapData) return state;
-      const undoAction = state.undoStack[state.undoStack.length - 1];
+      const lastAction = state.undoStack[state.undoStack.length - 1];
+      const newUndoStack = state.undoStack.slice(0, -1);
+
+      // Multi-layer undo (PLACE_STAMP)
+      if ('stampLayers' in lastAction) {
+        const newLayers = state.mapData.layers.map((l) => ({
+          ...l,
+          data: l.data ? [...l.data] : l.data,
+        }));
+        for (const sl of (lastAction as any).stampLayers) {
+          const layer = newLayers[sl.layerIndex];
+          if (!layer || !layer.data) continue;
+          for (const c of sl.changes) {
+            layer.data[c.index] = c.oldGid;
+          }
+        }
+        return {
+          ...state,
+          mapData: { ...state.mapData, layers: newLayers },
+          undoStack: newUndoStack,
+          redoStack: [...state.redoStack, lastAction],
+          dirty: true,
+        };
+      }
+
+      const undoAction = lastAction;
       const newLayers = [...state.mapData.layers];
       const layer = { ...newLayers[undoAction.layerIndex] };
       if (layer.type !== 'tilelayer' || !layer.data) return state;
@@ -308,14 +341,39 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return {
         ...state,
         mapData: { ...state.mapData, layers: newLayers },
-        undoStack: state.undoStack.slice(0, -1),
+        undoStack: newUndoStack,
         redoStack: [...state.redoStack, undoAction],
         dirty: true,
       };
     }
     case 'REDO': {
       if (state.redoStack.length === 0 || !state.mapData) return state;
-      const redoAction = state.redoStack[state.redoStack.length - 1];
+      const lastAction = state.redoStack[state.redoStack.length - 1];
+      const newRedoStack = state.redoStack.slice(0, -1);
+
+      // Multi-layer redo (PLACE_STAMP)
+      if ('stampLayers' in lastAction) {
+        const newLayers = state.mapData.layers.map((l) => ({
+          ...l,
+          data: l.data ? [...l.data] : l.data,
+        }));
+        for (const sl of (lastAction as any).stampLayers) {
+          const layer = newLayers[sl.layerIndex];
+          if (!layer || !layer.data) continue;
+          for (const c of sl.changes) {
+            layer.data[c.index] = c.newGid;
+          }
+        }
+        return {
+          ...state,
+          mapData: { ...state.mapData, layers: newLayers },
+          undoStack: [...state.undoStack, lastAction],
+          redoStack: newRedoStack,
+          dirty: true,
+        };
+      }
+
+      const redoAction = lastAction;
       const newLayers = [...state.mapData.layers];
       const layer = { ...newLayers[redoAction.layerIndex] };
       if (layer.type !== 'tilelayer' || !layer.data) return state;
@@ -327,7 +385,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         ...state,
         mapData: { ...state.mapData, layers: newLayers },
         undoStack: [...state.undoStack, redoAction],
-        redoStack: state.redoStack.slice(0, -1),
+        redoStack: newRedoStack,
         dirty: true,
       };
     }
@@ -613,6 +671,36 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         mapData: { ...state.mapData, tilesets: newTilesets },
         tilesetImages: newImages,
         sortedGids,
+        dirty: true,
+      };
+    }
+    case 'PLACE_STAMP': {
+      if (!state.mapData) return state;
+      const newLayers = state.mapData.layers.map((l) => ({
+        ...l,
+        data: l.data ? [...l.data] : l.data,
+      }));
+
+      for (const sl of action.stampLayers) {
+        const layer = newLayers[sl.layerIndex];
+        if (!layer || !layer.data) continue;
+        for (const c of sl.changes) {
+          layer.data[c.index] = c.newGid;
+        }
+      }
+
+      const undoEntry = {
+        type: 'PLACE_STAMP' as const,
+        stampLayers: action.stampLayers,
+      };
+      const undoStack = [...state.undoStack, undoEntry];
+      if (undoStack.length > 100) undoStack.shift();
+
+      return {
+        ...state,
+        mapData: { ...state.mapData, layers: newLayers },
+        undoStack,
+        redoStack: [],
         dirty: true,
       };
     }
