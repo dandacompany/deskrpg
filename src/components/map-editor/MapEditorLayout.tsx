@@ -82,6 +82,7 @@ export default function MapEditorLayout({
   // Left panel section order & collapsed state
   const [sectionOrder, setSectionOrder] = useState<string[]>(['layers', 'tilesets', 'minimap']);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [sectionVisibility, setSectionVisibility] = useState<Record<string, boolean>>({ layers: true, tilesets: true, minimap: true });
   const dragSectionRef = useRef<string | null>(null);
   const [dragOverSection, setDragOverSection] = useState<string | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
@@ -808,6 +809,8 @@ export default function MapEditorLayout({
         onUndo={() => dispatch({ type: 'UNDO' })}
         onRedo={() => dispatch({ type: 'REDO' })}
         onHelp={() => setShowHelp(true)}
+        sectionVisibility={sectionVisibility}
+        onToggleSection={(id) => setSectionVisibility((prev) => ({ ...prev, [id]: !prev[id] }))}
       />
 
       {/* Main area: panel + canvas */}
@@ -817,7 +820,7 @@ export default function MapEditorLayout({
           className="flex flex-col bg-surface border-r border-border flex-shrink-0 overflow-y-auto"
           style={{ width: panelWidth }}
         >
-          {sectionOrder.map((sectionId) => {
+          {sectionOrder.filter((id) => sectionVisibility[id] !== false).map((sectionId) => {
             const isCollapsed = !!collapsedSections[sectionId];
             const isDragOver = dragOverSection === sectionId;
             const sectionLabel = sectionId === 'layers' ? 'Layers' : sectionId === 'minimap' ? 'Minimap' : 'Tilesets';

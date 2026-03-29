@@ -26,6 +26,8 @@ export interface ToolbarProps {
   onUndo: () => void;
   onRedo: () => void;
   onHelp: () => void;
+  sectionVisibility: Record<string, boolean>;
+  onToggleSection: (id: string) => void;
 }
 
 function ToolGroup({ children }: { children: React.ReactNode }) {
@@ -140,6 +142,8 @@ export default function Toolbar({
   onUndo,
   onRedo,
   onHelp,
+  sectionVisibility,
+  onToggleSection,
 }: ToolbarProps) {
   const toolBtn = (tool: Tool, label: string, shortcut: string) => (
     <Button
@@ -169,6 +173,10 @@ export default function Toolbar({
         <Dropdown label="View">
           <DropdownToggle checked={showGrid} onChange={onToggleGrid}>Grid</DropdownToggle>
           <DropdownToggle checked={showCollision} onChange={onToggleCollision}>Collision</DropdownToggle>
+          <DropdownSeparator />
+          <DropdownToggle checked={sectionVisibility['layers'] !== false} onChange={() => onToggleSection('layers')}>Layers Panel</DropdownToggle>
+          <DropdownToggle checked={sectionVisibility['tilesets'] !== false} onChange={() => onToggleSection('tilesets')}>Tilesets Panel</DropdownToggle>
+          <DropdownToggle checked={sectionVisibility['minimap'] !== false} onChange={() => onToggleSection('minimap')}>Minimap Panel</DropdownToggle>
         </Dropdown>
       </ToolGroup>
 
