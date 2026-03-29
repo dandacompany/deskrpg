@@ -1006,7 +1006,7 @@ export default function PixelEditorModal({
   // --- Guard: don't render if no data ---
   if (!region || !tilesetInfo) {
     return (
-      <Modal open={open} onClose={onClose} title="Pixel Editor" size="full">
+      <Modal open={open} onClose={onClose} title="Pixel Editor" size="full" disableEscapeClose>
         <Modal.Body>
           <p className="text-text-secondary">No region selected.</p>
         </Modal.Body>
@@ -1021,7 +1021,7 @@ export default function PixelEditorModal({
   const isExpanded = region && (expandedCols !== region.width || expandedRows !== region.height);
 
   return (
-    <Modal open={open} onClose={onClose} title="Pixel Editor" size="full">
+    <Modal open={open} onClose={onClose} title="Pixel Editor" size="full" disableEscapeClose>
       {/* Custom body: fixed height to fill modal, flex col so canvas area stretches */}
       <div className="flex flex-col overflow-hidden" style={{ height: 'calc(85vh - 120px)' }}>
         {/* Toolbar row */}
