@@ -886,22 +886,9 @@ export default function MapEditorLayout({
                   </button>
                 )}
                 {sectionId === 'tilesets' && !isCollapsed && (
-                  <div className="flex items-center gap-2">
-                    {usedGids && sortedTilesets.some((ts) => {
-                      if (ts.name === BUILTIN_TILESET_NAME) return false;
-                      for (let g = ts.firstgid; g < ts.firstgid + ts.tilecount; g++) {
-                        if (usedGids.has(g)) return false;
-                      }
-                      return true;
-                    }) && (
-                      <button className="text-caption text-text-secondary hover:text-text" onClick={handleCleanUpUnused}>
-                        Clean Up
-                      </button>
-                    )}
-                    <button className="text-caption text-text-secondary hover:text-text" onClick={() => setShowImportTileset(true)}>
-                      +
-                    </button>
-                  </div>
+                  <button className="text-caption text-text-secondary hover:text-text" onClick={() => setShowImportTileset(true)}>
+                    +
+                  </button>
                 )}
               </div>
             );

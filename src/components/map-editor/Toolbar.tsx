@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui';
-import { Undo2, Redo2, HelpCircle, ChevronDown } from 'lucide-react';
+import { Undo2, Redo2, HelpCircle, ChevronDown, Paintbrush, Eraser, MousePointer2, Move } from 'lucide-react';
 import type { Tool } from './hooks/useMapEditor';
 
 export interface ToolbarProps {
@@ -145,16 +145,12 @@ export default function Toolbar({
   sectionVisibility,
   onToggleSection,
 }: ToolbarProps) {
-  const toolBtn = (tool: Tool, label: string, shortcut: string) => (
-    <Button
-      variant={activeTool === tool ? 'primary' : 'ghost'}
-      size="sm"
-      onClick={() => onToolChange(tool)}
-      title={`${label} (${shortcut})`}
-    >
-      {label} <span className="text-micro opacity-60">{shortcut}</span>
-    </Button>
-  );
+  const tools: Array<{ tool: Tool; icon: React.ReactNode; label: string; shortcut: string }> = [
+    { tool: 'paint', icon: <Paintbrush className="w-4 h-4" />, label: 'Paint', shortcut: 'B' },
+    { tool: 'erase', icon: <Eraser className="w-4 h-4" />, label: 'Erase', shortcut: 'E' },
+    { tool: 'select', icon: <MousePointer2 className="w-4 h-4" />, label: 'Select', shortcut: 'S' },
+    { tool: 'pan', icon: <Move className="w-4 h-4" />, label: 'Pan', shortcut: 'P' },
+  ];
 
   return (
     <div className="flex items-center h-10 bg-surface border-b border-border px-1 select-none flex-shrink-0">
@@ -182,10 +178,17 @@ export default function Toolbar({
 
       {/* Tools */}
       <ToolGroup>
-        {toolBtn('paint', 'Paint', 'B')}
-        {toolBtn('erase', 'Erase', 'E')}
-        {toolBtn('select', 'Select', 'S')}
-        {toolBtn('pan', 'Pan', 'P')}
+        {tools.map(({ tool, icon, label, shortcut }) => (
+          <Button
+            key={tool}
+            variant={activeTool === tool ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => onToolChange(tool)}
+            title={`${label} (${shortcut})`}
+          >
+            {icon}
+          </Button>
+        ))}
       </ToolGroup>
 
       {/* Zoom Controls */}
