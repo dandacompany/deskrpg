@@ -230,45 +230,7 @@ export default function PixelEditorModal({
     const so = shiftOffsetRef.current;
     const isShifting = so.dx !== 0 || so.dy !== 0;
 
-    if (isShifting && tilesetInfo) {
-      // During shift drag preview: show expanded grid
-      const { cols, rows, originX, originY } = calcExpandedGrid(so.dx, so.dy);
-      const expandedW = cols * tilesetInfo.tilewidth * zoom;
-      const expandedH = rows * tilesetInfo.tileheight * zoom;
-
-      // Checkerboard at expanded size
-      const blockSize = CHECKER_SIZE * zoom;
-      const cCols = Math.ceil(expandedW / blockSize);
-      const cRows = Math.ceil(expandedH / blockSize);
-      for (let r = 0; r < cRows; r++) {
-        for (let c = 0; c < cCols; c++) {
-          ctx.fillStyle = (r + c) % 2 === 0 ? CHECKER_LIGHT : CHECKER_DARK;
-          ctx.fillRect(c * blockSize, r * blockSize, blockSize, blockSize);
-        }
-      }
-
-      // Draw edited image at offset position
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(ec, originX * zoom, originY * zoom, ec.width * zoom, ec.height * zoom);
-
-      // Tile boundary grid lines (green)
-      ctx.strokeStyle = 'rgba(0,255,100,0.5)';
-      ctx.lineWidth = 1;
-      const tw = tilesetInfo.tilewidth * zoom;
-      const th = tilesetInfo.tileheight * zoom;
-      for (let x = 0; x <= expandedW; x += tw) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, expandedH);
-        ctx.stroke();
-      }
-      for (let y = 0; y <= expandedH; y += th) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(expandedW, y);
-        ctx.stroke();
-      }
-    } else {
+    {
       // Normal render (no shift)
       const w = ec.width * zoom;
       const h = ec.height * zoom;
@@ -279,9 +241,9 @@ export default function PixelEditorModal({
         ctx.drawImage(cc, 0, 0);
       }
 
-      // Draw edited image scaled
+      // Draw edited image scaled (with shift offset if dragging)
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(ec, 0, 0, w, h);
+      ctx.drawImage(ec, so.dx * zoom, so.dy * zoom, w, h);
 
       // Pixel grid lines at zoom >= 4x
       if (zoom >= 4) {
@@ -343,7 +305,7 @@ export default function PixelEditorModal({
     }
 
     ctx.restore();
-  }, [pan, zoom, tilesetInfo, calcExpandedGrid, tool, brushSize, color]);
+  }, [pan, zoom, tilesetInfo, tool, brushSize, color]);
 
   useEffect(() => {
     renderCanvas();
@@ -489,46 +451,33 @@ export default function PixelEditorModal({
     document.removeEventListener('mouseup', handlePanEnd);
   }, [handlePanMove]);
 
-  // --- Apply shift: create expanded canvas ---
+  // --- Apply shift: move image within current canvas (no auto-expand) ---
   const applyShift = useCallback(
     (dx: number, dy: number) => {
       const ec = editCanvasRef.current;
-      if (!ec || !tilesetInfo) return;
+      if (!ec) return;
       if (dx === 0 && dy === 0) {
         isShiftDraggingRef.current = false;
         setShiftOffset({ dx: 0, dy: 0 });
         return;
       }
 
-      const { cols, rows, originX, originY } = calcExpandedGrid(dx, dy);
-      const { tilewidth, tileheight } = tilesetInfo;
-
-      // Push undo snapshot before modifying
       pushUndo();
 
-      // Create new canvas with expanded size
+      // Redraw image at offset within same canvas size (content beyond edges is clipped)
       const newCanvas = document.createElement('canvas');
-      newCanvas.width = cols * tilewidth;
-      newCanvas.height = rows * tileheight;
+      newCanvas.width = ec.width;
+      newCanvas.height = ec.height;
       const newCtx = newCanvas.getContext('2d')!;
+      newCtx.drawImage(ec, dx, dy);
 
-      // Draw existing content at offset position
-      newCtx.drawImage(ec, originX, originY);
-
-      // Replace edit canvas
       editCanvasRef.current = newCanvas;
-      setExpandedCols(cols);
-      setExpandedRows(rows);
       setShiftOffset({ dx: 0, dy: 0 });
       isShiftDraggingRef.current = false;
 
-      // Rebuild checkerboard for new dimensions
-      buildCheckerboard(newCanvas.width, newCanvas.height, zoom);
-
-      // Re-render
       renderCanvas();
     },
-    [tilesetInfo, calcExpandedGrid, pushUndo, buildCheckerboard, zoom, renderCanvas],
+    [pushUndo, renderCanvas],
   );
 
   const handleMouseDown = useCallback(
@@ -863,6 +812,35 @@ export default function PixelEditorModal({
     renderCanvas();
   }, [tilesetInfo, pushUndo, zoom, buildCheckerboard, renderCanvas]);
 
+  // --- Add edge tile row/column ---
+  const addEdge = useCallback((edge: 'left' | 'right' | 'top' | 'bottom') => {
+    const ec = editCanvasRef.current;
+    if (!ec || !tilesetInfo) return;
+    const tw = tilesetInfo.tilewidth;
+    const th = tilesetInfo.tileheight;
+    const cols = Math.round(ec.width / tw);
+    const rows = Math.round(ec.height / th);
+
+    pushUndo();
+    let drawX = 0, drawY = 0, newCols = cols, newRows = rows;
+    if (edge === 'left') { drawX = tw; newCols++; }
+    if (edge === 'right') { newCols++; }
+    if (edge === 'top') { drawY = th; newRows++; }
+    if (edge === 'bottom') { newRows++; }
+
+    const newCanvas = document.createElement('canvas');
+    newCanvas.width = newCols * tw;
+    newCanvas.height = newRows * th;
+    const newCtx = newCanvas.getContext('2d')!;
+    newCtx.drawImage(ec, drawX, drawY);
+
+    editCanvasRef.current = newCanvas;
+    setExpandedCols(newCols);
+    setExpandedRows(newRows);
+    buildCheckerboard(newCanvas.width, newCanvas.height, zoom);
+    renderCanvas();
+  }, [tilesetInfo, pushUndo, zoom, buildCheckerboard, renderCanvas]);
+
   // --- Guard: don't render if no data ---
   if (!region || !tilesetInfo) {
     return (
@@ -976,6 +954,19 @@ export default function PixelEditorModal({
             </Button>
             <Button variant="ghost" size="sm" onClick={() => deleteEdge('bottom')} title="Delete bottom row">
               -B
+            </Button>
+            <div className="w-px h-4 bg-border mx-0.5" />
+            <Button variant="ghost" size="sm" onClick={() => addEdge('left')} title="Add column to left">
+              +L
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => addEdge('right')} title="Add column to right">
+              +R
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => addEdge('top')} title="Add row to top">
+              +T
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => addEdge('bottom')} title="Add row to bottom">
+              +B
             </Button>
           </div>
 
