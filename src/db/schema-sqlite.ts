@@ -150,3 +150,17 @@ export const tasks = sqliteTable("tasks", {
   index("idx_tasks_npc").on(table.npcId),
   uniqueIndex("idx_tasks_npc_task_id").on(table.npcId, table.npcTaskId),
 ]);
+
+export const stamps = sqliteTable("stamps", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  cols: integer("cols").notNull(),
+  rows: integer("rows").notNull(),
+  tileWidth: integer("tile_width").notNull().default(32),
+  tileHeight: integer("tile_height").notNull().default(32),
+  layers: text("layers").notNull(),
+  tilesets: text("tilesets").notNull(),
+  thumbnail: text("thumbnail"),
+  createdBy: text("created_by").references(() => users.id),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+});
