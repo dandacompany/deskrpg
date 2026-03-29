@@ -131,6 +131,20 @@ export function getDeskRPGRole(layer: TiledLayer, idx: number, layers: TiledLaye
   return null;
 }
 
+// === Layer Colors ===
+export const LAYER_COLORS: Record<string, { solid: string; overlay: string }> = {
+  floor:      { solid: '#22c55e', overlay: 'rgba(34, 197, 94, 0.12)' },
+  walls:      { solid: '#3b82f6', overlay: 'rgba(59, 130, 246, 0.12)' },
+  foreground: { solid: '#eab308', overlay: 'rgba(234, 179, 8, 0.12)' },
+  collision:  { solid: '#ef4444', overlay: 'rgba(239, 68, 68, 0.12)' },
+  objects:    { solid: '#8b5cf6', overlay: 'rgba(139, 92, 246, 0.12)' },
+};
+
+export function getLayerColor(layer: TiledLayer) {
+  const n = (layer.name || '').toLowerCase();
+  return LAYER_COLORS[n] ?? { solid: '#6b7280', overlay: 'rgba(107, 114, 128, 0.12)' };
+}
+
 // === Collision Tileset Generator ===
 export const BUILTIN_TILESET_NAME = 'color-palette';
 

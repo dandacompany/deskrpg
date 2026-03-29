@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react';
 import type { EditorState, TilesetImageInfo, TiledLayer } from './useMapEditor';
+import { getLayerColor } from './useMapEditor';
 
 // === Helpers ===
 
@@ -128,6 +129,17 @@ export function useCanvasRenderer(
             endRow,
             findTileset,
           );
+
+          // Layer color overlay on non-empty tiles
+          const lc = getLayerColor(layer);
+          ctx.fillStyle = lc.overlay;
+          for (let row = startRow; row <= endRow; row++) {
+            for (let col = startCol; col <= endCol; col++) {
+              if (layer.data![row * mapW + col] !== 0) {
+                ctx.fillRect(col * tw, row * th, tw, th);
+              }
+            }
+          }
 
           ctx.globalAlpha = prevAlpha;
         } else if (layer.type === 'objectgroup' && layer.objects) {
