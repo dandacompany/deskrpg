@@ -873,7 +873,7 @@ export default function MapEditorLayout({
                     className="text-caption text-text-secondary hover:text-text"
                     onClick={handleAddLayer}
                   >
-                    + Layer
+                    +
                   </button>
                 )}
                 {sectionId === 'tilesets' && !isCollapsed && (
@@ -890,7 +890,7 @@ export default function MapEditorLayout({
                       </button>
                     )}
                     <button className="text-caption text-text-secondary hover:text-text" onClick={() => setShowImportTileset(true)}>
-                      Import (I)
+                      +
                     </button>
                   </div>
                 )}
