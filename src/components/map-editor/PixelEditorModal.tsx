@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Modal } from '@/components/ui';
 import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
+import { removeBgToDataUrl } from '@/lib/remove-bg';
 
 // === Types ===
 
@@ -57,6 +58,7 @@ export default function PixelEditorModal({
   const [resizeTargetRows, setResizeTargetRows] = useState(1);
   const [brushSize, setBrushSize] = useState(1);
   const [showHelp, setShowHelp] = useState(false);
+  const [removingBg, setRemovingBg] = useState<string | null>(null); // progress text or null
 
   // --- Refs ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -748,6 +750,42 @@ export default function PixelEditorModal({
     renderCanvas();
   }, [tilesetInfo, resizeTargetCols, resizeTargetRows, pushUndo, zoom, buildCheckerboard, renderCanvas]);
 
+  // --- Remove background from current edit canvas ---
+  const handleRemoveBg = useCallback(async () => {
+    const ec = editCanvasRef.current;
+    if (!ec) return;
+
+    pushUndo();
+    setRemovingBg('Removing background...');
+
+    try {
+      const blob = await new Promise<Blob>((resolve) => {
+        ec.toBlob((b) => resolve(b!), 'image/png');
+      });
+
+      const resultDataUrl = await removeBgToDataUrl(blob, (p) => {
+        setRemovingBg(`Removing background... ${Math.round(p * 100)}%`);
+      });
+
+      // Load result and replace edit canvas
+      const img = new Image();
+      img.onload = () => {
+        const newCanvas = document.createElement('canvas');
+        newCanvas.width = ec.width;
+        newCanvas.height = ec.height;
+        const ctx = newCanvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        editCanvasRef.current = newCanvas;
+        setRemovingBg(null);
+        renderCanvas();
+      };
+      img.src = resultDataUrl;
+    } catch (err) {
+      console.error('Background removal failed:', err);
+      setRemovingBg(null);
+    }
+  }, [pushUndo, renderCanvas]);
+
   // --- Trim fully transparent edge rows/columns ---
   const trimEdges = useCallback(() => {
     const ec = editCanvasRef.current;
@@ -915,8 +953,15 @@ export default function PixelEditorModal({
           {/* Separator */}
           <div className="w-px h-6 bg-border" />
 
-          {/* Trim & edge delete */}
+          {/* BG removal, Trim & edge delete */}
           <div className="flex items-center gap-1">
+            {removingBg ? (
+              <span className="text-caption text-primary-light px-1">{removingBg}</span>
+            ) : (
+              <Button variant="ghost" size="sm" onClick={handleRemoveBg} title="AI background removal (applies to current canvas)">
+                Erase BG
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={trimEdges} title="Remove transparent edge tiles (T)">
               Trim
             </Button>
