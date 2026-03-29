@@ -44,7 +44,14 @@ export function useKeyboardShortcuts(callbacks: ShortcutCallbacks): void {
 
       // Ctrl shortcuts — always handled (not blocked by modal)
       if (ctrl) {
-        switch (e.key.toLowerCase()) {
+        const key = e.key.toLowerCase();
+        // Cmd/Ctrl+Shift+Z = Redo (must check before Cmd+Z = Undo)
+        if (e.shiftKey && key === 'z') {
+          e.preventDefault();
+          callbacks.onRedo();
+          return;
+        }
+        switch (key) {
           case 'z':
             e.preventDefault();
             callbacks.onUndo();
