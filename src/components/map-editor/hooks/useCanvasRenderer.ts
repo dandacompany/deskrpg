@@ -37,7 +37,16 @@ export function useCanvasRenderer(
       canvas: HTMLCanvasElement,
       characterSheet?: HTMLImageElement,
       characterState?: CharacterState,
-      options?: { layerOverlayMap?: Record<number, boolean> },
+      options?: {
+        layerOverlayMap?: Record<number, boolean>;
+        stampPreview?: {
+          tileX: number;
+          tileY: number;
+          cols: number;
+          rows: number;
+          previewImage?: HTMLImageElement;
+        };
+      },
     ) => {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
@@ -164,6 +173,30 @@ export function useCanvasRenderer(
       // 8.5. Selection overlay
       if (state.selection) {
         drawSelection(ctx, state.selection, tw, th);
+      }
+
+      // Stamp preview overlay
+      if (options?.stampPreview) {
+        const sp = options.stampPreview;
+        const sx = sp.tileX * tw;
+        const sy = sp.tileY * th;
+        const sw = sp.cols * tw;
+        const sh = sp.rows * th;
+
+        if (sp.previewImage) {
+          ctx.globalAlpha = 0.6;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(sp.previewImage, sx, sy, sw, sh);
+          ctx.globalAlpha = 1;
+          ctx.imageSmoothingEnabled = true;
+        }
+
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(168, 85, 247, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(sx, sy, sw, sh);
+        ctx.restore();
       }
 
       // 9. Restore

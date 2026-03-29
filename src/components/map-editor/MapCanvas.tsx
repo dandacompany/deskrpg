@@ -133,14 +133,13 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         render(canvas, characterSheetRef.current ?? undefined, characterState, {
           layerOverlayMap,
-          // TODO(Task 9): uncomment when renderer options type is updated
-          // stampPreview: activeStamp && stampCursorTile ? {
-          //   tileX: stampCursorTile.x,
-          //   tileY: stampCursorTile.y,
-          //   cols: activeStamp.cols,
-          //   rows: activeStamp.rows,
-          //   previewImage: stampPreviewImgRef.current ?? undefined,
-          // } : undefined,
+          stampPreview: activeStamp && stampCursorTile ? {
+            tileX: stampCursorTile.x,
+            tileY: stampCursorTile.y,
+            cols: activeStamp.cols,
+            rows: activeStamp.rows,
+            previewImage: stampPreviewImgRef.current ?? undefined,
+          } : undefined,
         });
       }
     });
@@ -156,14 +155,13 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
     if (!canvas) return;
     render(canvas, characterSheetRef.current ?? undefined, characterState, {
       layerOverlayMap,
-      // TODO(Task 9): uncomment when renderer options type is updated
-      // stampPreview: activeStamp && stampCursorTile ? {
-      //   tileX: stampCursorTile.x,
-      //   tileY: stampCursorTile.y,
-      //   cols: activeStamp.cols,
-      //   rows: activeStamp.rows,
-      //   previewImage: stampPreviewImgRef.current ?? undefined,
-      // } : undefined,
+      stampPreview: activeStamp && stampCursorTile ? {
+        tileX: stampCursorTile.x,
+        tileY: stampCursorTile.y,
+        cols: activeStamp.cols,
+        rows: activeStamp.rows,
+        previewImage: stampPreviewImgRef.current ?? undefined,
+      } : undefined,
     });
   }, [state, characterState, characterLoaded, render, stampCursorTile, activeStamp]);
 
