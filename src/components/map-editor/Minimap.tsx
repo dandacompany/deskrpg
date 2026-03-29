@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useCallback } from 'react';
+import { useT } from '@/lib/i18n';
 import type { EditorState, TilesetImageInfo } from './hooks/useMapEditor';
 
 interface MinimapProps {
@@ -21,6 +22,7 @@ export default function Minimap({
   onPanTo,
   hideHeader,
 }: MinimapProps) {
+  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -131,7 +133,7 @@ export default function Minimap({
     <div>
       {!hideHeader && (
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-border">
-          <span className="text-caption text-text-secondary">Minimap</span>
+          <span className="text-caption text-text-secondary">{t('mapEditor.minimap.title')}</span>
         </div>
       )}
       <div ref={containerRef} className="px-2 py-2">
