@@ -222,6 +222,9 @@ export default function Toolbar({
       {/* Spacer */}
       <div className="flex-1" />
 
+      {/* Title */}
+      <span className="text-caption text-text-dim tracking-wide mr-2 select-none">DeskRPG Map Editor</span>
+
       {/* Help */}
       <div className="px-2">
         <Tooltip label="Keyboard Shortcuts" shortcut="?">
