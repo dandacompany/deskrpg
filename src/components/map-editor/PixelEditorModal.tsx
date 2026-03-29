@@ -2,6 +2,15 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Modal } from '@/components/ui';
+import {
+  Pencil, Eraser, Pipette, Move, BoxSelect,
+  Scissors, Trash2, PlusSquare, MinusSquare,
+  Undo2, Redo2, HelpCircle, ZoomIn,
+  ImageMinus, ArrowLeftFromLine, ArrowRightFromLine, ArrowUpFromLine, ArrowDownFromLine,
+  ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine,
+  Maximize2,
+} from 'lucide-react';
+import Tooltip from './Tooltip';
 import { useT } from '@/lib/i18n';
 import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
 import { removeBgToDataUrl } from '@/lib/remove-bg';
@@ -29,6 +38,12 @@ interface PixelEditorModalProps {
     tileCount: number,
   ) => void;
   onOverwrite: (firstgid: number, dataUrl: string) => void;
+  /** Direct image mode: provide a pre-rendered image instead of region+tilesetInfo */
+  initialImageDataUrl?: string;
+  initialTileWidth?: number;
+  initialTileHeight?: number;
+  initialCols?: number;
+  initialRows?: number;
 }
 
 // === Constants ===
@@ -50,9 +65,13 @@ export default function PixelEditorModal({
   tilesetInfo,
   onSaveAsNew,
   onOverwrite,
+  initialImageDataUrl,
+  initialTileWidth,
+  initialTileHeight,
+  initialCols,
+  initialRows,
 }: PixelEditorModalProps) {
   const t = useT();
-
   // --- State ---
   const [tool, setTool] = useState<Tool>('pen');
   const [color, setColor] = useState('#000000');
@@ -62,6 +81,10 @@ export default function PixelEditorModal({
   const [shiftOffset, setShiftOffset] = useState({ dx: 0, dy: 0 });
   const [expandedCols, setExpandedCols] = useState(0);
   const [expandedRows, setExpandedRows] = useState(0);
+  const [hoveredEdge, setHoveredEdge] = useState<{
+    top: boolean; bottom: boolean; left: boolean; right: boolean;
+    screenX: number; screenY: number;
+  } | null>(null);
   const [resizeTargetCols, setResizeTargetCols] = useState(1);
   const [resizeTargetRows, setResizeTargetRows] = useState(1);
   const [brushSize, setBrushSize] = useState(1);
@@ -109,8 +132,15 @@ export default function PixelEditorModal({
   }, [open]);
 
   // Pixel dimensions of the region being edited
-  const regionPxW = region && tilesetInfo ? region.width * tilesetInfo.tilewidth : 0;
-  const regionPxH = region && tilesetInfo ? region.height * tilesetInfo.tileheight : 0;
+  const isDirectImage = !!initialImageDataUrl;
+  const regionPxW = isDirectImage
+    ? (initialCols ?? 1) * (initialTileWidth ?? 32)
+    : region && tilesetInfo ? region.width * tilesetInfo.tilewidth : 0;
+  const regionPxH = isDirectImage
+    ? (initialRows ?? 1) * (initialTileHeight ?? 32)
+    : region && tilesetInfo ? region.height * tilesetInfo.tileheight : 0;
+  const effectiveTileWidth = tilesetInfo?.tilewidth ?? initialTileWidth ?? 32;
+  const effectiveTileHeight = tilesetInfo?.tileheight ?? initialTileHeight ?? 32;
 
   // --- Pre-render checkerboard pattern for given zoom level ---
   const buildCheckerboard = useCallback(
@@ -150,10 +180,11 @@ export default function PixelEditorModal({
   // --- Calculate expanded grid from shift offset ---
   const calcExpandedGrid = useCallback(
     (dx: number, dy: number) => {
-      if (!tilesetInfo || !editCanvasRef.current) {
+      if (!editCanvasRef.current) {
         return { cols: expandedCols, rows: expandedRows, originX: 0, originY: 0 };
       }
-      const { tilewidth, tileheight } = tilesetInfo;
+      const tilewidth = effectiveTileWidth;
+      const tileheight = effectiveTileHeight;
       const ec = editCanvasRef.current;
       const currentCols = Math.round(ec.width / tilewidth);
       const currentRows = Math.round(ec.height / tileheight);
@@ -170,11 +201,29 @@ export default function PixelEditorModal({
 
       return { cols, rows, originX, originY };
     },
-    [tilesetInfo, expandedCols, expandedRows],
+    [effectiveTileWidth, effectiveTileHeight, expandedCols, expandedRows],
   );
 
   // --- Initialize edit canvas from region ---
   const initEditCanvas = useCallback(() => {
+    if (isDirectImage && initialImageDataUrl) {
+      // Direct image mode: load from dataUrl
+      const img = new Image();
+      img.onload = () => {
+        const ec = document.createElement('canvas');
+        ec.width = img.width;
+        ec.height = img.height;
+        const ctx = ec.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        editCanvasRef.current = ec;
+        undoStackRef.current = [ctx.getImageData(0, 0, ec.width, ec.height)];
+        redoStackRef.current = [];
+        // Trigger auto-fit after image loads
+        autoFit();
+      };
+      img.src = initialImageDataUrl;
+      return;
+    }
     if (!region || !tilesetInfo) return;
     const { col, row, width, height } = region;
     const { img, tilewidth, tileheight } = tilesetInfo;
@@ -195,44 +244,49 @@ export default function PixelEditorModal({
     editCanvasRef.current = ec;
     undoStackRef.current = [ctx.getImageData(0, 0, pw, ph)];
     redoStackRef.current = [];
-  }, [region, tilesetInfo]);
+  }, [region, tilesetInfo, isDirectImage, initialImageDataUrl, autoFit]);
 
   // --- Auto-fit zoom on open ---
   useEffect(() => {
-    if (!open || !region || !tilesetInfo) return;
+    if (!open) return;
+    if (!isDirectImage && (!region || !tilesetInfo)) return;
     initEditCanvas();
 
     // Calculate auto-fit zoom after container renders (may need multiple frames)
-    const tryAutoFit = (attempts = 0) => {
-      if (!containerRef.current || attempts > 10) return;
-      const cw = containerRef.current.clientWidth;
-      const ch = containerRef.current.clientHeight;
-      if (ch < 50 && attempts < 10) {
-        requestAnimationFrame(() => tryAutoFit(attempts + 1));
-        return;
-      }
-      const fitZoom = Math.min((cw * 0.8) / regionPxW, (ch * 0.8) / regionPxH);
-      const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.floor(fitZoom)));
-      setZoom(clamped);
-      setPan({
-        x: (cw - regionPxW * clamped) / 2,
-        y: (ch - regionPxH * clamped) / 2,
-      });
-    };
-    requestAnimationFrame(() => tryAutoFit());
+    if (!isDirectImage) {
+      const tryAutoFit = (attempts = 0) => {
+        if (!containerRef.current || attempts > 10) return;
+        const cw = containerRef.current.clientWidth;
+        const ch = containerRef.current.clientHeight;
+        if (ch < 50 && attempts < 10) {
+          requestAnimationFrame(() => tryAutoFit(attempts + 1));
+          return;
+        }
+        const fitZoom = Math.min((cw * 0.8) / regionPxW, (ch * 0.8) / regionPxH);
+        const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.floor(fitZoom)));
+        setZoom(clamped);
+        setPan({
+          x: (cw - regionPxW * clamped) / 2,
+          y: (ch - regionPxH * clamped) / 2,
+        });
+      };
+      requestAnimationFrame(() => tryAutoFit());
+    }
 
     // Reset tool state
     setTool('pen');
     setColor('#000000');
     setAlpha(255);
     setShiftOffset({ dx: 0, dy: 0 });
-    setExpandedCols(region.width);
-    setExpandedRows(region.height);
-  }, [open, region, tilesetInfo, initEditCanvas, regionPxW, regionPxH]);
+    const cols = isDirectImage ? (initialCols ?? 1) : region!.width;
+    const rows = isDirectImage ? (initialRows ?? 1) : region!.height;
+    setExpandedCols(cols);
+    setExpandedRows(rows);
+  }, [open, region, tilesetInfo, isDirectImage, initEditCanvas, regionPxW, regionPxH, initialCols, initialRows]);
 
   // Pixel dimensions of the current edit canvas (may be expanded)
-  const editPxW = tilesetInfo ? expandedCols * tilesetInfo.tilewidth : regionPxW;
-  const editPxH = tilesetInfo ? expandedRows * tilesetInfo.tileheight : regionPxH;
+  const editPxW = expandedCols * effectiveTileWidth || regionPxW;
+  const editPxH = expandedRows * effectiveTileHeight || regionPxH;
 
   // --- Rebuild checkerboard when zoom or dimensions change ---
   useEffect(() => {
@@ -291,11 +345,11 @@ export default function PixelEditorModal({
       }
 
       // Tile boundary grid lines (green, always visible)
-      if (tilesetInfo) {
+      {
         ctx.strokeStyle = 'rgba(0,255,100,0.5)';
         ctx.lineWidth = 1;
-        const tw = tilesetInfo.tilewidth * zoom;
-        const th = tilesetInfo.tileheight * zoom;
+        const tw = effectiveTileWidth * zoom;
+        const th = effectiveTileHeight * zoom;
         for (let x = 0; x <= w; x += tw) {
           ctx.beginPath();
           ctx.moveTo(x, 0);
@@ -460,6 +514,27 @@ export default function PixelEditorModal({
       return { x: px, y: py };
     },
     [pan, zoom],
+  );
+
+  // --- Tile coordinate from mouse event (for edge detection) ---
+  const getTileCoord = useCallback(
+    (e: React.MouseEvent) => {
+      const canvas = canvasRef.current;
+      const ec = editCanvasRef.current;
+      if (!canvas || !ec) return null;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left - pan.x;
+      const my = e.clientY - rect.top - pan.y;
+      const tw = effectiveTileWidth * zoom;
+      const th = effectiveTileHeight * zoom;
+      const cols = Math.round(ec.width / effectiveTileWidth);
+      const rows = Math.round(ec.height / effectiveTileHeight);
+      const tileX = Math.floor(mx / tw);
+      const tileY = Math.floor(my / th);
+      if (tileX < 0 || tileY < 0 || tileX >= cols || tileY >= rows) return null;
+      return { tileX, tileY, cols, rows };
+    },
+    [pan, zoom, effectiveTileWidth, effectiveTileHeight],
   );
 
   // --- Parse hex color to RGBA ---
@@ -655,6 +730,31 @@ export default function PixelEditorModal({
       const hoverCoord = getPixelCoord(e);
       hoverPixelRef.current = hoverCoord;
 
+      // Edge hover detection
+      const tileCoord = getTileCoord(e);
+      if (tileCoord && !isDrawingRef.current && !isShiftDraggingRef.current && !isRectSelectingRef.current) {
+        const { tileX, tileY, cols, rows } = tileCoord;
+        const top = tileY === 0;
+        const bottom = tileY === rows - 1;
+        const left = tileX === 0;
+        const right = tileX === cols - 1;
+        if (top || bottom || left || right) {
+          const canvas = canvasRef.current!;
+          const rect = canvas.getBoundingClientRect();
+          const tw = effectiveTileWidth * zoom;
+          const th = effectiveTileHeight * zoom;
+          setHoveredEdge({
+            top, bottom, left, right,
+            screenX: rect.left + pan.x + tileX * tw + tw / 2,
+            screenY: rect.top + pan.y + tileY * th + th / 2,
+          });
+        } else {
+          setHoveredEdge(null);
+        }
+      } else if (!tileCoord) {
+        setHoveredEdge(null);
+      }
+
       // Drawing (pan is handled at document level now)
       if (!isDrawingRef.current) {
         renderCanvas(); // re-render to show cursor preview
@@ -676,7 +776,7 @@ export default function PixelEditorModal({
 
       paintPixel(coord.x, coord.y);
     },
-    [getPixelCoord, paintPixel, zoom, renderCanvas],
+    [getPixelCoord, getTileCoord, paintPixel, zoom, pan, effectiveTileWidth, effectiveTileHeight, renderCanvas],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -814,8 +914,8 @@ export default function PixelEditorModal({
     const layoutRows = Math.ceil(tileCount / maxCols);
 
     // Re-draw tiles into new layout
-    const tw = tilesetInfo.tilewidth;
-    const th = tilesetInfo.tileheight;
+    const tw = effectiveTileWidth;
+    const th = effectiveTileHeight;
     const layoutCanvas = document.createElement('canvas');
     layoutCanvas.width = maxCols * tw;
     layoutCanvas.height = layoutRows * th;
@@ -831,10 +931,10 @@ export default function PixelEditorModal({
     }
 
     const dataUrl = layoutCanvas.toDataURL('image/png');
-    const name = `${tilesetInfo.name}-edited`;
+    const name = tilesetInfo ? `${tilesetInfo.name}-edited` : 'selection-edited';
     onSaveAsNew(dataUrl, name, maxCols, tw, th, tileCount);
     onClose();
-  }, [tilesetInfo, region, expandedCols, expandedRows, onSaveAsNew, onClose]);
+  }, [effectiveTileWidth, effectiveTileHeight, tilesetInfo, region, expandedCols, expandedRows, onSaveAsNew, onClose]);
 
   const handleOverwrite = useCallback(() => {
     if (!region) return;
@@ -846,10 +946,10 @@ export default function PixelEditorModal({
   // --- Resize handler ---
   const applyResize = useCallback(() => {
     const ec = editCanvasRef.current;
-    if (!ec || !tilesetInfo) return;
+    if (!ec) return;
 
-    const targetW = resizeTargetCols * tilesetInfo.tilewidth;
-    const targetH = resizeTargetRows * tilesetInfo.tileheight;
+    const targetW = resizeTargetCols * effectiveTileWidth;
+    const targetH = resizeTargetRows * effectiveTileHeight;
     if (targetW === ec.width && targetH === ec.height) return;
 
     pushUndo();
@@ -901,15 +1001,15 @@ export default function PixelEditorModal({
       console.error('Background removal failed:', err);
       setRemovingBg(null);
     }
-  }, [pushUndo, renderCanvas, t]);
+  }, [pushUndo, renderCanvas]);
 
   // --- Trim fully transparent edge rows/columns ---
   const trimEdges = useCallback(() => {
     const ec = editCanvasRef.current;
-    if (!ec || !tilesetInfo) return;
+    if (!ec) return;
     const ctx = ec.getContext('2d')!;
-    const tw = tilesetInfo.tilewidth;
-    const th = tilesetInfo.tileheight;
+    const tw = effectiveTileWidth;
+    const th = effectiveTileHeight;
     const cols = Math.round(ec.width / tw);
     const rows = Math.round(ec.height / th);
 
@@ -946,14 +1046,14 @@ export default function PixelEditorModal({
     setExpandedCols(newCols);
     setExpandedRows(newRows);
     requestAnimationFrame(() => { autoFit(); renderCanvas(); });
-  }, [tilesetInfo, pushUndo, autoFit, renderCanvas]);
+  }, [effectiveTileWidth, effectiveTileHeight, pushUndo, autoFit, renderCanvas]);
 
   // --- Delete edge row/column ---
   const deleteEdge = useCallback((edge: 'left' | 'right' | 'top' | 'bottom') => {
     const ec = editCanvasRef.current;
-    if (!ec || !tilesetInfo) return;
-    const tw = tilesetInfo.tilewidth;
-    const th = tilesetInfo.tileheight;
+    if (!ec) return;
+    const tw = effectiveTileWidth;
+    const th = effectiveTileHeight;
     const cols = Math.round(ec.width / tw);
     const rows = Math.round(ec.height / th);
     if ((edge === 'left' || edge === 'right') && cols <= 1) return;
@@ -976,14 +1076,14 @@ export default function PixelEditorModal({
     setExpandedCols(newCols);
     setExpandedRows(newRows);
     requestAnimationFrame(() => { autoFit(); renderCanvas(); });
-  }, [tilesetInfo, pushUndo, autoFit, renderCanvas]);
+  }, [effectiveTileWidth, effectiveTileHeight, pushUndo, autoFit, renderCanvas]);
 
   // --- Add edge tile row/column ---
   const addEdge = useCallback((edge: 'left' | 'right' | 'top' | 'bottom') => {
     const ec = editCanvasRef.current;
-    if (!ec || !tilesetInfo) return;
-    const tw = tilesetInfo.tilewidth;
-    const th = tilesetInfo.tileheight;
+    if (!ec) return;
+    const tw = effectiveTileWidth;
+    const th = effectiveTileHeight;
     const cols = Math.round(ec.width / tw);
     const rows = Math.round(ec.height / th);
 
@@ -1004,10 +1104,10 @@ export default function PixelEditorModal({
     setExpandedCols(newCols);
     setExpandedRows(newRows);
     requestAnimationFrame(() => { autoFit(); renderCanvas(); });
-  }, [tilesetInfo, pushUndo, autoFit, renderCanvas]);
+  }, [effectiveTileWidth, effectiveTileHeight, pushUndo, autoFit, renderCanvas]);
 
   // --- Guard: don't render if no data ---
-  if (!region || !tilesetInfo) {
+  if (!isDirectImage && (!region || !tilesetInfo)) {
     return (
       <Modal open={open} onClose={onClose} title={t('mapEditor.pixel.title')} size="full" disableEscapeClose>
         <Modal.Body>
@@ -1028,57 +1128,41 @@ export default function PixelEditorModal({
       {/* Custom body: fixed height to fill modal, flex col so canvas area stretches */}
       <div className="flex flex-col overflow-hidden" style={{ height: 'calc(85vh - 120px)' }}>
         {/* Toolbar row */}
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-surface flex-shrink-0">
-          {/* Tool buttons */}
-          <div className="flex items-center gap-1">
-            <Button
-              variant={tool === 'pen' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setTool('pen')}
-              title={t('mapEditor.pixel.penTooltip')}
-            >
-              {t('mapEditor.pixel.pen')}
-            </Button>
-            <Button
-              variant={tool === 'eraser' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setTool('eraser')}
-              title={t('mapEditor.pixel.eraserTooltip')}
-            >
-              {t('mapEditor.pixel.eraser')}
-            </Button>
-            <Button
-              variant={tool === 'eyedropper' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setTool('eyedropper')}
-              title={t('mapEditor.pixel.eyedropperTooltip')}
-            >
-              {t('mapEditor.pixel.eyedropper')}
-            </Button>
-            <Button
-              variant={tool === 'shift' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setTool('shift')}
-              title={t('mapEditor.pixel.shiftTooltip')}
-            >
-              {t('mapEditor.pixel.shift')}
-            </Button>
-            <Button
-              variant={tool === 'rect-select' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => { setTool('rect-select'); setIsPixelPasteMode(false); }}
-              title={t('mapEditor.pixel.selectTooltip')}
-            >
-              {t('mapEditor.pixel.select')}
-            </Button>
+        <div className="flex items-center h-10 bg-surface border-b border-border px-1 select-none flex-shrink-0">
+          {/* Tools */}
+          <div className="flex items-center gap-1 px-2 border-r border-border">
+            <Tooltip label={t('mapEditor.pixel.penTooltip')} shortcut="P">
+              <Button variant={tool === 'pen' ? 'primary' : 'ghost'} size="sm" onClick={() => setTool('pen')}>
+                <Pencil className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+            <Tooltip label={t('mapEditor.pixel.eraserTooltip')} shortcut="E">
+              <Button variant={tool === 'eraser' ? 'primary' : 'ghost'} size="sm" onClick={() => setTool('eraser')}>
+                <Eraser className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+            <Tooltip label={t('mapEditor.pixel.eyedropperTooltip')} shortcut="I">
+              <Button variant={tool === 'eyedropper' ? 'primary' : 'ghost'} size="sm" onClick={() => setTool('eyedropper')}>
+                <Pipette className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+            <Tooltip label={t('mapEditor.pixel.shiftTooltip')} shortcut="V">
+              <Button variant={tool === 'shift' ? 'primary' : 'ghost'} size="sm" onClick={() => setTool('shift')}>
+                <Move className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+            <Tooltip label={t('mapEditor.pixel.selectTooltip')} shortcut="M">
+              <Button variant={tool === 'rect-select' ? 'primary' : 'ghost'} size="sm" onClick={() => { setTool('rect-select'); setIsPixelPasteMode(false); }}>
+                <BoxSelect className="w-4 h-4" />
+              </Button>
+            </Tooltip>
           </div>
 
-          {/* Separator */}
-          <div className="w-px h-6 bg-border" />
-
-          {/* Resize controls */}
-          <div className="flex items-center gap-1">
-            <label className="text-caption text-text-secondary">{t('mapEditor.pixel.resize')}</label>
+          {/* Resize */}
+          <div className="flex items-center gap-1 px-2 border-r border-border">
+            <Tooltip label={t('mapEditor.pixel.resize')}>
+              <span className="text-caption text-text-secondary"><Maximize2 className="w-3.5 h-3.5" /></span>
+            </Tooltip>
             <input
               type="number"
               min={1}
@@ -1087,7 +1171,7 @@ export default function PixelEditorModal({
               onChange={(e) => setResizeTargetCols(Math.max(1, Number(e.target.value)))}
               className="w-10 h-6 text-center text-caption bg-surface-raised border border-border rounded text-text"
             />
-            <span className="text-caption text-text-dim">x</span>
+            <span className="text-caption text-text-dim">×</span>
             <input
               type="number"
               min={1}
@@ -1096,59 +1180,78 @@ export default function PixelEditorModal({
               onChange={(e) => setResizeTargetRows(Math.max(1, Number(e.target.value)))}
               className="w-10 h-6 text-center text-caption bg-surface-raised border border-border rounded text-text"
             />
-            <Button variant="ghost" size="sm" onClick={applyResize}>
-              {t('mapEditor.pixel.apply')}
-            </Button>
+            <Button variant="ghost" size="sm" onClick={applyResize}>{t('mapEditor.pixel.apply')}</Button>
           </div>
 
-          {/* Separator */}
-          <div className="w-px h-6 bg-border" />
-
-          {/* BG removal, Trim & edge delete */}
-          <div className="flex items-center gap-1">
+          {/* Canvas Operations: BG Remove, Trim, Edge Delete/Add */}
+          <div className="flex items-center gap-0.5 px-2 border-r border-border">
             {removingBg ? (
               <span className="text-caption text-primary-light px-1">{removingBg}</span>
             ) : (
-              <Button variant="ghost" size="sm" onClick={handleRemoveBg} title={t('mapEditor.pixel.eraseBgTooltip')}>
-                {t('mapEditor.pixel.eraseBg')}
-              </Button>
+              <Tooltip label={t('mapEditor.pixel.eraseBgTooltip')}>
+                <Button variant="ghost" size="sm" onClick={handleRemoveBg}>
+                  <ImageMinus className="w-4 h-4" />
+                </Button>
+              </Tooltip>
             )}
-            <Button variant="ghost" size="sm" onClick={trimEdges} title={t('mapEditor.pixel.trimTooltip')}>
-              {t('mapEditor.pixel.trim')}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => deleteEdge('left')} title={t('mapEditor.pixel.deleteLeftColTooltip')}>
-              {t('mapEditor.pixel.deleteLeftCol')}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => deleteEdge('right')} title={t('mapEditor.pixel.deleteRightColTooltip')}>
-              {t('mapEditor.pixel.deleteRightCol')}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => deleteEdge('top')} title={t('mapEditor.pixel.deleteTopRowTooltip')}>
-              {t('mapEditor.pixel.deleteTopRow')}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => deleteEdge('bottom')} title={t('mapEditor.pixel.deleteBottomRowTooltip')}>
-              {t('mapEditor.pixel.deleteBottomRow')}
-            </Button>
+            <Tooltip label={t('mapEditor.pixel.trimTooltip')} shortcut="T">
+              <Button variant="ghost" size="sm" onClick={trimEdges}>
+                <Scissors className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+
             <div className="w-px h-4 bg-border mx-0.5" />
-            <Button variant="ghost" size="sm" onClick={() => addEdge('left')} title={t('mapEditor.pixel.addLeftColTooltip')}>
-              {t('mapEditor.pixel.addLeftCol')}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => addEdge('right')} title={t('mapEditor.pixel.addRightColTooltip')}>
-              {t('mapEditor.pixel.addRightCol')}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => addEdge('top')} title={t('mapEditor.pixel.addTopRowTooltip')}>
-              {t('mapEditor.pixel.addTopRow')}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => addEdge('bottom')} title={t('mapEditor.pixel.addBottomRowTooltip')}>
-              {t('mapEditor.pixel.addBottomRow')}
-            </Button>
+
+            <Tooltip label={t('mapEditor.pixel.deleteLeftColTooltip')}>
+              <Button variant="ghost" size="sm" onClick={() => deleteEdge('left')}>
+                <ArrowLeftFromLine className="w-3.5 h-3.5" />
+              </Button>
+            </Tooltip>
+            <Tooltip label={t('mapEditor.pixel.deleteRightColTooltip')}>
+              <Button variant="ghost" size="sm" onClick={() => deleteEdge('right')}>
+                <ArrowRightFromLine className="w-3.5 h-3.5" />
+              </Button>
+            </Tooltip>
+            <Tooltip label={t('mapEditor.pixel.deleteTopRowTooltip')}>
+              <Button variant="ghost" size="sm" onClick={() => deleteEdge('top')}>
+                <ArrowUpFromLine className="w-3.5 h-3.5" />
+              </Button>
+            </Tooltip>
+            <Tooltip label={t('mapEditor.pixel.deleteBottomRowTooltip')}>
+              <Button variant="ghost" size="sm" onClick={() => deleteEdge('bottom')}>
+                <ArrowDownFromLine className="w-3.5 h-3.5" />
+              </Button>
+            </Tooltip>
+
+            <div className="w-px h-4 bg-border mx-0.5" />
+
+            <Tooltip label={t('mapEditor.pixel.addLeftColTooltip')}>
+              <Button variant="ghost" size="sm" onClick={() => addEdge('left')}>
+                <ArrowLeftToLine className="w-3.5 h-3.5" />
+              </Button>
+            </Tooltip>
+            <Tooltip label={t('mapEditor.pixel.addRightColTooltip')}>
+              <Button variant="ghost" size="sm" onClick={() => addEdge('right')}>
+                <ArrowRightToLine className="w-3.5 h-3.5" />
+              </Button>
+            </Tooltip>
+            <Tooltip label={t('mapEditor.pixel.addTopRowTooltip')}>
+              <Button variant="ghost" size="sm" onClick={() => addEdge('top')}>
+                <ArrowUpToLine className="w-3.5 h-3.5" />
+              </Button>
+            </Tooltip>
+            <Tooltip label={t('mapEditor.pixel.addBottomRowTooltip')}>
+              <Button variant="ghost" size="sm" onClick={() => addEdge('bottom')}>
+                <ArrowDownToLine className="w-3.5 h-3.5" />
+              </Button>
+            </Tooltip>
           </div>
 
-          {/* Separator */}
-          <div className="w-px h-6 bg-border" />
-
-          {/* Brush size */}
-          <div className="flex items-center gap-1">
-            <label className="text-caption text-text-secondary" title={t('mapEditor.pixel.brushSizeTooltip')}>{t('mapEditor.pixel.brushSize')}</label>
+          {/* Brush & Color */}
+          <div className="flex items-center gap-1.5 px-2 border-r border-border">
+            <Tooltip label={t('mapEditor.pixel.brushSizeTooltip')} shortcut="[ / ]">
+              <span className="text-caption text-text-secondary">{t('mapEditor.pixel.brushSize')}</span>
+            </Tooltip>
             <input
               type="range"
               min={1}
@@ -1157,68 +1260,73 @@ export default function PixelEditorModal({
               onChange={(e) => setBrushSize(Number(e.target.value))}
               className="w-16"
             />
-            <span className="text-caption text-text-secondary w-5 text-right">{brushSize}</span>
-          </div>
+            <span className="text-caption text-text-secondary w-5 text-right tabular-nums">{brushSize}</span>
 
-          {/* Separator */}
-          <div className="w-px h-6 bg-border" />
+            <div className="w-px h-4 bg-border mx-0.5" />
 
-          {/* Color picker */}
-          <div className="flex items-center gap-2">
-            <label className="text-caption text-text-secondary">{t('mapEditor.pixel.color')}</label>
-            <input
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="w-7 h-7 border border-border rounded cursor-pointer bg-transparent"
-            />
-          </div>
+            <Tooltip label={t('mapEditor.pixel.color')}>
+              <input
+                type="color"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="w-6 h-6 border border-border rounded cursor-pointer bg-transparent"
+              />
+            </Tooltip>
 
-          {/* Alpha slider */}
-          <div className="flex items-center gap-2">
-            <label className="text-caption text-text-secondary">{t('mapEditor.pixel.alpha')}</label>
+            <Tooltip label={t('mapEditor.pixel.alpha')}>
+              <span className="text-caption text-text-secondary">A</span>
+            </Tooltip>
             <input
               type="range"
               min={0}
               max={255}
               value={alpha}
               onChange={(e) => setAlpha(Number(e.target.value))}
-              className="w-20"
+              className="w-16"
             />
-            <span className="text-caption text-text-secondary w-8 text-right">{alpha}</span>
+            <span className="text-caption text-text-secondary w-8 text-right tabular-nums">{alpha}</span>
           </div>
 
-          {/* Separator */}
-          <div className="w-px h-6 bg-border" />
-
-          {/* Undo/Redo */}
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={undo} title={t('mapEditor.pixel.undoTooltip')}>
-              {t('mapEditor.pixel.undo')}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={redo} title={t('mapEditor.pixel.redoTooltip')}>
-              {t('mapEditor.pixel.redo')}
-            </Button>
+          {/* Undo / Redo */}
+          <div className="flex items-center gap-1 px-2 border-r border-border">
+            <Tooltip label={t('mapEditor.pixel.undoTooltip')} shortcut="⌘Z">
+              <Button variant="ghost" size="sm" onClick={undo}>
+                <Undo2 className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+            <Tooltip label={t('mapEditor.pixel.redoTooltip')} shortcut="⌘⇧Z">
+              <Button variant="ghost" size="sm" onClick={redo}>
+                <Redo2 className="w-4 h-4" />
+              </Button>
+            </Tooltip>
           </div>
 
-          {/* Separator */}
-          <div className="w-px h-6 bg-border" />
-
-          {/* Zoom display */}
-          <span className="text-caption text-text-secondary" title={t('mapEditor.pixel.zoomTooltip')}>{zoom}x</span>
+          {/* Zoom */}
+          <div className="flex items-center gap-1 px-2 border-r border-border">
+            <Tooltip label={t('mapEditor.pixel.zoomTooltip')} shortcut="Wheel">
+              <span className="text-caption text-text-secondary tabular-nums">{zoom}×</span>
+            </Tooltip>
+          </div>
 
           {/* Help */}
-          <Button variant="ghost" size="sm" onClick={() => setShowHelp(true)} title={t('mapEditor.pixel.shortcutsTooltip')}>
-            ?
-          </Button>
+          <div className="flex items-center px-2">
+            <Tooltip label={t('mapEditor.pixel.shortcutsTooltip')} shortcut="?">
+              <Button variant="ghost" size="sm" onClick={() => setShowHelp(true)}>
+                <HelpCircle className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+          </div>
 
-          {/* Region info */}
-          <span className="text-caption text-text-secondary ml-auto">
-            {t('mapEditor.pixel.dimensions', { w: editPxW, h: editPxH, cols: expandedCols, rows: expandedRows })}
-            {isExpanded && (
-              <span className="text-amber-400 ml-1">{t('mapEditor.pixel.expanded')}</span>
-            )}
-          </span>
+          {/* Spacer + Region Info */}
+          <div className="flex-1" />
+          <div className="px-3">
+            <span className="text-caption text-text-secondary tabular-nums">
+              {t('mapEditor.pixel.dimensions', { w: editPxW, h: editPxH, cols: expandedCols, rows: expandedRows })}
+              {isExpanded && (
+                <span className="text-amber-400 ml-1">{t('mapEditor.pixel.expanded')}</span>
+              )}
+            </span>
+          </div>
         </div>
 
         {/* Canvas area */}
@@ -1233,7 +1341,7 @@ export default function PixelEditorModal({
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onMouseLeave={() => { hoverPixelRef.current = null; renderCanvas(); }}
+            onMouseLeave={() => { hoverPixelRef.current = null; setHoveredEdge(null); renderCanvas(); }}
             onWheel={handleWheel}
             onContextMenu={(e) => e.preventDefault()}
           />
@@ -1293,15 +1401,17 @@ export default function PixelEditorModal({
         <Button variant="secondary" size="sm" onClick={handleSaveAsNew}>
           {t('mapEditor.pixel.saveAsNew')}
         </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleOverwrite}
-          disabled={!!isExpanded}
-          title={isExpanded ? t('mapEditor.pixel.overwriteDisabled') : undefined}
-        >
-          {t('mapEditor.pixel.overwrite')}
-        </Button>
+        {!isDirectImage && (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleOverwrite}
+            disabled={!!isExpanded}
+            title={isExpanded ? t('mapEditor.pixel.overwriteDisabled') : undefined}
+          >
+            {t('mapEditor.pixel.overwrite')}
+          </Button>
+        )}
       </Modal.Footer>
     </Modal>
   );
