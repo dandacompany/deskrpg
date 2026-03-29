@@ -33,14 +33,16 @@ function ModalRoot({ open, onClose, title, size = "md", disableEscapeClose, chil
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div
         className={`
           ${SIZE_CLASSES[size]} w-full mx-4 max-h-[90vh]
           bg-bg rounded-xl shadow-2xl border border-border
           flex flex-col overflow-hidden
         `.trim().replace(/\s+/g, " ")}
-        onClick={(e) => e.stopPropagation()}
       >
         {title && (
           <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
