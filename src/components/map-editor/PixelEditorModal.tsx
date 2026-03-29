@@ -670,18 +670,37 @@ export default function PixelEditorModal({
 
   const handleSaveAsNew = useCallback(() => {
     if (!tilesetInfo || !region) return;
-    const dataUrl = getDataUrl();
+    const ec = editCanvasRef.current;
+    if (!ec) return;
+
+    const tileCount = expandedCols * expandedRows;
+
+    // Re-layout tiles into a square-ish grid (max ~8 columns) for palette display
+    const maxCols = Math.min(expandedCols, Math.max(1, Math.ceil(Math.sqrt(tileCount))));
+    const layoutRows = Math.ceil(tileCount / maxCols);
+
+    // Re-draw tiles into new layout
+    const tw = tilesetInfo.tilewidth;
+    const th = tilesetInfo.tileheight;
+    const layoutCanvas = document.createElement('canvas');
+    layoutCanvas.width = maxCols * tw;
+    layoutCanvas.height = layoutRows * th;
+    const ctx = layoutCanvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+
+    for (let i = 0; i < tileCount; i++) {
+      const srcCol = i % expandedCols;
+      const srcRow = Math.floor(i / expandedCols);
+      const dstCol = i % maxCols;
+      const dstRow = Math.floor(i / maxCols);
+      ctx.drawImage(ec, srcCol * tw, srcRow * th, tw, th, dstCol * tw, dstRow * th, tw, th);
+    }
+
+    const dataUrl = layoutCanvas.toDataURL('image/png');
     const name = `${tilesetInfo.name}-edited`;
-    onSaveAsNew(
-      dataUrl,
-      name,
-      expandedCols,
-      tilesetInfo.tilewidth,
-      tilesetInfo.tileheight,
-      expandedCols * expandedRows,
-    );
+    onSaveAsNew(dataUrl, name, maxCols, tw, th, tileCount);
     onClose();
-  }, [tilesetInfo, region, expandedCols, expandedRows, getDataUrl, onSaveAsNew, onClose]);
+  }, [tilesetInfo, region, expandedCols, expandedRows, onSaveAsNew, onClose]);
 
   const handleOverwrite = useCallback(() => {
     if (!region) return;
