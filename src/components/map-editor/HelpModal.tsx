@@ -1,6 +1,7 @@
 'use client';
 
 import { Modal } from '@/components/ui';
+import { useT } from '@/lib/i18n';
 
 export interface HelpModalProps {
   open: boolean;
@@ -9,82 +10,82 @@ export interface HelpModalProps {
 
 interface Shortcut {
   keys: string[];
-  desc: string;
+  descKey: string;
 }
 
 interface ShortcutSection {
-  title: string;
+  titleKey: string;
   shortcuts: Shortcut[];
 }
 
 const SECTIONS: ShortcutSection[] = [
   {
-    title: 'File',
+    titleKey: 'mapEditor.help.sectionFile',
     shortcuts: [
-      { keys: ['Ctrl', 'N'], desc: 'New map' },
-      { keys: ['Ctrl', 'O'], desc: 'Load map / tileset' },
-      { keys: ['Ctrl', 'S'], desc: 'Save to DeskRPG' },
+      { keys: ['Ctrl', 'N'], descKey: 'mapEditor.help.newMap' },
+      { keys: ['Ctrl', 'O'], descKey: 'mapEditor.help.loadMap' },
+      { keys: ['Ctrl', 'S'], descKey: 'mapEditor.help.saveToDeskrpg' },
     ],
   },
   {
-    title: 'Tools',
+    titleKey: 'mapEditor.help.sectionTools',
     shortcuts: [
-      { keys: ['B'], desc: 'Paint brush' },
-      { keys: ['E'], desc: 'Eraser' },
-      { keys: ['S'], desc: 'Select tool' },
-      { keys: ['Space'], desc: 'Hold to pan' },
+      { keys: ['B'], descKey: 'mapEditor.help.paintBrush' },
+      { keys: ['E'], descKey: 'mapEditor.help.eraser' },
+      { keys: ['S'], descKey: 'mapEditor.help.selectTool' },
+      { keys: ['Space'], descKey: 'mapEditor.help.holdToPan' },
     ],
   },
   {
-    title: 'View',
+    titleKey: 'mapEditor.help.sectionView',
     shortcuts: [
-      { keys: ['G'], desc: 'Toggle grid overlay' },
-      { keys: ['+'], desc: 'Zoom in' },
-      { keys: ['-'], desc: 'Zoom out' },
-      { keys: ['0'], desc: 'Reset zoom' },
+      { keys: ['G'], descKey: 'mapEditor.help.toggleGrid' },
+      { keys: ['+'], descKey: 'mapEditor.help.zoomIn' },
+      { keys: ['-'], descKey: 'mapEditor.help.zoomOut' },
+      { keys: ['0'], descKey: 'mapEditor.help.resetZoom' },
     ],
   },
   {
-    title: 'Edit',
+    titleKey: 'mapEditor.help.sectionEdit',
     shortcuts: [
-      { keys: ['Ctrl', 'Z'], desc: 'Undo' },
-      { keys: ['Ctrl', 'Y'], desc: 'Redo' },
-      { keys: ['Ctrl', 'C'], desc: 'Copy selected tiles' },
-      { keys: ['Ctrl', 'V'], desc: 'Paste' },
-      { keys: ['Backspace'], desc: 'Delete selected tiles' },
-      { keys: ['Escape'], desc: 'Clear selection' },
+      { keys: ['Ctrl', 'Z'], descKey: 'mapEditor.help.undo' },
+      { keys: ['Ctrl', 'Y'], descKey: 'mapEditor.help.redo' },
+      { keys: ['Ctrl', 'C'], descKey: 'mapEditor.help.copyTiles' },
+      { keys: ['Ctrl', 'V'], descKey: 'mapEditor.help.paste' },
+      { keys: ['Backspace'], descKey: 'mapEditor.help.deleteSelectedTiles' },
+      { keys: ['Escape'], descKey: 'mapEditor.help.clearSelection' },
     ],
   },
   {
-    title: 'Layers',
+    titleKey: 'mapEditor.help.sectionLayers',
     shortcuts: [
-      { keys: ['['], desc: 'Select layer above' },
-      { keys: [']'], desc: 'Select layer below' },
-      { keys: ['Del'], desc: 'Delete selected layer' },
+      { keys: ['['], descKey: 'mapEditor.help.selectLayerAbove' },
+      { keys: [']'], descKey: 'mapEditor.help.selectLayerBelow' },
+      { keys: ['Del'], descKey: 'mapEditor.help.deleteSelectedLayer' },
     ],
   },
   {
-    title: 'Palette',
+    titleKey: 'mapEditor.help.sectionPalette',
     shortcuts: [
-      { keys: ['Ctrl', 'I'], desc: 'Import tileset' },
-      { keys: ['1-9'], desc: 'Quick select tile by index' },
+      { keys: ['Ctrl', 'I'], descKey: 'mapEditor.help.importTileset' },
+      { keys: ['1-9'], descKey: 'mapEditor.help.quickSelectTile' },
     ],
   },
   {
-    title: 'Character',
+    titleKey: 'mapEditor.help.sectionCharacter',
     shortcuts: [
-      { keys: ['C'], desc: 'Toggle character preview' },
-      { keys: ['Arrow keys'], desc: 'Move character (preview mode)' },
+      { keys: ['C'], descKey: 'mapEditor.help.toggleCharacterPreview' },
+      { keys: ['Arrow keys'], descKey: 'mapEditor.help.moveCharacter' },
     ],
   },
   {
-    title: 'DeskRPG Layers',
+    titleKey: 'mapEditor.help.sectionDeskrpgLayers',
     shortcuts: [
-      { keys: ['Floor'], desc: 'Depth 0 -- ground tiles' },
-      { keys: ['Walls'], desc: 'Depth 1 -- wall structures' },
-      { keys: ['Foreground'], desc: 'Depth 10000 -- renders above character' },
-      { keys: ['Collision'], desc: 'Hidden in game -- blocks movement' },
-      { keys: ['Objects'], desc: 'Spawn points & furniture (y-sort)' },
+      { keys: ['Floor'], descKey: 'mapEditor.help.layerFloor' },
+      { keys: ['Walls'], descKey: 'mapEditor.help.layerWalls' },
+      { keys: ['Foreground'], descKey: 'mapEditor.help.layerForeground' },
+      { keys: ['Collision'], descKey: 'mapEditor.help.layerCollision' },
+      { keys: ['Objects'], descKey: 'mapEditor.help.layerObjects' },
     ],
   },
 ];
@@ -97,7 +98,7 @@ function KeyBadge({ children }: { children: string }) {
   );
 }
 
-function ShortcutRow({ shortcut }: { shortcut: Shortcut }) {
+function ShortcutRow({ shortcut, t }: { shortcut: Shortcut; t: (key: string) => string }) {
   return (
     <div className="flex items-center gap-3 py-1">
       <div className="flex items-center gap-1 w-28 flex-shrink-0 justify-end">
@@ -108,24 +109,26 @@ function ShortcutRow({ shortcut }: { shortcut: Shortcut }) {
           </span>
         ))}
       </div>
-      <span className="text-caption text-text-secondary">{shortcut.desc}</span>
+      <span className="text-caption text-text-secondary">{t(shortcut.descKey)}</span>
     </div>
   );
 }
 
 export default function HelpModal({ open, onClose }: HelpModalProps) {
+  const t = useT();
+
   return (
-    <Modal open={open} onClose={onClose} title="Keyboard Shortcuts" size="lg">
+    <Modal open={open} onClose={onClose} title={t('mapEditor.help.title')} size="lg">
       <Modal.Body>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {SECTIONS.map((section) => (
-            <div key={section.title}>
+            <div key={section.titleKey}>
               <h3 className="text-title text-text mb-2 pb-1 border-b border-border">
-                {section.title}
+                {t(section.titleKey)}
               </h3>
               <div className="space-y-0.5">
                 {section.shortcuts.map((shortcut, i) => (
-                  <ShortcutRow key={i} shortcut={shortcut} />
+                  <ShortcutRow key={i} shortcut={shortcut} t={t} />
                 ))}
               </div>
             </div>
@@ -134,7 +137,7 @@ export default function HelpModal({ open, onClose }: HelpModalProps) {
       </Modal.Body>
       <Modal.Footer>
         <span className="text-caption text-text-dim mr-auto">
-          Press <KeyBadge>?</KeyBadge> anytime to toggle this dialog
+          {t('mapEditor.help.footerHintBefore')} <KeyBadge>?</KeyBadge> {t('mapEditor.help.footerHintAfter')}
         </span>
       </Modal.Footer>
     </Modal>
