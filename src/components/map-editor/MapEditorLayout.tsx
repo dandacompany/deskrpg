@@ -698,6 +698,7 @@ export default function MapEditorLayout({
     onToolPaint: () => dispatch({ type: 'SET_TOOL', tool: 'paint' }),
     onToolErase: () => dispatch({ type: 'SET_TOOL', tool: 'erase' }),
     onToolSelect: () => dispatch({ type: 'SET_TOOL', tool: 'select' }),
+    onToolPan: () => dispatch({ type: 'SET_TOOL', tool: 'pan' }),
     onToggleGrid: () => dispatch({ type: 'TOGGLE_GRID' }),
     onZoomIn: () => dispatch({ type: 'SET_ZOOM', zoom: state.zoom + 0.5 }),
     onZoomOut: () => dispatch({ type: 'SET_ZOOM', zoom: state.zoom - 0.5 }),

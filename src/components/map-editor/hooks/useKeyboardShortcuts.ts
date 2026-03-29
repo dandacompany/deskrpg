@@ -6,6 +6,7 @@ interface ShortcutCallbacks {
   onToolPaint: () => void;
   onToolErase: () => void;
   onToolSelect: () => void;
+  onToolPan: () => void;
   onToggleGrid: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -99,6 +100,10 @@ export function useKeyboardShortcuts(callbacks: ShortcutCallbacks): void {
         case 's':
         case 'S':
           callbacks.onToolSelect();
+          break;
+        case 'p':
+        case 'P':
+          callbacks.onToolPan();
           break;
         case 'g':
         case 'G':

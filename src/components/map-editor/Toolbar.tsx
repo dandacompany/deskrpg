@@ -1,6 +1,8 @@
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui';
+import { Undo2, Redo2, HelpCircle, ChevronDown } from 'lucide-react';
 import type { Tool } from './hooks/useMapEditor';
 
 export interface ToolbarProps {
@@ -32,6 +34,89 @@ function ToolGroup({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
+}
+
+function Dropdown({
+  label,
+  children,
+}: {
+  label: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)}>
+        {label}
+        <ChevronDown className="w-3 h-3 ml-0.5 opacity-60" />
+      </Button>
+      {open && (
+        <div
+          className="absolute top-full left-0 mt-1 bg-surface border border-border rounded-lg shadow-xl z-50 min-w-[160px] py-1"
+          onClick={() => setOpen(false)}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DropdownItem({
+  onClick,
+  shortcut,
+  children,
+}: {
+  onClick: () => void;
+  shortcut?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center justify-between px-3 py-1.5 text-caption text-text-secondary hover:bg-surface-raised hover:text-text transition-colors"
+    >
+      <span>{children}</span>
+      {shortcut && <span className="text-micro text-text-dim ml-4">{shortcut}</span>}
+    </button>
+  );
+}
+
+function DropdownToggle({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onChange(); }}
+      className="w-full flex items-center justify-between px-3 py-1.5 text-caption text-text-secondary hover:bg-surface-raised hover:text-text transition-colors"
+    >
+      <span>{children}</span>
+      <span className={`text-micro ${checked ? 'text-primary-light' : 'text-text-dim'}`}>
+        {checked ? '✓' : ''}
+      </span>
+    </button>
+  );
+}
+
+function DropdownSeparator() {
+  return <div className="my-1 border-t border-border" />;
 }
 
 export default function Toolbar({
@@ -69,31 +154,30 @@ export default function Toolbar({
 
   return (
     <div className="flex items-center h-10 bg-surface border-b border-border px-1 select-none flex-shrink-0">
+      {/* File Menu */}
+      <ToolGroup>
+        <Dropdown label={<>{dirty && <span className="text-warning mr-1">●</span>}File</>}>
+          <DropdownItem onClick={onNewMap} shortcut="⌘N">New Map</DropdownItem>
+          <DropdownItem onClick={onLoad} shortcut="⌘O">Open</DropdownItem>
+          <DropdownItem onClick={onSaveToDeskRPG} shortcut="⌘S">Save</DropdownItem>
+          <DropdownSeparator />
+          <DropdownItem onClick={onExportTMJ}>Export .tmj</DropdownItem>
+          <DropdownItem onClick={onExportTMX}>Export .tmx</DropdownItem>
+        </Dropdown>
+
+        {/* View Menu */}
+        <Dropdown label="View">
+          <DropdownToggle checked={showGrid} onChange={onToggleGrid}>Grid</DropdownToggle>
+          <DropdownToggle checked={showCollision} onChange={onToggleCollision}>Collision</DropdownToggle>
+        </Dropdown>
+      </ToolGroup>
+
       {/* Tools */}
       <ToolGroup>
         {toolBtn('paint', 'Paint', 'B')}
         {toolBtn('erase', 'Erase', 'E')}
         {toolBtn('select', 'Select', 'S')}
-        {toolBtn('pan', 'Pan', '⎵')}
-      </ToolGroup>
-
-      {/* File Operations */}
-      <ToolGroup>
-        <Button variant="ghost" size="sm" onClick={onNewMap} title="New Map (Ctrl+N)">
-          New
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onLoad} title="Load (Ctrl+O)">
-          Load
-        </Button>
-        <Button variant="primary" size="sm" onClick={onSaveToDeskRPG} title="Save to DeskRPG (Ctrl+S)">
-          {dirty ? '● Save' : 'Save'}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onExportTMJ} title="Export .tmj">
-          TMJ
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onExportTMX} title="Export .tmx">
-          TMX
-        </Button>
+        {toolBtn('pan', 'Pan', 'P')}
       </ToolGroup>
 
       {/* Zoom Controls */}
@@ -109,35 +193,13 @@ export default function Toolbar({
         </Button>
       </ToolGroup>
 
-      {/* Toggles */}
-      <ToolGroup>
-        <label className="flex items-center gap-1.5 cursor-pointer text-caption text-text-secondary hover:text-text transition-colors">
-          <input
-            type="checkbox"
-            checked={showGrid}
-            onChange={onToggleGrid}
-            className="accent-primary-light w-3 h-3"
-          />
-          Grid
-        </label>
-        <label className="flex items-center gap-1.5 cursor-pointer text-caption text-text-secondary hover:text-text transition-colors">
-          <input
-            type="checkbox"
-            checked={showCollision}
-            onChange={onToggleCollision}
-            className="accent-danger w-3 h-3"
-          />
-          Collision
-        </label>
-      </ToolGroup>
-
       {/* Undo / Redo */}
       <ToolGroup>
-        <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl+Z)">
-          ↩
+        <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo} title="Undo (⌘Z)">
+          <Undo2 className="w-4 h-4" />
         </Button>
-        <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Y)">
-          ↪
+        <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo} title="Redo (⌘⇧Z)">
+          <Redo2 className="w-4 h-4" />
         </Button>
       </ToolGroup>
 
@@ -147,7 +209,7 @@ export default function Toolbar({
       {/* Help */}
       <div className="px-2">
         <Button variant="ghost" size="sm" onClick={onHelp} title="Keyboard Shortcuts (?)">
-          ?
+          <HelpCircle className="w-4 h-4" />
         </Button>
       </div>
     </div>
