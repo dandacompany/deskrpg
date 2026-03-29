@@ -5,6 +5,7 @@ import { Button } from '@/components/ui';
 import { Info, Eye, EyeOff } from 'lucide-react';
 import { isCoreLayer, getDeskRPGRole, getLayerColor } from './hooks/useMapEditor';
 import Tooltip from './Tooltip';
+import { useT } from '@/lib/i18n';
 import type { TiledLayer } from './hooks/useMapEditor';
 
 export interface LayerPanelProps {
@@ -50,6 +51,7 @@ function LayerItem({
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
 }) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(layer.name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -101,7 +103,7 @@ function LayerItem({
           onToggleVisibility();
         }}
         className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-surface-raised transition-colors"
-        title={layer.visible ? 'Hide layer' : 'Show layer'}
+        title={layer.visible ? t('mapEditor.layers.hideLayer') : t('mapEditor.layers.showLayer')}
       >
         {layer.visible ? (
           <Eye className="w-3.5 h-3.5 text-primary-light" />
@@ -126,7 +128,7 @@ function LayerItem({
           <span
             className="text-caption text-text truncate block"
             onDoubleClick={handleDoubleClick}
-            title="Double-click to rename"
+            title={t('mapEditor.layers.doubleClickToRename')}
           >
             {layer.name}
           </span>
@@ -146,7 +148,7 @@ function LayerItem({
       <div className="flex-1" />
 
       {/* Color chip — click to toggle overlay (right side) */}
-      <Tooltip label={showOverlay ? 'Hide layer overlay' : 'Show layer overlay'}>
+      <Tooltip label={showOverlay ? t('mapEditor.layers.hideOverlay') : t('mapEditor.layers.showOverlay')}>
         <button
           className="w-2.5 h-2.5 rounded-sm flex-shrink-0 transition-opacity"
           style={{
@@ -165,7 +167,7 @@ function LayerItem({
             onDelete();
           }}
           className="text-text-dim hover:text-danger text-body opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
-          title="Delete layer"
+          title={t('mapEditor.layers.deleteLayer')}
         >
           &times;
         </button>
@@ -187,6 +189,7 @@ export default function LayerPanel({
   onToggleLayerOverlay,
   hideHeader,
 }: LayerPanelProps) {
+  const t = useT();
   const dragIndexRef = useRef<number | null>(null);
 
   const handleDragStart = useCallback((index: number) => (e: React.DragEvent) => {
@@ -217,9 +220,9 @@ export default function LayerPanel({
       {/* Header */}
       {!hideHeader && (
         <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
-          <span className="text-title text-text">Layers</span>
-          <Button variant="ghost" size="sm" onClick={onAddLayer} title="Add Layer">
-            + Layer
+          <span className="text-title text-text">{t('mapEditor.layers.title')}</span>
+          <Button variant="ghost" size="sm" onClick={onAddLayer} title={t('mapEditor.layers.addLayerTooltip')}>
+            {t('mapEditor.layers.addLayer')}
           </Button>
         </div>
       )}

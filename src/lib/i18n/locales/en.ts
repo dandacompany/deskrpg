@@ -1346,6 +1346,32 @@ const en: Record<string, string> = {
 
   // Session
   "session.kicked": "You were disconnected because another session was opened.",
+
+  // Map Editor - Panels
+  "mapEditor.layers.title": "Layers",
+  "mapEditor.layers.addLayer": "+ Layer",
+  "mapEditor.layers.addLayerTooltip": "Add Layer",
+  "mapEditor.layers.hideLayer": "Hide layer",
+  "mapEditor.layers.showLayer": "Show layer",
+  "mapEditor.layers.doubleClickToRename": "Double-click to rename",
+  "mapEditor.layers.hideOverlay": "Hide layer overlay",
+  "mapEditor.layers.showOverlay": "Show layer overlay",
+  "mapEditor.layers.deleteLayer": "Delete layer",
+  "mapEditor.tilesets.title": "Tilesets",
+  "mapEditor.tilesets.importButton": "Import (I)",
+  "mapEditor.tilesets.importTooltip": "Import Tileset (I)",
+  "mapEditor.tilesets.importTilesetTooltip": "Import Tileset",
+  "mapEditor.tilesets.doubleClickToRename": "double-click to rename",
+  "mapEditor.tilesets.selectAll": "Select All",
+  "mapEditor.tilesets.editPixels": "Edit Pixels",
+  "mapEditor.tilesets.removeTileset": "Remove Tileset",
+  "mapEditor.tilesets.noTilesets": "No tilesets imported yet.",
+  "mapEditor.minimap.title": "Minimap",
+  "mapEditor.emptyState": "Create or load a map to get started.",
+  "mapEditor.statusBar.tile": "Tile:",
+  "mapEditor.statusBar.layer": "Layer:",
+  "mapEditor.statusBar.tool": "Tool:",
+  "mapEditor.statusBar.noMap": "No map",
 };
 
 export default en;

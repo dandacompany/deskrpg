@@ -1346,6 +1346,32 @@ const ja: Record<string, string> = {
 
   // Session
   "session.kicked": "別の場所からのログインにより、現在のセッションが終了しました。",
+
+  // Map Editor - Panels
+  "mapEditor.layers.title": "レイヤー",
+  "mapEditor.layers.addLayer": "+ レイヤー",
+  "mapEditor.layers.addLayerTooltip": "レイヤー追加",
+  "mapEditor.layers.hideLayer": "レイヤーを隠す",
+  "mapEditor.layers.showLayer": "レイヤーを表示",
+  "mapEditor.layers.doubleClickToRename": "ダブルクリックで名前変更",
+  "mapEditor.layers.hideOverlay": "レイヤーオーバーレイを隠す",
+  "mapEditor.layers.showOverlay": "レイヤーオーバーレイを表示",
+  "mapEditor.layers.deleteLayer": "レイヤーを削除",
+  "mapEditor.tilesets.title": "タイルセット",
+  "mapEditor.tilesets.importButton": "インポート (I)",
+  "mapEditor.tilesets.importTooltip": "タイルセットをインポート (I)",
+  "mapEditor.tilesets.importTilesetTooltip": "タイルセットをインポート",
+  "mapEditor.tilesets.doubleClickToRename": "ダブルクリックで名前変更",
+  "mapEditor.tilesets.selectAll": "すべて選択",
+  "mapEditor.tilesets.editPixels": "ピクセル編集",
+  "mapEditor.tilesets.removeTileset": "タイルセットを削除",
+  "mapEditor.tilesets.noTilesets": "インポートされたタイルセットがありません。",
+  "mapEditor.minimap.title": "ミニマップ",
+  "mapEditor.emptyState": "マップを作成するか読み込んでください。",
+  "mapEditor.statusBar.tile": "タイル:",
+  "mapEditor.statusBar.layer": "レイヤー:",
+  "mapEditor.statusBar.tool": "ツール:",
+  "mapEditor.statusBar.noMap": "マップなし",
 };
 
 export default ja;

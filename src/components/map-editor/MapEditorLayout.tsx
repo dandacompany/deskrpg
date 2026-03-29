@@ -19,6 +19,7 @@ import type {
 } from './hooks/useMapEditor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { Plus } from 'lucide-react';
+import { useT } from '@/lib/i18n';
 import Tooltip from './Tooltip';
 import Toolbar from './Toolbar';
 import LayerPanel from './LayerPanel';
@@ -66,6 +67,7 @@ export default function MapEditorLayout({
   characterId,
 }: MapEditorLayoutProps) {
   const router = useRouter();
+  const t = useT();
   const { state, dispatch, findTileset } = useMapEditor();
 
   // Modal visibility
@@ -955,7 +957,7 @@ export default function MapEditorLayout({
           {sectionOrder.filter((id) => sectionVisibility[id] !== false).map((sectionId) => {
             const isCollapsed = !!collapsedSections[sectionId];
             const isDragOver = dragOverSection === sectionId;
-            const sectionLabel = sectionId === 'layers' ? 'Layers' : sectionId === 'minimap' ? 'Minimap' : 'Tilesets';
+            const sectionLabel = sectionId === 'layers' ? t('mapEditor.layers.title') : sectionId === 'minimap' ? t('mapEditor.minimap.title') : t('mapEditor.tilesets.title');
 
             // Section header (shared for all sections)
             const header = (
@@ -999,7 +1001,7 @@ export default function MapEditorLayout({
                 </button>
                 {/* Section-specific header actions */}
                 {sectionId === 'layers' && !isCollapsed && (
-                  <Tooltip label="Add Layer">
+                  <Tooltip label={t('mapEditor.layers.addLayerTooltip')}>
                     <button
                       className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
                       onClick={handleAddLayer}
@@ -1009,7 +1011,7 @@ export default function MapEditorLayout({
                   </Tooltip>
                 )}
                 {sectionId === 'tilesets' && !isCollapsed && (
-                  <Tooltip label="Import Tileset" shortcut="I">
+                  <Tooltip label={t('mapEditor.tilesets.importTilesetTooltip')} shortcut="I">
                     <button
                       className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
                       onClick={() => handleQuickImportTileset()}
@@ -1110,7 +1112,7 @@ export default function MapEditorLayout({
             />
           ) : (
             <div className="flex items-center justify-center h-full text-text-dim text-body">
-              Create or load a map to get started.
+              {t('mapEditor.emptyState')}
             </div>
           )}
         </div>
@@ -1120,16 +1122,16 @@ export default function MapEditorLayout({
       <div className="h-6 flex items-center gap-4 px-3 bg-surface border-t border-border text-micro text-text-dim select-none flex-shrink-0">
         {statusInfo && (
           <span>
-            Tile: ({statusInfo.tileX}, {statusInfo.tileY})
+            {t('mapEditor.statusBar.tile')} ({statusInfo.tileX}, {statusInfo.tileY})
           </span>
         )}
-        <span>Layer: {activeLayerName}</span>
-        <span>Tool: {toolName}</span>
+        <span>{t('mapEditor.statusBar.layer')} {activeLayerName}</span>
+        <span>{t('mapEditor.statusBar.tool')} {toolName}</span>
         {statusInfo && statusInfo.gid > 0 && <span>GID: {statusInfo.gid}</span>}
         <span className="ml-auto">
           {state.mapData
             ? `${state.mapData.width}x${state.mapData.height} (${state.mapData.tilewidth}px)`
-            : 'No map'}
+            : t('mapEditor.statusBar.noMap')}
         </span>
       </div>
 

@@ -6,6 +6,7 @@ import { CheckSquare, X, Pencil } from 'lucide-react';
 import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
 import { BUILTIN_TILESET_NAME } from './hooks/useMapEditor';
 import Tooltip from './Tooltip';
+import { useT } from '@/lib/i18n';
 
 export interface TilePaletteProps {
   tilesets: TilesetImageInfo[];
@@ -52,6 +53,7 @@ function TilesetSection({
   onDragEnd: () => void;
   isDragOver?: boolean;
 }) {
+  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -281,7 +283,7 @@ function TilesetSection({
           ) : (
             <span
               className="truncate"
-              title={`${name} — double-click to rename`}
+              title={`${name} — ${t('mapEditor.tilesets.doubleClickToRename')}`}
               onDoubleClick={() => { setEditName(name); setIsEditing(true); setTimeout(() => editRef.current?.select(), 0); }}
             >
               {name}
@@ -290,7 +292,7 @@ function TilesetSection({
         </span>
         <div className="flex items-center gap-1 flex-shrink-0">
           {name !== BUILTIN_TILESET_NAME && (
-            <Tooltip label="Select All">
+            <Tooltip label={t('mapEditor.tilesets.selectAll')}>
             <Button
               variant="ghost"
               size="sm"
@@ -313,7 +315,7 @@ function TilesetSection({
             </Tooltip>
           )}
           {onEditPixels && hasSelectionInThisTileset && (
-            <Tooltip label="Edit Pixels">
+            <Tooltip label={t('mapEditor.tilesets.editPixels')}>
             <Button
               variant="ghost"
               size="sm"
@@ -324,7 +326,7 @@ function TilesetSection({
             </Tooltip>
           )}
           {name !== BUILTIN_TILESET_NAME && (
-            <Tooltip label="Remove Tileset">
+            <Tooltip label={t('mapEditor.tilesets.removeTileset')}>
             <button
               onClick={onDelete}
               className="text-text-dim hover:text-danger text-body transition-colors px-1"
@@ -365,6 +367,7 @@ export default function TilePalette({
   onReorderTileset,
   hideHeader,
 }: TilePaletteProps) {
+  const t = useT();
   // Drag reorder state
   const [dragFromFirstgid, setDragFromFirstgid] = useState<number | null>(null);
   const [dragOverFirstgid, setDragOverFirstgid] = useState<number | null>(null);
@@ -385,9 +388,9 @@ export default function TilePalette({
       {/* Header */}
       {!hideHeader && (
         <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
-          <span className="text-title text-text">Tilesets</span>
-          <Button variant="ghost" size="sm" onClick={onImportTileset} title="Import Tileset (I)">
-            Import (I)
+          <span className="text-title text-text">{t('mapEditor.tilesets.title')}</span>
+          <Button variant="ghost" size="sm" onClick={onImportTileset} title={t('mapEditor.tilesets.importTooltip')}>
+            {t('mapEditor.tilesets.importButton')}
           </Button>
         </div>
       )}
@@ -403,7 +406,7 @@ export default function TilePalette({
       <div className="px-2 py-2">
         {tilesets.length === 0 && (
           <p className="text-caption text-text-dim text-center py-8">
-            No tilesets imported yet.
+            {t('mapEditor.tilesets.noTilesets')}
           </p>
         )}
         {tilesets.map((info) => (

@@ -1346,6 +1346,32 @@ const zh: Record<string, string> = {
 
   // Session
   "session.kicked": "由于在其他位置登录，当前会话已断开。",
+
+  // Map Editor - Panels
+  "mapEditor.layers.title": "图层",
+  "mapEditor.layers.addLayer": "+ 图层",
+  "mapEditor.layers.addLayerTooltip": "添加图层",
+  "mapEditor.layers.hideLayer": "隐藏图层",
+  "mapEditor.layers.showLayer": "显示图层",
+  "mapEditor.layers.doubleClickToRename": "双击重命名",
+  "mapEditor.layers.hideOverlay": "隐藏图层叠加",
+  "mapEditor.layers.showOverlay": "显示图层叠加",
+  "mapEditor.layers.deleteLayer": "删除图层",
+  "mapEditor.tilesets.title": "图块集",
+  "mapEditor.tilesets.importButton": "导入 (I)",
+  "mapEditor.tilesets.importTooltip": "导入图块集 (I)",
+  "mapEditor.tilesets.importTilesetTooltip": "导入图块集",
+  "mapEditor.tilesets.doubleClickToRename": "双击重命名",
+  "mapEditor.tilesets.selectAll": "全选",
+  "mapEditor.tilesets.editPixels": "编辑像素",
+  "mapEditor.tilesets.removeTileset": "移除图块集",
+  "mapEditor.tilesets.noTilesets": "尚未导入图块集。",
+  "mapEditor.minimap.title": "小地图",
+  "mapEditor.emptyState": "创建或加载地图以开始。",
+  "mapEditor.statusBar.tile": "图块:",
+  "mapEditor.statusBar.layer": "图层:",
+  "mapEditor.statusBar.tool": "工具:",
+  "mapEditor.statusBar.noMap": "无地图",
 };
 
 export default zh;
