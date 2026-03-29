@@ -80,9 +80,20 @@ export default function MapEditorLayout({
   const [panelWidth, setPanelWidth] = useState(300);
 
   // Left panel section order & collapsed state
-  const [sectionOrder, setSectionOrder] = useState<string[]>(['layers', 'tilesets', 'minimap']);
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
-  const [sectionVisibility, setSectionVisibility] = useState<Record<string, boolean>>({ layers: true, tilesets: true, minimap: true });
+  const [sectionOrder, setSectionOrder] = useState<string[]>(() => {
+    try { const v = localStorage.getItem('mapEditor.sectionOrder'); return v ? JSON.parse(v) : ['layers', 'tilesets', 'minimap']; } catch { return ['layers', 'tilesets', 'minimap']; }
+  });
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
+    try { const v = localStorage.getItem('mapEditor.collapsedSections'); return v ? JSON.parse(v) : {}; } catch { return {}; }
+  });
+  const [sectionVisibility, setSectionVisibility] = useState<Record<string, boolean>>(() => {
+    try { const v = localStorage.getItem('mapEditor.sectionVisibility'); return v ? JSON.parse(v) : { layers: true, tilesets: true, minimap: true }; } catch { return { layers: true, tilesets: true, minimap: true }; }
+  });
+  // Persist view settings to localStorage
+  useEffect(() => { localStorage.setItem('mapEditor.sectionOrder', JSON.stringify(sectionOrder)); }, [sectionOrder]);
+  useEffect(() => { localStorage.setItem('mapEditor.collapsedSections', JSON.stringify(collapsedSections)); }, [collapsedSections]);
+  useEffect(() => { localStorage.setItem('mapEditor.sectionVisibility', JSON.stringify(sectionVisibility)); }, [sectionVisibility]);
+
   const dragSectionRef = useRef<string | null>(null);
   const [dragOverSection, setDragOverSection] = useState<string | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
