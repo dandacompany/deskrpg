@@ -17,7 +17,6 @@ export interface TilePaletteProps {
   onSelectRegion: (region: TileRegion) => void;
   onImportTileset: () => void;
   onDeleteTileset: (firstgid: number) => void;
-  onRemoveBg?: (firstgid: number) => void;
   onRemoveBgSelection?: (firstgid: number, region: TileRegion) => void;
   removeBgProgress?: RemoveBgProgress | null;
   onReorderTileset?: (fromFirstgid: number, toFirstgid: number) => void;
@@ -38,7 +37,6 @@ function TilesetSection({
   selectedRegion,
   onSelectRegion,
   onDelete,
-  onRemoveBg,
   onRemoveBgSelection,
   removeBgProgress,
   removeBgDetail,
@@ -53,7 +51,6 @@ function TilesetSection({
   selectedRegion: TileRegion | null;
   onSelectRegion: (region: TileRegion) => void;
   onDelete: () => void;
-  onRemoveBg?: () => void;
   onRemoveBgSelection?: () => void;
   removeBgProgress?: number | null;
   removeBgDetail?: string | null;
@@ -276,28 +273,18 @@ function TilesetSection({
         <div className="flex items-center gap-1 flex-shrink-0">
           {removeBgProgress != null ? (
             <span className="text-caption text-primary-light px-1">
-              {removeBgDetail ? `Removing BG... ${removeBgDetail}` : `Removing BG... ${removeBgProgress}%`}
+              {removeBgDetail ? `${removeBgDetail}` : `Removing BG... ${removeBgProgress}%`}
             </span>
           ) : (
             <>
-              {onRemoveBg && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onRemoveBg}
-                  title="Remove background (creates new tileset)"
-                >
-                  Remove BG
-                </Button>
-              )}
               {onRemoveBgSelection && hasSelectionInThisTileset && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={onRemoveBgSelection}
-                  title="Remove BG for selected tiles only"
+                  title="Remove background from selected tiles (creates new tileset)"
                 >
-                  BG Sel
+                  Remove BG
                 </Button>
               )}
             </>
@@ -337,7 +324,6 @@ export default function TilePalette({
   onSelectRegion,
   onImportTileset,
   onDeleteTileset,
-  onRemoveBg,
   onRemoveBgSelection,
   removeBgProgress,
   onReorderTileset,
@@ -424,7 +410,6 @@ export default function TilePalette({
             selectedRegion={selectedRegion}
             onSelectRegion={onSelectRegion}
             onDelete={() => onDeleteTileset(info.firstgid)}
-            onRemoveBg={onRemoveBg ? () => onRemoveBg(info.firstgid) : undefined}
             onRemoveBgSelection={
               onRemoveBgSelection && selectedRegion && selectedRegion.firstgid === info.firstgid
                 ? () => onRemoveBgSelection(info.firstgid, selectedRegion!)

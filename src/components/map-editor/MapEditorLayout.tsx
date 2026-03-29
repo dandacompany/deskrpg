@@ -476,147 +476,63 @@ export default function MapEditorLayout({
     [state.mapData, dispatch],
   );
 
-  // === Remove Background ===
-
-  const handleRemoveBg = useCallback(
-    async (firstgid: number) => {
-      const tsInfo = state.tilesetImages[firstgid];
-      if (!tsInfo?.img || !state.mapData) return;
-
-      setRemoveBgProgress({ firstgid, progress: 0 });
-
-      try {
-        const resultDataUrl = await removeBgToDataUrl(tsInfo.img, (p) => {
-          setRemoveBgProgress({ firstgid, progress: Math.round(p * 100) });
-        });
-
-        const newImg = new Image();
-        newImg.onload = () => {
-          // Calculate new firstgid for the new tileset
-          let newFirstgid = 1;
-          for (const ts of state.mapData!.tilesets) {
-            const end = ts.firstgid + ts.tilecount;
-            if (end > newFirstgid) newFirstgid = end;
-          }
-
-          // Find the original tileset definition
-          const originalTs = state.mapData!.tilesets.find((t) => t.firstgid === firstgid);
-          if (!originalTs) {
-            setRemoveBgProgress(null);
-            return;
-          }
-
-          // Create a NEW tileset with the bg-removed image
-          const newTileset: TiledTileset = {
-            ...originalTs,
-            firstgid: newFirstgid,
-            name: `${originalTs.name} (no bg)`,
-            image: resultDataUrl,
-          };
-
-          const newImageInfo: TilesetImageInfo = {
-            img: newImg,
-            firstgid: newFirstgid,
-            columns: tsInfo.columns,
-            tilewidth: tsInfo.tilewidth,
-            tileheight: tsInfo.tileheight,
-            tilecount: tsInfo.tilecount,
-            name: `${tsInfo.name} (no bg)`,
-          };
-
-          dispatch({ type: 'ADD_TILESET', tileset: newTileset, imageInfo: newImageInfo });
-          setRemoveBgProgress(null);
-        };
-        newImg.onerror = () => {
-          console.error('Failed to load processed image');
-          setRemoveBgProgress(null);
-        };
-        newImg.src = resultDataUrl;
-      } catch (err) {
-        console.error('Background removal failed:', err);
-        setRemoveBgProgress(null);
-      }
-    },
-    [state.tilesetImages, state.mapData, dispatch],
-  );
-
-  // === Remove Background (Selection) ===
+  // === Remove Background (Selection - single crop) ===
 
   const handleRemoveBgSelection = useCallback(
     async (firstgid: number, region: TileRegion) => {
       const tsInfo = state.tilesetImages[firstgid];
       if (!tsInfo?.img || !state.mapData) return;
 
-      const totalTiles = region.width * region.height;
-      setRemoveBgProgress({ firstgid, progress: 0, detail: `0/${totalTiles} tiles` });
+      setRemoveBgProgress({ firstgid, progress: 0, detail: 'Cropping selection...' });
 
       try {
-        // Create an offscreen canvas to compose the result
         const tileW = tsInfo.tilewidth;
         const tileH = tsInfo.tileheight;
-        const resultCanvas = document.createElement('canvas');
-        resultCanvas.width = region.width * tileW;
-        resultCanvas.height = region.height * tileH;
-        const resultCtx = resultCanvas.getContext('2d')!;
 
-        let processed = 0;
+        // 1. Crop the entire selection as one image
+        const cropCanvas = document.createElement('canvas');
+        cropCanvas.width = region.width * tileW;
+        cropCanvas.height = region.height * tileH;
+        const cropCtx = cropCanvas.getContext('2d')!;
+        cropCtx.drawImage(
+          tsInfo.img,
+          region.col * tileW,
+          region.row * tileH,
+          region.width * tileW,
+          region.height * tileH,
+          0, 0,
+          region.width * tileW,
+          region.height * tileH,
+        );
 
-        for (let r = 0; r < region.height; r++) {
-          for (let c = 0; c < region.width; c++) {
-            // Crop the individual tile from the tileset image
-            const srcCol = region.col + c;
-            const srcRow = region.row + r;
-            const tileCanvas = document.createElement('canvas');
-            tileCanvas.width = tileW;
-            tileCanvas.height = tileH;
-            const tileCtx = tileCanvas.getContext('2d')!;
-            tileCtx.drawImage(
-              tsInfo.img,
-              srcCol * tileW,
-              srcRow * tileH,
-              tileW,
-              tileH,
-              0,
-              0,
-              tileW,
-              tileH,
-            );
+        // 2. Convert to blob and remove background in one shot
+        const cropBlob = await new Promise<Blob>((resolve) => {
+          cropCanvas.toBlob((blob) => resolve(blob!), 'image/png');
+        });
 
-            // Convert tile to blob for removeBg
-            const tileBlob = await new Promise<Blob>((resolve) => {
-              tileCanvas.toBlob((blob) => resolve(blob!), 'image/png');
-            });
+        setRemoveBgProgress({ firstgid, progress: 10, detail: 'Removing background...' });
 
-            // Remove background
-            const bgRemovedDataUrl = await removeBgToDataUrl(tileBlob);
+        const resultDataUrl = await removeBgToDataUrl(cropBlob, (p) => {
+          const pct = Math.round(10 + p * 85);
+          setRemoveBgProgress({ firstgid, progress: pct, detail: 'Removing background...' });
+        });
 
-            // Draw the bg-removed tile onto the result canvas
-            const bgRemovedImg = await loadImage(bgRemovedDataUrl);
-            resultCtx.drawImage(bgRemovedImg, c * tileW, r * tileH, tileW, tileH);
+        setRemoveBgProgress({ firstgid, progress: 95, detail: 'Registering tileset...' });
 
-            processed++;
-            const pct = Math.round((processed / totalTiles) * 100);
-            setRemoveBgProgress({ firstgid, progress: pct, detail: `${processed}/${totalTiles} tiles` });
-          }
-        }
-
-        // Convert result canvas to data URL
-        const resultDataUrl = resultCanvas.toDataURL('image/png');
-
-        // Calculate new firstgid
+        // 3. Calculate new firstgid
         let newFirstgid = 1;
         for (const ts of state.mapData!.tilesets) {
           const end = ts.firstgid + ts.tilecount;
           if (end > newFirstgid) newFirstgid = end;
         }
 
-        // Find original tileset name
+        // 4. Register as new tileset
         const originalTs = state.mapData!.tilesets.find((t) => t.firstgid === firstgid);
         const originalName = originalTs?.name ?? tsInfo.name;
 
         const newTileset: TiledTileset = {
           firstgid: newFirstgid,
-          name: `${originalName} (selection no bg)`,
+          name: `${originalName} (no bg)`,
           tilewidth: tileW,
           tileheight: tileH,
           tilecount: region.width * region.height,
@@ -634,13 +550,13 @@ export default function MapEditorLayout({
           tilewidth: tileW,
           tileheight: tileH,
           tilecount: region.width * region.height,
-          name: `${originalName} (selection no bg)`,
+          name: `${originalName} (no bg)`,
         };
 
         dispatch({ type: 'ADD_TILESET', tileset: newTileset, imageInfo: newImageInfo });
         setRemoveBgProgress(null);
       } catch (err) {
-        console.error('Background removal (selection) failed:', err);
+        console.error('Background removal failed:', err);
         setRemoveBgProgress(null);
       }
     },
@@ -901,7 +817,6 @@ export default function MapEditorLayout({
               onSelectRegion={handleSelectRegion}
               onImportTileset={() => setShowImportTileset(true)}
               onDeleteTileset={handleDeleteTileset}
-              onRemoveBg={handleRemoveBg}
               onRemoveBgSelection={handleRemoveBgSelection}
               removeBgProgress={removeBgProgress}
               onReorderTileset={handleReorderTileset}

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rmdir /Users/dante/.claude/skills/image-editing-api/assets)",
+      "Bash(chmod +x /Users/dante/.claude/skills/image-editing-api/scripts/compare-prices.sh)",
+      "Bash(bash /Users/dante/.claude/skills/image-editing-api/scripts/compare-prices.sh inpaint)"
+    ]
+  }
+}

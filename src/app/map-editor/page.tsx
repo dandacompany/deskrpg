@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Upload, Download, Trash2, Copy, Search, Package, ArrowLeft, Pencil, Plus } from "lucide-react";
+import { Upload, Download, Trash2, Copy, Search, ArrowLeft, Pencil, Plus } from "lucide-react";
 
 export default function MapEditorPage() {
   return (
@@ -231,23 +231,6 @@ function MapEditorListPage() {
           </div>
         </div>
 
-        {/* Starter Kit */}
-        <div className="bg-surface border border-border rounded-lg p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold flex items-center gap-2"><Package className="w-5 h-5" /> Tiled Starter Kit</h2>
-              <p className="text-sm text-text-muted mt-1">
-                Download the tileset + sample maps for <a href="https://www.mapeditor.org/" target="_blank" rel="noopener" className="text-primary-light hover:underline">Tiled Map Editor</a>.
-                Edit maps in Tiled, then upload .tmj files here.
-              </p>
-            </div>
-            <a href="/assets/tiled-kit/README.md" target="_blank"
-              className="flex items-center gap-2 px-4 py-2 bg-surface-raised border border-border hover:border-primary-light rounded text-sm font-semibold">
-              <Download className="w-4 h-4" /> View Kit
-            </a>
-          </div>
-        </div>
-
         {/* Search */}
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-dim" />
@@ -260,7 +243,7 @@ function MapEditorListPage() {
           <div className="text-text-muted">Loading...</div>
         ) : filteredTemplates.length === 0 ? (
           <div className="text-text-muted text-center py-12">
-            {search ? "No matching templates." : "No templates yet. Upload a .tmj file or use the starter kit!"}
+            {search ? "No matching templates." : "No templates yet. Create a new map or upload a .tmj file."}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

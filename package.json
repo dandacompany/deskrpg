@@ -16,6 +16,7 @@
     "db:setup": "dotenv -e .env.local -- drizzle-kit push --force"
   },
   "dependencies": {
+    "@imgly/background-removal": "^1.7.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.8.0",
     "drizzle-orm": "^0.45.1",
