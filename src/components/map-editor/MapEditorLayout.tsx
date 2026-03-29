@@ -19,6 +19,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import Toolbar from './Toolbar';
 import LayerPanel from './LayerPanel';
 import TilePalette from './TilePalette';
+import Minimap from './Minimap';
 import { MapCanvas } from './MapCanvas';
 import HelpModal from './HelpModal';
 import NewMapModal from './NewMapModal';
@@ -75,6 +76,8 @@ export default function MapEditorLayout({
 
   // Resizable panel
   const [panelWidth, setPanelWidth] = useState(300);
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const canvasAreaRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
 
   // Layer visibility (local -- independent from mapData.layers[].visible which persists)
@@ -739,6 +742,24 @@ export default function MapEditorLayout({
     document.addEventListener('mouseup', handleMouseUp);
   }, [panelWidth]);
 
+  // === Viewport size tracking for minimap ===
+  useEffect(() => {
+    const el = canvasAreaRef.current;
+    if (!el) return;
+    const update = () => setViewportSize({ width: el.clientWidth, height: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const handlePanTo = useCallback(
+    (panX: number, panY: number) => {
+      dispatch({ type: 'SET_PAN', panX, panY });
+    },
+    [dispatch],
+  );
+
   // === Tile selection handler ===
 
   const handleSelectRegion = useCallback(
@@ -811,6 +832,15 @@ export default function MapEditorLayout({
             )}
           </div>
 
+          {/* Minimap */}
+          <Minimap
+            state={state}
+            findTileset={findTileset}
+            viewportWidth={viewportSize.width}
+            viewportHeight={viewportSize.height}
+            onPanTo={handlePanTo}
+          />
+
           {/* Tile Palette */}
           <div className="flex-1 min-h-0 overflow-hidden">
             <TilePalette
@@ -834,7 +864,7 @@ export default function MapEditorLayout({
         />
 
         {/* Canvas Area */}
-        <div className="flex-1 min-w-0 min-h-0">
+        <div ref={canvasAreaRef} className="flex-1 min-w-0 min-h-0">
           {state.mapData ? (
             <MapCanvas
               state={state}
