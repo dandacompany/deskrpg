@@ -1,12 +1,12 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { NPC_PRESETS } from "@/lib/npc-presets";
 import { PERSONA_PRESETS, applyPresetName } from "@/lib/npc-persona-presets";
 import { useT } from "@/lib/i18n";
-import { Building2, Coffee, GraduationCap, ChevronRight } from "lucide-react";
+import { ChevronRight, Plus, Trash2, ExternalLink } from "lucide-react";
 
 export default function CreateChannelPage() {
   return (
@@ -31,11 +31,13 @@ function CreateChannelPageInner() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(true);
-  const [mapTemplate, setMapTemplate] = useState("office");
+  const [mapTemplateId, setMapTemplateId] = useState("");
+  const [templateList, setTemplateList] = useState<{ id: string; name: string; icon: string; description: string | null; cols: number; rows: number }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
 
   // --- AI Gateway ---
   const [gatewayOpen, setGatewayOpen] = useState(false);
@@ -55,6 +57,45 @@ function CreateChannelPageInner() {
   const [npcSoul, setNpcSoul] = useState("");
   const [npcAdvancedOpen, setNpcAdvancedOpen] = useState(false);
   const [npcAppearancePreset, setNpcAppearancePreset] = useState("receptionist");
+
+  useEffect(() => {
+    fetch("/api/map-templates")
+      .then((r) => r.json())
+      .then(async (data) => {
+        const templates = data.templates || [];
+        setTemplateList(templates);
+        // Auto-select: URL templateId param > first template
+        const urlTemplateId = searchParams.get("templateId");
+        if (urlTemplateId && templates.some((t: { id: string }) => t.id === urlTemplateId)) {
+          setMapTemplateId(urlTemplateId);
+        } else if (templates.length > 0 && !mapTemplateId) {
+          setMapTemplateId(templates[0].id);
+        }
+
+        // Generate thumbnails
+        try {
+          const { generateMapThumbnail, generateTiledThumbnail } = await import("@/lib/map-thumbnail");
+          const thumbs: Record<string, string> = {};
+          for (const t of templates) {
+            try {
+              const res = await fetch(`/api/map-templates/${t.id}`);
+              const detail = await res.json();
+              const tmpl = detail.template;
+
+              if (tmpl.tiledJson) {
+                const tiled = typeof tmpl.tiledJson === "string" ? JSON.parse(tmpl.tiledJson) : tmpl.tiledJson;
+                thumbs[t.id] = generateTiledThumbnail(tiled, 4);
+              } else if (tmpl.layers) {
+                const layers = typeof tmpl.layers === "string" ? JSON.parse(tmpl.layers) : tmpl.layers;
+                const objects = typeof tmpl.objects === "string" ? JSON.parse(tmpl.objects) : (tmpl.objects || []);
+                thumbs[t.id] = generateMapThumbnail(layers, objects, tmpl.cols, tmpl.rows, 4);
+              }
+            } catch { /* skip */ }
+          }
+          setThumbnails(thumbs);
+        } catch { /* skip */ }
+      });
+  }, []);
 
   const hasGatewayUrl = gatewayUrl.trim().length > 0;
   const hasTestAgents = testResult?.ok && testResult.agents && testResult.agents.length > 0;
@@ -131,7 +172,7 @@ function CreateChannelPageInner() {
         name: name.trim(),
         description: description.trim() || null,
         isPublic,
-        mapTemplate,
+        mapTemplateId,
         password: isPublic ? undefined : password,
       };
 
@@ -272,25 +313,64 @@ function CreateChannelPageInner() {
           <div>
             <label className="block text-sm font-semibold mb-2">{t("channels.create.mapTemplate")} *</label>
             <div className="grid grid-cols-3 gap-3">
-              {[
-                { id: "office", icon: <Building2 className="w-6 h-6" />, nameKey: "channels.create.map.office", descKey: "channels.create.map.officeDesc" },
-                { id: "cafe", icon: <Coffee className="w-6 h-6" />, nameKey: "channels.create.map.cafe", descKey: "channels.create.map.cafeDesc" },
-                { id: "classroom", icon: <GraduationCap className="w-6 h-6" />, nameKey: "channels.create.map.classroom", descKey: "channels.create.map.classroomDesc" },
-              ].map((tpl) => (
-                <button
-                  key={tpl.id} type="button"
-                  onClick={() => setMapTemplate(tpl.id)}
-                  className={`p-3 rounded-lg border text-center transition flex flex-col items-center ${
-                    mapTemplate === tpl.id
+              {templateList.map((tpl) => (
+                <div
+                  key={tpl.id}
+                  className={`relative p-3 rounded-lg border text-center transition flex flex-col items-center cursor-pointer group ${
+                    mapTemplateId === tpl.id
                       ? "border-primary-light bg-primary-muted text-primary-light"
                       : "border-border bg-surface hover:border-border text-text-muted"
                   }`}
+                  onClick={() => setMapTemplateId(tpl.id)}
                 >
-                  <div className="mb-1">{tpl.icon}</div>
-                  <div className="font-semibold text-sm text-white">{t(tpl.nameKey)}</div>
-                  <div className="text-xs text-text-muted mt-1">{t(tpl.descKey)}</div>
-                </button>
+                  {/* Action buttons (top-right) */}
+                  <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Link
+                      href={`/map-editor?from=create&characterId=${characterId}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="p-1 rounded bg-surface-raised border border-border hover:border-primary-light"
+                      title="맵 에디터에서 보기"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!confirm(`"${tpl.name}" 템플릿을 삭제할까요?`)) return;
+                        fetch(`/api/map-templates/${tpl.id}`, { method: "DELETE" }).then((res) => {
+                          if (res.ok) {
+                            setTemplateList((prev) => prev.filter((t) => t.id !== tpl.id));
+                            if (mapTemplateId === tpl.id) {
+                              setMapTemplateId(templateList.find((t) => t.id !== tpl.id)?.id || "");
+                            }
+                          }
+                        });
+                      }}
+                      className="p-1 rounded bg-surface-raised border border-border hover:border-danger text-danger"
+                      title="삭제"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {thumbnails[tpl.id] && (
+                    <img src={thumbnails[tpl.id]} alt={tpl.name}
+                      className="w-full rounded mb-1 border border-border"
+                      style={{ imageRendering: "pixelated" }} />
+                  )}
+                  <div className="mb-1 text-xl">{tpl.icon}</div>
+                  <div className="font-semibold text-sm text-white">{tpl.name}</div>
+                  <div className="text-xs text-text-muted mt-1">{tpl.cols}x{tpl.rows}</div>
+                </div>
               ))}
+              {/* Add new template button */}
+              <Link
+                href={`/map-editor?from=create&characterId=${characterId}`}
+                className="p-3 rounded-lg border border-dashed border-border text-center transition flex flex-col items-center justify-center hover:border-primary-light text-text-muted hover:text-text"
+              >
+                <Plus className="w-6 h-6 mb-1" />
+                <div className="font-semibold text-sm">맵 추가</div>
+              </Link>
             </div>
           </div>
 

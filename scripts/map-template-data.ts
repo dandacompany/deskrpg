@@ -1,5 +1,5 @@
-import type { MapObject } from "./object-types";
-import { generateObjectId } from "./object-types";
+import type { MapObject } from "../src/lib/object-types";
+import { generateObjectId } from "../src/lib/object-types";
 
 export type MapTemplateId = "office" | "cafe" | "classroom";
 

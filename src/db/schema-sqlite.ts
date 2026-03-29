@@ -43,6 +43,8 @@ export const channelMembers = sqliteTable("channel_members", {
   channelId: text("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   role: text("role").notNull().default("member"),
+  lastX: integer("last_x"),
+  lastY: integer("last_y"),
   joinedAt: text("joined_at").$defaultFn(() => new Date().toISOString()),
 }, (table) => [
   index("idx_channel_members_channel_id").on(table.channelId),
@@ -67,6 +69,24 @@ export const mapPortals = sqliteTable("map_portals", {
   fromY: integer("from_y").notNull(),
   toX: integer("to_x").notNull(),
   toY: integer("to_y").notNull(),
+});
+
+export const mapTemplates = sqliteTable("map_templates", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  icon: text("icon").notNull().default("🗺️"),
+  description: text("description"),
+  cols: integer("cols").notNull(),
+  rows: integer("rows").notNull(),
+  layers: text("layers"),
+  objects: text("objects"),
+  tiledJson: text("tiled_json"),
+  spawnCol: integer("spawn_col").notNull(),
+  spawnRow: integer("spawn_row").notNull(),
+  tags: text("tags"),
+  createdBy: text("created_by").references(() => users.id),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
 });
 
 export const npcs = sqliteTable("npcs", {

@@ -175,6 +175,63 @@ const OBJECT_DRAWERS: Record<string, (g: Phaser.GameObjects.Graphics, w: number,
   },
 };
 
+function generateFlippedTexture(
+  scene: Phaser.Scene,
+  sourceKey: string,
+  targetKey: string,
+  w: number, h: number,
+  flipX: boolean, flipY: boolean,
+): void {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+
+  const sourceImage = scene.textures.get(sourceKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+
+  ctx.save();
+  if (flipX) {
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+  }
+  if (flipY) {
+    ctx.translate(0, h);
+    ctx.scale(1, -1);
+  }
+  ctx.drawImage(sourceImage, 0, 0);
+  ctx.restore();
+
+  scene.textures.addCanvas(targetKey, canvas);
+}
+
+function generateTintedTexture(
+  scene: Phaser.Scene,
+  sourceKey: string,
+  targetKey: string,
+  w: number, h: number,
+  brightness: number, // 0-1, where 1 = no change, 0.75 = slightly darker
+): void {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+
+  const sourceImage = scene.textures.get(sourceKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+  ctx.drawImage(sourceImage, 0, 0);
+
+  // Darken overlay
+  ctx.globalCompositeOperation = "multiply";
+  const val = Math.round(brightness * 255);
+  ctx.fillStyle = `rgb(${val},${val},${val})`;
+  ctx.fillRect(0, 0, w, h);
+
+  // Restore alpha from original
+  ctx.globalCompositeOperation = "destination-in";
+  ctx.drawImage(sourceImage, 0, 0);
+
+  scene.textures.addCanvas(targetKey, canvas);
+}
+
 export function generateObjectTextures(scene: Phaser.Scene): void {
   for (const [typeId, def] of Object.entries(OBJECT_TYPES)) {
     const drawer = OBJECT_DRAWERS[typeId];
@@ -182,9 +239,21 @@ export function generateObjectTextures(scene: Phaser.Scene): void {
 
     const w = def.width * TILE;
     const h = def.height * TILE;
-    const g = scene.add.graphics();
-    drawer(g, w, h);
-    g.generateTexture(`obj-${typeId}`, w, h);
-    g.destroy();
+
+    // --- DOWN (default / front-facing) ---
+    const gDown = scene.add.graphics();
+    drawer(gDown, w, h);
+    gDown.generateTexture(`obj-${typeId}-down`, w, h);
+    gDown.generateTexture(`obj-${typeId}`, w, h); // backward compat alias
+    gDown.destroy();
+
+    // --- RIGHT (horizontal flip via canvas) ---
+    generateFlippedTexture(scene, `obj-${typeId}-down`, `obj-${typeId}-right`, w, h, true, false);
+
+    // --- LEFT (same as down for front-facing objects) ---
+    generateFlippedTexture(scene, `obj-${typeId}-down`, `obj-${typeId}-left`, w, h, false, false);
+
+    // --- UP (back view - darker tint) ---
+    generateTintedTexture(scene, `obj-${typeId}-down`, `obj-${typeId}-up`, w, h, 0.75);
   }
 }

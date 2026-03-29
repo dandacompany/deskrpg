@@ -592,9 +592,24 @@ function GamePageInner() {
         }
 
         // Set pending channel data for GameScene to read during create()
+        // Parse mapData if it's a JSON string (SQLite stores as text)
+        let rawMapData = channelData.channel.mapData;
+        if (typeof rawMapData === "string") {
+          try { rawMapData = JSON.parse(rawMapData); } catch { /* keep as string */ }
+        }
+        // Detect if mapData is actually Tiled JSON (has tiledversion field)
+        const isTiledJson = rawMapData && typeof rawMapData === "object" && "tiledversion" in rawMapData;
+
         setPendingChannelData({
           channelId: channelData.channel.id,
-          mapData: channelData.channel.mapData || null,
+          mapData: isTiledJson ? null : (rawMapData || null),
+          tiledJson: isTiledJson ? rawMapData : null,
+          mapConfig: typeof channelData.channel.mapConfig === "string"
+            ? JSON.parse(channelData.channel.mapConfig)
+            : (channelData.channel.mapConfig || null),
+          savedPosition: channelData.channel.lastX != null && channelData.channel.lastY != null
+            ? { x: channelData.channel.lastX, y: channelData.channel.lastY }
+            : null,
         });
 
         // Composite character sprite
@@ -938,14 +953,41 @@ function GamePageInner() {
 
                 {/* Exit section */}
                 <div className="border-t border-border my-1" />
-                <Link
-                  href={`/channels?characterId=${characterId}`}
-                  className="block px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-white flex items-center gap-2"
-                  onClick={() => setShowUserMenu(false)}
+                <button
+                  onClick={async () => {
+                    setShowUserMenu(false);
+                    // Save position via API before leaving (socket disconnect may not fire)
+                    try {
+                      const channelId = new URLSearchParams(window.location.search).get("channelId");
+                      if (channelId && socketRef.current) {
+                        // Request position from Phaser via EventBus
+                        const pos = await new Promise<{x: number; y: number} | null>((resolve) => {
+                          let resolved = false;
+                          const handler = (data: {x: number; y: number}) => {
+                            resolved = true;
+                            EventBus.off("player-position-response", handler);
+                            resolve(data);
+                          };
+                          EventBus.on("player-position-response", handler);
+                          EventBus.emit("request-player-position");
+                          setTimeout(() => { if (!resolved) { EventBus.off("player-position-response", handler); resolve(null); } }, 200);
+                        });
+                        if (pos) {
+                          await fetch(`/api/channels/${channelId}/save-position`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ x: Math.round(pos.x), y: Math.round(pos.y) }),
+                          }).catch(() => {});
+                        }
+                      }
+                    } catch { /* best effort */ }
+                    window.location.href = `/channels?characterId=${characterId}`;
+                  }}
+                  className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-white flex items-center gap-2"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   {t("game.leaveChannel")}
-                </Link>
+                </button>
                 <button
                   onClick={() => {
                     document.cookie = "token=; path=/; max-age=0";

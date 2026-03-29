@@ -1,8 +1,7 @@
 import { db, jsonForDb } from "@/db";
-import { channels, channelMembers, users, npcs } from "@/db";
+import { channels, channelMembers, users, npcs, mapTemplates } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
-import { getMapTemplate } from "@/lib/map-templates";
 import { hashPassword } from "@/lib/password";
 import { internalRpc, getUserId } from "@/lib/internal-rpc";
 
@@ -66,16 +65,34 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, description, isPublic, mapTemplate, password, gatewayConfig, defaultNpc } = body;
+    const { name, description, isPublic, mapTemplateId, password, gatewayConfig, defaultNpc } = body;
 
     if (!name || typeof name !== "string" || name.length < 1 || name.length > 100) {
       return NextResponse.json({ error: "name is required (1-100 chars)" }, { status: 400 });
     }
 
-    const template = getMapTemplate(mapTemplate);
-    if (!template) {
-      return NextResponse.json({ error: "Invalid map template. Choose: office, cafe, classroom" }, { status: 400 });
+    if (!mapTemplateId) {
+      return NextResponse.json({ error: "mapTemplateId is required" }, { status: 400 });
     }
+
+    const [template] = await db
+      .select()
+      .from(mapTemplates)
+      .where(eq(mapTemplates.id, mapTemplateId))
+      .limit(1);
+
+    if (!template) {
+      return NextResponse.json({ error: "Map template not found" }, { status: 404 });
+    }
+
+    // Parse layers/objects if stored as JSON string (SQLite)
+    const templateLayers = typeof template.layers === "string" ? JSON.parse(template.layers) : template.layers;
+    const templateObjects = typeof template.objects === "string" ? JSON.parse(template.objects) : template.objects;
+
+    // If template has tiledJson, store it directly as channel mapData
+    const templateTiledJson = template.tiledJson
+      ? (typeof template.tiledJson === "string" ? JSON.parse(template.tiledJson) : template.tiledJson)
+      : null;
 
     const channelIsPublic = isPublic !== false;
 
@@ -99,7 +116,7 @@ export async function POST(req: NextRequest) {
         isPublic: channelIsPublic,
         inviteCode,
         maxPlayers: 50,
-        mapData: jsonForDb({ layers: template.layers, objects: template.objects }),
+        mapData: jsonForDb(templateTiledJson || { layers: templateLayers, objects: templateObjects }),
         mapConfig: jsonForDb({ cols: template.cols, rows: template.rows, spawnCol: template.spawnCol, spawnRow: template.spawnRow }),
         password: passwordHash,
         gatewayConfig: jsonForDb(gatewayConfig || null),

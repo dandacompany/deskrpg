@@ -2,7 +2,7 @@ import { Server, Socket } from "socket.io";
 import { jwtVerify } from "jose";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import * as schema from "../db/schema";
 
 // ---------------------------------------------------------------------------
@@ -665,6 +665,35 @@ export function setupSocketHandlers(io: Server) {
       const player = players.get(socket.id);
       if (player) {
         socket.to(player.mapId).emit("player:left", { id: socket.id });
+
+        // Save last position to DB
+        const px = Math.round(player.x);
+        const py = Math.round(player.y);
+        console.log(`[socket] Saving position for ${player.characterName}: (${px}, ${py}) channel=${player.mapId} user=${player.userId}`);
+        try {
+          // Use the shared db + schema from src/db (supports both PG and SQLite)
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const dbModule = require("../db");
+          const result = dbModule.db.update(dbModule.channelMembers)
+            .set({ lastX: px, lastY: py })
+            .where(
+              and(
+                eq(dbModule.channelMembers.channelId, player.mapId),
+                eq(dbModule.channelMembers.userId, player.userId),
+              )
+            );
+          // Handle both sync (SQLite) and async (PG)
+          if (result && typeof result.then === "function") {
+            result.then(() => {
+              console.log(`[socket] Position saved OK for ${player.characterName}`);
+            }).catch((err: Error) => {
+              console.error("[socket] Position save failed (async):", err.message);
+            });
+          }
+        } catch (e) {
+          console.error("[socket] Position save failed (sync):", e instanceof Error ? e.message : e);
+        }
+
         players.delete(socket.id);
         console.log(
           `[socket] Player disconnected: ${user.nickname} (${socket.id})`,

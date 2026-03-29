@@ -43,6 +43,8 @@ export const channelMembers = pgTable("channel_members", {
   channelId: uuid("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   role: varchar("role", { length: 20 }).notNull().default("member"),
+  lastX: integer("last_x"),
+  lastY: integer("last_y"),
   joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow(),
 }, (table) => [
   index("idx_channel_members_channel_id").on(table.channelId),
@@ -67,6 +69,24 @@ export const mapPortals = pgTable("map_portals", {
   fromY: integer("from_y").notNull(),
   toX: integer("to_x").notNull(),
   toY: integer("to_y").notNull(),
+});
+
+export const mapTemplates = pgTable("map_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 200 }).notNull(),
+  icon: varchar("icon", { length: 10 }).notNull().default("🗺️"),
+  description: varchar("description", { length: 500 }),
+  cols: integer("cols").notNull(),
+  rows: integer("rows").notNull(),
+  layers: jsonb("layers"),
+  objects: jsonb("objects"),
+  tiledJson: jsonb("tiled_json"),
+  spawnCol: integer("spawn_col").notNull(),
+  spawnRow: integer("spawn_row").notNull(),
+  tags: varchar("tags", { length: 500 }),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
 export const npcs = pgTable("npcs", {

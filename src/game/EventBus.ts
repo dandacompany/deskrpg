@@ -46,9 +46,21 @@ export const EventBus = new SimpleEventEmitter();
 
 // Pending channel data — set before GameScene creates, read during create()
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export let pendingChannelData: { channelId: string; mapData: any } | null = null;
+export let pendingChannelData: {
+  channelId: string;
+  mapData: any;
+  tiledJson?: any;
+  mapConfig?: any;
+  savedPosition?: { x: number; y: number } | null;
+} | null = null;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function setPendingChannelData(data: { channelId: string; mapData: any } | null) {
+export function setPendingChannelData(data: {
+  channelId: string;
+  mapData: any;
+  tiledJson?: any;
+  mapConfig?: any;
+  savedPosition?: { x: number; y: number } | null;
+} | null) {
   pendingChannelData = data;
 }

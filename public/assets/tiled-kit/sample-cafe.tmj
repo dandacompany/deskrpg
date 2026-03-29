@@ -1,0 +1,842 @@
+{
+  "compressionlevel": -1,
+  "height": 11,
+  "width": 15,
+  "tilewidth": 32,
+  "tileheight": 32,
+  "infinite": false,
+  "orientation": "orthogonal",
+  "renderorder": "right-down",
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.11.0",
+  "nextlayerid": 4,
+  "nextobjectid": 15,
+  "tilesets": [
+    {
+      "firstgid": 1,
+      "name": "deskrpg-tileset",
+      "tilewidth": 32,
+      "tileheight": 32,
+      "tilecount": 16,
+      "columns": 16,
+      "image": "deskrpg-tileset.png",
+      "imagewidth": 512,
+      "imageheight": 32,
+      "tiles": [
+        {
+          "id": 0,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "empty"
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "floor"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "wall"
+            },
+            {
+              "name": "collision",
+              "type": "bool",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "desk"
+            },
+            {
+              "name": "collision",
+              "type": "bool",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "chair"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "computer"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "plant"
+            },
+            {
+              "name": "collision",
+              "type": "bool",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "door"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "meeting_table"
+            },
+            {
+              "name": "collision",
+              "type": "bool",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "coffee"
+            },
+            {
+              "name": "collision",
+              "type": "bool",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "water_cooler"
+            },
+            {
+              "name": "collision",
+              "type": "bool",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "bookshelf"
+            },
+            {
+              "name": "collision",
+              "type": "bool",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "carpet"
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "whiteboard"
+            },
+            {
+              "name": "collision",
+              "type": "bool",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "reception_desk"
+            },
+            {
+              "name": "collision",
+              "type": "bool",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": 15,
+          "properties": [
+            {
+              "name": "name",
+              "type": "string",
+              "value": "cubicle_wall"
+            },
+            {
+              "name": "collision",
+              "type": "bool",
+              "value": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": 1,
+      "name": "floor",
+      "type": "tilelayer",
+      "width": 15,
+      "height": 11,
+      "x": 0,
+      "y": 0,
+      "opacity": 1,
+      "visible": true,
+      "data": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        0,
+        2,
+        13,
+        13,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        0,
+        2,
+        13,
+        13,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": 2,
+      "name": "walls",
+      "type": "tilelayer",
+      "width": 15,
+      "height": 11,
+      "x": 0,
+      "y": 0,
+      "opacity": 1,
+      "visible": true,
+      "data": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        8,
+        8,
+        8,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "id": 3,
+      "name": "objects",
+      "type": "objectgroup",
+      "x": 0,
+      "y": 0,
+      "opacity": 1,
+      "visible": true,
+      "draworder": "topdown",
+      "objects": [
+        {
+          "id": 1,
+          "name": "spawn",
+          "type": "spawn",
+          "x": 224,
+          "y": 288,
+          "width": 0,
+          "height": 0,
+          "point": true,
+          "visible": true
+        },
+        {
+          "id": 2,
+          "name": "bookshelf",
+          "type": "bookshelf",
+          "x": 288,
+          "y": 32,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "bookshelf"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "name": "bookshelf",
+          "type": "bookshelf",
+          "x": 320,
+          "y": 32,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "bookshelf"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "name": "bookshelf",
+          "type": "bookshelf",
+          "x": 352,
+          "y": 32,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "bookshelf"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "name": "bookshelf",
+          "type": "bookshelf",
+          "x": 384,
+          "y": 32,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "bookshelf"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "name": "meeting_table",
+          "type": "meeting_table",
+          "x": 64,
+          "y": 64,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "meeting_table"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "name": "meeting_table",
+          "type": "meeting_table",
+          "x": 192,
+          "y": 64,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "meeting_table"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "name": "plant",
+          "type": "plant",
+          "x": 384,
+          "y": 96,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "plant"
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "name": "meeting_table",
+          "type": "meeting_table",
+          "x": 288,
+          "y": 128,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "meeting_table"
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "name": "meeting_table",
+          "type": "meeting_table",
+          "x": 64,
+          "y": 160,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "meeting_table"
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "name": "plant",
+          "type": "plant",
+          "x": 160,
+          "y": 160,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "plant"
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "name": "meeting_table",
+          "type": "meeting_table",
+          "x": 288,
+          "y": 224,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "meeting_table"
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "name": "plant",
+          "type": "plant",
+          "x": 384,
+          "y": 224,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "plant"
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "name": "meeting_table",
+          "type": "meeting_table",
+          "x": 192,
+          "y": 256,
+          "width": 32,
+          "height": 32,
+          "visible": true,
+          "properties": [
+            {
+              "name": "objectType",
+              "type": "string",
+              "value": "meeting_table"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

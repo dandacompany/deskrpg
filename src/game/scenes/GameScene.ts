@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import type { Socket } from "socket.io-client";
-import { MapObject, MapData, OBJECT_TYPES, OBJECT_TYPE_LIST, computeOccupiedTiles, detectAndConvertMapData, generateObjectId, canPlaceObject } from "@/lib/object-types";
+import { MapObject, MapData, OBJECT_TYPES, OBJECT_TYPE_LIST, computeOccupiedTiles, detectAndConvertMapData, generateObjectId, canPlaceObject, getObjectDimensions } from "@/lib/object-types";
 
 // ---------------------------------------------------------------------------
 // Map constants
@@ -1079,6 +1079,9 @@ export class GameScene extends Phaser.Scene {
   // Channel
   private channelId: string = "";
   private channelMapData: MapData | null = null;
+  private tiledSpawnCol: number | null = null;
+  private tiledSpawnRow: number | null = null;
+  private savedPosition: { x: number; y: number } | null = null;
 
   // Player name label
   private playerNameLabel: Phaser.GameObjects.Text | null = null;
@@ -1182,35 +1185,64 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     // Read pending channel data set by game page before scene creation
+    let tiledJsonData: Record<string, unknown> | null = null;
+
     if (pendingChannelData) {
       this.channelId = pendingChannelData.channelId;
-      if (pendingChannelData.mapData) {
-        this.channelMapData = detectAndConvertMapData(pendingChannelData.mapData, MAP_COLS, MAP_ROWS);
+
+      if (pendingChannelData.tiledJson) {
+        // Explicit Tiled JSON passed from game page
+        tiledJsonData = pendingChannelData.tiledJson;
+      } else if (pendingChannelData.mapData) {
+        // Check if mapData IS Tiled JSON (has tiledversion field)
+        if (pendingChannelData.mapData.tiledversion) {
+          tiledJsonData = pendingChannelData.mapData;
+        } else {
+          this.channelMapData = detectAndConvertMapData(pendingChannelData.mapData, MAP_COLS, MAP_ROWS);
+        }
       }
+
+      // Store spawn from mapConfig if available
+      if (pendingChannelData.mapConfig) {
+        const config = pendingChannelData.mapConfig;
+        if (typeof config.spawnCol === "number") this.tiledSpawnCol = config.spawnCol;
+        if (typeof config.spawnRow === "number") this.tiledSpawnRow = config.spawnRow;
+      }
+
+      // Restore saved position from last session
+      if (pendingChannelData.savedPosition) {
+        this.savedPosition = pendingChannelData.savedPosition;
+      }
+
       setPendingChannelData(null); // consumed
     }
 
-    // Priority: channel map data > localStorage > default office map
-    let mapData: MapData;
-
-    if (this.channelMapData) {
-      mapData = this.channelMapData;
+    if (tiledJsonData) {
+      // Tiled JSON path — use Phaser's built-in Tiled JSON loader
+      this.loadTiledMap(tiledJsonData);
     } else {
-      const savedMap = this.loadMapFromLocalStorage();
-      if (savedMap) {
-        mapData = detectAndConvertMapData(savedMap, MAP_COLS, MAP_ROWS);
+      // Legacy path: channel map data > localStorage > default office map
+      let mapData: MapData;
+
+      if (this.channelMapData) {
+        mapData = this.channelMapData;
       } else {
-        mapData = buildOfficeMap();
+        const savedMap = this.loadMapFromLocalStorage();
+        if (savedMap) {
+          mapData = detectAndConvertMapData(savedMap, MAP_COLS, MAP_ROWS);
+        } else {
+          mapData = buildOfficeMap();
+        }
       }
+
+      this.floorData = mapData.layers.floor;
+      this.wallsData = mapData.layers.walls;
+      this.mapObjects = mapData.objects;
+
+      // Create tilemap and render objects
+      this.createTilemap();
+      this.renderObjects();
     }
-
-    this.floorData = mapData.layers.floor;
-    this.wallsData = mapData.layers.walls;
-    this.mapObjects = mapData.objects;
-
-    // Create tilemap and render objects
-    this.createTilemap();
-    this.renderObjects();
 
     // Input keys
     if (this.input.keyboard) {
@@ -1262,6 +1294,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, mapWidth, mapHeight);
     this.cameras.main.setBounds(0, 0, mapWidth, mapHeight);
     this.cameras.main.setZoom(2);
+    this.cameras.main.setRoundPixels(true);
 
     // Minimap
     const minimap = this.cameras.add(
@@ -1688,11 +1721,292 @@ export class GameScene extends Phaser.Scene {
       this.clearNpcBubble(data.npcId);
     });
 
+    // Respond to position requests from React (for save-on-leave)
+    EventBus.on("request-player-position", () => {
+      if (this.player) {
+        EventBus.emit("player-position-response", { x: this.player.x, y: this.player.y });
+      }
+    });
+
     // Tell React the scene is ready
     EventBus.emit("scene-ready");
 
     // Also re-request socket in case it was already sent before we registered
     EventBus.emit("request-socket");
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tiled JSON map loading
+  // ---------------------------------------------------------------------------
+
+  private loadTiledMap(tiledJson: Record<string, unknown>): void {
+    // Resolve external tileset references — Phaser doesn't support them
+    const tilesetArr = tiledJson.tilesets as Array<Record<string, unknown>>;
+    if (tilesetArr) {
+      for (let i = 0; i < tilesetArr.length; i++) {
+        if (tilesetArr[i].source && !tilesetArr[i].image) {
+          // Replace external reference with embedded DeskRPG default tileset
+          const firstgid = tilesetArr[i].firstgid || 1;
+          tilesetArr[i] = {
+            firstgid,
+            name: "deskrpg-tileset",
+            tilewidth: 32,
+            tileheight: 32,
+            tilecount: 16,
+            columns: 16,
+            image: "deskrpg-tileset.png",
+            imagewidth: 512,
+            imageheight: 32,
+          };
+          console.log("[GameScene] Resolved external tileset reference to embedded format");
+        }
+      }
+    }
+
+    // Destroy existing layers if any
+    if (this.floorLayer) { this.floorLayer.destroy(); this.floorLayer = null; }
+    if (this.wallsLayer) { this.wallsLayer.destroy(); this.wallsLayer = null; }
+
+    // Add Tiled JSON to Phaser's tilemap cache
+    this.cache.tilemap.add("channel-map", {
+      format: Phaser.Tilemaps.Formats.TILED_JSON,
+      data: tiledJson,
+    });
+
+    // Load custom tileset images before creating the tilemap
+    const tilesetDefs = (tiledJson.tilesets as Array<{
+      firstgid: number;
+      source?: string;
+      name?: string;
+      image?: string;
+      tilewidth?: number;
+      tileheight?: number;
+    }>) || [];
+
+    const imagesToLoad: { key: string; url: string; tileWidth: number; tileHeight: number }[] = [];
+    for (const ts of tilesetDefs) {
+      const tsName = ts.name || ts.source?.replace(/\.tsx$/, "") || "deskrpg-tileset";
+      const tsImage = ts.image || "";
+      const tileW = ts.tilewidth || TILE_SIZE;
+      const tileH = ts.tileheight || TILE_SIZE;
+
+      // Skip if texture already loaded (e.g. "office-tiles" from BootScene)
+      if (this.textures.exists(tsName)) continue;
+
+      // Determine image URL
+      if (tsImage.startsWith("/")) {
+        // Absolute path (e.g. /assets/uploads/{id}/tileset.png)
+        imagesToLoad.push({ key: tsName, url: tsImage, tileWidth: tileW, tileHeight: tileH });
+      } else if (tsImage && tsImage !== "deskrpg-tileset.png") {
+        // Relative path — try common locations
+        imagesToLoad.push({ key: tsName, url: `/assets/uploads/${tsImage}`, tileWidth: tileW, tileHeight: tileH });
+      }
+    }
+
+    if (imagesToLoad.length > 0) {
+      // Dynamically load tileset images, then continue
+      for (const img of imagesToLoad) {
+        this.load.image(img.key, img.url);
+      }
+      this.load.once("complete", () => {
+        this.finishTiledMapLoad(tiledJson, imagesToLoad);
+      });
+      this.load.once("loaderror", (file: { key: string; url: string }) => {
+        console.error("[GameScene] Failed to load tileset image:", file.key, file.url);
+      });
+      this.load.start();
+      return;
+    }
+
+    // No custom images to load — proceed immediately
+    this.finishTiledMapLoad(tiledJson, []);
+  }
+
+  private finishTiledMapLoad(tiledJson: Record<string, unknown>, loadedImages: { key: string; tileWidth: number; tileHeight: number }[]): void {
+    const map = this.make.tilemap({ key: "channel-map" });
+
+    // Add tilesets to the map
+    const tilesetDefs = (tiledJson.tilesets as Array<{
+      firstgid: number;
+      source?: string;
+      name?: string;
+      image?: string;
+      tilewidth?: number;
+      tileheight?: number;
+    }>) || [];
+
+    for (const ts of tilesetDefs) {
+      const tsName = ts.name || ts.source?.replace(/\.tsx$/, "") || "deskrpg-tileset";
+      const tileW = ts.tilewidth || TILE_SIZE;
+      const tileH = ts.tileheight || TILE_SIZE;
+
+      if (this.textures.exists(tsName)) {
+        // Custom loaded texture or BootScene texture
+        map.addTilesetImage(tsName, tsName, tileW, tileH, 0, 0);
+      } else if (this.textures.exists("office-tiles") && (tsName === "deskrpg-tileset" || (ts.image || "").includes("deskrpg"))) {
+        // DeskRPG default tileset → use office-tiles
+        map.addTilesetImage(tsName, "office-tiles", TILE_SIZE, TILE_SIZE, 0, 0);
+      } else if (this.textures.exists("office-tiles")) {
+        // Unknown tileset but office-tiles available — use as fallback
+        console.warn(`[GameScene] Unknown tileset "${tsName}", using office-tiles fallback`);
+        map.addTilesetImage(tsName, "office-tiles", TILE_SIZE, TILE_SIZE, 0, 0);
+      }
+    }
+
+    // Create tile layers — try by name first, fallback to order
+    const mapWidth = (tiledJson.width as number) || MAP_COLS;
+    const mapHeight = (tiledJson.height as number) || MAP_ROWS;
+
+    // Get all tile layer names from the Tiled JSON
+    const tiledLayers = (tiledJson.layers as Array<{ name: string; type: string }>) || [];
+    const tileLayerNames = tiledLayers.filter(l => l.type === "tilelayer").map(l => l.name);
+
+    // Try named layers first, fallback to first/second tile layer by order
+    const floorLayerName = tileLayerNames.find(n => n.toLowerCase() === "floor") || tileLayerNames[0];
+    const wallsLayerName = tileLayerNames.find(n => n.toLowerCase() === "walls") || tileLayerNames[1];
+
+    let floorLayer: Phaser.Tilemaps.TilemapLayer | null = null;
+    if (floorLayerName) {
+      floorLayer = map.createLayer(floorLayerName, map.tilesets);
+      if (floorLayer) {
+        floorLayer.setDepth(0);
+        this.floorLayer = floorLayer;
+      }
+    }
+
+    let wallsLayer: Phaser.Tilemaps.TilemapLayer | null = null;
+    if (wallsLayerName && wallsLayerName !== floorLayerName) {
+      wallsLayer = map.createLayer(wallsLayerName, map.tilesets);
+      if (wallsLayer) {
+        wallsLayer.setDepth(1);
+        this.wallsLayer = wallsLayer;
+        wallsLayer.setCollisionByProperty({ collision: true });
+      }
+    }
+
+    // Create any remaining tile layers (3rd, 4th, etc.)
+    // Special layers (case-insensitive):
+    //   "collision" → hidden, used for collision data only
+    //   "foreground" → rendered above characters (depth 10000+)
+    for (let i = 0; i < tileLayerNames.length; i++) {
+      const name = tileLayerNames[i];
+      if (name === floorLayerName || name === wallsLayerName) continue;
+      const nameLower = name.toLowerCase();
+      const extraLayer = map.createLayer(name, map.tilesets);
+      if (extraLayer) {
+        if (nameLower === "collision") {
+          extraLayer.setVisible(false);
+        } else if (nameLower === "foreground" || nameLower === "above" || nameLower === "overlay") {
+          // Foreground layer: renders above characters but below UI
+          extraLayer.setDepth(10000);
+        } else {
+          extraLayer.setDepth(i + 2);
+        }
+      }
+    }
+
+    // Extract floor/walls data arrays for the legacy collision system
+    // (isWalkable() checks floorData/wallsData directly)
+    this.floorData = [];
+    this.wallsData = [];
+    for (let r = 0; r < mapHeight; r++) {
+      const floorRow = new Array(mapWidth).fill(0);
+      const wallsRow = new Array(mapWidth).fill(0);
+      for (let c = 0; c < mapWidth; c++) {
+        if (floorLayer) {
+          const tile = floorLayer.getTileAt(c, r);
+          floorRow[c] = tile ? tile.index : 0;
+        }
+        if (wallsLayer) {
+          const tile = wallsLayer.getTileAt(c, r);
+          wallsRow[c] = tile ? tile.index : 0;
+        }
+      }
+      this.floorData.push(floorRow);
+      this.wallsData.push(wallsRow);
+    }
+
+    // Process object layers + Collision layer
+    this.mapObjects = [];
+    const collisionCells = new Set<string>();
+    const allLayers = tiledJson.layers as Array<Record<string, unknown>> | undefined;
+    for (const layer of allLayers || []) {
+      const layerName = ((layer.name as string) || "").toLowerCase();
+
+      // --- Collision layer (objectgroup): all objects become collision rects ---
+      if (layer.type === "objectgroup" && layerName === "collision") {
+        const objects = layer.objects as Array<Record<string, unknown>> | undefined;
+        for (const obj of objects || []) {
+          const ox = (obj.x as number) || 0;
+          const oy = (obj.y as number) || 0;
+          const ow = (obj.width as number) || TILE_SIZE;
+          const oh = (obj.height as number) || TILE_SIZE;
+          // Convert pixel rect to tile cells
+          const startCol = Math.floor(ox / TILE_SIZE);
+          const startRow = Math.floor(oy / TILE_SIZE);
+          const endCol = Math.ceil((ox + ow) / TILE_SIZE);
+          const endRow = Math.ceil((oy + oh) / TILE_SIZE);
+          for (let r = startRow; r < endRow; r++) {
+            for (let c = startCol; c < endCol; c++) {
+              collisionCells.add(`${c},${r}`);
+            }
+          }
+        }
+        continue; // Don't process collision layer as regular objects
+      }
+
+      // --- Collision layer (tilelayer): any non-zero tile is collision ---
+      if (layer.type === "tilelayer" && layerName === "collision") {
+        const data = layer.data as number[] | undefined;
+        if (data) {
+          for (let r = 0; r < mapHeight; r++) {
+            for (let c = 0; c < mapWidth; c++) {
+              const gid = data[r * mapWidth + c] || 0;
+              if (gid !== 0) {
+                collisionCells.add(`${c},${r}`);
+              }
+            }
+          }
+        }
+        // Hide the collision tile layer if it was created
+        const collisionTileLayer = map.getLayer(layer.name as string);
+        if (collisionTileLayer?.tilemapLayer) {
+          collisionTileLayer.tilemapLayer.setVisible(false);
+        }
+        continue;
+      }
+
+      // --- Regular object layers ---
+      if (layer.type === "objectgroup") {
+        const objects = layer.objects as Array<Record<string, unknown>> | undefined;
+        for (const obj of objects || []) {
+          // Spawn point
+          if (obj.name === "spawn" || obj.type === "spawn") {
+            this.tiledSpawnCol = Math.floor((obj.x as number) / TILE_SIZE);
+            this.tiledSpawnRow = Math.floor((obj.y as number) / TILE_SIZE);
+            continue;
+          }
+
+          // Furniture/object — only add if type is recognized
+          const objectType = (obj.type as string) || "";
+          if (objectType && OBJECT_TYPES[objectType]) {
+            this.mapObjects.push({
+              id: generateObjectId(),
+              type: objectType,
+              col: Math.floor((obj.x as number) / TILE_SIZE),
+              row: Math.floor((obj.y as number) / TILE_SIZE),
+            });
+          }
+        }
+      }
+    }
+
+    this.renderObjects();
+    this.objectOccupiedTiles = computeOccupiedTiles(this.mapObjects);
+    // Merge collision layer cells into objectOccupiedTiles
+    for (const cell of collisionCells) {
+      this.objectOccupiedTiles.add(cell);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1744,11 +2058,14 @@ export class GameScene extends Phaser.Scene {
     for (const obj of this.mapObjects) {
       const def = OBJECT_TYPES[obj.type];
       if (!def) continue;
-      const texKey = `obj-${obj.type}`;
+      const dir = obj.direction || "down";
+      let texKey = `obj-${obj.type}-${dir}`;
+      if (!this.textures.exists(texKey)) {
+        texKey = `obj-${obj.type}`; // fallback
+      }
       if (!this.textures.exists(texKey)) continue;
 
-      const w = def.width || 1;
-      const h = def.height || 1;
+      const { width: w, height: h } = getObjectDimensions(obj.type, obj.direction);
       const x = (obj.col + w / 2) * TILE_SIZE;
       const y = (obj.row + h) * TILE_SIZE;
 
@@ -2370,10 +2687,22 @@ export class GameScene extends Phaser.Scene {
   private createPlayer(): void {
     if (this.playerReady) return; // prevent double creation
 
-    // Find a free spawn position, checking NPCs, remote players, AND object occupied tiles
-    const { col: spawnCol, row: spawnRow } = this.findFreeSpawn(8, 3);
-    const spawnX = spawnCol * TILE_SIZE + TILE_SIZE / 2;
-    const spawnY = spawnRow * TILE_SIZE + TILE_SIZE / 2;
+    let spawnX: number;
+    let spawnY: number;
+
+    if (this.savedPosition) {
+      // Restore saved position from last session (pixel coordinates)
+      spawnX = this.savedPosition.x;
+      spawnY = this.savedPosition.y;
+      this.savedPosition = null; // consumed
+    } else {
+      // Find a free spawn position, checking NPCs, remote players, AND object occupied tiles
+      const preferSpawnCol = this.tiledSpawnCol ?? 8;
+      const preferSpawnRow = this.tiledSpawnRow ?? 3;
+      const { col: spawnCol, row: spawnRow } = this.findFreeSpawn(preferSpawnCol, preferSpawnRow);
+      spawnX = spawnCol * TILE_SIZE + TILE_SIZE / 2;
+      spawnY = spawnRow * TILE_SIZE + TILE_SIZE / 2;
+    }
 
     const playerTex = this.textures.exists("player") ? "player" : "fallback-char";
     this.player = this.physics.add.sprite(spawnX, spawnY, playerTex, playerTex === "player" ? DIR_DOWN * SPRITE_COLS : 0);

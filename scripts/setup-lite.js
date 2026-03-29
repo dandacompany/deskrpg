@@ -45,4 +45,16 @@ try {
   process.exit(1);
 }
 
+// 5. Seed built-in map templates
+console.log("[setup] Seeding map templates...");
+try {
+  execFileSync("npx", ["tsx", "scripts/seed-map-templates.ts"], {
+    cwd: ROOT,
+    stdio: "inherit",
+    env: { ...process.env, DB_TYPE: "sqlite", SQLITE_PATH: "data/deskrpg.db" },
+  });
+} catch {
+  console.warn("[setup] Seed failed (non-critical — templates can be added manually)");
+}
+
 console.log("\n✓ Ready (SQLite mode) — run: npm run dev\n");

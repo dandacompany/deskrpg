@@ -8,6 +8,7 @@ export interface MapObject {
   col: number;
   row: number;
   variant?: string;
+  direction?: "down" | "left" | "right" | "up";
 }
 
 export interface MapData {
@@ -27,25 +28,38 @@ export interface ObjectTypeDef {
   renderType: "graphic" | "png";
   depthMode: "y-sort" | "fixed";
   fixedDepth?: number;
+  directional: boolean;
 }
 
 // V1 object type registry
 export const OBJECT_TYPES: Record<string, ObjectTypeDef> = {
-  desk:           { id: "desk",           name: "Desk",           width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort" },
-  chair:          { id: "chair",          name: "Chair",          width: 1, height: 1, collision: false, renderType: "graphic", depthMode: "y-sort" },
-  computer:       { id: "computer",       name: "Computer",       width: 1, height: 1, collision: false, renderType: "graphic", depthMode: "y-sort" },
-  plant:          { id: "plant",          name: "Plant",          width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort" },
-  bookshelf:      { id: "bookshelf",      name: "Bookshelf",      width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "fixed", fixedDepth: 5 },
-  meeting_table:  { id: "meeting_table",  name: "Meeting Table",  width: 2, height: 2, collision: true,  renderType: "graphic", depthMode: "y-sort" },
-  coffee:         { id: "coffee",         name: "Coffee Machine", width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort" },
-  water_cooler:   { id: "water_cooler",   name: "Water Cooler",   width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort" },
-  whiteboard:     { id: "whiteboard",     name: "Whiteboard",     width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "fixed", fixedDepth: 5 },
-  reception_desk: { id: "reception_desk", name: "Reception Desk", width: 2, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort" },
-  cubicle_wall:   { id: "cubicle_wall",   name: "Cubicle Wall",   width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort" },
+  desk:           { id: "desk",           name: "Desk",           width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
+  chair:          { id: "chair",          name: "Chair",          width: 1, height: 1, collision: false, renderType: "graphic", depthMode: "y-sort", directional: true },
+  computer:       { id: "computer",       name: "Computer",       width: 1, height: 1, collision: false, renderType: "graphic", depthMode: "y-sort", directional: true },
+  plant:          { id: "plant",          name: "Plant",          width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
+  bookshelf:      { id: "bookshelf",      name: "Bookshelf",      width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "fixed", fixedDepth: 5, directional: true },
+  meeting_table:  { id: "meeting_table",  name: "Meeting Table",  width: 2, height: 2, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
+  coffee:         { id: "coffee",         name: "Coffee Machine", width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
+  water_cooler:   { id: "water_cooler",   name: "Water Cooler",   width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
+  whiteboard:     { id: "whiteboard",     name: "Whiteboard",     width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "fixed", fixedDepth: 5, directional: true },
+  reception_desk: { id: "reception_desk", name: "Reception Desk", width: 2, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
+  cubicle_wall:   { id: "cubicle_wall",   name: "Cubicle Wall",   width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
 };
 
 // List for editor toolbar ordering
 export const OBJECT_TYPE_LIST: ObjectTypeDef[] = Object.values(OBJECT_TYPES);
+
+// Get effective width/height considering direction (left/right swap w and h for non-square objects)
+export function getObjectDimensions(type: string, direction?: string): { width: number; height: number } {
+  const def = OBJECT_TYPES[type];
+  if (!def) return { width: 1, height: 1 };
+  const w = def.width || 1;
+  const h = def.height || 1;
+  if ((direction === "left" || direction === "right") && w !== h) {
+    return { width: h, height: w };
+  }
+  return { width: w, height: h };
+}
 
 // ---------------------------------------------------------------------------
 // Tile ID → Object Type mapping (for legacy GameScene T constants)
@@ -76,8 +90,7 @@ export function computeOccupiedTiles(objects: MapObject[]): Set<string> {
   for (const obj of objects) {
     const def = OBJECT_TYPES[obj.type];
     if (!def || !def.collision) continue;
-    const w = def.width || 1;
-    const h = def.height || 1;
+    const { width: w, height: h } = getObjectDimensions(obj.type, obj.direction);
     for (let c = obj.col; c < obj.col + w; c++) {
       for (let r = obj.row; r < obj.row + h; r++) {
         occupied.add(`${c},${r}`);
@@ -93,11 +106,11 @@ export function computeOccupiedTiles(objects: MapObject[]): Set<string> {
 export function canPlaceObject(
   type: string, col: number, row: number,
   existingObjects: MapObject[], wallsData: number[][],
+  direction?: "down" | "left" | "right" | "up",
 ): boolean {
   const def = OBJECT_TYPES[type];
   if (!def) return false;
-  const w = def.width || 1;
-  const h = def.height || 1;
+  const { width: w, height: h } = getObjectDimensions(type, direction);
 
   for (let c = col; c < col + w; c++) {
     for (let r = row; r < row + h; r++) {
@@ -109,8 +122,7 @@ export function canPlaceObject(
         for (const obj of existingObjects) {
           const oDef = OBJECT_TYPES[obj.type];
           if (!oDef || !oDef.collision) continue;
-          const ow = oDef.width || 1;
-          const oh = oDef.height || 1;
+          const { width: ow, height: oh } = getObjectDimensions(obj.type, obj.direction);
           if (c >= obj.col && c < obj.col + ow && r >= obj.row && r < obj.row + oh) {
             return false;
           }

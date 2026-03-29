@@ -29,6 +29,7 @@ export const npcs = activeSchema.npcs;
 export const chatMessages = activeSchema.chatMessages;
 export const meetingMinutes = activeSchema.meetingMinutes;
 export const tasks = activeSchema.tasks;
+export const mapTemplates = activeSchema.mapTemplates;
 
 // Use PG type for all API routes — Drizzle's runtime API is identical across dialects.
 type DbInstance = NodePgDatabase<typeof pgSchema>;
