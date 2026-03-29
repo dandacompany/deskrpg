@@ -56,7 +56,7 @@ function TilesetSection({
 
   const { img, firstgid, columns, tilewidth, tileheight, tilecount, name } = info;
   const rows = Math.ceil(tilecount / columns);
-  const isCompact = tilecount <= 4;
+  const isCompact = rows === 1;
 
   // Draw tileset image + grid + selection overlay
   const draw = useCallback(
