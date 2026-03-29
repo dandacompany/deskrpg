@@ -18,6 +18,7 @@ export interface TilePaletteProps {
   onImportTileset: () => void;
   onDeleteTileset: (firstgid: number) => void;
   onRemoveBgSelection?: (firstgid: number, region: TileRegion) => void;
+  onEditPixels?: (firstgid: number, region: TileRegion) => void;
   removeBgProgress?: RemoveBgProgress | null;
   onReorderTileset?: (fromFirstgid: number, toFirstgid: number) => void;
   usedGids?: Set<number>;
@@ -38,6 +39,7 @@ function TilesetSection({
   onSelectRegion,
   onDelete,
   onRemoveBgSelection,
+  onEditPixels,
   removeBgProgress,
   removeBgDetail,
   isUnused,
@@ -52,6 +54,7 @@ function TilesetSection({
   onSelectRegion: (region: TileRegion) => void;
   onDelete: () => void;
   onRemoveBgSelection?: () => void;
+  onEditPixels?: () => void;
   removeBgProgress?: number | null;
   removeBgDetail?: string | null;
   isUnused?: boolean;
@@ -287,6 +290,16 @@ function TilesetSection({
                   Remove BG
                 </Button>
               )}
+              {onEditPixels && hasSelectionInThisTileset && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onEditPixels}
+                  title="Edit selected tiles pixel-by-pixel"
+                >
+                  Edit Pixels
+                </Button>
+              )}
             </>
           )}
           <button
@@ -325,6 +338,7 @@ export default function TilePalette({
   onImportTileset,
   onDeleteTileset,
   onRemoveBgSelection,
+  onEditPixels,
   removeBgProgress,
   onReorderTileset,
   usedGids,
@@ -413,6 +427,11 @@ export default function TilePalette({
             onRemoveBgSelection={
               onRemoveBgSelection && selectedRegion && selectedRegion.firstgid === info.firstgid
                 ? () => onRemoveBgSelection(info.firstgid, selectedRegion!)
+                : undefined
+            }
+            onEditPixels={
+              onEditPixels && selectedRegion && selectedRegion.firstgid === info.firstgid
+                ? () => onEditPixels(info.firstgid, selectedRegion!)
                 : undefined
             }
             removeBgProgress={

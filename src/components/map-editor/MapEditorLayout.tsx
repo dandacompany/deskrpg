@@ -24,6 +24,7 @@ import { MapCanvas } from './MapCanvas';
 import HelpModal from './HelpModal';
 import NewMapModal from './NewMapModal';
 import ImportTilesetModal from './ImportTilesetModal';
+import PixelEditorModal from './PixelEditorModal';
 import type { ImportTilesetResult } from './ImportTilesetModal';
 import { buildProjectZip, loadProjectZip } from '@/lib/map-project';
 import { exportTmx } from '@/lib/tmx-exporter';
@@ -67,6 +68,7 @@ export default function MapEditorLayout({
   const [showNewMap, setShowNewMap] = useState(false);
   const [showImportTileset, setShowImportTileset] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showPixelEditor, setShowPixelEditor] = useState(false);
 
   // Pan (space-held) state
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -563,6 +565,94 @@ export default function MapEditorLayout({
     [state.tilesetImages, state.mapData, dispatch],
   );
 
+  // === Pixel Editor ===
+
+  const handleEditPixels = useCallback(
+    (firstgid: number, region: TileRegion) => {
+      if (!state.tilesetImages[firstgid]) return;
+      setShowPixelEditor(true);
+    },
+    [state.tilesetImages],
+  );
+
+  const handlePixelSaveAsNew = useCallback(
+    async (dataUrl: string, name: string, columns: number, tileWidth: number, tileHeight: number, tileCount: number) => {
+      if (!state.mapData) return;
+
+      let newFirstgid = 1;
+      for (const ts of state.mapData.tilesets) {
+        const end = ts.firstgid + ts.tilecount;
+        if (end > newFirstgid) newFirstgid = end;
+      }
+
+      const newTileset: TiledTileset = {
+        firstgid: newFirstgid,
+        name,
+        tilewidth: tileWidth,
+        tileheight: tileHeight,
+        tilecount: tileCount,
+        columns,
+        image: dataUrl,
+        imagewidth: columns * tileWidth,
+        imageheight: Math.ceil(tileCount / columns) * tileHeight,
+      };
+
+      const newImg = await loadImage(dataUrl);
+      const newImageInfo: TilesetImageInfo = {
+        img: newImg,
+        firstgid: newFirstgid,
+        columns,
+        tilewidth: tileWidth,
+        tileheight: tileHeight,
+        tilecount: tileCount,
+        name,
+      };
+
+      dispatch({ type: 'ADD_TILESET', tileset: newTileset, imageInfo: newImageInfo });
+    },
+    [state.mapData, dispatch],
+  );
+
+  const handlePixelOverwrite = useCallback(
+    async (firstgid: number, dataUrl: string) => {
+      const tsInfo = state.tilesetImages[firstgid];
+      if (!tsInfo) return;
+
+      const region = state.selectedRegion;
+      if (!region) return;
+
+      const fullCanvas = document.createElement('canvas');
+      fullCanvas.width = tsInfo.img.naturalWidth;
+      fullCanvas.height = tsInfo.img.naturalHeight;
+      const ctx = fullCanvas.getContext('2d')!;
+      ctx.drawImage(tsInfo.img, 0, 0);
+
+      const editedImg = await loadImage(dataUrl);
+      ctx.clearRect(
+        region.col * tsInfo.tilewidth,
+        region.row * tsInfo.tileheight,
+        region.width * tsInfo.tilewidth,
+        region.height * tsInfo.tileheight,
+      );
+      ctx.drawImage(
+        editedImg,
+        region.col * tsInfo.tilewidth,
+        region.row * tsInfo.tileheight,
+      );
+
+      const fullDataUrl = fullCanvas.toDataURL('image/png');
+      const newImg = await loadImage(fullDataUrl);
+
+      dispatch({
+        type: 'UPDATE_TILESET_IMAGE',
+        firstgid,
+        imageInfo: { ...tsInfo, img: newImg },
+        imageDataUrl: fullDataUrl,
+      });
+    },
+    [state.tilesetImages, state.selectedRegion, dispatch],
+  );
+
   // === Reorder Tilesets ===
 
   const handleReorderTileset = useCallback(
@@ -818,6 +908,7 @@ export default function MapEditorLayout({
               onImportTileset={() => setShowImportTileset(true)}
               onDeleteTileset={handleDeleteTileset}
               onRemoveBgSelection={handleRemoveBgSelection}
+              onEditPixels={handleEditPixels}
               removeBgProgress={removeBgProgress}
               onReorderTileset={handleReorderTileset}
               usedGids={usedGids}
@@ -893,6 +984,17 @@ export default function MapEditorLayout({
         open={showHelp}
         onClose={() => setShowHelp(false)}
       />
+
+      {showPixelEditor && state.selectedRegion && state.tilesetImages[state.selectedRegion.firstgid] && (
+        <PixelEditorModal
+          open={showPixelEditor}
+          onClose={() => setShowPixelEditor(false)}
+          region={state.selectedRegion}
+          tilesetInfo={state.tilesetImages[state.selectedRegion.firstgid]}
+          onSaveAsNew={handlePixelSaveAsNew}
+          onOverwrite={handlePixelOverwrite}
+        />
+      )}
     </div>
   );
 }
