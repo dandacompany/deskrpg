@@ -318,7 +318,8 @@ function TilesetSection({
           style={{
             width: '100%',
             minWidth: '200px',
-            ...(isCompact ? { maxHeight: '48px', objectFit: 'contain' } : {}),
+            maxHeight: isCompact ? '48px' : '300px',
+            objectFit: 'contain',
             imageRendering: 'pixelated',
           }}
           onMouseDown={handleMouseDown}
