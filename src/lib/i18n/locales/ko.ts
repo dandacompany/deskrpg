@@ -1345,6 +1345,32 @@ const ko: Record<string, string> = {
   "settings.gatewayUrlPlaceholder": "http://your-server:18789",
   "settings.gatewayTokenPlaceholder": "Bearer 토큰",
 
+  // Map Editor - Toolbar
+  "mapEditor.toolbar.title": "DeskRPG 맵 에디터",
+  "mapEditor.toolbar.file": "파일",
+  "mapEditor.toolbar.newMap": "새 맵",
+  "mapEditor.toolbar.open": "열기",
+  "mapEditor.toolbar.export": "내보내기",
+  "mapEditor.toolbar.exportTmj": ".tmj (Tiled JSON)",
+  "mapEditor.toolbar.exportTmx": ".tmx (Tiled XML)",
+  "mapEditor.toolbar.exportPng": ".png (이미지)",
+  "mapEditor.toolbar.backToDeskRPG": "DeskRPG로 돌아가기",
+  "mapEditor.toolbar.view": "보기",
+  "mapEditor.toolbar.grid": "격자",
+  "mapEditor.toolbar.collision": "충돌 영역",
+  "mapEditor.toolbar.layersPanel": "레이어 패널",
+  "mapEditor.toolbar.tilesetsPanel": "타일셋 패널",
+  "mapEditor.toolbar.minimapPanel": "미니맵 패널",
+  "mapEditor.toolbar.paint": "페인트",
+  "mapEditor.toolbar.erase": "지우개",
+  "mapEditor.toolbar.select": "선택",
+  "mapEditor.toolbar.pan": "이동",
+  "mapEditor.toolbar.zoomOut": "축소",
+  "mapEditor.toolbar.zoomIn": "확대",
+  "mapEditor.toolbar.undo": "실행 취소",
+  "mapEditor.toolbar.redo": "다시 실행",
+  "mapEditor.toolbar.keyboardShortcuts": "키보드 단축키",
+
   // Session
   "session.kicked": "다른 위치에서 접속하여 현재 세션이 종료되었습니다.",
 };

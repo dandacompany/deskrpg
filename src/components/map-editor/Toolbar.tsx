@@ -5,6 +5,7 @@ import { Button } from '@/components/ui';
 import { Undo2, Redo2, HelpCircle, ChevronDown, Paintbrush, Eraser, MousePointer2, Move, Home } from 'lucide-react';
 import Tooltip from './Tooltip';
 import type { Tool } from './hooks/useMapEditor';
+import { useT } from '@/lib/i18n';
 
 export interface ToolbarProps {
   activeTool: Tool;
@@ -177,44 +178,46 @@ export default function Toolbar({
   sectionVisibility,
   onToggleSection,
 }: ToolbarProps) {
+  const t = useT();
+
   const tools: Array<{ tool: Tool; icon: React.ReactNode; label: string; shortcut: string }> = [
-    { tool: 'paint', icon: <Paintbrush className="w-4 h-4" />, label: 'Paint', shortcut: 'B' },
-    { tool: 'erase', icon: <Eraser className="w-4 h-4" />, label: 'Erase', shortcut: 'E' },
-    { tool: 'select', icon: <MousePointer2 className="w-4 h-4" />, label: 'Select', shortcut: 'S' },
-    { tool: 'pan', icon: <Move className="w-4 h-4" />, label: 'Pan', shortcut: 'P' },
+    { tool: 'paint', icon: <Paintbrush className="w-4 h-4" />, label: t('mapEditor.toolbar.paint'), shortcut: 'B' },
+    { tool: 'erase', icon: <Eraser className="w-4 h-4" />, label: t('mapEditor.toolbar.erase'), shortcut: 'E' },
+    { tool: 'select', icon: <MousePointer2 className="w-4 h-4" />, label: t('mapEditor.toolbar.select'), shortcut: 'S' },
+    { tool: 'pan', icon: <Move className="w-4 h-4" />, label: t('mapEditor.toolbar.pan'), shortcut: 'P' },
   ];
 
   return (
     <div className="flex items-center h-10 bg-surface border-b border-border px-1 select-none flex-shrink-0">
       {/* Title */}
       <div className="px-3 flex items-center">
-        <span className="text-body font-bold text-primary-light tracking-wide select-none">DeskRPG Map Editor</span>
+        <span className="text-body font-bold text-primary-light tracking-wide select-none">{t('mapEditor.toolbar.title')}</span>
       </div>
 
       {/* File Menu */}
       <ToolGroup>
-        <Dropdown label="File">
-          <DropdownItem onClick={onNewMap} shortcut="⌘N">New Map</DropdownItem>
-          <DropdownItem onClick={onLoad} shortcut="⌘O">Open</DropdownItem>
-          <DropdownItem onClick={onSaveToDeskRPG} shortcut="⌘S">Save</DropdownItem>
+        <Dropdown label={t('mapEditor.toolbar.file')}>
+          <DropdownItem onClick={onNewMap} shortcut="⌘N">{t('mapEditor.toolbar.newMap')}</DropdownItem>
+          <DropdownItem onClick={onLoad} shortcut="⌘O">{t('mapEditor.toolbar.open')}</DropdownItem>
+          <DropdownItem onClick={onSaveToDeskRPG} shortcut="⌘S">{t('common.save')}</DropdownItem>
           <DropdownSeparator />
-          <DropdownSubmenu label="Export">
-            <DropdownItem onClick={onExportTMJ}>.tmj (Tiled JSON)</DropdownItem>
-            <DropdownItem onClick={onExportTMX}>.tmx (Tiled XML)</DropdownItem>
-            <DropdownItem onClick={onExportPNG}>.png (Image)</DropdownItem>
+          <DropdownSubmenu label={t('mapEditor.toolbar.export')}>
+            <DropdownItem onClick={onExportTMJ}>{t('mapEditor.toolbar.exportTmj')}</DropdownItem>
+            <DropdownItem onClick={onExportTMX}>{t('mapEditor.toolbar.exportTmx')}</DropdownItem>
+            <DropdownItem onClick={onExportPNG}>{t('mapEditor.toolbar.exportPng')}</DropdownItem>
           </DropdownSubmenu>
           <DropdownSeparator />
-          <DropdownItem onClick={onGoBack}>Back to DeskRPG</DropdownItem>
+          <DropdownItem onClick={onGoBack}>{t('mapEditor.toolbar.backToDeskRPG')}</DropdownItem>
         </Dropdown>
 
         {/* View Menu */}
-        <Dropdown label="View">
-          <DropdownToggle checked={showGrid} onChange={onToggleGrid}>Grid</DropdownToggle>
-          <DropdownToggle checked={showCollision} onChange={onToggleCollision}>Collision</DropdownToggle>
+        <Dropdown label={t('mapEditor.toolbar.view')}>
+          <DropdownToggle checked={showGrid} onChange={onToggleGrid}>{t('mapEditor.toolbar.grid')}</DropdownToggle>
+          <DropdownToggle checked={showCollision} onChange={onToggleCollision}>{t('mapEditor.toolbar.collision')}</DropdownToggle>
           <DropdownSeparator />
-          <DropdownToggle checked={sectionVisibility['layers'] !== false} onChange={() => onToggleSection('layers')}>Layers Panel</DropdownToggle>
-          <DropdownToggle checked={sectionVisibility['tilesets'] !== false} onChange={() => onToggleSection('tilesets')}>Tilesets Panel</DropdownToggle>
-          <DropdownToggle checked={sectionVisibility['minimap'] !== false} onChange={() => onToggleSection('minimap')}>Minimap Panel</DropdownToggle>
+          <DropdownToggle checked={sectionVisibility['layers'] !== false} onChange={() => onToggleSection('layers')}>{t('mapEditor.toolbar.layersPanel')}</DropdownToggle>
+          <DropdownToggle checked={sectionVisibility['tilesets'] !== false} onChange={() => onToggleSection('tilesets')}>{t('mapEditor.toolbar.tilesetsPanel')}</DropdownToggle>
+          <DropdownToggle checked={sectionVisibility['minimap'] !== false} onChange={() => onToggleSection('minimap')}>{t('mapEditor.toolbar.minimapPanel')}</DropdownToggle>
         </Dropdown>
       </ToolGroup>
 
@@ -235,25 +238,25 @@ export default function Toolbar({
 
       {/* Zoom Controls */}
       <ToolGroup>
-        <Tooltip label="Zoom Out" shortcut="−">
+        <Tooltip label={t('mapEditor.toolbar.zoomOut')} shortcut="−">
           <Button variant="ghost" size="sm" onClick={onZoomOut}>−</Button>
         </Tooltip>
         <span className="text-caption text-text-secondary w-12 text-center tabular-nums">
           {Math.round(zoom * 100)}%
         </span>
-        <Tooltip label="Zoom In" shortcut="+">
+        <Tooltip label={t('mapEditor.toolbar.zoomIn')} shortcut="+">
           <Button variant="ghost" size="sm" onClick={onZoomIn}>+</Button>
         </Tooltip>
       </ToolGroup>
 
       {/* Undo / Redo */}
       <ToolGroup>
-        <Tooltip label="Undo" shortcut="⌘Z">
+        <Tooltip label={t('mapEditor.toolbar.undo')} shortcut="⌘Z">
           <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo}>
             <Undo2 className="w-4 h-4" />
           </Button>
         </Tooltip>
-        <Tooltip label="Redo" shortcut="⌘⇧Z">
+        <Tooltip label={t('mapEditor.toolbar.redo')} shortcut="⌘⇧Z">
           <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo}>
             <Redo2 className="w-4 h-4" />
           </Button>
@@ -265,12 +268,12 @@ export default function Toolbar({
 
       {/* Help & Back */}
       <div className="px-2 flex items-center gap-1">
-        <Tooltip label="Keyboard Shortcuts" shortcut="?">
+        <Tooltip label={t('mapEditor.toolbar.keyboardShortcuts')} shortcut="?">
           <Button variant="ghost" size="sm" onClick={onHelp}>
             <HelpCircle className="w-4 h-4" />
           </Button>
         </Tooltip>
-        <Tooltip label="Back to DeskRPG">
+        <Tooltip label={t('mapEditor.toolbar.backToDeskRPG')}>
           <Button variant="ghost" size="sm" onClick={onGoBack}>
             <Home className="w-4 h-4" />
           </Button>
