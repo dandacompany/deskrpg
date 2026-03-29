@@ -15,6 +15,11 @@ interface MapCanvasProps {
   findTileset: (gid: number) => TilesetImageInfo | null;
   onStatusUpdate?: (info: { tileX: number; tileY: number; gid: number }) => void;
   layerOverlayMap?: Record<number, boolean>;
+  onEditSelectionPixels?: (dataUrl: string, width: number, height: number, tileWidth: number, tileHeight: number) => void;
+  onCopySelection?: () => void;
+  onSaveAsStamp?: (thumbnail: string | null) => void;
+  activeStamp?: any | null;
+  onPlaceStamp?: (targetX: number, targetY: number) => void;
 }
 
 // === Constants ===
