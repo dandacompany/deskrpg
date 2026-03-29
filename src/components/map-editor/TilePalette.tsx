@@ -136,12 +136,16 @@ function TilesetSection({
   );
 
   useEffect(() => {
-    if (img.complete) {
-      draw(null);
-    } else {
-      img.onload = () => draw(null);
-    }
-  }, [img, draw]);
+    if (isCollapsed) return;
+    // Use rAF to ensure canvas is mounted in DOM after expanding
+    requestAnimationFrame(() => {
+      if (img.complete) {
+        draw(null);
+      } else {
+        img.onload = () => draw(null);
+      }
+    });
+  }, [img, draw, isCollapsed]);
 
   const getCellFromEvent = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
