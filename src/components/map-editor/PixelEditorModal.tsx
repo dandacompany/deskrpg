@@ -56,6 +56,7 @@ export default function PixelEditorModal({
   const [resizeTargetCols, setResizeTargetCols] = useState(1);
   const [resizeTargetRows, setResizeTargetRows] = useState(1);
   const [brushSize, setBrushSize] = useState(1);
+  const [showHelp, setShowHelp] = useState(false);
 
   // --- Refs ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -67,6 +68,8 @@ export default function PixelEditorModal({
   const isPanningRef = useRef(false);
   const lastPanRef = useRef({ x: 0, y: 0 });
   const isDrawingRef = useRef(false);
+  const drawStartRef = useRef<{ x: number; y: number } | null>(null);
+  const hoverPixelRef = useRef<{ x: number; y: number } | null>(null);
   const isShiftDraggingRef = useRef(false);
   const shiftStartRef = useRef({ x: 0, y: 0 });
   const shiftOffsetRef = useRef({ dx: 0, dy: 0 });
@@ -317,8 +320,28 @@ export default function PixelEditorModal({
       }
     }
 
+    // Brush cursor preview
+    const hp = hoverPixelRef.current;
+    if (hp && (tool === 'pen' || tool === 'eraser')) {
+      const half = Math.floor(brushSize / 2);
+      const bx = (hp.x - half) * zoom;
+      const by = (hp.y - half) * zoom;
+      const bs = brushSize * zoom;
+      if (tool === 'eraser') {
+        ctx.strokeStyle = 'rgba(255, 80, 80, 0.7)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx, by, bs, bs);
+      } else {
+        ctx.fillStyle = color + '40'; // 25% opacity preview
+        ctx.fillRect(bx, by, bs, bs);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx, by, bs, bs);
+      }
+    }
+
     ctx.restore();
-  }, [pan, zoom, tilesetInfo, calcExpandedGrid]);
+  }, [pan, zoom, tilesetInfo, calcExpandedGrid, tool, brushSize, color]);
 
   useEffect(() => {
     renderCanvas();
@@ -537,6 +560,7 @@ export default function PixelEditorModal({
 
       pushUndo();
       isDrawingRef.current = true;
+      drawStartRef.current = { x: coord.x, y: coord.y };
       paintPixel(coord.x, coord.y);
     },
     [getPixelCoord, tool, pickColor, pushUndo, paintPixel, handlePanMove, handlePanEnd],
@@ -555,10 +579,29 @@ export default function PixelEditorModal({
         return;
       }
 
+      // Update hover cursor for brush preview
+      const hoverCoord = getPixelCoord(e);
+      hoverPixelRef.current = hoverCoord;
+
       // Drawing (pan is handled at document level now)
-      if (!isDrawingRef.current) return;
-      const coord = getPixelCoord(e);
+      if (!isDrawingRef.current) {
+        renderCanvas(); // re-render to show cursor preview
+        return;
+      }
+      const coord = hoverCoord;
       if (!coord) return;
+
+      // Shift key: constrain to horizontal or vertical axis from start
+      if (e.shiftKey && drawStartRef.current) {
+        const dx = Math.abs(coord.x - drawStartRef.current.x);
+        const dy = Math.abs(coord.y - drawStartRef.current.y);
+        if (dx > dy) {
+          coord.y = drawStartRef.current.y; // lock vertical
+        } else {
+          coord.x = drawStartRef.current.x; // lock horizontal
+        }
+      }
+
       paintPixel(coord.x, coord.y);
     },
     [getPixelCoord, paintPixel, zoom, renderCanvas],
@@ -571,6 +614,7 @@ export default function PixelEditorModal({
       return;
     }
     isDrawingRef.current = false;
+    drawStartRef.current = null;
   }, [applyShift]);
 
   // Cleanup document listeners on unmount
@@ -621,24 +665,22 @@ export default function PixelEditorModal({
       // Don't capture if user is typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      if (e.key === 'e' || e.key === 'E') {
-        e.preventDefault();
-        setTool('eraser');
-      } else if (e.key === 'p' || e.key === 'P') {
-        e.preventDefault();
-        setTool('pen');
-      } else if (e.key === 'i' || e.key === 'I') {
-        e.preventDefault();
-        setTool('eyedropper');
-      } else if (e.key === 'v' || e.key === 'V') {
-        e.preventDefault();
-        setTool('shift');
-      } else if (e.ctrlKey && e.key === 'z') {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key === 'z') {
         e.preventDefault();
         undo();
-      } else if (e.ctrlKey && e.key === 'y') {
+      } else if (mod && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
         e.preventDefault();
         redo();
+      } else if (!mod) {
+        if (e.key === 'e' || e.key === 'E') { e.preventDefault(); setTool('eraser'); }
+        else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); setTool('pen'); }
+        else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setTool('eyedropper'); }
+        else if (e.key === 'v' || e.key === 'V') { e.preventDefault(); setTool('shift'); }
+        else if (e.key === 't' || e.key === 'T') { e.preventDefault(); trimEdges(); }
+        else if (e.key === '[') { e.preventDefault(); setBrushSize((s) => Math.max(1, s - 1)); }
+        else if (e.key === ']') { e.preventDefault(); setBrushSize((s) => Math.min(16, s + 1)); }
+        else if (e.key === '?') { e.preventDefault(); setShowHelp((v) => !v); }
       }
     };
     document.addEventListener('keydown', handler);
@@ -869,7 +911,7 @@ export default function PixelEditorModal({
 
           {/* Trim & edge delete */}
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={trimEdges} title="Remove fully transparent edge tiles">
+            <Button variant="ghost" size="sm" onClick={trimEdges} title="Remove transparent edge tiles (T)">
               Trim
             </Button>
             <Button variant="ghost" size="sm" onClick={() => deleteEdge('left')} title="Delete left column">
@@ -891,7 +933,7 @@ export default function PixelEditorModal({
 
           {/* Brush size */}
           <div className="flex items-center gap-1">
-            <label className="text-caption text-text-secondary">Size</label>
+            <label className="text-caption text-text-secondary" title="Brush size ([ / ])">Size</label>
             <input
               type="range"
               min={1}
@@ -936,10 +978,10 @@ export default function PixelEditorModal({
 
           {/* Undo/Redo */}
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={undo} title="Undo (Ctrl+Z)">
+            <Button variant="ghost" size="sm" onClick={undo} title="Undo (Cmd/Ctrl+Z)">
               Undo
             </Button>
-            <Button variant="ghost" size="sm" onClick={redo} title="Redo (Ctrl+Y)">
+            <Button variant="ghost" size="sm" onClick={redo} title="Redo (Cmd/Ctrl+Y or Cmd/Ctrl+Shift+Z)">
               Redo
             </Button>
           </div>
@@ -948,7 +990,12 @@ export default function PixelEditorModal({
           <div className="w-px h-6 bg-border" />
 
           {/* Zoom display */}
-          <span className="text-caption text-text-secondary">{zoom}x</span>
+          <span className="text-caption text-text-secondary" title="Zoom (Mouse wheel)">{zoom}x</span>
+
+          {/* Help */}
+          <Button variant="ghost" size="sm" onClick={() => setShowHelp(true)} title="Keyboard shortcuts (?)">
+            ?
+          </Button>
 
           {/* Region info */}
           <span className="text-caption text-text-secondary ml-auto">
@@ -971,11 +1018,55 @@ export default function PixelEditorModal({
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
+            onMouseLeave={() => { hoverPixelRef.current = null; renderCanvas(); }}
             onWheel={handleWheel}
             onContextMenu={(e) => e.preventDefault()}
           />
         </div>
       </div>
+
+      {/* Help overlay */}
+      {showHelp && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/70"
+          onClick={() => setShowHelp(false)}
+        >
+          <div
+            className="bg-bg rounded-xl border border-border p-6 max-w-lg text-body"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-heading text-text">Keyboard Shortcuts</h3>
+              <button onClick={() => setShowHelp(false)} className="text-text-muted hover:text-text">&times;</button>
+            </div>
+            <div className="grid grid-cols-2 gap-y-1 gap-x-6 text-caption">
+              {[
+                ['P', 'Pen tool'],
+                ['E', 'Eraser tool'],
+                ['I', 'Eyedropper (Pick)'],
+                ['V', 'Shift (move image)'],
+                ['T', 'Trim transparent edges'],
+                ['[ / ]', 'Brush size -/+'],
+                ['Cmd/Ctrl+Z', 'Undo'],
+                ['Cmd/Ctrl+Y', 'Redo'],
+                ['Cmd/Ctrl+Shift+Z', 'Redo (alt)'],
+                ['?', 'Toggle this help'],
+                ['Mouse wheel', 'Zoom in/out'],
+                ['Middle-click drag', 'Pan canvas'],
+                ['Shift + draw', 'Constrain to axis'],
+                ['Escape', 'Close editor'],
+              ].map(([key, desc]) => (
+                <div key={key} className="contents">
+                  <span className="text-text font-mono bg-surface-raised px-1.5 py-0.5 rounded border border-border text-center">
+                    {key}
+                  </span>
+                  <span className="text-text-secondary py-0.5">{desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <Modal.Footer>
         <Button variant="ghost" size="sm" onClick={onClose}>
