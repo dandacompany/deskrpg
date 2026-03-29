@@ -37,6 +37,7 @@ export function useCanvasRenderer(
       canvas: HTMLCanvasElement,
       characterSheet?: HTMLImageElement,
       characterState?: CharacterState,
+      options?: { showLayerOverlay?: boolean },
     ) => {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
@@ -131,12 +132,14 @@ export function useCanvasRenderer(
           );
 
           // Layer color overlay on non-empty tiles
-          const lc = getLayerColor(layer);
-          ctx.fillStyle = lc.overlay;
-          for (let row = startRow; row <= endRow; row++) {
-            for (let col = startCol; col <= endCol; col++) {
-              if (layer.data![row * mapW + col] !== 0) {
-                ctx.fillRect(col * tw, row * th, tw, th);
+          if (options?.showLayerOverlay !== false) {
+            const lc = getLayerColor(layer);
+            ctx.fillStyle = lc.overlay;
+            for (let row = startRow; row <= endRow; row++) {
+              for (let col = startCol; col <= endCol; col++) {
+                if (layer.data![row * mapW + col] !== 0) {
+                  ctx.fillRect(col * tw, row * th, tw, th);
+                }
               }
             }
           }
