@@ -138,7 +138,7 @@ function LayerItem({
       {/* Info tooltip */}
       {role && (
         <Tooltip label={`${layer.type === 'tilelayer' ? 'Tile' : 'Object'} · ${role.desc}`} shortcut={role.label}>
-          <span className="cursor-help flex-shrink-0">
+          <span className="cursor-default flex-shrink-0">
             <Info className="w-3.5 h-3.5 text-text-dim hover:text-text-secondary" />
           </span>
         </Tooltip>
