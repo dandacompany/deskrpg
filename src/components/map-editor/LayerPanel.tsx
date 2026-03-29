@@ -14,6 +14,7 @@ export interface LayerPanelProps {
   onReorderLayers: (fromIndex: number, toIndex: number) => void;
   onAddLayer: () => void;
   onToggleVisibility: (index: number) => void;
+  hideHeader?: boolean;
 }
 
 function LayerItem({
@@ -160,6 +161,7 @@ export default function LayerPanel({
   onReorderLayers,
   onAddLayer,
   onToggleVisibility,
+  hideHeader,
 }: LayerPanelProps) {
   const dragIndexRef = useRef<number | null>(null);
 
@@ -189,12 +191,14 @@ export default function LayerPanel({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
-        <span className="text-title text-text">Layers</span>
-        <Button variant="ghost" size="sm" onClick={onAddLayer} title="Add Layer">
-          + Layer
-        </Button>
-      </div>
+      {!hideHeader && (
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
+          <span className="text-title text-text">Layers</span>
+          <Button variant="ghost" size="sm" onClick={onAddLayer} title="Add Layer">
+            + Layer
+          </Button>
+        </div>
+      )}
 
       {/* Layer list */}
       <div className="flex-1 overflow-y-auto px-1.5 py-1.5 space-y-0.5">

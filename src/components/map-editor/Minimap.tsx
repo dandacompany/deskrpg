@@ -10,6 +10,7 @@ interface MinimapProps {
   viewportWidth: number;
   viewportHeight: number;
   onPanTo: (panX: number, panY: number) => void;
+  hideHeader?: boolean;
 }
 
 export default function Minimap({
@@ -18,6 +19,7 @@ export default function Minimap({
   viewportWidth,
   viewportHeight,
   onPanTo,
+  hideHeader,
 }: MinimapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -126,11 +128,13 @@ export default function Minimap({
   if (!state.mapData) return null;
 
   return (
-    <div className="border-b border-border">
-      <div className="flex items-center justify-between px-3 py-1.5">
-        <span className="text-caption text-text-secondary">Minimap</span>
-      </div>
-      <div ref={containerRef} className="px-2 pb-2">
+    <div>
+      {!hideHeader && (
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-border">
+          <span className="text-caption text-text-secondary">Minimap</span>
+        </div>
+      )}
+      <div ref={containerRef} className="px-2 py-2">
         <canvas
           ref={canvasRef}
           className="w-full cursor-pointer rounded"

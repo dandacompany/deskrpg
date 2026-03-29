@@ -78,6 +78,12 @@ export default function MapEditorLayout({
 
   // Resizable panel
   const [panelWidth, setPanelWidth] = useState(300);
+
+  // Left panel section order & collapsed state
+  const [sectionOrder, setSectionOrder] = useState<string[]>(['layers', 'minimap', 'tilesets']);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const dragSectionRef = useRef<string | null>(null);
+  const [dragOverSection, setDragOverSection] = useState<string | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const canvasAreaRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
@@ -813,50 +819,152 @@ export default function MapEditorLayout({
       <div className="flex-1 flex min-h-0">
         {/* Left Panel */}
         <div
-          className="flex flex-col bg-surface border-r border-border flex-shrink-0"
+          className="flex flex-col bg-surface border-r border-border flex-shrink-0 overflow-y-auto"
           style={{ width: panelWidth }}
         >
-          {/* Layer Panel */}
-          <div className="max-h-[280px] overflow-hidden border-b border-border">
-            {state.mapData && (
-              <LayerPanel
-                layers={state.mapData.layers}
-                activeLayerIndex={state.activeLayerIndex}
-                onSelectLayer={(index) => dispatch({ type: 'SET_ACTIVE_LAYER', index })}
-                onRenameLayer={(index, name) => dispatch({ type: 'RENAME_LAYER', index, name })}
-                onDeleteLayer={(index) => handleDeleteLayer(index)}
-                onReorderLayers={(from, to) =>
-                  dispatch({ type: 'REORDER_LAYERS', fromIndex: from, toIndex: to })
-                }
-                onAddLayer={handleAddLayer}
-                onToggleVisibility={handleToggleLayerVisibility}
-              />
-            )}
-          </div>
+          {sectionOrder.map((sectionId) => {
+            const isCollapsed = !!collapsedSections[sectionId];
+            const isDragOver = dragOverSection === sectionId;
+            const sectionLabel = sectionId === 'layers' ? 'Layers' : sectionId === 'minimap' ? 'Minimap' : 'Tilesets';
 
-          {/* Minimap */}
-          <Minimap
-            state={state}
-            findTileset={findTileset}
-            viewportWidth={viewportSize.width}
-            viewportHeight={viewportSize.height}
-            onPanTo={handlePanTo}
-          />
+            // Section header (shared for all sections)
+            const header = (
+              <div
+                key={sectionId}
+                draggable
+                onDragStart={() => { dragSectionRef.current = sectionId; }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (dragSectionRef.current && dragSectionRef.current !== sectionId) {
+                    setDragOverSection(sectionId);
+                  }
+                }}
+                onDrop={() => {
+                  if (dragSectionRef.current && dragSectionRef.current !== sectionId) {
+                    setSectionOrder((prev) => {
+                      const arr = [...prev];
+                      const fromIdx = arr.indexOf(dragSectionRef.current!);
+                      const toIdx = arr.indexOf(sectionId);
+                      arr.splice(fromIdx, 1);
+                      arr.splice(toIdx, 0, dragSectionRef.current!);
+                      return arr;
+                    });
+                  }
+                  dragSectionRef.current = null;
+                  setDragOverSection(null);
+                }}
+                onDragEnd={() => { dragSectionRef.current = null; setDragOverSection(null); }}
+                className={`flex items-center justify-between px-3 py-1.5 border-b border-border cursor-grab select-none flex-shrink-0 ${
+                  isDragOver ? 'border-t-2 border-t-primary-light' : ''
+                }`}
+              >
+                <button
+                  className="flex items-center gap-1 text-caption font-semibold text-text-secondary hover:text-text"
+                  onClick={() => setCollapsedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }))}
+                >
+                  <span className="text-micro" style={{ display: 'inline-block', width: '12px', textAlign: 'center' }}>
+                    {isCollapsed ? '▸' : '▾'}
+                  </span>
+                  {sectionLabel}
+                </button>
+                {/* Section-specific header actions */}
+                {sectionId === 'layers' && !isCollapsed && (
+                  <button
+                    className="text-caption text-text-secondary hover:text-text"
+                    onClick={handleAddLayer}
+                  >
+                    + Layer
+                  </button>
+                )}
+                {sectionId === 'tilesets' && !isCollapsed && (
+                  <div className="flex items-center gap-2">
+                    {usedGids && sortedTilesets.some((ts) => {
+                      if (ts.name === BUILTIN_TILESET_NAME) return false;
+                      for (let g = ts.firstgid; g < ts.firstgid + ts.tilecount; g++) {
+                        if (usedGids.has(g)) return false;
+                      }
+                      return true;
+                    }) && (
+                      <button className="text-caption text-text-secondary hover:text-text" onClick={handleCleanUpUnused}>
+                        Clean Up
+                      </button>
+                    )}
+                    <button className="text-caption text-text-secondary hover:text-text" onClick={() => setShowImportTileset(true)}>
+                      Import (I)
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
 
-          {/* Tile Palette */}
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <TilePalette
-              tilesets={sortedTilesets}
-              selectedRegion={state.selectedRegion}
-              onSelectRegion={handleSelectRegion}
-              onImportTileset={() => setShowImportTileset(true)}
-              onDeleteTileset={handleDeleteTileset}
-              onEditPixels={handleEditPixels}
-              onReorderTileset={handleReorderTileset}
-              usedGids={usedGids}
-              onCleanUpUnused={handleCleanUpUnused}
-            />
-          </div>
+            if (isCollapsed) return header;
+
+            // Section content
+            if (sectionId === 'layers') {
+              return (
+                <div key={sectionId} className="flex flex-col">
+                  {header}
+                  <div className="max-h-[280px] overflow-y-auto">
+                    {state.mapData && (
+                      <LayerPanel
+                        layers={state.mapData.layers}
+                        activeLayerIndex={state.activeLayerIndex}
+                        onSelectLayer={(index) => dispatch({ type: 'SET_ACTIVE_LAYER', index })}
+                        onRenameLayer={(index, name) => dispatch({ type: 'RENAME_LAYER', index, name })}
+                        onDeleteLayer={(index) => handleDeleteLayer(index)}
+                        onReorderLayers={(from, to) =>
+                          dispatch({ type: 'REORDER_LAYERS', fromIndex: from, toIndex: to })
+                        }
+                        onAddLayer={handleAddLayer}
+                        onToggleVisibility={handleToggleLayerVisibility}
+                        hideHeader
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
+            if (sectionId === 'minimap') {
+              return (
+                <div key={sectionId} className="flex flex-col">
+                  {header}
+                  <Minimap
+                    state={state}
+                    findTileset={findTileset}
+                    viewportWidth={viewportSize.width}
+                    viewportHeight={viewportSize.height}
+                    onPanTo={handlePanTo}
+                    hideHeader
+                  />
+                </div>
+              );
+            }
+
+            if (sectionId === 'tilesets') {
+              return (
+                <div key={sectionId} className="flex flex-col flex-1 min-h-0">
+                  {header}
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    <TilePalette
+                      tilesets={sortedTilesets}
+                      selectedRegion={state.selectedRegion}
+                      onSelectRegion={handleSelectRegion}
+                      onImportTileset={() => setShowImportTileset(true)}
+                      onDeleteTileset={handleDeleteTileset}
+                      onEditPixels={handleEditPixels}
+                      onReorderTileset={handleReorderTileset}
+                      usedGids={usedGids}
+                      onCleanUpUnused={handleCleanUpUnused}
+                      hideHeader
+                    />
+                  </div>
+                </div>
+              );
+            }
+
+            return null;
+          })}
         </div>
 
         {/* Resize Handle */}

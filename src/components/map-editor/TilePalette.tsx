@@ -15,6 +15,7 @@ export interface TilePaletteProps {
   onReorderTileset?: (fromFirstgid: number, toFirstgid: number) => void;
   usedGids?: Set<number>;
   onCleanUpUnused?: () => void;
+  hideHeader?: boolean;
 }
 
 interface DragState {
@@ -330,6 +331,7 @@ export default function TilePalette({
   onReorderTileset,
   usedGids,
   onCleanUpUnused,
+  hideHeader,
 }: TilePaletteProps) {
   // Drag reorder state
   const [dragFromFirstgid, setDragFromFirstgid] = useState<number | null>(null);
@@ -371,24 +373,26 @@ export default function TilePalette({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
-        <span className="text-title text-text">Tilesets</span>
-        <div className="flex items-center gap-1">
-          {hasUnused && onCleanUpUnused && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onCleanUpUnused}
-              title={`Remove ${unusedFirstgids.size} unused tileset(s)`}
-            >
-              Clean Up
+      {!hideHeader && (
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
+          <span className="text-title text-text">Tilesets</span>
+          <div className="flex items-center gap-1">
+            {hasUnused && onCleanUpUnused && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCleanUpUnused}
+                title={`Remove ${unusedFirstgids.size} unused tileset(s)`}
+              >
+                Clean Up
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={onImportTileset} title="Import Tileset (I)">
+              Import (I)
             </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={onImportTileset} title="Import Tileset (I)">
-            Import (I)
-          </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Selection info */}
       {selectionInfo && (
