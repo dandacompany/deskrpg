@@ -6,8 +6,7 @@ import {
   Pencil, Eraser, Pipette, Move, BoxSelect,
   Scissors, Trash2, PlusSquare, MinusSquare,
   Undo2, Redo2, HelpCircle, ZoomIn,
-  ImageMinus, ArrowLeftFromLine, ArrowRightFromLine, ArrowUpFromLine, ArrowDownFromLine,
-  ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine,
+  ImageMinus,
   Maximize2,
 } from 'lucide-react';
 import Tooltip from './Tooltip';
@@ -1217,52 +1216,6 @@ export default function PixelEditorModal({
             <Tooltip label={t('mapEditor.pixel.trimTooltip')} shortcut="T">
               <Button variant="ghost" size="sm" onClick={trimEdges}>
                 <Scissors className="w-4 h-4" />
-              </Button>
-            </Tooltip>
-
-            <div className="w-px h-4 bg-border mx-0.5" />
-
-            <Tooltip label={t('mapEditor.pixel.deleteLeftColTooltip')}>
-              <Button variant="ghost" size="sm" onClick={() => deleteEdge('left')}>
-                <ArrowLeftFromLine className="w-3.5 h-3.5" />
-              </Button>
-            </Tooltip>
-            <Tooltip label={t('mapEditor.pixel.deleteRightColTooltip')}>
-              <Button variant="ghost" size="sm" onClick={() => deleteEdge('right')}>
-                <ArrowRightFromLine className="w-3.5 h-3.5" />
-              </Button>
-            </Tooltip>
-            <Tooltip label={t('mapEditor.pixel.deleteTopRowTooltip')}>
-              <Button variant="ghost" size="sm" onClick={() => deleteEdge('top')}>
-                <ArrowUpFromLine className="w-3.5 h-3.5" />
-              </Button>
-            </Tooltip>
-            <Tooltip label={t('mapEditor.pixel.deleteBottomRowTooltip')}>
-              <Button variant="ghost" size="sm" onClick={() => deleteEdge('bottom')}>
-                <ArrowDownFromLine className="w-3.5 h-3.5" />
-              </Button>
-            </Tooltip>
-
-            <div className="w-px h-4 bg-border mx-0.5" />
-
-            <Tooltip label={t('mapEditor.pixel.addLeftColTooltip')}>
-              <Button variant="ghost" size="sm" onClick={() => addEdge('left')}>
-                <ArrowLeftToLine className="w-3.5 h-3.5" />
-              </Button>
-            </Tooltip>
-            <Tooltip label={t('mapEditor.pixel.addRightColTooltip')}>
-              <Button variant="ghost" size="sm" onClick={() => addEdge('right')}>
-                <ArrowRightToLine className="w-3.5 h-3.5" />
-              </Button>
-            </Tooltip>
-            <Tooltip label={t('mapEditor.pixel.addTopRowTooltip')}>
-              <Button variant="ghost" size="sm" onClick={() => addEdge('top')}>
-                <ArrowUpToLine className="w-3.5 h-3.5" />
-              </Button>
-            </Tooltip>
-            <Tooltip label={t('mapEditor.pixel.addBottomRowTooltip')}>
-              <Button variant="ghost" size="sm" onClick={() => addEdge('bottom')}>
-                <ArrowDownToLine className="w-3.5 h-3.5" />
               </Button>
             </Tooltip>
           </div>
