@@ -677,6 +677,7 @@ export default function PixelEditorModal({
       // Shift tool: start shift drag
       if (tool === 'shift') {
         isShiftDraggingRef.current = true;
+        setHoveredEdge(null);
         shiftStartRef.current = { x: e.clientX, y: e.clientY };
         return;
       }
@@ -700,6 +701,7 @@ export default function PixelEditorModal({
       if (tool === 'rect-select') {
         // Start selection drag
         isRectSelectingRef.current = true;
+        setHoveredEdge(null);
         rectSelectStartRef.current = { x: coord.x, y: coord.y };
         setPixelSelection({ x: coord.x, y: coord.y, width: 1, height: 1 });
         return;
@@ -712,6 +714,7 @@ export default function PixelEditorModal({
 
       pushUndo();
       isDrawingRef.current = true;
+      setHoveredEdge(null);
       drawStartRef.current = { x: coord.x, y: coord.y };
       paintPixel(coord.x, coord.y);
     },
