@@ -822,6 +822,7 @@ export default function MapEditorLayout({
         onUndo={() => dispatch({ type: 'UNDO' })}
         onRedo={() => dispatch({ type: 'REDO' })}
         onHelp={() => setShowHelp(true)}
+        onGoBack={() => router.push('/map-editor')}
         sectionVisibility={sectionVisibility}
         onToggleSection={(id) => setSectionVisibility((prev) => ({ ...prev, [id]: !prev[id] }))}
       />

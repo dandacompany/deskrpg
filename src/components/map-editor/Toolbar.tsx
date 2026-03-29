@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui';
-import { Undo2, Redo2, HelpCircle, ChevronDown, Paintbrush, Eraser, MousePointer2, Move } from 'lucide-react';
+import { Undo2, Redo2, HelpCircle, ChevronDown, Paintbrush, Eraser, MousePointer2, Move, Home } from 'lucide-react';
 import Tooltip from './Tooltip';
 import type { Tool } from './hooks/useMapEditor';
 
@@ -27,6 +27,7 @@ export interface ToolbarProps {
   onUndo: () => void;
   onRedo: () => void;
   onHelp: () => void;
+  onGoBack: () => void;
   sectionVisibility: Record<string, boolean>;
   onToggleSection: (id: string) => void;
 }
@@ -143,6 +144,7 @@ export default function Toolbar({
   onUndo,
   onRedo,
   onHelp,
+  onGoBack,
   sectionVisibility,
   onToggleSection,
 }: ToolbarProps) {
@@ -169,6 +171,8 @@ export default function Toolbar({
           <DropdownSeparator />
           <DropdownItem onClick={onExportTMJ}>Export .tmj</DropdownItem>
           <DropdownItem onClick={onExportTMX}>Export .tmx</DropdownItem>
+          <DropdownSeparator />
+          <DropdownItem onClick={onGoBack}>Back to DeskRPG</DropdownItem>
         </Dropdown>
 
         {/* View Menu */}
@@ -227,11 +231,16 @@ export default function Toolbar({
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Help */}
-      <div className="px-2">
+      {/* Help & Back */}
+      <div className="px-2 flex items-center gap-1">
         <Tooltip label="Keyboard Shortcuts" shortcut="?">
           <Button variant="ghost" size="sm" onClick={onHelp}>
             <HelpCircle className="w-4 h-4" />
+          </Button>
+        </Tooltip>
+        <Tooltip label="Back to DeskRPG">
+          <Button variant="ghost" size="sm" onClick={onGoBack}>
+            <Home className="w-4 h-4" />
           </Button>
         </Tooltip>
       </div>
