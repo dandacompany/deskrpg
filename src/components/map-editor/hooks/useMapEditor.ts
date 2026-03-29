@@ -198,6 +198,7 @@ type EditorAction =
   | { type: 'SET_CLIPBOARD'; clipboard: { width: number; height: number; gids: number[][]; layerIndex: number } }
   | { type: 'DELETE_SELECTION' }
   | { type: 'PASTE_CLIPBOARD'; x: number; y: number }
+  | { type: 'MOVE_TILES'; fromX: number; fromY: number; toX: number; toY: number; width: number; height: number }
   | { type: 'REORDER_TILESETS'; fromFirstgid: number; toFirstgid: number }
   | { type: 'REMOVE_UNUSED_TILESETS'; firstgids: number[] };
 
@@ -449,6 +450,80 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         undoStack,
         redoStack: [],
         dirty: true,
+      };
+    }
+    case 'MOVE_TILES': {
+      if (!state.mapData) return state;
+      const layer = state.mapData.layers[state.activeLayerIndex];
+      if (!layer || layer.type !== 'tilelayer' || !layer.data) return state;
+      const { fromX, fromY, toX, toY, width, height } = action;
+      if (fromX === toX && fromY === toY) return state;
+      const mapW = state.mapData.width;
+      const mapH = state.mapData.height;
+      const changes: Array<{ index: number; oldGid: number; newGid: number }> = [];
+
+      // 1. Read source tiles
+      const srcGids: number[][] = [];
+      for (let dy = 0; dy < height; dy++) {
+        const row: number[] = [];
+        for (let dx = 0; dx < width; dx++) {
+          const tx = fromX + dx, ty = fromY + dy;
+          if (tx >= 0 && tx < mapW && ty >= 0 && ty < mapH) {
+            row.push(layer.data[ty * mapW + tx]);
+          } else {
+            row.push(0);
+          }
+        }
+        srcGids.push(row);
+      }
+
+      // 2. Clear source (set to 0)
+      for (let dy = 0; dy < height; dy++) {
+        for (let dx = 0; dx < width; dx++) {
+          const tx = fromX + dx, ty = fromY + dy;
+          if (tx >= 0 && tx < mapW && ty >= 0 && ty < mapH) {
+            const idx = ty * mapW + tx;
+            if (layer.data[idx] !== 0) {
+              changes.push({ index: idx, oldGid: layer.data[idx], newGid: 0 });
+            }
+          }
+        }
+      }
+
+      // 3. Place at destination
+      for (let dy = 0; dy < height; dy++) {
+        for (let dx = 0; dx < width; dx++) {
+          const tx = toX + dx, ty = toY + dy;
+          if (tx >= 0 && tx < mapW && ty >= 0 && ty < mapH) {
+            const idx = ty * mapW + tx;
+            const newGid = srcGids[dy][dx];
+            // Find existing change for this index or use current data
+            const existing = changes.find(c => c.index === idx);
+            if (existing) {
+              existing.newGid = newGid;
+            } else if (layer.data[idx] !== newGid) {
+              changes.push({ index: idx, oldGid: layer.data[idx], newGid });
+            }
+          }
+        }
+      }
+
+      if (changes.length === 0) return state;
+      const newLayers = [...state.mapData.layers];
+      const newLayer = { ...newLayers[state.activeLayerIndex] };
+      const newData = [...newLayer.data!];
+      changes.forEach(c => { newData[c.index] = c.newGid; });
+      newLayer.data = newData;
+      newLayers[state.activeLayerIndex] = newLayer;
+      const undoStack = [...state.undoStack, { layerIndex: state.activeLayerIndex, changes }];
+      if (undoStack.length > 100) undoStack.shift();
+      return {
+        ...state,
+        mapData: { ...state.mapData, layers: newLayers },
+        undoStack,
+        redoStack: [],
+        dirty: true,
+        selection: { x: toX, y: toY, width, height },
       };
     }
     case 'REORDER_TILESETS': {

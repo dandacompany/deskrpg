@@ -42,11 +42,15 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate }: MapC
   const isDraggingTile = useRef(false);
   const isDraggingCharacter = useRef(false);
   const isSelectDragging = useRef(false);
+  const isMovingSelection = useRef(false);
+  const moveOrigin = useRef<{ x: number; y: number } | null>(null);
+  const moveStartSelection = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
   const selectStart = useRef<{ x: number; y: number } | null>(null);
   const pendingChanges = useRef<Array<{ index: number; oldGid: number; newGid: number }>>([]);
   const pendingLayerIndex = useRef<number>(0);
   const walkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastDragPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isPasteMode, setIsPasteMode] = useState(false);
 
   // Hooks
   const { render } = useCanvasRenderer(state, findTileset);
@@ -318,15 +322,34 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate }: MapC
 
       // 3. Select tool
       if (state.tool === 'select' && e.button === 0) {
-        // If clipboard exists and we click, paste at this location
-        if (state.clipboard) {
-          const tile = screenToTile(mx, my);
+        const tile = screenToTile(mx, my);
+
+        // Paste mode: click to place clipboard content
+        if (isPasteMode && state.clipboard) {
           dispatch({ type: 'PASTE_CLIPBOARD', x: tile.x, y: tile.y });
+          // Stay in paste mode for multiple pastes; Escape to exit
           return;
         }
-        const tile = screenToTile(mx, my);
+
+        // Check if clicking inside existing selection → start move drag
+        if (state.selection) {
+          const sel = state.selection;
+          if (
+            tile.x >= sel.x && tile.x < sel.x + sel.width &&
+            tile.y >= sel.y && tile.y < sel.y + sel.height
+          ) {
+            isMovingSelection.current = true;
+            moveOrigin.current = { x: tile.x, y: tile.y };
+            moveStartSelection.current = { ...sel };
+            return;
+          }
+        }
+
+        // Click outside selection (or no selection) → start new selection drag
         isSelectDragging.current = true;
         selectStart.current = { x: tile.x, y: tile.y };
+        setIsPasteMode(false);
+        dispatch({ type: 'CLEAR_SELECTION' });
         dispatch({
           type: 'SET_SELECTION',
           selection: { x: tile.x, y: tile.y, width: 1, height: 1 },
@@ -391,7 +414,28 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate }: MapC
         return;
       }
 
-      // 3. Select drag
+      // 3a. Move selection drag
+      if (isMovingSelection.current && moveOrigin.current && state.selection) {
+        const tile = screenToTile(mx, my);
+        const dx = tile.x - moveOrigin.current.x;
+        const dy = tile.y - moveOrigin.current.y;
+        if (dx !== 0 || dy !== 0) {
+          // Move the selection rectangle
+          dispatch({
+            type: 'SET_SELECTION',
+            selection: {
+              x: state.selection.x + dx,
+              y: state.selection.y + dy,
+              width: state.selection.width,
+              height: state.selection.height,
+            },
+          });
+          moveOrigin.current = { x: tile.x, y: tile.y };
+        }
+        return;
+      }
+
+      // 3b. Select drag (creating new selection)
       if (isSelectDragging.current && selectStart.current) {
         const tile = screenToTile(mx, my);
         const sx = Math.min(selectStart.current.x, tile.x);
@@ -439,6 +483,30 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate }: MapC
       stopWalkAnimation();
     }
 
+    // Move selection finalize — apply tile data move
+    if (isMovingSelection.current && moveStartSelection.current && state.selection) {
+      const from = moveStartSelection.current;
+      const to = state.selection;
+      if (from.x !== to.x || from.y !== to.y) {
+        dispatch({
+          type: 'MOVE_TILES',
+          fromX: from.x,
+          fromY: from.y,
+          toX: to.x,
+          toY: to.y,
+          width: from.width,
+          height: from.height,
+        });
+      }
+      isMovingSelection.current = false;
+      moveOrigin.current = null;
+      moveStartSelection.current = null;
+    } else if (isMovingSelection.current) {
+      isMovingSelection.current = false;
+      moveOrigin.current = null;
+      moveStartSelection.current = null;
+    }
+
     // Select drag finalize
     if (isSelectDragging.current) {
       isSelectDragging.current = false;
@@ -451,7 +519,7 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate }: MapC
       isDraggingTile.current = false;
       pendingChanges.current = [];
     }
-  }, [panZoom, stopWalkAnimation]);
+  }, [panZoom, stopWalkAnimation, state.selection, dispatch]);
 
   const handleWheel = useCallback(
     (e: React.WheelEvent<HTMLCanvasElement>) => {
@@ -465,6 +533,24 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate }: MapC
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
   }, []);
+
+  // === Escape key to exit paste mode ===
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isPasteMode) {
+        setIsPasteMode(false);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isPasteMode]);
+
+  // === Enter paste mode when Ctrl+V sets clipboard ===
+  useEffect(() => {
+    if (state.clipboard && state.tool === 'select') {
+      setIsPasteMode(true);
+    }
+  }, [state.clipboard, state.tool]);
 
   // === Cleanup walk interval on unmount ===
 
