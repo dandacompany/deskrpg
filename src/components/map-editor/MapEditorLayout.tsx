@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import {
   useMapEditor,
   createDefaultMap,
-  generateCollisionTilesetDataUrl,
+  generateBuiltinTilesetDataUrl,
+  getBuiltinTilesetInfo,
+  BUILTIN_TILESET_NAME,
   isCoreLayer,
 } from './hooks/useMapEditor';
 import type {
@@ -215,41 +217,41 @@ export default function MapEditorLayout({
     });
   }
 
-  // === Collision Tileset ===
+  // === Built-in Color Palette Tileset ===
 
-  const addCollisionTileset = useCallback(
+  const addBuiltinTileset = useCallback(
     (mapData: TiledMap) => {
-      // Calculate firstgid after all existing tilesets
       let firstgid = 1;
       for (const ts of mapData.tilesets) {
         const end = ts.firstgid + ts.tilecount;
         if (end > firstgid) firstgid = end;
       }
 
-      const dataUrl = generateCollisionTilesetDataUrl(mapData.tilewidth);
+      const dataUrl = generateBuiltinTilesetDataUrl(mapData.tilewidth);
+      const info = getBuiltinTilesetInfo(mapData.tilewidth);
       const img = new Image();
       img.src = dataUrl;
 
       const tileset: TiledTileset = {
         firstgid,
-        name: 'collision-tileset',
+        name: BUILTIN_TILESET_NAME,
         tilewidth: mapData.tilewidth,
         tileheight: mapData.tileheight,
-        tilecount: 2,
-        columns: 2,
+        tilecount: info.tilecount,
+        columns: info.columns,
         image: dataUrl,
-        imagewidth: mapData.tilewidth * 2,
-        imageheight: mapData.tileheight,
+        imagewidth: info.imagewidth,
+        imageheight: info.imageheight,
       };
 
       const imageInfo: TilesetImageInfo = {
         img,
         firstgid,
-        columns: 2,
+        columns: info.columns,
         tilewidth: mapData.tilewidth,
         tileheight: mapData.tileheight,
-        tilecount: 2,
-        name: 'collision-tileset',
+        tilecount: info.tilecount,
+        name: BUILTIN_TILESET_NAME,
       };
 
       dispatch({ type: 'ADD_TILESET', tileset, imageInfo });
@@ -263,9 +265,9 @@ export default function MapEditorLayout({
     (mapData: TiledMap, projectName: string) => {
       dispatch({ type: 'SET_MAP', mapData, projectName, templateId: null });
       // Add collision tileset after setting map
-      addCollisionTileset(mapData);
+      addBuiltinTileset(mapData);
     },
-    [dispatch, addCollisionTileset],
+    [dispatch, addBuiltinTileset],
   );
 
   const handleLoad = useCallback(() => {
@@ -597,7 +599,7 @@ export default function MapEditorLayout({
     if (!state.mapData) return;
     const unusedFirstgids: number[] = [];
     for (const ts of state.mapData.tilesets) {
-      if (ts.name === 'collision-tileset') continue;
+      if (ts.name === BUILTIN_TILESET_NAME) continue;
       const maxGid = ts.firstgid + ts.tilecount - 1;
       let isUsed = false;
       for (let gid = ts.firstgid; gid <= maxGid; gid++) {

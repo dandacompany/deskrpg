@@ -3,6 +3,7 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { Button } from '@/components/ui';
 import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
+import { BUILTIN_TILESET_NAME } from './hooks/useMapEditor';
 
 export interface TilePaletteProps {
   tilesets: TilesetImageInfo[];
@@ -289,13 +290,15 @@ function TilesetSection({
               Edit Pixels
             </Button>
           )}
-          <button
-            onClick={onDelete}
-            className="text-text-dim hover:text-danger text-body transition-colors px-1"
-            title="Remove tileset"
-          >
-            &times;
-          </button>
+          {name !== BUILTIN_TILESET_NAME && (
+            <button
+              onClick={onDelete}
+              className="text-text-dim hover:text-danger text-body transition-colors px-1"
+              title="Remove tileset"
+            >
+              &times;
+            </button>
+          )}
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -348,8 +351,8 @@ export default function TilePalette({
     const unused = new Set<number>();
     if (!usedGids) return unused;
     for (const ts of tilesets) {
-      // Skip collision-tileset from unused detection
-      if (ts.name === 'collision-tileset') continue;
+      // Skip built-in tileset from unused detection
+      if (ts.name === BUILTIN_TILESET_NAME) continue;
       const maxGid = ts.firstgid + ts.tilecount - 1;
       let isUsed = false;
       for (let gid = ts.firstgid; gid <= maxGid; gid++) {
