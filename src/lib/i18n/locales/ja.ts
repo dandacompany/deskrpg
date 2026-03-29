@@ -1344,6 +1344,32 @@ const ja: Record<string, string> = {
   "settings.gatewayUrlPlaceholder": "http://your-server:18789",
   "settings.gatewayTokenPlaceholder": "Bearerトークン",
 
+  // Map Editor - Toolbar
+  "mapEditor.toolbar.title": "DeskRPG マップエディタ",
+  "mapEditor.toolbar.file": "ファイル",
+  "mapEditor.toolbar.newMap": "新規マップ",
+  "mapEditor.toolbar.open": "開く",
+  "mapEditor.toolbar.export": "エクスポート",
+  "mapEditor.toolbar.exportTmj": ".tmj (Tiled JSON)",
+  "mapEditor.toolbar.exportTmx": ".tmx (Tiled XML)",
+  "mapEditor.toolbar.exportPng": ".png (画像)",
+  "mapEditor.toolbar.backToDeskRPG": "DeskRPGに戻る",
+  "mapEditor.toolbar.view": "表示",
+  "mapEditor.toolbar.grid": "グリッド",
+  "mapEditor.toolbar.collision": "コリジョン",
+  "mapEditor.toolbar.layersPanel": "レイヤーパネル",
+  "mapEditor.toolbar.tilesetsPanel": "タイルセットパネル",
+  "mapEditor.toolbar.minimapPanel": "ミニマップパネル",
+  "mapEditor.toolbar.paint": "ペイント",
+  "mapEditor.toolbar.erase": "消しゴム",
+  "mapEditor.toolbar.select": "選択",
+  "mapEditor.toolbar.pan": "パン",
+  "mapEditor.toolbar.zoomOut": "ズームアウト",
+  "mapEditor.toolbar.zoomIn": "ズームイン",
+  "mapEditor.toolbar.undo": "元に戻す",
+  "mapEditor.toolbar.redo": "やり直し",
+  "mapEditor.toolbar.keyboardShortcuts": "キーボードショートカット",
+
   // Session
   "session.kicked": "別の場所からのログインにより、現在のセッションが終了しました。",
 };
