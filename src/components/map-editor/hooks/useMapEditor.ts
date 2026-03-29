@@ -142,8 +142,8 @@ const PALETTE_COLORS = [
 ];
 
 export function generateBuiltinTilesetDataUrl(tileSize: number = 32): string {
-  const cols = 4;
-  const rows = Math.ceil(PALETTE_COLORS.length / cols);
+  const cols = PALETTE_COLORS.length;
+  const rows = 1;
   const canvas = document.createElement('canvas');
   canvas.width = tileSize * cols;
   canvas.height = tileSize * rows;
@@ -164,9 +164,9 @@ export function generateBuiltinTilesetDataUrl(tileSize: number = 32): string {
 }
 
 export function getBuiltinTilesetInfo(tileSize: number = 32) {
-  const cols = 4;
+  const cols = PALETTE_COLORS.length;
   const count = PALETTE_COLORS.length;
-  const rows = Math.ceil(count / cols);
+  const rows = 1;
   return { columns: cols, tilecount: count, rows, imagewidth: cols * tileSize, imageheight: rows * tileSize };
 }
 
