@@ -58,6 +58,7 @@ function TilesetSection({
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const editRef = useRef<HTMLInputElement>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const { img, firstgid, columns, tilewidth, tileheight, tilecount, name } = info;
   const rows = Math.ceil(tilecount / columns);
@@ -257,6 +258,12 @@ function TilesetSection({
         onDragEnd={onDragEnd}
       >
         <span className="text-caption text-text-secondary truncate flex items-center gap-1 min-w-0">
+          <button
+            className="text-micro flex-shrink-0 w-3 text-center text-text-dim hover:text-text"
+            onClick={(e) => { e.stopPropagation(); setIsCollapsed((v) => !v); }}
+          >
+            {isCollapsed ? '▸' : '▾'}
+          </button>
           {isEditing ? (
             <input
               ref={editRef}
@@ -324,7 +331,7 @@ function TilesetSection({
           )}
         </div>
       </div>
-      <div className="overflow-x-auto">
+      {!isCollapsed && <div>
         <canvas
           ref={canvasRef}
           className="cursor-crosshair"
@@ -338,7 +345,7 @@ function TilesetSection({
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
         />
-      </div>
+      </div>}
     </div>
   );
 }
