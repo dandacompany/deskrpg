@@ -712,8 +712,8 @@ export default function MapEditorLayout({
     onToolSelect: () => dispatch({ type: 'SET_TOOL', tool: 'select' }),
     onToolPan: () => dispatch({ type: 'SET_TOOL', tool: 'pan' }),
     onToggleGrid: () => dispatch({ type: 'TOGGLE_GRID' }),
-    onZoomIn: () => dispatch({ type: 'SET_ZOOM', zoom: state.zoom + 0.5 }),
-    onZoomOut: () => dispatch({ type: 'SET_ZOOM', zoom: state.zoom - 0.5 }),
+    onZoomIn: () => dispatch({ type: 'SET_ZOOM', zoom: Math.round((state.zoom + 0.1) * 10) / 10 }),
+    onZoomOut: () => dispatch({ type: 'SET_ZOOM', zoom: Math.round((state.zoom - 0.1) * 10) / 10 }),
     onUndo: () => dispatch({ type: 'UNDO' }),
     onRedo: () => dispatch({ type: 'REDO' }),
     onNewMap: () => {
@@ -813,8 +813,8 @@ export default function MapEditorLayout({
         onSaveToDeskRPG={handleSaveToDeskRPG}
         onExportTMJ={handleExportTMJ}
         onExportTMX={handleExportTMX}
-        onZoomIn={() => dispatch({ type: 'SET_ZOOM', zoom: state.zoom + 0.5 })}
-        onZoomOut={() => dispatch({ type: 'SET_ZOOM', zoom: state.zoom - 0.5 })}
+        onZoomIn={() => dispatch({ type: 'SET_ZOOM', zoom: Math.round((state.zoom + 0.1) * 10) / 10 })}
+        onZoomOut={() => dispatch({ type: 'SET_ZOOM', zoom: Math.round((state.zoom - 0.1) * 10) / 10 })}
         onToggleGrid={() => dispatch({ type: 'TOGGLE_GRID' })}
         onToggleCollision={() => dispatch({ type: 'TOGGLE_COLLISION' })}
         onUndo={() => dispatch({ type: 'UNDO' })}
