@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui';
 import { Info, Eye, EyeOff } from 'lucide-react';
 import { isCoreLayer, getDeskRPGRole } from './hooks/useMapEditor';
+import Tooltip from './Tooltip';
 import type { TiledLayer } from './hooks/useMapEditor';
 
 export interface LayerPanelProps {
@@ -136,12 +137,11 @@ function LayerItem({
 
       {/* Info tooltip */}
       {role && (
-        <span
-          className="cursor-help flex-shrink-0"
-          title={`${layer.type === 'tilelayer' ? 'Tile' : 'Object'} layer | ${role.label} | ${role.desc}`}
-        >
-          <Info className="w-3.5 h-3.5 text-text-dim hover:text-text-secondary" />
-        </span>
+        <Tooltip label={`${layer.type === 'tilelayer' ? 'Tile' : 'Object'} · ${role.desc}`} shortcut={role.label}>
+          <span className="cursor-help flex-shrink-0">
+            <Info className="w-3.5 h-3.5 text-text-dim hover:text-text-secondary" />
+          </span>
+        </Tooltip>
       )}
 
       {/* Delete button (hidden for core layers) */}
