@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Modal, Input } from '@/components/ui';
+import { useT } from '@/lib/i18n';
 import type { TiledTileset, TilesetImageInfo } from './hooks/useMapEditor';
 
 export interface ImportTilesetResult {
@@ -32,6 +33,7 @@ export default function ImportTilesetModal({
   onImport,
   initialFile,
 }: ImportTilesetModalProps) {
+  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -280,12 +282,12 @@ export default function ImportTilesetModal({
   }, [image, calcGrid, selection, tileWidth, tileHeight, margin, spacing, name, existingTilesets, onImport, onClose]);
 
   return (
-    <Modal open={open} onClose={onClose} title="Import Tileset" size="lg">
+    <Modal open={open} onClose={onClose} title={t("mapEditor.importTileset.title")} size="lg">
       <Modal.Body>
         <div className="space-y-4">
           {/* File picker */}
           <div>
-            <label className="text-caption text-text-secondary block mb-1">Image File</label>
+            <label className="text-caption text-text-secondary block mb-1">{t("mapEditor.importTileset.imageFile")}</label>
             <input
               ref={fileInputRef}
               type="file"
@@ -314,29 +316,29 @@ export default function ImportTilesetModal({
               {/* Settings */}
               <div className="w-48 flex-shrink-0 space-y-3">
                 <div>
-                  <label className="text-caption text-text-secondary block mb-1">Name</label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Tileset name" />
+                  <label className="text-caption text-text-secondary block mb-1">{t("mapEditor.importTileset.name")}</label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("mapEditor.importTileset.namePlaceholder")} />
                 </div>
                 <div>
-                  <label className="text-caption text-text-secondary block mb-1">Tile Width</label>
+                  <label className="text-caption text-text-secondary block mb-1">{t("mapEditor.importTileset.tileWidth")}</label>
                   <Input type="number" value={tileWidth} onChange={(e) => setTileWidth(Math.max(1, Number(e.target.value)))} min={1} />
                 </div>
                 <div>
-                  <label className="text-caption text-text-secondary block mb-1">Tile Height</label>
+                  <label className="text-caption text-text-secondary block mb-1">{t("mapEditor.importTileset.tileHeight")}</label>
                   <Input type="number" value={tileHeight} onChange={(e) => setTileHeight(Math.max(1, Number(e.target.value)))} min={1} />
                 </div>
                 <div>
-                  <label className="text-caption text-text-secondary block mb-1">Margin</label>
+                  <label className="text-caption text-text-secondary block mb-1">{t("mapEditor.importTileset.margin")}</label>
                   <Input type="number" value={margin} onChange={(e) => setMargin(Math.max(0, Number(e.target.value)))} min={0} />
                 </div>
                 <div>
-                  <label className="text-caption text-text-secondary block mb-1">Spacing</label>
+                  <label className="text-caption text-text-secondary block mb-1">{t("mapEditor.importTileset.spacing")}</label>
                   <Input type="number" value={spacing} onChange={(e) => setSpacing(Math.max(0, Number(e.target.value)))} min={0} />
                 </div>
                 <div className="text-caption text-text-dim pt-1">
                   {(() => {
                     const { columns, rows } = calcGrid();
-                    return `${columns} x ${rows} tiles (${columns * rows} total)`;
+                    return t("mapEditor.importTileset.tileInfo", { columns, rows, total: columns * rows });
                   })()}
                 </div>
               </div>
@@ -347,10 +349,10 @@ export default function ImportTilesetModal({
 
       <Modal.Footer>
         <Button variant="ghost" onClick={onClose}>
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button variant="primary" onClick={handleImport} disabled={!image}>
-          Import
+          {t("mapEditor.importTileset.import")}
         </Button>
       </Modal.Footer>
     </Modal>

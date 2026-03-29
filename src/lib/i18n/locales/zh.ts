@@ -1344,6 +1344,28 @@ const zh: Record<string, string> = {
   "settings.gatewayUrlPlaceholder": "http://your-server:18789",
   "settings.gatewayTokenPlaceholder": "Bearer令牌",
 
+  // Map Editor - Modals
+  "mapEditor.newMap.title": "新建地图",
+  "mapEditor.newMap.projectName": "项目名称",
+  "mapEditor.newMap.namePlaceholder": "地图名称",
+  "mapEditor.newMap.template": "模板",
+  "mapEditor.newMap.templateSmall": "小",
+  "mapEditor.newMap.templateMedium": "中",
+  "mapEditor.newMap.templateLarge": "大",
+  "mapEditor.newMap.customSize": "自定义尺寸",
+  "mapEditor.newMap.width": "宽度",
+  "mapEditor.newMap.height": "高度",
+  "mapEditor.importTileset.title": "导入图块集",
+  "mapEditor.importTileset.imageFile": "图像文件",
+  "mapEditor.importTileset.name": "名称",
+  "mapEditor.importTileset.namePlaceholder": "图块集名称",
+  "mapEditor.importTileset.tileWidth": "图块宽度",
+  "mapEditor.importTileset.tileHeight": "图块高度",
+  "mapEditor.importTileset.margin": "边距",
+  "mapEditor.importTileset.spacing": "间距",
+  "mapEditor.importTileset.tileInfo": "{columns} x {rows} 图块 (共 {total} 个)",
+  "mapEditor.importTileset.import": "导入",
+
   // Session
   "session.kicked": "由于在其他位置登录，当前会话已断开。",
 };

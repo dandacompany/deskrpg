@@ -1344,6 +1344,28 @@ const ja: Record<string, string> = {
   "settings.gatewayUrlPlaceholder": "http://your-server:18789",
   "settings.gatewayTokenPlaceholder": "Bearerトークン",
 
+  // Map Editor - Modals
+  "mapEditor.newMap.title": "新規マップ",
+  "mapEditor.newMap.projectName": "プロジェクト名",
+  "mapEditor.newMap.namePlaceholder": "マップ名",
+  "mapEditor.newMap.template": "テンプレート",
+  "mapEditor.newMap.templateSmall": "小",
+  "mapEditor.newMap.templateMedium": "中",
+  "mapEditor.newMap.templateLarge": "大",
+  "mapEditor.newMap.customSize": "カスタムサイズ",
+  "mapEditor.newMap.width": "幅",
+  "mapEditor.newMap.height": "高さ",
+  "mapEditor.importTileset.title": "タイルセットのインポート",
+  "mapEditor.importTileset.imageFile": "画像ファイル",
+  "mapEditor.importTileset.name": "名前",
+  "mapEditor.importTileset.namePlaceholder": "タイルセット名",
+  "mapEditor.importTileset.tileWidth": "タイル幅",
+  "mapEditor.importTileset.tileHeight": "タイル高さ",
+  "mapEditor.importTileset.margin": "マージン",
+  "mapEditor.importTileset.spacing": "スペーシング",
+  "mapEditor.importTileset.tileInfo": "{columns} x {rows} タイル (合計 {total})",
+  "mapEditor.importTileset.import": "インポート",
+
   // Session
   "session.kicked": "別の場所からのログインにより、現在のセッションが終了しました。",
 };

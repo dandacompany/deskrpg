@@ -1345,6 +1345,28 @@ const ko: Record<string, string> = {
   "settings.gatewayUrlPlaceholder": "http://your-server:18789",
   "settings.gatewayTokenPlaceholder": "Bearer 토큰",
 
+  // Map Editor - Modals
+  "mapEditor.newMap.title": "새 맵",
+  "mapEditor.newMap.projectName": "프로젝트 이름",
+  "mapEditor.newMap.namePlaceholder": "맵 이름",
+  "mapEditor.newMap.template": "템플릿",
+  "mapEditor.newMap.templateSmall": "소형",
+  "mapEditor.newMap.templateMedium": "중형",
+  "mapEditor.newMap.templateLarge": "대형",
+  "mapEditor.newMap.customSize": "사용자 지정 크기",
+  "mapEditor.newMap.width": "너비",
+  "mapEditor.newMap.height": "높이",
+  "mapEditor.importTileset.title": "타일셋 가져오기",
+  "mapEditor.importTileset.imageFile": "이미지 파일",
+  "mapEditor.importTileset.name": "이름",
+  "mapEditor.importTileset.namePlaceholder": "타일셋 이름",
+  "mapEditor.importTileset.tileWidth": "타일 너비",
+  "mapEditor.importTileset.tileHeight": "타일 높이",
+  "mapEditor.importTileset.margin": "여백",
+  "mapEditor.importTileset.spacing": "간격",
+  "mapEditor.importTileset.tileInfo": "{columns} x {rows} 타일 (총 {total}개)",
+  "mapEditor.importTileset.import": "가져오기",
+
   // Session
   "session.kicked": "다른 위치에서 접속하여 현재 세션이 종료되었습니다.",
 };

@@ -1344,6 +1344,28 @@ const en: Record<string, string> = {
   "settings.gatewayUrlPlaceholder": "http://your-server:18789",
   "settings.gatewayTokenPlaceholder": "Bearer token",
 
+  // Map Editor - Modals
+  "mapEditor.newMap.title": "New Map",
+  "mapEditor.newMap.projectName": "Project Name",
+  "mapEditor.newMap.namePlaceholder": "Map name",
+  "mapEditor.newMap.template": "Template",
+  "mapEditor.newMap.templateSmall": "Small",
+  "mapEditor.newMap.templateMedium": "Medium",
+  "mapEditor.newMap.templateLarge": "Large",
+  "mapEditor.newMap.customSize": "Custom Size",
+  "mapEditor.newMap.width": "Width",
+  "mapEditor.newMap.height": "Height",
+  "mapEditor.importTileset.title": "Import Tileset",
+  "mapEditor.importTileset.imageFile": "Image File",
+  "mapEditor.importTileset.name": "Name",
+  "mapEditor.importTileset.namePlaceholder": "Tileset name",
+  "mapEditor.importTileset.tileWidth": "Tile Width",
+  "mapEditor.importTileset.tileHeight": "Tile Height",
+  "mapEditor.importTileset.margin": "Margin",
+  "mapEditor.importTileset.spacing": "Spacing",
+  "mapEditor.importTileset.tileInfo": "{columns} x {rows} tiles ({total} total)",
+  "mapEditor.importTileset.import": "Import",
+
   // Session
   "session.kicked": "You were disconnected because another session was opened.",
 };
