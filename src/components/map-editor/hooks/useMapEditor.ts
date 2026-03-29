@@ -188,6 +188,7 @@ type EditorAction =
   | { type: 'REORDER_LAYERS'; fromIndex: number; toIndex: number }
   | { type: 'ADD_TILESET'; tileset: TiledTileset; imageInfo: TilesetImageInfo }
   | { type: 'DELETE_TILESET'; firstgid: number }
+  | { type: 'UPDATE_TILESET_IMAGE'; firstgid: number; imageInfo: TilesetImageInfo; imageDataUrl: string }
   | { type: 'MARK_CLEAN' }
   | { type: 'SET_PROJECT_NAME'; name: string };
 
@@ -339,6 +340,19 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         mapData: { ...state.mapData, tilesets: newTilesets },
         tilesetImages: newImages,
         sortedGids,
+        dirty: true,
+      };
+    }
+    case 'UPDATE_TILESET_IMAGE': {
+      if (!state.mapData) return state;
+      const newTilesetImages = { ...state.tilesetImages, [action.firstgid]: action.imageInfo };
+      const newTilesets = state.mapData.tilesets.map((ts) =>
+        ts.firstgid === action.firstgid ? { ...ts, image: action.imageDataUrl } : ts,
+      );
+      return {
+        ...state,
+        mapData: { ...state.mapData, tilesets: newTilesets },
+        tilesetImages: newTilesetImages,
         dirty: true,
       };
     }

@@ -4,12 +4,19 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { Button } from '@/components/ui';
 import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
 
+export interface RemoveBgProgress {
+  firstgid: number;
+  progress: number;
+}
+
 export interface TilePaletteProps {
   tilesets: TilesetImageInfo[];
   selectedRegion: TileRegion | null;
   onSelectRegion: (region: TileRegion) => void;
   onImportTileset: () => void;
   onDeleteTileset: (firstgid: number) => void;
+  onRemoveBg?: (firstgid: number) => void;
+  removeBgProgress?: RemoveBgProgress | null;
 }
 
 interface DragState {
@@ -25,11 +32,15 @@ function TilesetSection({
   selectedRegion,
   onSelectRegion,
   onDelete,
+  onRemoveBg,
+  removeBgProgress,
 }: {
   info: TilesetImageInfo;
   selectedRegion: TileRegion | null;
   onSelectRegion: (region: TileRegion) => void;
   onDelete: () => void;
+  onRemoveBg?: () => void;
+  removeBgProgress?: number | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -214,13 +225,30 @@ function TilesetSection({
         <span className="text-caption text-text-secondary truncate" title={name}>
           {name}
         </span>
-        <button
-          onClick={onDelete}
-          className="text-text-dim hover:text-danger text-body transition-colors flex-shrink-0 px-1"
-          title="Remove tileset"
-        >
-          &times;
-        </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {removeBgProgress != null ? (
+            <span className="text-caption text-primary-light px-1">
+              Removing BG... {removeBgProgress}%
+            </span>
+          ) : (
+            onRemoveBg && (
+              <button
+                onClick={onRemoveBg}
+                className="text-text-dim hover:text-primary-light text-micro transition-colors px-1"
+                title="Remove background"
+              >
+                BG
+              </button>
+            )
+          )}
+          <button
+            onClick={onDelete}
+            className="text-text-dim hover:text-danger text-body transition-colors px-1"
+            title="Remove tileset"
+          >
+            &times;
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <canvas
@@ -248,6 +276,8 @@ export default function TilePalette({
   onSelectRegion,
   onImportTileset,
   onDeleteTileset,
+  onRemoveBg,
+  removeBgProgress,
 }: TilePaletteProps) {
   // Compute selection info text
   let selectionInfo = '';
@@ -291,6 +321,12 @@ export default function TilePalette({
             selectedRegion={selectedRegion}
             onSelectRegion={onSelectRegion}
             onDelete={() => onDeleteTileset(info.firstgid)}
+            onRemoveBg={onRemoveBg ? () => onRemoveBg(info.firstgid) : undefined}
+            removeBgProgress={
+              removeBgProgress?.firstgid === info.firstgid
+                ? removeBgProgress.progress
+                : null
+            }
           />
         ))}
       </div>

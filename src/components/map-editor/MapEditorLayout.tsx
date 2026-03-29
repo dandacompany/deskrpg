@@ -19,6 +19,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import Toolbar from './Toolbar';
 import LayerPanel from './LayerPanel';
 import TilePalette from './TilePalette';
+import type { RemoveBgProgress } from './TilePalette';
 import { MapCanvas } from './MapCanvas';
 import HelpModal from './HelpModal';
 import NewMapModal from './NewMapModal';
@@ -26,6 +27,7 @@ import ImportTilesetModal from './ImportTilesetModal';
 import type { ImportTilesetResult } from './ImportTilesetModal';
 import { buildProjectZip, loadProjectZip } from '@/lib/map-project';
 import { exportTmx } from '@/lib/tmx-exporter';
+import { removeBgToDataUrl } from '@/lib/remove-bg';
 
 // === Props ===
 
@@ -83,6 +85,9 @@ export default function MapEditorLayout({
     tileY: number;
     gid: number;
   } | null>(null);
+
+  // Remove BG progress
+  const [removeBgProgress, setRemoveBgProgress] = useState<RemoveBgProgress | null>(null);
 
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -471,6 +476,39 @@ export default function MapEditorLayout({
     [state.mapData, dispatch],
   );
 
+  // === Remove Background ===
+
+  const handleRemoveBg = useCallback(
+    async (firstgid: number) => {
+      const tsInfo = state.tilesetImages[firstgid];
+      if (!tsInfo?.img) return;
+
+      setRemoveBgProgress({ firstgid, progress: 0 });
+
+      try {
+        const resultDataUrl = await removeBgToDataUrl(tsInfo.img, (p) => {
+          setRemoveBgProgress({ firstgid, progress: Math.round(p * 100) });
+        });
+
+        const newImg = new Image();
+        newImg.onload = () => {
+          const newTsInfo: TilesetImageInfo = { ...tsInfo, img: newImg };
+          dispatch({ type: 'UPDATE_TILESET_IMAGE', firstgid, imageInfo: newTsInfo, imageDataUrl: resultDataUrl });
+          setRemoveBgProgress(null);
+        };
+        newImg.onerror = () => {
+          console.error('Failed to load processed image');
+          setRemoveBgProgress(null);
+        };
+        newImg.src = resultDataUrl;
+      } catch (err) {
+        console.error('Background removal failed:', err);
+        setRemoveBgProgress(null);
+      }
+    },
+    [state.tilesetImages, dispatch],
+  );
+
   // === Sorted tileset list for palette ===
 
   const sortedTilesets = useMemo(() => {
@@ -622,6 +660,8 @@ export default function MapEditorLayout({
               onSelectRegion={handleSelectRegion}
               onImportTileset={() => setShowImportTileset(true)}
               onDeleteTileset={handleDeleteTileset}
+              onRemoveBg={handleRemoveBg}
+              removeBgProgress={removeBgProgress}
             />
           </div>
         </div>
