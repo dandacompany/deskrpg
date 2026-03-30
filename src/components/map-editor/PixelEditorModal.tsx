@@ -126,6 +126,7 @@ export default function PixelEditorModal({
     startW: number;
     startH: number;
   } | null>(null);
+  const [transformCursor, setTransformCursor] = useState('default');
 
   // --- Refs ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -349,6 +350,48 @@ export default function PixelEditorModal({
       se: { x: x + w, y: y + h },
     };
   }, []);
+
+  const hitTestHandle = useCallback((e: React.MouseEvent): HandleType | null => {
+    if (!transformRef.current) return null;
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left - pan.x;
+    const my = e.clientY - rect.top - pan.y;
+
+    const t = transformRef.current;
+    const handles = getHandlePositions(t, zoom);
+    const hh = HANDLE_HIT / 2;
+
+    const handleEntries = Object.entries(handles) as [HandleType, { x: number; y: number }][];
+    for (const [key, p] of handleEntries) {
+      if (mx >= p.x - hh && mx <= p.x + hh && my >= p.y - hh && my <= p.y + hh) {
+        return key;
+      }
+    }
+
+    const tx = t.x * zoom;
+    const ty = t.y * zoom;
+    const tw = t.width * zoom;
+    const th = t.height * zoom;
+    if (mx >= tx && mx <= tx + tw && my >= ty && my <= ty + th) {
+      return 'move';
+    }
+
+    return null;
+  }, [pan, zoom, getHandlePositions]);
+
+  const getHandleCursor = (handle: HandleType | null): string => {
+    switch (handle) {
+      case 'nw': case 'se': return 'nwse-resize';
+      case 'ne': case 'sw': return 'nesw-resize';
+      case 'n': case 's': return 'ns-resize';
+      case 'w': case 'e': return 'ew-resize';
+      case 'move': return 'move';
+      default: return 'default';
+    }
+  };
 
   // --- Render display canvas ---
   const renderCanvas = useCallback(() => {
@@ -840,6 +883,12 @@ export default function PixelEditorModal({
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      // Transform mode: update cursor on hover
+      if (transformActive && !transformDragRef.current) {
+        const handle = hitTestHandle(e);
+        setTransformCursor(getHandleCursor(handle));
+      }
+
       // Shift dragging
       if (isShiftDraggingRef.current) {
         const dx = Math.round((e.clientX - shiftStartRef.current.x) / zoom);
@@ -1340,8 +1389,9 @@ export default function PixelEditorModal({
   }
 
   // --- Cursor style ---
-  const cursorStyle =
-    tool === 'shift' ? 'move' : tool === 'rect-select' ? 'crosshair' : tool === 'eyedropper' ? 'crosshair' : tool === 'eraser' ? 'cell' : 'default';
+  const cursorStyle = transformActive
+    ? transformCursor
+    : tool === 'shift' ? 'move' : tool === 'rect-select' ? 'crosshair' : tool === 'eyedropper' ? 'crosshair' : tool === 'eraser' ? 'cell' : 'default';
 
   const isExpanded = region && (expandedCols !== region.width || expandedRows !== region.height);
 
