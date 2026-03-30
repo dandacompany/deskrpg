@@ -495,9 +495,14 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       if (!state.mapData) return state;
       const newTilesetImages = { ...state.tilesetImages, [action.tileset.firstgid]: action.imageInfo };
       const sortedGids = Object.keys(newTilesetImages).map(Number).sort((a, b) => b - a);
+      // Prevent duplicate tilesets with same firstgid
+      const existingIdx = state.mapData.tilesets.findIndex(ts => ts.firstgid === action.tileset.firstgid);
+      const newTilesets = existingIdx >= 0
+        ? state.mapData.tilesets.map((ts, i) => i === existingIdx ? action.tileset : ts)
+        : [...state.mapData.tilesets, action.tileset];
       return {
         ...state,
-        mapData: { ...state.mapData, tilesets: [...state.mapData.tilesets, action.tileset] },
+        mapData: { ...state.mapData, tilesets: newTilesets },
         tilesetImages: newTilesetImages,
         sortedGids,
         dirty: true,
