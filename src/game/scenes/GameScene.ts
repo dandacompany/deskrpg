@@ -1054,6 +1054,9 @@ export class GameScene extends Phaser.Scene {
   // Map layers data (for walkability and editor)
   private floorData: number[][] = [];
   private wallsData: number[][] = [];
+  private collisionData: number[][] = []; // Tiled Collision layer data
+  private effectiveMapCols: number = MAP_COLS;
+  private effectiveMapRows: number = MAP_ROWS;
   private mapObjects: MapObject[] = [];
   private objectSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private ySortObjectSprites = new Map<string, Phaser.GameObjects.Sprite>();
@@ -1096,10 +1099,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private isWalkable(tileX: number, tileY: number): boolean {
-    if (tileX < 0 || tileX >= MAP_COLS || tileY < 0 || tileY >= MAP_ROWS) return false;
-    // Check walls layer
-    const wallTile = this.wallsData[tileY]?.[tileX] ?? T.EMPTY;
-    if (COLLISION_TILES.has(wallTile)) return false;
+    if (tileX < 0 || tileX >= this.effectiveMapCols || tileY < 0 || tileY >= this.effectiveMapRows) return false;
+    // Check Collision layer (Tiled maps)
+    if (this.collisionData.length > 0) {
+      const collisionGid = this.collisionData[tileY]?.[tileX] ?? 0;
+      if (collisionGid !== 0) return false;
+    }
+    // Legacy walls check
+    if (this.wallsData.length > 0 && this.collisionData.length === 0) {
+      const wallTile = this.wallsData[tileY]?.[tileX] ?? T.EMPTY;
+      if (COLLISION_TILES.has(wallTile)) return false;
+    }
     // Check object occupied tiles
     if (this.objectOccupiedTiles.has(`${tileX},${tileY}`)) return false;
     return true;
@@ -1857,6 +1867,21 @@ export class GameScene extends Phaser.Scene {
     const mapWidth = (tiledJson.width as number) || MAP_COLS;
     const mapHeight = (tiledJson.height as number) || MAP_ROWS;
 
+    // Set effective map dimensions for isWalkable bounds check
+    this.effectiveMapCols = mapWidth;
+    this.effectiveMapRows = mapHeight;
+
+    // Extract collision layer data for walkability checks
+    this.collisionData = [];
+    const tiledLayersRaw = (tiledJson.layers as Array<{ name: string; type: string; data?: number[]; width?: number }>) || [];
+    const collisionLayerData = tiledLayersRaw.find(l => l.type === 'tilelayer' && l.name.toLowerCase() === 'collision');
+    if (collisionLayerData?.data) {
+      const w = collisionLayerData.width || mapWidth;
+      for (let r = 0; r < mapHeight; r++) {
+        this.collisionData.push(collisionLayerData.data.slice(r * w, (r + 1) * w));
+      }
+    }
+
     // Get all tile layer names from the Tiled JSON
     const tiledLayers = (tiledJson.layers as Array<{ name: string; type: string }>) || [];
     const tileLayerNames = tiledLayers.filter(l => l.type === "tilelayer").map(l => l.name);
@@ -1880,7 +1905,7 @@ export class GameScene extends Phaser.Scene {
       if (wallsLayer) {
         wallsLayer.setDepth(1);
         this.wallsLayer = wallsLayer;
-        wallsLayer.setCollisionByProperty({ collision: true });
+        // Walls layer is decorative only — collision is handled by the Collision layer
       }
     }
 

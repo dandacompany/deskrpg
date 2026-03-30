@@ -1,9 +1,16 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui';
-import { Info, Eye, EyeOff } from 'lucide-react';
-import { isCoreLayer, getDeskRPGRole, getLayerColor } from './hooks/useMapEditor';
+import { Eye, EyeOff, GripVertical, User } from 'lucide-react';
+import {
+  isCoreLayer,
+  getDeskRPGRole,
+  getLayerColor,
+  getLayerDepth,
+  getDepthLabel,
+  CHARACTER_DEPTH_THRESHOLD,
+} from './hooks/useMapEditor';
 import Tooltip from './Tooltip';
 import { useT } from '@/lib/i18n';
 import type { TiledLayer } from './hooks/useMapEditor';
@@ -15,6 +22,7 @@ export interface LayerPanelProps {
   onRenameLayer: (index: number, name: string) => void;
   onDeleteLayer: (index: number) => void;
   onReorderLayers: (fromIndex: number, toIndex: number) => void;
+  onSetLayerDepth?: (index: number, depth: number | string) => void;
   onAddLayer: () => void;
   onToggleVisibility: (index: number) => void;
   layerOverlayMap?: Record<number, boolean>;
@@ -22,11 +30,19 @@ export interface LayerPanelProps {
   hideHeader?: boolean;
 }
 
+/** A single sorted entry mapping visual position to original array index */
+interface SortedEntry {
+  layer: TiledLayer;
+  originalIndex: number;
+  depth: number;
+}
+
 function LayerItem({
   layer,
-  index,
+  originalIndex,
   isActive,
   allLayers,
+  depthLabel,
   onSelect,
   onRename,
   onDelete,
@@ -35,12 +51,14 @@ function LayerItem({
   onToggleOverlay,
   onDragStart,
   onDragOver,
+  onDragEnd,
   onDrop,
 }: {
   layer: TiledLayer;
-  index: number;
+  originalIndex: number;
   isActive: boolean;
   allLayers: TiledLayer[];
+  depthLabel: string;
   onSelect: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
@@ -49,6 +67,7 @@ function LayerItem({
   onToggleOverlay?: () => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragOver: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
   onDrop: (e: React.DragEvent) => void;
 }) {
   const t = useT();
@@ -57,8 +76,7 @@ function LayerItem({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isCore = isCoreLayer(layer);
-  const role = getDeskRPGRole(layer, index, allLayers);
-
+  const role = getDeskRPGRole(layer, originalIndex, allLayers);
   const layerColor = getLayerColor(layer);
 
   const handleDoubleClick = useCallback(() => {
@@ -83,19 +101,29 @@ function LayerItem({
     [commitRename],
   );
 
+  const tooltipLabel = role
+    ? `${layer.type === 'tilelayer' ? 'Tile' : 'Object'} · ${role.desc}`
+    : layer.type === 'tilelayer' ? 'Tile Layer' : 'Object Layer';
+
   return (
     <div
       draggable
       onDragStart={onDragStart}
       onDragOver={onDragOver}
+      onDragEnd={onDragEnd}
       onDrop={onDrop}
       className={`
-        group flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer transition-colors
+        group flex items-center gap-1 px-1 py-1.5 rounded-md cursor-pointer transition-colors
         ${isActive ? 'border border-primary-light/30' : 'hover:bg-surface-raised border border-transparent'}
       `.trim().replace(/\s+/g, ' ')}
       style={{ backgroundColor: isActive ? layerColor.overlay : undefined }}
       onClick={onSelect}
     >
+      {/* Drag handle */}
+      <span className="flex-shrink-0 cursor-grab active:cursor-grabbing text-text-dim hover:text-text-secondary">
+        <GripVertical className="w-3.5 h-3.5" />
+      </span>
+
       {/* Visibility toggle */}
       <button
         onClick={(e) => {
@@ -103,7 +131,6 @@ function LayerItem({
           onToggleVisibility();
         }}
         className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-surface-raised transition-colors"
-        title={layer.visible ? t('mapEditor.layers.hideLayer') : t('mapEditor.layers.showLayer')}
       >
         {layer.visible ? (
           <Eye className="w-3.5 h-3.5 text-primary-light" />
@@ -112,7 +139,7 @@ function LayerItem({
         )}
       </button>
 
-      {/* Layer name */}
+      {/* Layer name with tooltip */}
       <div className="flex-1 min-w-0">
         {editing ? (
           <input
@@ -125,29 +152,23 @@ function LayerItem({
             className="w-full bg-surface text-caption text-text px-1 py-0.5 rounded border border-border outline-none focus:border-primary-light"
           />
         ) : (
-          <span
-            className="text-caption text-text truncate block"
-            onDoubleClick={handleDoubleClick}
-            title={t('mapEditor.layers.doubleClickToRename')}
-          >
-            {layer.name}
-          </span>
+          <Tooltip label={tooltipLabel} shortcut={depthLabel}>
+            <span
+              className="text-caption text-text truncate block"
+              onDoubleClick={handleDoubleClick}
+            >
+              {layer.name}
+            </span>
+          </Tooltip>
         )}
       </div>
 
-      {/* Info tooltip — right after name */}
-      {role && (
-        <Tooltip label={`${layer.type === 'tilelayer' ? 'Tile' : 'Object'} · ${role.desc}`} shortcut={role.label}>
-          <span className="cursor-default flex-shrink-0">
-            <Info className="w-3.5 h-3.5 text-text-dim hover:text-text-secondary" />
-          </span>
-        </Tooltip>
-      )}
+      {/* Depth badge */}
+      <span className="text-micro text-text-dim bg-surface-raised px-1 py-0.5 rounded font-mono flex-shrink-0">
+        {depthLabel}
+      </span>
 
-      {/* Spacer */}
-      <div className="flex-1" />
-
-      {/* Color chip — click to toggle overlay (right side) */}
+      {/* Color chip */}
       <Tooltip label={showOverlay ? t('mapEditor.layers.hideOverlay') : t('mapEditor.layers.showOverlay')}>
         <button
           className="w-2.5 h-2.5 rounded-sm flex-shrink-0 transition-opacity"
@@ -176,6 +197,31 @@ function LayerItem({
   );
 }
 
+/** Character divider line */
+function CharacterDivider({ isDragOver, onDragOver, onDrop }: {
+  isDragOver: boolean;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+}) {
+  return (
+    <div
+      className={`
+        flex items-center gap-2 px-2 py-1 my-0.5 transition-colors
+        ${isDragOver ? 'bg-primary-light/10' : ''}
+      `.trim().replace(/\s+/g, ' ')}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <div className="flex-1 border-t border-border" />
+      <div className="flex items-center gap-1 text-micro text-text-dim select-none whitespace-nowrap">
+        <User className="w-3 h-3" />
+        <span>Character / NPC</span>
+      </div>
+      <div className="flex-1 border-t border-border" />
+    </div>
+  );
+}
+
 export default function LayerPanel({
   layers,
   activeLayerIndex,
@@ -183,6 +229,7 @@ export default function LayerPanel({
   onRenameLayer,
   onDeleteLayer,
   onReorderLayers,
+  onSetLayerDepth,
   onAddLayer,
   onToggleVisibility,
   layerOverlayMap,
@@ -190,29 +237,120 @@ export default function LayerPanel({
   hideHeader,
 }: LayerPanelProps) {
   const t = useT();
-  const dragIndexRef = useRef<number | null>(null);
+  const dragVisualIndexRef = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [dragOverDivider, setDragOverDivider] = useState(false);
 
-  const handleDragStart = useCallback((index: number) => (e: React.DragEvent) => {
-    dragIndexRef.current = index;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(index));
-  }, []);
+  // Sort layers by depth descending (highest depth at top = renders on top)
+  const sortedEntries: SortedEntry[] = useMemo(() => {
+    return layers
+      .map((layer, originalIndex) => ({
+        layer,
+        originalIndex,
+        depth: getLayerDepth(layer),
+      }))
+      .sort((a, b) => b.depth - a.depth);
+  }, [layers]);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  // Find where the character divider goes (between above-char and below-char layers)
+  const dividerVisualIndex = useMemo(() => {
+    const idx = sortedEntries.findIndex((e) => e.depth < CHARACTER_DEPTH_THRESHOLD);
+    return idx === -1 ? sortedEntries.length : idx;
+  }, [sortedEntries]);
+
+  const handleDragStart = useCallback(
+    (visualIndex: number) => (e: React.DragEvent) => {
+      dragVisualIndexRef.current = visualIndex;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(visualIndex));
+    },
+    [],
+  );
+
+  const handleDragOver = useCallback(
+    (visualIndex: number) => (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      setDragOverIndex(visualIndex);
+      setDragOverDivider(false);
+    },
+    [],
+  );
+
+  const handleDragOverDivider = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    setDragOverDivider(true);
+    setDragOverIndex(null);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    dragVisualIndexRef.current = null;
+    setDragOverIndex(null);
+    setDragOverDivider(false);
   }, []);
 
   const handleDrop = useCallback(
-    (toIndex: number) => (e: React.DragEvent) => {
+    (toVisualIndex: number) => (e: React.DragEvent) => {
       e.preventDefault();
-      const fromIndex = dragIndexRef.current;
-      if (fromIndex !== null && fromIndex !== toIndex) {
-        onReorderLayers(fromIndex, toIndex);
+      const fromVisualIndex = dragVisualIndexRef.current;
+      if (fromVisualIndex === null || fromVisualIndex === toVisualIndex) {
+        handleDragEnd();
+        return;
       }
-      dragIndexRef.current = null;
+
+      const fromOriginal = sortedEntries[fromVisualIndex].originalIndex;
+      const toOriginal = sortedEntries[toVisualIndex].originalIndex;
+      const fromDepth = sortedEntries[fromVisualIndex].depth;
+      const toDepth = sortedEntries[toVisualIndex].depth;
+
+      // Check if crossing the character divider
+      const fromAbove = fromDepth >= CHARACTER_DEPTH_THRESHOLD;
+      const toAbove = toDepth >= CHARACTER_DEPTH_THRESHOLD;
+
+      if (fromAbove !== toAbove && onSetLayerDepth) {
+        // Crossed the divider — update depth
+        if (toAbove) {
+          // Moving to above character: set depth to 10000 + offset
+          onSetLayerDepth(fromOriginal, CHARACTER_DEPTH_THRESHOLD);
+        } else {
+          // Moving to below character: set depth based on target neighbors
+          const neighborDepth = toDepth;
+          onSetLayerDepth(fromOriginal, Math.max(0, neighborDepth));
+        }
+      }
+
+      onReorderLayers(fromOriginal, toOriginal);
+      handleDragEnd();
     },
-    [onReorderLayers],
+    [sortedEntries, onReorderLayers, onSetLayerDepth, handleDragEnd],
+  );
+
+  const handleDropOnDivider = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const fromVisualIndex = dragVisualIndexRef.current;
+      if (fromVisualIndex === null) {
+        handleDragEnd();
+        return;
+      }
+
+      const entry = sortedEntries[fromVisualIndex];
+      const fromAbove = entry.depth >= CHARACTER_DEPTH_THRESHOLD;
+
+      if (onSetLayerDepth) {
+        if (fromAbove) {
+          // Was above, dropping on divider = move just below character
+          onSetLayerDepth(entry.originalIndex, CHARACTER_DEPTH_THRESHOLD - 1);
+        } else {
+          // Was below, dropping on divider = move just above character
+          onSetLayerDepth(entry.originalIndex, CHARACTER_DEPTH_THRESHOLD);
+        }
+      }
+
+      handleDragEnd();
+    },
+    [sortedEntries, onSetLayerDepth, handleDragEnd],
   );
 
   return (
@@ -227,26 +365,48 @@ export default function LayerPanel({
         </div>
       )}
 
-      {/* Layer list */}
+      {/* Layer list sorted by depth with character divider */}
       <div className="flex-1 overflow-y-auto px-1.5 py-1.5 space-y-0.5">
-        {layers.map((layer, index) => (
-          <LayerItem
-            key={layer.id}
-            layer={layer}
-            index={index}
-            isActive={index === activeLayerIndex}
-            allLayers={layers}
-            onSelect={() => onSelectLayer(index)}
-            onRename={(name) => onRenameLayer(index, name)}
-            onDelete={() => onDeleteLayer(index)}
-            onToggleVisibility={() => onToggleVisibility(index)}
-            showOverlay={layerOverlayMap?.[index] ?? true}
-            onToggleOverlay={() => onToggleLayerOverlay?.(index)}
-            onDragStart={handleDragStart(index)}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop(index)}
+        {sortedEntries.map((entry, visualIndex) => {
+          const showDividerBefore = visualIndex === dividerVisualIndex;
+
+          return (
+            <div key={entry.layer.id}>
+              {showDividerBefore && (
+                <CharacterDivider
+                  isDragOver={dragOverDivider}
+                  onDragOver={handleDragOverDivider}
+                  onDrop={handleDropOnDivider}
+                />
+              )}
+              <LayerItem
+                layer={entry.layer}
+                originalIndex={entry.originalIndex}
+                isActive={entry.originalIndex === activeLayerIndex}
+                allLayers={layers}
+                depthLabel={getDepthLabel(entry.layer)}
+                onSelect={() => onSelectLayer(entry.originalIndex)}
+                onRename={(name) => onRenameLayer(entry.originalIndex, name)}
+                onDelete={() => onDeleteLayer(entry.originalIndex)}
+                onToggleVisibility={() => onToggleVisibility(entry.originalIndex)}
+                showOverlay={layerOverlayMap?.[entry.originalIndex] ?? true}
+                onToggleOverlay={() => onToggleLayerOverlay?.(entry.originalIndex)}
+                onDragStart={handleDragStart(visualIndex)}
+                onDragOver={handleDragOver(visualIndex)}
+                onDragEnd={handleDragEnd}
+                onDrop={handleDrop(visualIndex)}
+              />
+            </div>
+          );
+        })}
+        {/* Divider at end if all layers are above character */}
+        {dividerVisualIndex === sortedEntries.length && (
+          <CharacterDivider
+            isDragOver={dragOverDivider}
+            onDragOver={handleDragOverDivider}
+            onDrop={handleDropOnDivider}
           />
-        ))}
+        )}
       </div>
     </div>
   );

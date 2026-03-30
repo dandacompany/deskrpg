@@ -13,7 +13,7 @@ const SIZE_CLASSES: Record<string, string> = {
 export interface ModalProps {
   open: boolean;
   onClose: () => void;
-  title?: string;
+  title?: React.ReactNode;
   size?: "sm" | "md" | "lg" | "full";
   /** If true, Escape key will NOT close the modal */
   disableEscapeClose?: boolean;

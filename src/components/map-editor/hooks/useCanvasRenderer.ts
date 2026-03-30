@@ -90,57 +90,34 @@ export function useCanvasRenderer(
       const endCol = Math.min(mapW - 1, Math.ceil(viewRight / tw));
       const endRow = Math.min(mapH - 1, Math.ceil(viewBottom / th));
 
-      // Sort layers by index but track depth for character insertion
       const layers = mapData.layers;
-      let characterDrawn = false;
+      const charAboveRow = characterState ? characterState.tileY - 1 : -1;
+      // Collect foreground layers to split-render around character
+      const fgLayers: { li: number; layer: typeof layers[0] }[] = [];
 
-      // 5 & 6. Draw layers
+      // Pass 1: Draw all non-foreground layers + foreground above-row only
       for (let li = 0; li < layers.length; li++) {
         const layer = layers[li];
-
-        // Skip collision layer if not showing
-        if (
-          !showCollision &&
-          layer.name.toLowerCase() === 'collision'
-        ) {
-          continue;
-        }
-
-        // Skip invisible layers
+        if (!showCollision && layer.name.toLowerCase() === 'collision') continue;
         if (!layer.visible) continue;
 
         const depth = getLayerDepth(layer);
 
-        // 6. Draw character before foreground layer (depth >= 10000)
-        if (
-          !characterDrawn &&
-          depth >= 10000 &&
-          characterSheet &&
-          characterState
-        ) {
-          drawCharacter(ctx, characterSheet, characterState, tw, th);
-          characterDrawn = true;
-        }
-
         if (layer.type === 'tilelayer' && layer.data) {
-          // Set layer opacity
           const prevAlpha = ctx.globalAlpha;
           ctx.globalAlpha = layer.opacity;
 
-          drawTileLayer(
-            ctx,
-            layer,
-            mapW,
-            tw,
-            th,
-            startCol,
-            startRow,
-            endCol,
-            endRow,
-            findTileset,
-          );
+          if (depth >= 10000) {
+            // Foreground: draw ONLY the above-character row now (before character)
+            fgLayers.push({ li, layer });
+            if (charAboveRow >= startRow && charAboveRow <= endRow) {
+              drawTileLayer(ctx, layer, mapW, tw, th, startCol, charAboveRow, endCol, charAboveRow, findTileset);
+            }
+          } else {
+            drawTileLayer(ctx, layer, mapW, tw, th, startCol, startRow, endCol, endRow, findTileset);
+          }
 
-          // Layer color overlay on non-empty tiles (per-layer toggle)
+          // Layer color overlay
           if (options?.layerOverlayMap?.[li] !== false) {
             const lc = getLayerColor(layer);
             ctx.fillStyle = lc.overlay;
@@ -155,14 +132,32 @@ export function useCanvasRenderer(
 
           ctx.globalAlpha = prevAlpha;
         } else if (layer.type === 'objectgroup' && layer.objects) {
-          // 7. Object layers
           drawObjectLayer(ctx, layer);
         }
       }
 
-      // Draw character after all layers if no foreground layer exists
-      if (!characterDrawn && characterSheet && characterState) {
+      // Pass 2: Draw character (on top of above-row foreground tiles)
+      if (characterSheet && characterState) {
         drawCharacter(ctx, characterSheet, characterState, tw, th);
+      }
+
+      // Pass 3: Draw foreground layers — all rows EXCEPT the above-character row
+      for (const { li, layer } of fgLayers) {
+        if (layer.type !== 'tilelayer' || !layer.data) continue;
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = layer.opacity;
+
+        // Rows above the charAboveRow
+        if (startRow < charAboveRow) {
+          drawTileLayer(ctx, layer, mapW, tw, th, startCol, startRow, endCol, charAboveRow - 1, findTileset);
+        }
+        // Rows below the charAboveRow
+        const resumeRow = charAboveRow >= startRow ? charAboveRow + 1 : startRow;
+        if (resumeRow <= endRow) {
+          drawTileLayer(ctx, layer, mapW, tw, th, startCol, resumeRow, endCol, endRow, findTileset);
+        }
+
+        ctx.globalAlpha = prevAlpha;
       }
 
       // 8. Grid overlay
@@ -265,9 +260,9 @@ function drawCharacter(
   const sx = charState.frame * frameSize;
   const sy = charState.direction * frameSize;
 
-  // Center character on tile
+  // Center character horizontally, shift up so feet align near tile bottom
   const dx = charState.tileX * tw + (tw - drawSize) / 2;
-  const dy = charState.tileY * th + (th - drawSize) / 2;
+  const dy = charState.tileY * th + th - drawSize;
 
   // Shadow ellipse beneath character
   ctx.save();

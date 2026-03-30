@@ -6,7 +6,7 @@ import {
   Pencil, Eraser, Pipette, Move, BoxSelect,
   Scissors, Trash2, PlusSquare, MinusSquare,
   Undo2, Redo2, HelpCircle, ZoomIn,
-  ImageMinus,
+  ImageMinus, Grid3x3,
   Maximize2,
 } from 'lucide-react';
 import Tooltip from './Tooltip';
@@ -43,6 +43,9 @@ interface PixelEditorModalProps {
   initialTileHeight?: number;
   initialCols?: number;
   initialRows?: number;
+  onSaveAsStamp?: (thumbnail: string, cols: number, rows: number, tileWidth: number, tileHeight: number) => void;
+  /** When set, footer shows only Cancel + Apply (for stamp editor pixel editing) */
+  onApply?: (dataUrl: string) => void;
 }
 
 // === Constants ===
@@ -69,6 +72,8 @@ export default function PixelEditorModal({
   initialTileHeight,
   initialCols,
   initialRows,
+  onSaveAsStamp,
+  onApply,
 }: PixelEditorModalProps) {
   const t = useT();
   // --- State ---
@@ -80,12 +85,13 @@ export default function PixelEditorModal({
   const [shiftOffset, setShiftOffset] = useState({ dx: 0, dy: 0 });
   const [expandedCols, setExpandedCols] = useState(0);
   const [expandedRows, setExpandedRows] = useState(0);
+  const [tileEditMode, setTileEditMode] = useState(false);
   const [hoveredEdge, setHoveredEdge] = useState<{
-    top: boolean; bottom: boolean; left: boolean; right: boolean;
-    screenX: number; screenY: number;
+    top: 'add' | 'delete' | null;
+    bottom: 'add' | 'delete' | null;
+    left: 'add' | 'delete' | null;
+    right: 'add' | 'delete' | null;
   } | null>(null);
-  const hoveredEdgeRef = useRef(hoveredEdge);
-  hoveredEdgeRef.current = hoveredEdge;
   const [resizeTargetCols, setResizeTargetCols] = useState(1);
   const [resizeTargetRows, setResizeTargetRows] = useState(1);
   const [brushSize, setBrushSize] = useState(1);
@@ -363,24 +369,6 @@ export default function PixelEditorModal({
           ctx.lineTo(w, y);
           ctx.stroke();
         }
-      }
-    }
-
-    // Edge hover highlight overlay
-    {
-      const he = hoveredEdgeRef.current;
-      if (he) {
-        const w = ec.width * zoom;
-        const h = ec.height * zoom;
-        const tw = effectiveTileWidth * zoom;
-        const th = effectiveTileHeight * zoom;
-        const cols = Math.round(ec.width / effectiveTileWidth);
-        const rows = Math.round(ec.height / effectiveTileHeight);
-        ctx.fillStyle = 'rgba(100, 180, 255, 0.12)';
-        if (he.top) ctx.fillRect(0, 0, w, th);
-        if (he.bottom) ctx.fillRect(0, (rows - 1) * th, w, th);
-        if (he.left) ctx.fillRect(0, 0, tw, h);
-        if (he.right) ctx.fillRect((cols - 1) * tw, 0, tw, h);
       }
     }
 
@@ -752,29 +740,99 @@ export default function PixelEditorModal({
       const hoverCoord = getPixelCoord(e);
       hoverPixelRef.current = hoverCoord;
 
-      // Edge hover detection
-      const tileCoord = getTileCoord(e);
-      if (tileCoord && !isDrawingRef.current && !isShiftDraggingRef.current && !isRectSelectingRef.current) {
-        const { tileX, tileY, cols, rows } = tileCoord;
-        const top = tileY === 0;
-        const bottom = tileY === rows - 1;
-        const left = tileX === 0;
-        const right = tileX === cols - 1;
-        if (top || bottom || left || right) {
-          const canvas = canvasRef.current!;
+      // Edge hover detection (only in tile edit mode)
+      // - On edge tiles → 'delete'
+      // - Outside image (within 1 tile margin) → 'add'
+      if (tileEditMode && !isDrawingRef.current && !isShiftDraggingRef.current && !isRectSelectingRef.current) {
+        const ec = editCanvasRef.current;
+        const canvas = canvasRef.current;
+        if (ec && canvas) {
           const rect = canvas.getBoundingClientRect();
+          const mx = e.clientX - rect.left - pan.x;
+          const my = e.clientY - rect.top - pan.y;
           const tw = effectiveTileWidth * zoom;
           const th = effectiveTileHeight * zoom;
-          setHoveredEdge({
-            top, bottom, left, right,
-            screenX: rect.left + pan.x + tileX * tw + tw / 2,
-            screenY: rect.top + pan.y + tileY * th + th / 2,
-          });
-        } else {
-          setHoveredEdge(null);
+          const cols = Math.round(ec.width / effectiveTileWidth);
+          const rows = Math.round(ec.height / effectiveTileHeight);
+          const imgW = cols * tw;
+          const imgH = rows * th;
+
+          const inImageX = mx >= 0 && mx < imgW;
+          const inImageY = my >= 0 && my < imgH;
+          // Outside image but within one tile width/height
+          const inAddLeft = mx >= -tw && mx < 0;
+          const inAddRight = mx >= imgW && mx < imgW + tw;
+          const inAddTop = my >= -th && my < 0;
+          const inAddBottom = my >= imgH && my < imgH + th;
+
+          const tileX = Math.floor(mx / tw);
+          const tileY = Math.floor(my / th);
+
+          type A = 'add' | 'delete' | null;
+          let top: A = null, bottom: A = null, left: A = null, right: A = null;
+
+          if (inImageX && inImageY) {
+            // On edge tiles → delete
+            const isTop = tileY === 0;
+            const isBottom = tileY === rows - 1;
+            const isLeft = tileX === 0;
+            const isRight = tileX === cols - 1;
+
+            if ((isTop || isBottom) && (isLeft || isRight)) {
+              // Corner tile: use diagonal to pick one axis
+              // Distance from tile edges: closer to horizontal edge → row, closer to vertical → column
+              const withinTileX = mx - tileX * tw; // px from left of tile
+              const withinTileY = my - tileY * th; // px from top of tile
+              const distToVertEdge = isLeft ? withinTileX : tw - withinTileX;
+              const distToHorizEdge = isTop ? withinTileY : th - withinTileY;
+              // Normalize: compare ratio to tile dimensions
+              if (distToHorizEdge / th < distToVertEdge / tw) {
+                // Closer to horizontal edge → select row
+                if (isTop) top = 'delete';
+                if (isBottom) bottom = 'delete';
+              } else {
+                // Closer to vertical edge → select column
+                if (isLeft) left = 'delete';
+                if (isRight) right = 'delete';
+              }
+            } else {
+              if (isTop) top = 'delete';
+              if (isBottom) bottom = 'delete';
+              if (isLeft) left = 'delete';
+              if (isRight) right = 'delete';
+            }
+          } else {
+            // Outside image → add for the corresponding edge
+            const isAddTop = inAddTop && (inImageX || inAddLeft || inAddRight);
+            const isAddBottom = inAddBottom && (inImageX || inAddLeft || inAddRight);
+            const isAddLeft = inAddLeft && (inImageY || inAddTop || inAddBottom);
+            const isAddRight = inAddRight && (inImageY || inAddTop || inAddBottom);
+
+            if ((isAddTop || isAddBottom) && (isAddLeft || isAddRight)) {
+              // Corner outside: use diagonal to pick one axis
+              const distToImgX = isAddLeft ? -mx : mx - imgW;
+              const distToImgY = isAddTop ? -my : my - imgH;
+              if (distToImgY / th < distToImgX / tw) {
+                if (isAddTop) top = 'add';
+                if (isAddBottom) bottom = 'add';
+              } else {
+                if (isAddLeft) left = 'add';
+                if (isAddRight) right = 'add';
+              }
+            } else {
+              if (isAddTop) top = 'add';
+              if (isAddBottom) bottom = 'add';
+              if (isAddLeft) left = 'add';
+              if (isAddRight) right = 'add';
+            }
+          }
+
+          if (top || bottom || left || right) {
+            setHoveredEdge({ top, bottom, left, right });
+          } else {
+            setHoveredEdge(null);
+          }
         }
-      } else if (!tileCoord) {
-        setHoveredEdge(null);
       }
 
       // Drawing (pan is handled at document level now)
@@ -798,7 +856,7 @@ export default function PixelEditorModal({
 
       paintPixel(coord.x, coord.y);
     },
-    [getPixelCoord, getTileCoord, paintPixel, zoom, pan, effectiveTileWidth, effectiveTileHeight, renderCanvas],
+    [getPixelCoord, getTileCoord, paintPixel, zoom, pan, effectiveTileWidth, effectiveTileHeight, tileEditMode, renderCanvas],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -902,11 +960,11 @@ export default function PixelEditorModal({
             setPixelSelection(null);
           }
         }
-        else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); setTool('eraser'); setIsPixelPasteMode(false); }
-        else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); setTool('pen'); setIsPixelPasteMode(false); }
-        else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setTool('eyedropper'); setIsPixelPasteMode(false); }
-        else if (e.key === 'v' || e.key === 'V') { e.preventDefault(); setTool('shift'); setIsPixelPasteMode(false); }
-        else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); setTool('rect-select'); setIsPixelPasteMode(false); }
+        else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); setTool('eraser'); setIsPixelPasteMode(false); setTileEditMode(false); setHoveredEdge(null); }
+        else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); setTool('pen'); setIsPixelPasteMode(false); setTileEditMode(false); setHoveredEdge(null); }
+        else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setTool('eyedropper'); setIsPixelPasteMode(false); setTileEditMode(false); setHoveredEdge(null); }
+        else if (e.key === 'v' || e.key === 'V') { e.preventDefault(); setTool('shift'); setIsPixelPasteMode(false); setTileEditMode(false); setHoveredEdge(null); }
+        else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); setTool('rect-select'); setIsPixelPasteMode(false); setTileEditMode(false); setHoveredEdge(null); }
         else if (e.key === 't' || e.key === 'T') { e.preventDefault(); trimEdges(); }
         else if (e.key === '[') { e.preventDefault(); setBrushSize((s) => Math.max(1, s - 1)); }
         else if (e.key === ']') { e.preventDefault(); setBrushSize((s) => Math.min(16, s + 1)); }
@@ -925,7 +983,7 @@ export default function PixelEditorModal({
   }, []);
 
   const handleSaveAsNew = useCallback(() => {
-    if (!tilesetInfo || !region) return;
+    if (!isDirectImage && (!tilesetInfo || !region)) return;
     const ec = editCanvasRef.current;
     if (!ec) return;
 
@@ -956,7 +1014,7 @@ export default function PixelEditorModal({
     const name = tilesetInfo ? `${tilesetInfo.name}-edited` : 'selection-edited';
     onSaveAsNew(dataUrl, name, maxCols, tw, th, tileCount);
     onClose();
-  }, [effectiveTileWidth, effectiveTileHeight, tilesetInfo, region, expandedCols, expandedRows, onSaveAsNew, onClose]);
+  }, [effectiveTileWidth, effectiveTileHeight, tilesetInfo, region, isDirectImage, expandedCols, expandedRows, onSaveAsNew, onClose]);
 
   const handleOverwrite = useCallback(() => {
     if (!region) return;
@@ -1154,34 +1212,58 @@ export default function PixelEditorModal({
           {/* Tools */}
           <div className="flex items-center gap-1 px-2 border-r border-border">
             <Tooltip label={t('mapEditor.pixel.penTooltip')} shortcut="P">
-              <Button variant={tool === 'pen' ? 'primary' : 'ghost'} size="sm" onClick={() => setTool('pen')}>
+              <Button variant={!tileEditMode && tool === 'pen' ? 'primary' : 'ghost'} size="sm" onClick={() => { setTool('pen'); setTileEditMode(false); setHoveredEdge(null); }}>
                 <Pencil className="w-4 h-4" />
               </Button>
             </Tooltip>
             <Tooltip label={t('mapEditor.pixel.eraserTooltip')} shortcut="E">
-              <Button variant={tool === 'eraser' ? 'primary' : 'ghost'} size="sm" onClick={() => setTool('eraser')}>
+              <Button variant={!tileEditMode && tool === 'eraser' ? 'primary' : 'ghost'} size="sm" onClick={() => { setTool('eraser'); setTileEditMode(false); setHoveredEdge(null); }}>
                 <Eraser className="w-4 h-4" />
               </Button>
             </Tooltip>
             <Tooltip label={t('mapEditor.pixel.eyedropperTooltip')} shortcut="I">
-              <Button variant={tool === 'eyedropper' ? 'primary' : 'ghost'} size="sm" onClick={() => setTool('eyedropper')}>
+              <Button variant={!tileEditMode && tool === 'eyedropper' ? 'primary' : 'ghost'} size="sm" onClick={() => { setTool('eyedropper'); setTileEditMode(false); setHoveredEdge(null); }}>
                 <Pipette className="w-4 h-4" />
               </Button>
             </Tooltip>
             <Tooltip label={t('mapEditor.pixel.shiftTooltip')} shortcut="V">
-              <Button variant={tool === 'shift' ? 'primary' : 'ghost'} size="sm" onClick={() => setTool('shift')}>
+              <Button variant={!tileEditMode && tool === 'shift' ? 'primary' : 'ghost'} size="sm" onClick={() => { setTool('shift'); setTileEditMode(false); setHoveredEdge(null); }}>
                 <Move className="w-4 h-4" />
               </Button>
             </Tooltip>
             <Tooltip label={t('mapEditor.pixel.selectTooltip')} shortcut="M">
-              <Button variant={tool === 'rect-select' ? 'primary' : 'ghost'} size="sm" onClick={() => { setTool('rect-select'); setIsPixelPasteMode(false); }}>
+              <Button variant={!tileEditMode && tool === 'rect-select' ? 'primary' : 'ghost'} size="sm" onClick={() => { setTool('rect-select'); setIsPixelPasteMode(false); setTileEditMode(false); setHoveredEdge(null); }}>
                 <BoxSelect className="w-4 h-4" />
               </Button>
             </Tooltip>
           </div>
 
-          {/* Resize */}
-          <div className="flex items-center gap-1 px-2 border-r border-border">
+          {/* Canvas Operations: BG Remove, Trim */}
+          <div className="flex items-center gap-0.5 px-2 border-r border-border">
+            {removingBg ? (
+              <span className="text-caption text-primary-light px-1">{removingBg}</span>
+            ) : (
+              <Tooltip label={t('mapEditor.pixel.eraseBgTooltip')}>
+                <Button variant="ghost" size="sm" onClick={handleRemoveBg}>
+                  <ImageMinus className="w-4 h-4" />
+                </Button>
+              </Tooltip>
+            )}
+            <Tooltip label={t('mapEditor.pixel.trimTooltip')} shortcut="T">
+              <Button variant="ghost" size="sm" onClick={trimEdges}>
+                <Scissors className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+
+            <div className="w-px h-4 bg-border mx-0.5" />
+
+            <Tooltip label={t('mapEditor.pixel.tileEditMode')}>
+              <Button variant={tileEditMode ? 'primary' : 'ghost'} size="sm" onClick={() => { setTileEditMode(v => !v); setHoveredEdge(null); }}>
+                <Grid3x3 className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+
+            {/* Resize (next to tile edit mode) */}
             <Tooltip label={t('mapEditor.pixel.resize')}>
               <span className="text-caption text-text-secondary"><Maximize2 className="w-3.5 h-3.5" /></span>
             </Tooltip>
@@ -1203,24 +1285,6 @@ export default function PixelEditorModal({
               className="w-10 h-6 text-center text-caption bg-surface-raised border border-border rounded text-text"
             />
             <Button variant="ghost" size="sm" onClick={applyResize}>{t('mapEditor.pixel.apply')}</Button>
-          </div>
-
-          {/* Canvas Operations: BG Remove, Trim, Edge Delete/Add */}
-          <div className="flex items-center gap-0.5 px-2 border-r border-border">
-            {removingBg ? (
-              <span className="text-caption text-primary-light px-1">{removingBg}</span>
-            ) : (
-              <Tooltip label={t('mapEditor.pixel.eraseBgTooltip')}>
-                <Button variant="ghost" size="sm" onClick={handleRemoveBg}>
-                  <ImageMinus className="w-4 h-4" />
-                </Button>
-              </Tooltip>
-            )}
-            <Tooltip label={t('mapEditor.pixel.trimTooltip')} shortcut="T">
-              <Button variant="ghost" size="sm" onClick={trimEdges}>
-                <Scissors className="w-4 h-4" />
-              </Button>
-            </Tooltip>
           </div>
 
           {/* Brush & Color */}
@@ -1310,65 +1374,103 @@ export default function PixelEditorModal({
           ref={containerRef}
           className="flex-1 min-h-0 overflow-hidden bg-bg-deep relative"
           style={{ cursor: cursorStyle }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => { hoverPixelRef.current = null; setHoveredEdge(null); renderCanvas(); }}
         >
           <canvas
             ref={canvasRef}
             className="absolute inset-0"
             onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onMouseLeave={() => { hoverPixelRef.current = null; setHoveredEdge(null); renderCanvas(); }}
+            onMouseLeave={() => { hoverPixelRef.current = null; renderCanvas(); }}
             onWheel={handleWheel}
             onContextMenu={(e) => e.preventDefault()}
           />
 
-          {/* Edge hover buttons */}
+          {/* Edge hover zones: delete (red) on edge row/col, add (green) outside */}
           {hoveredEdge && (() => {
             const ec = editCanvasRef.current;
             if (!ec) return null;
-            const imgW = ec.width * zoom;
-            const imgH = ec.height * zoom;
-            const btnOffset = 4;
+            const tw = effectiveTileWidth * zoom;
+            const th = effectiveTileHeight * zoom;
+            const cols = Math.round(ec.width / effectiveTileWidth);
+            const rows = Math.round(ec.height / effectiveTileHeight);
+            const imgW = cols * tw;
+            const imgH = rows * th;
 
-            const buttons: React.ReactNode[] = [];
+            const zones: React.ReactNode[] = [];
+            const delCls = "w-full h-full bg-red-500/20 hover:bg-red-500/35 border border-red-500/40 hover:border-red-500/60 transition-colors";
+            const addCls = "w-full h-full bg-green-500/15 hover:bg-green-500/30 border border-dashed border-green-500/30 hover:border-green-500/50 transition-colors";
 
-            if (hoveredEdge.top) {
-              buttons.push(
-                <div key="top" className="absolute flex gap-0.5" style={{ left: pan.x + imgW / 2, top: pan.y - 24, transform: 'translateX(-50%)' }}>
-                  <button onClick={() => { deleteEdge('top'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-red-500/90 hover:bg-red-400 text-white text-xs font-bold flex items-center justify-center shadow-md">-</button>
-                  <button onClick={() => { addEdge('top'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-green-500/90 hover:bg-green-400 text-white text-xs font-bold flex items-center justify-center shadow-md">+</button>
-                </div>
+            // Top
+            if (hoveredEdge.top === 'delete') {
+              zones.push(
+                <div key="del-top" className="absolute cursor-pointer" title={t('mapEditor.pixel.deleteTopRowTooltip')}
+                  style={{ left: pan.x, top: pan.y, width: imgW, height: th }}
+                  onClick={() => { deleteEdge('top'); setHoveredEdge(null); }}
+                ><div className={delCls} /></div>
+              );
+            } else if (hoveredEdge.top === 'add') {
+              zones.push(
+                <div key="add-top" className="absolute cursor-pointer" title={t('mapEditor.pixel.addTopRowTooltip')}
+                  style={{ left: pan.x, top: pan.y - th, width: imgW, height: th }}
+                  onClick={() => { addEdge('top'); setHoveredEdge(null); }}
+                ><div className={addCls} /></div>
               );
             }
 
-            if (hoveredEdge.bottom) {
-              buttons.push(
-                <div key="bottom" className="absolute flex gap-0.5" style={{ left: pan.x + imgW / 2, top: pan.y + imgH + btnOffset, transform: 'translateX(-50%)' }}>
-                  <button onClick={() => { addEdge('bottom'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-green-500/90 hover:bg-green-400 text-white text-xs font-bold flex items-center justify-center shadow-md">+</button>
-                  <button onClick={() => { deleteEdge('bottom'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-red-500/90 hover:bg-red-400 text-white text-xs font-bold flex items-center justify-center shadow-md">-</button>
-                </div>
+            // Bottom
+            if (hoveredEdge.bottom === 'delete') {
+              zones.push(
+                <div key="del-bottom" className="absolute cursor-pointer" title={t('mapEditor.pixel.deleteBottomRowTooltip')}
+                  style={{ left: pan.x, top: pan.y + imgH - th, width: imgW, height: th }}
+                  onClick={() => { deleteEdge('bottom'); setHoveredEdge(null); }}
+                ><div className={delCls} /></div>
+              );
+            } else if (hoveredEdge.bottom === 'add') {
+              zones.push(
+                <div key="add-bottom" className="absolute cursor-pointer" title={t('mapEditor.pixel.addBottomRowTooltip')}
+                  style={{ left: pan.x, top: pan.y + imgH, width: imgW, height: th }}
+                  onClick={() => { addEdge('bottom'); setHoveredEdge(null); }}
+                ><div className={addCls} /></div>
               );
             }
 
-            if (hoveredEdge.left) {
-              buttons.push(
-                <div key="left" className="absolute flex flex-col gap-0.5" style={{ left: pan.x - 24, top: pan.y + imgH / 2, transform: 'translateY(-50%)' }}>
-                  <button onClick={() => { deleteEdge('left'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-red-500/90 hover:bg-red-400 text-white text-xs font-bold flex items-center justify-center shadow-md">-</button>
-                  <button onClick={() => { addEdge('left'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-green-500/90 hover:bg-green-400 text-white text-xs font-bold flex items-center justify-center shadow-md">+</button>
-                </div>
+            // Left
+            if (hoveredEdge.left === 'delete') {
+              zones.push(
+                <div key="del-left" className="absolute cursor-pointer" title={t('mapEditor.pixel.deleteLeftColTooltip')}
+                  style={{ left: pan.x, top: pan.y, width: tw, height: imgH }}
+                  onClick={() => { deleteEdge('left'); setHoveredEdge(null); }}
+                ><div className={delCls} /></div>
+              );
+            } else if (hoveredEdge.left === 'add') {
+              zones.push(
+                <div key="add-left" className="absolute cursor-pointer" title={t('mapEditor.pixel.addLeftColTooltip')}
+                  style={{ left: pan.x - tw, top: pan.y, width: tw, height: imgH }}
+                  onClick={() => { addEdge('left'); setHoveredEdge(null); }}
+                ><div className={addCls} /></div>
               );
             }
 
-            if (hoveredEdge.right) {
-              buttons.push(
-                <div key="right" className="absolute flex flex-col gap-0.5" style={{ left: pan.x + imgW + btnOffset, top: pan.y + imgH / 2, transform: 'translateY(-50%)' }}>
-                  <button onClick={() => { addEdge('right'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-green-500/90 hover:bg-green-400 text-white text-xs font-bold flex items-center justify-center shadow-md">+</button>
-                  <button onClick={() => { deleteEdge('right'); setHoveredEdge(null); }} className="w-5 h-5 rounded bg-red-500/90 hover:bg-red-400 text-white text-xs font-bold flex items-center justify-center shadow-md">-</button>
-                </div>
+            // Right
+            if (hoveredEdge.right === 'delete') {
+              zones.push(
+                <div key="del-right" className="absolute cursor-pointer" title={t('mapEditor.pixel.deleteRightColTooltip')}
+                  style={{ left: pan.x + imgW - tw, top: pan.y, width: tw, height: imgH }}
+                  onClick={() => { deleteEdge('right'); setHoveredEdge(null); }}
+                ><div className={delCls} /></div>
+              );
+            } else if (hoveredEdge.right === 'add') {
+              zones.push(
+                <div key="add-right" className="absolute cursor-pointer" title={t('mapEditor.pixel.addRightColTooltip')}
+                  style={{ left: pan.x + imgW, top: pan.y, width: tw, height: imgH }}
+                  onClick={() => { addEdge('right'); setHoveredEdge(null); }}
+                ><div className={addCls} /></div>
               );
             }
 
-            return <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 10 }}><div className="pointer-events-auto">{buttons}</div></div>;
+            return <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 10 }}><div className="pointer-events-auto">{zones}</div></div>;
           })()}
         </div>
       </div>
@@ -1420,22 +1522,49 @@ export default function PixelEditorModal({
       )}
 
       <Modal.Footer>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          {t('common.cancel')}
-        </Button>
-        <Button variant="secondary" size="sm" onClick={handleSaveAsNew}>
-          {t('mapEditor.pixel.saveAsNew')}
-        </Button>
-        {!isDirectImage && (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleOverwrite}
-            disabled={!!isExpanded}
-            title={isExpanded ? t('mapEditor.pixel.overwriteDisabled') : undefined}
-          >
-            {t('mapEditor.pixel.overwrite')}
-          </Button>
+        {onApply ? (
+          <>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => {
+              const ec = editCanvasRef.current;
+              if (!ec) return;
+              onApply(ec.toDataURL('image/png'));
+            }}>
+              {t('mapEditor.pixel.apply')}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            {onSaveAsStamp && (
+              <Button variant="secondary" size="sm" onClick={() => {
+                const ec = editCanvasRef.current;
+                if (!ec) return;
+                const dataUrl = ec.toDataURL('image/png');
+                onSaveAsStamp(dataUrl, expandedCols, expandedRows, effectiveTileWidth, effectiveTileHeight);
+              }}>
+                {t('mapEditor.pixel.saveAsStamp')}
+              </Button>
+            )}
+            <Button variant="secondary" size="sm" onClick={handleSaveAsNew}>
+              {t('mapEditor.pixel.saveAsNew')}
+            </Button>
+            {!isDirectImage && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleOverwrite}
+                disabled={!!isExpanded}
+                title={isExpanded ? t('mapEditor.pixel.overwriteDisabled') : undefined}
+              >
+                {t('mapEditor.pixel.overwrite')}
+              </Button>
+            )}
+          </>
         )}
       </Modal.Footer>
     </Modal>

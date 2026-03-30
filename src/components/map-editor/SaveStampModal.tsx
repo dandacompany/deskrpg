@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Button, Modal } from '@/components/ui';
+import { useT } from '@/lib/i18n';
 
 interface SaveStampModalProps {
   open: boolean;
@@ -11,6 +12,7 @@ interface SaveStampModalProps {
 }
 
 export default function SaveStampModal({ open, onClose, onSave, saving }: SaveStampModalProps) {
+  const t = useT();
   const [name, setName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -28,21 +30,21 @@ export default function SaveStampModal({ open, onClose, onSave, saving }: SaveSt
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Save as Stamp">
+    <Modal open={open} onClose={onClose} title={t('mapEditor.stamps.saveTitle')}>
       <Modal.Body>
         <div className="space-y-3">
           <p className="text-caption text-text-secondary">
-            Save the selected region across all layers as a reusable Stamp.
+            {t('mapEditor.stamps.saveDescription')}
           </p>
           <div>
-            <label className="block text-caption text-text-secondary mb-1">Stamp Name</label>
+            <label className="block text-caption text-text-secondary mb-1">{t('mapEditor.stamps.stampName')}</label>
             <input
               ref={inputRef}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
-              placeholder="e.g. Chair (front), Desk set..."
+              placeholder={t('mapEditor.stamps.stampNamePlaceholder')}
               className="w-full bg-surface text-caption text-text px-3 py-2 rounded border border-border outline-none focus:border-primary-light"
               maxLength={200}
             />
@@ -59,7 +61,7 @@ export default function SaveStampModal({ open, onClose, onSave, saving }: SaveSt
           onClick={handleSubmit}
           disabled={!name.trim() || saving}
         >
-          {saving ? 'Saving...' : 'Save Stamp'}
+          {saving ? t('mapEditor.stamps.saving') : t('mapEditor.stamps.save')}
         </Button>
       </Modal.Footer>
     </Modal>

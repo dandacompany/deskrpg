@@ -8,7 +8,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const [stamp] = await db.select().from(stamps).where(eq(stamps.id, id));
   if (!stamp) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(stamp);
+  // SQLite stores JSON as text — parse if needed
+  const result = {
+    ...stamp,
+    layers: typeof stamp.layers === 'string' ? JSON.parse(stamp.layers) : stamp.layers,
+    tilesets: typeof stamp.tilesets === 'string' ? JSON.parse(stamp.tilesets) : stamp.tilesets,
+  };
+  return NextResponse.json(result);
 }
 
 // DELETE /api/stamps/:id

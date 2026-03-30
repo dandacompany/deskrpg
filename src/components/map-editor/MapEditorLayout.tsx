@@ -43,6 +43,7 @@ import { buildPixelMatchRemap, findLayerByName } from '@/lib/stamp-utils';
 // === Props ===
 
 interface MapEditorLayoutProps {
+  projectId?: string;
   initialTemplateId?: string | null;
   fromCreate?: boolean;
   characterId?: string | null;
@@ -67,6 +68,7 @@ function downloadString(content: string, filename: string, mime = 'application/j
 // === Component ===
 
 export default function MapEditorLayout({
+  projectId: initialProjectId,
   initialTemplateId,
   fromCreate,
   characterId,
@@ -180,8 +182,22 @@ export default function MapEditorLayout({
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-    // No longer auto-load templates or show NewMapModal
-    // ProjectBrowser handles entry
+
+    if (initialProjectId) {
+      loadProject(initialProjectId).then((data) => {
+        if (data) {
+          setStamps(data.stamps.map(s => ({
+            id: s.id,
+            name: s.name,
+            cols: s.cols,
+            rows: s.rows,
+            thumbnail: s.thumbnail ?? null,
+            layerNames: s.layerNames,
+          })));
+          setProjectLoaded(true);
+        }
+      });
+    }
   }, []);
 
   // === Layer visibility sync ===
@@ -932,11 +948,11 @@ export default function MapEditorLayout({
     onUndo: () => dispatch({ type: 'UNDO' }),
     onRedo: () => dispatch({ type: 'REDO' }),
     onNewMap: () => {
-      if (confirmIfDirty()) setProjectLoaded(false);
+      if (confirmIfDirty()) router.push('/map-editor');
     },
     onSave: handleSave,
     onLoad: () => {
-      if (confirmIfDirty()) setProjectLoaded(false);
+      if (confirmIfDirty()) router.push('/map-editor');
     },
     onImportTileset: () => handleQuickImportTileset(),
     onHelp: () => setShowHelp((prev) => !prev),
@@ -1038,28 +1054,25 @@ export default function MapEditorLayout({
 
   // === Render ===
 
-  if (!projectLoaded) {
+  if (!projectLoaded && !initialProjectId) {
     return (
       <ProjectBrowser
-        onOpenProject={async (projectId) => {
-          const data = await loadProject(projectId);
-          if (data) {
-            setStamps(data.stamps.map(s => ({
-              id: s.id,
-              name: s.name,
-              cols: s.cols,
-              rows: s.rows,
-              thumbnail: s.thumbnail,
-              layerNames: s.layerNames,
-            })));
-            setProjectLoaded(true);
-          }
+        onOpenProject={(id) => {
+          router.push(`/map-editor/${id}`);
         }}
         onCreateProject={async (name, cols, rows, tw, th) => {
-          await createProject(name, cols, rows, tw, th);
-          setProjectLoaded(true);
+          const id = await createProject(name, cols, rows, tw, th);
+          router.push(`/map-editor/${id}`);
         }}
       />
+    );
+  }
+
+  if (!projectLoaded) {
+    return (
+      <div className="h-screen bg-gray-900 flex items-center justify-center text-gray-500">
+        Loading project...
+      </div>
     );
   }
 
@@ -1078,10 +1091,10 @@ export default function MapEditorLayout({
         dirty={state.dirty}
         onToolChange={(tool) => dispatch({ type: 'SET_TOOL', tool })}
         onNewMap={() => {
-          if (confirmIfDirty()) setProjectLoaded(false);
+          if (confirmIfDirty()) router.push('/map-editor');
         }}
         onLoad={() => {
-          if (confirmIfDirty()) setProjectLoaded(false);
+          if (confirmIfDirty()) router.push('/map-editor');
         }}
         onSaveToDeskRPG={handleSave}
         onExportTMJ={handleExportTMJ}
