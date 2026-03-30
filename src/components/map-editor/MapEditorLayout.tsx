@@ -615,84 +615,102 @@ export default function MapEditorLayout({
       if (!state.mapData) return;
 
       if (firstgid === 0) {
-        // Direct image mode: apply edited pixels back to the map selection area
-        // The edited image covers the selected region's tiles
-        const sel = state.selection;
+        // Direct image mode: edited pixels from map selection area
+        // Each tile in the edited image corresponds to a map tile at (sel.x+c, sel.y+r)
+        // We update each tile's image in its source tileset
+        const sel = stampSelectionRef.current ?? state.selection;
         if (!sel) return;
 
         const tw = state.mapData.tilewidth;
         const th = state.mapData.tileheight;
+        const mapW = state.mapData.width;
         const editedImg = await loadImage(dataUrl);
 
-        // Find or create a tileset for these edited tiles
-        // We'll create individual tile images and match them via pixel hashing
-        // Simpler approach: update the tileset image in-place by replacing the region
-        const region = state.selectedRegion;
-        if (region) {
-          const tsInfo = state.tilesetImages[region.firstgid];
-          if (!tsInfo) return;
+        // Collect which tilesets need updating: { firstgid -> { tsInfo, canvas (mutable copy) } }
+        const tilesetCanvases = new Map<number, { tsInfo: TilesetImageInfo; canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D }>();
 
-          const fullCanvas = document.createElement('canvas');
-          fullCanvas.width = tsInfo.img.naturalWidth;
-          fullCanvas.height = tsInfo.img.naturalHeight;
-          const ctx = fullCanvas.getContext('2d')!;
+        const getOrCreateCanvas = (fgid: number) => {
+          if (tilesetCanvases.has(fgid)) return tilesetCanvases.get(fgid)!;
+          const tsInfo = state.tilesetImages[fgid];
+          if (!tsInfo) return null;
+          const canvas = document.createElement('canvas');
+          canvas.width = tsInfo.img.naturalWidth || tsInfo.img.width;
+          canvas.height = tsInfo.img.naturalHeight || tsInfo.img.height;
+          const ctx = canvas.getContext('2d')!;
           ctx.drawImage(tsInfo.img, 0, 0);
+          const entry = { tsInfo, canvas, ctx };
+          tilesetCanvases.set(fgid, entry);
+          return entry;
+        };
 
-          // Clear the original region and draw edited image
-          ctx.clearRect(
-            region.col * tsInfo.tilewidth,
-            region.row * tsInfo.tileheight,
-            origCols * tsInfo.tilewidth,
-            origRows * tsInfo.tileheight,
-          );
-          ctx.drawImage(
-            editedImg,
-            region.col * tsInfo.tilewidth,
-            region.row * tsInfo.tileheight,
-          );
+        // For each tile in the edited region, find its GID on the active layer,
+        // locate it in the tileset, and overwrite that tile's pixels
+        const activeLayer = state.mapData.layers[state.activeLayerIndex];
+        if (!activeLayer?.data) return;
 
-          const fullDataUrl = fullCanvas.toDataURL('image/png');
+        const changes: Array<{ index: number; oldGid: number; newGid: number }> = [];
+
+        for (let r = 0; r < Math.max(newRows, origRows); r++) {
+          for (let c = 0; c < Math.max(newCols, origCols); c++) {
+            const mapX = sel.x + c;
+            const mapY = sel.y + r;
+            if (mapX < 0 || mapX >= mapW || mapY < 0 || mapY >= state.mapData.height) continue;
+            const mapIdx = mapY * mapW + mapX;
+
+            if (r >= newRows || c >= newCols) {
+              // Tile was deleted in pixel editor → clear on map
+              if (activeLayer.data[mapIdx] !== 0) {
+                changes.push({ index: mapIdx, oldGid: activeLayer.data[mapIdx], newGid: 0 });
+              }
+              continue;
+            }
+
+            const gid = activeLayer.data[mapIdx];
+            if (gid === 0) continue; // empty tile, skip
+
+            // Find which tileset this GID belongs to
+            let tsFgid = 0;
+            for (const ts of state.mapData.tilesets) {
+              if (gid >= ts.firstgid && gid < ts.firstgid + ts.tilecount) {
+                tsFgid = ts.firstgid;
+                break;
+              }
+            }
+            if (tsFgid === 0) continue;
+
+            const entry = getOrCreateCanvas(tsFgid);
+            if (!entry) continue;
+
+            // Calculate tile position within the tileset image
+            const localId = gid - tsFgid;
+            const tsCol = localId % entry.tsInfo.columns;
+            const tsRow = Math.floor(localId / entry.tsInfo.columns);
+
+            // Copy the edited tile pixel data into the tileset canvas
+            entry.ctx.clearRect(tsCol * tw, tsRow * th, tw, th);
+            entry.ctx.drawImage(
+              editedImg,
+              c * tw, r * th, tw, th,  // source rect from edited image
+              tsCol * tw, tsRow * th, tw, th,  // dest rect in tileset
+            );
+          }
+        }
+
+        // Apply GID changes (deleted tiles)
+        if (changes.length > 0) {
+          dispatch({ type: 'PAINT_TILE', layerIndex: state.activeLayerIndex, changes });
+        }
+
+        // Update all modified tileset images
+        for (const [fgid, entry] of tilesetCanvases) {
+          const fullDataUrl = entry.canvas.toDataURL('image/png');
           const newImg = await loadImage(fullDataUrl);
-
           dispatch({
             type: 'UPDATE_TILESET_IMAGE',
-            firstgid: region.firstgid,
-            imageInfo: { ...tsInfo, img: newImg },
+            firstgid: fgid,
+            imageInfo: { ...entry.tsInfo, img: newImg },
             imageDataUrl: fullDataUrl,
           });
-
-          // If tiles were added/removed, update map GID array
-          if (newCols !== origCols || newRows !== origRows) {
-            const mapW = state.mapData.width;
-            const activeLayer = state.mapData.layers[state.activeLayerIndex];
-            if (activeLayer?.data) {
-              const newData = [...activeLayer.data];
-              for (let r = 0; r < Math.max(newRows, origRows); r++) {
-                for (let c = 0; c < Math.max(newCols, origCols); c++) {
-                  const mapX = sel.x + c;
-                  const mapY = sel.y + r;
-                  if (mapX >= state.mapData.width || mapY >= state.mapData.height) continue;
-                  const idx = mapY * mapW + mapX;
-
-                  if (r >= newRows || c >= newCols) {
-                    // Tile was deleted — set to 0 (transparent)
-                    newData[idx] = 0;
-                  }
-                  // Existing/added tiles keep their GIDs (image was updated in-place)
-                }
-              }
-              dispatch({
-                type: 'PAINT_TILE',
-                layerIndex: state.activeLayerIndex,
-                changes: newData.reduce((acc, gid, idx) => {
-                  if (gid !== activeLayer.data![idx]) {
-                    acc.push({ index: idx, oldGid: activeLayer.data![idx], newGid: gid });
-                  }
-                  return acc;
-                }, [] as Array<{ index: number; oldGid: number; newGid: number }>),
-              });
-            }
-          }
         }
         return;
       }
