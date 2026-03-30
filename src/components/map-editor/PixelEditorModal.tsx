@@ -22,6 +22,19 @@ interface PixelSelection {
   x: number; y: number; width: number; height: number;
 }
 
+interface TransformState {
+  floatingCanvas: HTMLCanvasElement;
+  originX: number;
+  originY: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  smooth: boolean;
+}
+
+type HandleType = 'nw' | 'n' | 'ne' | 'w' | 'e' | 'sw' | 's' | 'se' | 'move';
+
 
 interface PixelEditorModalProps {
   open: boolean;
@@ -102,6 +115,17 @@ export default function PixelEditorModal({
   const [isPixelPasteMode, setIsPixelPasteMode] = useState(false);
   const isRectSelectingRef = useRef(false);
   const rectSelectStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [transformActive, setTransformActive] = useState(false);
+  const transformRef = useRef<TransformState | null>(null);
+  const transformDragRef = useRef<{
+    handle: HandleType;
+    startMx: number;
+    startMy: number;
+    startX: number;
+    startY: number;
+    startW: number;
+    startH: number;
+  } | null>(null);
 
   // --- Refs ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
