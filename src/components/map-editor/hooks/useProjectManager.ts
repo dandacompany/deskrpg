@@ -171,7 +171,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
 
       addBuiltinTileset(mapData);
 
-      return { id: created.id as string, createdBy: created.created_by as string | null };
+      return { id: created.id as string, createdBy: (created.createdBy ?? created.created_by ?? null) as string | null };
     },
     [dispatch, addBuiltinTileset]
   );

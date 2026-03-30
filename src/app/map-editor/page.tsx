@@ -104,7 +104,7 @@ function MapEditorListPage() {
       if (!createRes.ok) throw new Error("Failed to create project");
       const project = await createRes.json();
 
-      router.push(`/map-editor/${project.created_by}/${project.id}`);
+      router.push(`/map-editor/${project.createdBy ?? project.created_by}/${project.id}`);
     } catch (err) {
       console.error("Failed to create project from template:", err);
       alert("Failed to open template for editing.");
@@ -178,7 +178,7 @@ function MapEditorListPage() {
           });
           if (res.ok) {
             const project = await res.json();
-            router.push(`/map-editor/${project.created_by}/${project.id}`);
+            router.push(`/map-editor/${project.createdBy ?? project.created_by}/${project.id}`);
           }
         }}
       />
