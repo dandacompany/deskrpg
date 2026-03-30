@@ -317,9 +317,14 @@ export default function Toolbar({
       {/* Save, Help, Language & Back */}
       <div className="px-2 flex items-center gap-1">
         <Tooltip label={`${t('common.save')} (⌘S)`}>
-          <Button variant={dirty ? "primary" : "ghost"} size="sm" onClick={onSaveToDeskRPG}>
-            <Save className="w-4 h-4" />
-          </Button>
+          <div className="relative">
+            <Button variant="ghost" size="sm" onClick={onSaveToDeskRPG}>
+              <Save className="w-4 h-4" />
+            </Button>
+            {dirty && (
+              <span className="absolute top-0.5 left-0.5 w-2 h-2 rounded-full bg-primary" />
+            )}
+          </div>
         </Tooltip>
         <Tooltip label={t('mapEditor.toolbar.keyboardShortcuts')} shortcut="?">
           <Button variant="ghost" size="sm" onClick={onHelp}>
