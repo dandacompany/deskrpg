@@ -820,6 +820,35 @@ export default function PixelEditorModal({
     renderCanvas();
   }, [pixelSelection, pushUndo, renderCanvas]);
 
+  const commitTransform = useCallback(() => {
+    const t = transformRef.current;
+    const ec = editCanvasRef.current;
+    if (!t || !ec) return;
+
+    const ctx = ec.getContext('2d')!;
+    ctx.imageSmoothingEnabled = t.smooth;
+    ctx.drawImage(t.floatingCanvas, t.x, t.y, t.width, t.height);
+    ctx.imageSmoothingEnabled = false;
+
+    transformRef.current = null;
+    transformDragRef.current = null;
+    setTransformActive(false);
+    setPixelSelection(null);
+    setTransformCursor('default');
+    renderCanvas();
+  }, [renderCanvas]);
+
+  const cancelTransform = useCallback(() => {
+    if (!transformRef.current) return;
+    undo();
+    transformRef.current = null;
+    transformDragRef.current = null;
+    setTransformActive(false);
+    setPixelSelection(null);
+    setTransformCursor('default');
+    renderCanvas();
+  }, [undo, renderCanvas]);
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       // Middle-click: start panning with document-level listeners
@@ -830,6 +859,31 @@ export default function PixelEditorModal({
         document.addEventListener('mousemove', handlePanMove);
         document.addEventListener('mouseup', handlePanEnd);
         return;
+      }
+
+      // Transform mode: handle clicks
+      if (transformActive && e.button === 0) {
+        const handle = hitTestHandle(e);
+        if (handle) {
+          const t = transformRef.current!;
+          const canvas = canvasRef.current!;
+          const rect = canvas.getBoundingClientRect();
+          const mx = (e.clientX - rect.left - pan.x) / zoom;
+          const my = (e.clientY - rect.top - pan.y) / zoom;
+          transformDragRef.current = {
+            handle,
+            startMx: mx,
+            startMy: my,
+            startX: t.x,
+            startY: t.y,
+            startW: t.width,
+            startH: t.height,
+          };
+          return;
+        } else {
+          commitTransform();
+          return;
+        }
       }
 
       if (e.button !== 0) return;
@@ -878,7 +932,7 @@ export default function PixelEditorModal({
       drawStartRef.current = { x: coord.x, y: coord.y };
       paintPixel(coord.x, coord.y);
     },
-    [getPixelCoord, tool, pickColor, pushUndo, paintPixel, handlePanMove, handlePanEnd, isPixelPasteMode, pixelClipboard, renderCanvas],
+    [getPixelCoord, tool, pickColor, pushUndo, paintPixel, handlePanMove, handlePanEnd, isPixelPasteMode, pixelClipboard, renderCanvas, transformActive, hitTestHandle, commitTransform, zoom, pan],
   );
 
   const handleMouseMove = useCallback(
@@ -887,6 +941,27 @@ export default function PixelEditorModal({
       if (transformActive && !transformDragRef.current) {
         const handle = hitTestHandle(e);
         setTransformCursor(getHandleCursor(handle));
+      }
+
+      // Transform mode: drag in progress
+      if (transformActive && transformDragRef.current) {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = (e.clientX - rect.left - pan.x) / zoom;
+        const my = (e.clientY - rect.top - pan.y) / zoom;
+        const drag = transformDragRef.current;
+        const t = transformRef.current!;
+        const dx = mx - drag.startMx;
+        const dy = my - drag.startMy;
+
+        if (drag.handle === 'move') {
+          t.x = Math.round(drag.startX + dx);
+          t.y = Math.round(drag.startY + dy);
+        }
+
+        renderCanvas();
+        return;
       }
 
       // Shift dragging
@@ -1038,6 +1113,10 @@ export default function PixelEditorModal({
   );
 
   const handleMouseUp = useCallback(() => {
+    if (transformDragRef.current) {
+      transformDragRef.current = null;
+      return;
+    }
     if (isRectSelectingRef.current) {
       isRectSelectingRef.current = false;
       rectSelectStartRef.current = null;
