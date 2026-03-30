@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui';
-import { Undo2, Redo2, HelpCircle, ChevronDown, Paintbrush, Eraser, MousePointer2, Move, Home, Globe } from 'lucide-react';
+import { Undo2, Redo2, HelpCircle, ChevronDown, Paintbrush, Eraser, MousePointer2, Move, Home, Globe, Save, ArrowLeft } from 'lucide-react';
 import Tooltip from './Tooltip';
 import type { Tool } from './hooks/useMapEditor';
 import { useT, useLocale, LOCALES } from '@/lib/i18n';
@@ -314,8 +314,13 @@ export default function Toolbar({
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Help, Language & Back */}
+      {/* Save, Help, Language & Back */}
       <div className="px-2 flex items-center gap-1">
+        <Tooltip label={`${t('common.save')} (⌘S)`}>
+          <Button variant={dirty ? "primary" : "ghost"} size="sm" onClick={onSaveToDeskRPG}>
+            <Save className="w-4 h-4" />
+          </Button>
+        </Tooltip>
         <Tooltip label={t('mapEditor.toolbar.keyboardShortcuts')} shortcut="?">
           <Button variant="ghost" size="sm" onClick={onHelp}>
             <HelpCircle className="w-4 h-4" />
@@ -324,7 +329,7 @@ export default function Toolbar({
         <LocaleDropdown />
         <Tooltip label={t('mapEditor.toolbar.backToDeskRPG')}>
           <Button variant="ghost" size="sm" onClick={onGoBack}>
-            <Home className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4" />
           </Button>
         </Tooltip>
       </div>
