@@ -36,7 +36,8 @@ export interface ProjectData {
 }
 
 export interface UseProjectManagerOptions {
-  dispatch: (action: unknown) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  dispatch: (action: any) => void;
   addBuiltinTileset: (mapData: TiledMap) => void;
 }
 
