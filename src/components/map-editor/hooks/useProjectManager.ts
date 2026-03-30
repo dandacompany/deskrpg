@@ -159,19 +159,19 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
         throw new Error(`Failed to create project: ${res.status} ${res.statusText}`);
       }
 
-      const { project } = await res.json();
+      const created = await res.json();
 
       dispatch({
         type: 'SET_MAP',
         mapData,
-        projectName: project.name,
-        projectId: project.id,
+        projectName: created.name,
+        projectId: created.id,
         templateId: null,
       });
 
       addBuiltinTileset(mapData);
 
-      return project.id as string;
+      return created.id as string;
     },
     [dispatch, addBuiltinTileset]
   );
