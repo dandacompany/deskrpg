@@ -44,6 +44,7 @@ import { buildPixelMatchRemap, findLayerByName } from '@/lib/stamp-utils';
 
 interface MapEditorLayoutProps {
   projectId?: string;
+  ownerId?: string;
   initialTemplateId?: string | null;
   fromCreate?: boolean;
   characterId?: string | null;
@@ -69,6 +70,7 @@ function downloadString(content: string, filename: string, mime = 'application/j
 
 export default function MapEditorLayout({
   projectId: initialProjectId,
+  ownerId,
   initialTemplateId,
   fromCreate,
   characterId,
@@ -1057,12 +1059,12 @@ export default function MapEditorLayout({
   if (!projectLoaded && !initialProjectId) {
     return (
       <ProjectBrowser
-        onOpenProject={(id) => {
-          router.push(`/map-editor/${id}`);
+        onOpenProject={(id, userId) => {
+          router.push(`/map-editor/${userId}/${id}`);
         }}
         onCreateProject={async (name, cols, rows, tw, th) => {
-          const id = await createProject(name, cols, rows, tw, th);
-          router.push(`/map-editor/${id}`);
+          const result = await createProject(name, cols, rows, tw, th);
+          router.push(`/map-editor/${result.createdBy}/${result.id}`);
         }}
       />
     );

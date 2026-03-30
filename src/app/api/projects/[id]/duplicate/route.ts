@@ -1,11 +1,17 @@
 import { db, projects, projectTilesets, projectStamps } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { getUserId } from "@/lib/internal-rpc";
 
-// POST /api/projects/[id]/duplicate — duplicate a project with its asset links
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// POST /api/projects/[id]/duplicate — duplicate a project (owner only)
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const userId = getUserId(req);
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { id } = await params;
-  const [original] = await db.select().from(projects).where(eq(projects.id, id));
+  const [original] = await db.select().from(projects).where(
+    and(eq(projects.id, id), eq(projects.createdBy, userId))
+  );
   if (!original) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const [copy] = await db.insert(projects).values({
@@ -13,6 +19,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     thumbnail: original.thumbnail,
     tiledJson: original.tiledJson,
     settings: original.settings,
+    createdBy: userId,
   }).returning();
 
   // Copy tileset links

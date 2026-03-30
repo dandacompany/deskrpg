@@ -146,7 +146,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
       rows: number,
       tileWidth: number,
       tileHeight: number
-    ): Promise<string> => {
+    ): Promise<{ id: string; createdBy: string | null }> => {
       const mapData = createDefaultMap(name, cols, rows, tileWidth);
 
       const res = await fetch('/api/projects', {
@@ -171,7 +171,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
 
       addBuiltinTileset(mapData);
 
-      return created.id as string;
+      return { id: created.id as string, createdBy: created.created_by as string | null };
     },
     [dispatch, addBuiltinTileset]
   );

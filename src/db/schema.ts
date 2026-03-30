@@ -189,6 +189,7 @@ export const projects = pgTable("projects", {
   thumbnail: text("thumbnail"),
   tiledJson: jsonb("tiled_json"),
   settings: jsonb("settings"),
+  createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

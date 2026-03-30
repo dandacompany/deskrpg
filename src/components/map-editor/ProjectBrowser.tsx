@@ -10,6 +10,7 @@ interface ProjectItem {
   name: string;
   thumbnail: string | null;
   settings: Record<string, unknown>;
+  createdBy: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -17,7 +18,7 @@ interface ProjectItem {
 type SortKey = "name" | "updatedAt" | "createdAt";
 
 interface ProjectBrowserProps {
-  onOpenProject: (projectId: string) => void;
+  onOpenProject: (projectId: string, userId: string) => void;
   onCreateProject: (name: string, cols: number, rows: number, tileWidth: number, tileHeight: number) => void;
 }
 
@@ -117,7 +118,7 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {filtered.map((project) => (
               <div key={project.id} className="group relative bg-gray-800 rounded-lg border border-gray-700 hover:border-blue-500 cursor-pointer transition-colors overflow-hidden"
-                onClick={() => onOpenProject(project.id)}>
+                onClick={() => onOpenProject(project.id, project.createdBy)}>
                 <div className="aspect-video bg-gray-900 flex items-center justify-center">
                   {project.thumbnail ? (
                     <img src={project.thumbnail} alt={project.name} className="w-full h-full object-contain" />

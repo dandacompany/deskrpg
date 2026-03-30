@@ -189,6 +189,7 @@ export const projects = sqliteTable("projects", {
   thumbnail: text("thumbnail"),
   tiledJson: text("tiled_json"),
   settings: text("settings"),
+  createdBy: text("created_by").references(() => users.id),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()).notNull(),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()).notNull(),
 });

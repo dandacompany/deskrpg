@@ -6,9 +6,10 @@ import MapEditorLayout from '@/components/map-editor/MapEditorLayout';
 
 function EditorContent() {
   const params = useParams();
+  const userId = params.userId as string;
   const projectId = params.projectId as string;
 
-  return <MapEditorLayout projectId={projectId} />;
+  return <MapEditorLayout projectId={projectId} ownerId={userId} />;
 }
 
 export default function MapEditorProjectPage() {

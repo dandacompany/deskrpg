@@ -3,7 +3,11 @@
     "allow": [
       "Bash(rmdir /Users/dante/.claude/skills/image-editing-api/assets)",
       "Bash(chmod +x /Users/dante/.claude/skills/image-editing-api/scripts/compare-prices.sh)",
-      "Bash(bash /Users/dante/.claude/skills/image-editing-api/scripts/compare-prices.sh inpaint)"
+      "Bash(bash /Users/dante/.claude/skills/image-editing-api/scripts/compare-prices.sh inpaint)",
+      "Bash(grep -l 'REPLICATE' ~/.claude/auth/*.env)",
+      "Bash(grep -l 'FAL' ~/.claude/auth/*.env)",
+      "Bash(grep -l 'RECRAFT' ~/.claude/auth/*.env)",
+      "Bash(grep -l 'KIE' ~/.claude/auth/*.env)"
     ]
   }
 }

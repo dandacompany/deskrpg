@@ -104,7 +104,7 @@ function MapEditorListPage() {
       if (!createRes.ok) throw new Error("Failed to create project");
       const project = await createRes.json();
 
-      router.push(`/map-editor/${project.id}`);
+      router.push(`/map-editor/${project.created_by}/${project.id}`);
     } catch (err) {
       console.error("Failed to create project from template:", err);
       alert("Failed to open template for editing.");
@@ -167,7 +167,7 @@ function MapEditorListPage() {
     <div className="theme-web min-h-screen bg-bg text-text">
       {/* Project Browser Section */}
       <ProjectBrowser
-        onOpenProject={(id) => router.push(`/map-editor/${id}`)}
+        onOpenProject={(id, userId) => router.push(`/map-editor/${userId}/${id}`)}
         onCreateProject={async (name, cols, rows, tw, th) => {
           const { createDefaultMap } = await import("@/components/map-editor/hooks/useMapEditor");
           const mapData = createDefaultMap(name, cols, rows, tw);
@@ -178,7 +178,7 @@ function MapEditorListPage() {
           });
           if (res.ok) {
             const project = await res.json();
-            router.push(`/map-editor/${project.id}`);
+            router.push(`/map-editor/${project.created_by}/${project.id}`);
           }
         }}
       />

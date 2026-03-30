@@ -1,12 +1,26 @@
 import { db, projects, projectTilesets, projectStamps, tilesetImages, stamps, jsonForDb, isPostgres } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { getUserId } from "@/lib/internal-rpc";
+
+async function getOwnedProject(req: NextRequest, id: string) {
+  const userId = getUserId(req);
+  if (!userId) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+
+  const [project] = await db.select().from(projects).where(
+    and(eq(projects.id, id), eq(projects.createdBy, userId))
+  );
+  if (!project) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
+
+  return { project, userId };
+}
 
 // GET /api/projects/[id] — project detail with linked tilesets + stamps
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [project] = await db.select().from(projects).where(eq(projects.id, id));
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const result = await getOwnedProject(req, id);
+  if ("error" in result && !("project" in result)) return result.error;
+  const { project } = result as { project: typeof projects.$inferSelect };
 
   // Load linked tilesets
   const tilesetRows = await db
@@ -53,9 +67,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json({ project: parsedProject, tilesets: tilesetRows, stamps: parsedStamps });
 }
 
-// PUT /api/projects/[id] — save project
+// PUT /api/projects/[id] — save project (owner only)
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const result = await getOwnedProject(req, id);
+  if ("error" in result && !("project" in result)) return result.error;
+
   const body = await req.json();
   const { tiledJson, thumbnail, settings, name } = body;
 
@@ -71,9 +88,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({ ok: true });
 }
 
-// DELETE /api/projects/[id] — delete project
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// DELETE /api/projects/[id] — delete project (owner only)
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const result = await getOwnedProject(req, id);
+  if ("error" in result && !("project" in result)) return result.error;
+
   await db.delete(projects).where(eq(projects.id, id));
   return NextResponse.json({ ok: true });
 }
