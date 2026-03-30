@@ -848,13 +848,22 @@ export default function MapEditorLayout({
   const stampSelectionRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const fetchStamps = useCallback(async () => {
+    if (!state.projectId) return;
     try {
-      const res = await fetch('/api/stamps');
-      if (res.ok) setStamps(await res.json());
+      const res = await fetch(`/api/projects/${state.projectId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setStamps((data.stamps ?? []).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          cols: s.cols,
+          rows: s.rows,
+          thumbnail: s.thumbnail ?? null,
+          layerNames: s.layerNames ?? [],
+        })));
+      }
     } catch { /* ignore */ }
-  }, []);
-
-  useEffect(() => { fetchStamps(); }, [fetchStamps]);
+  }, [state.projectId]);
 
   const handleSaveStamp = useCallback(async (name: string) => {
     const sel = stampSelectionRef.current ?? state.selection;
