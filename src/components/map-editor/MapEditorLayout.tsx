@@ -947,14 +947,21 @@ export default function MapEditorLayout({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (res.ok) await fetchStamps();
+      if (res.ok) {
+        const created = await res.json();
+        // Link to project
+        if (state.projectId && created.id) {
+          await linkStamp(state.projectId, created.id);
+        }
+        await fetchStamps();
+      }
     } finally {
       setSavingStamp(false);
       setShowSaveStamp(false);
       stampThumbnailRef.current = null;
       stampSelectionRef.current = null;
     }
-  }, [state.mapData, state.selection, state.tilesetImages, fetchStamps]);
+  }, [state.mapData, state.selection, state.tilesetImages, state.projectId, fetchStamps, linkStamp]);
 
   const handleSelectStamp = useCallback(async (id: string) => {
     if (activeStamp?.id === id) { setActiveStamp(null); return; }
@@ -1161,6 +1168,35 @@ export default function MapEditorLayout({
   const activeLayerName = state.mapData?.layers[state.activeLayerIndex]?.name ?? '-';
   const toolName = state.tool === 'paint' ? 'Paint' : state.tool === 'erase' ? 'Erase' : state.tool === 'select' ? 'Select' : 'Pan';
 
+  // === Save As ===
+
+  const handleSaveAs = useCallback(async () => {
+    if (!state.mapData || !state.projectId) return;
+    const newName = prompt(t('mapEditor.project.projectName'), state.projectName);
+    if (!newName?.trim()) return;
+
+    try {
+      // Create new project as copy
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newName.trim(),
+          tiledJson: state.mapData,
+          settings: {},
+        }),
+      });
+      if (!res.ok) return;
+      const created = await res.json();
+
+      // Update local state to point to new project
+      dispatch({ type: 'SET_MAP', mapData: state.mapData, projectName: newName.trim(), projectId: created.id });
+      dispatch({ type: 'MARK_CLEAN' });
+    } catch (err) {
+      console.error('Save As failed:', err);
+    }
+  }, [state.mapData, state.projectId, state.projectName, dispatch, t]);
+
   // === Render ===
 
   if (!projectLoaded) {
@@ -1222,6 +1258,7 @@ export default function MapEditorLayout({
         onGoBack={() => router.push('/map-editor')}
         sectionVisibility={sectionVisibility}
         onToggleSection={(id) => setSectionVisibility((prev) => ({ ...prev, [id]: !prev[id] }))}
+        onSaveAs={handleSaveAs}
       />
 
       {/* Main area: panel + canvas */}
@@ -1365,6 +1402,27 @@ export default function MapEditorLayout({
                       onDeleteStamp={handleDeleteStamp}
                       onEditStamp={handleEditStamp}
                       hideHeader
+                      projectId={state.projectId}
+                      onAddToProject={async (stampId) => {
+                        if (state.projectId) {
+                          await linkStamp(state.projectId, stampId);
+                          // Refresh project stamps
+                          try {
+                            const res = await fetch(`/api/projects/${state.projectId}`);
+                            if (res.ok) {
+                              const data = await res.json();
+                              setStamps(data.stamps.map((s: any) => ({
+                                id: s.id,
+                                name: s.name,
+                                cols: s.cols,
+                                rows: s.rows,
+                                thumbnail: s.thumbnail ?? undefined,
+                                layerNames: s.layerNames ?? [],
+                              })));
+                            }
+                          } catch {}
+                        }
+                      }}
                     />
                   )}
                 </div>
@@ -1491,6 +1549,10 @@ export default function MapEditorLayout({
         existingTilesets={state.mapData?.tilesets ?? []}
         onImport={handleImportTileset}
         initialFile={droppedTilesetFile}
+        projectId={state.projectId}
+        onLinkTileset={async (tilesetId, firstgid) => {
+          if (state.projectId) await linkTileset(state.projectId, tilesetId, firstgid);
+        }}
       />
 
       <HelpModal
