@@ -327,6 +327,29 @@ export default function PixelEditorModal({
     buildCheckerboard(editPxW, editPxH, zoom);
   }, [open, editPxW, editPxH, zoom, buildCheckerboard]);
 
+  // --- Transform handle constants & helpers ---
+  const HANDLE_SIZE = 10;
+  const HANDLE_HIT = 12;
+
+  const getHandlePositions = useCallback((t: TransformState, z: number) => {
+    const x = t.x * z;
+    const y = t.y * z;
+    const w = t.width * z;
+    const h = t.height * z;
+    const hw = w / 2;
+    const hh = h / 2;
+    return {
+      nw: { x, y },
+      n:  { x: x + hw, y },
+      ne: { x: x + w, y },
+      w:  { x, y: y + hh },
+      e:  { x: x + w, y: y + hh },
+      sw: { x, y: y + h },
+      s:  { x: x + hw, y: y + h },
+      se: { x: x + w, y: y + h },
+    };
+  }, []);
+
   // --- Render display canvas ---
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -465,8 +488,54 @@ export default function PixelEditorModal({
       ctx.strokeRect(hp.x * zoom, hp.y * zoom, pixelClipboard.width * zoom, pixelClipboard.height * zoom);
     }
 
+    // Transform mode: floating layer + handles
+    if (transformActive && transformRef.current) {
+      const t = transformRef.current;
+
+      // Draw floating layer
+      ctx.imageSmoothingEnabled = t.smooth;
+      ctx.drawImage(t.floatingCanvas, t.x * zoom, t.y * zoom, t.width * zoom, t.height * zoom);
+      ctx.imageSmoothingEnabled = false;
+
+      // Marching ants border
+      ctx.save();
+      const dashOff = (Date.now() / 80) % 12;
+      ctx.setLineDash([4, 4]);
+      ctx.lineDashOffset = -dashOff;
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(t.x * zoom, t.y * zoom, t.width * zoom, t.height * zoom);
+      ctx.lineDashOffset = -dashOff + 4;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.strokeRect(t.x * zoom, t.y * zoom, t.width * zoom, t.height * zoom);
+      ctx.restore();
+
+      // 8 handles
+      const handles = getHandlePositions(t, zoom);
+      const hs = HANDLE_SIZE / 2;
+      const cornerKeys: HandleType[] = ['nw', 'ne', 'sw', 'se'];
+      const edgeKeys: HandleType[] = ['n', 's', 'w', 'e'];
+
+      for (const key of cornerKeys) {
+        const p = handles[key as keyof typeof handles];
+        ctx.fillStyle = '#3b82f6';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.fillRect(p.x - hs, p.y - hs, HANDLE_SIZE, HANDLE_SIZE);
+        ctx.strokeRect(p.x - hs, p.y - hs, HANDLE_SIZE, HANDLE_SIZE);
+      }
+      for (const key of edgeKeys) {
+        const p = handles[key as keyof typeof handles];
+        ctx.fillStyle = '#60a5fa';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.fillRect(p.x - hs, p.y - hs, HANDLE_SIZE, HANDLE_SIZE);
+        ctx.strokeRect(p.x - hs, p.y - hs, HANDLE_SIZE, HANDLE_SIZE);
+      }
+    }
+
     ctx.restore();
-  }, [pan, zoom, tilesetInfo, tool, brushSize, color, pixelSelection, isPixelPasteMode, pixelClipboard]);
+  }, [pan, zoom, tilesetInfo, tool, brushSize, color, pixelSelection, isPixelPasteMode, pixelClipboard, transformActive]);
 
   useEffect(() => {
     renderCanvas();
@@ -474,7 +543,7 @@ export default function PixelEditorModal({
 
   // --- Marching ants animation loop for paste mode ---
   useEffect(() => {
-    if (!isPixelPasteMode || !open) return;
+    if ((!isPixelPasteMode && !transformActive) || !open) return;
     let raf: number;
     const animate = () => {
       renderCanvas();
