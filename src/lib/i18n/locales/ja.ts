@@ -1545,6 +1545,7 @@ const ja: Record<string, string> = {
   "mapEditor.pixel.saveAsStamp": "スタンプとして保存",
   "mapEditor.pixel.saveAsNew": "新しいタイルセットとして保存",
   "mapEditor.pixel.overwrite": "元のタイルセットを上書き",
+  "mapEditor.pixel.applyToMap": "マップに適用",
   "mapEditor.pixel.overwriteDisabled": "上書きできません：グリッドサイズが変更されました。「新しいタイルセットとして保存」を使用してください。",
   "mapEditor.pixel.keyboardShortcuts": "キーボードショートカット",
   "mapEditor.pixel.shortcutPen": "ペンツール",

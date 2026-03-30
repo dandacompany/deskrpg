@@ -1545,6 +1545,7 @@ const en: Record<string, string> = {
   "mapEditor.pixel.saveAsStamp": "Save as Stamp",
   "mapEditor.pixel.saveAsNew": "Save as New Tileset",
   "mapEditor.pixel.overwrite": "Overwrite Original",
+  "mapEditor.pixel.applyToMap": "Apply to Map",
   "mapEditor.pixel.overwriteDisabled": "Cannot overwrite: grid dimensions changed. Use \"Save as New Tileset\" instead.",
   "mapEditor.pixel.keyboardShortcuts": "Keyboard Shortcuts",
   "mapEditor.pixel.shortcutPen": "Pen tool",

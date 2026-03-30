@@ -1545,6 +1545,7 @@ const zh: Record<string, string> = {
   "mapEditor.pixel.saveAsStamp": "保存为图章",
   "mapEditor.pixel.saveAsNew": "另存为新图块集",
   "mapEditor.pixel.overwrite": "覆盖原始图块集",
+  "mapEditor.pixel.applyToMap": "应用到地图",
   "mapEditor.pixel.overwriteDisabled": "\u65E0\u6CD5\u8986\u76D6\uFF1A\u7F51\u683C\u5C3A\u5BF8\u5DF2\u66F4\u6539\u3002\u8BF7\u4F7F\u7528\u300E\u53E6\u5B58\u4E3A\u65B0\u56FE\u5757\u96C6\u300F\u3002",
   "mapEditor.pixel.keyboardShortcuts": "键盘快捷键",
   "mapEditor.pixel.shortcutPen": "画笔工具",

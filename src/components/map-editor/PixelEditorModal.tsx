@@ -1553,17 +1553,15 @@ export default function PixelEditorModal({
             <Button variant="secondary" size="sm" onClick={handleSaveAsNew}>
               {t('mapEditor.pixel.saveAsNew')}
             </Button>
-            {!isDirectImage && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleOverwrite}
-                disabled={!!isExpanded}
-                title={isExpanded ? t('mapEditor.pixel.overwriteDisabled') : undefined}
-              >
-                {t('mapEditor.pixel.overwrite')}
-              </Button>
-            )}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleOverwrite}
+              disabled={isDirectImage ? false : !!isExpanded}
+              title={!isDirectImage && isExpanded ? t('mapEditor.pixel.overwriteDisabled') : undefined}
+            >
+              {t('mapEditor.pixel.applyToMap')}
+            </Button>
           </>
         )}
       </Modal.Footer>

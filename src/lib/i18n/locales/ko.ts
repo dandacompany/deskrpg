@@ -1546,6 +1546,7 @@ const ko: Record<string, string> = {
   "mapEditor.pixel.saveAsStamp": "스탬프로 저장",
   "mapEditor.pixel.saveAsNew": "새 타일셋으로 저장",
   "mapEditor.pixel.overwrite": "원본 덮어쓰기",
+  "mapEditor.pixel.applyToMap": "맵 적용",
   "mapEditor.pixel.overwriteDisabled": "덮어쓸 수 없음: 그리드 크기가 변경되었습니다. \"새 타일셋으로 저장\"을 사용하세요.",
   "mapEditor.pixel.keyboardShortcuts": "키보드 단축키",
   "mapEditor.pixel.shortcutPen": "펜 도구",
