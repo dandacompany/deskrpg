@@ -1008,7 +1008,7 @@ export default function MapEditorLayout({
     } catch { /* ignore */ }
   }, []);
 
-  const handleSaveStampEdit = useCallback(async (updated: { layers: any[]; tilesets: any[]; thumbnail: string | null }) => {
+  const handleSaveStampEdit = useCallback(async (updated: { name?: string; cols?: number; rows?: number; layers: any[]; tilesets: any[]; thumbnail: string | null }) => {
     if (!editingStamp) return;
     try {
       const res = await fetch(`/api/stamps/${editingStamp.id}`, {

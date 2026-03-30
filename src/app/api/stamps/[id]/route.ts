@@ -28,12 +28,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  const { name, layers, tilesets, thumbnail } = body;
+  const { name, cols, rows, layers, tilesets, thumbnail } = body;
 
   await db
     .update(stamps)
     .set({
       ...(name !== undefined && { name }),
+      ...(cols !== undefined && { cols }),
+      ...(rows !== undefined && { rows }),
       ...(layers !== undefined && { layers: jsonForDb(layers) }),
       ...(tilesets !== undefined && { tilesets: jsonForDb(tilesets) }),
       ...(thumbnail !== undefined && { thumbnail }),

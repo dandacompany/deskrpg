@@ -10,7 +10,7 @@ interface StampEditorModalProps {
   open: boolean;
   onClose: () => void;
   stamp: StampData;
-  onSave: (updated: { name?: string; layers: StampLayerData[]; tilesets: StampTilesetData[]; thumbnail: string | null }) => void;
+  onSave: (updated: { name?: string; cols?: number; rows?: number; layers: StampLayerData[]; tilesets: StampTilesetData[]; thumbnail: string | null }) => void;
   onOpenPixelEditor: (imageDataUrl: string, cols: number, rows: number, tileWidth: number, tileHeight: number, onResult: (dataUrl: string, newCols: number, newRows: number) => void) => void;
 }
 
@@ -37,6 +37,8 @@ export default function StampEditorModal({
   const [layers, setLayers] = useState<StampLayerData[]>(parseLayers(stamp.layers));
   const [tilesets, setTilesets] = useState<StampTilesetData[]>(parseTilesets(stamp.tilesets));
   const [tilesetImages, setTilesetImages] = useState<Map<number, HTMLImageElement>>(new Map());
+  const [stampCols, setStampCols] = useState(stamp.cols);
+  const [stampRows, setStampRows] = useState(stamp.rows);
   const [dirty, setDirty] = useState(false);
   const [selectedTile, setSelectedTile] = useState<{ col: number; row: number } | null>(null);
   const [stampName, setStampName] = useState(stamp.name);
@@ -48,6 +50,8 @@ export default function StampEditorModal({
   useEffect(() => {
     setLayers(parseLayers(stamp.layers));
     setTilesets(parseTilesets(stamp.tilesets));
+    setStampCols(stamp.cols);
+    setStampRows(stamp.rows);
     setActiveLayerIndex(0);
     setDirty(false);
     setSelectedTile(null);
@@ -82,13 +86,13 @@ export default function StampEditorModal({
 
   // Get which layer owns a tile at (col, row) — returns layer index or -1
   const getTileOwnerLayer = useCallback((col: number, row: number): number => {
-    const idx = row * stamp.cols + col;
+    const idx = row * stampCols + col;
     // Check layers from top (last) to bottom (first) — topmost non-zero wins
     for (let li = layers.length - 1; li >= 0; li--) {
       if (layers[li].data[idx] !== 0) return li;
     }
     return -1;
-  }, [layers, stamp.cols]);
+  }, [layers, stampCols]);
 
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -98,14 +102,14 @@ export default function StampEditorModal({
     const ds = DISPLAY_TILE_SIZE;
     const tw = stamp.tileWidth;
     const th = stamp.tileHeight;
-    canvas.width = stamp.cols * ds;
-    canvas.height = stamp.rows * ds;
+    canvas.width = stampCols * ds;
+    canvas.height = stampRows * ds;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.imageSmoothingEnabled = false;
 
     // Draw checkerboard background
-    for (let row = 0; row < stamp.rows; row++) {
-      for (let col = 0; col < stamp.cols; col++) {
+    for (let row = 0; row < stampRows; row++) {
+      for (let col = 0; col < stampCols; col++) {
         ctx.fillStyle = (col + row) % 2 === 0 ? '#1a1a2e' : '#16162a';
         ctx.fillRect(col * ds, row * ds, ds, ds);
       }
@@ -127,8 +131,8 @@ export default function StampEditorModal({
         const localId = gid - ts.firstgid;
         const srcCol = localId % ts.columns;
         const srcRow = Math.floor(localId / ts.columns);
-        const dstCol = i % stamp.cols;
-        const dstRow = Math.floor(i / stamp.cols);
+        const dstCol = i % stampCols;
+        const dstRow = Math.floor(i / stampCols);
         ctx.drawImage(img, srcCol * ts.tilewidth, srcRow * ts.tileheight, ts.tilewidth, ts.tileheight, dstCol * ds, dstRow * ds, ds, ds);
       }
 
@@ -139,8 +143,8 @@ export default function StampEditorModal({
         ctx.fillStyle = lc.overlay;
         for (let i = 0; i < layer.data.length; i++) {
           if (layer.data[i] !== 0) {
-            const col = i % stamp.cols;
-            const row = Math.floor(i / stamp.cols);
+            const col = i % stampCols;
+            const row = Math.floor(i / stampCols);
             ctx.fillRect(col * ds, row * ds, ds, ds);
           }
         }
@@ -150,8 +154,8 @@ export default function StampEditorModal({
     ctx.globalAlpha = 1;
 
     // Layer color badge per tile (small dot in corner showing which layer owns it)
-    for (let row = 0; row < stamp.rows; row++) {
-      for (let col = 0; col < stamp.cols; col++) {
+    for (let row = 0; row < stampRows; row++) {
+      for (let col = 0; col < stampCols; col++) {
         const ownerIdx = getTileOwnerLayer(col, row);
         if (ownerIdx < 0) continue;
         const lc = getLayerColorByName(layers[ownerIdx].name);
@@ -167,11 +171,11 @@ export default function StampEditorModal({
     // Tile grid lines
     ctx.strokeStyle = 'rgba(0,255,100,0.3)';
     ctx.lineWidth = 1;
-    for (let x = 0; x <= stamp.cols; x++) {
-      ctx.beginPath(); ctx.moveTo(x * ds, 0); ctx.lineTo(x * ds, stamp.rows * ds); ctx.stroke();
+    for (let x = 0; x <= stampCols; x++) {
+      ctx.beginPath(); ctx.moveTo(x * ds, 0); ctx.lineTo(x * ds, stampRows * ds); ctx.stroke();
     }
-    for (let y = 0; y <= stamp.rows; y++) {
-      ctx.beginPath(); ctx.moveTo(0, y * ds); ctx.lineTo(stamp.cols * ds, y * ds); ctx.stroke();
+    for (let y = 0; y <= stampRows; y++) {
+      ctx.beginPath(); ctx.moveTo(0, y * ds); ctx.lineTo(stampCols * ds, y * ds); ctx.stroke();
     }
 
     // Selected tile highlight
@@ -195,15 +199,15 @@ export default function StampEditorModal({
     const my = (e.clientY - rect.top) * scaleY;
     const col = Math.floor(mx / DISPLAY_TILE_SIZE);
     const row = Math.floor(my / DISPLAY_TILE_SIZE);
-    if (col >= 0 && col < stamp.cols && row >= 0 && row < stamp.rows) {
+    if (col >= 0 && col < stampCols && row >= 0 && row < stampRows) {
       setSelectedTile({ col, row });
     }
-  }, [stamp.cols, stamp.rows]);
+  }, [stampCols, stampRows]);
 
   // Move selected tile to a different layer
   const moveTileToLayer = useCallback((targetLayerIndex: number) => {
     if (!selectedTile) return;
-    const idx = selectedTile.row * stamp.cols + selectedTile.col;
+    const idx = selectedTile.row * stampCols + selectedTile.col;
     const newLayers = layers.map((layer, li) => {
       const newData = [...layer.data];
       if (li === targetLayerIndex) {
@@ -222,12 +226,12 @@ export default function StampEditorModal({
     });
     setLayers(newLayers);
     setDirty(true);
-  }, [selectedTile, layers, stamp.cols]);
+  }, [selectedTile, layers, stampCols]);
 
   // Handle layer click — switch active layer only (tile move is via dropdown)
   const handleLayerClick = useCallback((idx: number) => {
     setActiveLayerIndex(idx);
-  }, [selectedTile, layers, stamp.cols, getTileOwnerLayer, moveTileToLayer]);
+  }, [selectedTile, layers, stampCols, getTileOwnerLayer, moveTileToLayer]);
 
   const buildLayerImage = useCallback((layerIndex: number): string | null => {
     const layer = layers[layerIndex];
@@ -235,8 +239,8 @@ export default function StampEditorModal({
     const tw = stamp.tileWidth;
     const th = stamp.tileHeight;
     const offscreen = document.createElement('canvas');
-    offscreen.width = stamp.cols * tw;
-    offscreen.height = stamp.rows * th;
+    offscreen.width = stampCols * tw;
+    offscreen.height = stampRows * th;
     const ctx = offscreen.getContext('2d');
     if (!ctx) return null;
     for (let i = 0; i < layer.data.length; i++) {
@@ -249,8 +253,8 @@ export default function StampEditorModal({
       const localId = gid - ts.firstgid;
       const srcCol = localId % ts.columns;
       const srcRow = Math.floor(localId / ts.columns);
-      const dstCol = i % stamp.cols;
-      const dstRow = Math.floor(i / stamp.cols);
+      const dstCol = i % stampCols;
+      const dstRow = Math.floor(i / stampCols);
       ctx.drawImage(img, srcCol * ts.tilewidth, srcRow * ts.tileheight, ts.tilewidth, ts.tileheight, dstCol * tw, dstRow * th, tw, th);
     }
     return offscreen.toDataURL('image/png');
@@ -259,11 +263,11 @@ export default function StampEditorModal({
   const handleEditPixels = useCallback(() => {
     const imageDataUrl = buildLayerImage(activeLayerIndex);
     if (!imageDataUrl) return;
-    onOpenPixelEditor(imageDataUrl, stamp.cols, stamp.rows, stamp.tileWidth, stamp.tileHeight, (resultDataUrl: string, newCols: number, newRows: number) => {
+    onOpenPixelEditor(imageDataUrl, stampCols, stampRows, stamp.tileWidth, stamp.tileHeight, (resultDataUrl: string, newCols: number, newRows: number) => {
       const layer = layers[activeLayerIndex];
       const tileCount = newCols * newRows;
-      const oldCols = stamp.cols;
-      const oldRows = stamp.rows;
+      const oldCols = stampCols;
+      const oldRows = stampRows;
 
       // Find which tileset this layer uses (first non-zero GID)
       const firstGid = layer.data.find((g) => g !== 0);
@@ -331,9 +335,9 @@ export default function StampEditorModal({
           }
           newLayers[i] = { ...otherLayer, data: resizedData };
         }
-        // Update stamp cols/rows — mutate stamp reference used by parent
-        stamp.cols = newCols;
-        stamp.rows = newRows;
+        // Update stamp cols/rows
+        setStampCols(newCols);
+        setStampRows(newRows);
       }
 
       setLayers(newLayers);
@@ -343,8 +347,13 @@ export default function StampEditorModal({
 
   const handleSave = useCallback(() => {
     const thumbnail = canvasRef.current?.toDataURL('image/png') ?? null;
-    onSave({ name: stampName !== stamp.name ? stampName : undefined, layers, tilesets, thumbnail });
-  }, [layers, tilesets, stampName, stamp.name, onSave]);
+    onSave({
+      name: stampName !== stamp.name ? stampName : undefined,
+      cols: stampCols !== stamp.cols ? stampCols : undefined,
+      rows: stampRows !== stamp.rows ? stampRows : undefined,
+      layers, tilesets, thumbnail,
+    });
+  }, [layers, tilesets, stampName, stamp.name, stampCols, stampRows, stamp.cols, stamp.rows, onSave]);
 
   const activeLayer = layers[activeLayerIndex];
   const selectedTileOwner = selectedTile ? getTileOwnerLayer(selectedTile.col, selectedTile.row) : -1;
@@ -407,7 +416,7 @@ export default function StampEditorModal({
                   onChange={(e) => {
                     const name = e.target.value;
                     if (!name) return;
-                    const emptyData = new Array(stamp.cols * stamp.rows).fill(0);
+                    const emptyData = new Array(stampCols * stampRows).fill(0);
                     setLayers((prev) => [...prev, { name, type: 'tilelayer', depth: 0, data: emptyData }]);
                     setDirty(true);
                   }}
@@ -423,7 +432,7 @@ export default function StampEditorModal({
 
           {/* Selected tile info — show ALL layers that have a tile here */}
           {selectedTile && (() => {
-            const idx = selectedTile.row * stamp.cols + selectedTile.col;
+            const idx = selectedTile.row * stampCols + selectedTile.col;
             const tileLayers = layers
               .map((layer, li) => ({ li, layer, gid: layer.data[idx] }))
               .filter((t) => t.gid !== 0);
@@ -484,7 +493,7 @@ export default function StampEditorModal({
           <div className="h-9 border-b border-border flex items-center px-3 gap-2 flex-shrink-0">
             <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: getLayerColorByName(activeLayer?.name ?? '').solid }} />
             <span className="text-caption text-text">{activeLayer?.name}</span>
-            <span className="text-micro text-text-dim ml-auto">{stamp.cols} x {stamp.rows}</span>
+            <span className="text-micro text-text-dim ml-auto">{stampCols} x {stampRows}</span>
           </div>
           <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center bg-bg-deep p-4">
             <canvas
