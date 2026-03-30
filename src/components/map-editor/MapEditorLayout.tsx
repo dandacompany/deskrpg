@@ -851,6 +851,11 @@ export default function MapEditorLayout({
     dispatch({ type: 'SET_TOOL', tool: 'select' });
   }, [state.clipboard, dispatch]);
 
+  const handleCut = useCallback(() => {
+    handleCopy();
+    dispatch({ type: 'DELETE_SELECTION' });
+  }, [handleCopy, dispatch]);
+
   const handleDeleteSelection = useCallback(() => {
     if (!state.selection) return;
     dispatch({ type: 'DELETE_SELECTION' });
@@ -1118,6 +1123,7 @@ export default function MapEditorLayout({
     onSpaceDown: handleSpaceDown,
     onSpaceUp: handleSpaceUp,
     onCopy: handleCopy,
+    onCut: handleCut,
     onPaste: handlePaste,
     onDeleteSelection: handleDeleteSelection,
     onClearSelection: handleClearSelection,

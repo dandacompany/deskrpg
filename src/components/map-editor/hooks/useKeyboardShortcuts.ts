@@ -21,6 +21,7 @@ interface ShortcutCallbacks {
   onSpaceDown: () => void;
   onSpaceUp: () => void;
   onCopy: () => void;
+  onCut: () => void;
   onPaste: () => void;
   onDeleteSelection: () => void;
   onClearSelection: () => void;
@@ -77,6 +78,10 @@ export function useKeyboardShortcuts(callbacks: ShortcutCallbacks): void {
             e.preventDefault();
             callbacks.onCopy();
             return;
+          case 'x':
+            e.preventDefault();
+            callbacks.onCut();
+            return;
           case 'v':
             e.preventDefault();
             callbacks.onPaste();
@@ -124,8 +129,6 @@ export function useKeyboardShortcuts(callbacks: ShortcutCallbacks): void {
           callbacks.onHelp();
           break;
         case 'Delete':
-          callbacks.onDeleteLayer();
-          break;
         case 'Backspace':
           callbacks.onDeleteSelection();
           break;
