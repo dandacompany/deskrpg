@@ -127,6 +127,7 @@ export default function PixelEditorModal({
     startH: number;
   } | null>(null);
   const [transformCursor, setTransformCursor] = useState('default');
+  const [smoothScaling, setSmoothScaling] = useState(false);
 
   // --- Refs ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -603,7 +604,7 @@ export default function PixelEditorModal({
     };
     raf = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(raf);
-  }, [isPixelPasteMode, open, renderCanvas]);
+  }, [isPixelPasteMode, transformActive, open, renderCanvas]);
 
   // --- Resize display canvas to container ---
   useEffect(() => {
@@ -795,10 +796,9 @@ export default function PixelEditorModal({
     [pushUndo, renderCanvas],
   );
 
-  const enterTransform = useCallback(() => {
+  const enterTransform = useCallback((sel: PixelSelection) => {
     const ec = editCanvasRef.current;
-    const sel = pixelSelection;
-    if (!ec || !sel || sel.width < 1 || sel.height < 1) return;
+    if (!ec || sel.width < 1 || sel.height < 1) return;
 
     pushUndo();
 
@@ -827,7 +827,7 @@ export default function PixelEditorModal({
     };
     setTransformActive(true);
     renderCanvas();
-  }, [pixelSelection, pushUndo, renderCanvas]);
+  }, [pushUndo, renderCanvas]);
 
   const commitTransform = useCallback(() => {
     const t = transformRef.current;
@@ -844,6 +844,7 @@ export default function PixelEditorModal({
     setTransformActive(false);
     setPixelSelection(null);
     setTransformCursor('default');
+    setSmoothScaling(false);
     renderCanvas();
   }, [renderCanvas]);
 
@@ -855,6 +856,7 @@ export default function PixelEditorModal({
     setTransformActive(false);
     setPixelSelection(null);
     setTransformCursor('default');
+    setSmoothScaling(false);
     renderCanvas();
   }, [undo, renderCanvas]);
 
@@ -984,6 +986,11 @@ export default function PixelEditorModal({
           if (h === 'se' || h === 's' || h === 'sw') newH = drag.startH + dy;
           if (h === 'nw' || h === 'n' || h === 'ne') { newY = drag.startY + dy; newH = drag.startH - dy; }
 
+          // Handle negative dimensions (flip) before aspect ratio
+          if (newW < 0) { newX += newW; newW = -newW; }
+          if (newH < 0) { newY += newH; newH = -newH; }
+
+          // Corner handles: aspect ratio lock (unless Shift held)
           if (isCorner && !e.shiftKey) {
             const ratio = drag.startW / drag.startH;
             const absDx = Math.abs(newW - drag.startW);
@@ -1003,9 +1010,6 @@ export default function PixelEditorModal({
               newW = targetW;
             }
           }
-
-          if (newW < 0) { newX += newW; newW = -newW; }
-          if (newH < 0) { newY += newH; newH = -newH; }
 
           if (newW < 1) newW = 1;
           if (newH < 1) newH = 1;
@@ -1176,8 +1180,9 @@ export default function PixelEditorModal({
     if (isRectSelectingRef.current) {
       isRectSelectingRef.current = false;
       rectSelectStartRef.current = null;
-      // Enter transform mode if we have a valid selection
-      setTimeout(() => enterTransform(), 0);
+      if (pixelSelection && pixelSelection.width >= 1 && pixelSelection.height >= 1) {
+        enterTransform(pixelSelection);
+      }
       return;
     }
     if (isShiftDraggingRef.current) {
@@ -1187,7 +1192,7 @@ export default function PixelEditorModal({
     }
     isDrawingRef.current = false;
     drawStartRef.current = null;
-  }, [applyShift, enterTransform]);
+  }, [applyShift, enterTransform, pixelSelection]);
 
   // Cleanup document listeners on unmount
   useEffect(() => {
@@ -1254,12 +1259,15 @@ export default function PixelEditorModal({
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
+        if (transformActive) return; // Block redo during transform
         redo();
       } else if (mod && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
+        if (transformActive) { cancelTransform(); return; } // Treat as cancel
         undo();
       } else if (mod && (e.key === 'y' || e.key === 'Y')) {
         e.preventDefault();
+        if (transformActive) return; // Block redo during transform
         redo();
       } else if (mod && (e.key === 'c' || e.key === 'C')) {
         // Copy pixel selection → auto enter paste mode
@@ -1586,10 +1594,11 @@ export default function PixelEditorModal({
               <label className="flex items-center gap-1 text-xs text-secondary cursor-pointer select-none">
                 <input
                   type="checkbox"
-                  checked={transformRef.current?.smooth ?? false}
+                  checked={smoothScaling}
                   onChange={(e) => {
                     if (transformRef.current) {
                       transformRef.current.smooth = e.target.checked;
+                      setSmoothScaling(e.target.checked);
                       renderCanvas();
                     }
                   }}
