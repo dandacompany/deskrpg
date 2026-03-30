@@ -36,7 +36,7 @@ interface PixelEditorModalProps {
     tileHeight: number,
     tileCount: number,
   ) => void;
-  onOverwrite: (firstgid: number, dataUrl: string) => void;
+  onOverwrite: (firstgid: number, dataUrl: string, cols: number, rows: number, originalCols: number, originalRows: number) => void;
   /** Direct image mode: provide a pre-rendered image instead of region+tilesetInfo */
   initialImageDataUrl?: string;
   initialTileWidth?: number;
@@ -1017,11 +1017,21 @@ export default function PixelEditorModal({
   }, [effectiveTileWidth, effectiveTileHeight, tilesetInfo, region, isDirectImage, expandedCols, expandedRows, onSaveAsNew, onClose]);
 
   const handleOverwrite = useCallback(() => {
-    if (!region) return;
     const dataUrl = getDataUrl();
-    onOverwrite(region.firstgid, dataUrl);
+    const tw = effectiveTileWidth;
+    const th = effectiveTileHeight;
+
+    if (isDirectImage) {
+      // Direct image mode (e.g. opened from selection)
+      const origCols = initialCols ?? 1;
+      const origRows = initialRows ?? 1;
+      // Use firstgid 0 to signal "apply edited selection back to map"
+      onOverwrite(0, dataUrl, expandedCols, expandedRows, origCols, origRows);
+    } else if (region) {
+      onOverwrite(region.firstgid, dataUrl, expandedCols, expandedRows, region.width, region.height);
+    }
     onClose();
-  }, [region, getDataUrl, onOverwrite, onClose]);
+  }, [region, getDataUrl, onOverwrite, onClose, isDirectImage, expandedCols, expandedRows, initialCols, initialRows, effectiveTileWidth, effectiveTileHeight]);
 
   // --- Resize handler ---
   const applyResize = useCallback(() => {

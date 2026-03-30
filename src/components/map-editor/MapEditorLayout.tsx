@@ -611,7 +611,93 @@ export default function MapEditorLayout({
   );
 
   const handlePixelOverwrite = useCallback(
-    async (firstgid: number, dataUrl: string) => {
+    async (firstgid: number, dataUrl: string, newCols: number, newRows: number, origCols: number, origRows: number) => {
+      if (!state.mapData) return;
+
+      if (firstgid === 0) {
+        // Direct image mode: apply edited pixels back to the map selection area
+        // The edited image covers the selected region's tiles
+        const sel = state.selection;
+        if (!sel) return;
+
+        const tw = state.mapData.tilewidth;
+        const th = state.mapData.tileheight;
+        const editedImg = await loadImage(dataUrl);
+
+        // Find or create a tileset for these edited tiles
+        // We'll create individual tile images and match them via pixel hashing
+        // Simpler approach: update the tileset image in-place by replacing the region
+        const region = state.selectedRegion;
+        if (region) {
+          const tsInfo = state.tilesetImages[region.firstgid];
+          if (!tsInfo) return;
+
+          const fullCanvas = document.createElement('canvas');
+          fullCanvas.width = tsInfo.img.naturalWidth;
+          fullCanvas.height = tsInfo.img.naturalHeight;
+          const ctx = fullCanvas.getContext('2d')!;
+          ctx.drawImage(tsInfo.img, 0, 0);
+
+          // Clear the original region and draw edited image
+          ctx.clearRect(
+            region.col * tsInfo.tilewidth,
+            region.row * tsInfo.tileheight,
+            origCols * tsInfo.tilewidth,
+            origRows * tsInfo.tileheight,
+          );
+          ctx.drawImage(
+            editedImg,
+            region.col * tsInfo.tilewidth,
+            region.row * tsInfo.tileheight,
+          );
+
+          const fullDataUrl = fullCanvas.toDataURL('image/png');
+          const newImg = await loadImage(fullDataUrl);
+
+          dispatch({
+            type: 'UPDATE_TILESET_IMAGE',
+            firstgid: region.firstgid,
+            imageInfo: { ...tsInfo, img: newImg },
+            imageDataUrl: fullDataUrl,
+          });
+
+          // If tiles were added/removed, update map GID array
+          if (newCols !== origCols || newRows !== origRows) {
+            const mapW = state.mapData.width;
+            const activeLayer = state.mapData.layers[state.activeLayerIndex];
+            if (activeLayer?.data) {
+              const newData = [...activeLayer.data];
+              for (let r = 0; r < Math.max(newRows, origRows); r++) {
+                for (let c = 0; c < Math.max(newCols, origCols); c++) {
+                  const mapX = sel.x + c;
+                  const mapY = sel.y + r;
+                  if (mapX >= state.mapData.width || mapY >= state.mapData.height) continue;
+                  const idx = mapY * mapW + mapX;
+
+                  if (r >= newRows || c >= newCols) {
+                    // Tile was deleted — set to 0 (transparent)
+                    newData[idx] = 0;
+                  }
+                  // Existing/added tiles keep their GIDs (image was updated in-place)
+                }
+              }
+              dispatch({
+                type: 'PAINT_TILE',
+                layerIndex: state.activeLayerIndex,
+                changes: newData.reduce((acc, gid, idx) => {
+                  if (gid !== activeLayer.data![idx]) {
+                    acc.push({ index: idx, oldGid: activeLayer.data![idx], newGid: gid });
+                  }
+                  return acc;
+                }, [] as Array<{ index: number; oldGid: number; newGid: number }>),
+              });
+            }
+          }
+        }
+        return;
+      }
+
+      // Normal tileset region overwrite
       const tsInfo = state.tilesetImages[firstgid];
       if (!tsInfo) return;
 
@@ -628,8 +714,8 @@ export default function MapEditorLayout({
       ctx.clearRect(
         region.col * tsInfo.tilewidth,
         region.row * tsInfo.tileheight,
-        region.width * tsInfo.tilewidth,
-        region.height * tsInfo.tileheight,
+        origCols * tsInfo.tilewidth,
+        origRows * tsInfo.tileheight,
       );
       ctx.drawImage(
         editedImg,
@@ -647,7 +733,7 @@ export default function MapEditorLayout({
         imageDataUrl: fullDataUrl,
       });
     },
-    [state.tilesetImages, state.selectedRegion, dispatch],
+    [state.tilesetImages, state.selectedRegion, state.selection, state.mapData, state.activeLayerIndex, dispatch],
   );
 
   // === Reorder Tilesets ===
