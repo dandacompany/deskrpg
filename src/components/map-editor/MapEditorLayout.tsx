@@ -306,6 +306,49 @@ export default function MapEditorLayout({
   const handleSave = useCallback(async () => {
     if (!state.mapData || !state.projectId) return;
     try {
+      // Sync tilesets to DB: save images and link to project
+      for (const ts of state.mapData.tilesets) {
+        const imgInfo = state.tilesetImages[ts.firstgid];
+        if (!imgInfo) continue;
+
+        // Get image as base64
+        let imageDataUrl = ts.image;
+        if (!imageDataUrl.startsWith('data:') && imgInfo.img) {
+          const canvas = document.createElement('canvas');
+          canvas.width = imgInfo.img.naturalWidth || imgInfo.img.width;
+          canvas.height = imgInfo.img.naturalHeight || imgInfo.img.height;
+          const ctx = canvas.getContext('2d')!;
+          ctx.drawImage(imgInfo.img, 0, 0);
+          imageDataUrl = canvas.toDataURL('image/png');
+        }
+
+        // Upsert tileset to DB
+        try {
+          const saveRes = await fetch('/api/tilesets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: ts.name,
+              tilewidth: ts.tilewidth,
+              tileheight: ts.tileheight,
+              columns: ts.columns,
+              tilecount: ts.tilecount,
+              image: imageDataUrl,
+            }),
+          });
+          if (saveRes.ok) {
+            const saved = await saveRes.json();
+            const tilesetDbId = saved.id ?? saved.id;
+            // Link to project (ignore duplicate errors)
+            await fetch(`/api/projects/${state.projectId}/tilesets`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tilesetId: tilesetDbId, firstgid: ts.firstgid }),
+            }).catch(() => {});
+          }
+        } catch {}
+      }
+
       const canvasEl = document.querySelector<HTMLCanvasElement>('#map-canvas');
       const thumbnail = canvasEl ? canvasEl.toDataURL('image/png', 0.5) : null;
       await saveProject(state.projectId, state.mapData, thumbnail);
@@ -313,7 +356,7 @@ export default function MapEditorLayout({
       console.error('Save failed:', err);
       alert('Failed to save. Please try again.');
     }
-  }, [state.mapData, state.projectId, saveProject]);
+  }, [state.mapData, state.projectId, state.tilesetImages, saveProject]);
 
   const handleExportTMJ = useCallback(() => {
     if (!state.mapData) return;

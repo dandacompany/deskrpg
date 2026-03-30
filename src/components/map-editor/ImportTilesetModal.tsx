@@ -315,7 +315,7 @@ export default function ImportTilesetModal({
 
     onImport({ tileset, imageInfo, imageDataUrl });
 
-    // Save tileset to DB and link to project
+    // Save tileset to DB and link to project (await before closing)
     if (projectId) {
       try {
         const saveRes = await fetch('/api/tilesets', {
@@ -332,9 +332,11 @@ export default function ImportTilesetModal({
         });
         if (saveRes.ok) {
           const saved = await saveRes.json();
-          onLinkTileset?.(saved.id, firstgid);
+          await onLinkTileset?.(saved.id, firstgid);
         }
-      } catch {}
+      } catch (err) {
+        console.error('Failed to save tileset to DB:', err);
+      }
     }
 
     onClose();
