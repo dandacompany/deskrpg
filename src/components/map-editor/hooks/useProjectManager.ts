@@ -58,16 +58,18 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
 
       const { project, tilesets } = data;
 
-      // Dispatch SET_MAP first
+      // Clear tilesets from tiledJson to avoid duplicates — DB tilesets are the source of truth
+      const mapData = { ...project.tiledJson, tilesets: [] as TiledTileset[] };
+
       dispatch({
         type: 'SET_MAP',
-        mapData: project.tiledJson,
+        mapData,
         projectName: project.name,
         projectId: project.id,
         templateId: null,
       });
 
-      // Load each tileset image and dispatch ADD_TILESET
+      // Load each tileset image from DB and dispatch ADD_TILESET
       for (const ts of tilesets) {
         const img = new Image();
         img.src = ts.image;
