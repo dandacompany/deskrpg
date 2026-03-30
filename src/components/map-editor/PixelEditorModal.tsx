@@ -94,6 +94,7 @@ export default function PixelEditorModal({
   } | null>(null);
   const [resizeTargetCols, setResizeTargetCols] = useState(1);
   const [resizeTargetRows, setResizeTargetRows] = useState(1);
+  const [resizeDrag, setResizeDrag] = useState<{ startX: number; startY: number; startCols: number; startRows: number } | null>(null);
   const [brushSize, setBrushSize] = useState(1);
   const [showHelp, setShowHelp] = useState(false);
   const [removingBg, setRemovingBg] = useState<string | null>(null);
@@ -1060,6 +1061,39 @@ export default function PixelEditorModal({
     requestAnimationFrame(() => { autoFit(); renderCanvas(); });
   }, [tilesetInfo, resizeTargetCols, resizeTargetRows, pushUndo, autoFit, renderCanvas]);
 
+  // --- Corner drag resize ---
+  const handleResizeHandleDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizeDrag({ startX: e.clientX, startY: e.clientY, startCols: expandedCols, startRows: expandedRows });
+
+    const handleMove = (ev: MouseEvent) => {
+      const tw = effectiveTileWidth * zoom;
+      const th = effectiveTileHeight * zoom;
+      const dx = ev.clientX - e.clientX;
+      const dy = ev.clientY - e.clientY;
+      const newCols = Math.max(1, Math.round(expandedCols + dx / tw));
+      const newRows = Math.max(1, Math.round(expandedRows + dy / th));
+      setResizeTargetCols(newCols);
+      setResizeTargetRows(newRows);
+    };
+
+    const handleUp = () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+      setResizeDrag(null);
+      // applyResize will be called by the user clicking Apply, or we auto-apply:
+      // Auto-apply on drag end
+      setTimeout(() => {
+        const btn = document.querySelector('[data-resize-apply]') as HTMLButtonElement | null;
+        btn?.click();
+      }, 0);
+    };
+
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+  }, [expandedCols, expandedRows, effectiveTileWidth, effectiveTileHeight, zoom]);
+
   // --- Remove background from current edit canvas ---
   const handleRemoveBg = useCallback(async () => {
     const ec = editCanvasRef.current;
@@ -1297,7 +1331,7 @@ export default function PixelEditorModal({
               onChange={(e) => setResizeTargetRows(Math.max(1, Number(e.target.value)))}
               className="w-10 h-6 text-center text-caption bg-surface-raised border border-border rounded text-text"
             />
-            <Button variant="ghost" size="sm" onClick={applyResize}>{t('mapEditor.pixel.apply')}</Button>
+            <Button variant="ghost" size="sm" onClick={applyResize} data-resize-apply>{t('mapEditor.pixel.apply')}</Button>
           </div>
 
           {/* Brush & Color */}
@@ -1399,6 +1433,30 @@ export default function PixelEditorModal({
             onWheel={handleWheel}
             onContextMenu={(e) => e.preventDefault()}
           />
+
+          {/* Corner resize handle */}
+          {editPxW > 0 && editPxH > 0 && (
+            <div
+              className="absolute z-20 w-3 h-3 bg-blue-500 border border-white rounded-sm cursor-nwse-resize hover:bg-blue-400"
+              style={{
+                left: pan.x + (resizeDrag ? resizeTargetCols * effectiveTileWidth * zoom : editPxW * zoom) - 6,
+                top: pan.y + (resizeDrag ? resizeTargetRows * effectiveTileHeight * zoom : editPxH * zoom) - 6,
+              }}
+              onMouseDown={handleResizeHandleDown}
+            />
+          )}
+          {/* Preview outline during resize drag */}
+          {resizeDrag && (
+            <div
+              className="absolute z-10 border-2 border-dashed border-blue-400 pointer-events-none"
+              style={{
+                left: pan.x,
+                top: pan.y,
+                width: resizeTargetCols * effectiveTileWidth * zoom,
+                height: resizeTargetRows * effectiveTileHeight * zoom,
+              }}
+            />
+          )}
 
           {/* Edge hover zones: delete (red) on edge row/col, add (green) outside */}
           {hoveredEdge && (() => {
