@@ -1,12 +1,13 @@
-import { db } from "@/db";
+import { db, jsonForDb } from "@/db";
 import { stamps } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
 
-// GET /api/stamps — list all stamps (lightweight: no tilesets)
-export async function GET() {
-  const rows = await db
+// GET /api/stamps?builtIn=true — list stamps (lightweight: no tilesets), optionally filtered by builtIn
+export async function GET(req: NextRequest) {
+  const builtInParam = req.nextUrl.searchParams.get("builtIn");
+  let query = db
     .select({
       id: stamps.id,
       name: stamps.name,
@@ -17,7 +18,14 @@ export async function GET() {
       createdAt: stamps.createdAt,
     })
     .from(stamps)
-    .orderBy(desc(stamps.createdAt));
+    .orderBy(desc(stamps.createdAt))
+    .$dynamic();
+  if (builtInParam === "true") {
+    query = query.where(eq(stamps.builtIn, true));
+  } else if (builtInParam === "false") {
+    query = query.where(eq(stamps.builtIn, false));
+  }
+  const rows = await query;
 
   const result = rows.map((r) => ({
     id: r.id,
@@ -25,9 +33,10 @@ export async function GET() {
     cols: r.cols,
     rows: r.rows,
     thumbnail: r.thumbnail,
-    layerNames: Array.isArray(r.layers)
-      ? (r.layers as Array<{ name: string }>).map((l) => l.name)
-      : [],
+    layerNames: (() => {
+      const parsed = typeof r.layers === 'string' ? JSON.parse(r.layers) : r.layers;
+      return Array.isArray(parsed) ? (parsed as Array<{ name: string }>).map((l) => l.name) : [];
+    })(),
     createdAt: r.createdAt,
   }));
 
@@ -53,8 +62,8 @@ export async function POST(req: NextRequest) {
       rows: stampRows,
       tileWidth: tileWidth ?? 32,
       tileHeight: tileHeight ?? 32,
-      layers,
-      tilesets,
+      layers: jsonForDb(layers),
+      tilesets: jsonForDb(tilesets),
       thumbnail: thumbnail ?? null,
       createdBy: userId ?? null,
     })
