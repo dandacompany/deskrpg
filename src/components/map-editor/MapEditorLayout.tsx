@@ -109,7 +109,7 @@ export default function MapEditorLayout({
   const [savingStamp, setSavingStamp] = useState(false);
   const [editingStamp, setEditingStamp] = useState<StampData | null>(null);
   const [showStampEditor, setShowStampEditor] = useState(false);
-  const pixelEditorStampCallbackRef = useRef<((dataUrl: string) => void) | null>(null);
+  const pixelEditorStampCallbackRef = useRef<((dataUrl: string, newCols: number, newRows: number) => void) | null>(null);
 
   // Pan (space-held) state
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -1591,8 +1591,8 @@ export default function MapEditorLayout({
           initialTileHeight={selectionPixelData?.tileHeight}
           initialCols={selectionPixelData?.cols}
           initialRows={selectionPixelData?.rows}
-          onApply={pixelEditorStampCallbackRef.current ? (dataUrl: string) => {
-            pixelEditorStampCallbackRef.current?.(dataUrl);
+          onApply={pixelEditorStampCallbackRef.current ? (dataUrl: string, newCols: number, newRows: number) => {
+            pixelEditorStampCallbackRef.current?.(dataUrl, newCols, newRows);
             pixelEditorStampCallbackRef.current = null;
             setShowPixelEditor(false);
             setSelectionPixelData(null);

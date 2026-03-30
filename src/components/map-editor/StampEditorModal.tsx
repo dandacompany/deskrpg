@@ -11,7 +11,7 @@ interface StampEditorModalProps {
   onClose: () => void;
   stamp: StampData;
   onSave: (updated: { name?: string; layers: StampLayerData[]; tilesets: StampTilesetData[]; thumbnail: string | null }) => void;
-  onOpenPixelEditor: (imageDataUrl: string, cols: number, rows: number, tileWidth: number, tileHeight: number, onResult: (dataUrl: string) => void) => void;
+  onOpenPixelEditor: (imageDataUrl: string, cols: number, rows: number, tileWidth: number, tileHeight: number, onResult: (dataUrl: string, newCols: number, newRows: number) => void) => void;
 }
 
 function getLayerColorByName(name: string) {
@@ -259,41 +259,84 @@ export default function StampEditorModal({
   const handleEditPixels = useCallback(() => {
     const imageDataUrl = buildLayerImage(activeLayerIndex);
     if (!imageDataUrl) return;
-    onOpenPixelEditor(imageDataUrl, stamp.cols, stamp.rows, stamp.tileWidth, stamp.tileHeight, (resultDataUrl: string) => {
+    onOpenPixelEditor(imageDataUrl, stamp.cols, stamp.rows, stamp.tileWidth, stamp.tileHeight, (resultDataUrl: string, newCols: number, newRows: number) => {
       const layer = layers[activeLayerIndex];
-      const tileCount = stamp.cols * stamp.rows;
+      const tileCount = newCols * newRows;
+      const oldCols = stamp.cols;
+      const oldRows = stamp.rows;
 
       // Find which tileset this layer uses (first non-zero GID)
       const firstGid = layer.data.find((g) => g !== 0);
       const existingTs = firstGid ? findTileset(firstGid) : null;
 
+      // Build new data array for the potentially resized grid
+      const newData: number[] = [];
+      const baseGid = existingTs?.firstgid ?? tilesets.reduce((max, ts) => Math.max(max, ts.firstgid + ts.tilecount), 1);
+
+      for (let r = 0; r < newRows; r++) {
+        for (let c = 0; c < newCols; c++) {
+          // Check if this tile position had content in the old grid
+          if (r < oldRows && c < oldCols) {
+            const oldIdx = r * oldCols + c;
+            const oldGid = layer.data[oldIdx];
+            if (oldGid !== 0) {
+              // Remap to sequential position in the tileset
+              const newIdx = r * newCols + c;
+              newData.push(baseGid + newIdx);
+            } else {
+              newData.push(0);
+            }
+          } else {
+            // New tile added by expansion — assign a GID
+            const newIdx = r * newCols + c;
+            newData.push(baseGid + newIdx);
+          }
+        }
+      }
+
       if (existingTs) {
-        // Update existing tileset image in-place, keep same GIDs
         const updatedTilesets = tilesets.map((ts) =>
           ts.firstgid === existingTs.firstgid
-            ? { ...ts, image: resultDataUrl, columns: stamp.cols, tilecount: tileCount }
+            ? { ...ts, image: resultDataUrl, columns: newCols, tilecount: tileCount }
             : ts,
         );
         setTilesets(updatedTilesets);
-        // GIDs stay the same — just remap to sequential within this tileset
-        const newData = layer.data.map((gid, i) => gid !== 0 ? existingTs.firstgid + i : 0);
-        const newLayers = [...layers];
-        newLayers[activeLayerIndex] = { ...layer, data: newData };
-        setLayers(newLayers);
       } else {
-        // No existing tileset — create one with the original layer name (not "-edited")
-        const newFirstgid = tilesets.reduce((max, ts) => Math.max(max, ts.firstgid + ts.tilecount), 1);
         const newTileset: StampTilesetData = {
-          name: layer.name, firstgid: newFirstgid,
+          name: layer.name, firstgid: baseGid,
           tilewidth: stamp.tileWidth, tileheight: stamp.tileHeight,
-          columns: stamp.cols, tilecount: tileCount, image: resultDataUrl,
+          columns: newCols, tilecount: tileCount, image: resultDataUrl,
         };
-        const newData = layer.data.map((_gid, i) => newFirstgid + i);
-        const newLayers = [...layers];
-        newLayers[activeLayerIndex] = { ...layer, data: newData };
-        setLayers(newLayers);
         setTilesets(prev => [...prev, newTileset]);
       }
+
+      // Update layer data and stamp dimensions
+      const newLayers = [...layers];
+      newLayers[activeLayerIndex] = { ...layer, data: newData };
+
+      // Also resize other layers if grid size changed
+      if (newCols !== oldCols || newRows !== oldRows) {
+        for (let i = 0; i < newLayers.length; i++) {
+          if (i === activeLayerIndex) continue;
+          const otherLayer = newLayers[i];
+          const resizedData: number[] = [];
+          for (let r = 0; r < newRows; r++) {
+            for (let c = 0; c < newCols; c++) {
+              if (r < oldRows && c < oldCols) {
+                resizedData.push(otherLayer.data[r * oldCols + c]);
+              } else {
+                resizedData.push(0);
+              }
+            }
+          }
+          newLayers[i] = { ...otherLayer, data: resizedData };
+        }
+        // Update stamp cols/rows — mutate stamp reference used by parent
+        stamp.cols = newCols;
+        stamp.rows = newRows;
+      }
+
+      setLayers(newLayers);
       setDirty(true);
     });
   }, [activeLayerIndex, layers, tilesets, stamp, buildLayerImage, onOpenPixelEditor]);

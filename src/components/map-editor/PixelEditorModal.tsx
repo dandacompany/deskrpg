@@ -45,7 +45,7 @@ interface PixelEditorModalProps {
   initialRows?: number;
   onSaveAsStamp?: (thumbnail: string, cols: number, rows: number, tileWidth: number, tileHeight: number) => void;
   /** When set, footer shows only Cancel + Apply (for stamp editor pixel editing) */
-  onApply?: (dataUrl: string) => void;
+  onApply?: (dataUrl: string, newCols: number, newRows: number) => void;
 }
 
 // === Constants ===
@@ -1540,7 +1540,7 @@ export default function PixelEditorModal({
             <Button variant="primary" size="sm" onClick={() => {
               const ec = editCanvasRef.current;
               if (!ec) return;
-              onApply(ec.toDataURL('image/png'));
+              onApply(ec.toDataURL('image/png'), expandedCols, expandedRows);
             }}>
               {t('mapEditor.pixel.apply')}
             </Button>
