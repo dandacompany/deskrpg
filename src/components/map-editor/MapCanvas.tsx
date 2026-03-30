@@ -320,6 +320,9 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      // Close context menu on any mouse down
+      setContextMenu(null);
+
       const canvas = canvasRef.current;
       if (!canvas || !state.mapData) return;
       const rect = canvas.getBoundingClientRect();
@@ -769,7 +772,7 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
       {/* Context Menu */}
       {contextMenu && state.selection && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
+          <div className="fixed inset-0 z-40" onMouseDown={() => setContextMenu(null)} />
           <div
             className="fixed z-50 bg-surface border border-border rounded-md shadow-lg py-1 min-w-[160px]"
             style={{ left: contextMenu.x, top: contextMenu.y }}
