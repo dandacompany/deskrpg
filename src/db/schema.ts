@@ -162,5 +162,52 @@ export const stamps = pgTable("stamps", {
   tilesets: jsonb("tilesets").notNull(),
   thumbnail: text("thumbnail"),
   createdBy: uuid("created_by").references(() => users.id),
+  builtIn: boolean("built_in").default(false).notNull(),
+  tags: text("tags"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
+
+export const tilesetImages = pgTable("tileset_images", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 200 }).notNull(),
+  tilewidth: integer("tilewidth").notNull().default(32),
+  tileheight: integer("tileheight").notNull().default(32),
+  columns: integer("columns").notNull(),
+  tilecount: integer("tilecount").notNull(),
+  image: text("image").notNull(),
+  builtIn: boolean("built_in").default(false).notNull(),
+  tags: text("tags"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_tileset_images_name").on(table.name),
+]);
+
+// ── Projects ──────────────────────────────────────────────
+export const projects = pgTable("projects", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  thumbnail: text("thumbnail"),
+  tiledJson: jsonb("tiled_json"),
+  settings: jsonb("settings"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const projectTilesets = pgTable("project_tilesets", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  tilesetId: uuid("tileset_id").notNull().references(() => tilesetImages.id, { onDelete: "cascade" }),
+  firstgid: integer("firstgid").notNull(),
+  addedAt: timestamp("added_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  unique("uq_project_tileset").on(t.projectId, t.tilesetId),
+]);
+
+export const projectStamps = pgTable("project_stamps", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  stampId: uuid("stamp_id").notNull().references(() => stamps.id, { onDelete: "cascade" }),
+  addedAt: timestamp("added_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  unique("uq_project_stamp").on(t.projectId, t.stampId),
+]);

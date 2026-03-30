@@ -162,5 +162,52 @@ export const stamps = sqliteTable("stamps", {
   tilesets: text("tilesets").notNull(),
   thumbnail: text("thumbnail"),
   createdBy: text("created_by").references(() => users.id),
+  builtIn: integer("built_in", { mode: "boolean" }).default(false).notNull(),
+  tags: text("tags"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
 });
+
+export const tilesetImages = sqliteTable("tileset_images", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  tilewidth: integer("tilewidth").notNull().default(32),
+  tileheight: integer("tileheight").notNull().default(32),
+  columns: integer("columns").notNull(),
+  tilecount: integer("tilecount").notNull(),
+  image: text("image").notNull(), // base64 data URL
+  builtIn: integer("built_in", { mode: "boolean" }).default(false).notNull(),
+  tags: text("tags"),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  uniqueIndex("idx_tileset_images_name").on(table.name),
+]);
+
+// ── Projects ──────────────────────────────────────────────
+export const projects = sqliteTable("projects", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  thumbnail: text("thumbnail"),
+  tiledJson: text("tiled_json"),
+  settings: text("settings"),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()).notNull(),
+  updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()).notNull(),
+});
+
+export const projectTilesets = sqliteTable("project_tilesets", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  tilesetId: text("tileset_id").notNull().references(() => tilesetImages.id, { onDelete: "cascade" }),
+  firstgid: integer("firstgid").notNull(),
+  addedAt: text("added_at").$defaultFn(() => new Date().toISOString()).notNull(),
+}, (t) => [
+  unique("uq_project_tileset").on(t.projectId, t.tilesetId),
+]);
+
+export const projectStamps = sqliteTable("project_stamps", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  stampId: text("stamp_id").notNull().references(() => stamps.id, { onDelete: "cascade" }),
+  addedAt: text("added_at").$defaultFn(() => new Date().toISOString()).notNull(),
+}, (t) => [
+  unique("uq_project_stamp").on(t.projectId, t.stampId),
+]);
