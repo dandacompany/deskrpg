@@ -667,6 +667,14 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
     return offscreen.toDataURL('image/png');
   }, [state.mapData, state.selection, findTileset]);
 
+  // Close context menu on any keypress
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleKey = () => setContextMenu(null);
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [contextMenu]);
+
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     if (state.tool === 'select' && state.selection) {
