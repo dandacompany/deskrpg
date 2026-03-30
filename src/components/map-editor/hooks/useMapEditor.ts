@@ -103,6 +103,7 @@ export interface EditorState {
   projectName: string;
   dirty: boolean;
   templateId: string | null;
+  projectId: string | null;
   mapData: TiledMap | null;
   tilesetImages: Record<number, TilesetImageInfo>;
   activeLayerIndex: number;
@@ -150,6 +151,28 @@ export const LAYER_COLORS: Record<string, { solid: string; overlay: string }> = 
 export function getLayerColor(layer: TiledLayer) {
   const n = (layer.name || '').toLowerCase();
   return LAYER_COLORS[n] ?? { solid: '#6b7280', overlay: 'rgba(107, 114, 128, 0.12)' };
+}
+
+/** Character depth threshold — layers with depth >= this render above characters */
+export const CHARACTER_DEPTH_THRESHOLD = 10000;
+
+/** Extract numeric depth from a layer's properties array */
+export function getLayerDepth(layer: TiledLayer): number {
+  const depthProp = layer.properties?.find((p) => p.name === 'depth');
+  if (!depthProp) return 0;
+  if (depthProp.value === 'y-sort') return 5000;
+  return Number(depthProp.value) || 0;
+}
+
+/** Get a short display label for a layer's depth */
+export function getDepthLabel(layer: TiledLayer): string {
+  const depthProp = layer.properties?.find((p) => p.name === 'depth');
+  if (!depthProp) return 'D:0';
+  if (depthProp.value === 'y-sort') return 'y-sort';
+  const v = Number(depthProp.value) || 0;
+  if (v >= 10000) return `D:${(v / 1000).toFixed(0)}K`;
+  if (v < 0) return `D:${v}`;
+  return `D:${v}`;
 }
 
 // === Collision Tileset Generator ===
@@ -220,7 +243,7 @@ export function createDefaultMap(name: string, width: number, height: number, ti
 
 // === Reducer Actions ===
 type EditorAction =
-  | { type: 'SET_MAP'; mapData: TiledMap; projectName?: string; templateId?: string | null }
+  | { type: 'SET_MAP'; mapData: TiledMap; projectName?: string; templateId?: string | null; projectId?: string | null }
   | { type: 'SET_TOOL'; tool: Tool }
   | { type: 'SET_ACTIVE_LAYER'; index: number }
   | { type: 'SET_SELECTED_TILE'; gid: number; region?: TileRegion | null }
@@ -250,7 +273,9 @@ type EditorAction =
   | { type: 'RENAME_TILESET'; firstgid: number; name: string }
   | { type: 'REORDER_TILESETS'; fromFirstgid: number; toFirstgid: number }
   | { type: 'REMOVE_UNUSED_TILESETS'; firstgids: number[] }
-  | { type: 'PLACE_STAMP'; stampLayers: Array<{ layerIndex: number; changes: Array<{ index: number; oldGid: number; newGid: number }> }> };
+  | { type: 'PLACE_STAMP'; stampLayers: Array<{ layerIndex: number; changes: Array<{ index: number; oldGid: number; newGid: number }> }> }
+  | { type: 'SET_LAYER_DEPTH'; index: number; depth: number | string }
+  | { type: 'MOVE_SELECTION_TO_LAYER'; targetLayerIndex: number };
 
 export type { EditorAction };
 
@@ -263,6 +288,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         mapData: action.mapData,
         projectName: action.projectName ?? state.projectName,
         templateId: action.templateId !== undefined ? action.templateId : state.templateId,
+        projectId: action.projectId !== undefined ? action.projectId : state.projectId,
         dirty: false,
         undoStack: [],
         redoStack: [],
@@ -331,13 +357,23 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       }
 
       const undoAction = lastAction;
-      const newLayers = [...state.mapData.layers];
-      const layer = { ...newLayers[undoAction.layerIndex] };
+      const newLayers = state.mapData.layers.map((l) => ({
+        ...l,
+        data: l.data ? [...l.data] : l.data,
+      }));
+      const layer = newLayers[undoAction.layerIndex];
       if (layer.type !== 'tilelayer' || !layer.data) return state;
-      const newData = [...layer.data];
-      undoAction.changes.forEach(c => { newData[c.index] = c.oldGid; });
-      layer.data = newData;
-      newLayers[undoAction.layerIndex] = layer;
+      undoAction.changes.forEach(c => { layer.data![c.index] = c.oldGid; });
+      // Handle extra layers (e.g., MOVE_SELECTION_TO_LAYER)
+      if ('extraLayers' in undoAction) {
+        for (const el of (undoAction as any).extraLayers) {
+          const extraLayer = newLayers[el.layerIndex];
+          if (!extraLayer || !extraLayer.data) continue;
+          for (const c of el.changes) {
+            extraLayer.data[c.index] = c.oldGid;
+          }
+        }
+      }
       return {
         ...state,
         mapData: { ...state.mapData, layers: newLayers },
@@ -374,13 +410,23 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       }
 
       const redoAction = lastAction;
-      const newLayers = [...state.mapData.layers];
-      const layer = { ...newLayers[redoAction.layerIndex] };
+      const newLayers = state.mapData.layers.map((l) => ({
+        ...l,
+        data: l.data ? [...l.data] : l.data,
+      }));
+      const layer = newLayers[redoAction.layerIndex];
       if (layer.type !== 'tilelayer' || !layer.data) return state;
-      const newData = [...layer.data];
-      redoAction.changes.forEach(c => { newData[c.index] = c.newGid; });
-      layer.data = newData;
-      newLayers[redoAction.layerIndex] = layer;
+      redoAction.changes.forEach(c => { layer.data![c.index] = c.newGid; });
+      // Handle extra layers (e.g., MOVE_SELECTION_TO_LAYER)
+      if ('extraLayers' in redoAction) {
+        for (const el of (redoAction as any).extraLayers) {
+          const extraLayer = newLayers[el.layerIndex];
+          if (!extraLayer || !extraLayer.data) continue;
+          for (const c of el.changes) {
+            extraLayer.data[c.index] = c.newGid;
+          }
+        }
+      }
       return {
         ...state,
         mapData: { ...state.mapData, layers: newLayers },
@@ -410,6 +456,18 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         activeLayerIndex: newActive,
         dirty: true,
       };
+    }
+    case 'SET_LAYER_DEPTH': {
+      if (!state.mapData) return state;
+      const newLayers = [...state.mapData.layers];
+      const layer = { ...newLayers[action.index] };
+      const depthValue = action.depth;
+      const depthType = typeof depthValue === 'string' ? 'string' : 'int';
+      const props = (layer.properties || []).filter((p) => p.name !== 'depth');
+      props.push({ name: 'depth', type: depthType, value: depthValue });
+      layer.properties = props;
+      newLayers[action.index] = layer;
+      return { ...state, mapData: { ...state.mapData, layers: newLayers }, dirty: true };
     }
     case 'RENAME_LAYER': {
       if (!state.mapData) return state;
@@ -510,6 +568,51 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       newLayer.data = newData;
       newLayers[state.activeLayerIndex] = newLayer;
       const undoStack = [...state.undoStack, { layerIndex: state.activeLayerIndex, changes }];
+      if (undoStack.length > 100) undoStack.shift();
+      return {
+        ...state,
+        mapData: { ...state.mapData, layers: newLayers },
+        undoStack,
+        redoStack: [],
+        dirty: true,
+        selection: null,
+      };
+    }
+    case 'MOVE_SELECTION_TO_LAYER': {
+      if (!state.mapData || !state.selection) return state;
+      const srcLayer = state.mapData.layers[state.activeLayerIndex];
+      const dstLayer = state.mapData.layers[action.targetLayerIndex];
+      if (!srcLayer || srcLayer.type !== 'tilelayer' || !srcLayer.data) return state;
+      if (!dstLayer || dstLayer.type !== 'tilelayer' || !dstLayer.data) return state;
+      if (state.activeLayerIndex === action.targetLayerIndex) return state;
+      const sel = state.selection;
+      const mapW = state.mapData.width;
+      const mapH = state.mapData.height;
+      const srcChanges: Array<{ index: number; oldGid: number; newGid: number }> = [];
+      const dstChanges: Array<{ index: number; oldGid: number; newGid: number }> = [];
+      for (let dy = 0; dy < sel.height; dy++) {
+        for (let dx = 0; dx < sel.width; dx++) {
+          const tx = sel.x + dx;
+          const ty = sel.y + dy;
+          if (tx < 0 || tx >= mapW || ty < 0 || ty >= mapH) continue;
+          const idx = ty * mapW + tx;
+          const gid = srcLayer.data[idx];
+          if (gid !== 0) {
+            srcChanges.push({ index: idx, oldGid: gid, newGid: 0 });
+            dstChanges.push({ index: idx, oldGid: dstLayer.data![idx], newGid: gid });
+          }
+        }
+      }
+      if (srcChanges.length === 0) return state;
+      const newLayers = [...state.mapData.layers];
+      const newSrcLayer = { ...newLayers[state.activeLayerIndex], data: [...srcLayer.data] };
+      const newDstLayer = { ...newLayers[action.targetLayerIndex], data: [...dstLayer.data!] };
+      srcChanges.forEach(c => { newSrcLayer.data![c.index] = c.newGid; });
+      dstChanges.forEach(c => { newDstLayer.data![c.index] = c.newGid; });
+      newLayers[state.activeLayerIndex] = newSrcLayer;
+      newLayers[action.targetLayerIndex] = newDstLayer;
+      const undoEntry = { layerIndex: state.activeLayerIndex, changes: srcChanges, extraLayers: [{ layerIndex: action.targetLayerIndex, changes: dstChanges }] };
+      const undoStack = [...state.undoStack, undoEntry];
       if (undoStack.length > 100) undoStack.shift();
       return {
         ...state,
@@ -713,6 +816,7 @@ const initialState: EditorState = {
   projectName: 'Untitled Map',
   dirty: false,
   templateId: null,
+  projectId: null,
   mapData: null,
   tilesetImages: {},
   activeLayerIndex: 0,
