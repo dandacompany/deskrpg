@@ -1473,6 +1473,7 @@ const ja: Record<string, string> = {
   "mapEditor.stamps.stampEditor": "スタンプエディタ",
   "mapEditor.stamps.layers": "レイヤー",
   "mapEditor.stamps.editPixels": "ピクセル編集",
+  "mapEditor.stamps.confirmDelete": "このスタンプを削除しますか？",
   "mapEditor.stamps.selectedTile": "選択タイル",
   "mapEditor.stamps.tileOnLayer": "レイヤー",
   "mapEditor.stamps.emptyTile": "空のタイル",

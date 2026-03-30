@@ -12,6 +12,7 @@ interface StampEditorModalProps {
   stamp: StampData;
   onSave: (updated: { name?: string; cols?: number; rows?: number; layers: StampLayerData[]; tilesets: StampTilesetData[]; thumbnail: string | null }) => void;
   onOpenPixelEditor: (imageDataUrl: string, cols: number, rows: number, tileWidth: number, tileHeight: number, onResult: (dataUrl: string, newCols: number, newRows: number) => void) => void;
+  onDelete?: (stampId: string) => void;
 }
 
 function getLayerColorByName(name: string) {
@@ -29,7 +30,7 @@ const parseTilesets = (v: unknown): StampTilesetData[] => {
 };
 
 export default function StampEditorModal({
-  open, onClose, stamp, onSave, onOpenPixelEditor,
+  open, onClose, stamp, onSave, onOpenPixelEditor, onDelete,
 }: StampEditorModalProps) {
   const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -508,6 +509,13 @@ export default function StampEditorModal({
 
       <Modal.Footer>
         <Button variant="ghost" size="sm" onClick={onClose}>{t('common.cancel')}</Button>
+        {onDelete && (
+          <Button variant="danger" size="sm" onClick={() => {
+            if (confirm(t('mapEditor.stamps.confirmDelete'))) {
+              onDelete(stamp.id);
+            }
+          }}>{t('common.delete')}</Button>
+        )}
         <div className="flex-1" />
         <Button variant="secondary" size="sm" onClick={handleEditPixels}>{t('mapEditor.stamps.editPixels')}</Button>
         <Button variant="primary" size="sm" onClick={handleSave} disabled={!dirty}>{t('common.save')}</Button>

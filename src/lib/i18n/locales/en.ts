@@ -1473,6 +1473,7 @@ const en: Record<string, string> = {
   "mapEditor.stamps.stampEditor": "Stamp Editor",
   "mapEditor.stamps.layers": "Layers",
   "mapEditor.stamps.editPixels": "Edit Pixels",
+  "mapEditor.stamps.confirmDelete": "Are you sure you want to delete this stamp?",
   "mapEditor.stamps.selectedTile": "Selected Tile",
   "mapEditor.stamps.tileOnLayer": "Layer",
   "mapEditor.stamps.emptyTile": "Empty tile",
