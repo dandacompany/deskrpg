@@ -289,6 +289,8 @@ export default function PixelEditorModal({
     const rows = isDirectImage ? (initialRows ?? 1) : region!.height;
     setExpandedCols(cols);
     setExpandedRows(rows);
+    setResizeTargetCols(cols);
+    setResizeTargetRows(rows);
   }, [open, region, tilesetInfo, isDirectImage, initEditCanvas, regionPxW, regionPxH, initialCols, initialRows]);
 
   // Pixel dimensions of the current edit canvas (may be expanded)
