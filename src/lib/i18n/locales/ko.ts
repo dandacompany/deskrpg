@@ -1460,6 +1460,7 @@ const ko: Record<string, string> = {
   "mapEditor.tilesets.importButton": "가져오기 (I)",
   "mapEditor.tilesets.importTooltip": "타일셋 가져오기 (I)",
   "mapEditor.tilesets.importTilesetTooltip": "타일셋 가져오기",
+  "mapEditor.tilesets.createStampFromSelection": "선택 영역으로 스탬프 만들기",
   "mapEditor.tilesets.doubleClickToRename": "더블클릭하여 이름 변경",
   "mapEditor.tilesets.selectAll": "전체 선택",
   "mapEditor.tilesets.editPixels": "픽셀 편집",

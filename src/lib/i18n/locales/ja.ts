@@ -1459,6 +1459,7 @@ const ja: Record<string, string> = {
   "mapEditor.tilesets.importButton": "インポート (I)",
   "mapEditor.tilesets.importTooltip": "タイルセットをインポート (I)",
   "mapEditor.tilesets.importTilesetTooltip": "タイルセットをインポート",
+  "mapEditor.tilesets.createStampFromSelection": "選択範囲からスタンプ作成",
   "mapEditor.tilesets.doubleClickToRename": "ダブルクリックで名前変更",
   "mapEditor.tilesets.selectAll": "すべて選択",
   "mapEditor.tilesets.editPixels": "ピクセル編集",

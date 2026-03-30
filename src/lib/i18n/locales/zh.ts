@@ -1459,6 +1459,7 @@ const zh: Record<string, string> = {
   "mapEditor.tilesets.importButton": "导入 (I)",
   "mapEditor.tilesets.importTooltip": "导入图块集 (I)",
   "mapEditor.tilesets.importTilesetTooltip": "导入图块集",
+  "mapEditor.tilesets.createStampFromSelection": "从选区创建图章",
   "mapEditor.tilesets.doubleClickToRename": "双击重命名",
   "mapEditor.tilesets.selectAll": "全选",
   "mapEditor.tilesets.editPixels": "编辑像素",

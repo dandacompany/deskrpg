@@ -1459,6 +1459,7 @@ const en: Record<string, string> = {
   "mapEditor.tilesets.importButton": "Import (I)",
   "mapEditor.tilesets.importTooltip": "Import Tileset (I)",
   "mapEditor.tilesets.importTilesetTooltip": "Import Tileset",
+  "mapEditor.tilesets.createStampFromSelection": "Create Stamp from Selection",
   "mapEditor.tilesets.doubleClickToRename": "double-click to rename",
   "mapEditor.tilesets.selectAll": "Select All",
   "mapEditor.tilesets.editPixels": "Edit Pixels",

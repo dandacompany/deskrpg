@@ -18,7 +18,7 @@ import type {
   TiledLayer,
 } from './hooks/useMapEditor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { Plus } from 'lucide-react';
+import { Plus, Stamp } from 'lucide-react';
 import { useT } from '@/lib/i18n';
 import Tooltip from './Tooltip';
 import Toolbar from './Toolbar';
@@ -865,11 +865,6 @@ export default function MapEditorLayout({
     dispatch({ type: 'CLEAR_SELECTION' });
   }, [dispatch]);
 
-  // === Stamp Functions ===
-
-  const stampThumbnailRef = useRef<string | null>(null);
-  const stampSelectionRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
-
   const fetchStamps = useCallback(async () => {
     if (!state.projectId) return;
     try {
@@ -887,6 +882,82 @@ export default function MapEditorLayout({
       }
     } catch { /* ignore */ }
   }, [state.projectId]);
+
+  // Create stamp from tileset palette selection
+  const handleCreateStampFromTileset = useCallback(async () => {
+    const region = state.selectedRegion;
+    if (!region || !state.mapData) return;
+    const tsInfo = state.tilesetImages[region.firstgid];
+    if (!tsInfo) return;
+
+    const tw = tsInfo.tilewidth;
+    const th = tsInfo.tileheight;
+    const cols = region.width;
+    const rows = region.height;
+
+    // Render the selected tiles to a canvas for thumbnail
+    const canvas = document.createElement('canvas');
+    canvas.width = cols * tw;
+    canvas.height = rows * th;
+    const ctx = canvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+
+    // Build GID data and draw tiles
+    const data: number[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const localId = (region.row + r) * tsInfo.columns + (region.col + c);
+        const gid = region.firstgid + localId;
+        data.push(gid);
+        // Draw tile
+        const srcX = (localId % tsInfo.columns) * tw;
+        const srcY = Math.floor(localId / tsInfo.columns) * th;
+        ctx.drawImage(tsInfo.img, srcX, srcY, tw, th, c * tw, r * th, tw, th);
+      }
+    }
+
+    const thumbnail = canvas.toDataURL('image/png');
+
+    // Build tileset image for stamp
+    const tsCanvas = document.createElement('canvas');
+    tsCanvas.width = tsInfo.img.naturalWidth || tsInfo.img.width;
+    tsCanvas.height = tsInfo.img.naturalHeight || tsInfo.img.height;
+    tsCanvas.getContext('2d')!.drawImage(tsInfo.img, 0, 0);
+    const tsImage = tsCanvas.toDataURL('image/png');
+
+    const stampLayer = { name: 'Floor', type: 'tilelayer', depth: 0, data };
+    const stampTileset = {
+      name: tsInfo.name, firstgid: region.firstgid,
+      tilewidth: tw, tileheight: th,
+      columns: tsInfo.columns, tilecount: tsInfo.tilecount, image: tsImage,
+    };
+
+    const name = `Stamp ${cols}x${rows}`;
+    const body = {
+      name, cols, rows, tileWidth: tw, tileHeight: th,
+      layers: [stampLayer], tilesets: [stampTileset], thumbnail,
+    };
+
+    try {
+      const res = await fetch('/api/stamps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        if (state.projectId && created.id) {
+          await linkStamp(state.projectId, created.id);
+        }
+        await fetchStamps();
+      }
+    } catch { /* ignore */ }
+  }, [state.selectedRegion, state.tilesetImages, state.mapData, state.projectId, linkStamp, fetchStamps]);
+
+  // === Stamp Functions ===
+
+  const stampThumbnailRef = useRef<string | null>(null);
+  const stampSelectionRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const handleSaveStamp = useCallback(async (name: string) => {
     const sel = stampSelectionRef.current ?? state.selection;
@@ -1361,14 +1432,26 @@ export default function MapEditorLayout({
                   </Tooltip>
                 )}
                 {sectionId === 'tilesets' && !isCollapsed && (
-                  <Tooltip label={t('mapEditor.tilesets.importTilesetTooltip')} shortcut="I">
-                    <button
-                      className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
-                      onClick={() => handleQuickImportTileset()}
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </Tooltip>
+                  <div className="flex items-center gap-0.5">
+                    {state.selectedRegion && (
+                      <Tooltip label={t('mapEditor.tilesets.createStampFromSelection')}>
+                        <button
+                          className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
+                          onClick={handleCreateStampFromTileset}
+                        >
+                          <Stamp className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
+                    )}
+                    <Tooltip label={t('mapEditor.tilesets.importTilesetTooltip')} shortcut="I">
+                      <button
+                        className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
+                        onClick={() => handleQuickImportTileset()}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </Tooltip>
+                  </div>
                 )}
               </div>
             );
