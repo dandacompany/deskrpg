@@ -575,14 +575,17 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
     }
   }, [panZoom, stopWalkAnimation, state.selection, dispatch]);
 
-  const handleWheel = useCallback(
-    (e: React.WheelEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+  // Register wheel handler as non-passive native listener to allow preventDefault
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
       panZoom.handleWheel(e, canvas.getBoundingClientRect());
-    },
-    [panZoom],
-  );
+    };
+    canvas.addEventListener('wheel', handler, { passive: false });
+    return () => canvas.removeEventListener('wheel', handler);
+  }, [panZoom]);
 
   const renderSelectionToDataUrl = useCallback((): string | null => {
     if (!state.mapData || !state.selection) return null;
@@ -774,7 +777,7 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
+        /* wheel handled via native listener (non-passive) in useEffect */
         onContextMenu={handleContextMenu}
       />
       {/* Context Menu */}
