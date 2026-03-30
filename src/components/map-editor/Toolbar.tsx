@@ -2,10 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui';
-import { Undo2, Redo2, HelpCircle, ChevronDown, Paintbrush, Eraser, MousePointer2, Move, Home } from 'lucide-react';
+import { Undo2, Redo2, HelpCircle, ChevronDown, Paintbrush, Eraser, MousePointer2, Move, Home, Globe } from 'lucide-react';
 import Tooltip from './Tooltip';
 import type { Tool } from './hooks/useMapEditor';
-import { useT } from '@/lib/i18n';
+import { useT, useLocale, LOCALES } from '@/lib/i18n';
 
 export interface ToolbarProps {
   activeTool: Tool;
@@ -19,6 +19,7 @@ export interface ToolbarProps {
   onNewMap: () => void;
   onLoad: () => void;
   onSaveToDeskRPG: () => void;
+  onSaveAs?: () => void;
   onExportTMJ: () => void;
   onExportTMX: () => void;
   onExportPNG: () => void;
@@ -152,6 +153,50 @@ function DropdownSubmenu({
   );
 }
 
+function LocaleDropdown() {
+  const { locale, setLocale } = useLocale();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const current = LOCALES.find((l) => l.code === locale);
+
+  return (
+    <div ref={ref} className="relative">
+      <Tooltip label={current?.label ?? 'Language'}>
+        <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)}>
+          <Globe className="w-4 h-4" />
+        </Button>
+      </Tooltip>
+      {open && (
+        <div className="absolute top-full right-0 mt-1 bg-surface border border-border rounded-lg shadow-xl z-50 min-w-[120px] py-1">
+          {LOCALES.map((l) => (
+            <button
+              key={l.code}
+              onClick={() => { setLocale(l.code); setOpen(false); }}
+              className={`w-full flex items-center px-3 py-1.5 text-caption transition-colors ${
+                l.code === locale
+                  ? 'text-primary-light bg-surface-raised'
+                  : 'text-text-secondary hover:bg-surface-raised hover:text-text'
+              }`}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Toolbar({
   activeTool,
   zoom,
@@ -164,6 +209,7 @@ export default function Toolbar({
   onNewMap,
   onLoad,
   onSaveToDeskRPG,
+  onSaveAs,
   onExportTMJ,
   onExportTMX,
   onExportPNG,
@@ -197,9 +243,10 @@ export default function Toolbar({
       {/* File Menu */}
       <ToolGroup>
         <Dropdown label={t('mapEditor.toolbar.file')}>
-          <DropdownItem onClick={onNewMap} shortcut="⌘N">{t('mapEditor.toolbar.newMap')}</DropdownItem>
-          <DropdownItem onClick={onLoad} shortcut="⌘O">{t('mapEditor.toolbar.open')}</DropdownItem>
+          <DropdownItem onClick={onNewMap} shortcut="⌘N">{t('mapEditor.project.newProject')}</DropdownItem>
+          <DropdownItem onClick={onLoad} shortcut="⌘O">{t('mapEditor.project.openProject')}</DropdownItem>
           <DropdownItem onClick={onSaveToDeskRPG} shortcut="⌘S">{t('common.save')}</DropdownItem>
+          <DropdownItem onClick={() => { onSaveAs?.(); }}>{t('mapEditor.project.saveAs')}</DropdownItem>
           <DropdownSeparator />
           <DropdownSubmenu label={t('mapEditor.toolbar.export')}>
             <DropdownItem onClick={onExportTMJ}>{t('mapEditor.toolbar.exportTmj')}</DropdownItem>
@@ -217,6 +264,7 @@ export default function Toolbar({
           <DropdownSeparator />
           <DropdownToggle checked={sectionVisibility['layers'] !== false} onChange={() => onToggleSection('layers')}>{t('mapEditor.toolbar.layersPanel')}</DropdownToggle>
           <DropdownToggle checked={sectionVisibility['tilesets'] !== false} onChange={() => onToggleSection('tilesets')}>{t('mapEditor.toolbar.tilesetsPanel')}</DropdownToggle>
+          <DropdownToggle checked={sectionVisibility['stamps'] !== false} onChange={() => onToggleSection('stamps')}>{t('mapEditor.toolbar.stampsPanel')}</DropdownToggle>
           <DropdownToggle checked={sectionVisibility['minimap'] !== false} onChange={() => onToggleSection('minimap')}>{t('mapEditor.toolbar.minimapPanel')}</DropdownToggle>
         </Dropdown>
       </ToolGroup>
@@ -266,13 +314,14 @@ export default function Toolbar({
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Help & Back */}
+      {/* Help, Language & Back */}
       <div className="px-2 flex items-center gap-1">
         <Tooltip label={t('mapEditor.toolbar.keyboardShortcuts')} shortcut="?">
           <Button variant="ghost" size="sm" onClick={onHelp}>
             <HelpCircle className="w-4 h-4" />
           </Button>
         </Tooltip>
+        <LocaleDropdown />
         <Tooltip label={t('mapEditor.toolbar.backToDeskRPG')}>
           <Button variant="ghost" size="sm" onClick={onGoBack}>
             <Home className="w-4 h-4" />
