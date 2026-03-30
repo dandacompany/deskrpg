@@ -1691,36 +1691,55 @@ export default function MapEditorLayout({
             setShowPixelEditor(false);
             setSelectionPixelData(null);
           } : undefined}
-          onSaveAsStamp={state.mapData ? async (thumbnail) => {
-            // Use the same logic as map context menu "save as stamp"
-            // — preserves original map GIDs and tileset references
+          onSaveAsStamp={state.mapData ? async (thumbnail, cols, rows, tileWidth, tileHeight) => {
+            // Two paths: map selection or tileset palette selection
             const sel = stampSelectionRef.current ?? state.selection;
-            if (!sel || !state.mapData) return;
-            const tw = state.mapData.tilewidth;
-            const th = state.mapData.tileheight;
-            const mapW = state.mapData.width;
-            const stampLayers: Array<{ name: string; type: string; depth: number; data: number[] }> = [];
+            const region = state.selectedRegion;
+
+            if (!state.mapData) return;
+
+            let stampLayers: Array<{ name: string; type: string; depth: number; data: number[] }> = [];
             const usedGids = new Set<number>();
-            for (const layer of state.mapData.layers) {
-              if (layer.type !== 'tilelayer' || !layer.data) continue;
-              if (layer.name.toLowerCase() === 'collision') continue;
-              const depthProp = layer.properties?.find((p: any) => p.name === 'depth');
-              const depthVal = depthProp ? Number(depthProp.value) || 0 : 0;
-              const data: number[] = [];
-              for (let row = 0; row < sel.height; row++) {
-                for (let col = 0; col < sel.width; col++) {
-                  const mapCol = sel.x + col;
-                  const mapRow = sel.y + row;
-                  const gid = (mapCol >= 0 && mapCol < mapW && mapRow >= 0 && mapRow < state.mapData!.height)
-                    ? layer.data[mapRow * mapW + mapCol] : 0;
-                  data.push(gid);
-                  if (gid !== 0) usedGids.add(gid);
+
+            if (sel) {
+              // Map selection path — use map GIDs from all layers
+              const tw = state.mapData.tilewidth;
+              const th = state.mapData.tileheight;
+              const mapW = state.mapData.width;
+              for (const layer of state.mapData.layers) {
+                if (layer.type !== 'tilelayer' || !layer.data) continue;
+                if (layer.name.toLowerCase() === 'collision') continue;
+                const depthProp = layer.properties?.find((p: any) => p.name === 'depth');
+                const depthVal = depthProp ? Number(depthProp.value) || 0 : 0;
+                const data: number[] = [];
+                for (let row = 0; row < sel.height; row++) {
+                  for (let col = 0; col < sel.width; col++) {
+                    const mapCol = sel.x + col;
+                    const mapRow = sel.y + row;
+                    const gid = (mapCol >= 0 && mapCol < mapW && mapRow >= 0 && mapRow < state.mapData!.height)
+                      ? layer.data[mapRow * mapW + mapCol] : 0;
+                    data.push(gid);
+                    if (gid !== 0) usedGids.add(gid);
+                  }
+                }
+                if (data.some((g) => g !== 0)) {
+                  stampLayers.push({ name: layer.name, type: layer.type, depth: depthVal, data });
                 }
               }
-              if (data.some((g) => g !== 0)) {
-                stampLayers.push({ name: layer.name, type: layer.type, depth: depthVal, data });
+            } else if (region) {
+              // Tileset palette selection path — build a single-layer stamp from selected tiles
+              const data: number[] = [];
+              for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                  const localId = (region.row + r) * (state.tilesetImages[region.firstgid]?.columns ?? 1) + (region.col + c);
+                  const gid = region.firstgid + localId;
+                  data.push(gid);
+                  usedGids.add(gid);
+                }
               }
+              stampLayers = [{ name: 'Floor', type: 'tilelayer', depth: 0, data }];
             }
+
             if (stampLayers.length === 0) return;
             const stampTilesets: Array<{ name: string; firstgid: number; tilewidth: number; tileheight: number; columns: number; tilecount: number; image: string }> = [];
             for (const ts of state.mapData.tilesets) {
@@ -1739,9 +1758,13 @@ export default function MapEditorLayout({
               });
             }
             const layerName = state.mapData.layers[state.activeLayerIndex]?.name || 'stamp';
+            const stampCols = sel ? sel.width : cols;
+            const stampRows = sel ? sel.height : rows;
+            const stampTw = sel ? state.mapData.tilewidth : tileWidth;
+            const stampTh = sel ? state.mapData.tileheight : tileHeight;
             const res = await fetch('/api/stamps', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: `${layerName}-stamp`, cols: sel.width, rows: sel.height, tileWidth: tw, tileHeight: th, layers: stampLayers, tilesets: stampTilesets, thumbnail }),
+              body: JSON.stringify({ name: `${layerName}-stamp`, cols: stampCols, rows: stampRows, tileWidth: stampTw, tileHeight: stampTh, layers: stampLayers, tilesets: stampTilesets, thumbnail }),
             });
             if (res.ok) await fetchStamps();
           } : undefined}

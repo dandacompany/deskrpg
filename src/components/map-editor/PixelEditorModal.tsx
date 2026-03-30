@@ -989,8 +989,9 @@ export default function PixelEditorModal({
 
     const tileCount = expandedCols * expandedRows;
 
-    // Re-layout tiles into a square-ish grid (max ~8 columns) for palette display
-    const maxCols = Math.min(expandedCols, Math.max(1, Math.ceil(Math.sqrt(tileCount))));
+    // Re-layout tiles: use original tileset columns if available, otherwise square-ish grid
+    const origColumns = tilesetInfo?.columns ?? expandedCols;
+    const maxCols = tileCount === 1 ? origColumns : Math.min(expandedCols, Math.max(origColumns, Math.ceil(Math.sqrt(tileCount))));
     const layoutRows = Math.ceil(tileCount / maxCols);
 
     // Re-draw tiles into new layout
