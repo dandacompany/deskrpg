@@ -24,7 +24,6 @@ export function usePanZoom(state: EditorState, dispatch: Dispatch) {
 
   const handleWheel = useCallback(
     (e: React.WheelEvent | WheelEvent, canvasRect: DOMRect) => {
-      e.preventDefault();
 
       if (e.ctrlKey || e.metaKey) {
         // Cmd/Ctrl + scroll = zoom (cursor-anchored)
