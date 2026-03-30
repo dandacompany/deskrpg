@@ -954,10 +954,54 @@ export default function PixelEditorModal({
         const t = transformRef.current!;
         const dx = mx - drag.startMx;
         const dy = my - drag.startMy;
+        const h = drag.handle;
 
-        if (drag.handle === 'move') {
+        if (h === 'move') {
           t.x = Math.round(drag.startX + dx);
           t.y = Math.round(drag.startY + dy);
+        } else {
+          let newX = drag.startX;
+          let newY = drag.startY;
+          let newW = drag.startW;
+          let newH = drag.startH;
+
+          const isCorner = h === 'nw' || h === 'ne' || h === 'sw' || h === 'se';
+
+          if (h === 'se' || h === 'e' || h === 'ne') newW = drag.startW + dx;
+          if (h === 'nw' || h === 'w' || h === 'sw') { newX = drag.startX + dx; newW = drag.startW - dx; }
+          if (h === 'se' || h === 's' || h === 'sw') newH = drag.startH + dy;
+          if (h === 'nw' || h === 'n' || h === 'ne') { newY = drag.startY + dy; newH = drag.startH - dy; }
+
+          if (isCorner && !e.shiftKey) {
+            const ratio = drag.startW / drag.startH;
+            const absDx = Math.abs(newW - drag.startW);
+            const absDy = Math.abs(newH - drag.startH);
+
+            if (absDx >= absDy) {
+              const targetH = Math.round(newW / ratio);
+              if (h === 'nw' || h === 'ne') {
+                newY = drag.startY + drag.startH - targetH;
+              }
+              newH = targetH;
+            } else {
+              const targetW = Math.round(newH * ratio);
+              if (h === 'nw' || h === 'sw') {
+                newX = drag.startX + drag.startW - targetW;
+              }
+              newW = targetW;
+            }
+          }
+
+          if (newW < 0) { newX += newW; newW = -newW; }
+          if (newH < 0) { newY += newH; newH = -newH; }
+
+          if (newW < 1) newW = 1;
+          if (newH < 1) newH = 1;
+
+          t.x = Math.round(newX);
+          t.y = Math.round(newY);
+          t.width = Math.round(newW);
+          t.height = Math.round(newH);
         }
 
         renderCanvas();
