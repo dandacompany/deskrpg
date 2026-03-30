@@ -674,6 +674,40 @@ export default function PixelEditorModal({
     [pushUndo, renderCanvas],
   );
 
+  const enterTransform = useCallback(() => {
+    const ec = editCanvasRef.current;
+    const sel = pixelSelection;
+    if (!ec || !sel || sel.width < 1 || sel.height < 1) return;
+
+    pushUndo();
+
+    // Extract selected pixels into floating canvas
+    const srcCtx = ec.getContext('2d')!;
+    const imageData = srcCtx.getImageData(sel.x, sel.y, sel.width, sel.height);
+
+    const floating = document.createElement('canvas');
+    floating.width = sel.width;
+    floating.height = sel.height;
+    floating.getContext('2d')!.putImageData(imageData, 0, 0);
+
+    // Clear original area
+    srcCtx.clearRect(sel.x, sel.y, sel.width, sel.height);
+
+    // Initialize transform state
+    transformRef.current = {
+      floatingCanvas: floating,
+      originX: sel.x,
+      originY: sel.y,
+      x: sel.x,
+      y: sel.y,
+      width: sel.width,
+      height: sel.height,
+      smooth: false,
+    };
+    setTransformActive(true);
+    renderCanvas();
+  }, [pixelSelection, pushUndo, renderCanvas]);
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       // Middle-click: start panning with document-level listeners
@@ -889,6 +923,8 @@ export default function PixelEditorModal({
     if (isRectSelectingRef.current) {
       isRectSelectingRef.current = false;
       rectSelectStartRef.current = null;
+      // Enter transform mode if we have a valid selection
+      setTimeout(() => enterTransform(), 0);
       return;
     }
     if (isShiftDraggingRef.current) {
@@ -898,7 +934,7 @@ export default function PixelEditorModal({
     }
     isDrawingRef.current = false;
     drawStartRef.current = null;
-  }, [applyShift]);
+  }, [applyShift, enterTransform]);
 
   // Cleanup document listeners on unmount
   useEffect(() => {
