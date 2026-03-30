@@ -1570,6 +1570,11 @@ export default function MapEditorLayout({
           onClose={() => { setShowStampEditor(false); setEditingStamp(null); }}
           stamp={editingStamp}
           onSave={handleSaveStampEdit}
+          onDelete={async (stampId) => {
+            await handleDeleteStamp(stampId);
+            setShowStampEditor(false);
+            setEditingStamp(null);
+          }}
           onOpenPixelEditor={(imageDataUrl, cols, rows, tileWidth, tileHeight, onResult) => {
             pixelEditorStampCallbackRef.current = onResult;
             setSelectionPixelData({ dataUrl: imageDataUrl, tileWidth, tileHeight, cols, rows });

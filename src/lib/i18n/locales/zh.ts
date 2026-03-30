@@ -1473,6 +1473,7 @@ const zh: Record<string, string> = {
   "mapEditor.stamps.stampEditor": "图章编辑器",
   "mapEditor.stamps.layers": "图层",
   "mapEditor.stamps.editPixels": "像素编辑",
+  "mapEditor.stamps.confirmDelete": "确定要删除此图章吗？",
   "mapEditor.stamps.selectedTile": "选中图块",
   "mapEditor.stamps.tileOnLayer": "图层",
   "mapEditor.stamps.emptyTile": "空图块",

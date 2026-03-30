@@ -1474,6 +1474,7 @@ const ko: Record<string, string> = {
   "mapEditor.stamps.stampEditor": "스탬프 에디터",
   "mapEditor.stamps.layers": "레이어",
   "mapEditor.stamps.editPixels": "픽셀 편집",
+  "mapEditor.stamps.confirmDelete": "이 스탬프를 삭제하시겠습니까?",
   "mapEditor.stamps.selectedTile": "선택된 타일",
   "mapEditor.stamps.tileOnLayer": "레이어",
   "mapEditor.stamps.emptyTile": "빈 타일",
