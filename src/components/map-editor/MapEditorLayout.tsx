@@ -27,11 +27,9 @@ import TilePalette from './TilePalette';
 import Minimap from './Minimap';
 import { MapCanvas } from './MapCanvas';
 import HelpModal from './HelpModal';
-import NewMapModal from './NewMapModal';
 import ImportTilesetModal from './ImportTilesetModal';
 import PixelEditorModal from './PixelEditorModal';
 import type { ImportTilesetResult } from './ImportTilesetModal';
-import { buildProjectZip, loadProjectZip } from '@/lib/map-project';
 import { exportTmx } from '@/lib/tmx-exporter';
 import ProjectBrowser from './ProjectBrowser';
 import { useProjectManager } from './hooks/useProjectManager';
@@ -88,7 +86,6 @@ export default function MapEditorLayout({
   const [projectLoaded, setProjectLoaded] = useState(false);
 
   // Modal visibility
-  const [showNewMap, setShowNewMap] = useState(false);
   const [showImportTileset, setShowImportTileset] = useState(false);
   const [droppedTilesetFile, setDroppedTilesetFile] = useState<File | null>(null);
   const [isDroppingTileset, setIsDroppingTileset] = useState(false);
@@ -173,7 +170,6 @@ export default function MapEditorLayout({
 
 
   // File input refs
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const tilesetFileInputRef = useRef<HTMLInputElement>(null);
 
   // Track initialization
@@ -187,85 +183,6 @@ export default function MapEditorLayout({
     // No longer auto-load templates or show NewMapModal
     // ProjectBrowser handles entry
   }, []);
-
-  async function loadTemplate(templateId: string) {
-    try {
-      const res = await fetch(`/api/map-templates/${templateId}`);
-      if (!res.ok) throw new Error('Failed to load template');
-      const data = await res.json();
-      const mapData = JSON.parse(data.tiledJson) as TiledMap;
-
-      // Load tileset images: try DB first, then file, and save to DB for future use
-      const tilesetImages: Record<number, TilesetImageInfo> = {};
-      for (const ts of mapData.tilesets) {
-        let img: HTMLImageElement | null = null;
-
-        // 1. Try loading from DB
-        try {
-          const dbRes = await fetch(`/api/tilesets?name=${encodeURIComponent(ts.name)}`);
-          if (dbRes.ok) {
-            const dbData = await dbRes.json();
-            if (dbData.image) {
-              img = await loadImage(dbData.image);
-            }
-          }
-        } catch { /* DB fetch failed, try file */ }
-
-        // 2. Fallback: load from file
-        if (!img) {
-          const imgSrc = ts.image.startsWith('data:') || ts.image.startsWith('/')
-            ? ts.image
-            : `/assets/uploads/${templateId}/${ts.image}`;
-          try {
-            img = await loadImage(imgSrc);
-            // Save to DB for future use
-            const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth || img.width;
-            canvas.height = img.naturalHeight || img.height;
-            const ctx = canvas.getContext('2d')!;
-            ctx.drawImage(img, 0, 0);
-            const dataUrl = canvas.toDataURL('image/png');
-            fetch('/api/tilesets', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: ts.name, tilewidth: ts.tilewidth, tileheight: ts.tileheight, columns: ts.columns, tilecount: ts.tilecount, image: dataUrl }),
-            }).catch(() => {}); // fire-and-forget
-          } catch {
-            console.warn(`[MapEditor] Failed to load tileset image for: ${ts.name}`);
-            continue;
-          }
-        }
-
-        tilesetImages[ts.firstgid] = {
-          img,
-          firstgid: ts.firstgid,
-          columns: ts.columns,
-          tilewidth: ts.tilewidth,
-          tileheight: ts.tileheight,
-          tilecount: ts.tilecount,
-          name: ts.name,
-        };
-      }
-
-      // SET_MAP first, then ADD_TILESET so tilesetImages are populated after map data
-      dispatch({
-        type: 'SET_MAP',
-        mapData,
-        projectName: data.name || 'Loaded Template',
-        templateId,
-      });
-
-      for (const [fgid, info] of Object.entries(tilesetImages)) {
-        const ts = mapData.tilesets.find((t) => t.firstgid === Number(fgid));
-        if (ts) {
-          dispatch({ type: 'ADD_TILESET', tileset: ts, imageInfo: info });
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load template:', err);
-      setShowNewMap(true);
-    }
-  }
 
   // === Layer visibility sync ===
 
@@ -367,84 +284,6 @@ export default function MapEditorLayout({
   addBuiltinTilesetRef.current = addBuiltinTileset;
 
   // === File Operations ===
-
-  const handleNewMap = useCallback(
-    (mapData: TiledMap, projectName: string) => {
-      dispatch({ type: 'SET_MAP', mapData, projectName, templateId: null });
-      // Add collision tileset after setting map
-      addBuiltinTileset(mapData);
-    },
-    [dispatch, addBuiltinTileset],
-  );
-
-  const handleLoad = useCallback(() => {
-    if (!confirmIfDirty()) return;
-    fileInputRef.current?.click();
-  }, [confirmIfDirty]);
-
-  const handleFileSelected = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      // Reset input so same file can be selected again
-      e.target.value = '';
-
-      try {
-        if (file.name.endsWith('.zip')) {
-          // ZIP project
-          const { mapData, tilesetDataUrls, projectName } = await loadProjectZip(file);
-
-          dispatch({ type: 'SET_MAP', mapData, projectName, templateId: null });
-
-          // Load tileset images
-          for (const ts of mapData.tilesets) {
-            const imgUrl =
-              tilesetDataUrls[ts.image] ??
-              tilesetDataUrls[ts.image.split('/').pop()!];
-            if (!imgUrl) continue;
-            const img = await loadImage(imgUrl);
-            const imageInfo: TilesetImageInfo = {
-              img,
-              firstgid: ts.firstgid,
-              columns: ts.columns,
-              tilewidth: ts.tilewidth,
-              tileheight: ts.tileheight,
-              tilecount: ts.tilecount,
-              name: ts.name,
-            };
-            dispatch({ type: 'ADD_TILESET', tileset: ts, imageInfo });
-          }
-        } else {
-          // TMJ / JSON
-          const text = await file.text();
-          const mapData = JSON.parse(text) as TiledMap;
-          const projectName = file.name.replace(/\.(tmj|json|tmx)$/i, '');
-          dispatch({ type: 'SET_MAP', mapData, projectName, templateId: null });
-
-          // Load tileset images from data URLs embedded in TMJ
-          for (const ts of mapData.tilesets) {
-            if (ts.image?.startsWith('data:')) {
-              const img = await loadImage(ts.image);
-              const imageInfo: TilesetImageInfo = {
-                img,
-                firstgid: ts.firstgid,
-                columns: ts.columns,
-                tilewidth: ts.tilewidth,
-                tileheight: ts.tileheight,
-                tilecount: ts.tilecount,
-                name: ts.name,
-              };
-              dispatch({ type: 'ADD_TILESET', tileset: ts, imageInfo });
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load file:', err);
-        alert('Failed to load file. Make sure it is a valid TMJ or ZIP project.');
-      }
-    },
-    [dispatch],
-  );
 
   const handleSave = useCallback(async () => {
     if (!state.mapData || !state.projectId) return;
@@ -1522,13 +1361,6 @@ export default function MapEditorLayout({
 
       {/* Hidden file inputs */}
       <input
-        ref={fileInputRef}
-        type="file"
-        accept=".tmj,.tmx,.json,.zip"
-        className="hidden"
-        onChange={handleFileSelected}
-      />
-      <input
         ref={tilesetFileInputRef}
         type="file"
         accept="image/*"
@@ -1537,12 +1369,6 @@ export default function MapEditorLayout({
       />
 
       {/* Modals */}
-      <NewMapModal
-        open={showNewMap}
-        onClose={() => setShowNewMap(false)}
-        onSubmit={handleNewMap}
-      />
-
       <ImportTilesetModal
         open={showImportTileset}
         onClose={() => { setShowImportTileset(false); setDroppedTilesetFile(null); }}
