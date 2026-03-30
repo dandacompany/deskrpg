@@ -1224,6 +1224,14 @@ export default function PixelEditorModal({
     [zoom, pan],
   );
 
+  const switchTool = useCallback((newTool: Tool) => {
+    if (transformActive) commitTransform();
+    setTool(newTool);
+    setIsPixelPasteMode(false);
+    setTileEditMode(false);
+    setHoveredEdge(null);
+  }, [transformActive, commitTransform]);
+
   // --- Keyboard shortcuts ---
   useEffect(() => {
     if (!open) return;
@@ -1254,20 +1262,26 @@ export default function PixelEditorModal({
       } else if (!mod) {
         if (e.key === 'Escape') {
           e.preventDefault();
-          if (isPixelPasteMode) {
-            // Escape in paste mode → exit paste mode, keep selection
+          if (transformActive) {
+            cancelTransform();
+          } else if (isPixelPasteMode) {
             setIsPixelPasteMode(false);
             setPixelClipboard(null);
           } else {
-            // Escape normally → clear selection
             setPixelSelection(null);
           }
         }
-        else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); setTool('eraser'); setIsPixelPasteMode(false); setTileEditMode(false); setHoveredEdge(null); }
-        else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); setTool('pen'); setIsPixelPasteMode(false); setTileEditMode(false); setHoveredEdge(null); }
-        else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setTool('eyedropper'); setIsPixelPasteMode(false); setTileEditMode(false); setHoveredEdge(null); }
-        else if (e.key === 'v' || e.key === 'V') { e.preventDefault(); setTool('shift'); setIsPixelPasteMode(false); setTileEditMode(false); setHoveredEdge(null); }
-        else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); setTool('rect-select'); setIsPixelPasteMode(false); setTileEditMode(false); setHoveredEdge(null); }
+        else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (transformActive) {
+            commitTransform();
+          }
+        }
+        else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); switchTool('eraser'); }
+        else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); switchTool('pen'); }
+        else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); switchTool('eyedropper'); }
+        else if (e.key === 'v' || e.key === 'V') { e.preventDefault(); switchTool('shift'); }
+        else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); switchTool('rect-select'); }
         else if (e.key === 't' || e.key === 'T') { e.preventDefault(); trimEdges(); }
         else if (e.key === '[') { e.preventDefault(); setBrushSize((s) => Math.max(1, s - 1)); }
         else if (e.key === ']') { e.preventDefault(); setBrushSize((s) => Math.min(16, s + 1)); }
@@ -1276,7 +1290,7 @@ export default function PixelEditorModal({
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [open, undo, redo, pixelSelection, pixelClipboard, isPixelPasteMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, undo, redo, pixelSelection, pixelClipboard, isPixelPasteMode, transformActive, commitTransform, cancelTransform, switchTool]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Save handlers ---
   const getDataUrl = useCallback(() => {
@@ -1527,27 +1541,27 @@ export default function PixelEditorModal({
           {/* Tools */}
           <div className="flex items-center gap-1 px-2 border-r border-border">
             <Tooltip label={t('mapEditor.pixel.penTooltip')} shortcut="P">
-              <Button variant={!tileEditMode && tool === 'pen' ? 'primary' : 'ghost'} size="sm" onClick={() => { setTool('pen'); setTileEditMode(false); setHoveredEdge(null); }}>
+              <Button variant={!tileEditMode && tool === 'pen' ? 'primary' : 'ghost'} size="sm" onClick={() => switchTool('pen')}>
                 <Pencil className="w-4 h-4" />
               </Button>
             </Tooltip>
             <Tooltip label={t('mapEditor.pixel.eraserTooltip')} shortcut="E">
-              <Button variant={!tileEditMode && tool === 'eraser' ? 'primary' : 'ghost'} size="sm" onClick={() => { setTool('eraser'); setTileEditMode(false); setHoveredEdge(null); }}>
+              <Button variant={!tileEditMode && tool === 'eraser' ? 'primary' : 'ghost'} size="sm" onClick={() => switchTool('eraser')}>
                 <Eraser className="w-4 h-4" />
               </Button>
             </Tooltip>
             <Tooltip label={t('mapEditor.pixel.eyedropperTooltip')} shortcut="I">
-              <Button variant={!tileEditMode && tool === 'eyedropper' ? 'primary' : 'ghost'} size="sm" onClick={() => { setTool('eyedropper'); setTileEditMode(false); setHoveredEdge(null); }}>
+              <Button variant={!tileEditMode && tool === 'eyedropper' ? 'primary' : 'ghost'} size="sm" onClick={() => switchTool('eyedropper')}>
                 <Pipette className="w-4 h-4" />
               </Button>
             </Tooltip>
             <Tooltip label={t('mapEditor.pixel.shiftTooltip')} shortcut="V">
-              <Button variant={!tileEditMode && tool === 'shift' ? 'primary' : 'ghost'} size="sm" onClick={() => { setTool('shift'); setTileEditMode(false); setHoveredEdge(null); }}>
+              <Button variant={!tileEditMode && tool === 'shift' ? 'primary' : 'ghost'} size="sm" onClick={() => switchTool('shift')}>
                 <Move className="w-4 h-4" />
               </Button>
             </Tooltip>
             <Tooltip label={t('mapEditor.pixel.selectTooltip')} shortcut="M">
-              <Button variant={!tileEditMode && tool === 'rect-select' ? 'primary' : 'ghost'} size="sm" onClick={() => { setTool('rect-select'); setIsPixelPasteMode(false); setTileEditMode(false); setHoveredEdge(null); }}>
+              <Button variant={!tileEditMode && tool === 'rect-select' ? 'primary' : 'ghost'} size="sm" onClick={() => switchTool('rect-select')}>
                 <BoxSelect className="w-4 h-4" />
               </Button>
             </Tooltip>
