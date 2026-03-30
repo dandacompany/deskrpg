@@ -1594,6 +1594,14 @@ const en: Record<string, string> = {
   "mapEditor.assets.removeFromProject": "Remove from Project",
   "mapEditor.assets.noTilesets": "No tilesets available",
   "mapEditor.assets.noStamps": "No stamps available",
+
+  // Map Editor - Template Browser
+  "mapEditor.template.title": "Map Templates",
+  "mapEditor.template.search": "Search templates...",
+  "mapEditor.template.noTemplates": "No templates yet.",
+  "mapEditor.template.noResults": "No matching templates.",
+  "mapEditor.template.creating": "Creating project...",
+  "mapEditor.template.backToCreate": "Back to channel creation",
 };
 
 export default en;

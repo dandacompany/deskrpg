@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Download, Trash2, Copy, Search, ArrowLeft, Pencil, Plus } from "lucide-react";
+import { useT } from "@/lib/i18n";
 import ProjectBrowser from "@/components/map-editor/ProjectBrowser";
 
 export default function MapEditorPage() {
@@ -32,6 +33,7 @@ function MapEditorListPage() {
   const fromCreate = searchParams.get("from") === "create";
   const characterId = searchParams.get("characterId");
 
+  const t = useT();
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -182,80 +184,70 @@ function MapEditorListPage() {
       />
 
       {/* Map Templates Section */}
-      <div className="max-w-6xl mx-auto px-6 pb-8">
+      <div className="px-6 pb-8">
         {fromCreate && (
           <Link
             href={`/channels/create?characterId=${characterId || ""}`}
             className="flex items-center gap-2 mb-4 px-4 py-2 bg-surface border border-border rounded-lg text-sm text-text-muted hover:text-text hover:border-primary-light transition"
           >
             <ArrowLeft className="w-4 h-4" />
-            채널 만들기로 돌아가기
+            {t("mapEditor.template.backToCreate")}
           </Link>
         )}
 
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">Map Templates</h2>
+        <div className="flex items-center justify-between mb-4 border-b border-gray-700 pb-3">
+          <h2 className="text-xl font-bold">{t("mapEditor.template.title")}</h2>
         </div>
 
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-dim" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search templates..."
-            className="w-full pl-10 pr-4 py-2 bg-surface border border-border rounded text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary-light" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("mapEditor.template.search")}
+            className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
 
         {loading ? (
-          <div className="text-text-muted">Loading...</div>
+          <div className="text-gray-500">Loading...</div>
         ) : filteredTemplates.length === 0 ? (
-          <div className="text-text-muted text-center py-12">
-            {search ? "No matching templates." : "No templates yet."}
+          <div className="text-gray-500 text-center py-12">
+            {search ? t("mapEditor.template.noResults") : t("mapEditor.template.noTemplates")}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredTemplates.map((t) => (
-              <div key={t.id} className="bg-surface border border-border rounded-lg p-4 hover:border-primary-light transition">
-                {thumbnails[t.id] && (
-                  <img src={thumbnails[t.id]} alt={t.name} className="w-full rounded mb-2 border border-border" style={{ imageRendering: "pixelated" }} />
-                )}
-                <div className="flex items-start justify-between mb-1">
-                  <div>
-                    <span className="text-xl mr-2">{t.icon}</span>
-                    <span className="font-semibold">{t.name}</span>
-                  </div>
-                  <span className="text-xs text-text-dim">{t.cols}x{t.rows}</span>
-                </div>
-                {t.description && <p className="text-sm text-text-muted mb-2">{t.description}</p>}
-                {t.tags && (
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {t.tags.split(",").map((tag) => (
-                      <span key={tag} className="text-[10px] bg-surface-raised px-1.5 py-0.5 rounded text-text-dim">{tag.trim()}</span>
-                    ))}
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {fromCreate && (
-                    <Link
-                      href={`/channels/create?characterId=${characterId || ""}&templateId=${t.id}`}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs bg-primary hover:bg-primary-hover text-white font-semibold">
-                      선택
-                    </Link>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {filteredTemplates.map((tmpl) => (
+              <div key={tmpl.id} className="group relative bg-gray-800 rounded-lg border border-gray-700 hover:border-blue-500 cursor-pointer transition-colors overflow-hidden"
+                onClick={() => handleEditTemplate(tmpl.id)}>
+                <div className="aspect-video bg-gray-900 flex items-center justify-center">
+                  {thumbnails[tmpl.id] ? (
+                    <img src={thumbnails[tmpl.id]} alt={tmpl.name} className="w-full h-full object-contain" style={{ imageRendering: "pixelated" }} />
+                  ) : (
+                    <div className="text-gray-600 text-xs">No preview</div>
                   )}
-                  <button
-                    onClick={() => handleEditTemplate(t.id)}
-                    disabled={creatingFrom === t.id}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded text-xs bg-surface-raised border border-border hover:border-primary-light disabled:opacity-50">
-                    <Pencil className="w-3 h-3" /> {creatingFrom === t.id ? "Creating..." : "Edit"}
+                </div>
+                <div className="p-3">
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm">{tmpl.icon}</span>
+                    <span className="text-sm font-medium truncate">{tmpl.name}</span>
+                  </div>
+                  {tmpl.description && <p className="text-xs text-gray-500 mt-0.5 truncate">{tmpl.description}</p>}
+                  <div className="text-xs text-gray-600 mt-1">{tmpl.cols}×{tmpl.rows}</div>
+                </div>
+                {creatingFrom === tmpl.id && (
+                  <div className="absolute inset-0 bg-gray-900/80 flex items-center justify-center">
+                    <span className="text-sm text-blue-400">{t("mapEditor.template.creating")}</span>
+                  </div>
+                )}
+                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"
+                    onClick={(e) => { e.stopPropagation(); handleDownload(tmpl.id); }} title=".tmj">
+                    <Download size={14} />
                   </button>
-                  <button onClick={() => handleDownload(t.id)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded text-xs bg-surface-raised border border-border hover:border-primary-light">
-                    <Download className="w-3 h-3" /> .tmj
+                  <button className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"
+                    onClick={(e) => { e.stopPropagation(); handleDuplicate(tmpl.id); }} title={t("mapEditor.project.duplicate")}>
+                    <Copy size={14} />
                   </button>
-                  <button onClick={() => handleDuplicate(t.id)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded text-xs bg-surface-raised border border-border hover:border-primary-light">
-                    <Copy className="w-3 h-3" /> Copy
-                  </button>
-                  <button onClick={() => handleDelete(t.id, t.name)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded text-xs bg-surface-raised border border-border hover:border-danger text-danger">
-                    <Trash2 className="w-3 h-3" /> Delete
+                  <button className="p-1.5 bg-gray-700/80 rounded hover:bg-red-600 text-gray-300"
+                    onClick={(e) => { e.stopPropagation(); handleDelete(tmpl.id, tmpl.name); }} title={t("common.delete")}>
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>

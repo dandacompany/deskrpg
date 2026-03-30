@@ -1594,6 +1594,14 @@ const zh: Record<string, string> = {
   "mapEditor.assets.removeFromProject": "从项目移除",
   "mapEditor.assets.noTilesets": "没有可用的图块集",
   "mapEditor.assets.noStamps": "没有可用的图章",
+
+  // Map Editor - Template Browser
+  "mapEditor.template.title": "地图模板",
+  "mapEditor.template.search": "搜索模板...",
+  "mapEditor.template.noTemplates": "暂无模板。",
+  "mapEditor.template.noResults": "没有匹配的模板。",
+  "mapEditor.template.creating": "正在创建项目...",
+  "mapEditor.template.backToCreate": "返回频道创建",
 };
 
 export default zh;

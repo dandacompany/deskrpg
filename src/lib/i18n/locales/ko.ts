@@ -1595,6 +1595,14 @@ const ko: Record<string, string> = {
   "mapEditor.assets.removeFromProject": "프로젝트에서 제거",
   "mapEditor.assets.noTilesets": "타일셋이 없습니다",
   "mapEditor.assets.noStamps": "스탬프가 없습니다",
+
+  // Map Editor - Template Browser
+  "mapEditor.template.title": "맵 템플릿",
+  "mapEditor.template.search": "템플릿 검색...",
+  "mapEditor.template.noTemplates": "템플릿이 없습니다.",
+  "mapEditor.template.noResults": "검색 결과가 없습니다.",
+  "mapEditor.template.creating": "프로젝트 생성 중...",
+  "mapEditor.template.backToCreate": "채널 만들기로 돌아가기",
 };
 
 export default ko;

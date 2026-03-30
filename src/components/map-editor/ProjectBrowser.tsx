@@ -73,7 +73,7 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-white">
+    <div className="flex flex-col bg-gray-900 text-white">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
         <h1 className="text-xl font-bold">{t("mapEditor.project.browserTitle")}</h1>

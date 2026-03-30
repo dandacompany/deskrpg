@@ -1594,6 +1594,14 @@ const ja: Record<string, string> = {
   "mapEditor.assets.removeFromProject": "プロジェクトから削除",
   "mapEditor.assets.noTilesets": "タイルセットがありません",
   "mapEditor.assets.noStamps": "スタンプがありません",
+
+  // Map Editor - Template Browser
+  "mapEditor.template.title": "マップテンプレート",
+  "mapEditor.template.search": "テンプレートを検索...",
+  "mapEditor.template.noTemplates": "テンプレートがありません。",
+  "mapEditor.template.noResults": "一致するテンプレートがありません。",
+  "mapEditor.template.creating": "プロジェクト作成中...",
+  "mapEditor.template.backToCreate": "チャンネル作成に戻る",
 };
 
 export default ja;
