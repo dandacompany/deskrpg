@@ -163,6 +163,15 @@ export default function PixelEditorModal({
     }
   }, [open]);
 
+  // --- Clean up transform on modal close ---
+  useEffect(() => {
+    if (!open) {
+      transformRef.current = null;
+      transformDragRef.current = null;
+      setTransformActive(false);
+    }
+  }, [open]);
+
   // Pixel dimensions of the region being edited
   const isDirectImage = !!initialImageDataUrl;
   const regionPxW = isDirectImage
@@ -886,6 +895,9 @@ export default function PixelEditorModal({
         }
       }
 
+      // Block other interactions while transforming
+      if (transformActive) return;
+
       if (e.button !== 0) return;
 
       // Shift tool: start shift drag
@@ -1252,6 +1264,7 @@ export default function PixelEditorModal({
       } else if (mod && (e.key === 'c' || e.key === 'C')) {
         // Copy pixel selection → auto enter paste mode
         e.preventDefault();
+        if (transformActive) return;
         const ec = editCanvasRef.current;
         if (ec && pixelSelection) {
           const ctx = ec.getContext('2d')!;
