@@ -6,17 +6,17 @@ import {
   Pencil, Eraser, Pipette, Move, BoxSelect,
   Scissors, Trash2, PlusSquare, MinusSquare,
   Undo2, Redo2, HelpCircle, ZoomIn,
-  ImageMinus, Grid3x3,
+  Grid3x3, Wand2,
   Maximize2,
 } from 'lucide-react';
 import Tooltip from './Tooltip';
 import { useT } from '@/lib/i18n';
 import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
-import { removeBgToDataUrl } from '@/lib/remove-bg';
+
 
 // === Types ===
 
-type Tool = 'pen' | 'eraser' | 'eyedropper' | 'shift' | 'rect-select';
+type Tool = 'pen' | 'eraser' | 'eyedropper' | 'shift' | 'rect-select' | 'magic-eraser';
 
 interface PixelSelection {
   x: number; y: number; width: number; height: number;
@@ -71,6 +71,48 @@ const ZOOM_LEVELS = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32] as const;
 const MIN_ZOOM = ZOOM_LEVELS[0];
 const MAX_ZOOM = ZOOM_LEVELS[ZOOM_LEVELS.length - 1];
 
+// === Flood fill helper (used by magic eraser) ===
+
+function floodFillRegion(
+  imageData: ImageData,
+  startX: number,
+  startY: number,
+  tolerance: number,
+): Set<number> {
+  const { data, width, height } = imageData;
+  const result = new Set<number>();
+  const startIdx = (startY * width + startX) * 4;
+  const tr = data[startIdx], tg = data[startIdx + 1], tb = data[startIdx + 2], ta = data[startIdx + 3];
+  const scaledTol = tolerance * 2.55;
+
+  const visited = new Uint8Array(width * height);
+  const queue: number[] = [startX, startY];
+  visited[startY * width + startX] = 1;
+
+  while (queue.length > 0) {
+    const y = queue.pop()!;
+    const x = queue.pop()!;
+    const idx = (y * width + x) * 4;
+    const dist = Math.max(
+      Math.abs(data[idx] - tr),
+      Math.abs(data[idx + 1] - tg),
+      Math.abs(data[idx + 2] - tb),
+      Math.abs(data[idx + 3] - ta),
+    );
+    if (dist > scaledTol) continue;
+    result.add(idx);
+
+    // 4-directional neighbors
+    for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+      if (nx >= 0 && nx < width && ny >= 0 && ny < height && !visited[ny * width + nx]) {
+        visited[ny * width + nx] = 1;
+        queue.push(nx, ny);
+      }
+    }
+  }
+  return result;
+}
+
 // === Component ===
 
 export default function PixelEditorModal({
@@ -109,7 +151,9 @@ export default function PixelEditorModal({
   const [resizeTargetRows, setResizeTargetRows] = useState(1);
   const [brushSize, setBrushSize] = useState(1);
   const [showHelp, setShowHelp] = useState(false);
-  const [removingBg, setRemovingBg] = useState<string | null>(null);
+  const [magicEraserTolerance, setMagicEraserTolerance] = useState(0);
+  const magicEraserPreviewRef = useRef<Set<number> | null>(null);
+  const magicEraserCacheKeyRef = useRef<string>('');
   const [pixelSelection, setPixelSelection] = useState<PixelSelection | null>(null);
   const [pixelClipboard, setPixelClipboard] = useState<ImageData | null>(null);
   const [isPixelPasteMode, setIsPixelPasteMode] = useState(false);
@@ -494,6 +538,20 @@ export default function PixelEditorModal({
       }
     }
 
+    // Magic eraser preview overlay
+    if (tool === 'magic-eraser' && magicEraserPreviewRef.current && magicEraserPreviewRef.current.size > 0) {
+      const ec2 = editCanvasRef.current;
+      if (ec2) {
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+        for (const idx of magicEraserPreviewRef.current) {
+          const pixelIdx = idx / 4;
+          const px = pixelIdx % ec2.width;
+          const py = Math.floor(pixelIdx / ec2.width);
+          ctx.fillRect(px * zoom, py * zoom, zoom, zoom);
+        }
+      }
+    }
+
     // Pixel selection rectangle
     const ps = pixelSelection;
     if (ps) {
@@ -513,8 +571,39 @@ export default function PixelEditorModal({
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.strokeRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
         ctx.restore();
+      } else if (tool === 'rect-select' && !isRectSelectingRef.current) {
+        // Completed selection: marching ants + 8 handles
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+        ctx.fillRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
+        ctx.save();
+        const dashOff2 = (Date.now() / 80) % 12;
+        ctx.setLineDash([4, 4]);
+        ctx.lineDashOffset = -dashOff2;
+        ctx.strokeStyle = 'rgba(59, 130, 246, 0.9)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
+        ctx.lineDashOffset = -dashOff2 + 4;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.strokeRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
+        ctx.restore();
+
+        // Draw 8 handles on selection
+        const selHandles = getHandlePositions({ x: ps.x, y: ps.y, width: ps.width, height: ps.height } as TransformState, zoom);
+        const shs = HANDLE_SIZE / 2;
+        for (const key of (['nw', 'ne', 'sw', 'se'] as const)) {
+          const p = selHandles[key];
+          ctx.fillStyle = '#3b82f6'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+          ctx.fillRect(p.x - shs, p.y - shs, HANDLE_SIZE, HANDLE_SIZE);
+          ctx.strokeRect(p.x - shs, p.y - shs, HANDLE_SIZE, HANDLE_SIZE);
+        }
+        for (const key of (['n', 's', 'w', 'e'] as const)) {
+          const p = selHandles[key];
+          ctx.fillStyle = '#60a5fa'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+          ctx.fillRect(p.x - shs, p.y - shs, HANDLE_SIZE, HANDLE_SIZE);
+          ctx.strokeRect(p.x - shs, p.y - shs, HANDLE_SIZE, HANDLE_SIZE);
+        }
       } else if (tool === 'rect-select') {
-        // Normal selection: static dashed border
+        // Dragging selection: simple dashed border
         ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
         ctx.fillRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
         ctx.save();
@@ -596,7 +685,8 @@ export default function PixelEditorModal({
 
   // --- Marching ants animation loop for paste mode ---
   useEffect(() => {
-    if ((!isPixelPasteMode && !transformActive) || !open) return;
+    const needsAnimation = isPixelPasteMode || transformActive || (tool === 'rect-select' && pixelSelection && !isRectSelectingRef.current);
+    if (!needsAnimation || !open) return;
     let raf: number;
     const animate = () => {
       renderCanvas();
@@ -604,7 +694,7 @@ export default function PixelEditorModal({
     };
     raf = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(raf);
-  }, [isPixelPasteMode, transformActive, open, renderCanvas]);
+  }, [isPixelPasteMode, transformActive, tool, pixelSelection, open, renderCanvas]);
 
   // --- Resize display canvas to container ---
   useEffect(() => {
@@ -750,6 +840,18 @@ export default function PixelEditorModal({
     },
     [],
   );
+
+  // --- Magic eraser preview ---
+  const computeMagicEraserPreview = useCallback((px: number, py: number) => {
+    const ec = editCanvasRef.current;
+    if (!ec) return;
+    const cacheKey = `${px},${py},${magicEraserTolerance}`;
+    if (magicEraserCacheKeyRef.current === cacheKey) return;
+    magicEraserCacheKeyRef.current = cacheKey;
+    const ctx = ec.getContext('2d')!;
+    const imageData = ctx.getImageData(0, 0, ec.width, ec.height);
+    magicEraserPreviewRef.current = floodFillRegion(imageData, px, py, magicEraserTolerance);
+  }, [magicEraserTolerance]);
 
   // --- Mouse handlers ---
 
@@ -927,7 +1029,50 @@ export default function PixelEditorModal({
 
       // Rect-select tool
       if (tool === 'rect-select') {
-        // Start selection drag
+        // If there's an existing selection, check if clicking on handle/interior to start transform
+        if (pixelSelection && pixelSelection.width >= 1 && pixelSelection.height >= 1) {
+          const canvas = canvasRef.current!;
+          const rect = canvas.getBoundingClientRect();
+          const screenX = e.clientX - rect.left - pan.x;
+          const screenY = e.clientY - rect.top - pan.y;
+          const sel = pixelSelection;
+          const handles = getHandlePositions({ x: sel.x, y: sel.y, width: sel.width, height: sel.height } as TransformState, zoom);
+          const hh = HANDLE_HIT / 2;
+
+          // Check handles
+          let hitHandle: HandleType | null = null;
+          for (const [key, p] of Object.entries(handles) as [HandleType, { x: number; y: number }][]) {
+            if (screenX >= p.x - hh && screenX <= p.x + hh && screenY >= p.y - hh && screenY <= p.y + hh) {
+              hitHandle = key;
+              break;
+            }
+          }
+          // Check interior
+          if (!hitHandle) {
+            const sx = sel.x * zoom, sy = sel.y * zoom, sw = sel.width * zoom, sh = sel.height * zoom;
+            if (screenX >= sx && screenX <= sx + sw && screenY >= sy && screenY <= sy + sh) {
+              hitHandle = 'move';
+            }
+          }
+
+          if (hitHandle) {
+            // Enter transform mode, then start drag
+            enterTransform(pixelSelection);
+            const t = transformRef.current!;
+            const mx = (e.clientX - rect.left - pan.x) / zoom;
+            const my = (e.clientY - rect.top - pan.y) / zoom;
+            transformDragRef.current = {
+              handle: hitHandle,
+              startMx: mx, startMy: my,
+              startX: t.x, startY: t.y,
+              startW: t.width, startH: t.height,
+            };
+            return;
+          }
+          // Clicking outside selection → clear and start new selection
+        }
+
+        // Start new selection drag
         isRectSelectingRef.current = true;
         setHoveredEdge(null);
         rectSelectStartRef.current = { x: coord.x, y: coord.y };
@@ -940,13 +1085,34 @@ export default function PixelEditorModal({
         return;
       }
 
+      // Magic eraser: apply flood fill transparency
+      if (tool === 'magic-eraser') {
+        const ec = editCanvasRef.current;
+        if (!ec) return;
+        pushUndo();
+        const ctx = ec.getContext('2d')!;
+        const imageData = ctx.getImageData(0, 0, ec.width, ec.height);
+        const region = floodFillRegion(imageData, coord.x, coord.y, magicEraserTolerance);
+        for (const idx of region) {
+          imageData.data[idx] = 0;
+          imageData.data[idx + 1] = 0;
+          imageData.data[idx + 2] = 0;
+          imageData.data[idx + 3] = 0;
+        }
+        ctx.putImageData(imageData, 0, 0);
+        magicEraserCacheKeyRef.current = '';
+        magicEraserPreviewRef.current = null;
+        renderCanvas();
+        return;
+      }
+
       pushUndo();
       isDrawingRef.current = true;
       setHoveredEdge(null);
       drawStartRef.current = { x: coord.x, y: coord.y };
       paintPixel(coord.x, coord.y);
     },
-    [getPixelCoord, tool, pickColor, pushUndo, paintPixel, handlePanMove, handlePanEnd, isPixelPasteMode, pixelClipboard, renderCanvas, transformActive, hitTestHandle, commitTransform, zoom, pan],
+    [getPixelCoord, tool, pickColor, pushUndo, paintPixel, handlePanMove, handlePanEnd, isPixelPasteMode, pixelClipboard, renderCanvas, transformActive, hitTestHandle, commitTransform, zoom, pan, magicEraserTolerance],
   );
 
   const handleMouseMove = useCallback(
@@ -955,6 +1121,30 @@ export default function PixelEditorModal({
       if (transformActive && !transformDragRef.current) {
         const handle = hitTestHandle(e);
         setTransformCursor(getHandleCursor(handle));
+      }
+
+      // Selection mode: update cursor for handles/interior
+      if (!transformActive && tool === 'rect-select' && pixelSelection && !isRectSelectingRef.current) {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          const screenX = e.clientX - rect.left - pan.x;
+          const screenY = e.clientY - rect.top - pan.y;
+          const sel = pixelSelection;
+          const handles = getHandlePositions({ x: sel.x, y: sel.y, width: sel.width, height: sel.height } as TransformState, zoom);
+          const hh = HANDLE_HIT / 2;
+          let cursor: HandleType | null = null;
+          for (const [key, p] of Object.entries(handles) as [HandleType, { x: number; y: number }][]) {
+            if (screenX >= p.x - hh && screenX <= p.x + hh && screenY >= p.y - hh && screenY <= p.y + hh) {
+              cursor = key; break;
+            }
+          }
+          if (!cursor) {
+            const sx = sel.x * zoom, sy = sel.y * zoom, sw = sel.width * zoom, sh = sel.height * zoom;
+            if (screenX >= sx && screenX <= sx + sw && screenY >= sy && screenY <= sy + sh) cursor = 'move';
+          }
+          setTransformCursor(getHandleCursor(cursor));
+        }
       }
 
       // Transform mode: drag in progress
@@ -1148,6 +1338,15 @@ export default function PixelEditorModal({
         }
       }
 
+      // Magic eraser: compute preview on hover
+      if (tool === 'magic-eraser' && !isDrawingRef.current) {
+        const coord = getPixelCoord(e);
+        if (coord) {
+          computeMagicEraserPreview(coord.x, coord.y);
+          renderCanvas();
+        }
+      }
+
       // Drawing (pan is handled at document level now)
       if (!isDrawingRef.current) {
         renderCanvas(); // re-render to show cursor preview
@@ -1169,7 +1368,7 @@ export default function PixelEditorModal({
 
       paintPixel(coord.x, coord.y);
     },
-    [getPixelCoord, getTileCoord, paintPixel, zoom, pan, effectiveTileWidth, effectiveTileHeight, tileEditMode, renderCanvas],
+    [getPixelCoord, getTileCoord, paintPixel, zoom, pan, effectiveTileWidth, effectiveTileHeight, tileEditMode, renderCanvas, tool, computeMagicEraserPreview],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -1180,9 +1379,8 @@ export default function PixelEditorModal({
     if (isRectSelectingRef.current) {
       isRectSelectingRef.current = false;
       rectSelectStartRef.current = null;
-      if (pixelSelection && pixelSelection.width >= 1 && pixelSelection.height >= 1) {
-        enterTransform(pixelSelection);
-      }
+      // Selection complete — stay in selection mode (don't enter transform yet)
+      // Transform enters on handle/interior drag via handleMouseDown
       return;
     }
     if (isShiftDraggingRef.current) {
@@ -1247,6 +1445,8 @@ export default function PixelEditorModal({
     setIsPixelPasteMode(false);
     setTileEditMode(false);
     setHoveredEdge(null);
+    magicEraserPreviewRef.current = null;
+    magicEraserCacheKeyRef.current = '';
   }, [transformActive, commitTransform]);
 
   // --- Keyboard shortcuts ---
@@ -1303,6 +1503,7 @@ export default function PixelEditorModal({
         else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); switchTool('eyedropper'); }
         else if (e.key === 'v' || e.key === 'V') { e.preventDefault(); switchTool('shift'); }
         else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); switchTool('rect-select'); }
+        else if (e.key === 'g' || e.key === 'G') { e.preventDefault(); switchTool('magic-eraser'); }
         else if (e.key === 't' || e.key === 'T') { e.preventDefault(); trimEdges(); }
         else if (e.key === '[') { e.preventDefault(); setBrushSize((s) => Math.max(1, s - 1)); }
         else if (e.key === ']') { e.preventDefault(); setBrushSize((s) => Math.min(16, s + 1)); }
@@ -1395,42 +1596,6 @@ export default function PixelEditorModal({
     setExpandedRows(resizeTargetRows);
     requestAnimationFrame(() => { autoFit(); renderCanvas(); });
   }, [tilesetInfo, resizeTargetCols, resizeTargetRows, pushUndo, autoFit, renderCanvas]);
-
-  // --- Remove background from current edit canvas ---
-  const handleRemoveBg = useCallback(async () => {
-    const ec = editCanvasRef.current;
-    if (!ec) return;
-
-    pushUndo();
-    setRemovingBg(t('mapEditor.pixel.removingBg'));
-
-    try {
-      const blob = await new Promise<Blob>((resolve) => {
-        ec.toBlob((b) => resolve(b!), 'image/png');
-      });
-
-      const resultDataUrl = await removeBgToDataUrl(blob, (p) => {
-        setRemovingBg(t('mapEditor.pixel.removingBgProgress', { percent: Math.round(p * 100) }));
-      });
-
-      // Load result and replace edit canvas
-      const img = new Image();
-      img.onload = () => {
-        const newCanvas = document.createElement('canvas');
-        newCanvas.width = ec.width;
-        newCanvas.height = ec.height;
-        const ctx = newCanvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0);
-        editCanvasRef.current = newCanvas;
-        setRemovingBg(null);
-        renderCanvas();
-      };
-      img.src = resultDataUrl;
-    } catch (err) {
-      console.error('Background removal failed:', err);
-      setRemovingBg(null);
-    }
-  }, [pushUndo, renderCanvas]);
 
   // --- Trim fully transparent edge rows/columns ---
   const trimEdges = useCallback(() => {
@@ -1547,9 +1712,11 @@ export default function PixelEditorModal({
   }
 
   // --- Cursor style ---
+  const hasSelectionHandles = !transformActive && tool === 'rect-select' && pixelSelection && transformCursor !== 'default';
   const cursorStyle = transformActive
     ? transformCursor
-    : tool === 'shift' ? 'move' : tool === 'rect-select' ? 'crosshair' : tool === 'eyedropper' ? 'crosshair' : tool === 'eraser' ? 'cell' : 'default';
+    : hasSelectionHandles ? transformCursor
+    : tool === 'shift' ? 'move' : tool === 'rect-select' ? 'crosshair' : tool === 'eyedropper' ? 'crosshair' : tool === 'eraser' ? 'cell' : tool === 'magic-eraser' ? 'crosshair' : 'default';
 
   const isExpanded = region && (expandedCols !== region.width || expandedRows !== region.height);
 
@@ -1588,6 +1755,25 @@ export default function PixelEditorModal({
             </Tooltip>
           </div>
 
+          {/* Magic eraser tolerance */}
+          {tool === 'magic-eraser' && (
+            <div className="flex items-center gap-1.5 px-2 border-l border-border">
+              <span className="text-micro text-secondary whitespace-nowrap">Tolerance</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={magicEraserTolerance}
+                onChange={(e) => {
+                  setMagicEraserTolerance(Number(e.target.value));
+                  magicEraserCacheKeyRef.current = '';
+                }}
+                className="w-20 h-1 accent-primary-light"
+              />
+              <span className="text-micro text-secondary w-5 text-right">{magicEraserTolerance}</span>
+            </div>
+          )}
+
           {/* Transform mode options */}
           {transformActive && (
             <div className="flex items-center gap-1 px-2 border-l border-border">
@@ -1609,17 +1795,13 @@ export default function PixelEditorModal({
             </div>
           )}
 
-          {/* Canvas Operations: BG Remove, Trim */}
+          {/* Canvas Operations: Magic Eraser, Trim */}
           <div className="flex items-center gap-0.5 px-2 border-r border-border">
-            {removingBg ? (
-              <span className="text-caption text-primary-light px-1">{removingBg}</span>
-            ) : (
-              <Tooltip label={t('mapEditor.pixel.eraseBgTooltip')}>
-                <Button variant="ghost" size="sm" onClick={handleRemoveBg}>
-                  <ImageMinus className="w-4 h-4" />
-                </Button>
-              </Tooltip>
-            )}
+            <Tooltip label="Magic Eraser" shortcut="G">
+              <Button variant={!tileEditMode && tool === 'magic-eraser' ? 'primary' : 'ghost'} size="sm" onClick={() => switchTool('magic-eraser')}>
+                <Wand2 className="w-4 h-4" />
+              </Button>
+            </Tooltip>
             <Tooltip label={t('mapEditor.pixel.trimTooltip')} shortcut="T">
               <Button variant="ghost" size="sm" onClick={trimEdges}>
                 <Scissors className="w-4 h-4" />
@@ -1746,14 +1928,14 @@ export default function PixelEditorModal({
           className="flex-1 min-h-0 overflow-hidden bg-bg-deep relative"
           style={{ cursor: cursorStyle }}
           onMouseMove={handleMouseMove}
-          onMouseLeave={() => { hoverPixelRef.current = null; setHoveredEdge(null); renderCanvas(); }}
+          onMouseLeave={() => { hoverPixelRef.current = null; setHoveredEdge(null); magicEraserPreviewRef.current = null; magicEraserCacheKeyRef.current = ''; renderCanvas(); }}
         >
           <canvas
             ref={canvasRef}
             className="absolute inset-0"
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
-            onMouseLeave={() => { hoverPixelRef.current = null; renderCanvas(); }}
+            onMouseLeave={() => { hoverPixelRef.current = null; magicEraserPreviewRef.current = null; magicEraserCacheKeyRef.current = ''; renderCanvas(); }}
             onWheel={handleWheel}
             onContextMenu={(e) => e.preventDefault()}
           />
