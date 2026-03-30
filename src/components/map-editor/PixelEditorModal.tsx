@@ -1567,6 +1567,26 @@ export default function PixelEditorModal({
             </Tooltip>
           </div>
 
+          {/* Transform mode options */}
+          {transformActive && (
+            <div className="flex items-center gap-1 px-2 border-l border-border">
+              <label className="flex items-center gap-1 text-xs text-secondary cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={transformRef.current?.smooth ?? false}
+                  onChange={(e) => {
+                    if (transformRef.current) {
+                      transformRef.current.smooth = e.target.checked;
+                      renderCanvas();
+                    }
+                  }}
+                  className="w-3 h-3"
+                />
+                Smooth
+              </label>
+            </div>
+          )}
+
           {/* Canvas Operations: BG Remove, Trim */}
           <div className="flex items-center gap-0.5 px-2 border-r border-border">
             {removingBg ? (
