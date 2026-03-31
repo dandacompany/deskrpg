@@ -5,14 +5,14 @@ import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useT, useLocale, LOCALES } from "@/lib/i18n";
-import { ClipboardList, MessageSquare, Undo2, Clock, Footprints, PhoneCall, Bell, ChevronDown, UserPlus, Settings, Share2, LogOut, Pencil, Users, Globe } from "lucide-react";
+import { ClipboardList, MessageSquare, Undo2, Clock, Footprints, PhoneCall, Bell, ChevronDown, UserPlus, UserMinus, Settings, Share2, LogOut, Pencil, Users, Globe } from "lucide-react";
 import type { Socket } from "socket.io-client";
 import {
   CharacterAppearance,
   LegacyCharacterAppearance,
 } from "@/lib/lpc-registry";
 import { compositeCharacter } from "@/lib/sprite-compositor";
-import { EventBus, setPendingChannelData } from "@/game/EventBus";
+import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import ChatPanel, { type ChannelChatMessage } from "@/components/ChatPanel";
 import MeetingRoom from "@/components/MeetingRoom";
 import NpcHireModal from "@/components/NpcHireModal";
@@ -21,15 +21,24 @@ import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
 import TaskBoard from "@/components/TaskBoard";
 import type { Task } from "@/components/TaskCard";
+import { getLocalizedErrorMessage, getLocalizedMessage } from "@/lib/i18n/error-codes";
+import { resolveNpcResponseChunk, type NpcResponsePayload } from "@/lib/npc-response-messages";
+import { sanitizeNpcResponseText } from "@/lib/task-block-utils.js";
+
+function GameEngineLoading() {
+  const t = useT();
+
+  return (
+    <div className="fixed inset-0 bg-gray-800 flex items-center justify-center text-gray-400">
+      {t("game.loadingEngine")}
+    </div>
+  );
+}
 
 // Import PhaserGame with SSR disabled — Phaser requires browser APIs
 const PhaserGame = dynamic(() => import("@/components/PhaserGame"), {
   ssr: false,
-  loading: () => (
-    <div className="fixed inset-0 bg-gray-800 flex items-center justify-center text-gray-400">
-      Loading game engine...
-    </div>
-  ),
+  loading: () => <GameEngineLoading />,
 });
 
 interface Character {
@@ -53,14 +62,104 @@ interface ChannelInfo {
   mapData: unknown;
   mapConfig: unknown;
   isPublic: boolean;
+  isMember?: boolean;
+  isOwner?: boolean;
   hasGateway: boolean;
+  gatewayConfig?: {
+    taskAutomation?: {
+      autoProgressNudgeEnabled?: boolean;
+      autoProgressNudgeMinutes?: number;
+      reportWaitSeconds?: number;
+    };
+  } | null;
+}
+
+interface PendingNpcReport {
+  reportId: string;
+  npcId: string;
+  npcName?: string;
+  message: string;
+  kind: string;
+}
+
+interface ChannelPlayerSummary {
+  id: string;
+  name: string;
+  appearance: CharacterAppearance | LegacyCharacterAppearance | null;
+}
+
+type RosterActionMenu =
+  | {
+      type: "player";
+      playerId: string;
+      playerName: string;
+      x: number;
+      y: number;
+    }
+  | {
+      type: "npc";
+      npcId: string;
+      npcName: string;
+      x: number;
+      y: number;
+    };
+
+function RosterAvatar({
+  appearance,
+  size = 28,
+}: {
+  appearance: CharacterAppearance | LegacyCharacterAppearance | null;
+  size?: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current || !appearance) return;
+
+    const canvas = canvasRef.current;
+    const offscreen = document.createElement("canvas");
+
+    compositeCharacter(offscreen, appearance)
+      .then(() => {
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        canvas.width = size;
+        canvas.height = size;
+        ctx.clearRect(0, 0, size, size);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(offscreen, 0, 128, 64, 64, 0, 0, size, size);
+      })
+      .catch(() => {});
+  }, [appearance, size]);
+
+  if (!appearance) {
+    return (
+      <div
+        className="rounded-full bg-surface-raised flex items-center justify-center text-text-secondary text-micro font-bold shrink-0"
+        style={{ width: size, height: size }}
+      >
+        ?
+      </div>
+    );
+  }
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={size}
+      height={size}
+      className="rounded-full bg-surface-raised shrink-0"
+      style={{ width: size, height: size, imageRendering: "pixelated" }}
+    />
+  );
 }
 
 export default function GamePage() {
+  const t = useT();
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
-        Loading...
+        {t("common.loading")}
       </div>
     }>
       <GamePageInner />
@@ -79,16 +178,21 @@ function GamePageInner() {
   const [character, setCharacter] = useState<Character | null>(null);
   const [channel, setChannel] = useState<ChannelInfo | null>(null);
   const [spritesheetDataUrl, setSpritesheetDataUrl] = useState<string | null>(null);
+  const [gameChannelData, setGameChannelData] = useState<PendingChannelData>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [playerCount, setPlayerCount] = useState(1);
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [socketConnected, setSocketConnected] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showRosterMenu, setShowRosterMenu] = useState<"players" | "npcs" | null>(null);
+  const [rosterActionMenu, setRosterActionMenu] = useState<RosterActionMenu | null>(null);
   const [mode, setMode] = useState<"office" | "meeting">("office");
   const [channelNpcs, setChannelNpcs] = useState<{ id: string; name: string; appearance: unknown }[]>([]);
+  const [channelPlayers, setChannelPlayers] = useState<ChannelPlayerSummary[]>([]);
 
   // Ref to track current dialogNpc for use inside socket listeners (must be declared before sync effect)
   const dialogNpcRef = useRef<{ npcId: string; npcName: string } | null>(null);
@@ -116,18 +220,22 @@ function GamePageInner() {
   // NPC greeting messages (stored until dialog opens)
   const npcGreetings = useRef<Map<string, string>>(new Map());
   const npcMessagesRef = useRef<NpcChatMessage[]>([]);
+  const pendingNpcReportsRef = useRef<Map<string, PendingNpcReport>>(new Map());
+  const consumedNpcReportIdsRef = useRef<Set<string>>(new Set());
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showChannelSettings, setShowChannelSettings] = useState(false);
   const [showTaskBoard, setShowTaskBoard] = useState(false);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [meetingMinutesCount, setMeetingMinutesCount] = useState(0);
 
   // Owner & NPC management state
   const [isOwner, setIsOwner] = useState(false);
   const [showHireModal, setShowHireModal] = useState(false);
   const [placementMode, setPlacementMode] = useState(false);
-  const [pendingNpc, setPendingNpc] = useState<{ name: string; persona: string; appearance: unknown; direction: string; agentId?: string; agentAction?: "select" | "create"; identity?: string; soul?: string } | null>(null);
-  const [editingNpc, setEditingNpc] = useState<{ id: string; name: string; persona: string; appearance: unknown; agentId?: string | null } | null>(null);
+  const [spawnSetMode, setSpawnSetMode] = useState(false);
+  const [pendingNpc, setPendingNpc] = useState<{ presetId?: string; name: string; persona: string; appearance: unknown; direction: string; agentId?: string; agentAction?: "select" | "create"; identity?: string; soul?: string; locale?: string } | null>(null);
+  const [editingNpc, setEditingNpc] = useState<{ id: string; name: string; persona: string; appearance: unknown; direction?: string; agentId?: string | null } | null>(null);
   // npcMenu removed — Edit/Fire now in ChatPanel gear menu
 
   // NPC context menu (right-click) state
@@ -145,6 +253,8 @@ function GamePageInner() {
   // Ref to accumulate streaming text (avoids setState-in-effect issues)
   const streamBufferRef = useRef("");
   const socketRef = useRef<Socket | null>(null);
+  // Current player position — updated from GameScene for beforeunload save
+  const playerPositionRef = useRef<{ x: number; y: number } | null>(null);
 
   // Redirect to channel select if no channelId
   useEffect(() => {
@@ -155,6 +265,49 @@ function GamePageInner() {
     }
   }, [channelId, characterId, router]);
 
+  // Track player position for beforeunload save
+  useEffect(() => {
+    if (!channelId) return;
+    // Poll position every 15s and update ref
+    const interval = setInterval(() => {
+      let resolved = false;
+      const handler = (data: { x: number; y: number }) => {
+        resolved = true;
+        EventBus.off("player-position-response", handler);
+        playerPositionRef.current = data;
+      };
+      EventBus.on("player-position-response", handler);
+      EventBus.emit("request-player-position");
+      setTimeout(() => { if (!resolved) EventBus.off("player-position-response", handler); }, 500);
+    }, 15000);
+
+    // Save position on page unload (refresh, tab close)
+    const handleUnload = () => {
+      // EventBus is synchronous — get fresh position immediately
+      let freshPos: { x: number; y: number } | null = null;
+      const syncHandler = (data: { x: number; y: number }) => { freshPos = data; };
+      EventBus.on("player-position-response", syncHandler);
+      EventBus.emit("request-player-position");
+      EventBus.off("player-position-response", syncHandler);
+
+      const pos = freshPos ?? playerPositionRef.current;
+      if (!pos) return;
+      // fetch with keepalive continues after page navigation
+      fetch(`/api/channels/${channelId}/save-position`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ x: Math.round(pos.x), y: Math.round(pos.y) }),
+        keepalive: true,
+      }).catch(() => {});
+    };
+    window.addEventListener("beforeunload", handleUnload);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("beforeunload", handleUnload);
+    };
+  }, [channelId]);
+
   const showToastNotification = useCallback((id: string, message: string) => {
     setToastMessage(message);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -164,6 +317,68 @@ function GamePageInner() {
     );
   }, []);
 
+  const deleteTask = useCallback((taskId: string) => {
+    if (!socketRef.current?.connected) {
+      showToastNotification(`task-delete-disconnected-${taskId}`, t("chat.disconnected"));
+      return;
+    }
+    socketRef.current.emit("task:delete", { taskId });
+  }, [showToastNotification, t]);
+
+  const requestTaskReport = useCallback((taskId: string) => {
+    if (!socketRef.current?.connected) {
+      showToastNotification(`task-request-disconnected-${taskId}`, t("chat.disconnected"));
+      return;
+    }
+    socketRef.current.emit("task:request-report", { taskId });
+    showToastNotification(`task-request-${taskId}`, t("task.requestReportQueued"));
+  }, [showToastNotification, t]);
+
+  const resumeTask = useCallback((taskId: string) => {
+    if (!socketRef.current?.connected) {
+      showToastNotification(`task-resume-disconnected-${taskId}`, t("chat.disconnected"));
+      return;
+    }
+    socketRef.current.emit("task:resume", { taskId });
+    showToastNotification(`task-resume-${taskId}`, t("task.resumeQueued"));
+  }, [showToastNotification, t]);
+
+  const completeTask = useCallback((taskId: string) => {
+    if (!socketRef.current?.connected) {
+      showToastNotification(`task-complete-disconnected-${taskId}`, t("chat.disconnected"));
+      return;
+    }
+    socketRef.current.emit("task:complete", { taskId });
+    showToastNotification(`task-complete-${taskId}`, t("task.completeQueued"));
+  }, [showToastNotification, t]);
+
+  const refreshChannelTasks = useCallback(() => {
+    if (!channelId || !socketRef.current?.connected) return;
+    socketRef.current.emit("task:list", { channelId });
+  }, [channelId]);
+
+  const appendPendingReportToDialog = useCallback((npcId: string, baseMessages: NpcChatMessage[]) => {
+    const pendingReport = pendingNpcReportsRef.current.get(npcId);
+    if (!pendingReport) return baseMessages;
+    const alreadyInHistory = baseMessages.some((message) =>
+      message.role === "npc" && message.content === pendingReport.message,
+    );
+    if (consumedNpcReportIdsRef.current.has(pendingReport.reportId)) {
+      pendingNpcReportsRef.current.delete(npcId);
+      return baseMessages;
+    }
+
+    consumedNpcReportIdsRef.current.add(pendingReport.reportId);
+    pendingNpcReportsRef.current.delete(npcId);
+    socketRef.current?.emit("npc:report-consumed", { reportId: pendingReport.reportId });
+
+    if (alreadyInHistory) {
+      return baseMessages;
+    }
+
+    return [...baseMessages, { role: "npc", content: pendingReport.message }];
+  }, []);
+
   // Socket.io connection (dynamic import to avoid SSR window access)
   useEffect(() => {
     let socketInstance: Socket | null = null;
@@ -171,18 +386,81 @@ function GamePageInner() {
 
     import("socket.io-client").then(({ io }) => {
       if (cancelled) return;
-      socketInstance = io({ path: "/socket.io" });
+      socketInstance = io({
+        path: "/socket.io",
+        transports: ["websocket"],
+        upgrade: false,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 500,
+        reconnectionDelayMax: 3000,
+        timeout: 10000,
+      });
       setSocket(socketInstance);
       socketRef.current = socketInstance;
+      setSocketConnected(socketInstance.connected);
+
+      socketInstance.on("connect", () => {
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[page] socket connected", {
+            id: socketInstance?.id ?? null,
+            transport: socketInstance?.io?.engine?.transport?.name ?? null,
+          });
+        }
+        setSocketConnected(true);
+        setIsNpcStreaming(false);
+        if (channelId) {
+          socketInstance?.emit("task:list", { channelId });
+        }
+      });
+      socketInstance.on("disconnect", (reason: string) => {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[page] socket disconnected", {
+            id: socketInstance?.id ?? null,
+            reason,
+          });
+        }
+        setSocketConnected(false);
+        setIsNpcStreaming(false);
+        showToastNotification("socket-disconnected", t("game.socketDisconnected", { reason }));
+      });
+      socketInstance.on("connect_error", (error: Error) => {
+        setSocketConnected(false);
+        setIsNpcStreaming(false);
+        console.error("[page] socket connect_error", {
+          message: error.message,
+          description: "description" in error ? (error as Error & { description?: unknown }).description : undefined,
+          context: "context" in error ? (error as Error & { context?: unknown }).context : undefined,
+          type: "type" in error ? (error as Error & { type?: unknown }).type : undefined,
+        });
+        showToastNotification("socket-connect-error", t("game.socketConnectFailed"));
+      });
 
       socketInstance.on("players:state", (data: { players: unknown[] }) => {
         setPlayerCount(data.players.length + 1);
+        setChannelPlayers([
+          {
+            id: "__self__",
+            name: characterNameRef.current || character?.name || t("game.you"),
+            appearance: character?.appearance ?? null,
+          },
+          ...((data.players || []) as { id: string; characterName: string; appearance?: CharacterAppearance | LegacyCharacterAppearance | null }[]).map((player) => ({
+            id: player.id,
+            name: player.characterName,
+            appearance: player.appearance ?? null,
+          })),
+        ]);
       });
-      socketInstance.on("player:joined", () => {
+      socketInstance.on("player:joined", (player: { id: string; characterName: string; appearance?: CharacterAppearance | LegacyCharacterAppearance | null }) => {
         setPlayerCount((c) => c + 1);
+        setChannelPlayers((prev) => {
+          if (prev.some((existing) => existing.id === player.id)) return prev;
+          return [...prev, { id: player.id, name: player.characterName, appearance: player.appearance ?? null }];
+        });
       });
-      socketInstance.on("player:left", () => {
+      socketInstance.on("player:left", ({ id }: { id: string }) => {
         setPlayerCount((c) => Math.max(1, c - 1));
+        setChannelPlayers((prev) => prev.filter((player) => player.id !== id));
       });
 
       // Channel chat history (sent on join)
@@ -192,10 +470,32 @@ function GamePageInner() {
 
       // NPC chat history (sent on demand) — only apply if it matches the current dialog
       socketInstance.on("npc:history", (data: { npcId: string; messages: { role: string; content: string }[] }) => {
-        if (!dialogNpcRef.current || dialogNpcRef.current.npcId !== data.npcId) return;
-        if (data.messages && data.messages.length > 0) {
-          setNpcMessages(data.messages.map(m => ({ role: m.role as "player" | "npc", content: m.content })));
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[page] npc:history", {
+            currentDialogNpcId: dialogNpcRef.current?.npcId ?? null,
+            npcId: data.npcId,
+            messageCount: data.messages?.length ?? 0,
+          });
         }
+        if (!dialogNpcRef.current || dialogNpcRef.current.npcId !== data.npcId) return;
+        const historyMessages = (data.messages || []).map((m) => ({
+          role: m.role as "player" | "npc",
+          content: m.role === "npc" ? sanitizeNpcResponseText(m.content) : m.content,
+        }));
+        setNpcMessages(appendPendingReportToDialog(data.npcId, historyMessages));
+      });
+
+      socketInstance.on("npc:history-append", (data: { npcId: string; message: string }) => {
+        const cleaned = sanitizeNpcResponseText(data.message);
+        if (!cleaned.trim()) return;
+        if (dialogNpcRef.current?.npcId !== data.npcId) return;
+
+        setNpcMessages((prev) => {
+          if (prev.some((message) => message.role === "npc" && message.content === cleaned)) {
+            return prev;
+          }
+          return [...prev, { role: "npc", content: cleaned }];
+        });
       });
 
       // Channel chat messages
@@ -227,12 +527,27 @@ function GamePageInner() {
         router.push(`/channels?characterId=${characterId}`);
       });
 
+      socketInstance.on("channel:access-denied", (data: {
+        channelId?: string;
+        action?: string;
+        reason?: string;
+        errorCode?: string;
+      }) => {
+        setIsNpcStreaming(false);
+        showToastNotification(
+          `channel-access-denied-${data.action ?? "unknown"}-${data.reason ?? "unknown"}`,
+          getLocalizedErrorMessage(t, data, "errors.forbidden"),
+        );
+      });
+
       socketInstance.on("session:kicked", (data: { reason: string }) => {
-        alert(data.reason);
+        setIsNpcStreaming(false);
+        alert(getLocalizedMessage(t, data.reason, "game.sessionKicked"));
         router.push(`/channels?characterId=${characterId}`);
       });
 
       socketInstance.on("join-error", () => {
+        setIsNpcStreaming(false);
         router.push(`/channels?characterId=${characterId}`);
       });
 
@@ -245,13 +560,28 @@ function GamePageInner() {
         }
       });
 
-      socketInstance.on("npc:report-ready", (data: { npcId: string; message: string }) => {
-        EventBus.emit("npc:call-to-player", { npcId: data.npcId, message: data.message });
+      socketInstance.on("npc:report-ready", (data: PendingNpcReport) => {
+        pendingNpcReportsRef.current.set(data.npcId, data);
+        if (dialogNpcRef.current?.npcId === data.npcId) {
+          setNpcMessages((prev) => appendPendingReportToDialog(data.npcId, prev));
+          return;
+        }
+        EventBus.emit("npc:call-to-player", {
+          npcId: data.npcId,
+          message: data.message,
+          reportId: data.reportId,
+          reportKind: data.kind,
+          npcName: data.npcName,
+          bubbleText: t("game.reportReadyBubble"),
+        });
       });
 
-      // When NPC finishes responding, check if it's far from player and move it closer
+      // Generic NPC chat responses should stay in the dialog.
+      // Only explicit report-ready events should pull an NPC over to the player.
       socketInstance.on("npc:response-complete", (data: { npcId: string; npcName: string }) => {
-        EventBus.emit("npc:deliver-response", { npcId: data.npcId, npcName: data.npcName });
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[page] npc:response-complete", data);
+        }
       });
 
       socketInstance.on("npc:returning", (data: { npcId: string }) => {
@@ -259,12 +589,25 @@ function GamePageInner() {
       });
 
       // NPC response streaming — only process for the NPC currently in dialog
-      socketInstance.on("npc:response", (data: { npcId: string; chunk: string; done: boolean }) => {
+      socketInstance.on("npc:response", (data: NpcResponsePayload) => {
+        const chunk = resolveNpcResponseChunk(data, t);
+
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[page] npc:response", {
+            currentDialogNpcId: dialogNpcRef.current?.npcId ?? null,
+            npcId: data.npcId,
+            done: data.done,
+            messageCode: data.messageCode ?? null,
+            chunkPreview: chunk.slice(0, 40),
+          });
+        }
         // Ignore responses for NPCs not in the current dialog
         if (dialogNpcRef.current && dialogNpcRef.current.npcId !== data.npcId) return;
-        if (data.chunk) {
-          streamBufferRef.current += data.chunk;
-          const buffered = streamBufferRef.current;
+        if (chunk) {
+          streamBufferRef.current += chunk;
+          const buffered = sanitizeNpcResponseText(streamBufferRef.current, {
+            stripIncompleteTail: true,
+          });
           setIsNpcStreaming(true);
           setNpcMessages((prev) => {
             const last = prev[prev.length - 1];
@@ -278,20 +621,18 @@ function GamePageInner() {
         }
         if (data.done) {
           setIsNpcStreaming(false);
-          // 스트리밍 완료 시 json:task 블록을 즉시 제거 (npc:response-done 대기 없이)
-          const finalText = streamBufferRef.current;
-          if (finalText.includes("```json:task")) {
-            const cleaned = finalText.replace(/```json:task\s*\n[\s\S]*?\n```/g, "").trim();
-            setNpcMessages((prev) => {
-              const lastIdx = prev.length - 1;
-              if (lastIdx >= 0 && prev[lastIdx].role === "npc") {
-                const updated = [...prev];
-                updated[lastIdx] = { role: "npc", content: cleaned };
-                return updated;
-              }
-              return prev;
-            });
-          }
+          const cleaned = sanitizeNpcResponseText(streamBufferRef.current, {
+            stripIncompleteTail: true,
+          });
+          setNpcMessages((prev) => {
+            const lastIdx = prev.length - 1;
+            if (lastIdx >= 0 && prev[lastIdx].role === "npc") {
+              const updated = [...prev];
+              updated[lastIdx] = { role: "npc", content: cleaned };
+              return updated;
+            }
+            return prev;
+          });
           streamBufferRef.current = "";
         }
       });
@@ -302,7 +643,7 @@ function GamePageInner() {
       });
 
       // Task: real-time updates
-      socketInstance.on("task:updated", ({ task, action }: { task: Task; action: string }) => {
+      socketInstance.on("task:updated", ({ task, action }: { task: Task; action?: string }) => {
         setAllTasks((prev) => {
           const idx = prev.findIndex((t) => t.id === task.id);
           if (idx >= 0) {
@@ -312,6 +653,16 @@ function GamePageInner() {
           }
           return [task, ...prev];
         });
+
+        if (action === "stalled") {
+          showToastNotification(`task-stalled-${task.id}`, t("task.stalledToast", { title: task.title }));
+        }
+        if (action === "resume") {
+          showToastNotification(`task-resume-toast-${task.id}`, t("task.resumeToast", { title: task.title }));
+        }
+        if (action === "complete_manual") {
+          showToastNotification(`task-complete-toast-${task.id}`, t("task.completeToast", { title: task.title }));
+        }
       });
 
       // Task: initial load — channel tasks (npcId null = channel-wide response)
@@ -342,8 +693,28 @@ function GamePageInner() {
         socketInstance.disconnect();
       }
       setSocket(null);
+      setSocketConnected(false);
+      setChannelPlayers([]);
       socketRef.current = null;
     };
+  }, [appendPendingReportToDialog, channelId, character?.appearance, character?.name, characterId, router, showToastNotification, t]);
+
+  useEffect(() => {
+    if (!showTaskBoard) return;
+    refreshChannelTasks();
+  }, [showTaskBoard, refreshChannelTasks]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest("[data-roster-menu-root]") && !target?.closest("[data-roster-action-menu-root]")) {
+        setShowRosterMenu(null);
+        setRosterActionMenu(null);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => window.removeEventListener("mousedown", handlePointerDown);
   }, []);
 
   // Shared dialog state reset
@@ -363,6 +734,7 @@ function GamePageInner() {
   // Listen for NPC interact event from GameScene
   useEffect(() => {
     const handleNpcInteract = (data: { npcId: string; npcName: string }) => {
+      console.log("[page] handleNpcInteract called", data);
       resetDialog();
       // If NPC has a stored greeting, show it as the first message
       const greeting = npcGreetings.current.get(data.npcId);
@@ -370,6 +742,7 @@ function GamePageInner() {
         setNpcMessages([{ role: "npc", content: greeting }]);
         npcGreetings.current.delete(data.npcId);
       }
+      dialogNpcRef.current = data;
       setDialogNpc(data);
       EventBus.emit("dialog:open");
       EventBus.emit("npc:bubble-clear", { npcId: data.npcId });
@@ -407,16 +780,19 @@ function GamePageInner() {
     };
 
     const handleNpcAutoGreet = (data: { npcId: string; npcName: string }) => {
-      const greeting = `Hi! I'm ${data.npcName}. Press E to talk!`;
+      const greeting = t("game.npcGreeting", { name: data.npcName });
       npcGreetings.current.set(data.npcId, greeting);
       EventBus.emit("npc:bubble", { npcId: data.npcId });
-      showToastNotification(`greet-${data.npcId}-${Date.now()}`, `${data.npcName} says hello!`);
+      showToastNotification(`greet-${data.npcId}-${Date.now()}`, t("game.npcGreeting", { name: data.npcName }));
     };
 
     const handleToastShow = (data: { message: string }) => {
+      // Cancel any auto-clear timer so proximity toast persists until toast:hide
+      if (toastTimerRef.current) { clearTimeout(toastTimerRef.current); toastTimerRef.current = null; }
       setToastMessage(data.message);
     };
     const handleToastHide = () => {
+      if (toastTimerRef.current) { clearTimeout(toastTimerRef.current); toastTimerRef.current = null; }
       setToastMessage(null);
     };
 
@@ -433,11 +809,21 @@ function GamePageInner() {
     const handleMovementStarted = (data: { npcId: string }) => {
       setNpcMoveStates(prev => ({ ...prev, [data.npcId]: "moving-to-player" }));
     };
-    const handleMovementArrived = (data: { npcId: string; npcName?: string }) => {
+    const handleMovementArrived = (data: {
+      npcId: string;
+      npcName?: string;
+      reportId?: string;
+      reportKind?: string;
+    }) => {
       setNpcMoveStates(prev => ({ ...prev, [data.npcId]: "waiting" }));
+      if (data.reportId) {
+        return;
+      }
       // Auto-open dialog when NPC arrives — preserve existing messages (don't resetDialog)
       if (data.npcName) {
-        setDialogNpc({ npcId: data.npcId, npcName: data.npcName });
+        const nextDialogNpc = { npcId: data.npcId, npcName: data.npcName };
+        dialogNpcRef.current = nextDialogNpc;
+        setDialogNpc(nextDialogNpc);
         EventBus.emit("dialog:open");
         EventBus.emit("npc:bubble-clear", { npcId: data.npcId });
         // Always request history to ensure conversation is complete
@@ -480,39 +866,128 @@ function GamePageInner() {
       EventBus.off("npc:movement-arrived", handleMovementArrived);
       EventBus.off("npc:movement-returned", handleMovementReturned);
     };
-  }, [resetDialog]);
+  }, [resetDialog, showToastNotification, t]);
 
   const handleDialogClose = useCallback(() => {
     resetDialog();
     EventBus.emit("dialog:close");
   }, [resetDialog]);
 
+  const openRosterActionMenu = useCallback((
+    anchorEl: HTMLElement,
+    menu: Omit<RosterActionMenu, "x" | "y">,
+  ) => {
+    const rect = anchorEl.getBoundingClientRect();
+    const menuWidth = 180;
+    const menuHeight = 220;
+    setContextMenu(null);
+    setRosterActionMenu({
+      ...menu,
+      x: Math.max(12, Math.min(rect.right + 8, window.innerWidth - menuWidth - 12)),
+      y: Math.max(12, Math.min(rect.top, window.innerHeight - menuHeight - 12)),
+    });
+  }, []);
+
+  const closeRosterMenus = useCallback(() => {
+    setShowRosterMenu(null);
+    setRosterActionMenu(null);
+  }, []);
+
+  const handleCallNpcById = useCallback((npcId: string) => {
+    if (!socket) return;
+    socket.emit("npc:call", { channelId, npcId });
+    setContextMenu(null);
+    closeRosterMenus();
+  }, [socket, channelId, closeRosterMenus]);
+
+  const handleTalkNpcById = useCallback((npcId: string, npcName: string) => {
+    EventBus.emit("npc:approach-and-interact", { npcId, npcName });
+    setContextMenu(null);
+    closeRosterMenus();
+  }, [closeRosterMenus]);
+
+  const handleFireNpcById = useCallback((npcId: string) => {
+    EventBus.emit("npc:fire", { npcId });
+    setContextMenu(null);
+    closeRosterMenus();
+  }, [closeRosterMenus]);
+
+  const handleOpenPlayerChat = useCallback(() => {
+    EventBus.emit("player:chat-open");
+    closeRosterMenus();
+  }, [closeRosterMenus]);
+
+  const handleEditCharacter = useCallback(() => {
+    closeRosterMenus();
+    router.push(`/characters/create?editId=${characterId}`);
+  }, [characterId, closeRosterMenus, router]);
+
+  const handleStartPositionSetting = useCallback(() => {
+    if (!isOwner || mode !== "office") return;
+    setSpawnSetMode(true);
+    closeRosterMenus();
+  }, [closeRosterMenus, isOwner, mode]);
+
   const handleSelectNpc = useCallback((npcId: string, npcName: string) => {
     resetDialog();
-    setDialogNpc({ npcId, npcName });
+    const nextDialogNpc = { npcId, npcName };
+    dialogNpcRef.current = nextDialogNpc;
+    setDialogNpc(nextDialogNpc);
     EventBus.emit("dialog:open");
+    EventBus.emit("npc:bubble-clear", { npcId });
+    if (socketRef.current) {
+      socketRef.current.emit("npc:history", { npcId });
+    }
   }, [resetDialog]);
 
   const handleDialogSend = useCallback(
     (message: string) => {
       if (!socket || !dialogNpc) return;
+      if (!socket.connected) {
+        showToastNotification(
+          `npc-chat-disconnected-${dialogNpc.npcId}`,
+          t("game.npcChatDisconnected"),
+        );
+        return;
+      }
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[page] handleDialogSend", {
+          npcId: dialogNpc.npcId,
+          npcName: dialogNpc.npcName,
+          message,
+        });
+      }
       // Add player message immediately
       setNpcMessages((prev) => [...prev, { role: "player", content: message }]);
       streamBufferRef.current = "";
       socket.emit("npc:chat", { npcId: dialogNpc.npcId, message });
     },
-    [socket, dialogNpc],
+    [socket, dialogNpc, showToastNotification, t],
   );
 
-  const handleGamePasswordSubmit = useCallback(async (password: string): Promise<boolean> => {
-    if (!channelId) return false;
+  const handleChannelChatSend = useCallback((message: string) => {
+    if (!socket || !socket.connected) {
+      showToastNotification(
+        "channel-chat-disconnected",
+        t("game.channelChatDisconnected"),
+      );
+      return;
+    }
+    socket.emit("chat:send", { message });
+  }, [socket, showToastNotification, t]);
+
+  const handleGamePasswordSubmit = useCallback(async (password: string): Promise<string | null> => {
+    if (!channelId) return t("errors.failedToJoinChannel");
     try {
       const res = await fetch(`/api/channels/${channelId}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
       });
-      if (!res.ok) return false;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return getLocalizedErrorMessage(t, data, "password.wrong");
+      }
       setShowPasswordModal(false);
       setLoading(true);
       // Reload channel data
@@ -523,11 +998,11 @@ function GamePageInner() {
         setIsOwner(channelData.channel.isOwner || false);
       }
       setLoading(false);
-      return true;
+      return null;
     } catch {
-      return false;
+      return t("errors.failedToJoinChannel");
     }
-  }, [channelId]);
+  }, [channelId, t]);
 
   const handleCopyInvite = () => {
     if (!channel?.inviteCode) return;
@@ -541,7 +1016,7 @@ function GamePageInner() {
   // Fetch character data and channel data
   useEffect(() => {
     if (!characterId) {
-      setError("No character selected");
+      setError(t("errors.noCharacterSelected"));
       setLoading(false);
       return;
     }
@@ -554,7 +1029,7 @@ function GamePageInner() {
     const channelRes = await fetch(`/api/channels/${channelId}`).catch(() => null);
     if (channelRes && channelRes.status === 403) {
       const data = await channelRes.json();
-      if (data.error === "password_required") {
+      if (data.errorCode === "password_required" || data.error === "password_required") {
         setShowPasswordModal(true);
         setLoading(false);
         return;
@@ -570,7 +1045,7 @@ function GamePageInner() {
         const chars: Character[] = charData.characters || [];
         const found = chars.find((c) => c.id === characterId);
         if (!found) {
-          setError("Character not found");
+          setError(t("errors.characterNotFound"));
           setLoading(false);
           return;
         }
@@ -583,13 +1058,23 @@ function GamePageInner() {
           setLoading(false);
           return;
         }
-        setChannel(channelData.channel);
-        if (channelData.channel?.isOwner) setIsOwner(true);
+        let nextChannel = channelData.channel as ChannelInfo;
 
-        // Auto-join public channels
-        if (channelData.channel?.isPublic && !channelData.channel?.isMember) {
-          fetch(`/api/channels/${channelId}/join`, { method: "POST" }).catch(() => {});
+        // Auto-join public channels before downstream effects start fetching
+        if (nextChannel?.isPublic && !nextChannel?.isMember && !nextChannel?.isOwner) {
+          const joinRes = await fetch(`/api/channels/${channelId}/join`, { method: "POST" });
+          if (!joinRes.ok) {
+            const errorData = await joinRes.json().catch(() => ({}));
+            throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToLoadGameData"));
+          }
+          nextChannel = {
+            ...nextChannel,
+            isMember: true,
+          };
         }
+
+        setChannel(nextChannel);
+        if (nextChannel?.isOwner) setIsOwner(true);
 
         // Set pending channel data for GameScene to read during create()
         // Parse mapData if it's a JSON string (SQLite stores as text)
@@ -600,7 +1085,7 @@ function GamePageInner() {
         // Detect if mapData is actually Tiled JSON (has tiledversion field)
         const isTiledJson = rawMapData && typeof rawMapData === "object" && "tiledversion" in rawMapData;
 
-        setPendingChannelData({
+        const nextPendingChannelData: PendingChannelData = {
           channelId: channelData.channel.id,
           mapData: isTiledJson ? null : (rawMapData || null),
           tiledJson: isTiledJson ? rawMapData : null,
@@ -610,7 +1095,10 @@ function GamePageInner() {
           savedPosition: channelData.channel.lastX != null && channelData.channel.lastY != null
             ? { x: channelData.channel.lastX, y: channelData.channel.lastY }
             : null,
-        });
+          reportWaitSeconds: channelData.channel.gatewayConfig?.taskAutomation?.reportWaitSeconds ?? 20,
+        };
+        setPendingChannelData(nextPendingChannelData);
+        setGameChannelData(nextPendingChannelData);
 
         // Composite character sprite
         const canvas = document.createElement("canvas");
@@ -622,28 +1110,54 @@ function GamePageInner() {
           setSpritesheetDataUrl(dataUrl);
         } catch (err) {
           console.error("Failed to composite character:", err);
-          setError("Failed to load character sprite");
+          setError(t("errors.failedToLoadCharacterSprite"));
         }
 
         setLoading(false);
       })
       .catch(() => {
-        setError("Failed to load game data");
+        setError(t("errors.failedToLoadGameData"));
         setLoading(false);
       });
     })();
-  }, [characterId, channelId]);
+  }, [characterId, channelId, t]);
 
   // Fetch NPCs for this channel (for meeting room)
   useEffect(() => {
-    if (!channelId) return;
+    if (!channelId || (!channel?.isMember && !channel?.isOwner)) return;
     fetch(`/api/npcs?channelId=${channelId}`)
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToFetchNpcs"));
+        }
+        return res.json();
+      })
       .then((data) => {
         if (data.npcs) setChannelNpcs(data.npcs);
       })
-      .catch(() => {});
-  }, [channelId]);
+      .catch((err) => {
+        console.error("Failed to fetch channel NPCs:", err);
+      });
+  }, [channelId, channel?.isMember, channel?.isOwner, t]);
+
+  useEffect(() => {
+    if (!channelId || (!channel?.isMember && !channel?.isOwner)) return;
+    fetch(`/api/meetings?channelId=${channelId}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToFetchMeetings"));
+        }
+        return res.json();
+      })
+      .then((data) => {
+        setMeetingMinutesCount(Array.isArray(data.minutes) ? data.minutes.length : 0);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch meeting minutes:", err);
+      });
+  }, [channelId, channel?.isMember, channel?.isOwner, mode, t]);
 
   // Emit owner status when scene is ready
   useEffect(() => {
@@ -653,6 +1167,12 @@ function GamePageInner() {
     EventBus.on("scene-ready", onSceneReady);
     return () => { EventBus.off("scene-ready", onSceneReady); };
   }, [isOwner]);
+
+  useEffect(() => {
+    EventBus.emit("task-automation-updated", {
+      reportWaitSeconds: channel?.gatewayConfig?.taskAutomation?.reportWaitSeconds ?? 20,
+    });
+  }, [channel?.gatewayConfig?.taskAutomation?.reportWaitSeconds]);
 
   // Placement mode coordination
   useEffect(() => {
@@ -669,11 +1189,17 @@ function GamePageInner() {
             channelId, name: pendingNpc.name, persona: pendingNpc.persona,
             appearance: pendingNpc.appearance, direction: pendingNpc.direction,
             positionX: data.col, positionY: data.row,
+            presetId: pendingNpc.presetId,
             agentId: pendingNpc.agentId, agentAction: pendingNpc.agentAction,
             identity: pendingNpc.identity, soul: pendingNpc.soul,
+            locale: pendingNpc.locale,
           }),
         });
         if (res.status === 409) return; // tile occupied, stay in placement mode
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToCreateNpc"));
+        }
         if (res.ok) {
           const result = await res.json();
           const npcsRes = await fetch(`/api/npcs?channelId=${channelId}`);
@@ -684,14 +1210,57 @@ function GamePageInner() {
           // Broadcast to other players
           if (socket) socket.emit("npc:broadcast-add", result.npc);
         }
-      } catch (err) { console.error("Failed to place NPC:", err); }
+      } catch (err) {
+        console.error("Failed to place NPC:", err);
+        showToastNotification(
+          "npc-place-error",
+          err instanceof Error ? err.message : t("errors.failedToCreateNpc"),
+        );
+      }
       finally { setPlacementMode(false); setPendingNpc(null); EventBus.emit("placement-mode-end"); }
     };
     const onPlacementCancel = () => { setPlacementMode(false); setPendingNpc(null); };
     EventBus.on("placement-complete", onPlacementComplete);
     EventBus.on("placement-cancel", onPlacementCancel);
     return () => { EventBus.off("placement-complete", onPlacementComplete); EventBus.off("placement-cancel", onPlacementCancel); };
-  }, [placementMode, pendingNpc, channelId, socket]);
+  }, [placementMode, pendingNpc, channelId, showToastNotification, socket, t]);
+
+  // Spawn set mode coordination
+  useEffect(() => {
+    if (spawnSetMode) {
+      EventBus.emit("spawn-set-mode-start");
+    }
+    const onSpawnSelected = async (data: { col: number; row: number }) => {
+      if (!channelId) return;
+      try {
+        const existingConfig = typeof channel?.mapConfig === "string"
+          ? JSON.parse(channel.mapConfig as string)
+          : (channel?.mapConfig || {});
+        await fetch(`/api/channels/${channelId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mapConfig: { ...existingConfig, spawnCol: data.col, spawnRow: data.row } }),
+        });
+        setChannel((prev) => prev ? { ...prev, mapConfig: { ...(typeof prev.mapConfig === "object" ? prev.mapConfig as Record<string, unknown> : {}), spawnCol: data.col, spawnRow: data.row } } : prev);
+        showToastNotification("spawn-set", t("game.spawnSetSuccess", { col: data.col, row: data.row }));
+      } catch (err) {
+        console.error("Failed to save spawn position:", err);
+      } finally {
+        setSpawnSetMode(false);
+        EventBus.emit("spawn-set-mode-end");
+      }
+    };
+    const onSpawnCancel = () => {
+      setSpawnSetMode(false);
+      EventBus.emit("spawn-set-mode-end");
+    };
+    EventBus.on("spawn:selected", onSpawnSelected);
+    EventBus.on("spawn-set-cancel", onSpawnCancel);
+    return () => {
+      EventBus.off("spawn:selected", onSpawnSelected);
+      EventBus.off("spawn-set-cancel", onSpawnCancel);
+    };
+  }, [spawnSetMode, channelId, channel, showToastNotification, t]);
 
   // NPC management listeners (edit / fire)
   useEffect(() => {
@@ -702,15 +1271,20 @@ function GamePageInner() {
         id: npc.id, name: npc.name,
         persona: (npc as Record<string, unknown>).persona as string || "",
         appearance: npc.appearance,
+        direction: typeof (npc as Record<string, unknown>).direction === "string" ? (npc as Record<string, unknown>).direction as string : "down",
         agentId: (npc as Record<string, unknown>).agentId as string | null || null,
       });
       setShowHireModal(true);
     };
     const onNpcFire = async (data: { npcId: string }) => {
-      if (!confirm("Are you sure you want to fire this NPC?")) return;
+      if (!confirm(t("game.fireNpcConfirm"))) return;
       const firedNpcId = data.npcId;
       try {
-        await fetch(`/api/npcs/${firedNpcId}`, { method: "DELETE" });
+        const deleteRes = await fetch(`/api/npcs/${firedNpcId}`, { method: "DELETE" });
+        if (!deleteRes.ok) {
+          const errorData = await deleteRes.json().catch(() => ({}));
+          throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToDeleteNpc"));
+        }
         const res = await fetch(`/api/npcs?channelId=${channelId}`);
         const npcsData = await res.json();
         setChannelNpcs(npcsData.npcs || []);
@@ -720,36 +1294,43 @@ function GamePageInner() {
         if (socket) socket.emit("npc:broadcast-remove", { npcId: firedNpcId });
         // Clean up tasks for the fired NPC
         setAllTasks((prev) => prev.filter((t) => t.npcId !== firedNpcId));
-      } catch (err) { console.error("Failed to fire NPC:", err); }
+      } catch (err) {
+        console.error("Failed to fire NPC:", err);
+        showToastNotification(
+          `npc-fire-error-${firedNpcId}`,
+          err instanceof Error ? err.message : t("errors.failedToDeleteNpc"),
+        );
+      }
     };
     EventBus.on("npc:edit", onNpcEdit);
     EventBus.on("npc:fire", onNpcFire);
     return () => { EventBus.off("npc:edit", onNpcEdit); EventBus.off("npc:fire", onNpcFire); };
-  }, [channelNpcs, channelId, socket]);
+  }, [channelNpcs, channelId, showToastNotification, socket, t]);
 
   // NPC context menu handlers
   const handleCallNpc = useCallback(() => {
-    if (!contextMenu || !socket) return;
-    socket.emit("npc:call", { channelId, npcId: contextMenu.npcId });
-    setContextMenu(null);
-  }, [contextMenu, socket, channelId]);
+    if (!contextMenu) return;
+    handleCallNpcById(contextMenu.npcId);
+  }, [contextMenu, handleCallNpcById]);
 
   const handleContextTalk = useCallback(() => {
     if (!contextMenu) return;
-    EventBus.emit("npc:interact", { npcId: contextMenu.npcId, npcName: contextMenu.npcName });
-    setContextMenu(null);
-  }, [contextMenu]);
+    handleTalkNpcById(contextMenu.npcId, contextMenu.npcName);
+  }, [contextMenu, handleTalkNpcById]);
 
   const handleReturnNpc = useCallback((npcId: string) => {
     if (!socket) return;
     socket.emit("npc:return-home", { channelId, npcId });
-  }, [socket, channelId]);
+    setContextMenu(null);
+    closeRosterMenus();
+  }, [socket, channelId, closeRosterMenus]);
 
   // ESC key to close context menu
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && contextMenu) {
-        setContextMenu(null);
+      if (e.key === "Escape") {
+        if (contextMenu) setContextMenu(null);
+        if (rosterActionMenu) setRosterActionMenu(null);
       }
     };
     const preventContextMenu = (e: MouseEvent) => e.preventDefault();
@@ -759,14 +1340,14 @@ function GamePageInner() {
       window.removeEventListener("keydown", handleEsc);
       window.removeEventListener("contextmenu", preventContextMenu);
     };
-  }, [contextMenu]);
+  }, [contextMenu, rosterActionMenu]);
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
         <div className="text-center">
-          <div className="text-xl mb-2">Loading game...</div>
-          <div className="text-gray-400">Preparing your character</div>
+          <div className="text-xl mb-2">{t("common.loadingGame")}</div>
+          <div className="text-gray-400">{t("common.preparingCharacter")}</div>
         </div>
       </div>
     );
@@ -781,7 +1362,7 @@ function GamePageInner() {
             href="/characters"
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded font-semibold"
           >
-            Back to Characters
+            {t("common.backToCharacters")}
           </Link>
         </div>
       </div>
@@ -792,16 +1373,31 @@ function GamePageInner() {
     <div className="h-screen w-screen overflow-hidden bg-gray-900 text-white">
       {/* Game canvas — full screen background (hidden when in meeting mode) */}
       <div style={{ visibility: mode === "office" ? "visible" : "hidden", position: mode === "office" ? "relative" : "absolute", pointerEvents: mode === "office" ? "auto" : "none" }}>
-        {spritesheetDataUrl && character && (
+        {spritesheetDataUrl && character && gameChannelData && (
           <PhaserGame
             spritesheetDataUrl={spritesheetDataUrl}
             socket={socket}
             characterId={character.id}
             characterName={character.name}
             appearance={character.appearance}
+            channelInitData={gameChannelData}
           />
         )}
       </div>
+
+      {/* Spawn set mode banner */}
+      {spawnSetMode && (
+        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2 bg-green-900/90 border border-green-500 rounded-lg text-green-100 text-sm shadow-lg">
+          <Footprints className="w-4 h-4 text-green-400" />
+          <span>{t("game.spawnSetMode")}</span>
+          <button
+            onClick={() => { setSpawnSetMode(false); EventBus.emit("spawn-set-mode-end"); }}
+            className="ml-2 px-2 py-0.5 bg-green-700 hover:bg-green-600 rounded text-xs"
+          >
+            {t("common.closeEsc")}
+          </button>
+        </div>
+      )}
 
       {/* Top bar — floating over game */}
       <div className="fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-2 bg-black/50 backdrop-blur-sm">
@@ -812,19 +1408,147 @@ function GamePageInner() {
 
         {/* Right: grouped controls */}
         <div className="flex items-center gap-1.5">
-          {/* Players count */}
-          <span className="text-caption text-text-dim px-1.5">{t("game.onlineCount", { count: playerCount })}</span>
+          {/* Gateway status */}
+          {channel?.hasGateway ? (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-400/20 text-caption text-emerald-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span>{t("game.aiConnected")}</span>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowChannelSettings(true)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-400/20 text-caption text-amber-200 hover:bg-amber-500/20"
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-300" />
+              <span>{t("game.gatewayConnect")}</span>
+            </button>
+          )}
+
+          {/* Roster buttons */}
+          <div className="relative" data-roster-menu-root>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  setRosterActionMenu(null);
+                  setShowRosterMenu((prev) => prev === "players" ? null : "players");
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-caption text-text-secondary"
+              >
+                <span className="w-2 h-2 rounded-full bg-sky-400" />
+                <span>{t("game.playersOnlineCount", { count: playerCount })}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setRosterActionMenu(null);
+                  setShowRosterMenu((prev) => prev === "npcs" ? null : "npcs");
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-caption text-text-secondary"
+              >
+                <span className="w-2 h-2 rounded-full bg-violet-400" />
+                <span>{t("game.npcsAtWorkCount", { count: channelNpcs.length })}</span>
+              </button>
+            </div>
+
+            {showRosterMenu && (
+              <div className="absolute top-full left-0 mt-2 w-64 bg-surface border border-border rounded-lg shadow-xl z-50 overflow-hidden">
+                <div className="px-3 py-2 border-b border-border text-caption text-text-dim flex items-center justify-between gap-2">
+                  <span>
+                    {showRosterMenu === "players" ? t("game.playersOnlineCount", { count: playerCount }) : t("game.npcsAtWorkCount", { count: channelNpcs.length })}
+                  </span>
+                  {showRosterMenu === "players" && (
+                    <button
+                      onClick={() => {
+                        setShowSharePopup(true);
+                        closeRosterMenus();
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/80 hover:bg-primary text-white text-micro font-semibold"
+                    >
+                      <Share2 className="w-3 h-3" />
+                      <span>{t("game.inviteFriend")}</span>
+                    </button>
+                  )}
+                  {showRosterMenu === "npcs" && isOwner && mode === "office" && (
+                    <button
+                      onClick={() => {
+                        setShowHireModal(true);
+                        closeRosterMenus();
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/80 hover:bg-primary text-white text-micro font-semibold"
+                    >
+                      <UserPlus className="w-3 h-3" />
+                      <span>{t("game.hireNpc")}</span>
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-64 overflow-y-auto py-1">
+                  {showRosterMenu === "players" ? (
+                    channelPlayers.length > 0 ? channelPlayers.map((player) => (
+                      player.id === "__self__" ? (
+                        <button
+                          key={player.id}
+                          onClick={(event) => openRosterActionMenu(event.currentTarget, {
+                            type: "player",
+                            playerId: player.id,
+                            playerName: player.name,
+                          })}
+                          className="w-full px-3 py-2 text-body text-text-secondary hover:bg-surface-raised flex items-center gap-2 text-left"
+                        >
+                          <RosterAvatar appearance={player.appearance} />
+                          <span className="truncate">{player.name}</span>
+                          <span className="ml-auto text-micro text-text-dim">{t("game.you")}</span>
+                        </button>
+                      ) : (
+                        <button
+                          key={player.id}
+                          onClick={(event) => openRosterActionMenu(event.currentTarget, {
+                            type: "player",
+                            playerId: player.id,
+                            playerName: player.name,
+                          })}
+                          className="w-full px-3 py-2 text-body text-text-secondary hover:bg-surface-raised flex items-center gap-2 text-left"
+                        >
+                          <RosterAvatar appearance={player.appearance} />
+                          <span className="truncate">{player.name}</span>
+                        </button>
+                      )
+                    )) : (
+                      <div className="px-3 py-3 text-caption text-text-dim">{t("game.noPlayersOnline")}</div>
+                    )
+                  ) : (
+                    channelNpcs.length > 0 ? channelNpcs.map((npc) => (
+                      <button
+                        key={npc.id}
+                        onClick={(event) => openRosterActionMenu(event.currentTarget, {
+                          type: "npc",
+                          npcId: npc.id,
+                          npcName: npc.name,
+                        })}
+                        className="w-full px-3 py-2 text-body text-text-secondary hover:bg-surface-raised flex items-center gap-2 text-left"
+                      >
+                        <RosterAvatar appearance={npc.appearance as CharacterAppearance | LegacyCharacterAppearance | null} />
+                        <span className="truncate">{npc.name}</span>
+                      </button>
+                    )) : (
+                      <div className="px-3 py-3 text-caption text-text-dim">{t("game.noNpcsAtWork")}</div>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Mode toggle */}
           <button
             onClick={() => setMode(mode === "office" ? "meeting" : "office")}
-            className={`px-2.5 py-1 rounded-md text-caption font-semibold ${
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-caption font-semibold ${
               mode === "meeting"
                 ? "bg-primary hover:bg-primary-hover text-white"
                 : "bg-meeting/80 hover:bg-meeting text-white"
             }`}
           >
+            <Users className="w-3 h-3" />
             {mode === "office" ? t("game.meetingRoom") : t("common.back")}
+            <span className="bg-white/20 px-1.5 rounded-full text-micro">{meetingMinutesCount}</span>
           </button>
 
           {/* Tasks button */}
@@ -873,6 +1597,15 @@ function GamePageInner() {
                   >
                     <UserPlus className="w-3.5 h-3.5" />
                     {t("game.hireNpc")}
+                  </button>
+                )}
+                {isOwner && mode === "office" && (
+                  <button
+                    onClick={() => { setSpawnSetMode(true); setShowUserMenu(false); }}
+                    className="w-full text-left px-4 py-2 text-body text-text-secondary hover:bg-surface-raised hover:text-white flex items-center gap-2"
+                  >
+                    <Footprints className="w-3.5 h-3.5" />
+                    {t("game.setStartPosition")}
                   </button>
                 )}
                 {isOwner && (
@@ -1049,17 +1782,39 @@ function GamePageInner() {
           setShowHireModal(false);
         }}
         onSaveEdit={async (npcId, updates) => {
-          await fetch(`/api/npcs/${npcId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(updates),
-          });
-          const res = await fetch(`/api/npcs?channelId=${channelId}`);
-          const data = await res.json();
-          setChannelNpcs(data.npcs || []);
-          setShowHireModal(false);
-          setEditingNpc(null);
-          if (socket) socket.emit("npc:broadcast-update", { npcId, ...updates });
+          try {
+            const patchRes = await fetch(`/api/npcs/${npcId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(updates),
+            });
+            if (!patchRes.ok) {
+              const errorData = await patchRes.json().catch(() => ({}));
+              throw new Error(getLocalizedErrorMessage(t, errorData, "npc.saveEditFailed"));
+            }
+            const patchData = await patchRes.json().catch(() => ({}));
+            const res = await fetch(`/api/npcs?channelId=${channelId}`);
+            const data = await res.json();
+            setChannelNpcs(data.npcs || []);
+            setShowHireModal(false);
+            setEditingNpc(null);
+            const localUpdate = patchData?.npc
+              ? {
+                  npcId,
+                  name: patchData.npc.name,
+                  appearance: patchData.npc.appearance,
+                  direction: patchData.npc.direction,
+                }
+              : { npcId, ...updates };
+            EventBus.emit("npc:update-local", localUpdate);
+            if (socket) socket.emit("npc:broadcast-update", localUpdate);
+          } catch (error) {
+            console.error("Failed to save NPC edit:", error);
+            showToastNotification(
+              `npc-edit-error-${npcId}`,
+              error instanceof Error ? error.message : t("npc.saveEditFailed"),
+            );
+          }
         }}
         editingNpc={editingNpc}
         currentNpcCount={channelNpcs.length}
@@ -1068,7 +1823,7 @@ function GamePageInner() {
 
       {showPasswordModal && channelId && (
         <PasswordModal
-          channelName={channel?.name || "Private Channel"}
+          channelName={channel?.name || t("channels.privateChannel")}
           onSubmit={handleGamePasswordSubmit}
           onClose={() => router.push(`/channels?characterId=${characterId}`)}
         />
@@ -1083,7 +1838,28 @@ function GamePageInner() {
           inviteCode={channel.inviteCode}
           onClose={() => setShowChannelSettings(false)}
           onUpdated={(data) => {
-            setChannel((prev) => prev ? { ...prev, ...data } : prev);
+            if (typeof data.gatewayConfig?.taskAutomation?.reportWaitSeconds === "number") {
+              EventBus.emit("task-automation-updated", {
+                reportWaitSeconds: data.gatewayConfig.taskAutomation.reportWaitSeconds,
+              });
+            }
+            setChannel((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                ...data,
+                gatewayConfig: data.gatewayConfig
+                  ? {
+                      ...(prev.gatewayConfig || {}),
+                      ...data.gatewayConfig,
+                      taskAutomation: {
+                        ...(prev.gatewayConfig?.taskAutomation || {}),
+                        ...(data.gatewayConfig.taskAutomation || {}),
+                      },
+                    }
+                  : prev.gatewayConfig,
+              };
+            });
           }}
         />
       )}
@@ -1093,7 +1869,10 @@ function GamePageInner() {
         isOpen={showTaskBoard}
         onClose={() => setShowTaskBoard(false)}
         tasks={allTasks}
-        onDeleteTask={(taskId) => { if (socket) socket.emit("task:delete", { taskId }); }}
+        onDeleteTask={deleteTask}
+        onRequestReportTask={requestTaskReport}
+        onResumeTask={resumeTask}
+        onCompleteTask={completeTask}
       />
 
       {/* Placement mode indicator */}
@@ -1147,6 +1926,8 @@ function GamePageInner() {
             dialogNpc={dialogNpc}
             npcMessages={npcMessages}
             isNpcStreaming={isNpcStreaming}
+            npcChatInputDisabled={!socketConnected}
+            npcChatDisabledPlaceholder={t("chat.disconnected")}
             onSend={handleDialogSend}
             onClose={handleDialogClose}
             npcSelectList={npcSelectList}
@@ -1160,12 +1941,16 @@ function GamePageInner() {
             }}
             channelMessages={channelMessages}
             channelChatOpen={channelChatOpen}
-            channelChatInputDisabled={channelChatInputDisabled}
-            onSendChannelChat={(message) => { if (socket) socket.emit("chat:send", { message }); }}
+            channelChatInputDisabled={channelChatInputDisabled || !socketConnected}
+            onSendChannelChat={handleChannelChatSend}
             currentPlayerName={character?.name}
             npcMoveState={dialogNpc ? npcMoveStates[dialogNpc.npcId] : undefined}
             onReturnNpc={dialogNpc && npcCallers[dialogNpc.npcId] === socket?.id ? handleReturnNpc : undefined}
             socket={socket}
+            onDeleteTask={deleteTask}
+            onRequestReportTask={requestTaskReport}
+            onResumeTask={resumeTask}
+            onCompleteTask={completeTask}
           />
         </>
       )}
@@ -1218,9 +2003,121 @@ function GamePageInner() {
               >
                 <MessageSquare className="w-3.5 h-3.5 inline mr-1" />{t("context.talk")}
               </button>
+              {isOwner && (
+                <button
+                  onClick={() => handleFireNpcById(contextMenu.npcId)}
+                  className="w-full text-left px-3 py-2 text-body text-danger hover:bg-surface-raised"
+                >
+                  <UserMinus className="w-3.5 h-3.5 inline mr-1" />{t("context.fire")}
+                </button>
+              )}
             </div>
           </div>
         </>;
+      })()}
+
+      {rosterActionMenu && (() => {
+        if (rosterActionMenu.type === "player") {
+          return (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setRosterActionMenu(null)} />
+              <div
+                className="fixed z-50"
+                style={{ left: rosterActionMenu.x, top: rosterActionMenu.y }}
+                data-roster-action-menu-root
+              >
+                <div className="bg-surface border border-border rounded-lg shadow-xl py-1 min-w-[160px]">
+                  {rosterActionMenu.playerId === "__self__" ? (
+                    <>
+                      <button
+                        onClick={handleEditCharacter}
+                        className="w-full text-left px-3 py-2 text-body text-text hover:bg-surface-raised"
+                      >
+                        <Pencil className="w-3.5 h-3.5 inline mr-1" />{t("game.editCharacter")}
+                      </button>
+                      {isOwner && mode === "office" && (
+                        <button
+                          onClick={handleStartPositionSetting}
+                          className="w-full text-left px-3 py-2 text-body text-text hover:bg-surface-raised"
+                        >
+                          <Footprints className="w-3.5 h-3.5 inline mr-1" />{t("game.setStartPosition")}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleOpenPlayerChat}
+                      className="w-full text-left px-3 py-2 text-body text-text hover:bg-surface-raised"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 inline mr-1" />{t("context.talk")}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          );
+        }
+
+        const currentMoveState = npcMoveStates[rosterActionMenu.npcId] || "idle";
+        const isCaller = npcCallers[rosterActionMenu.npcId] === socket?.id;
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setRosterActionMenu(null)} />
+            <div
+              className="fixed z-50"
+              style={{ left: rosterActionMenu.x, top: rosterActionMenu.y }}
+              data-roster-action-menu-root
+            >
+              <div className="bg-surface border border-border rounded-lg shadow-xl py-1 min-w-[160px]">
+                {currentMoveState === "idle" && (
+                  <button
+                    onClick={() => handleCallNpcById(rosterActionMenu.npcId)}
+                    className="w-full text-left px-3 py-2 text-body text-npc hover:bg-surface-raised"
+                  >
+                    <PhoneCall className="w-3.5 h-3.5 inline mr-1" />{t("context.call")}
+                  </button>
+                )}
+                {currentMoveState === "waiting" && isCaller && (
+                  <button
+                    onClick={() => handleReturnNpc(rosterActionMenu.npcId)}
+                    className="w-full text-left px-3 py-2 text-body text-npc hover:bg-surface-raised"
+                  >
+                    <Undo2 className="w-3.5 h-3.5 inline mr-1" />{t("context.return")}
+                  </button>
+                )}
+                {currentMoveState === "waiting" && !isCaller && (
+                  <button disabled className="w-full text-left px-3 py-2 text-body text-text-dim cursor-not-allowed">
+                    <Clock className="w-3.5 h-3.5 inline mr-1" />{t("context.calledByOther")}
+                  </button>
+                )}
+                {currentMoveState !== "idle" && currentMoveState !== "waiting" && (
+                  <button disabled className="w-full text-left px-3 py-2 text-body text-text-dim cursor-not-allowed">
+                    <Footprints className="w-3.5 h-3.5 inline mr-1" />{t("npc.moving")}
+                  </button>
+                )}
+                <button
+                  onClick={() => handleTalkNpcById(rosterActionMenu.npcId, rosterActionMenu.npcName)}
+                  disabled={currentMoveState !== "idle"}
+                  className={`w-full text-left px-3 py-2 text-body ${
+                    currentMoveState === "idle"
+                      ? "text-text hover:bg-surface-raised"
+                      : "text-text-dim cursor-not-allowed"
+                  }`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5 inline mr-1" />{t("context.talk")}
+                </button>
+                {isOwner && (
+                  <button
+                    onClick={() => handleFireNpcById(rosterActionMenu.npcId)}
+                    className="w-full text-left px-3 py-2 text-body text-danger hover:bg-surface-raised"
+                  >
+                    <UserMinus className="w-3.5 h-3.5 inline mr-1" />{t("context.fire")}
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        );
       })()}
 
       {mode === "meeting" && character && (

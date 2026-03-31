@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildChannelAccessDeniedPayload,
+  getChannelAccessDeniedErrorCode,
   summarizeChannelCreateAccess,
   summarizeChannelDetailAccess,
   summarizeChannelJoinAccess,
@@ -187,4 +189,38 @@ test("socket participation preserves legacy null-group fallback", () => {
   assert.equal(privateMember.reason, "legacy_channel_member");
   assert.equal(privateNonMember.allowed, false);
   assert.equal(privateNonMember.reason, "legacy_private_password_required");
+});
+
+test("socket denial reasons map to stable localized error codes", () => {
+  assert.equal(
+    getChannelAccessDeniedErrorCode("groupless_public_browse_only"),
+    "public_channel_browse_only",
+  );
+  assert.equal(
+    getChannelAccessDeniedErrorCode("group_membership_required"),
+    "group_membership_required",
+  );
+  assert.equal(
+    getChannelAccessDeniedErrorCode("password_required"),
+    "password_required",
+  );
+  assert.equal(
+    getChannelAccessDeniedErrorCode("legacy_private_password_required"),
+    "password_required",
+  );
+});
+
+test("socket denial payload preserves reason and specific errorCode", () => {
+  const payload = buildChannelAccessDeniedPayload({
+    channelId: "channel-1",
+    action: "meeting:join",
+    reason: "legacy_private_password_required",
+  });
+
+  assert.deepEqual(payload, {
+    channelId: "channel-1",
+    action: "meeting:join",
+    reason: "legacy_private_password_required",
+    errorCode: "password_required",
+  });
 });
