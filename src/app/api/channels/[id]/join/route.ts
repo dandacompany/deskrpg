@@ -1,8 +1,9 @@
 import { db } from "@/db";
-import { channels, channelMembers } from "@/db";
+import { channels, channelMembers, groupMembers } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { verifyPassword } from "@/lib/password";
+import { summarizeChannelJoinAccess } from "@/lib/rbac/channel-access";
 
 function getUserId(req: NextRequest): string | null {
   return req.headers.get("x-user-id");
@@ -14,7 +15,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) {
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  }
 
   const { id } = await params;
 
@@ -27,7 +30,10 @@ export async function POST(
       .limit(1);
 
     if (!channel) {
-      return NextResponse.json({ error: "Channel not found" }, { status: 404 });
+      return NextResponse.json(
+        { errorCode: "channel_not_found", error: "Channel not found" },
+        { status: 404 },
+      );
     }
 
     // Check if already a member
@@ -36,6 +42,31 @@ export async function POST(
       .from(channelMembers)
       .where(and(eq(channelMembers.channelId, id), eq(channelMembers.userId, userId)))
       .limit(1);
+
+    const groupMembership = channel.groupId
+      ? await db
+        .select({ role: groupMembers.role })
+        .from(groupMembers)
+        .where(and(eq(groupMembers.groupId, channel.groupId), eq(groupMembers.userId, userId)))
+        .limit(1)
+      : [];
+
+    const joinAccess = summarizeChannelJoinAccess({
+      isPublic: channel.isPublic ?? true,
+      hasActiveGroupMembership: !!groupMembership[0]?.role,
+      isChannelMember: !!existing || channel.ownerId === userId,
+    });
+
+    if (!joinAccess.allowed) {
+      const errorCode = joinAccess.reason === "groupless_public_browse_only"
+        ? "public_channel_browse_only"
+        : "group_membership_required";
+      const error = joinAccess.reason === "groupless_public_browse_only"
+        ? "public channel browse only"
+        : "group membership required";
+
+      return NextResponse.json({ errorCode, error }, { status: 403 });
+    }
 
     if (existing) {
       return NextResponse.json({
@@ -49,31 +80,46 @@ export async function POST(
       const { password } = body;
 
       if (!password || typeof password !== "string") {
-        return NextResponse.json({ error: "password_required" }, { status: 401 });
+        return NextResponse.json(
+          { errorCode: "password_required", error: "password_required" },
+          { status: 401 },
+        );
       }
 
       if (!channel.password) {
-        return NextResponse.json({ error: "Channel misconfigured" }, { status: 500 });
+        return NextResponse.json(
+          { errorCode: "channel_misconfigured", error: "Channel misconfigured" },
+          { status: 500 },
+        );
       }
 
       const valid = await verifyPassword(password, channel.password);
       if (!valid) {
-        return NextResponse.json({ error: "wrong_password" }, { status: 401 });
+        return NextResponse.json(
+          { errorCode: "wrong_password", error: "wrong_password" },
+          { status: 401 },
+        );
       }
     }
 
     // Register as member
-    await db.insert(channelMembers).values({
-      channelId: id,
-      userId,
-      role: "member",
-    });
+    await db
+      .insert(channelMembers)
+      .values({
+        channelId: id,
+        userId,
+        role: "member",
+      })
+      .onConflictDoNothing();
 
     return NextResponse.json({
       channel: { id: channel.id, name: channel.name, description: channel.description },
     });
   } catch (err) {
     console.error("Failed to join channel:", err);
-    return NextResponse.json({ error: "Failed to join channel" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_join_channel", error: "Failed to join channel" },
+      { status: 500 },
+    );
   }
 }

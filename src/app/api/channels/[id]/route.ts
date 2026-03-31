@@ -1,9 +1,10 @@
 import { db } from "@/db";
-import { channels, channelMembers, npcs } from "@/db";
+import { channels, channelMembers, groupMembers, groups } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
 import { getUserId } from "@/lib/internal-rpc";
+import { summarizeChannelJoinAccess } from "@/lib/rbac/channel-access";
 
 // GET /api/channels/:id — get channel details + map data
 export async function GET(
@@ -25,6 +26,8 @@ export async function GET(
         isPublic: channels.isPublic,
         inviteCode: channels.inviteCode,
         maxPlayers: channels.maxPlayers,
+        groupId: channels.groupId,
+        groupName: groups.name,
         mapData: channels.mapData,
         mapConfig: channels.mapConfig,
         gatewayConfig: channels.gatewayConfig,
@@ -32,6 +35,7 @@ export async function GET(
         updatedAt: channels.updatedAt,
       })
       .from(channels)
+      .leftJoin(groups, eq(channels.groupId, groups.id))
       .where(eq(channels.id, id))
       .limit(1);
 
@@ -47,15 +51,28 @@ export async function GET(
       .from(channelMembers)
       .where(and(eq(channelMembers.channelId, id), eq(channelMembers.userId, userId)))
       .limit(1);
+    const groupMemberRows = channel.groupId
+      ? await db
+        .select({ role: groupMembers.role })
+        .from(groupMembers)
+        .where(and(eq(groupMembers.groupId, channel.groupId), eq(groupMembers.userId, userId)))
+        .limit(1)
+      : [];
 
     const memberRole = memberRows[0]?.role ?? null;
     const lastX = memberRows[0]?.lastX ?? null;
     const lastY = memberRows[0]?.lastY ?? null;
     const isOwner = channel.ownerId === userId;
     const isMember = !!memberRole || isOwner;
+    const hasActiveGroupMembership = !!groupMemberRows[0]?.role;
+    const joinAccess = summarizeChannelJoinAccess({
+      isPublic: channel.isPublic ?? true,
+      hasActiveGroupMembership,
+      isChannelMember: isMember,
+    });
 
     // Non-member + private → 403 password_required
-    if (!channel.isPublic && !isMember) {
+    if (!channel.isPublic && !isMember && !hasActiveGroupMembership) {
       return NextResponse.json({ error: "password_required" }, { status: 403 });
     }
 
@@ -65,6 +82,13 @@ export async function GET(
         ...channelWithoutGateway,
         isOwner,
         isMember,
+        canView: true,
+        canJoin: joinAccess.allowed,
+        requiresGroupMembership: !joinAccess.allowed,
+        joinAccessReason: joinAccess.reason,
+        requiresPassword: !channel.isPublic && !isMember,
+        groupId: channel.groupId,
+        groupName: channel.groupName,
         hasGateway: !!(gatewayConfig as { url?: string } | null)?.url,
         lastX,
         lastY,
