@@ -1,3 +1,5 @@
+import type { ErrorCode } from "@/lib/i18n/error-codes";
+
 export type ChannelCreateAccessReason =
   | "group_member"
   | "group_membership_required"
@@ -26,6 +28,16 @@ export type ChannelParticipationAccessReason =
   | "legacy_channel_member"
   | "password_required"
   | "legacy_private_password_required";
+
+export type ChannelAccessDeniedAction =
+  | "player:join"
+  | "meeting:join"
+  | "meeting:chat";
+
+export type ChannelAccessDeniedReason = Extract<
+  ChannelParticipationAccessReason,
+  "groupless_public_browse_only" | "group_membership_required" | "password_required" | "legacy_private_password_required"
+>;
 
 export function summarizeChannelCreateAccess(args: {
   hasActiveGroupMembership: boolean;
@@ -129,4 +141,31 @@ export function summarizeChannelParticipationAccess(args: {
   }
 
   return { allowed: true, reason: "group_member" as const };
+}
+
+export function getChannelAccessDeniedErrorCode(
+  reason: ChannelAccessDeniedReason,
+): ErrorCode {
+  if (reason === "groupless_public_browse_only") {
+    return "public_channel_browse_only";
+  }
+
+  if (reason === "group_membership_required") {
+    return "group_membership_required";
+  }
+
+  return "password_required";
+}
+
+export function buildChannelAccessDeniedPayload(args: {
+  channelId: string;
+  action: ChannelAccessDeniedAction;
+  reason: ChannelAccessDeniedReason;
+}) {
+  return {
+    channelId: args.channelId,
+    action: args.action,
+    reason: args.reason,
+    errorCode: getChannelAccessDeniedErrorCode(args.reason),
+  };
 }

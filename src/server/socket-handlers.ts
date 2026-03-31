@@ -3,7 +3,10 @@ import { jwtVerify } from "jose";
 import { eq, and } from "drizzle-orm";
 import { db, channels, npcs, channelMembers, tasks, npcReports, characters, groupMembers } from "../db";
 import { parseDbObject } from "../lib/db-json";
-import { summarizeChannelParticipationAccess } from "../lib/rbac/channel-access";
+import {
+  buildChannelAccessDeniedPayload,
+  summarizeChannelParticipationAccess,
+} from "../lib/rbac/channel-access";
 import {
   type NpcResponseMessageCode,
   type NpcResponsePayload,
@@ -78,12 +81,6 @@ interface MeetingRoom {
   participants: Set<string>;
   messages: MeetingMessage[];
 }
-
-type SocketChannelAccessDeniedReason =
-  | "groupless_public_browse_only"
-  | "group_membership_required"
-  | "password_required"
-  | "legacy_private_password_required";
 
 // ---------------------------------------------------------------------------
 // In-memory stores
@@ -659,25 +656,9 @@ async function authenticateSocket(
 
 function emitChannelAccessDenied(
   socket: Socket,
-  input: {
-    channelId: string;
-    action: "player:join" | "meeting:join" | "meeting:chat";
-    reason: SocketChannelAccessDeniedReason;
-  },
+  input: Parameters<typeof buildChannelAccessDeniedPayload>[0],
 ) {
-  const errorCode =
-    input.reason === "groupless_public_browse_only"
-      ? "public_channel_browse_only"
-      : input.reason === "group_membership_required"
-        ? "group_membership_required"
-        : "forbidden";
-
-  socket.emit("channel:access-denied", {
-    channelId: input.channelId,
-    action: input.action,
-    reason: input.reason,
-    errorCode,
-  });
+  socket.emit("channel:access-denied", buildChannelAccessDeniedPayload(input));
 }
 
 async function getSocketChannelParticipationAccess(channelId: string, userId: string) {
