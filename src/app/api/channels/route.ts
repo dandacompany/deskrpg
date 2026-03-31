@@ -15,7 +15,11 @@ import { eq, and } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
 import { internalRpc, getUserId } from "@/lib/internal-rpc";
 import { resolvePermission, type PermissionEffect } from "@/lib/rbac/permissions";
-import { summarizeChannelJoinAccess } from "@/lib/rbac/channel-access";
+import {
+  summarizeChannelCreateAccess,
+  summarizeChannelDetailAccess,
+  summarizeChannelJoinAccess,
+} from "@/lib/rbac/channel-access";
 
 function generateInviteCode(): string {
   return Math.random().toString(36).substring(2, 10);
@@ -59,12 +63,17 @@ async function canCreateChannel(userId: string, groupId: string) {
       ),
     );
 
-  return resolvePermission({
+  const permissionDecision = resolvePermission({
     systemRole: user.systemRole,
     groupRole: membership?.role ?? null,
     permissionKey: "create_channel",
     groupEffects: groupEffectRows.map((row) => row.effect as PermissionEffect),
     userEffects: userEffectRows.map((row) => row.effect as PermissionEffect),
+  });
+
+  return summarizeChannelCreateAccess({
+    hasActiveGroupMembership: !!membership?.role,
+    permissionAllowed: permissionDecision.allowed,
   });
 }
 
@@ -109,13 +118,19 @@ export async function GET(req: NextRequest) {
         const isChannelMember = isOwner || !!r.memberRole;
         const hasActiveGroupMembership = !!r.groupMemberRole;
         const canView = r.isPublic || isChannelMember || hasActiveGroupMembership;
-
-        if (!canView) return null;
-
-        const joinAccess = summarizeChannelJoinAccess({
+        const detailAccess = summarizeChannelDetailAccess({
+          groupId: r.groupId,
           isPublic: r.isPublic ?? true,
           hasActiveGroupMembership,
           isChannelMember,
+        });
+
+        if (!canView || !detailAccess.allowed) return null;
+
+        const joinAccess = summarizeChannelJoinAccess({
+          groupId: r.groupId,
+          isPublic: r.isPublic ?? true,
+          hasActiveGroupMembership,
         });
 
         return {
@@ -134,7 +149,7 @@ export async function GET(req: NextRequest) {
           canJoin: joinAccess.allowed,
           requiresGroupMembership: !joinAccess.allowed,
           joinAccessReason: joinAccess.reason,
-          requiresPassword: !r.isPublic && !isChannelMember,
+          requiresPassword: detailAccess.requiresPassword,
           groupId: r.groupId,
           groupName: r.groupName,
           playerCount: 0,
@@ -188,6 +203,13 @@ export async function POST(req: NextRequest) {
 
     const access = await canCreateChannel(userId, groupId);
     if (!access.allowed) {
+      if (access.reason === "group_membership_required") {
+        return NextResponse.json(
+          { errorCode: "group_membership_required", error: "group membership required" },
+          { status: 403 },
+        );
+      }
+
       return NextResponse.json(
         { errorCode: "channel_creation_forbidden", error: "channel creation forbidden" },
         { status: 403 },

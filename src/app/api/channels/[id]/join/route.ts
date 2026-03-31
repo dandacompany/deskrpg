@@ -3,7 +3,7 @@ import { channels, channelMembers, groupMembers } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { verifyPassword } from "@/lib/password";
-import { summarizeChannelJoinAccess } from "@/lib/rbac/channel-access";
+import { summarizeChannelDetailAccess, summarizeChannelJoinAccess } from "@/lib/rbac/channel-access";
 
 function getUserId(req: NextRequest): string | null {
   return req.headers.get("x-user-id");
@@ -51,10 +51,16 @@ export async function POST(
         .limit(1)
       : [];
 
-    const joinAccess = summarizeChannelJoinAccess({
+    const detailAccess = summarizeChannelDetailAccess({
+      groupId: channel.groupId,
       isPublic: channel.isPublic ?? true,
       hasActiveGroupMembership: !!groupMembership[0]?.role,
       isChannelMember: !!existing || channel.ownerId === userId,
+    });
+    const joinAccess = summarizeChannelJoinAccess({
+      groupId: channel.groupId,
+      isPublic: channel.isPublic ?? true,
+      hasActiveGroupMembership: !!groupMembership[0]?.role,
     });
 
     if (!joinAccess.allowed) {
@@ -75,7 +81,7 @@ export async function POST(
     }
 
     // Private channel: require password
-    if (!channel.isPublic) {
+    if (detailAccess.requiresPassword) {
       const body = await req.json().catch(() => ({}));
       const { password } = body;
 

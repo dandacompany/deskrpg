@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
 import { getUserId } from "@/lib/internal-rpc";
-import { summarizeChannelJoinAccess } from "@/lib/rbac/channel-access";
+import { summarizeChannelDetailAccess, summarizeChannelJoinAccess } from "@/lib/rbac/channel-access";
 
 // GET /api/channels/:id — get channel details + map data
 export async function GET(
@@ -65,15 +65,27 @@ export async function GET(
     const isOwner = channel.ownerId === userId;
     const isMember = !!memberRole || isOwner;
     const hasActiveGroupMembership = !!groupMemberRows[0]?.role;
-    const joinAccess = summarizeChannelJoinAccess({
+    const detailAccess = summarizeChannelDetailAccess({
+      groupId: channel.groupId,
       isPublic: channel.isPublic ?? true,
       hasActiveGroupMembership,
       isChannelMember: isMember,
     });
+    const joinAccess = summarizeChannelJoinAccess({
+      groupId: channel.groupId,
+      isPublic: channel.isPublic ?? true,
+      hasActiveGroupMembership,
+    });
 
-    // Non-member + private → 403 password_required
-    if (!channel.isPublic && !isMember && !hasActiveGroupMembership) {
-      return NextResponse.json({ error: "password_required" }, { status: 403 });
+    if (!detailAccess.allowed) {
+      if (detailAccess.reason === "legacy_private_password_required") {
+        return NextResponse.json({ error: "password_required" }, { status: 403 });
+      }
+
+      return NextResponse.json(
+        { errorCode: "group_membership_required", error: "group membership required" },
+        { status: 403 },
+      );
     }
 
     const { gatewayConfig, ...channelWithoutGateway } = channel;
@@ -86,7 +98,7 @@ export async function GET(
         canJoin: joinAccess.allowed,
         requiresGroupMembership: !joinAccess.allowed,
         joinAccessReason: joinAccess.reason,
-        requiresPassword: !channel.isPublic && !isMember,
+        requiresPassword: detailAccess.requiresPassword,
         groupId: channel.groupId,
         groupName: channel.groupName,
         hasGateway: !!(gatewayConfig as { url?: string } | null)?.url,

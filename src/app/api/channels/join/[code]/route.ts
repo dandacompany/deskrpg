@@ -58,9 +58,9 @@ export async function GET(
       : [];
 
     const joinAccess = summarizeChannelJoinAccess({
+      groupId: channel.groupId,
       isPublic: channel.isPublic ?? true,
       hasActiveGroupMembership: !!groupMembership[0]?.role,
-      isChannelMember: !!existing || channel.ownerId === userId,
     });
 
     if (!joinAccess.allowed) {
