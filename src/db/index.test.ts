@@ -128,3 +128,77 @@ test("ensureSqliteCompatibility creates RBAC tables and backfills a legacy sqlit
   assert.equal(membershipCount.count, 1);
   assert.equal(systemAdminCount.count, 1);
 });
+
+test("ensureSqliteCompatibility dedupes legacy group join requests before adding unique index", () => {
+  const sqlite = new Database(":memory:");
+  sqlite.pragma("foreign_keys = ON");
+  sqlite.exec(`
+    CREATE TABLE users (
+      id TEXT PRIMARY KEY NOT NULL,
+      login_id TEXT NOT NULL,
+      nickname TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TEXT
+    );
+    CREATE TABLE groups (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      description TEXT,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT REFERENCES users(id),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE channels (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      owner_id TEXT NOT NULL REFERENCES users(id),
+      created_at TEXT
+    );
+    CREATE TABLE npcs (
+      id TEXT PRIMARY KEY NOT NULL,
+      channel_id TEXT NOT NULL REFERENCES channels(id)
+    );
+    CREATE TABLE tasks (
+      id TEXT PRIMARY KEY NOT NULL
+    );
+    CREATE TABLE group_join_requests (
+      id TEXT PRIMARY KEY NOT NULL,
+      group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      message TEXT,
+      reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      reviewed_at TEXT,
+      created_at TEXT NOT NULL
+    );
+  `);
+
+  sqlite.prepare(
+    "INSERT INTO users (id, login_id, nickname, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
+  ).run("user-1", "user1", "User 1", "hash", "2026-03-30T12:00:00.000Z");
+  sqlite.prepare(
+    "INSERT INTO groups (id, name, slug, description, is_default, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run("group-1", "Group 1", "group-1", null, 0, "user-1", "2026-03-30T12:00:00.000Z", "2026-03-30T12:00:00.000Z");
+  sqlite.prepare(
+    "INSERT INTO group_join_requests (id, group_id, user_id, status, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run("req-old", "group-1", "user-1", "rejected", "old", "2026-03-30T12:00:00.000Z");
+  sqlite.prepare(
+    "INSERT INTO group_join_requests (id, group_id, user_id, status, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run("req-new", "group-1", "user-1", "pending", "new", "2026-03-31T12:00:00.000Z");
+
+  ensureSqliteCompatibility(sqlite);
+
+  const rows = sqlite.prepare(
+    "SELECT id, status FROM group_join_requests WHERE group_id = ? AND user_id = ? ORDER BY created_at DESC",
+  ).all("group-1", "user-1") as Array<{ id: string; status: string }>;
+  const uniqueIndex = sqlite.prepare(
+    "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'group_join_requests_group_user_unique'",
+  ).get() as { name?: string } | undefined;
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, "req-new");
+  assert.equal(rows[0].status, "pending");
+  assert.equal(uniqueIndex?.name, "group_join_requests_group_user_unique");
+});

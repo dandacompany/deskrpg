@@ -34,6 +34,17 @@ export function canWriteGroupPermissionEffect(input: {
   );
 }
 
+export function sanitizeGroupPermissionEffects(input: {
+  permissionKey: PermissionKey;
+  effects: PermissionEffect[];
+}) {
+  if (input.permissionKey !== "manage_group_permissions") {
+    return input.effects;
+  }
+
+  return input.effects.filter((effect) => effect !== "deny");
+}
+
 export function buildGroupSlugCandidates(baseSlug: string, attempts: number) {
   return Array.from({ length: attempts }, (_, index) =>
     index === 0 ? baseSlug : `${baseSlug}-${index + 1}`,
@@ -200,8 +211,14 @@ export async function hasGroupPermission(
     systemRole: context.systemRole,
     groupRole: context.groupRole,
     permissionKey,
-    groupEffects: groupEffectRows.map((row) => row.effect as PermissionEffect),
-    userEffects: userEffectRows.map((row) => row.effect as PermissionEffect),
+    groupEffects: sanitizeGroupPermissionEffects({
+      permissionKey,
+      effects: groupEffectRows.map((row) => row.effect as PermissionEffect),
+    }),
+    userEffects: sanitizeGroupPermissionEffects({
+      permissionKey,
+      effects: userEffectRows.map((row) => row.effect as PermissionEffect),
+    }),
   });
 
   return decision.allowed;

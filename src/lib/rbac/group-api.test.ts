@@ -5,6 +5,7 @@ import {
   buildGroupSlugCandidates,
   canWriteGroupPermissionEffect,
   resolveJoinRequestReview,
+  sanitizeGroupPermissionEffects,
 } from "./group-api";
 
 test("manage_group_permissions deny writes are rejected to prevent self-lock", () => {
@@ -28,6 +29,23 @@ test("manage_group_permissions deny writes are rejected to prevent self-lock", (
       effect: "deny",
     }),
     true,
+  );
+});
+
+test("stale manage_group_permissions deny effects are ignored at authorization time", () => {
+  assert.deepEqual(
+    sanitizeGroupPermissionEffects({
+      permissionKey: "manage_group_permissions",
+      effects: ["deny", "allow"],
+    }),
+    ["allow"],
+  );
+  assert.deepEqual(
+    sanitizeGroupPermissionEffects({
+      permissionKey: "create_channel",
+      effects: ["deny", "allow"],
+    }),
+    ["deny", "allow"],
   );
 });
 
