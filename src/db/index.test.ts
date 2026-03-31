@@ -5,7 +5,7 @@ import Database from "better-sqlite3";
 
 import { ensureSqliteCompatibility } from "./index";
 
-test("ensureSqliteCompatibility adds RBAC columns to legacy sqlite tables", () => {
+test("ensureSqliteCompatibility backfills legacy rows for new RBAC columns", () => {
   const sqlite = new Database(":memory:");
   sqlite.pragma("foreign_keys = ON");
   sqlite.exec(`
@@ -32,14 +32,14 @@ test("ensureSqliteCompatibility adds RBAC columns to legacy sqlite tables", () =
     );
   `);
 
-  ensureSqliteCompatibility(sqlite);
-
   sqlite.prepare(
     "INSERT INTO users (id, login_id, nickname, password_hash) VALUES (?, ?, ?, ?)",
   ).run("user-1", "legacy-user", "Legacy", "hash");
   sqlite.prepare(
     "INSERT INTO channels (id, name, owner_id) VALUES (?, ?, ?)",
   ).run("channel-1", "General", "user-1");
+
+  ensureSqliteCompatibility(sqlite);
 
   const userColumns = sqlite.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
   const channelColumns = sqlite.prepare("PRAGMA table_info(channels)").all() as Array<{ name: string }>;
