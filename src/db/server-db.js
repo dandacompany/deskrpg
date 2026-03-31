@@ -222,7 +222,9 @@ function ensureSqliteCompatibility(sqlite) {
 
   sqlite.transaction(() => {
     const bootstrapUserId = ensureSqliteBootstrapUser(sqlite);
-    const defaultGroupId = ensureSqliteDefaultGroup(sqlite, bootstrapUserId);
+    const defaultGroupId = bootstrapUserId
+      ? ensureSqliteDefaultGroup(sqlite, bootstrapUserId)
+      : null;
 
     ensureSqliteBootstrapGroupAdminMembership(sqlite, defaultGroupId, bootstrapUserId);
     assignLegacyChannelsToDefaultGroup(sqlite, defaultGroupId);

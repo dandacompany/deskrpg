@@ -9,6 +9,48 @@ import Database from "better-sqlite3";
 
 const require = createRequire(import.meta.url);
 
+test("server-db sqlite compatibility does not pre-create bootstrap RBAC rows for an empty legacy sqlite deployment", () => {
+  process.env.DB_TYPE = "sqlite";
+
+  const modulePath = require.resolve("./server-db.js");
+  delete require.cache[modulePath];
+
+  const { ensureSqliteCompatibility } = require("./server-db.js") as {
+    ensureSqliteCompatibility: (sqlite: Database.Database) => void;
+  };
+
+  const sqlite = new Database(":memory:");
+  sqlite.pragma("foreign_keys = ON");
+  sqlite.exec(`
+    CREATE TABLE users (
+      id TEXT PRIMARY KEY NOT NULL,
+      login_id TEXT NOT NULL,
+      nickname TEXT NOT NULL,
+      password_hash TEXT NOT NULL
+    );
+    CREATE TABLE channels (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      owner_id TEXT
+    );
+    CREATE TABLE npcs (
+      id TEXT PRIMARY KEY NOT NULL,
+      channel_id TEXT
+    );
+    CREATE TABLE tasks (
+      id TEXT PRIMARY KEY NOT NULL
+    );
+  `);
+
+  ensureSqliteCompatibility(sqlite);
+
+  const groupsCount = sqlite.prepare("SELECT COUNT(*) AS count FROM groups").get() as { count: number };
+  const groupMembersCount = sqlite.prepare("SELECT COUNT(*) AS count FROM group_members").get() as { count: number };
+
+  assert.equal(groupsCount.count, 0);
+  assert.equal(groupMembersCount.count, 0);
+});
+
 test("server-db sqlite exports RBAC schema and backfills a legacy sqlite deployment", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-server-db-"));
   const sqlitePath = path.join(tempDir, "server-db-test.sqlite");
