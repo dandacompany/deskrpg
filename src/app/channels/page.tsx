@@ -162,6 +162,7 @@ function ChannelsPageInner() {
   };
 
   const canCreateChannels = availableGroups.some((group) => group.canCreateChannel);
+  const canManageGroups = availableGroups.some((group) => !group.role || group.role === "group_admin");
 
   if (loading) {
     return (
@@ -185,7 +186,7 @@ function ChannelsPageInner() {
           <div className="flex items-center gap-3">
             <LogoutButton />
             <LocaleSwitcher />
-            {availableGroups.length > 0 && (
+            {canManageGroups && (
               <Link
                 href="/admin/groups"
                 className="px-4 py-2 bg-surface-raised hover:bg-surface-raised/80 rounded font-semibold"

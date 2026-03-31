@@ -44,6 +44,11 @@ function AdminGroupsPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const manageableGroups = useMemo(
+    () => groups.filter((group) => !group.role || group.role === "group_admin"),
+    [groups],
+  );
+
   useEffect(() => {
     fetch("/api/groups")
       .then(async (response) => {
@@ -56,7 +61,8 @@ function AdminGroupsPageInner() {
       .then((data) => {
         const nextGroups = Array.isArray(data.groups) ? data.groups : [];
         setGroups(nextGroups);
-        setSelectedGroupId(nextGroups[0]?.id ?? "");
+        const nextManageableGroups = nextGroups.filter((group) => !group.role || group.role === "group_admin");
+        setSelectedGroupId(nextManageableGroups[0]?.id ?? "");
         setLoading(false);
       })
       .catch((nextError) => {
@@ -66,8 +72,8 @@ function AdminGroupsPageInner() {
   }, [t]);
 
   const selectedGroup = useMemo(
-    () => groups.find((group) => group.id === selectedGroupId) ?? null,
-    [groups, selectedGroupId],
+    () => manageableGroups.find((group) => group.id === selectedGroupId) ?? null,
+    [manageableGroups, selectedGroupId],
   );
 
   if (loading) {
@@ -104,7 +110,7 @@ function AdminGroupsPageInner() {
           </div>
         )}
 
-        {groups.length === 0
+        {manageableGroups.length === 0
           ? (
             <div className="rounded-xl border border-border bg-surface px-6 py-10 text-center text-text-muted">
               {t("admin.groups.empty")}
@@ -115,7 +121,7 @@ function AdminGroupsPageInner() {
               <aside className="rounded-xl border border-border bg-surface p-4">
                 <h2 className="mb-3 text-lg font-semibold">{t("admin.groups.manage")}</h2>
                 <div className="space-y-2">
-                  {groups.map((group) => (
+                  {manageableGroups.map((group) => (
                     <button
                       key={group.id}
                       type="button"
