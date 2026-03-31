@@ -9,7 +9,7 @@ import {
   hasGroupPermission,
   unauthorizedResponse,
 } from "@/lib/rbac/group-api";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 async function requireInviteManager(groupId: string, userId: string) {
@@ -111,4 +111,51 @@ export async function POST(
     .returning();
 
   return NextResponse.json({ invite }, { status: 201 });
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const userId = getAuthenticatedUserId(req);
+  if (!userId) return unauthorizedResponse();
+
+  const { id: groupId } = await params;
+  const auth = await requireInviteManager(groupId, userId);
+  if ("response" in auth) return auth.response;
+
+  const body = await req.json();
+  const { inviteId } = body ?? {};
+  if (typeof inviteId !== "string" || !inviteId) {
+    return NextResponse.json(
+      { errorCode: "missing_required_fields", error: "inviteId is required" },
+      { status: 400 },
+    );
+  }
+
+  const now = new Date().toISOString();
+  const revoked = await db
+    .update(groupInvites)
+    .set({ revokedAt: now })
+    .where(and(eq(groupInvites.id, inviteId), eq(groupInvites.groupId, groupId)))
+    .returning();
+
+  if (revoked[0]) {
+    return NextResponse.json({ invite: revoked[0], revoked: true });
+  }
+
+  const [existing] = await db
+    .select({ id: groupInvites.id, revokedAt: groupInvites.revokedAt })
+    .from(groupInvites)
+    .where(and(eq(groupInvites.id, inviteId), eq(groupInvites.groupId, groupId)))
+    .limit(1);
+
+  if (!existing) {
+    return NextResponse.json(
+      { errorCode: "not_found", error: "invite not found" },
+      { status: 404 },
+    );
+  }
+
+  return NextResponse.json({ invite: existing, revoked: true, alreadyRevoked: true });
 }

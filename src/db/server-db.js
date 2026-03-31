@@ -114,6 +114,42 @@ function assignLegacyChannelsToDefaultGroup(sqlite, groupId) {
   sqlite.prepare("UPDATE channels SET group_id = ? WHERE group_id IS NULL").run(groupId);
 }
 
+function dedupeSqliteGroupJoinRequests(sqlite) {
+  if (
+    !sqliteTableExists(sqlite, "group_join_requests") ||
+    !sqliteTableExists(sqlite, "users") ||
+    !sqliteTableExists(sqlite, "groups")
+  ) {
+    return;
+  }
+
+  const rows = sqlite.prepare(`
+    SELECT rowid, group_id, user_id, status, created_at
+    FROM group_join_requests
+    ORDER BY
+      group_id ASC,
+      user_id ASC,
+      CASE status
+        WHEN 'pending' THEN 0
+        WHEN 'approved' THEN 1
+        ELSE 2
+      END ASC,
+      created_at DESC,
+      rowid DESC
+  `).all();
+
+  const seen = new Set();
+  const deleteStmt = sqlite.prepare("DELETE FROM group_join_requests WHERE rowid = ?");
+  for (const row of rows) {
+    const key = `${row.group_id}:${row.user_id}`;
+    if (seen.has(key)) {
+      deleteStmt.run(row.rowid);
+      continue;
+    }
+    seen.add(key);
+  }
+}
+
 function ensureSqliteCompatibility(sqlite) {
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS groups (
@@ -161,7 +197,8 @@ function ensureSqliteCompatibility(sqlite) {
       message TEXT,
       reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
       reviewed_at TEXT,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      UNIQUE(group_id, user_id)
     );
     CREATE INDEX IF NOT EXISTS idx_group_join_requests_group_id ON group_join_requests(group_id);
     CREATE INDEX IF NOT EXISTS idx_group_join_requests_user_id ON group_join_requests(user_id);
@@ -219,6 +256,9 @@ function ensureSqliteCompatibility(sqlite) {
     "ALTER TABLE tasks ADD COLUMN stalled_at TEXT",
     "ALTER TABLE tasks ADD COLUMN stalled_reason TEXT",
   ]);
+
+  dedupeSqliteGroupJoinRequests(sqlite);
+  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS group_join_requests_group_user_unique ON group_join_requests(group_id, user_id)");
 
   sqlite.transaction(() => {
     const bootstrapUserId = ensureSqliteBootstrapUser(sqlite);
@@ -346,6 +386,7 @@ if (isPostgres) {
   }, (table) => [
     index("idx_group_join_requests_group_id").on(table.groupId),
     index("idx_group_join_requests_user_id").on(table.userId),
+    unique("group_join_requests_group_user_unique").on(table.groupId, table.userId),
   ]);
 
   const groupPermissions = pgTable("group_permissions", {
@@ -591,6 +632,7 @@ if (isPostgres) {
   }, (table) => [
     index("idx_group_join_requests_group_id").on(table.groupId),
     index("idx_group_join_requests_user_id").on(table.userId),
+    unique("group_join_requests_group_user_unique").on(table.groupId, table.userId),
   ]);
 
   const groupPermissions = sqliteTable("group_permissions", {
