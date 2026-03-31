@@ -3,6 +3,7 @@
 // Supports PostgreSQL (default) and SQLite via DB_TYPE env var
 
 "use strict";
+/* eslint-disable @typescript-eslint/no-require-imports */
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -12,6 +13,61 @@ const isPostgres = DB_TYPE === "postgresql" || DB_TYPE === "postgres";
 
 let db;
 let schema;
+
+function sqliteTableExists(sqlite, tableName) {
+  const row = sqlite
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(tableName);
+  return Boolean(row);
+}
+
+function applySqliteAlterStatements(sqlite, tableName, statements) {
+  if (!sqliteTableExists(sqlite, tableName)) return;
+
+  for (const statement of statements) {
+    try {
+      sqlite.exec(statement);
+    } catch (error) {
+      if (!String(error).includes("duplicate column name")) throw error;
+    }
+  }
+}
+
+function ensureSqliteCompatibility(sqlite) {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS npc_reports (
+      id TEXT PRIMARY KEY NOT NULL,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      npc_id TEXT NOT NULL REFERENCES npcs(id) ON DELETE CASCADE,
+      task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      target_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      message TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL,
+      delivered_at TEXT,
+      consumed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_npc_reports_channel ON npc_reports(channel_id);
+    CREATE INDEX IF NOT EXISTS idx_npc_reports_target_user ON npc_reports(target_user_id);
+    CREATE INDEX IF NOT EXISTS idx_npc_reports_status ON npc_reports(status);
+  `);
+
+  applySqliteAlterStatements(sqlite, "users", [
+    "ALTER TABLE users ADD COLUMN system_role TEXT NOT NULL DEFAULT 'user'",
+  ]);
+  applySqliteAlterStatements(sqlite, "channels", [
+    "ALTER TABLE channels ADD COLUMN group_id TEXT REFERENCES groups(id) ON DELETE SET NULL",
+  ]);
+  applySqliteAlterStatements(sqlite, "tasks", [
+    "ALTER TABLE tasks ADD COLUMN auto_nudge_count INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE tasks ADD COLUMN auto_nudge_max INTEGER NOT NULL DEFAULT 5",
+    "ALTER TABLE tasks ADD COLUMN last_nudged_at TEXT",
+    "ALTER TABLE tasks ADD COLUMN last_reported_at TEXT",
+    "ALTER TABLE tasks ADD COLUMN stalled_at TEXT",
+    "ALTER TABLE tasks ADD COLUMN stalled_reason TEXT",
+  ]);
+}
 
 // ─── Drizzle query helpers (shared) ──────────────────────────────────────────
 const { eq, and, desc, sql } = require("drizzle-orm");
@@ -40,6 +96,7 @@ if (isPostgres) {
     loginId: varchar("login_id", { length: 50 }).unique().notNull(),
     nickname: varchar("nickname", { length: 50 }).unique().notNull(),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+    systemRole: varchar("system_role", { length: 20 }).notNull().default("user"),
     lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
@@ -56,11 +113,23 @@ if (isPostgres) {
     index("idx_characters_user_id").on(table.userId),
   ]);
 
+  const groups = pgTable("groups", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 100 }).notNull(),
+    slug: varchar("slug", { length: 100 }).unique().notNull(),
+    description: varchar("description", { length: 500 }),
+    isDefault: boolean("is_default").notNull().default(false),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  });
+
   const channels = pgTable("channels", {
     id: uuid("id").primaryKey().defaultRandom(),
     name: varchar("name", { length: 100 }).notNull(),
     description: varchar("description", { length: 500 }),
     ownerId: uuid("owner_id").notNull().references(() => users.id),
+    groupId: uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
     mapData: jsonb("map_data"),
     mapConfig: jsonb("map_config"),
     isPublic: boolean("is_public").default(true),
@@ -71,6 +140,77 @@ if (isPostgres) {
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   });
+
+  const groupMembers = pgTable("group_members", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: varchar("role", { length: 20 }).notNull().default("member"),
+    approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow(),
+  }, (table) => [
+    index("idx_group_members_group_id").on(table.groupId),
+    index("idx_group_members_user_id").on(table.userId),
+    unique("group_members_group_user_unique").on(table.groupId, table.userId),
+  ]);
+
+  const groupInvites = pgTable("group_invites", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    token: varchar("token", { length: 64 }).unique().notNull(),
+    createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+    targetUserId: uuid("target_user_id").references(() => users.id, { onDelete: "set null" }),
+    targetLoginId: varchar("target_login_id", { length: 50 }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    acceptedBy: uuid("accepted_by").references(() => users.id, { onDelete: "set null" }),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  }, (table) => [
+    index("idx_group_invites_group_id").on(table.groupId),
+    index("idx_group_invites_target_user_id").on(table.targetUserId),
+  ]);
+
+  const groupJoinRequests = pgTable("group_join_requests", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 20 }).notNull().default("pending"),
+    message: text("message"),
+    reviewedBy: uuid("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  }, (table) => [
+    index("idx_group_join_requests_group_id").on(table.groupId),
+    index("idx_group_join_requests_user_id").on(table.userId),
+  ]);
+
+  const groupPermissions = pgTable("group_permissions", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    permissionKey: varchar("permission_key", { length: 50 }).notNull(),
+    effect: varchar("effect", { length: 10 }).notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  }, (table) => [
+    index("idx_group_permissions_group_id").on(table.groupId),
+    unique("group_permissions_group_permission_unique").on(table.groupId, table.permissionKey),
+  ]);
+
+  const userPermissionOverrides = pgTable("user_permission_overrides", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    permissionKey: varchar("permission_key", { length: 50 }).notNull(),
+    effect: varchar("effect", { length: 10 }).notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  }, (table) => [
+    index("idx_user_permission_overrides_group_id").on(table.groupId),
+    index("idx_user_permission_overrides_user_id").on(table.userId),
+    unique("user_permission_overrides_group_user_permission_unique").on(table.groupId, table.userId, table.permissionKey),
+  ]);
 
   const channelMembers = pgTable("channel_members", {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -135,7 +275,40 @@ if (isPostgres) {
     uniqueIndex("idx_tasks_npc_task_id").on(table.npcId, table.npcTaskId),
   ]);
 
-  schema = { users, characters, channels, channelMembers, npcs, meetingMinutes, tasks };
+  const npcReports = pgTable("npc_reports", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    channelId: uuid("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+    npcId: uuid("npc_id").notNull().references(() => npcs.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+    targetUserId: uuid("target_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 20 }).notNull(),
+    message: text("message").notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  }, (table) => [
+    index("idx_npc_reports_channel").on(table.channelId),
+    index("idx_npc_reports_target_user").on(table.targetUserId),
+    index("idx_npc_reports_status").on(table.status),
+  ]);
+
+  schema = {
+    users,
+    characters,
+    groups,
+    channels,
+    groupMembers,
+    groupInvites,
+    groupJoinRequests,
+    groupPermissions,
+    userPermissionOverrides,
+    channelMembers,
+    npcs,
+    meetingMinutes,
+    tasks,
+    npcReports,
+  };
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   db = drizzle(pool, { schema });
@@ -168,6 +341,7 @@ if (isPostgres) {
     loginId: text("login_id").unique().notNull(),
     nickname: text("nickname").unique().notNull(),
     passwordHash: text("password_hash").notNull(),
+    systemRole: text("system_role").notNull().default("user"),
     lastActiveAt: text("last_active_at"),
     createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
     updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -184,11 +358,23 @@ if (isPostgres) {
     index("idx_characters_user_id").on(table.userId),
   ]);
 
+  const groups = sqliteTable("groups", {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    name: text("name").notNull(),
+    slug: text("slug").unique().notNull(),
+    description: text("description"),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
+  });
+
   const channels = sqliteTable("channels", {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     name: text("name").notNull(),
     description: text("description"),
     ownerId: text("owner_id").notNull().references(() => users.id),
+    groupId: text("group_id").references(() => groups.id, { onDelete: "set null" }),
     mapData: text("map_data"),
     mapConfig: text("map_config"),
     isPublic: integer("is_public", { mode: "boolean" }).default(true),
@@ -199,6 +385,77 @@ if (isPostgres) {
     createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
     updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
   });
+
+  const groupMembers = sqliteTable("group_members", {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("member"),
+    approvedBy: text("approved_by").references(() => users.id, { onDelete: "set null" }),
+    approvedAt: text("approved_at"),
+    joinedAt: text("joined_at").$defaultFn(() => new Date().toISOString()),
+  }, (table) => [
+    index("idx_group_members_group_id").on(table.groupId),
+    index("idx_group_members_user_id").on(table.userId),
+    unique("group_members_group_user_unique").on(table.groupId, table.userId),
+  ]);
+
+  const groupInvites = sqliteTable("group_invites", {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    token: text("token").unique().notNull(),
+    createdBy: text("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+    targetUserId: text("target_user_id").references(() => users.id, { onDelete: "set null" }),
+    targetLoginId: text("target_login_id"),
+    expiresAt: text("expires_at"),
+    acceptedBy: text("accepted_by").references(() => users.id, { onDelete: "set null" }),
+    acceptedAt: text("accepted_at"),
+    revokedAt: text("revoked_at"),
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+  }, (table) => [
+    index("idx_group_invites_group_id").on(table.groupId),
+    index("idx_group_invites_target_user_id").on(table.targetUserId),
+  ]);
+
+  const groupJoinRequests = sqliteTable("group_join_requests", {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("pending"),
+    message: text("message"),
+    reviewedBy: text("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+    reviewedAt: text("reviewed_at"),
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+  }, (table) => [
+    index("idx_group_join_requests_group_id").on(table.groupId),
+    index("idx_group_join_requests_user_id").on(table.userId),
+  ]);
+
+  const groupPermissions = sqliteTable("group_permissions", {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    permissionKey: text("permission_key").notNull(),
+    effect: text("effect").notNull(),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+  }, (table) => [
+    index("idx_group_permissions_group_id").on(table.groupId),
+    unique("group_permissions_group_permission_unique").on(table.groupId, table.permissionKey),
+  ]);
+
+  const userPermissionOverrides = sqliteTable("user_permission_overrides", {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    permissionKey: text("permission_key").notNull(),
+    effect: text("effect").notNull(),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+  }, (table) => [
+    index("idx_user_permission_overrides_group_id").on(table.groupId),
+    index("idx_user_permission_overrides_user_id").on(table.userId),
+    unique("user_permission_overrides_group_user_permission_unique").on(table.groupId, table.userId, table.permissionKey),
+  ]);
 
   const channelMembers = sqliteTable("channel_members", {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -263,17 +520,51 @@ if (isPostgres) {
     uniqueIndex("idx_tasks_npc_task_id").on(table.npcId, table.npcTaskId),
   ]);
 
-  schema = { users, characters, channels, channelMembers, npcs, meetingMinutes, tasks };
+  const npcReports = sqliteTable("npc_reports", {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    channelId: text("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+    npcId: text("npc_id").notNull().references(() => npcs.id, { onDelete: "cascade" }),
+    taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+    targetUserId: text("target_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    message: text("message").notNull(),
+    status: text("status").notNull().default("pending"),
+    createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+    deliveredAt: text("delivered_at"),
+    consumedAt: text("consumed_at"),
+  }, (table) => [
+    index("idx_npc_reports_channel").on(table.channelId),
+    index("idx_npc_reports_target_user").on(table.targetUserId),
+    index("idx_npc_reports_status").on(table.status),
+  ]);
+
+  schema = {
+    users,
+    characters,
+    groups,
+    channels,
+    groupMembers,
+    groupInvites,
+    groupJoinRequests,
+    groupPermissions,
+    userPermissionOverrides,
+    channelMembers,
+    npcs,
+    meetingMinutes,
+    tasks,
+    npcReports,
+  };
 
   const sqlite = new Database(dbPath);
 
   // Enable WAL mode and foreign key enforcement
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
+  ensureSqliteCompatibility(sqlite);
 
   db = drizzle(sqlite, { schema });
 
   console.log(`[server-db] SQLite mode — Drizzle ORM initialized (${dbPath})`);
 }
 
-module.exports = { db, schema, isPostgres, eq, and, desc, sql };
+module.exports = { db, schema, isPostgres, eq, and, desc, sql, ensureSqliteCompatibility };
