@@ -21,7 +21,13 @@ const activeSchema: typeof pgSchema = isPostgres ? pgSchema : require("./schema-
 // Re-export all table objects from the active schema
 export const users = activeSchema.users;
 export const characters = activeSchema.characters;
+export const groups = activeSchema.groups;
 export const channels = activeSchema.channels;
+export const groupMembers = activeSchema.groupMembers;
+export const groupInvites = activeSchema.groupInvites;
+export const groupJoinRequests = activeSchema.groupJoinRequests;
+export const groupPermissions = activeSchema.groupPermissions;
+export const userPermissionOverrides = activeSchema.userPermissionOverrides;
 export const channelMembers = activeSchema.channelMembers;
 export const maps = activeSchema.maps;
 export const mapPortals = activeSchema.mapPortals;
