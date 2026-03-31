@@ -1,5 +1,5 @@
 import { db, groupMembers, groups, users } from "@/db";
-import { buildBootstrapActions } from "@/lib/rbac/bootstrap";
+import { buildBootstrapActions, resolveBootstrapCompletion } from "@/lib/rbac/bootstrap";
 import { hashPassword } from "@/lib/password";
 import { signJWT } from "@/lib/jwt";
 import { NextRequest, NextResponse } from "next/server";
@@ -38,29 +38,49 @@ export async function POST(req: NextRequest) {
   const passwordHash = await hashPassword(password);
   const user = await db.transaction(async (tx) => {
     const [{ value: userCount }] = await tx.select({ value: count() }).from(users);
-    const [createdUser] = await tx.insert(users).values({ loginId, nickname, passwordHash }).returning();
+    const [createdUser] = await tx.insert(users).values({
+      loginId,
+      nickname,
+      passwordHash,
+      systemRole: "user",
+    }).returning();
 
     const bootstrap = buildBootstrapActions({
       existingUserCount: Number(userCount),
       userId: createdUser.id,
       loginId,
     });
+    let defaultGroupCreated = false;
+    let createdGroupId: string | null = null;
 
-    if (bootstrap.systemRole === "system_admin") {
+    if (bootstrap.createDefaultGroup && bootstrap.defaultGroup) {
+      const insertedGroups = await tx.insert(groups).values({
+        ...bootstrap.defaultGroup,
+        createdBy: createdUser.id,
+      }).onConflictDoNothing({
+        target: groups.slug,
+      }).returning();
+
+      const createdGroup = insertedGroups[0];
+      defaultGroupCreated = Boolean(createdGroup);
+      createdGroupId = createdGroup?.id ?? null;
+    }
+
+    const completion = resolveBootstrapCompletion({
+      bootstrap,
+      defaultGroupCreated,
+    });
+
+    if (completion.systemRole === "system_admin") {
       await tx
         .update(users)
-        .set({ systemRole: bootstrap.systemRole })
+        .set({ systemRole: completion.systemRole })
         .where(eq(users.id, createdUser.id));
     }
 
-    if (bootstrap.createDefaultGroup && bootstrap.defaultGroup && bootstrap.groupMembership) {
-      const [group] = await tx.insert(groups).values({
-        ...bootstrap.defaultGroup,
-        createdBy: createdUser.id,
-      }).returning();
-
+    if (completion.createGroupMembership && createdGroupId && bootstrap.groupMembership) {
       await tx.insert(groupMembers).values({
-        groupId: group.id,
+        groupId: createdGroupId,
         userId: bootstrap.groupMembership.userId,
         role: bootstrap.groupMembership.role,
         approvedBy: createdUser.id,
@@ -70,7 +90,7 @@ export async function POST(req: NextRequest) {
 
     return {
       ...createdUser,
-      systemRole: bootstrap.systemRole,
+      systemRole: completion.systemRole,
     };
   });
 

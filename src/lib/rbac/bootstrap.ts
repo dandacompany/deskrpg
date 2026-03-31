@@ -13,6 +13,11 @@ export type BootstrapActions = {
   } | null;
 };
 
+export type BootstrapCompletion = {
+  systemRole: "system_admin" | "user";
+  createGroupMembership: boolean;
+};
+
 export function buildBootstrapActions({
   existingUserCount,
   userId,
@@ -43,5 +48,30 @@ export function buildBootstrapActions({
       userId,
       role: "group_admin",
     },
+  };
+}
+
+export function resolveBootstrapCompletion({
+  bootstrap,
+  defaultGroupCreated,
+}: {
+  bootstrap: BootstrapActions;
+  defaultGroupCreated: boolean;
+}): BootstrapCompletion {
+  if (
+    bootstrap.createDefaultGroup &&
+    bootstrap.defaultGroup &&
+    bootstrap.groupMembership &&
+    defaultGroupCreated
+  ) {
+    return {
+      systemRole: "system_admin",
+      createGroupMembership: true,
+    };
+  }
+
+  return {
+    systemRole: "user",
+    createGroupMembership: false,
   };
 }
