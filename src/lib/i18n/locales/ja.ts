@@ -1809,6 +1809,7 @@ const ja: Record<string, string> = {
   "errors.channelPasswordLengthInvalid": "パスワードは4文字以上である必要があります",
   "errors.failedToFetchMembers": "メンバー一覧の取得に失敗しました",
   "errors.cannotKickOwner": "チャンネル所有者は退出させられません",
+  "errors.lastGroupAdminRequired": "グループには少なくとも1人のグループ管理者が必要です",
   "errors.memberNotFound": "メンバーが見つかりません",
   "errors.failedToKickMember": "メンバーの退出に失敗しました",
   "errors.failedToListTemplates": "テンプレート一覧の取得に失敗しました",

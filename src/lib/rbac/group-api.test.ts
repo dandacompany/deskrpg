@@ -3,9 +3,11 @@ import test from "node:test";
 
 import {
   buildGroupSlugCandidates,
+  canChangeGroupAdminStatus,
   canWriteGroupPermissionEffect,
   resolveJoinRequestReview,
   sanitizeGroupPermissionEffects,
+  summarizeGroupManagementCapabilities,
 } from "./group-api";
 
 test("manage_group_permissions deny writes are rejected to prevent self-lock", () => {
@@ -96,4 +98,47 @@ test("group slug candidates provide deterministic retry sequence", () => {
     "team-3",
     "team-4",
   ]);
+});
+
+test("management capabilities derive a single canManageGroup flag", () => {
+  assert.deepEqual(
+    summarizeGroupManagementCapabilities({
+      canCreateChannel: false,
+      canManageMembers: false,
+      canManagePermissions: true,
+      canApproveJoinRequests: false,
+    }),
+    {
+      canCreateChannel: false,
+      canManageMembers: false,
+      canManagePermissions: true,
+      canApproveJoinRequests: false,
+      canManageGroup: true,
+    },
+  );
+});
+
+test("last group admin cannot be demoted or removed", () => {
+  const result = canChangeGroupAdminStatus({
+    targetUserId: "user-1",
+    targetCurrentRole: "group_admin",
+    nextRole: "member",
+    adminUserIds: ["user-1"],
+  });
+
+  assert.equal(result.ok, false);
+  if (result.ok) throw new Error("expected failure");
+  assert.equal(result.errorCode, "last_group_admin_required");
+  assert.equal(result.status, 409);
+});
+
+test("group admin changes are allowed when another admin remains", () => {
+  const result = canChangeGroupAdminStatus({
+    targetUserId: "user-1",
+    targetCurrentRole: "group_admin",
+    nextRole: null,
+    adminUserIds: ["user-1", "user-2"],
+  });
+
+  assert.equal(result.ok, true);
 });

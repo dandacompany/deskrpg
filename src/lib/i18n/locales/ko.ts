@@ -1811,6 +1811,7 @@ const ko: Record<string, string> = {
   "errors.channelPasswordLengthInvalid": "비밀번호는 4자 이상이어야 합니다",
   "errors.failedToFetchMembers": "멤버 목록을 불러오지 못했습니다",
   "errors.cannotKickOwner": "채널 소유자는 강퇴할 수 없습니다",
+  "errors.lastGroupAdminRequired": "그룹에는 최소 한 명의 그룹 관리자가 남아 있어야 합니다",
   "errors.memberNotFound": "멤버를 찾을 수 없습니다",
   "errors.failedToKickMember": "멤버를 강퇴하지 못했습니다",
   "errors.failedToListTemplates": "템플릿 목록을 불러오지 못했습니다",

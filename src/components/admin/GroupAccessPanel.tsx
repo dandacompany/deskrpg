@@ -205,6 +205,11 @@ export default function GroupAccessPanel({
     }, {});
   }, [overrides.items]);
 
+  const groupAdminCount = useMemo(
+    () => members.items.filter((member) => member.role === "group_admin").length,
+    [members.items],
+  );
+
   const submitAction = useCallback(async (
     actionKey: string,
     work: () => Promise<void>,
@@ -311,6 +316,7 @@ export default function GroupAccessPanel({
                       </div>
                       <button
                         type="button"
+                        disabled={member.role === "group_admin" && groupAdminCount === 1}
                         onClick={() => void submitAction(`member-remove-${member.userId}`, async () => {
                           await readJsonOrThrow(await fetch(`/api/groups/${groupId}/members`, {
                             method: "DELETE",
@@ -318,7 +324,10 @@ export default function GroupAccessPanel({
                             body: JSON.stringify({ targetUserId: member.userId }),
                           }));
                         })}
-                        className="text-sm text-danger"
+                        className="text-sm text-danger disabled:cursor-not-allowed disabled:text-text-dim"
+                        title={member.role === "group_admin" && groupAdminCount === 1
+                          ? t("errors.lastGroupAdminRequired")
+                          : undefined}
                       >
                         {t("admin.groups.remove")}
                       </button>

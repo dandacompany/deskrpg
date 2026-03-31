@@ -6,6 +6,7 @@ import {
   getAuthenticatedUserId,
   hasGroupPermission,
   getUserSystemRole,
+  summarizeGroupManagementCapabilities,
   systemAdminRequiredResponse,
   unauthorizedResponse,
 } from "@/lib/rbac/group-api";
@@ -45,7 +46,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       groups: rows.map((row) => ({
         ...row,
-        canCreateChannel: true,
+        ...summarizeGroupManagementCapabilities({
+          canCreateChannel: true,
+          canManageMembers: true,
+          canManagePermissions: true,
+          canApproveJoinRequests: true,
+        }),
       })),
     });
   }
@@ -65,31 +71,37 @@ export async function GET(req: NextRequest) {
     .where(eq(groupMembers.userId, userId))
     .orderBy(groups.name);
 
-  const groupsWithCapabilities = await Promise.all(rows.map(async (row) => ({
-    id: row.id,
-    name: row.name,
-    slug: row.slug,
-    description: row.description,
-    isDefault: row.isDefault,
-    createdBy: row.createdBy,
-    role: row.role,
-    canCreateChannel: await hasGroupPermission(
-      {
-        userId,
-        systemRole,
-        group: {
-          id: row.id,
-          name: row.name,
-          slug: row.slug,
-          description: row.description,
-          isDefault: row.isDefault,
-          createdBy: row.createdBy,
-        },
-        groupRole: row.role,
+  const groupsWithCapabilities = await Promise.all(rows.map(async (row) => {
+    const context = {
+      userId,
+      systemRole,
+      group: {
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        description: row.description,
+        isDefault: row.isDefault,
+        createdBy: row.createdBy,
       },
-      "create_channel",
-    ),
-  })));
+      groupRole: row.role,
+    } as const;
+
+    return {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      description: row.description,
+      isDefault: row.isDefault,
+      createdBy: row.createdBy,
+      role: row.role,
+      ...summarizeGroupManagementCapabilities({
+        canCreateChannel: await hasGroupPermission(context, "create_channel"),
+        canManageMembers: await hasGroupPermission(context, "manage_group_members"),
+        canManagePermissions: await hasGroupPermission(context, "manage_group_permissions"),
+        canApproveJoinRequests: await hasGroupPermission(context, "approve_join_requests"),
+      }),
+    };
+  }));
 
   return NextResponse.json({
     groups: groupsWithCapabilities.map((row) => ({
@@ -101,6 +113,10 @@ export async function GET(req: NextRequest) {
       createdBy: row.createdBy,
       role: row.role,
       canCreateChannel: row.canCreateChannel,
+      canManageMembers: row.canManageMembers,
+      canManagePermissions: row.canManagePermissions,
+      canApproveJoinRequests: row.canApproveJoinRequests,
+      canManageGroup: row.canManageGroup,
     })),
   });
 }

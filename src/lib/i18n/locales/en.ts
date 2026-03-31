@@ -1810,6 +1810,7 @@ const en: Record<string, string> = {
   "errors.channelPasswordLengthInvalid": "Password must be at least 4 characters",
   "errors.failedToFetchMembers": "Failed to fetch members",
   "errors.cannotKickOwner": "The channel owner cannot be kicked",
+  "errors.lastGroupAdminRequired": "At least one group admin must remain in the group",
   "errors.memberNotFound": "Member not found",
   "errors.failedToKickMember": "Failed to kick member",
   "errors.failedToListTemplates": "Failed to list templates",

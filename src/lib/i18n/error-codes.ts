@@ -61,6 +61,7 @@ export type ErrorCode =
   | "channel_password_length_invalid"
   | "failed_to_fetch_members"
   | "cannot_kick_owner"
+  | "last_group_admin_required"
   | "member_not_found"
   | "failed_to_kick_member"
   | "failed_to_list_templates"
@@ -175,6 +176,7 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   channel_password_length_invalid: "errors.channelPasswordLengthInvalid",
   failed_to_fetch_members: "errors.failedToFetchMembers",
   cannot_kick_owner: "errors.cannotKickOwner",
+  last_group_admin_required: "errors.lastGroupAdminRequired",
   member_not_found: "errors.memberNotFound",
   failed_to_kick_member: "errors.failedToKickMember",
   failed_to_list_templates: "errors.failedToListTemplates",

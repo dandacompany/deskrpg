@@ -37,6 +37,7 @@ interface GroupOption {
   name: string;
   role?: GroupMemberRole;
   canCreateChannel?: boolean;
+  canManageGroup?: boolean;
 }
 
 export default function ChannelsPage() {
@@ -162,7 +163,7 @@ function ChannelsPageInner() {
   };
 
   const canCreateChannels = availableGroups.some((group) => group.canCreateChannel);
-  const canManageGroups = availableGroups.some((group) => !group.role || group.role === "group_admin");
+  const canManageGroups = availableGroups.some((group) => group.canManageGroup);
 
   if (loading) {
     return (

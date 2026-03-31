@@ -19,6 +19,10 @@ type GroupRow = {
   createdBy: string | null;
   role?: GroupMemberRole;
   canCreateChannel?: boolean;
+  canManageMembers?: boolean;
+  canManagePermissions?: boolean;
+  canApproveJoinRequests?: boolean;
+  canManageGroup?: boolean;
 };
 
 export default function AdminGroupsPage() {
@@ -45,7 +49,7 @@ function AdminGroupsPageInner() {
   const [error, setError] = useState("");
 
   const manageableGroups = useMemo(
-    () => groups.filter((group) => !group.role || group.role === "group_admin"),
+    () => groups.filter((group) => group.canManageGroup),
     [groups],
   );
 
@@ -61,7 +65,7 @@ function AdminGroupsPageInner() {
       .then((data) => {
         const nextGroups = Array.isArray(data.groups) ? data.groups : [];
         setGroups(nextGroups);
-        const nextManageableGroups = nextGroups.filter((group) => !group.role || group.role === "group_admin");
+        const nextManageableGroups = nextGroups.filter((group) => group.canManageGroup);
         setSelectedGroupId(nextManageableGroups[0]?.id ?? "");
         setLoading(false);
       })

@@ -24,6 +24,14 @@ export type GroupActorContext = {
   groupRole: GroupMemberRole | null;
 };
 
+export type GroupManagementCapabilities = {
+  canCreateChannel: boolean;
+  canManageMembers: boolean;
+  canManagePermissions: boolean;
+  canApproveJoinRequests: boolean;
+  canManageGroup: boolean;
+};
+
 export function canWriteGroupPermissionEffect(input: {
   permissionKey: PermissionKey;
   effect: PermissionEffect | null;
@@ -49,6 +57,39 @@ export function buildGroupSlugCandidates(baseSlug: string, attempts: number) {
   return Array.from({ length: attempts }, (_, index) =>
     index === 0 ? baseSlug : `${baseSlug}-${index + 1}`,
   );
+}
+
+export function summarizeGroupManagementCapabilities(input: Omit<GroupManagementCapabilities, "canManageGroup">): GroupManagementCapabilities {
+  return {
+    ...input,
+    canManageGroup: input.canManageMembers || input.canManagePermissions || input.canApproveJoinRequests,
+  };
+}
+
+export function canChangeGroupAdminStatus(input: {
+  targetUserId: string;
+  targetCurrentRole: GroupMemberRole | null;
+  nextRole: GroupMemberRole | null;
+  adminUserIds: string[];
+}) {
+  if (input.targetCurrentRole !== "group_admin") {
+    return { ok: true as const };
+  }
+
+  if (input.nextRole === "group_admin") {
+    return { ok: true as const };
+  }
+
+  const uniqueAdminUserIds = new Set(input.adminUserIds);
+  if (uniqueAdminUserIds.size === 1 && uniqueAdminUserIds.has(input.targetUserId)) {
+    return {
+      ok: false as const,
+      errorCode: "last_group_admin_required" as const,
+      status: 409,
+    };
+  }
+
+  return { ok: true as const };
 }
 
 export function resolveJoinRequestReview(input: {

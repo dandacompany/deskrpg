@@ -1809,6 +1809,7 @@ const zh: Record<string, string> = {
   "errors.channelPasswordLengthInvalid": "密码至少需要 4 个字符",
   "errors.failedToFetchMembers": "无法获取成员列表",
   "errors.cannotKickOwner": "不能移除频道所有者",
+  "errors.lastGroupAdminRequired": "群组中至少需要保留一名群组管理员",
   "errors.memberNotFound": "未找到成员",
   "errors.failedToKickMember": "无法移除成员",
   "errors.failedToListTemplates": "无法获取模板列表",

@@ -1,6 +1,7 @@
 import { db, groupJoinRequests, groupMembers, userPermissionOverrides, users } from "@/db";
 import { GROUP_MEMBER_ROLES } from "@/lib/rbac/constants";
 import {
+  canChangeGroupAdminStatus,
   getAuthenticatedUserId,
   getGroupActorContext,
   groupAdminRequiredResponse,
@@ -10,6 +11,15 @@ import {
 } from "@/lib/rbac/group-api";
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+
+async function listGroupAdminUserIds(groupId: string) {
+  const adminRows = await db
+    .select({ userId: groupMembers.userId })
+    .from(groupMembers)
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.role, "group_admin")));
+
+  return adminRows.map((row) => row.userId);
+}
 
 async function requireMembersManager(groupId: string, userId: string) {
   const context = await getGroupActorContext(groupId, userId);
@@ -100,6 +110,32 @@ export async function POST(
     );
   }
 
+  const [existingMembership] = await db
+    .select({ role: groupMembers.role })
+    .from(groupMembers)
+    .where(
+      and(
+        eq(groupMembers.groupId, groupId),
+        eq(groupMembers.userId, targetUser.id),
+      ),
+    )
+    .limit(1);
+
+  const adminUserIds = await listGroupAdminUserIds(groupId);
+  const roleChange = canChangeGroupAdminStatus({
+    targetUserId: targetUser.id,
+    targetCurrentRole: (existingMembership?.role as "group_admin" | "member" | null | undefined) ?? null,
+    nextRole: memberRole,
+    adminUserIds,
+  });
+
+  if (!roleChange.ok) {
+    return NextResponse.json(
+      { errorCode: roleChange.errorCode, error: "last group admin must remain" },
+      { status: roleChange.status },
+    );
+  }
+
   const now = new Date().toISOString();
   const [membership] = await db
     .insert(groupMembers)
@@ -159,6 +195,34 @@ export async function DELETE(
     return NextResponse.json(
       { errorCode: "missing_required_fields", error: "targetUserId is required" },
       { status: 400 },
+    );
+  }
+
+  const [existingMembership] = await db
+    .select({ role: groupMembers.role })
+    .from(groupMembers)
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, targetUserId)))
+    .limit(1);
+
+  if (!existingMembership) {
+    return NextResponse.json(
+      { errorCode: "member_not_found", error: "member not found" },
+      { status: 404 },
+    );
+  }
+
+  const adminUserIds = await listGroupAdminUserIds(groupId);
+  const roleChange = canChangeGroupAdminStatus({
+    targetUserId,
+    targetCurrentRole: existingMembership.role as "group_admin" | "member",
+    nextRole: null,
+    adminUserIds,
+  });
+
+  if (!roleChange.ok) {
+    return NextResponse.json(
+      { errorCode: roleChange.errorCode, error: "last group admin must remain" },
+      { status: roleChange.status },
     );
   }
 
