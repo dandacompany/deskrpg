@@ -24,6 +24,9 @@ export type ErrorCode =
   | "password_required"
   | "wrong_password"
   | "channel_misconfigured"
+  | "system_admin_required"
+  | "group_admin_required"
+  | "group_not_found"
   | "group_membership_required"
   | "public_channel_browse_only"
   | "failed_to_join_channel"
@@ -135,6 +138,9 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   password_required: "errors.passwordRequired",
   wrong_password: "errors.wrongPassword",
   channel_misconfigured: "errors.channelMisconfigured",
+  system_admin_required: "errors.systemAdminRequired",
+  group_admin_required: "errors.groupAdminRequired",
+  group_not_found: "errors.groupNotFound",
   group_membership_required: "errors.notAMember",
   public_channel_browse_only: "errors.forbidden",
   failed_to_join_channel: "errors.failedToJoinChannel",
