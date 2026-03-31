@@ -6,6 +6,7 @@ export const users = sqliteTable("users", {
   loginId: text("login_id").unique().notNull(),
   nickname: text("nickname").unique().notNull(),
   passwordHash: text("password_hash").notNull(),
+  systemRole: text("system_role").notNull().default("user"),
   lastActiveAt: text("last_active_at"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -22,11 +23,23 @@ export const characters = sqliteTable("characters", {
   index("idx_characters_user_id").on(table.userId),
 ]);
 
+export const groups = sqliteTable("groups", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  slug: text("slug").unique().notNull(),
+  description: text("description"),
+  isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
+});
+
 export const channels = sqliteTable("channels", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull(),
   description: text("description"),
   ownerId: text("owner_id").notNull().references(() => users.id),
+  groupId: text("group_id").references(() => groups.id, { onDelete: "set null" }),
   mapData: text("map_data"),
   mapConfig: text("map_config"),
   isPublic: integer("is_public", { mode: "boolean" }).default(true),
@@ -37,6 +50,77 @@ export const channels = sqliteTable("channels", {
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
 });
+
+export const groupMembers = sqliteTable("group_members", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull().default("member"),
+  approvedBy: text("approved_by").references(() => users.id, { onDelete: "set null" }),
+  approvedAt: text("approved_at"),
+  joinedAt: text("joined_at").$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  index("idx_group_members_group_id").on(table.groupId),
+  index("idx_group_members_user_id").on(table.userId),
+  unique("group_members_group_user_unique").on(table.groupId, table.userId),
+]);
+
+export const groupInvites = sqliteTable("group_invites", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  token: text("token").unique().notNull(),
+  createdBy: text("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  targetUserId: text("target_user_id").references(() => users.id, { onDelete: "set null" }),
+  targetLoginId: text("target_login_id"),
+  expiresAt: text("expires_at"),
+  acceptedBy: text("accepted_by").references(() => users.id, { onDelete: "set null" }),
+  acceptedAt: text("accepted_at"),
+  revokedAt: text("revoked_at"),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  index("idx_group_invites_group_id").on(table.groupId),
+  index("idx_group_invites_target_user_id").on(table.targetUserId),
+]);
+
+export const groupJoinRequests = sqliteTable("group_join_requests", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("pending"),
+  message: text("message"),
+  reviewedBy: text("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+  reviewedAt: text("reviewed_at"),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  index("idx_group_join_requests_group_id").on(table.groupId),
+  index("idx_group_join_requests_user_id").on(table.userId),
+]);
+
+export const groupPermissions = sqliteTable("group_permissions", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  permissionKey: text("permission_key").notNull(),
+  effect: text("effect").notNull(),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  index("idx_group_permissions_group_id").on(table.groupId),
+  unique("group_permissions_group_permission_unique").on(table.groupId, table.permissionKey),
+]);
+
+export const userPermissionOverrides = sqliteTable("user_permission_overrides", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  permissionKey: text("permission_key").notNull(),
+  effect: text("effect").notNull(),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  index("idx_user_permission_overrides_group_id").on(table.groupId),
+  index("idx_user_permission_overrides_user_id").on(table.userId),
+  unique("user_permission_overrides_group_user_permission_unique").on(table.groupId, table.userId, table.permissionKey),
+]);
 
 export const channelMembers = sqliteTable("channel_members", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),

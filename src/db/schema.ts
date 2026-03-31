@@ -6,6 +6,7 @@ export const users = pgTable("users", {
   loginId: varchar("login_id", { length: 50 }).unique().notNull(),
   nickname: varchar("nickname", { length: 50 }).unique().notNull(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+  systemRole: varchar("system_role", { length: 20 }).notNull().default("user"),
   lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
@@ -22,11 +23,23 @@ export const characters = pgTable("characters", {
   index("idx_characters_user_id").on(table.userId),
 ]);
 
+export const groups = pgTable("groups", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 100 }).notNull(),
+  slug: varchar("slug", { length: 100 }).unique().notNull(),
+  description: varchar("description", { length: 500 }),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
 export const channels = pgTable("channels", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 100 }).notNull(),
   description: varchar("description", { length: 500 }),
   ownerId: uuid("owner_id").notNull().references(() => users.id),
+  groupId: uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
   mapData: jsonb("map_data"),
   mapConfig: jsonb("map_config"),
   isPublic: boolean("is_public").default(true),
@@ -37,6 +50,77 @@ export const channels = pgTable("channels", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
+
+export const groupMembers = pgTable("group_members", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: varchar("role", { length: 20 }).notNull().default("member"),
+  approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index("idx_group_members_group_id").on(table.groupId),
+  index("idx_group_members_user_id").on(table.userId),
+  unique("group_members_group_user_unique").on(table.groupId, table.userId),
+]);
+
+export const groupInvites = pgTable("group_invites", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  token: varchar("token", { length: 64 }).unique().notNull(),
+  createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  targetUserId: uuid("target_user_id").references(() => users.id, { onDelete: "set null" }),
+  targetLoginId: varchar("target_login_id", { length: 50 }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  acceptedBy: uuid("accepted_by").references(() => users.id, { onDelete: "set null" }),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index("idx_group_invites_group_id").on(table.groupId),
+  index("idx_group_invites_target_user_id").on(table.targetUserId),
+]);
+
+export const groupJoinRequests = pgTable("group_join_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  message: text("message"),
+  reviewedBy: uuid("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index("idx_group_join_requests_group_id").on(table.groupId),
+  index("idx_group_join_requests_user_id").on(table.userId),
+]);
+
+export const groupPermissions = pgTable("group_permissions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  permissionKey: varchar("permission_key", { length: 50 }).notNull(),
+  effect: varchar("effect", { length: 10 }).notNull(),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index("idx_group_permissions_group_id").on(table.groupId),
+  unique("group_permissions_group_permission_unique").on(table.groupId, table.permissionKey),
+]);
+
+export const userPermissionOverrides = pgTable("user_permission_overrides", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  permissionKey: varchar("permission_key", { length: 50 }).notNull(),
+  effect: varchar("effect", { length: 10 }).notNull(),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index("idx_user_permission_overrides_group_id").on(table.groupId),
+  index("idx_user_permission_overrides_user_id").on(table.userId),
+  unique("user_permission_overrides_group_user_permission_unique").on(table.groupId, table.userId, table.permissionKey),
+]);
 
 export const channelMembers = pgTable("channel_members", {
   id: uuid("id").primaryKey().defaultRandom(),
