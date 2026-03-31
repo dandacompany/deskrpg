@@ -36,6 +36,7 @@ interface GroupOption {
   id: string;
   name: string;
   role?: GroupMemberRole;
+  canCreateChannel?: boolean;
 }
 
 export default function ChannelsPage() {
@@ -160,7 +161,7 @@ function ChannelsPageInner() {
     }
   };
 
-  const canCreateChannels = availableGroups.length > 0;
+  const canCreateChannels = availableGroups.some((group) => group.canCreateChannel);
 
   if (loading) {
     return (
