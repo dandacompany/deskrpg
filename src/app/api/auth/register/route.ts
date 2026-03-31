@@ -1,9 +1,9 @@
-import { db } from "@/db";
-import { users } from "@/db";
+import { db, groupMembers, groups, users } from "@/db";
+import { buildBootstrapActions } from "@/lib/rbac/bootstrap";
 import { hashPassword } from "@/lib/password";
 import { signJWT } from "@/lib/jwt";
 import { NextRequest, NextResponse } from "next/server";
-import { eq, or } from "drizzle-orm";
+import { count, eq, or } from "drizzle-orm";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -36,7 +36,43 @@ export async function POST(req: NextRequest) {
   }
 
   const passwordHash = await hashPassword(password);
-  const [user] = await db.insert(users).values({ loginId, nickname, passwordHash }).returning();
+  const user = await db.transaction(async (tx) => {
+    const [{ value: userCount }] = await tx.select({ value: count() }).from(users);
+    const [createdUser] = await tx.insert(users).values({ loginId, nickname, passwordHash }).returning();
+
+    const bootstrap = buildBootstrapActions({
+      existingUserCount: Number(userCount),
+      userId: createdUser.id,
+      loginId,
+    });
+
+    if (bootstrap.systemRole === "system_admin") {
+      await tx
+        .update(users)
+        .set({ systemRole: bootstrap.systemRole })
+        .where(eq(users.id, createdUser.id));
+    }
+
+    if (bootstrap.createDefaultGroup && bootstrap.defaultGroup && bootstrap.groupMembership) {
+      const [group] = await tx.insert(groups).values({
+        ...bootstrap.defaultGroup,
+        createdBy: createdUser.id,
+      }).returning();
+
+      await tx.insert(groupMembers).values({
+        groupId: group.id,
+        userId: bootstrap.groupMembership.userId,
+        role: bootstrap.groupMembership.role,
+        approvedBy: createdUser.id,
+        approvedAt: new Date().toISOString(),
+      });
+    }
+
+    return {
+      ...createdUser,
+      systemRole: bootstrap.systemRole,
+    };
+  });
 
   const token = await signJWT({ userId: user.id, nickname: user.nickname });
 
