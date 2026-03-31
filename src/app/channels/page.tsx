@@ -185,6 +185,14 @@ function ChannelsPageInner() {
           <div className="flex items-center gap-3">
             <LogoutButton />
             <LocaleSwitcher />
+            {availableGroups.length > 0 && (
+              <Link
+                href="/admin/groups"
+                className="px-4 py-2 bg-surface-raised hover:bg-surface-raised/80 rounded font-semibold"
+              >
+                {t("channels.manageGroups")}
+              </Link>
+            )}
             {canCreateChannels
               ? (
                 <Link
