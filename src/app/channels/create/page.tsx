@@ -13,6 +13,7 @@ interface GroupOption {
   id: string;
   name: string;
   role?: GroupMemberRole;
+  canCreateChannel?: boolean;
 }
 
 export default function CreateChannelPage() {
@@ -117,11 +118,13 @@ function CreateChannelPageInner() {
         const nextGroups = Array.isArray(data.groups) ? data.groups : [];
         setGroups(nextGroups);
         setGroupId((currentGroupId) => {
-          if (currentGroupId && nextGroups.some((group: GroupOption) => group.id === currentGroupId)) {
+          const creatableGroups = nextGroups.filter((group: GroupOption) => group.canCreateChannel);
+          if (currentGroupId && creatableGroups.some((group: GroupOption) => group.id === currentGroupId)) {
             return currentGroupId;
           }
 
-          const preferredGroup = nextGroups.find((group: GroupOption) => group.role !== "member") ?? nextGroups[0];
+          const preferredGroup = creatableGroups.find((group: GroupOption) => group.role !== "member")
+            ?? creatableGroups[0];
           return preferredGroup?.id ?? "";
         });
         setLoadingGroups(false);
@@ -139,7 +142,8 @@ function CreateChannelPageInner() {
 
   const hasGatewayUrl = gatewayUrl.trim().length > 0;
   const hasTestAgents = testResult?.ok && testResult.agents && testResult.agents.length > 0;
-  const hasAvailableGroups = groups.length > 0;
+  const creatableGroups = groups.filter((group) => group.canCreateChannel);
+  const hasAvailableGroups = creatableGroups.length > 0;
 
   const handlePersonaPresetChange = (presetId: string) => {
     setPersonaPresetId(presetId);
@@ -311,7 +315,7 @@ function CreateChannelPageInner() {
               className="w-full px-3 py-2 bg-surface border border-border rounded text-text focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent disabled:opacity-60"
             >
               {hasAvailableGroups
-                ? groups.map((group) => (
+                ? creatableGroups.map((group) => (
                   <option key={group.id} value={group.id}>
                     {group.name}
                   </option>

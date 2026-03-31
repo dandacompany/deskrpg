@@ -4,6 +4,7 @@ import { db, groupMembers, groups } from "@/db";
 import {
   buildGroupSlugCandidates,
   getAuthenticatedUserId,
+  hasGroupPermission,
   getUserSystemRole,
   systemAdminRequiredResponse,
   unauthorizedResponse,
@@ -41,7 +42,12 @@ export async function GET(req: NextRequest) {
       .from(groups)
       .orderBy(groups.name);
 
-    return NextResponse.json({ groups: rows });
+    return NextResponse.json({
+      groups: rows.map((row) => ({
+        ...row,
+        canCreateChannel: true,
+      })),
+    });
   }
 
   const rows = await db
@@ -59,8 +65,34 @@ export async function GET(req: NextRequest) {
     .where(eq(groupMembers.userId, userId))
     .orderBy(groups.name);
 
+  const groupsWithCapabilities = await Promise.all(rows.map(async (row) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description,
+    isDefault: row.isDefault,
+    createdBy: row.createdBy,
+    role: row.role,
+    canCreateChannel: await hasGroupPermission(
+      {
+        userId,
+        systemRole,
+        group: {
+          id: row.id,
+          name: row.name,
+          slug: row.slug,
+          description: row.description,
+          isDefault: row.isDefault,
+          createdBy: row.createdBy,
+        },
+        groupRole: row.role,
+      },
+      "create_channel",
+    ),
+  })));
+
   return NextResponse.json({
-    groups: rows.map((row) => ({
+    groups: groupsWithCapabilities.map((row) => ({
       id: row.id,
       name: row.name,
       slug: row.slug,
@@ -68,6 +100,7 @@ export async function GET(req: NextRequest) {
       isDefault: row.isDefault,
       createdBy: row.createdBy,
       role: row.role,
+      canCreateChannel: row.canCreateChannel,
     })),
   });
 }
