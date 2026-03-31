@@ -175,6 +175,9 @@ const REQUIRED_KEYS = [
   "errors.passwordRequired",
   "errors.wrongPassword",
   "errors.channelMisconfigured",
+  "errors.systemAdminRequired",
+  "errors.groupAdminRequired",
+  "errors.groupNotFound",
   "errors.failedToJoinChannel",
   "errors.failedToReachTestEndpoint",
   "errors.failedToResolveInviteCode",
@@ -223,6 +226,9 @@ const TEST_CODES: Record<ErrorCode, string> = {
   password_required: "errors.passwordRequired",
   wrong_password: "errors.wrongPassword",
   channel_misconfigured: "errors.channelMisconfigured",
+  system_admin_required: "errors.systemAdminRequired",
+  group_admin_required: "errors.groupAdminRequired",
+  group_not_found: "errors.groupNotFound",
   failed_to_join_channel: "errors.failedToJoinChannel",
   failed_to_reach_test_endpoint: "errors.failedToReachTestEndpoint",
   failed_to_resolve_invite_code: "errors.failedToResolveInviteCode",
@@ -326,4 +332,7 @@ test("group RBAC error codes map to stable translation keys", () => {
   assert.equal(getErrorMessageKey("channel_creation_forbidden"), "errors.forbidden");
   assert.equal(getErrorMessageKey("group_membership_required"), "errors.notAMember");
   assert.equal(getErrorMessageKey("public_channel_browse_only"), "errors.forbidden");
+  assert.equal(getErrorMessageKey("system_admin_required"), "errors.systemAdminRequired");
+  assert.equal(getErrorMessageKey("group_admin_required"), "errors.groupAdminRequired");
+  assert.equal(getErrorMessageKey("group_not_found"), "errors.groupNotFound");
 });
