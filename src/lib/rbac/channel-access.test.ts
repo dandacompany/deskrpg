@@ -5,6 +5,7 @@ import {
   summarizeChannelCreateAccess,
   summarizeChannelDetailAccess,
   summarizeChannelJoinAccess,
+  summarizeChannelParticipationAccess,
 } from "./channel-access";
 
 test("non-member cannot create a channel even with a would-be allow", () => {
@@ -110,4 +111,80 @@ test("null-group private channels fall back to legacy password flow", () => {
   assert.equal(detail.requiresPassword, true);
   assert.equal(join.allowed, true);
   assert.equal(join.reason, "legacy_private_channel");
+});
+
+test("socket participation denies grouped public browse-only users", () => {
+  const result = summarizeChannelParticipationAccess({
+    groupId: "group-1",
+    isPublic: true,
+    hasActiveGroupMembership: false,
+    isChannelMember: false,
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.reason, "groupless_public_browse_only");
+});
+
+test("socket participation requires active group membership even for existing channel members", () => {
+  const result = summarizeChannelParticipationAccess({
+    groupId: "group-1",
+    isPublic: false,
+    hasActiveGroupMembership: false,
+    isChannelMember: true,
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.reason, "group_membership_required");
+});
+
+test("socket participation requires prior private-channel approval after group membership", () => {
+  const result = summarizeChannelParticipationAccess({
+    groupId: "group-1",
+    isPublic: false,
+    hasActiveGroupMembership: true,
+    isChannelMember: false,
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.reason, "password_required");
+});
+
+test("socket participation allows active members into grouped channels", () => {
+  const result = summarizeChannelParticipationAccess({
+    groupId: "group-1",
+    isPublic: false,
+    hasActiveGroupMembership: true,
+    isChannelMember: true,
+  });
+
+  assert.equal(result.allowed, true);
+  assert.equal(result.reason, "group_member");
+});
+
+test("socket participation preserves legacy null-group fallback", () => {
+  const publicChannel = summarizeChannelParticipationAccess({
+    groupId: null,
+    isPublic: true,
+    hasActiveGroupMembership: false,
+    isChannelMember: false,
+  });
+  const privateMember = summarizeChannelParticipationAccess({
+    groupId: null,
+    isPublic: false,
+    hasActiveGroupMembership: false,
+    isChannelMember: true,
+  });
+  const privateNonMember = summarizeChannelParticipationAccess({
+    groupId: null,
+    isPublic: false,
+    hasActiveGroupMembership: false,
+    isChannelMember: false,
+  });
+
+  assert.equal(publicChannel.allowed, true);
+  assert.equal(publicChannel.reason, "legacy_public_channel");
+  assert.equal(privateMember.allowed, true);
+  assert.equal(privateMember.reason, "legacy_channel_member");
+  assert.equal(privateNonMember.allowed, false);
+  assert.equal(privateNonMember.reason, "legacy_private_password_required");
 });

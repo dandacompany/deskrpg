@@ -1,9 +1,41 @@
 import { Server, Socket } from "socket.io";
 import { jwtVerify } from "jose";
-import { Pool } from "pg";
-import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and } from "drizzle-orm";
-import * as schema from "../db/schema";
+import { db, channels, npcs, channelMembers, tasks, npcReports, characters, groupMembers } from "../db";
+import { parseDbObject } from "../lib/db-json";
+import { summarizeChannelParticipationAccess } from "../lib/rbac/channel-access";
+import {
+  type NpcResponseMessageCode,
+  type NpcResponsePayload,
+} from "../lib/npc-response-messages";
+import {
+  buildAutoExecutionPrompt,
+  buildCompletionReportRow,
+  buildResumeTaskExecutionPrompt,
+  buildTaskActionStartMessage,
+  buildQueuedReportRow,
+  buildManualTaskReportPrompt,
+  enqueueCompletionReport,
+  enqueueQueuedReport,
+  getProgressNudgeCutoff,
+  getPendingReportsForUserAndChannel,
+  getTaskAutomationConfig,
+  markReportConsumed,
+  markReportDelivered,
+  shouldDeliverCompletionReport,
+  toReportReadyPayload,
+} from "../lib/task-reporting";
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+const { OpenClawGateway } = require("../lib/openclaw-gateway.js") as { OpenClawGateway: new () => any };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { parseNpcResponse, isValidTaskAction } = require("../lib/task-parser.js") as typeof import("../lib/task-parser.js");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { sanitizeNpcResponseText } = require("../lib/task-block-utils.js") as typeof import("../lib/task-block-utils.js");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { TaskManager } = require("../lib/task-manager.js") as { TaskManager: new (db: typeof import("../db").db, schema: { tasks: typeof tasks; npcs: typeof npcs }) => { handleTaskAction: (...args: unknown[]) => Promise<unknown>; getTasksByNpc: (npcId: string) => Promise<unknown[]>; getTasksByChannel: (channelId: string) => Promise<unknown[]>; deleteTask: (taskId: string, channelId: string) => Promise<unknown>; getStaleInProgressTasks: (channelId: string, olderThanIso: string) => Promise<unknown[]>; resumeTask: (taskId: string, channelId: string) => Promise<unknown>; completeTask: (taskId: string, channelId: string) => Promise<unknown>; getTaskById: (taskId: string, channelId: string) => Promise<unknown>; }; };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { withTaskReminder } = require("../lib/task-prompt.js") as typeof import("../lib/task-prompt.js");
 
 // ---------------------------------------------------------------------------
 // Types
@@ -14,7 +46,7 @@ export interface PlayerState {
   userId: string;
   characterId: string;
   characterName: string;
-  appearance: unknown; // character appearance JSON
+  appearance: unknown;
   mapId: string;
   x: number;
   y: number;
@@ -22,14 +54,11 @@ export interface PlayerState {
   animation: string;
 }
 
-interface ChatMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
-}
-
 interface NpcConfig {
-  name: string;
-  persona: string;
+  agentId: string | null;
+  sessionKeyPrefix: string;
+  _channelId: string;
+  _name: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,17 +79,17 @@ interface MeetingRoom {
   messages: MeetingMessage[];
 }
 
+type SocketChannelAccessDeniedReason =
+  | "groupless_public_browse_only"
+  | "group_membership_required"
+  | "password_required"
+  | "legacy_private_password_required";
+
 // ---------------------------------------------------------------------------
 // In-memory stores
 // ---------------------------------------------------------------------------
 
 const players = new Map<string, PlayerState>();
-
-// NPC config cache: npcId -> config
-const npcConfigCache = new Map<string, NpcConfig>();
-
-// Conversation history: `${socketId}:${npcId}` -> messages
-const conversationHistory = new Map<string, ChatMessage[]>();
 
 // Rate limit: socketId -> last message timestamp
 const lastChatTime = new Map<string, number>();
@@ -68,24 +97,345 @@ const lastChatTime = new Map<string, number>();
 // Meeting rooms: channelId -> MeetingRoom
 const meetingRooms = new Map<string, MeetingRoom>();
 
+// NPC chat history: `${channelId}:${npcId}` -> [{ role, content, timestamp }]
+const npcChatHistory = new Map<string, { role: "player" | "npc"; content: string; timestamp: number }[]>();
+
+// OpenClaw gateway connections: channelId -> gateway instance
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const channelGateways = new Map<string, any>();
+
 const CHAT_COOLDOWN_MS = 2000;
-const MAX_HISTORY_MESSAGES = 20; // keep last N messages per conversation
+const PROGRESS_NUDGE_SCAN_MS = 60_000;
+const taskManager = new TaskManager(db, { tasks, npcs });
+const progressNudgeInFlight = new Set<string>();
+const progressNudgeCooldowns = new Map<string, number>();
+let progressNudgeTimer: NodeJS.Timeout | null = null;
 
-// ---------------------------------------------------------------------------
-// DB helper (lazy init)
-// ---------------------------------------------------------------------------
+type ManagedTask = {
+  id: string;
+  channelId: string;
+  npcId: string;
+  assignerId: string;
+  npcTaskId: string;
+  title: string;
+  summary?: string | null;
+  status: string;
+  autoNudgeCount?: number | null;
+  autoNudgeMax?: number | null;
+};
 
-let _pool: Pool | null = null;
-let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+function emitNpcSystemResponse(
+  socket: Socket,
+  npcId: string,
+  messageCode: NpcResponseMessageCode,
+) {
+  const payload: NpcResponsePayload = {
+    npcId,
+    chunk: "",
+    done: true,
+    messageCode,
+  };
+  socket.emit("npc:response", payload);
+}
 
-function getDb() {
-  if (!_db) {
-    const connStr = process.env.DATABASE_URL;
-    if (!connStr) throw new Error("Missing DATABASE_URL");
-    _pool = new Pool({ connectionString: connStr });
-    _db = drizzle(_pool, { schema });
+function getJoinedSocketsForUserAndChannel(
+  io: Server,
+  userId: string,
+  channelId: string,
+) {
+  return Array.from(players.values())
+    .filter((player) => player.userId === userId && player.mapId === channelId)
+    .map((player) => io.sockets.sockets.get(player.id))
+    .filter((joinedSocket): joinedSocket is Socket => Boolean(joinedSocket));
+}
+
+function appendNpcHistoryMessage(channelId: string, npcId: string, content: string) {
+  const sanitizedContent = sanitizeNpcResponseText(content);
+  if (!sanitizedContent.trim()) return null;
+  const historyKey = `${channelId}:${npcId}`;
+  const history = npcChatHistory.get(historyKey) || [];
+  history.push({ role: "npc", content: sanitizedContent, timestamp: Date.now() });
+  npcChatHistory.set(historyKey, history);
+  return sanitizedContent;
+}
+
+function appendNpcHistoryMessageForUser(
+  io: Server,
+  userId: string,
+  channelId: string,
+  npcId: string,
+  content: string,
+) {
+  const sanitizedContent = appendNpcHistoryMessage(channelId, npcId, content);
+  if (!sanitizedContent) return;
+
+  const joinedSockets = getJoinedSocketsForUserAndChannel(io, userId, channelId);
+  for (const joinedSocket of joinedSockets) {
+    joinedSocket.emit("npc:history-append", { npcId, message: sanitizedContent });
   }
-  return _db;
+}
+
+async function deliverPendingReportsToSocket(
+  socket: Socket,
+  userId: string,
+  channelId: string,
+) {
+  const pendingReports = await getPendingReportsForUserAndChannel(
+    db,
+    { npcReports },
+    { userId, channelId },
+  );
+
+  for (const report of pendingReports) {
+    const npcConfig = await getNpcConfig(report.npcId);
+    socket.emit("npc:report-ready", toReportReadyPayload(report, npcConfig?._name));
+    await markReportDelivered(db, { npcReports }, report.id);
+  }
+}
+
+async function getAssignerUserId(assignerId: string) {
+  const rows = await db
+    .select({ userId: characters.userId })
+    .from(characters)
+    .where(eq(characters.id, assignerId))
+    .limit(1);
+
+  return rows[0]?.userId ?? null;
+}
+
+async function getChannelTaskAutomation(channelId: string) {
+  const rows = await db
+    .select({ gatewayConfig: channels.gatewayConfig })
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .limit(1);
+
+  return getTaskAutomationConfig(rows[0]?.gatewayConfig ?? null);
+}
+
+async function processNpcTaskActions(
+  io: Server,
+  parsed: { message: string; tasks: unknown[] },
+  input: {
+    channelId: string;
+    npcId: string;
+    npcName: string;
+    assignerCharacterId: string;
+    targetUserId: string;
+  },
+) {
+  const taskAutomation = await getChannelTaskAutomation(input.channelId);
+
+  for (const taskAction of parsed.tasks) {
+    if (!isValidTaskAction(taskAction)) {
+      console.warn("[TaskManager] Invalid task action:", taskAction);
+      continue;
+    }
+
+    try {
+      const task = await taskManager.handleTaskAction(
+        taskAction,
+        input.channelId,
+        input.npcId,
+        input.assignerCharacterId,
+        { autoNudgeMax: taskAutomation.autoProgressNudgeMax },
+      ) as ManagedTask | null;
+
+      if (!task) continue;
+
+      io.to(input.channelId).emit("task:updated", { task, action: (taskAction as { action: string }).action });
+
+      if (shouldDeliverCompletionReport(taskAction as { action?: string })) {
+        appendNpcHistoryMessage(input.channelId, input.npcId, parsed.message);
+        const report = await enqueueCompletionReport(
+          db,
+          { npcReports },
+          buildCompletionReportRow({
+            channelId: input.channelId,
+            npcId: input.npcId,
+            taskId: task.id,
+            targetUserId: input.targetUserId,
+            message: parsed.message,
+          }),
+        );
+
+        if (report) {
+          const joinedSockets = getJoinedSocketsForUserAndChannel(
+            io,
+            input.targetUserId,
+            input.channelId,
+          );
+
+          if (joinedSockets.length > 0) {
+            const payload = toReportReadyPayload(report, input.npcName);
+            for (const joinedSocket of joinedSockets) {
+              joinedSocket.emit("npc:report-ready", payload);
+            }
+            await markReportDelivered(db, { npcReports }, report.id);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[TaskManager] Error handling task action:", err);
+    }
+  }
+}
+
+async function runProgressNudgeForTask(
+  io: Server,
+  task: ManagedTask,
+  promptOverride?: string,
+  reportKind = "progress",
+) {
+  if (progressNudgeInFlight.has(task.id)) return;
+
+  progressNudgeInFlight.add(task.id);
+
+  try {
+    const npcConfig = await getNpcConfig(task.npcId);
+    if (!npcConfig?.agentId) return;
+
+    const targetUserId = await getAssignerUserId(task.assignerId);
+    if (!targetUserId) return;
+
+    const gateway = await getOrConnectGateway(task.channelId);
+    if (!gateway) return;
+
+    const sessionKey = `${npcConfig.sessionKeyPrefix || task.npcId}-dm-${targetUserId}`;
+    await taskManager.markTaskNudged(task.id, task.channelId);
+    const response = await gateway.chatSend(
+      npcConfig.agentId,
+      sessionKey,
+      withTaskReminder(promptOverride ?? buildAutoExecutionPrompt(task)),
+      () => {},
+    );
+    const parsed = parseNpcResponse(response);
+
+    await processNpcTaskActions(io, parsed, {
+      channelId: task.channelId,
+      npcId: task.npcId,
+      npcName: npcConfig._name,
+      assignerCharacterId: task.assignerId,
+      targetUserId,
+    });
+
+    const preview = (parsed.message || "").trim() || `${task.title} 진행 상황을 보고했습니다.`;
+    appendNpcHistoryMessage(task.channelId, task.npcId, preview);
+
+    const report = await enqueueQueuedReport(
+      db,
+      { npcReports },
+      buildQueuedReportRow({
+        channelId: task.channelId,
+        npcId: task.npcId,
+        taskId: task.id,
+        targetUserId,
+        message: preview,
+        kind: reportKind,
+      }),
+    );
+
+    if (report) {
+      const joinedSockets = getJoinedSocketsForUserAndChannel(io, targetUserId, task.channelId);
+      if (joinedSockets.length > 0) {
+        const payload = toReportReadyPayload(report, npcConfig._name);
+        for (const joinedSocket of joinedSockets) {
+          joinedSocket.emit("npc:report-ready", payload);
+        }
+        await markReportDelivered(db, { npcReports }, report.id);
+      }
+    }
+  } catch (err) {
+    console.error("[task-reporting] Progress nudge failed:", err);
+  } finally {
+    progressNudgeInFlight.delete(task.id);
+  }
+}
+
+async function scanProgressNudges(io: Server) {
+  try {
+    const channelRows = await db
+      .select({ id: channels.id, gatewayConfig: channels.gatewayConfig })
+      .from(channels);
+
+    for (const channelRow of channelRows) {
+      const taskAutomation = getTaskAutomationConfig(channelRow.gatewayConfig);
+      if (!taskAutomation.autoProgressNudgeEnabled) continue;
+
+      const cutoffIso = new Date(
+        getProgressNudgeCutoff(taskAutomation.autoProgressNudgeMinutes),
+      ).toISOString();
+
+      const staleTasks = await taskManager.getStaleInProgressTasks(
+        channelRow.id,
+        cutoffIso,
+      ) as ManagedTask[];
+
+      for (const task of staleTasks) {
+        const autoNudgeMax = task.autoNudgeMax ?? taskAutomation.autoProgressNudgeMax;
+        if ((task.autoNudgeCount ?? 0) >= autoNudgeMax) {
+          const stalledTask = await taskManager.markTaskStalled(task.id, channelRow.id, "max_nudges_reached") as ManagedTask | null;
+          if (stalledTask) {
+            io.to(channelRow.id).emit("task:updated", { task: stalledTask, action: "stalled" });
+          }
+          continue;
+        }
+
+        const lastNudgedAt = progressNudgeCooldowns.get(task.id) ?? 0;
+        if (Date.now() - lastNudgedAt < taskAutomation.autoProgressNudgeMinutes * 60 * 1000) {
+          continue;
+        }
+
+        progressNudgeCooldowns.set(task.id, Date.now());
+        await runProgressNudgeForTask(io, task);
+      }
+    }
+  } catch (err) {
+    console.error("[task-reporting] Progress nudge scan failed:", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// OpenClaw gateway helper
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getOrConnectGateway(channelId: string): Promise<any | null> {
+  if (channelGateways.has(channelId)) {
+    const gw = channelGateways.get(channelId)!;
+    if (gw.isConnected()) return gw;
+    channelGateways.delete(channelId);
+  }
+
+  try {
+    const rows = await db
+      .select()
+      .from(channels)
+      .where(eq(channels.id, channelId))
+      .limit(1);
+
+    if (rows.length === 0) {
+      console.error(`[gateway] Channel not found: ${channelId}`);
+      return null;
+    }
+
+    const ch = rows[0];
+    const gwCfg = parseDbObject(ch.gatewayConfig);
+
+    if (!gwCfg?.url || !gwCfg?.token) {
+      console.log(`[gateway] Channel ${channelId} has no gatewayConfig`);
+      return null;
+    }
+
+    const gw = new OpenClawGateway();
+    await gw.connect(gwCfg.url, gwCfg.token);
+    channelGateways.set(channelId, gw);
+    console.log(`[gateway] Connected for channel ${channelId}: ${gwCfg.url}`);
+    return gw;
+  } catch (err) {
+    console.error(`[gateway] Connect failed for channel ${channelId}:`, err);
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -93,304 +443,163 @@ function getDb() {
 // ---------------------------------------------------------------------------
 
 async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
-  const cached = npcConfigCache.get(npcId);
-  if (cached) return cached;
-
   try {
-    const db = getDb();
     const rows = await db
       .select()
-      .from(schema.npcs)
-      .where(eq(schema.npcs.id, npcId))
+      .from(npcs)
+      .where(eq(npcs.id, npcId))
       .limit(1);
 
     if (rows.length === 0) return null;
 
     const npc = rows[0];
-    const openclawConfig = npc.openclawConfig as { persona?: string };
-    const config: NpcConfig = {
-      name: npc.name,
-      persona: openclawConfig?.persona || `You are ${npc.name}, an NPC in DeskRPG.`,
-    };
+    const oc = parseDbObject(npc.openclawConfig) || {};
 
-    npcConfigCache.set(npcId, config);
-    return config;
+    return {
+      agentId: (oc.agentId as string) || null,
+      sessionKeyPrefix: (oc.sessionKeyPrefix as string) || npcId,
+      _channelId: npc.channelId as string,
+      _name: npc.name,
+    };
   } catch (err) {
     console.error(`[npc] Failed to load config for ${npcId}:`, err);
     return null;
   }
 }
 
+async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> {
+  try {
+    const rows = await db
+      .select()
+      .from(npcs)
+      .where(eq(npcs.channelId, channelId));
+
+    return rows.map((npc) => {
+      const oc = parseDbObject(npc.openclawConfig) || {};
+      return {
+        agentId: (oc.agentId as string) || null,
+        sessionKeyPrefix: (oc.sessionKeyPrefix as string) || npc.id,
+        _channelId: channelId,
+        _name: npc.name,
+      };
+    });
+  } catch (err) {
+    console.error(`[npc] Failed to load NPC configs for channel ${channelId}:`, err);
+    return [];
+  }
+}
+
 // ---------------------------------------------------------------------------
-// OpenRouter streaming call
+// OpenClaw streaming — 1:1 DM chat
 // ---------------------------------------------------------------------------
 
 async function streamNpcResponse(
   socket: Socket,
   npcId: string,
   npcConfig: NpcConfig,
-  history: ChatMessage[],
-): Promise<void> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    socket.emit("npc:response", {
-      npcId,
-      chunk: "[AI service not configured. Set OPENROUTER_API_KEY.]",
-      done: true,
-    });
-    return;
+  userId: string,
+  message: string,
+): Promise<string> {
+  const { agentId, _channelId, sessionKeyPrefix } = npcConfig;
+  const debugNpcLogging = process.env.NODE_ENV !== "production";
+
+  if (!agentId) {
+    emitNpcSystemResponse(socket, npcId, "no_agent");
+    return "";
   }
 
-  const messages = [
-    { role: "system", content: npcConfig.persona },
-    ...history.map((m) => ({ role: m.role, content: m.content })),
-  ];
+  const gateway = await getOrConnectGateway(_channelId);
+  if (!gateway) {
+    emitNpcSystemResponse(socket, npcId, "gateway_not_connected");
+    return "";
+  }
 
+  const sessionKey = `${sessionKeyPrefix || npcId}-dm-${userId}`;
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://deskrpg.dante-labs.com",
-        "X-Title": "DeskRPG NPC Chat",
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-4o-mini",
-        messages,
-        stream: true,
-        max_tokens: 300,
-        temperature: 0.8,
-      }),
+    const response = await gateway.chatSend(agentId, sessionKey, message, (delta: string) => {
+      if (debugNpcLogging) {
+        console.log("[npc:response:chunk]", {
+          npcId,
+          agentId,
+          chunkPreview: delta.slice(0, 40),
+        });
+      }
+      socket.emit("npc:response", { npcId, chunk: delta, done: false });
     });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error(`[npc] OpenRouter error ${res.status}:`, errText);
-      socket.emit("npc:response", {
+    if (debugNpcLogging) {
+      console.log("[npc:response:done]", {
         npcId,
-        chunk: "[AI is unavailable right now. Try again later.]",
-        done: true,
+        agentId,
+        responseLength: response?.length ?? 0,
       });
-      return;
     }
-
-    const reader = res.body?.getReader();
-    if (!reader) {
-      socket.emit("npc:response", { npcId, chunk: "[No response]", done: true });
-      return;
-    }
-
-    const decoder = new TextDecoder();
-    let fullResponse = "";
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      // Process SSE lines
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || ""; // Keep incomplete line in buffer
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith("data: ")) continue;
-
-        const data = trimmed.slice(6);
-        if (data === "[DONE]") {
-          socket.emit("npc:response", { npcId, chunk: "", done: true });
-          break;
-        }
-
-        try {
-          const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            fullResponse += content;
-            socket.emit("npc:response", { npcId, chunk: content, done: false });
-          }
-
-          // Check if this is the final chunk
-          const finishReason = parsed.choices?.[0]?.finish_reason;
-          if (finishReason) {
-            socket.emit("npc:response", { npcId, chunk: "", done: true });
-          }
-        } catch {
-          // Skip malformed JSON
-        }
-      }
-    }
-
-    // Add assistant response to history
-    if (fullResponse) {
-      const convKey = `${socket.id}:${npcId}`;
-      const conv = conversationHistory.get(convKey) || [];
-      conv.push({ role: "assistant", content: fullResponse });
-      // Trim history
-      if (conv.length > MAX_HISTORY_MESSAGES) {
-        conv.splice(0, conv.length - MAX_HISTORY_MESSAGES);
-      }
-      conversationHistory.set(convKey, conv);
-    }
+    socket.emit("npc:response", { npcId, chunk: "", done: true });
+    return response || "";
   } catch (err) {
-    console.error("[npc] Stream error:", err);
-    socket.emit("npc:response", {
-      npcId,
-      chunk: "[Connection error. Try again.]",
-      done: true,
-    });
+    console.error(`[npc] OpenClaw chatSend error for ${npcId}:`, err);
+    emitNpcSystemResponse(socket, npcId, "gateway_error");
+    return "";
   }
 }
 
 // ---------------------------------------------------------------------------
-// Meeting room: load all NPCs for a channel
-// ---------------------------------------------------------------------------
-
-async function getNpcConfigsForChannel(
-  channelId: string,
-): Promise<{ id: string; name: string; persona: string }[]> {
-  try {
-    const db = getDb();
-    const rows = await db
-      .select()
-      .from(schema.npcs)
-      .where(eq(schema.npcs.channelId, channelId));
-
-    return rows.map((r) => {
-      const cfg = r.openclawConfig as { persona?: string };
-      return {
-        id: r.id,
-        name: r.name,
-        persona: cfg?.persona || `You are ${r.name}, an NPC in DeskRPG.`,
-      };
-    });
-  } catch (err) {
-    console.error("[meeting] Failed to load NPCs for channel:", err);
-    return [];
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Meeting room: stream NPC response to the meeting group
+// OpenClaw streaming — meeting room broadcast
 // ---------------------------------------------------------------------------
 
 async function streamMeetingNpcResponse(
   io: Server,
   channelId: string,
-  npcConfig: { id: string; name: string; persona: string },
+  npcConfig: NpcConfig,
   room: MeetingRoom,
   userMessage: string,
-  userName: string,
+  senderName: string,
 ): Promise<void> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return;
+  const { agentId, sessionKeyPrefix, _name } = npcConfig;
 
-  // Build context from recent meeting messages
-  const recentMessages = room.messages.slice(-10).map((m) => ({
-    role: m.senderType === "user" ? ("user" as const) : ("assistant" as const),
-    content: `[${m.sender}]: ${m.content}`,
-  }));
+  // Skip NPCs without an assigned agent in meeting rooms
+  if (!agentId) return;
 
-  const messages = [
-    {
-      role: "system" as const,
-      content: `${npcConfig.persona}\n\nYou are in a group meeting. Multiple people are talking. Respond naturally and briefly (1-2 sentences). You are ${npcConfig.name}. Address people by name when appropriate. The latest message was from ${userName}.`,
-    },
-    ...recentMessages,
-  ];
+  const gateway = await getOrConnectGateway(channelId);
+  if (!gateway) return;
 
+  const sessionKey = `${sessionKeyPrefix || _name}-meeting-${channelId}`;
+  const prompt = `${senderName}: ${userMessage}`;
+
+  const npcMessage: MeetingMessage = {
+    id: `npc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    sender: _name,
+    senderId: `npc-${_name}`,
+    senderType: "npc",
+    content: "",
+    timestamp: Date.now(),
+  };
+
+  room.messages.push(npcMessage);
+  if (room.messages.length > 100) room.messages.splice(0, room.messages.length - 100);
+
+  let fullText = "";
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://deskrpg.dante-labs.com",
-        "X-Title": "DeskRPG Meeting Room",
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-4o-mini",
-        messages,
-        stream: true,
-        max_tokens: 150,
-        temperature: 0.8,
-      }),
+    await gateway.chatSend(agentId, sessionKey, prompt, (delta: string) => {
+      fullText += delta;
+      npcMessage.content = fullText;
+      io.to(`meeting-${channelId}`).emit("meeting:npc-chunk", {
+        messageId: npcMessage.id,
+        sender: _name,
+        chunk: delta,
+        done: false,
+      });
     });
-
-    if (!res.ok) return;
-    const reader = res.body?.getReader();
-    if (!reader) return;
-
-    const decoder = new TextDecoder();
-    let fullResponse = "";
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith("data: ")) continue;
-        const data = trimmed.slice(6);
-        if (data === "[DONE]") {
-          io.to(`meeting-${channelId}`).emit("meeting:npc-stream", {
-            npcId: npcConfig.id,
-            npcName: npcConfig.name,
-            chunk: "",
-            done: true,
-          });
-          break;
-        }
-        try {
-          const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            fullResponse += content;
-            io.to(`meeting-${channelId}`).emit("meeting:npc-stream", {
-              npcId: npcConfig.id,
-              npcName: npcConfig.name,
-              chunk: content,
-              done: false,
-            });
-          }
-          if (parsed.choices?.[0]?.finish_reason) {
-            io.to(`meeting-${channelId}`).emit("meeting:npc-stream", {
-              npcId: npcConfig.id,
-              npcName: npcConfig.name,
-              chunk: "",
-              done: true,
-            });
-          }
-        } catch {
-          // Skip malformed JSON
-        }
-      }
-    }
-
-    // Store completed NPC message
-    if (fullResponse) {
-      const npcMessage: MeetingMessage = {
-        id: `msg-${Date.now()}-${npcConfig.id}`,
-        sender: npcConfig.name,
-        senderId: `npc-${npcConfig.id}`,
-        senderType: "npc",
-        content: fullResponse,
-        timestamp: Date.now(),
-      };
-      room.messages.push(npcMessage);
-      if (room.messages.length > 100) {
-        room.messages.splice(0, room.messages.length - 100);
-      }
-    }
+    npcMessage.content = fullText;
+    io.to(`meeting-${channelId}`).emit("meeting:npc-chunk", {
+      messageId: npcMessage.id,
+      sender: _name,
+      chunk: "",
+      done: true,
+    });
+    io.to(`meeting-${channelId}`).emit("meeting:message", npcMessage);
   } catch (err) {
-    console.error(`[meeting] NPC stream error for ${npcConfig.name}:`, err);
+    console.error(`[meeting] OpenClaw error for NPC ${_name}:`, err);
+    room.messages.pop();
   }
 }
 
@@ -409,17 +618,118 @@ async function authenticateSocket(
 ): Promise<{ userId: string; nickname: string } | null> {
   try {
     const cookieHeader = socket.handshake.headers.cookie || "";
-    const tokenMatch = cookieHeader.match(/token=([^;]+)/);
-    if (!tokenMatch) return null;
+    const tokenCookie = cookieHeader
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith("token="));
 
-    const { payload } = await jwtVerify(tokenMatch[1], getJwtSecret());
+    if (!tokenCookie) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[socket:auth] missing token cookie", {
+          socketId: socket.id,
+          transport: socket.conn.transport.name,
+          hasCookieHeader: cookieHeader.length > 0,
+          userAgent: socket.handshake.headers["user-agent"] || "",
+        });
+      }
+      return null;
+    }
+
+    const rawTokenValue = tokenCookie.slice("token=".length);
+    const normalizedToken = decodeURIComponent(rawTokenValue).replace(/^"|"$/g, "");
+
+    const { payload } = await jwtVerify(normalizedToken, getJwtSecret());
     return {
       userId: payload.userId as string,
       nickname: payload.nickname as string,
     };
-  } catch {
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[socket:auth] token verify failed", {
+        socketId: socket.id,
+        transport: socket.conn.transport.name,
+        error: error instanceof Error ? error.message : String(error),
+        cookiePreview: cookieHeader.slice(0, 120),
+        userAgent: socket.handshake.headers["user-agent"] || "",
+      });
+    }
     return null;
   }
+}
+
+function emitChannelAccessDenied(
+  socket: Socket,
+  input: {
+    channelId: string;
+    action: "player:join" | "meeting:join" | "meeting:chat";
+    reason: SocketChannelAccessDeniedReason;
+  },
+) {
+  const errorCode =
+    input.reason === "groupless_public_browse_only"
+      ? "public_channel_browse_only"
+      : input.reason === "group_membership_required"
+        ? "group_membership_required"
+        : "forbidden";
+
+  socket.emit("channel:access-denied", {
+    channelId: input.channelId,
+    action: input.action,
+    reason: input.reason,
+    errorCode,
+  });
+}
+
+async function getSocketChannelParticipationAccess(channelId: string, userId: string) {
+  const channelRows = await db
+    .select({
+      id: channels.id,
+      groupId: channels.groupId,
+      isPublic: channels.isPublic,
+      ownerId: channels.ownerId,
+    })
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .limit(1);
+
+  const channel = channelRows[0];
+  if (!channel) {
+    return null;
+  }
+
+  const groupMembershipRows = channel.groupId
+    ? await db
+        .select({ role: groupMembers.role })
+        .from(groupMembers)
+        .where(
+          and(
+            eq(groupMembers.groupId, channel.groupId),
+            eq(groupMembers.userId, userId),
+          ),
+        )
+        .limit(1)
+    : [];
+
+  const channelMembershipRows = await db
+    .select({ userId: channelMembers.userId })
+    .from(channelMembers)
+    .where(
+      and(
+        eq(channelMembers.channelId, channelId),
+        eq(channelMembers.userId, userId),
+      ),
+    )
+    .limit(1);
+
+  const access = summarizeChannelParticipationAccess({
+    groupId: channel.groupId,
+    isPublic: channel.isPublic ?? true,
+    hasActiveGroupMembership: groupMembershipRows.length > 0,
+    isChannelMember:
+      channel.ownerId === userId || channelMembershipRows.length > 0,
+  });
+
+  return { channel, access };
 }
 
 // ---------------------------------------------------------------------------
@@ -427,6 +737,12 @@ async function authenticateSocket(
 // ---------------------------------------------------------------------------
 
 export function setupSocketHandlers(io: Server) {
+  if (!progressNudgeTimer) {
+    progressNudgeTimer = setInterval(() => {
+      void scanProgressNudges(io);
+    }, PROGRESS_NUDGE_SCAN_MS);
+  }
+
   io.on("connection", async (socket) => {
     const user = await authenticateSocket(socket);
     if (!user) {
@@ -439,7 +755,7 @@ export function setupSocketHandlers(io: Server) {
     // ----- player:join -----
     socket.on(
       "player:join",
-      (data: {
+      async (data: {
         characterId: string;
         characterName: string;
         appearance: unknown;
@@ -447,6 +763,26 @@ export function setupSocketHandlers(io: Server) {
         x: number;
         y: number;
       }) => {
+        const accessResult = await getSocketChannelParticipationAccess(data.mapId, user.userId);
+        if (!accessResult) {
+          socket.emit("channel:access-denied", {
+            channelId: data.mapId,
+            action: "player:join",
+            reason: "forbidden",
+            errorCode: "forbidden",
+          });
+          return;
+        }
+
+        if (!accessResult.access.allowed) {
+          emitChannelAccessDenied(socket, {
+            channelId: data.mapId,
+            action: "player:join",
+            reason: accessResult.access.reason,
+          });
+          return;
+        }
+
         const playerState: PlayerState = {
           id: socket.id,
           userId: user.userId,
@@ -468,6 +804,7 @@ export function setupSocketHandlers(io: Server) {
           (p) => p.mapId === data.mapId && p.id !== socket.id,
         );
         socket.emit("players:state", { players: mapPlayers });
+        await deliverPendingReportsToSocket(socket, user.userId, data.mapId);
 
         // Broadcast to others in the same map
         socket.to(data.mapId).emit("player:joined", playerState);
@@ -506,21 +843,25 @@ export function setupSocketHandlers(io: Server) {
       "npc:chat",
       async (data: { npcId: string; message: string }) => {
         const { npcId, message } = data;
+        const debugNpcLogging = process.env.NODE_ENV !== "production";
 
         // Validate
         if (!npcId || !message || typeof message !== "string") return;
         const trimmed = message.trim().slice(0, 500);
         if (!trimmed) return;
+        if (debugNpcLogging) {
+          console.log("[npc:chat]", {
+            socketId: socket.id,
+            npcId,
+            message: trimmed,
+          });
+        }
 
         // Rate limit
         const now = Date.now();
         const lastTime = lastChatTime.get(socket.id) || 0;
         if (now - lastTime < CHAT_COOLDOWN_MS) {
-          socket.emit("npc:response", {
-            npcId,
-            chunk: "[Please wait before sending another message.]",
-            done: true,
-          });
+          emitNpcSystemResponse(socket, npcId, "wait_before_sending");
           return;
         }
         lastChatTime.set(socket.id, now);
@@ -528,33 +869,278 @@ export function setupSocketHandlers(io: Server) {
         // Load NPC config
         const npcConfig = await getNpcConfig(npcId);
         if (!npcConfig) {
-          socket.emit("npc:response", {
-            npcId,
-            chunk: "[NPC not found.]",
-            done: true,
-          });
+          emitNpcSystemResponse(socket, npcId, "npc_not_found");
           return;
         }
 
-        // Add user message to conversation history
-        const convKey = `${socket.id}:${npcId}`;
-        const history = conversationHistory.get(convKey) || [];
-        history.push({ role: "user", content: trimmed });
+        const player = players.get(socket.id);
+        const historyKey = `${player?.mapId || npcConfig._channelId}:${npcId}`;
+        const history = npcChatHistory.get(historyKey) || [];
+        history.push({ role: "player", content: trimmed, timestamp: Date.now() });
 
-        // Trim history
-        if (history.length > MAX_HISTORY_MESSAGES) {
-          history.splice(0, history.length - MAX_HISTORY_MESSAGES);
+        // Inject task reminder on every NPC DM so task actions can be parsed consistently.
+        const messageToSend = withTaskReminder(trimmed);
+
+        // Stream response via OpenClaw
+        const response = await streamNpcResponse(socket, npcId, npcConfig, user.userId, messageToSend);
+        if (response) {
+          const parsed = parseNpcResponse(response);
+          const sanitizedResponse = sanitizeNpcResponseText(response);
+          history.push({ role: "npc", content: sanitizedResponse, timestamp: Date.now() });
+          if (debugNpcLogging) {
+            console.log("[npc:chat:tasks]", {
+              socketId: socket.id,
+              npcId,
+              taskCount: parsed.tasks.length,
+            });
+          }
+          if (player?.characterId) {
+            await processNpcTaskActions(io, parsed, {
+              channelId: npcConfig._channelId,
+              npcId,
+              npcName: npcConfig._name,
+              assignerCharacterId: player.characterId,
+              targetUserId: player.userId,
+            });
+          } else {
+            console.warn("[TaskManager] No characterId for socket", socket.id);
+          }
+          if (debugNpcLogging) {
+            console.log("[npc:chat:complete]", {
+              socketId: socket.id,
+              npcId,
+              responseLength: response.length,
+            });
+          }
+          socket.emit("npc:response-complete", { npcId, npcName: npcConfig._name || npcId });
         }
-        conversationHistory.set(convKey, history);
-
-        // Stream response
-        await streamNpcResponse(socket, npcId, npcConfig, history);
+        npcChatHistory.set(historyKey, history);
       },
     );
 
+    socket.on("npc:history", ({ npcId }: { npcId: string }) => {
+      if (!npcId) return;
+      const player = players.get(socket.id);
+      const historyKey = `${player?.mapId || ""}:${npcId}`;
+      const history = npcChatHistory.get(historyKey) || [];
+      socket.emit("npc:history", { npcId, messages: history });
+    });
+
+    socket.on("npc:reset-chat", ({ npcId }: { npcId: string }) => {
+      if (!npcId) return;
+      const player = players.get(socket.id);
+      const historyKey = `${player?.mapId || ""}:${npcId}`;
+      npcChatHistory.delete(historyKey);
+    });
+
+    socket.on("npc:report-consumed", async ({ reportId }: { reportId?: string }) => {
+      if (!reportId) return;
+      try {
+        await markReportConsumed(db, { npcReports }, reportId);
+      } catch (err) {
+        console.error("[task-reporting] Error marking report consumed:", err);
+      }
+    });
+
+    // ----- NPC movement -----
+    socket.on("npc:call", ({ channelId, npcId }: { channelId: string; npcId: string }) => {
+      if (!channelId || !npcId) return;
+      const player = players.get(socket.id);
+      if (!player) return;
+      io.to(channelId).emit("npc:come-to-player", {
+        npcId,
+        targetPlayerId: socket.id,
+      });
+      console.log(`[npc] ${player.characterName} called NPC ${npcId} in ${channelId}`);
+    });
+
+    socket.on("npc:return-home", ({ channelId, npcId }: { channelId: string; npcId: string }) => {
+      if (!channelId || !npcId) return;
+      io.to(channelId).emit("npc:returning", { npcId });
+    });
+
+    socket.on(
+      "npc:position-update",
+      ({ channelId, npcId, x, y, direction }: { channelId: string; npcId: string; x: number; y: number; direction: string }) => {
+        if (!channelId || !npcId) return;
+        socket.to(channelId).emit("npc:position-sync", { npcId, x, y, direction });
+      },
+    );
+
+    socket.on("npc:arrived", ({ channelId, npcId }: { channelId: string; npcId: string }) => {
+      if (!channelId || !npcId) return;
+      socket.to(channelId).emit("npc:stop-moving", { npcId });
+      console.log(`[npc] NPC ${npcId} arrived at player in ${channelId}`);
+    });
+
+    // NPC management broadcasts (re-broadcast to room)
+    socket.on("npc:broadcast-add", (npcData: unknown) => {
+      const player = players.get(socket.id);
+      if (!player) return;
+      socket.to(player.mapId).emit("npc:added", npcData);
+    });
+
+    socket.on("npc:broadcast-update", (data: unknown) => {
+      const player = players.get(socket.id);
+      if (!player) return;
+      socket.to(player.mapId).emit("npc:updated", data);
+    });
+
+    socket.on("npc:broadcast-remove", (data: unknown) => {
+      const player = players.get(socket.id);
+      if (!player) return;
+      socket.to(player.mapId).emit("npc:removed", data);
+    });
+
+    socket.on("task:list", async ({ channelId, npcId }: { channelId?: string | null; npcId?: string | null }) => {
+      try {
+        const taskList = npcId
+          ? await taskManager.getTasksByNpc(npcId)
+          : channelId
+            ? await taskManager.getTasksByChannel(channelId)
+            : [];
+        socket.emit("task:list-response", { tasks: taskList, npcId: npcId || null });
+      } catch (err) {
+        console.error("[TaskManager] Error fetching tasks:", err);
+        socket.emit("task:list-response", { tasks: [], npcId: npcId || null });
+      }
+    });
+
+    socket.on("task:delete", async ({ taskId }: { taskId: string }) => {
+      try {
+        const player = players.get(socket.id);
+        if (!player || !taskId) return;
+        const deleted = await taskManager.deleteTask(taskId, player.mapId);
+        if (deleted) {
+          io.to(player.mapId).emit("task:deleted", { taskId });
+        }
+      } catch (err) {
+        console.error("[TaskManager] Error deleting task:", err);
+      }
+    });
+
+    socket.on("task:request-report", async ({ taskId }: { taskId: string }) => {
+      try {
+        const player = players.get(socket.id);
+        if (!player || !taskId) return;
+        const task = await taskManager.getTaskById(taskId, player.mapId) as ManagedTask | null;
+        if (!task) return;
+        if (task.status === "complete" || task.status === "cancelled") return;
+
+        let runnableTask = task;
+        if (task.status === "stalled") {
+          const resumedTask = await taskManager.resumeTask(task.id, player.mapId) as ManagedTask | null;
+          if (!resumedTask) return;
+          io.to(player.mapId).emit("task:updated", { task: resumedTask, action: "resume" });
+          runnableTask = resumedTask;
+        }
+
+        appendNpcHistoryMessageForUser(
+          io,
+          player.userId,
+          player.mapId,
+          runnableTask.npcId,
+          buildTaskActionStartMessage({ title: runnableTask.title }, "request-report"),
+        );
+
+        await runProgressNudgeForTask(io, {
+          id: runnableTask.id,
+          channelId: runnableTask.channelId,
+          npcId: runnableTask.npcId,
+          assignerId: runnableTask.assignerId,
+          npcTaskId: runnableTask.npcTaskId,
+          title: runnableTask.title,
+          summary: runnableTask.summary,
+          status: runnableTask.status,
+          autoNudgeCount: runnableTask.autoNudgeCount,
+          autoNudgeMax: runnableTask.autoNudgeMax,
+        }, buildManualTaskReportPrompt({
+          title: runnableTask.title,
+          summary: runnableTask.summary,
+          npcTaskId: runnableTask.npcTaskId,
+          status: runnableTask.status,
+        }), "manual");
+      } catch (err) {
+        console.error("[TaskManager] Error requesting task report:", err);
+      }
+    });
+
+    socket.on("task:resume", async ({ taskId }: { taskId: string }) => {
+      try {
+        const player = players.get(socket.id);
+        if (!player || !taskId) return;
+
+        const resumedTask = await taskManager.resumeTask(taskId, player.mapId) as ManagedTask | null;
+        if (resumedTask) {
+          io.to(player.mapId).emit("task:updated", { task: resumedTask, action: "resume" });
+
+          appendNpcHistoryMessageForUser(
+            io,
+            player.userId,
+            player.mapId,
+            resumedTask.npcId,
+            buildTaskActionStartMessage({ title: resumedTask.title }, "resume"),
+          );
+
+          await runProgressNudgeForTask(io, {
+            id: resumedTask.id,
+            channelId: resumedTask.channelId,
+            npcId: resumedTask.npcId,
+            assignerId: resumedTask.assignerId,
+            npcTaskId: resumedTask.npcTaskId,
+            title: resumedTask.title,
+            summary: resumedTask.summary,
+            status: resumedTask.status,
+            autoNudgeCount: resumedTask.autoNudgeCount,
+            autoNudgeMax: resumedTask.autoNudgeMax,
+          }, buildResumeTaskExecutionPrompt({
+            title: resumedTask.title,
+            summary: resumedTask.summary,
+            npcTaskId: resumedTask.npcTaskId,
+          }), "resume");
+        }
+      } catch (err) {
+        console.error("[TaskManager] Error resuming task:", err);
+      }
+    });
+
+    socket.on("task:complete", async ({ taskId }: { taskId: string }) => {
+      try {
+        const player = players.get(socket.id);
+        if (!player || !taskId) return;
+
+        const completedTask = await taskManager.completeTask(taskId, player.mapId) as ManagedTask | null;
+        if (completedTask) {
+          io.to(player.mapId).emit("task:updated", { task: completedTask, action: "complete_manual" });
+        }
+      } catch (err) {
+        console.error("[TaskManager] Error completing task:", err);
+      }
+    });
+
     // ----- meeting:join -----
-    socket.on("meeting:join", ({ channelId }: { channelId: string }) => {
+    socket.on("meeting:join", async ({ channelId }: { channelId: string }) => {
       if (!channelId) return;
+
+      const accessResult = await getSocketChannelParticipationAccess(channelId, user.userId);
+      if (!accessResult) {
+        socket.emit("channel:access-denied", {
+          channelId,
+          action: "meeting:join",
+          reason: "forbidden",
+          errorCode: "forbidden",
+        });
+        return;
+      }
+
+      if (!accessResult.access.allowed) {
+        emitChannelAccessDenied(socket, {
+          channelId,
+          action: "meeting:join",
+          reason: accessResult.access.reason,
+        });
+        return;
+      }
 
       let room = meetingRooms.get(channelId);
       if (!room) {
@@ -611,6 +1197,37 @@ export function setupSocketHandlers(io: Server) {
       async ({ channelId, message }: { channelId: string; message: string }) => {
         if (!channelId || !message) return;
 
+        const accessResult = await getSocketChannelParticipationAccess(channelId, user.userId);
+        if (!accessResult) {
+          socket.emit("channel:access-denied", {
+            channelId,
+            action: "meeting:chat",
+            reason: "forbidden",
+            errorCode: "forbidden",
+          });
+          return;
+        }
+
+        if (!accessResult.access.allowed) {
+          emitChannelAccessDenied(socket, {
+            channelId,
+            action: "meeting:chat",
+            reason: accessResult.access.reason,
+          });
+          return;
+        }
+
+        const room = meetingRooms.get(channelId);
+        if (!room || !room.participants.has(socket.id)) {
+          socket.emit("channel:access-denied", {
+            channelId,
+            action: "meeting:chat",
+            reason: "forbidden",
+            errorCode: "forbidden",
+          });
+          return;
+        }
+
         // Rate limit
         const now = Date.now();
         if (now - (lastChatTime.get(socket.id) || 0) < CHAT_COOLDOWN_MS) return;
@@ -630,11 +1247,6 @@ export function setupSocketHandlers(io: Server) {
         };
 
         // Store and broadcast
-        let room = meetingRooms.get(channelId);
-        if (!room) {
-          room = { participants: new Set(), messages: [] };
-          meetingRooms.set(channelId, room);
-        }
         room.messages.push(userMessage);
         if (room.messages.length > 100) {
           room.messages.splice(0, room.messages.length - 100);
@@ -671,20 +1283,18 @@ export function setupSocketHandlers(io: Server) {
         const py = Math.round(player.y);
         console.log(`[socket] Saving position for ${player.characterName}: (${px}, ${py}) channel=${player.mapId} user=${player.userId}`);
         try {
-          // Use the shared db + schema from src/db (supports both PG and SQLite)
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const dbModule = require("../db");
-          const result = dbModule.db.update(dbModule.channelMembers)
+          const result = db
+            .update(channelMembers)
             .set({ lastX: px, lastY: py })
             .where(
               and(
-                eq(dbModule.channelMembers.channelId, player.mapId),
-                eq(dbModule.channelMembers.userId, player.userId),
-              )
+                eq(channelMembers.channelId, player.mapId),
+                eq(channelMembers.userId, player.userId),
+              ),
             );
           // Handle both sync (SQLite) and async (PG)
-          if (result && typeof result.then === "function") {
-            result.then(() => {
+          if (result && typeof (result as unknown as Promise<unknown>).then === "function") {
+            (result as unknown as Promise<unknown>).then(() => {
               console.log(`[socket] Position saved OK for ${player.characterName}`);
             }).catch((err: Error) => {
               console.error("[socket] Position save failed (async):", err.message);
@@ -710,14 +1320,6 @@ export function setupSocketHandlers(io: Server) {
         }
       }
 
-      // Clean up conversation history for this socket
-      const keysToDelete: string[] = [];
-      conversationHistory.forEach((_, key) => {
-        if (key.startsWith(`${socket.id}:`)) {
-          keysToDelete.push(key);
-        }
-      });
-      keysToDelete.forEach((key) => conversationHistory.delete(key));
       lastChatTime.delete(socket.id);
     });
   });
