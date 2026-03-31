@@ -5,9 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PasswordModal from "@/components/PasswordModal";
 import { useT } from "@/lib/i18n";
+import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import LogoutButton from "@/components/LogoutButton";
 import { Lock, X } from "lucide-react";
+import type { GroupMemberRole } from "@/lib/rbac/constants";
 
 interface Channel {
   id: string;
@@ -22,6 +24,18 @@ interface Channel {
   maxPlayers: number;
   playerCount: number;
   createdAt: string;
+  canJoin?: boolean;
+  requiresGroupMembership?: boolean;
+  requiresPassword?: boolean;
+  groupId?: string | null;
+  groupName?: string | null;
+  joinAccessReason?: string | null;
+}
+
+interface GroupOption {
+  id: string;
+  name: string;
+  role?: GroupMemberRole;
 }
 
 export default function ChannelsPage() {
@@ -50,6 +64,7 @@ function ChannelsPageInner() {
   const [joinError, setJoinError] = useState("");
   const [passwordChannel, setPasswordChannel] = useState<Channel | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [availableGroups, setAvailableGroups] = useState<GroupOption[]>([]);
 
   useEffect(() => {
     if (!characterId) {
@@ -57,11 +72,16 @@ function ChannelsPageInner() {
       return;
     }
 
-    fetch("/api/channels")
-      .then((res) => res.json())
-      .then((data) => {
-        setChannels(data.channels || []);
-        setCurrentUserId(data.currentUserId || null);
+    Promise.all([
+      fetch("/api/channels").then((res) => res.json()),
+      fetch("/api/groups")
+        .then((res) => (res.ok ? res.json() : { groups: [] }))
+        .catch(() => ({ groups: [] })),
+    ])
+      .then(([channelData, groupData]) => {
+        setChannels(channelData.channels || []);
+        setCurrentUserId(channelData.currentUserId || null);
+        setAvailableGroups(groupData.groups || []);
         setLoading(false);
       })
       .catch(() => {
@@ -83,7 +103,22 @@ function ChannelsPageInner() {
   };
 
   const handleChannelClick = (channel: Channel) => {
-    if (channel.isLocked && !channel.isMember) {
+    if (channel.canJoin === false) {
+      if (channel.requiresGroupMembership) {
+        setJoinError(t("channels.browseOnlyHint"));
+      } else if (channel.joinAccessReason) {
+        setJoinError(
+          getLocalizedErrorMessage(
+            t,
+            { errorCode: channel.joinAccessReason },
+            "errors.forbidden",
+          ),
+        );
+      }
+      return;
+    }
+
+    if ((channel.requiresPassword ?? channel.isLocked) && !channel.isMember) {
       setPasswordChannel(channel);
     } else {
       router.push(`/game?channelId=${channel.id}&characterId=${characterId}`);
@@ -115,7 +150,7 @@ function ChannelsPageInner() {
       const data = await res.json();
 
       if (!res.ok) {
-        setJoinError(data.error || t("channels.invalidInvite"));
+        setJoinError(getLocalizedErrorMessage(t, data, "channels.invalidInvite"));
         return;
       }
 
@@ -124,6 +159,8 @@ function ChannelsPageInner() {
       setJoinError(t("channels.joinFailed"));
     }
   };
+
+  const canCreateChannels = availableGroups.length > 0;
 
   if (loading) {
     return (
@@ -147,14 +184,33 @@ function ChannelsPageInner() {
           <div className="flex items-center gap-3">
             <LogoutButton />
             <LocaleSwitcher />
-            <Link
-              href={`/channels/create?characterId=${characterId}`}
-              className="px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold"
-            >
-              {t("channels.createChannel")}
-            </Link>
+            {canCreateChannels
+              ? (
+                <Link
+                  href={`/channels/create?characterId=${characterId}`}
+                  className="px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold"
+                >
+                  {t("channels.createChannel")}
+                </Link>
+              )
+              : (
+                <button
+                  type="button"
+                  disabled
+                  className="px-4 py-2 bg-surface-raised text-text-dim rounded font-semibold opacity-60 cursor-not-allowed"
+                  title={t("channels.create.unavailableHint")}
+                >
+                  {t("channels.createChannel")}
+                </button>
+              )}
           </div>
         </div>
+
+        {!canCreateChannels && (
+          <div className="mb-6 rounded-lg border border-border bg-surface px-4 py-3 text-sm text-text-muted">
+            {t("channels.create.unavailableHint")}
+          </div>
+        )}
 
         {/* Join by code */}
         <div className="mb-8 flex gap-2 items-center">
@@ -188,7 +244,11 @@ function ChannelsPageInner() {
               <div
                 key={channel.id}
                 onClick={() => handleChannelClick(channel)}
-                className="bg-surface p-5 rounded-lg cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                className={`bg-surface p-5 rounded-lg transition-all ${
+                  channel.canJoin === false
+                    ? "cursor-default ring-1 ring-border"
+                    : "cursor-pointer hover:ring-2 hover:ring-primary"
+                }`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   {channel.isLocked && <Lock className="w-4 h-4 text-text-muted shrink-0" />}
@@ -206,6 +266,26 @@ function ChannelsPageInner() {
                 {channel.description && (
                   <p className="text-text-muted text-sm mb-3 line-clamp-2">
                     {channel.description}
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <span className="rounded-full bg-surface-raised px-2 py-1 text-[11px] font-medium text-text-muted">
+                    {channel.isPublic ? t("channels.public") : t("channels.private")}
+                  </span>
+                  {channel.groupName && (
+                    <span className="rounded-full bg-surface-raised px-2 py-1 text-[11px] font-medium text-text-muted">
+                      {t("channels.group")}: {channel.groupName}
+                    </span>
+                  )}
+                  {channel.canJoin === false && channel.requiresGroupMembership && (
+                    <span className="rounded-full bg-primary-muted px-2 py-1 text-[11px] font-medium text-primary-light">
+                      {t("channels.browseOnly")}
+                    </span>
+                  )}
+                </div>
+                {channel.canJoin === false && channel.requiresGroupMembership && (
+                  <p className="mb-3 text-xs text-text-muted">
+                    {t("channels.browseOnlyHint")}
                   </p>
                 )}
                 <div className="flex items-center justify-between text-xs text-text-dim">

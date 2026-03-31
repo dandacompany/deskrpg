@@ -7,6 +7,13 @@ import { NPC_PRESETS } from "@/lib/npc-presets";
 import { PERSONA_PRESETS, applyPresetName } from "@/lib/npc-persona-presets";
 import { useT } from "@/lib/i18n";
 import { ChevronRight, Plus, Trash2, ExternalLink } from "lucide-react";
+import type { GroupMemberRole } from "@/lib/rbac/constants";
+
+interface GroupOption {
+  id: string;
+  name: string;
+  role?: GroupMemberRole;
+}
 
 export default function CreateChannelPage() {
   return (
@@ -32,6 +39,9 @@ function CreateChannelPageInner() {
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [mapTemplateId, setMapTemplateId] = useState("");
+  const [groupId, setGroupId] = useState("");
+  const [groups, setGroups] = useState<GroupOption[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(true);
   const [templateList, setTemplateList] = useState<{ id: string; name: string; icon: string; description: string | null; cols: number; rows: number }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -97,8 +107,39 @@ function CreateChannelPageInner() {
       });
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/groups")
+      .then((res) => (res.ok ? res.json() : { groups: [] }))
+      .then((data) => {
+        if (cancelled) return;
+        const nextGroups = Array.isArray(data.groups) ? data.groups : [];
+        setGroups(nextGroups);
+        setGroupId((currentGroupId) => {
+          if (currentGroupId && nextGroups.some((group: GroupOption) => group.id === currentGroupId)) {
+            return currentGroupId;
+          }
+
+          const preferredGroup = nextGroups.find((group: GroupOption) => group.role !== "member") ?? nextGroups[0];
+          return preferredGroup?.id ?? "";
+        });
+        setLoadingGroups(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setGroups([]);
+        setLoadingGroups(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const hasGatewayUrl = gatewayUrl.trim().length > 0;
   const hasTestAgents = testResult?.ok && testResult.agents && testResult.agents.length > 0;
+  const hasAvailableGroups = groups.length > 0;
 
   const handlePersonaPresetChange = (presetId: string) => {
     setPersonaPresetId(presetId);
@@ -160,6 +201,10 @@ function CreateChannelPageInner() {
       setError(t("channels.create.passwordRequired"));
       return;
     }
+    if (!groupId) {
+      setError(t("channels.create.noAvailableGroups"));
+      return;
+    }
 
     setSubmitting(true);
     setError("");
@@ -171,6 +216,7 @@ function CreateChannelPageInner() {
       const payload: Record<string, unknown> = {
         name: name.trim(),
         description: description.trim() || null,
+        groupId,
         isPublic,
         mapTemplateId,
         password: isPublic ? undefined : password,
@@ -251,6 +297,36 @@ function CreateChannelPageInner() {
               className="w-full px-3 py-2 bg-surface border border-border rounded text-text placeholder-text-dim focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent resize-none"
               placeholder={t("channels.create.descriptionPlaceholder")}
             />
+          </div>
+
+          {/* Group */}
+          <div>
+            <label className="block text-sm font-semibold mb-1">
+              {t("channels.create.group")} *
+            </label>
+            <select
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+              disabled={loadingGroups || !hasAvailableGroups}
+              className="w-full px-3 py-2 bg-surface border border-border rounded text-text focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent disabled:opacity-60"
+            >
+              {hasAvailableGroups
+                ? groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))
+                : (
+                  <option value="">
+                    {loadingGroups ? t("common.loading") : t("channels.create.noAvailableGroups")}
+                  </option>
+                )}
+            </select>
+            {!loadingGroups && !hasAvailableGroups && (
+              <p className="mt-2 text-sm text-text-muted">
+                {t("channels.create.noAvailableGroups")}
+              </p>
+            )}
           </div>
 
           {/* Public/Private */}
@@ -609,7 +685,7 @@ function CreateChannelPageInner() {
           <div className="flex items-center gap-4 pt-2">
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || loadingGroups || !hasAvailableGroups}
               className="px-6 py-2 bg-primary hover:bg-primary-hover rounded font-semibold disabled:opacity-50"
             >
               {submitting ? t("channels.create.creating") : t("common.create")}
