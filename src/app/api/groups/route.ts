@@ -1,5 +1,8 @@
+import { randomUUID } from "node:crypto";
+
 import { db, groupMembers, groups } from "@/db";
 import {
+  buildGroupSlugCandidates,
   getAuthenticatedUserId,
   getUserSystemRole,
   systemAdminRequiredResponse,
@@ -16,26 +19,6 @@ function slugifyGroupName(name: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "group";
-}
-
-async function buildUniqueSlug(baseSlug: string) {
-  let candidate = baseSlug;
-  let suffix = 1;
-
-  while (true) {
-    const [existing] = await db
-      .select({ id: groups.id })
-      .from(groups)
-      .where(eq(groups.slug, candidate))
-      .limit(1);
-
-    if (!existing) {
-      return candidate;
-    }
-
-    suffix += 1;
-    candidate = `${baseSlug}-${suffix}`;
-  }
 }
 
 export async function GET(req: NextRequest) {
@@ -119,19 +102,38 @@ export async function POST(req: NextRequest) {
   const requestedSlug = typeof slug === "string" && slug.trim()
     ? slugifyGroupName(slug)
     : slugifyGroupName(name);
-  const uniqueSlug = await buildUniqueSlug(requestedSlug);
   const now = new Date().toISOString();
 
   const created = await db.transaction(async (tx) => {
-    const [group] = await tx
-      .insert(groups)
-      .values({
-        name: name.trim(),
-        slug: uniqueSlug,
-        description: typeof description === "string" ? description.trim() : null,
-        createdBy: userId,
-      })
-      .returning();
+    const slugCandidates = [
+      ...buildGroupSlugCandidates(requestedSlug, 8),
+      `${requestedSlug}-${randomUUID().slice(0, 8)}`,
+    ];
+
+    let group: typeof groups.$inferSelect | null = null;
+    for (const candidate of slugCandidates) {
+      const inserted = await tx
+        .insert(groups)
+        .values({
+          name: name.trim(),
+          slug: candidate,
+          description: typeof description === "string" ? description.trim() : null,
+          createdBy: userId,
+        })
+        .onConflictDoNothing({
+          target: groups.slug,
+        })
+        .returning();
+
+      if (inserted[0]) {
+        group = inserted[0];
+        break;
+      }
+    }
+
+    if (!group) {
+      throw new Error("failed_to_allocate_group_slug");
+    }
 
     const [membership] = await tx
       .insert(groupMembers)

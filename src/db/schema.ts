@@ -94,6 +94,7 @@ export const groupJoinRequests = pgTable("group_join_requests", {
 }, (table) => [
   index("idx_group_join_requests_group_id").on(table.groupId),
   index("idx_group_join_requests_user_id").on(table.userId),
+  unique("group_join_requests_group_user_unique").on(table.groupId, table.userId),
 ]);
 
 export const groupPermissions = pgTable("group_permissions", {
@@ -165,6 +166,7 @@ export const mapTemplates = pgTable("map_templates", {
   layers: jsonb("layers"),
   objects: jsonb("objects"),
   tiledJson: jsonb("tiled_json"),
+  thumbnail: text("thumbnail"),
   spawnCol: integer("spawn_col").notNull(),
   spawnRow: integer("spawn_row").notNull(),
   tags: varchar("tags", { length: 500 }),
@@ -188,6 +190,20 @@ export const npcs = pgTable("npcs", {
   index("idx_npcs_channel_id").on(table.channelId),
   unique("npcs_channel_position_unique").on(table.channelId, table.positionX, table.positionY),
 ]);
+
+export const npcReports = pgTable("npc_reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  channelId: uuid("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+  npcId: uuid("npc_id").notNull().references(() => npcs.id, { onDelete: "cascade" }),
+  taskId: uuid("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  targetUserId: uuid("target_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: varchar("kind", { length: 20 }).notNull(),
+  message: text("message").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+});
 
 export const chatMessages = pgTable("chat_messages", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -226,6 +242,12 @@ export const tasks = pgTable("tasks", {
   title: varchar("title", { length: 200 }).notNull(),
   summary: text("summary"),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
+  autoNudgeCount: integer("auto_nudge_count").notNull().default(0),
+  autoNudgeMax: integer("auto_nudge_max").notNull().default(5),
+  lastNudgedAt: timestamp("last_nudged_at", { withTimezone: true }),
+  lastReportedAt: timestamp("last_reported_at", { withTimezone: true }),
+  stalledAt: timestamp("stalled_at", { withTimezone: true }),
+  stalledReason: varchar("stalled_reason", { length: 50 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),

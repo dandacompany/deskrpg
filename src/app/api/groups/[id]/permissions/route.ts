@@ -1,6 +1,7 @@
 import { db, groupPermissions } from "@/db";
 import { PERMISSION_KEYS } from "@/lib/rbac/constants";
 import {
+  canWriteGroupPermissionEffect,
   getAuthenticatedUserId,
   getGroupActorContext,
   groupAdminRequiredResponse,
@@ -79,6 +80,13 @@ export async function PUT(
     return NextResponse.json(
       { errorCode: "missing_required_fields", error: "effect must be allow, deny, or null" },
       { status: 400 },
+    );
+  }
+
+  if (!canWriteGroupPermissionEffect({ permissionKey, effect })) {
+    return NextResponse.json(
+      { errorCode: "forbidden", error: "cannot deny manage_group_permissions" },
+      { status: 403 },
     );
   }
 

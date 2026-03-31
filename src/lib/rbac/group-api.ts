@@ -7,6 +7,9 @@ import { and, eq } from "drizzle-orm";
 import type { GroupMemberRole, PermissionKey, SystemRole } from "./constants";
 import { resolvePermission, type PermissionEffect } from "./permissions";
 
+type JoinRequestStatus = "pending" | "approved" | "rejected";
+type JoinRequestAction = "approve" | "reject";
+
 export type GroupActorContext = {
   userId: string;
   systemRole: SystemRole;
@@ -20,6 +23,62 @@ export type GroupActorContext = {
   };
   groupRole: GroupMemberRole | null;
 };
+
+export function canWriteGroupPermissionEffect(input: {
+  permissionKey: PermissionKey;
+  effect: PermissionEffect | null;
+}) {
+  return !(
+    input.permissionKey === "manage_group_permissions" &&
+    input.effect === "deny"
+  );
+}
+
+export function buildGroupSlugCandidates(baseSlug: string, attempts: number) {
+  return Array.from({ length: attempts }, (_, index) =>
+    index === 0 ? baseSlug : `${baseSlug}-${index + 1}`,
+  );
+}
+
+export function resolveJoinRequestReview(input: {
+  currentStatus: JoinRequestStatus;
+  action: JoinRequestAction;
+  existingMembershipRole: GroupMemberRole | null;
+}) {
+  if (input.currentStatus !== "pending") {
+    return {
+      ok: false as const,
+      status: 409,
+      errorCode: "forbidden" as const,
+    };
+  }
+
+  if (input.action === "reject") {
+    return {
+      ok: true as const,
+      nextStatus: "rejected" as const,
+      shouldUpsertMembership: false,
+      preservedMembershipRole: input.existingMembershipRole,
+    };
+  }
+
+  if (input.existingMembershipRole) {
+    return {
+      ok: true as const,
+      nextStatus: "approved" as const,
+      shouldUpsertMembership: false,
+      preservedMembershipRole: input.existingMembershipRole,
+    };
+  }
+
+  return {
+    ok: true as const,
+    nextStatus: "approved" as const,
+    shouldUpsertMembership: true,
+    membershipRole: "member" as const,
+    preservedMembershipRole: null,
+  };
+}
 
 export function getAuthenticatedUserId(req: NextRequest): string | null {
   return getUserId(req);

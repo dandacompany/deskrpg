@@ -5,6 +5,7 @@ import {
   groupAdminRequiredResponse,
   groupNotFoundResponse,
   hasGroupPermission,
+  resolveJoinRequestReview,
   unauthorizedResponse,
 } from "@/lib/rbac/group-api";
 import { and, eq } from "drizzle-orm";
@@ -76,34 +77,28 @@ export async function POST(
     return NextResponse.json({ alreadyMember: true });
   }
 
-  const [pending] = await db
-    .select({
-      id: groupJoinRequests.id,
-      status: groupJoinRequests.status,
-      message: groupJoinRequests.message,
-      createdAt: groupJoinRequests.createdAt,
-    })
-    .from(groupJoinRequests)
-    .where(
-      and(
-        eq(groupJoinRequests.groupId, groupId),
-        eq(groupJoinRequests.userId, userId),
-        eq(groupJoinRequests.status, "pending"),
-      ),
-    )
-    .limit(1);
-
-  if (pending) {
-    return NextResponse.json({ joinRequest: pending, created: false });
-  }
-
   const body = await req.json();
+  const now = new Date().toISOString();
   const [joinRequest] = await db
     .insert(groupJoinRequests)
     .values({
       groupId,
       userId,
       message: typeof body?.message === "string" ? body.message.trim() : null,
+      status: "pending",
+      reviewedBy: null,
+      reviewedAt: null,
+      createdAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [groupJoinRequests.groupId, groupJoinRequests.userId],
+      set: {
+        status: "pending",
+        message: typeof body?.message === "string" ? body.message.trim() : null,
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: now,
+      },
     })
     .returning();
 
@@ -156,42 +151,81 @@ export async function PATCH(
     );
   }
 
+  const [membership] = await db
+    .select({ role: groupMembers.role })
+    .from(groupMembers)
+    .where(
+      and(
+        eq(groupMembers.groupId, groupId),
+        eq(groupMembers.userId, existing.userId),
+      ),
+    )
+    .limit(1);
+
+  const review = resolveJoinRequestReview({
+    currentStatus: existing.status as "pending" | "approved" | "rejected",
+    action,
+    existingMembershipRole: (membership?.role as "group_admin" | "member" | null | undefined) ?? null,
+  });
+
+  if (!review.ok) {
+    return NextResponse.json(
+      { errorCode: review.errorCode, error: "join request is not pending" },
+      { status: review.status },
+    );
+  }
+
   const now = new Date().toISOString();
-  const status = action === "approve" ? "approved" : "rejected";
-
-  const result = await db.transaction(async (tx) => {
-    const [updatedRequest] = await tx
-      .update(groupJoinRequests)
-      .set({
-        status,
-        reviewedBy: userId,
-        reviewedAt: now,
-      })
-      .where(eq(groupJoinRequests.id, requestId))
-      .returning();
-
-    if (action === "approve") {
-      await tx
-        .insert(groupMembers)
-        .values({
-          groupId,
-          userId: existing.userId,
-          role: "member",
-          approvedBy: userId,
-          approvedAt: now,
+  let result;
+  try {
+    result = await db.transaction(async (tx) => {
+      const updatedRows = await tx
+        .update(groupJoinRequests)
+        .set({
+          status: review.nextStatus,
+          reviewedBy: userId,
+          reviewedAt: now,
         })
-        .onConflictDoUpdate({
-          target: [groupMembers.groupId, groupMembers.userId],
-          set: {
-            role: "member",
+        .where(
+          and(
+            eq(groupJoinRequests.id, requestId),
+            eq(groupJoinRequests.groupId, groupId),
+            eq(groupJoinRequests.status, "pending"),
+          ),
+        )
+        .returning();
+
+      const updatedRequest = updatedRows[0];
+      if (!updatedRequest) {
+        throw new Error("join_request_not_pending");
+      }
+
+      if (review.shouldUpsertMembership) {
+        await tx
+          .insert(groupMembers)
+          .values({
+            groupId,
+            userId: existing.userId,
+            role: review.membershipRole,
             approvedBy: userId,
             approvedAt: now,
-          },
-        });
-    }
+          })
+          .onConflictDoNothing({
+            target: [groupMembers.groupId, groupMembers.userId],
+          });
+      }
 
-    return updatedRequest;
-  });
+      return updatedRequest;
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "join_request_not_pending") {
+      return NextResponse.json(
+        { errorCode: "forbidden", error: "join request is not pending" },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
 
   return NextResponse.json({ joinRequest: result });
 }

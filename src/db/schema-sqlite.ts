@@ -94,6 +94,7 @@ export const groupJoinRequests = sqliteTable("group_join_requests", {
 }, (table) => [
   index("idx_group_join_requests_group_id").on(table.groupId),
   index("idx_group_join_requests_user_id").on(table.userId),
+  unique("group_join_requests_group_user_unique").on(table.groupId, table.userId),
 ]);
 
 export const groupPermissions = sqliteTable("group_permissions", {
@@ -165,6 +166,7 @@ export const mapTemplates = sqliteTable("map_templates", {
   layers: text("layers"),
   objects: text("objects"),
   tiledJson: text("tiled_json"),
+  thumbnail: text("thumbnail"),
   spawnCol: integer("spawn_col").notNull(),
   spawnRow: integer("spawn_row").notNull(),
   tags: text("tags"),
@@ -188,6 +190,20 @@ export const npcs = sqliteTable("npcs", {
   index("idx_npcs_channel_id").on(table.channelId),
   unique("npcs_channel_position_unique").on(table.channelId, table.positionX, table.positionY),
 ]);
+
+export const npcReports = sqliteTable("npc_reports", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  channelId: text("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+  npcId: text("npc_id").notNull().references(() => npcs.id, { onDelete: "cascade" }),
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  targetUserId: text("target_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()).notNull(),
+  deliveredAt: text("delivered_at"),
+  consumedAt: text("consumed_at"),
+});
 
 export const chatMessages = sqliteTable("chat_messages", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -226,6 +242,12 @@ export const tasks = sqliteTable("tasks", {
   title: text("title").notNull(),
   summary: text("summary"),
   status: text("status").notNull().default("pending"),
+  autoNudgeCount: integer("auto_nudge_count").notNull().default(0),
+  autoNudgeMax: integer("auto_nudge_max").notNull().default(5),
+  lastNudgedAt: text("last_nudged_at"),
+  lastReportedAt: text("last_reported_at"),
+  stalledAt: text("stalled_at"),
+  stalledReason: text("stalled_reason"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
   completedAt: text("completed_at"),

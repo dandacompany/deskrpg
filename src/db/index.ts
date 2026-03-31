@@ -34,6 +34,7 @@ export const channelMembers = activeSchema.channelMembers;
 export const maps = activeSchema.maps;
 export const mapPortals = activeSchema.mapPortals;
 export const npcs = activeSchema.npcs;
+export const npcReports = activeSchema.npcReports;
 export const chatMessages = activeSchema.chatMessages;
 export const meetingMinutes = activeSchema.meetingMinutes;
 export const tasks = activeSchema.tasks;
@@ -152,6 +153,42 @@ function assignLegacyChannelsToDefaultGroup(sqlite: BetterSqlite3.Database, grou
   sqlite.prepare("UPDATE channels SET group_id = ? WHERE group_id IS NULL").run(groupId);
 }
 
+function dedupeSqliteGroupJoinRequests(sqlite: BetterSqlite3.Database) {
+  if (
+    !sqliteTableExists(sqlite, "group_join_requests") ||
+    !sqliteTableExists(sqlite, "users") ||
+    !sqliteTableExists(sqlite, "groups")
+  ) {
+    return;
+  }
+
+  const rows = sqlite.prepare(`
+    SELECT rowid, group_id, user_id, status, created_at
+    FROM group_join_requests
+    ORDER BY
+      group_id ASC,
+      user_id ASC,
+      CASE status
+        WHEN 'pending' THEN 0
+        WHEN 'approved' THEN 1
+        ELSE 2
+      END ASC,
+      created_at DESC,
+      rowid DESC
+  `).all() as Array<{ rowid: number; group_id: string; user_id: string }>;
+
+  const seen = new Set<string>();
+  const deleteStmt = sqlite.prepare("DELETE FROM group_join_requests WHERE rowid = ?");
+  for (const row of rows) {
+    const key = `${row.group_id}:${row.user_id}`;
+    if (seen.has(key)) {
+      deleteStmt.run(row.rowid);
+      continue;
+    }
+    seen.add(key);
+  }
+}
+
 export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS groups (
@@ -199,7 +236,8 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
       message TEXT,
       reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
       reviewed_at TEXT,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      UNIQUE(group_id, user_id)
     );
     CREATE INDEX IF NOT EXISTS idx_group_join_requests_group_id ON group_join_requests(group_id);
     CREATE INDEX IF NOT EXISTS idx_group_join_requests_user_id ON group_join_requests(user_id);
@@ -258,6 +296,9 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
     "ALTER TABLE tasks ADD COLUMN stalled_reason TEXT",
   ]);
 
+  dedupeSqliteGroupJoinRequests(sqlite);
+  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS group_join_requests_group_user_unique ON group_join_requests(group_id, user_id)");
+
   sqlite.transaction(() => {
     const bootstrapUserId = ensureSqliteBootstrapUser(sqlite);
     const defaultGroupId = bootstrapUserId
@@ -268,7 +309,6 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
     assignLegacyChannelsToDefaultGroup(sqlite, defaultGroupId);
   })();
 }
-
 
 export function getDb(): DbInstance {
   if (!_db) {
