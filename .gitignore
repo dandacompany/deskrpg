@@ -65,4 +65,7 @@ public/assets/built-in/downloads/
 tmp/*
 !tmp/.gitkeep
 tests/
+*.test.js
+*.test.ts
+*.test.tsx
 deploy/
