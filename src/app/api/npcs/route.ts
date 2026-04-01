@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const channelId = req.nextUrl.searchParams.get("channelId");
     let rows;
     if (channelId) {
-      const gatewayState = await getGatewayRuntimeStateForChannel(channelId);
+      const gatewayState = await getGatewayRuntimeStateForChannel(channelId, { forceRefresh: true });
       if (gatewayState.status !== "valid") {
         return NextResponse.json({ npcs: [] });
       }

@@ -404,13 +404,16 @@ export async function persistGatewayValidationState(
     .where(eq(gatewayResources.id, gatewayId));
 }
 
-export async function getGatewayRuntimeStateForChannel(channelId: string) {
+export async function getGatewayRuntimeStateForChannel(
+  channelId: string,
+  options?: { forceRefresh?: boolean },
+) {
   const binding = await getChannelGatewayBinding(channelId);
   if (!binding) {
     return { status: "unbound" as const, gateway: null };
   }
 
-  const cached = getCachedGatewayRuntimeState(binding.resource.id);
+  const cached = options?.forceRefresh ? null : getCachedGatewayRuntimeState(binding.resource.id);
   if (cached) {
     return { ...cached, gateway: binding };
   }
