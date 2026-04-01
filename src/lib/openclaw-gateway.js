@@ -312,7 +312,7 @@ class OpenClawGateway {
           stream.resolve(finalText);
         } else if (p.state === "error") {
           if (stream._timer) clearTimeout(stream._timer);
-          stream.reject(new Error(p.error || "Chat error"));
+          stream.reject(new Error(p.error || p.errorMessage || "Chat error"));
         }
         return;
       }

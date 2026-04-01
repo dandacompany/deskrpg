@@ -1,5 +1,4 @@
-# docker/docker-compose.external.yml — External gateway: DeskRPG + PostgreSQL (no SSH tunnel proxy)
-# Use this when you bring your own OpenClaw gateway — no cloudflared tunnel needed.
+# docker/docker-compose.external.yml — DeskRPG + PostgreSQL
 services:
   deskrpg-db:
     image: postgres:16-alpine
@@ -20,23 +19,18 @@ services:
       retries: 5
 
   deskrpg-app:
-    build:
-      context: ..
-      dockerfile: Dockerfile
+    image: ${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}
     container_name: deskrpg-app
     restart: unless-stopped
     ports:
       - "3102:3000"
       - "3103:3001"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - ../public/assets:/app/public/assets
     environment:
       DATABASE_URL: postgresql://deskrpg:${POSTGRES_PASSWORD:-deskrpg_dev_pw}@deskrpg-db:5432/deskrpg
       JWT_SECRET: ${JWT_SECRET}
-      OPENCLAW_WS_URL: ${OPENCLAW_WS_URL:-ws://156.67.219.3:18800}
-      OPENCLAW_TOKEN: ${OPENCLAW_TOKEN}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     depends_on:
       deskrpg-db:
         condition: service_healthy

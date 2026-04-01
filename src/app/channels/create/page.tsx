@@ -1,12 +1,16 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { NPC_PRESETS } from "@/lib/npc-presets";
 import { PERSONA_PRESETS, applyPresetName } from "@/lib/npc-persona-presets";
-import { useT } from "@/lib/i18n";
-import { ChevronRight, Plus, Trash2, ExternalLink } from "lucide-react";
+import { useLocale, useT } from "@/lib/i18n";
+import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
+import { ChevronRight } from "lucide-react";
+import MapTemplateGrid from "@/components/map-editor/MapTemplateGrid";
+import { getDefaultMeetingProtocol, localizeNpcPromptDocument } from "@/lib/npc-agent-defaults";
+import { CHANNEL_PASSWORD_MIN_LENGTH } from "@/lib/security-policy";
 import type { GroupMemberRole } from "@/lib/rbac/constants";
 
 interface GroupOption {
@@ -17,11 +21,12 @@ interface GroupOption {
 }
 
 export default function CreateChannelPage() {
+  const t = useT();
   return (
     <Suspense
       fallback={
         <div className="theme-web min-h-screen flex items-center justify-center bg-bg text-text">
-          Loading...
+          {t("common.loading")}
         </div>
       }
     >
@@ -35,6 +40,7 @@ function CreateChannelPageInner() {
   const searchParams = useSearchParams();
   const characterId = searchParams.get("characterId");
   const t = useT();
+  const { locale } = useLocale();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -43,12 +49,10 @@ function CreateChannelPageInner() {
   const [groupId, setGroupId] = useState("");
   const [groups, setGroups] = useState<GroupOption[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
-  const [templateList, setTemplateList] = useState<{ id: string; name: string; icon: string; description: string | null; cols: number; rows: number }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
 
   // --- AI Gateway ---
   const [gatewayOpen, setGatewayOpen] = useState(false);
@@ -56,7 +60,13 @@ function CreateChannelPageInner() {
   const [gatewayToken, setGatewayToken] = useState("");
   const [showGatewayToken, setShowGatewayToken] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; agents?: { id: string; name: string }[]; error?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    agents?: { id: string; name: string }[];
+    error?: string;
+    errorCode?: string;
+    messageCode?: string;
+  } | null>(null);
 
   // --- Default NPC ---
   const [npcName, setNpcName] = useState("");
@@ -69,44 +79,11 @@ function CreateChannelPageInner() {
   const [npcAdvancedOpen, setNpcAdvancedOpen] = useState(false);
   const [npcAppearancePreset, setNpcAppearancePreset] = useState("receptionist");
 
+  // Auto-select template from URL param
   useEffect(() => {
-    fetch("/api/map-templates")
-      .then((r) => r.json())
-      .then(async (data) => {
-        const templates = data.templates || [];
-        setTemplateList(templates);
-        // Auto-select: URL templateId param > first template
-        const urlTemplateId = searchParams.get("templateId");
-        if (urlTemplateId && templates.some((t: { id: string }) => t.id === urlTemplateId)) {
-          setMapTemplateId(urlTemplateId);
-        } else if (templates.length > 0 && !mapTemplateId) {
-          setMapTemplateId(templates[0].id);
-        }
-
-        // Generate thumbnails
-        try {
-          const { generateMapThumbnail, generateTiledThumbnail } = await import("@/lib/map-thumbnail");
-          const thumbs: Record<string, string> = {};
-          for (const t of templates) {
-            try {
-              const res = await fetch(`/api/map-templates/${t.id}`);
-              const detail = await res.json();
-              const tmpl = detail.template;
-
-              if (tmpl.tiledJson) {
-                const tiled = typeof tmpl.tiledJson === "string" ? JSON.parse(tmpl.tiledJson) : tmpl.tiledJson;
-                thumbs[t.id] = generateTiledThumbnail(tiled, 4);
-              } else if (tmpl.layers) {
-                const layers = typeof tmpl.layers === "string" ? JSON.parse(tmpl.layers) : tmpl.layers;
-                const objects = typeof tmpl.objects === "string" ? JSON.parse(tmpl.objects) : (tmpl.objects || []);
-                thumbs[t.id] = generateMapThumbnail(layers, objects, tmpl.cols, tmpl.rows, 4);
-              }
-            } catch { /* skip */ }
-          }
-          setThumbnails(thumbs);
-        } catch { /* skip */ }
-      });
-  }, []);
+    const urlTemplateId = searchParams.get("templateId");
+    if (urlTemplateId) setMapTemplateId(urlTemplateId);
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,30 +122,35 @@ function CreateChannelPageInner() {
   const creatableGroups = groups.filter((group) => group.canCreateChannel);
   const hasAvailableGroups = creatableGroups.length > 0;
 
-  const handlePersonaPresetChange = (presetId: string) => {
+  const handlePersonaPresetChange = useCallback((presetId: string) => {
     setPersonaPresetId(presetId);
     if (presetId === "custom") return;
     const preset = PERSONA_PRESETS.find((p) => p.id === presetId);
     if (!preset) return;
-    const currentName = npcName.trim() || "AI Assistant";
-    setNpcIdentity(applyPresetName(preset.identity, currentName));
-    setNpcSoul(applyPresetName(preset.soul, currentName));
+    const currentName = npcName.trim() || t("npc.namePlaceholder");
+    setNpcIdentity(localizeNpcPromptDocument(applyPresetName(preset.identity, currentName), locale, "identity"));
+    setNpcSoul(localizeNpcPromptDocument(applyPresetName(preset.soul, currentName), locale, "soul"));
     if (preset.suggestedAppearancePreset) {
       setNpcAppearancePreset(preset.suggestedAppearancePreset);
     }
-  };
+  }, [locale, npcName, t]);
 
   const handleNpcNameBlur = () => {
     // Re-apply preset with updated name
     if (personaPresetId !== "custom") {
       const preset = PERSONA_PRESETS.find((p) => p.id === personaPresetId);
       if (preset) {
-        const currentName = npcName.trim() || "AI Assistant";
-        setNpcIdentity(applyPresetName(preset.identity, currentName));
-        setNpcSoul(applyPresetName(preset.soul, currentName));
+        const currentName = npcName.trim() || t("npc.namePlaceholder");
+        setNpcIdentity(localizeNpcPromptDocument(applyPresetName(preset.identity, currentName), locale, "identity"));
+        setNpcSoul(localizeNpcPromptDocument(applyPresetName(preset.soul, currentName), locale, "soul"));
       }
     }
   };
+
+  useEffect(() => {
+    if (personaPresetId === "custom") return;
+    handlePersonaPresetChange(personaPresetId);
+  }, [handlePersonaPresetChange, locale, personaPresetId]);
 
   const handleTestConnection = async () => {
     setTestingConnection(true);
@@ -183,13 +165,13 @@ function CreateChannelPageInner() {
         }),
       });
       const data = await res.json();
-      setTestResult(data);
+      setTestResult(data.ok ? data : { ...data, error: getLocalizedErrorMessage(t, data) });
       if (data.ok && data.agents?.length > 0) {
         setAgentAction("select");
         setSelectedAgentId(data.agents[0].id);
       }
     } catch {
-      setTestResult({ ok: false, error: "Failed to reach test endpoint" });
+      setTestResult({ ok: false, error: t("errors.failedToReachTestEndpoint") });
     } finally {
       setTestingConnection(false);
     }
@@ -201,8 +183,8 @@ function CreateChannelPageInner() {
       setError(t("channels.create.nameRequired"));
       return;
     }
-    if (!isPublic && password.length < 4) {
-      setError(t("channels.create.passwordRequired"));
+    if (!isPublic && password.length < CHANNEL_PASSWORD_MIN_LENGTH) {
+      setError(t("errors.channelPasswordLengthInvalid"));
       return;
     }
     if (!groupId) {
@@ -238,8 +220,11 @@ function CreateChannelPageInner() {
           name: npcName.trim(),
           agentId: effectiveAgentId,
           agentAction: agentAction === "select" ? "select" : (newAgentId ? "create" : undefined),
+          presetId: personaPresetId !== "custom" ? personaPresetId : undefined,
           identity: npcIdentity,
           soul: npcSoul,
+          meetingProtocol: getDefaultMeetingProtocol(locale),
+          locale,
           appearance: selectedAppearance,
         };
       }
@@ -253,7 +238,7 @@ function CreateChannelPageInner() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || t("channels.create.failed"));
+        setError(getLocalizedErrorMessage(t, data, "channels.create.failed"));
         setSubmitting(false);
         return;
       }
@@ -383,7 +368,7 @@ function CreateChannelPageInner() {
                   {showPassword ? t("common.hide") : t("common.show")}
                 </button>
               </div>
-              {password.length > 0 && password.length < 4 && (
+              {password.length > 0 && password.length < CHANNEL_PASSWORD_MIN_LENGTH && (
                 <p className="text-danger text-xs mt-1">{t("channels.create.passwordMinError")}</p>
               )}
             </div>
@@ -391,67 +376,15 @@ function CreateChannelPageInner() {
 
           {/* Map Template */}
           <div>
-            <label className="block text-sm font-semibold mb-2">{t("channels.create.mapTemplate")} *</label>
-            <div className="grid grid-cols-3 gap-3">
-              {templateList.map((tpl) => (
-                <div
-                  key={tpl.id}
-                  className={`relative p-3 rounded-lg border text-center transition flex flex-col items-center cursor-pointer group ${
-                    mapTemplateId === tpl.id
-                      ? "border-primary-light bg-primary-muted text-primary-light"
-                      : "border-border bg-surface hover:border-border text-text-muted"
-                  }`}
-                  onClick={() => setMapTemplateId(tpl.id)}
-                >
-                  {/* Action buttons (top-right) */}
-                  <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Link
-                      href={`/map-editor?from=create&characterId=${characterId}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="p-1 rounded bg-surface-raised border border-border hover:border-primary-light"
-                      title="맵 에디터에서 보기"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!confirm(`"${tpl.name}" 템플릿을 삭제할까요?`)) return;
-                        fetch(`/api/map-templates/${tpl.id}`, { method: "DELETE" }).then((res) => {
-                          if (res.ok) {
-                            setTemplateList((prev) => prev.filter((t) => t.id !== tpl.id));
-                            if (mapTemplateId === tpl.id) {
-                              setMapTemplateId(templateList.find((t) => t.id !== tpl.id)?.id || "");
-                            }
-                          }
-                        });
-                      }}
-                      className="p-1 rounded bg-surface-raised border border-border hover:border-danger text-danger"
-                      title="삭제"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                  {thumbnails[tpl.id] && (
-                    <img src={thumbnails[tpl.id]} alt={tpl.name}
-                      className="w-full rounded mb-1 border border-border"
-                      style={{ imageRendering: "pixelated" }} />
-                  )}
-                  <div className="mb-1 text-xl">{tpl.icon}</div>
-                  <div className="font-semibold text-sm text-white">{tpl.name}</div>
-                  <div className="text-xs text-text-muted mt-1">{tpl.cols}x{tpl.rows}</div>
-                </div>
-              ))}
-              {/* Add new template button */}
-              <Link
-                href={`/map-editor?from=create&characterId=${characterId}`}
-                className="p-3 rounded-lg border border-dashed border-border text-center transition flex flex-col items-center justify-center hover:border-primary-light text-text-muted hover:text-text"
-              >
-                <Plus className="w-6 h-6 mb-1" />
-                <div className="font-semibold text-sm">맵 추가</div>
-              </Link>
-            </div>
+            <label className="block text-sm font-semibold mb-2">
+              {t("channels.create.mapTemplate")} *
+            </label>
+            <MapTemplateGrid
+              selectedId={mapTemplateId}
+              onSelect={setMapTemplateId}
+              showActions
+              mapEditorQuery={`?from=create&characterId=${characterId}`}
+            />
           </div>
 
           {/* ============================================================= */}
@@ -592,7 +525,7 @@ function CreateChannelPageInner() {
                         value={newAgentId}
                         onChange={(e) => setNewAgentId(e.target.value)}
                         className="w-full px-3 py-2 bg-surface border border-border rounded text-text placeholder-text-dim focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent text-sm"
-                        placeholder="new-agent-id"
+                        placeholder={t("npc.agentIdPlaceholder")}
                       />
                     )}
                   </div>
@@ -602,7 +535,7 @@ function CreateChannelPageInner() {
                     value={newAgentId}
                     onChange={(e) => setNewAgentId(e.target.value)}
                     className="w-full px-3 py-2 bg-surface border border-border rounded text-text placeholder-text-dim focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent text-sm"
-                    placeholder="agent-id"
+                    placeholder={t("npc.agentIdPlaceholder")}
                   />
                 )}
               </div>

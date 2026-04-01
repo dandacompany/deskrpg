@@ -1,13 +1,16 @@
 import { db, projectStamps } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
+import { requireOwnedProject } from "@/lib/project-access";
 
 // POST /api/projects/[id]/stamps — link a stamp to a project (idempotent)
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
+  const access = await requireOwnedProject(req, projectId);
+  if ("error" in access && !("project" in access)) return access.error;
   const { stampId } = await req.json();
   if (!stampId) {
-    return NextResponse.json({ error: "stampId required" }, { status: 400 });
+    return NextResponse.json({ errorCode: "missing_required_fields", error: "stampId required" }, { status: 400 });
   }
 
   // Check if already linked

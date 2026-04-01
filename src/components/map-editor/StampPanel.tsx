@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Pencil, X, Grid3x3, List, Search, Plus } from 'lucide-react';
+import { Pencil, X, Grid3x3, List, Search } from 'lucide-react';
 import Tooltip from './Tooltip';
 import { LAYER_COLORS } from './hooks/useMapEditor';
 import { useT } from '@/lib/i18n';
+import { getLocalizedErrorMessage } from '@/lib/i18n/error-codes';
 import type { StampListItem } from '@/lib/stamp-utils';
 
 function getBadgeColor(layerName: string): string {
@@ -18,6 +19,7 @@ export interface StampPanelProps {
   onSelectStamp: (id: string) => void;
   onEditStamp?: (id: string) => void;
   onDeleteStamp: (id: string) => void;
+  onUnlinkStamp?: (id: string) => void;
   hideHeader?: boolean;
   projectId?: string | null;
   onAddToProject?: (stampId: string) => void;
@@ -29,8 +31,7 @@ export default function StampPanel({
   onSelectStamp,
   onEditStamp,
   onDeleteStamp,
-  hideHeader,
-  projectId,
+  onUnlinkStamp,
   onAddToProject,
 }: StampPanelProps) {
   const t = useT();
@@ -39,19 +40,26 @@ export default function StampPanel({
   const [activeTab, setActiveTab] = useState<'project' | 'myStamps' | 'builtIn'>('project');
   const [libraryStamps, setLibraryStamps] = useState<StampListItem[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryError, setLibraryError] = useState('');
 
   const fetchLibrary = useCallback(async (builtIn: boolean) => {
     setLibraryLoading(true);
+    setLibraryError('');
     try {
       const res = await fetch(`/api/stamps?builtIn=${builtIn}`);
       if (res.ok) {
         const data = await res.json();
         setLibraryStamps(data);
+      } else {
+        const data = await res.json().catch(() => null);
+        setLibraryError(getLocalizedErrorMessage(t, data, 'errors.failedToFetchStamps'));
       }
+    } catch {
+      setLibraryError(t('errors.failedToFetchStamps'));
     } finally {
       setLibraryLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (activeTab === 'myStamps') fetchLibrary(false);
@@ -121,9 +129,11 @@ export default function StampPanel({
           </div>
 
           {/* Stamp items */}
-          <div className="px-1.5 pb-1.5 overflow-y-auto" style={{ maxHeight: '240px' }}>
+          <div className="px-1.5 pt-1 pb-1.5 overflow-y-auto" style={{ maxHeight: '240px' }}>
             {libraryLoading ? (
-              <div className="py-3 text-center text-micro text-text-dim">Loading...</div>
+              <div className="py-3 text-center text-micro text-text-dim">{t('common.loading')}</div>
+            ) : libraryError ? (
+              <div className="py-3 text-center text-micro text-danger">{libraryError}</div>
             ) : filtered.length === 0 ? (
               <div className="py-3 text-center text-micro text-text-dim">{t('mapEditor.stamps.noResults')}</div>
             ) : viewMode === 'grid' ? (
@@ -147,11 +157,21 @@ export default function StampPanel({
                             ) : (
                               <span className="text-micro text-text-dim">{stamp.cols}×{stamp.rows}</span>
                             )}
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <Plus className="w-4 h-4 text-white" />
-                            </div>
                           </div>
                         </Tooltip>
+                        {/* Hover actions */}
+                        <div className="absolute -top-1 -right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {onEditStamp && (
+                            <button onClick={(e) => { e.stopPropagation(); onEditStamp(stamp.id); }}
+                              className="w-4 h-4 rounded-full bg-surface border border-border text-text-dim hover:text-primary-light flex items-center justify-center shadow-sm">
+                              <Pencil className="w-2.5 h-2.5" />
+                            </button>
+                          )}
+                          <button onClick={(e) => { e.stopPropagation(); onDeleteStamp(stamp.id); }}
+                            className="w-4 h-4 rounded-full bg-surface border border-border text-text-dim hover:text-danger flex items-center justify-center shadow-sm">
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
                       </div>
                     );
                   }
@@ -179,7 +199,7 @@ export default function StampPanel({
                             <Pencil className="w-2.5 h-2.5" />
                           </button>
                         )}
-                        <button onClick={(e) => { e.stopPropagation(); onDeleteStamp(stamp.id); }}
+                        <button onClick={(e) => { e.stopPropagation(); (onUnlinkStamp ?? onDeleteStamp)(stamp.id); }}
                           className="w-4 h-4 rounded-full bg-surface border border-border text-text-dim hover:text-danger flex items-center justify-center shadow-sm">
                           <X className="w-2.5 h-2.5" />
                         </button>
@@ -220,9 +240,16 @@ export default function StampPanel({
                             ))}
                           </div>
                         </div>
-                        <div className="opacity-0 group-hover:opacity-100 transition-all flex-shrink-0 text-text-dim hover:text-primary-light">
-                          <Plus className="w-3.5 h-3.5" />
-                        </div>
+                        {onEditStamp && (
+                          <button onClick={(e) => { e.stopPropagation(); onEditStamp(stamp.id); }}
+                            className="text-text-dim hover:text-primary-light opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button onClick={(e) => { e.stopPropagation(); onDeleteStamp(stamp.id); }}
+                          className="text-text-dim hover:text-danger opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     );
                   }
@@ -257,7 +284,7 @@ export default function StampPanel({
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                       )}
-                      <button onClick={(e) => { e.stopPropagation(); onDeleteStamp(stamp.id); }}
+                      <button onClick={(e) => { e.stopPropagation(); (onUnlinkStamp ?? onDeleteStamp)(stamp.id); }}
                         className="text-text-dim hover:text-danger opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
                         <X className="w-3.5 h-3.5" />
                       </button>

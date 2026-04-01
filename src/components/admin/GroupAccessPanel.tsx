@@ -28,6 +28,8 @@ type InviteRow = {
   revokedAt: string | null;
   createdAt: string;
   targetNickname: string | null;
+  status: "active" | "expired" | "revoked" | "accepted";
+  isReusable: boolean;
 };
 
 type JoinRequestRow = {
@@ -86,11 +88,17 @@ async function readJsonOrThrow(response: Response) {
 type GroupAccessPanelProps = {
   groupId: string;
   groupName: string;
+  canManageMembers: boolean;
+  canManagePermissions: boolean;
+  canApproveJoinRequests: boolean;
 };
 
 export default function GroupAccessPanel({
   groupId,
   groupName,
+  canManageMembers,
+  canManagePermissions,
+  canApproveJoinRequests,
 }: GroupAccessPanelProps) {
   const t = useT();
 
@@ -126,6 +134,8 @@ export default function GroupAccessPanel({
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [flashMessage, setFlashMessage] = useState("");
 
+  const needsMemberDirectory = canManageMembers || canManagePermissions;
+
   const showError = useCallback((payload: unknown, fallbackKey = "common.error") => {
     setFlashMessage(getLocalizedErrorMessage(t, payload, fallbackKey));
   }, [t]);
@@ -146,11 +156,36 @@ export default function GroupAccessPanel({
   }, [t]);
 
   const refreshAll = useCallback(async () => {
-    setMembers((current) => ({ ...current, loading: true, error: "" }));
-    setInvites((current) => ({ ...current, loading: true, error: "" }));
-    setJoinRequests((current) => ({ ...current, loading: true, error: "" }));
-    setPermissions((current) => ({ ...current, loading: true, error: "" }));
-    setOverrides((current) => ({ ...current, loading: true, error: "" }));
+    setMembers((current) => ({
+      ...current,
+      loading: needsMemberDirectory,
+      error: "",
+      items: needsMemberDirectory ? current.items : [],
+    }));
+    setInvites((current) => ({
+      ...current,
+      loading: canManageMembers,
+      error: "",
+      items: canManageMembers ? current.items : [],
+    }));
+    setJoinRequests((current) => ({
+      ...current,
+      loading: canApproveJoinRequests,
+      error: "",
+      items: canApproveJoinRequests ? current.items : [],
+    }));
+    setPermissions((current) => ({
+      ...current,
+      loading: canManagePermissions,
+      error: "",
+      items: canManagePermissions ? current.items : [],
+    }));
+    setOverrides((current) => ({
+      ...current,
+      loading: canManagePermissions,
+      error: "",
+      items: canManagePermissions ? current.items : [],
+    }));
 
     const [
       nextMembers,
@@ -159,11 +194,21 @@ export default function GroupAccessPanel({
       nextPermissions,
       nextOverrides,
     ] = await Promise.all([
-      loadSection<MemberRow>(`/api/groups/${groupId}/members`, "members"),
-      loadSection<InviteRow>(`/api/groups/${groupId}/invites`, "invites"),
-      loadSection<JoinRequestRow>(`/api/groups/${groupId}/join-requests`, "joinRequests"),
-      loadSection<PermissionRow>(`/api/groups/${groupId}/permissions`, "permissions"),
-      loadSection<OverrideRow>(`/api/groups/${groupId}/user-overrides`, "overrides"),
+      needsMemberDirectory
+        ? loadSection<MemberRow>(`/api/groups/${groupId}/members`, "members")
+        : Promise.resolve({ items: [], error: "" }),
+      canManageMembers
+        ? loadSection<InviteRow>(`/api/groups/${groupId}/invites`, "invites")
+        : Promise.resolve({ items: [], error: "" }),
+      canApproveJoinRequests
+        ? loadSection<JoinRequestRow>(`/api/groups/${groupId}/join-requests`, "joinRequests")
+        : Promise.resolve({ items: [], error: "" }),
+      canManagePermissions
+        ? loadSection<PermissionRow>(`/api/groups/${groupId}/permissions`, "permissions")
+        : Promise.resolve({ items: [], error: "" }),
+      canManagePermissions
+        ? loadSection<OverrideRow>(`/api/groups/${groupId}/user-overrides`, "overrides")
+        : Promise.resolve({ items: [], error: "" }),
     ]);
 
     setMembers({ ...nextMembers, loading: false });
@@ -171,7 +216,14 @@ export default function GroupAccessPanel({
     setJoinRequests({ ...nextJoinRequests, loading: false });
     setPermissions({ ...nextPermissions, loading: false });
     setOverrides({ ...nextOverrides, loading: false });
-  }, [groupId, loadSection]);
+  }, [
+    canApproveJoinRequests,
+    canManageMembers,
+    canManagePermissions,
+    groupId,
+    loadSection,
+    needsMemberDirectory,
+  ]);
 
   useEffect(() => {
     setPermissionDraft(buildInitialPermissionDraft());
@@ -233,6 +285,19 @@ export default function GroupAccessPanel({
     </section>
   );
 
+  const formatInviteStatus = (invite: InviteRow) => {
+    switch (invite.status) {
+      case "accepted":
+        return t("admin.groups.inviteStatus.accepted");
+      case "expired":
+        return t("admin.groups.inviteStatus.expired");
+      case "revoked":
+        return t("admin.groups.inviteStatus.revoked");
+      default:
+        return t("admin.groups.inviteStatus.active");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-surface p-4">
@@ -257,7 +322,7 @@ export default function GroupAccessPanel({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {sectionCard(
+        {canManageMembers && sectionCard(
           t("admin.groups.members"),
           <div className="space-y-4">
             <form
@@ -338,20 +403,19 @@ export default function GroupAccessPanel({
           </div>,
         )}
 
-        {sectionCard(
+        {canManageMembers && sectionCard(
           t("admin.groups.invites"),
           <div className="space-y-4">
             <form
               className="grid gap-2 sm:grid-cols-[1fr_220px_auto]"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (!inviteLoginId.trim()) return;
                 void submitAction("invite-create", async () => {
                   await readJsonOrThrow(await fetch(`/api/groups/${groupId}/invites`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      targetLoginId: inviteLoginId.trim(),
+                      targetLoginId: inviteLoginId.trim() || null,
                       expiresAt: inviteExpiresAt ? new Date(inviteExpiresAt).toISOString() : null,
                     }),
                   }));
@@ -363,13 +427,14 @@ export default function GroupAccessPanel({
               <input
                 value={inviteLoginId}
                 onChange={(event) => setInviteLoginId(event.target.value)}
-                placeholder={t("admin.groups.targetLoginId")}
+                placeholder={t("admin.groups.inviteTargetOptional")}
                 className="rounded-lg border border-border bg-bg px-3 py-2"
               />
               <input
                 type="datetime-local"
                 value={inviteExpiresAt}
                 onChange={(event) => setInviteExpiresAt(event.target.value)}
+                placeholder={t("admin.groups.inviteExpirationOptional")}
                 className="rounded-lg border border-border bg-bg px-3 py-2"
               />
               <button
@@ -380,6 +445,9 @@ export default function GroupAccessPanel({
                 {t("admin.groups.createInvite")}
               </button>
             </form>
+            <p className="text-xs text-text-muted">
+              {t("admin.groups.inviteFormHint")}
+            </p>
             {invites.loading
               ? <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
               : invites.error
@@ -389,29 +457,59 @@ export default function GroupAccessPanel({
               : (
                 <div className="space-y-2">
                   {invites.items.map((invite) => (
-                    <div key={invite.id} className="flex items-center justify-between rounded-lg bg-bg px-3 py-2">
-                      <div>
-                        <p className="font-medium">{invite.targetNickname || invite.targetLoginId || invite.token.slice(0, 8)}</p>
-                        <p className="text-xs text-text-muted">
-                          {invite.revokedAt ? "revoked" : invite.acceptedAt ? "accepted" : "active"}
-                          {invite.expiresAt ? ` · ${new Date(invite.expiresAt).toLocaleString()}` : ""}
-                        </p>
+                    <div key={invite.id} className="rounded-lg bg-bg px-3 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium">
+                              {invite.targetNickname || invite.targetLoginId || t("admin.groups.inviteShared")}
+                            </p>
+                            <span className="rounded-full bg-surface-raised px-2 py-0.5 text-xs text-text-muted">
+                              {invite.isReusable
+                                ? t("admin.groups.inviteReusable")
+                                : t("admin.groups.inviteSingleUse")}
+                            </span>
+                            <span className="rounded-full bg-surface-raised px-2 py-0.5 text-xs text-text-muted">
+                              {formatInviteStatus(invite)}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <code className="rounded border border-border px-2 py-1 font-mono text-xs text-amber-400">
+                              {invite.token}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await navigator.clipboard.writeText(invite.token);
+                                setFlashMessage(t("admin.groups.inviteCopied"));
+                              }}
+                              className="rounded-lg bg-surface-raised px-2 py-1 text-xs font-medium hover:bg-surface-raised/80"
+                            >
+                              {t("admin.groups.copyInvite")}
+                            </button>
+                          </div>
+                          <p className="mt-2 text-xs text-text-muted">
+                            {invite.expiresAt
+                              ? `${t("admin.groups.inviteExpires")} ${new Date(invite.expiresAt).toLocaleString()}`
+                              : t("admin.groups.inviteNeverExpires")}
+                          </p>
+                        </div>
+                        {!invite.revokedAt && (
+                          <button
+                            type="button"
+                            onClick={() => void submitAction(`invite-revoke-${invite.id}`, async () => {
+                              await readJsonOrThrow(await fetch(`/api/groups/${groupId}/invites`, {
+                                method: "DELETE",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ inviteId: invite.id }),
+                              }));
+                            })}
+                            className="text-sm text-danger"
+                          >
+                            {t("admin.groups.deleteInvite")}
+                          </button>
+                        )}
                       </div>
-                      {!invite.revokedAt && !invite.acceptedAt && (
-                        <button
-                          type="button"
-                          onClick={() => void submitAction(`invite-revoke-${invite.id}`, async () => {
-                            await readJsonOrThrow(await fetch(`/api/groups/${groupId}/invites`, {
-                              method: "DELETE",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ inviteId: invite.id }),
-                            }));
-                          })}
-                          className="text-sm text-danger"
-                        >
-                          {t("admin.groups.revokeInvite")}
-                        </button>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -419,7 +517,7 @@ export default function GroupAccessPanel({
           </div>,
         )}
 
-        {sectionCard(
+        {canApproveJoinRequests && sectionCard(
           t("admin.groups.joinRequests"),
           <div className="space-y-2">
             {joinRequests.loading
@@ -474,7 +572,7 @@ export default function GroupAccessPanel({
           </div>,
         )}
 
-        {sectionCard(
+        {canManagePermissions && sectionCard(
           t("admin.groups.permissions"),
           <div className="space-y-3">
             {permissions.loading
@@ -519,7 +617,7 @@ export default function GroupAccessPanel({
           </div>,
         )}
 
-        {sectionCard(
+        {canManagePermissions && sectionCard(
           t("admin.groups.userOverrides"),
           <div className="space-y-4">
             <form

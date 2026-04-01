@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useT } from "@/lib/i18n";
 
 interface ChatInputProps {
   onSend: (message: string, files?: File[]) => void;
   placeholder?: string;
   disabled?: boolean;
+  disabledPlaceholder?: string;
   cooldown?: boolean;
   maxLength?: number;
   autoFocus?: boolean;
@@ -15,14 +17,16 @@ interface ChatInputProps {
 
 export default function ChatInput({
   onSend,
-  placeholder = "메시지를 입력하세요...",
+  placeholder,
   disabled = false,
+  disabledPlaceholder,
   cooldown = false,
   maxLength = 500,
   autoFocus = false,
   showFileUpload = false,
   accentColor = "amber",
 }: ChatInputProps) {
+  const t = useT();
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -92,6 +96,8 @@ export default function ChatInput({
   const btnColor = canSend
     ? `bg-${accentColor}-500 hover:bg-${accentColor}-600 text-black`
     : "bg-gray-700 text-gray-500 cursor-not-allowed";
+  const resolvedPlaceholder = placeholder ?? t("chat.placeholder");
+  const resolvedDisabledPlaceholder = disabledPlaceholder ?? t("chat.responding");
 
   return (
     <div className="border-t border-gray-700 px-3 py-2">
@@ -102,7 +108,14 @@ export default function ChatInput({
             <div key={i} className="flex items-center gap-1 bg-gray-800 rounded px-2 py-1 text-xs text-gray-300">
               <span className="truncate max-w-[120px]">{f.name}</span>
               <span className="text-gray-500">({(f.size / 1024).toFixed(0)}KB)</span>
-              <button onClick={() => removeFile(i)} className="text-gray-500 hover:text-red-400 ml-1">x</button>
+              <button
+                onClick={() => removeFile(i)}
+                className="text-gray-500 hover:text-red-400 ml-1"
+                aria-label={t("chat.removeFile")}
+                title={t("chat.removeFile")}
+              >
+                x
+              </button>
             </div>
           ))}
         </div>
@@ -116,7 +129,8 @@ export default function ChatInput({
               onClick={() => fileInputRef.current?.click()}
               disabled={disabled}
               className="p-2 text-gray-400 hover:text-white rounded hover:bg-white/10 shrink-0 self-end"
-              title="파일 첨부"
+              title={t("chat.attachFile")}
+              aria-label={t("chat.attachFile")}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
@@ -139,7 +153,7 @@ export default function ChatInput({
           value={input}
           onChange={(e) => { if (!disabled) setInput(e.target.value.slice(0, maxLength)); }}
           onKeyDown={handleKeyDown}
-          placeholder={cooldown ? "잠시 후..." : (disabled ? "응답 중..." : placeholder)}
+          placeholder={cooldown ? t("chat.cooldown") : (disabled ? resolvedDisabledPlaceholder : resolvedPlaceholder)}
           rows={1}
           readOnly={disabled}
           className={`flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border focus:outline-none text-sm min-w-0 resize-none overflow-hidden leading-5 ${
@@ -154,7 +168,7 @@ export default function ChatInput({
           disabled={!canSend}
           className={`px-3 py-2 rounded-lg font-semibold text-sm shrink-0 self-end transition-colors ${btnColor}`}
         >
-          Send
+          {t("common.send")}
         </button>
       </div>
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useT } from "@/lib/i18n";
+import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { Plus, Copy, Trash2, Search } from "lucide-react";
 import NewProjectModal from "./NewProjectModal";
 
@@ -29,16 +30,25 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
   const [sortBy, setSortBy] = useState<SortKey>("updatedAt");
   const [loading, setLoading] = useState(true);
   const [showNewProject, setShowNewProject] = useState(false);
+  const [error, setError] = useState("");
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
       const res = await fetch("/api/projects");
-      if (res.ok) setProjects(await res.json());
+      if (res.ok) {
+        setProjects(await res.json());
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(getLocalizedErrorMessage(t, data, "errors.failedToFetchProjects"));
+      }
+    } catch {
+      setError(t("errors.failedToFetchProjects"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
@@ -52,14 +62,24 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
 
   const handleDuplicate = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    await fetch(`/api/projects/${id}/duplicate`, { method: "POST" });
+    const res = await fetch(`/api/projects/${id}/duplicate`, { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(getLocalizedErrorMessage(t, data, "errors.failedToDuplicateProject"));
+      return;
+    }
     fetchProjects();
   };
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (!confirm(t("mapEditor.project.confirmDelete"))) return;
-    await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(getLocalizedErrorMessage(t, data, "errors.failedToDeleteProject"));
+      return;
+    }
     fetchProjects();
   };
 
@@ -103,7 +123,9 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
       {/* Project Grid */}
       <div className="flex-1 overflow-auto p-6">
         {loading ? (
-          <div className="flex items-center justify-center h-40 text-gray-500">Loading...</div>
+          <div className="flex items-center justify-center h-40 text-gray-500">{t("common.loading")}</div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-40 text-red-400">{error}</div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-gray-500">
             <p className="text-lg">{t("mapEditor.project.noProjects")}</p>
@@ -123,7 +145,7 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
                   {project.thumbnail ? (
                     <img src={project.thumbnail} alt={project.name} className="w-full h-full object-contain" />
                   ) : (
-                    <div className="text-gray-600 text-xs">No preview</div>
+                    <div className="text-gray-600 text-xs">{t("common.noPreview")}</div>
                   )}
                 </div>
                 <div className="p-3">

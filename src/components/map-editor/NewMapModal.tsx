@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Button, Modal, Input } from '@/components/ui';
 import { useT } from '@/lib/i18n';
 import { createDefaultMap } from './hooks/useMapEditor';
@@ -29,7 +29,8 @@ const GRID_ROWS = MAX_ROWS;
 
 export default function NewMapModal({ open, onClose, onSubmit }: NewMapModalProps) {
   const t = useT();
-  const [name, setName] = useState('Untitled Map');
+  const defaultName = t('mapEditor.newMap.defaultName');
+  const [name, setName] = useState(defaultName);
   const [width, setWidth] = useState(20);
   const [height, setHeight] = useState(15);
   const [hoverW, setHoverW] = useState(0);
@@ -37,23 +38,26 @@ export default function NewMapModal({ open, onClose, onSubmit }: NewMapModalProp
   const [isDragging, setIsDragging] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (open) {
-      setName('Untitled Map');
-      setWidth(20);
-      setHeight(15);
-      setHoverW(0);
-      setHoverH(0);
-      setIsDragging(false);
-    }
-  }, [open]);
+  const resetForm = useCallback(() => {
+    setName(defaultName);
+    setWidth(20);
+    setHeight(15);
+    setHoverW(0);
+    setHoverH(0);
+    setIsDragging(false);
+  }, [defaultName]);
+
+  const handleClose = useCallback(() => {
+    resetForm();
+    onClose();
+  }, [onClose, resetForm]);
 
   const handleCreate = () => {
     const clampedW = Math.max(1, Math.min(MAX_COLS, width));
     const clampedH = Math.max(1, Math.min(MAX_ROWS, height));
     const mapData = createDefaultMap(name, clampedW, clampedH, TILE_SIZE);
     onSubmit(mapData, name);
-    onClose();
+    handleClose();
   };
 
   const selectTemplate = (t: typeof TEMPLATES[number]) => {
@@ -104,7 +108,7 @@ export default function NewMapModal({ open, onClose, onSubmit }: NewMapModalProp
   const displayH = isDragging ? height : (hoverH || height);
 
   return (
-    <Modal open={open} onClose={onClose} title={t("mapEditor.newMap.title")} size="md">
+    <Modal open={open} onClose={handleClose} title={t("mapEditor.newMap.title")} size="md">
       <Modal.Body>
         <div className="space-y-4">
           {/* Project Name */}

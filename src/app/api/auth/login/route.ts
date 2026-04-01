@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { users } from "@/db";
 import { verifyPassword } from "@/lib/password";
-import { signJWT } from "@/lib/jwt";
+import { signJWT, isSecureCookie } from "@/lib/jwt";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 
@@ -10,17 +10,26 @@ export async function POST(req: NextRequest) {
   const { loginId, password } = body;
 
   if (!loginId || !password) {
-    return NextResponse.json({ error: "loginId and password are required" }, { status: 400 });
+    return NextResponse.json(
+      { errorCode: "login_id_password_required", error: "loginId and password are required" },
+      { status: 400 },
+    );
   }
 
   const [user] = await db.select().from(users).where(eq(users.loginId, loginId)).limit(1);
   if (!user) {
-    return NextResponse.json({ error: "invalid credentials" }, { status: 401 });
+    return NextResponse.json(
+      { errorCode: "invalid_credentials", error: "invalid credentials" },
+      { status: 401 },
+    );
   }
 
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) {
-    return NextResponse.json({ error: "invalid credentials" }, { status: 401 });
+    return NextResponse.json(
+      { errorCode: "invalid_credentials", error: "invalid credentials" },
+      { status: 401 },
+    );
   }
 
   const token = await signJWT({ userId: user.id, nickname: user.nickname });
@@ -28,7 +37,7 @@ export async function POST(req: NextRequest) {
   const response = NextResponse.json({ user: { id: user.id, nickname: user.nickname } });
   response.cookies.set("token", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecureCookie(),
     sameSite: "lax",
     maxAge: 60 * 60 * 24 * 7,
     path: "/",

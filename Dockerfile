@@ -1,5 +1,5 @@
 # Dockerfile
-FROM node:20-alpine AS base
+FROM node:20-bookworm-slim AS base
 
 FROM base AS deps
 WORKDIR /app
@@ -29,10 +29,18 @@ COPY --from=builder /app/src/lib/meeting-broker.js ./src/lib/meeting-broker.js
 COPY --from=builder /app/src/lib/meeting-formatter.js ./src/lib/meeting-formatter.js
 COPY --from=builder /app/src/lib/openclaw-gateway.js ./src/lib/openclaw-gateway.js
 COPY --from=builder /app/src/lib/task-parser.js ./src/lib/task-parser.js
+COPY --from=builder /app/src/lib/task-block-utils.js ./src/lib/task-block-utils.js
 COPY --from=builder /app/src/lib/task-manager.js ./src/lib/task-manager.js
 COPY --from=builder /app/src/db/server-db.js ./src/db/server-db.js
 COPY --from=builder /app/src/db/normalize.js ./src/db/normalize.js
 COPY --from=builder /app/src/lib/task-prompt.js ./src/lib/task-prompt.js
+COPY --from=builder /app/src/lib/i18n/task-prompt-messages.js ./src/lib/i18n/task-prompt-messages.js
+COPY --from=builder /app/src/lib/internal-transport.js ./src/lib/internal-transport.js
+COPY --from=builder /app/src/lib/task-reporting.ts ./src/lib/task-reporting.ts
+COPY --from=builder /app/src/lib/rbac/channel-access.ts ./src/lib/rbac/channel-access.ts
+COPY --from=builder /app/src/server/meeting-socket.ts ./src/server/meeting-socket.ts
+COPY --from=builder /app/src/server/meeting-discussion.ts ./src/server/meeting-discussion.ts
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
 # Drizzle ORM + PostgreSQL driver (used by server.js, task-manager.js, server-db.js)
 COPY --from=builder /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
@@ -70,12 +78,17 @@ COPY --from=builder /app/node_modules/negotiator ./node_modules/negotiator
 COPY --from=builder /app/node_modules/mime-types ./node_modules/mime-types
 COPY --from=builder /app/node_modules/mime-db ./node_modules/mime-db
 COPY --from=builder /app/node_modules/jose ./node_modules/jose
+COPY --from=builder /app/node_modules/tsx ./node_modules/tsx
+COPY --from=builder /app/node_modules/esbuild ./node_modules/esbuild
+COPY --from=builder /app/node_modules/get-tsconfig ./node_modules/get-tsconfig
+COPY --from=builder /app/node_modules/resolve-pkg-maps ./node_modules/resolve-pkg-maps
 
 # Migration runner + SQL files
 COPY --from=builder /app/migrate.js ./migrate.js
 COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
+RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 
 USER nextjs
 EXPOSE 3000 3001

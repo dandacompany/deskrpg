@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1774166545008,
-      "tag": "0000_regular_iron_lad",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1774225855614,
-      "tag": "0001_sleepy_roxanne_simpson",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1774353190847,
-      "tag": "0002_mixed_zeigeist",
+      "when": 1774998891487,
+      "tag": "0000_big_karnak",
       "breakpoints": true
     }
   ]

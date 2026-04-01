@@ -1,5 +1,12 @@
 import { SignJWT, jwtVerify } from "jose";
 
+// COOKIE_SECURE=false 로 HTTP 배포 테스트 환경에서 secure 쿠키 비활성화 가능
+export function isSecureCookie(): boolean {
+  if (process.env.COOKIE_SECURE === "false") return false;
+  if (process.env.COOKIE_SECURE === "true") return true;
+  return process.env.NODE_ENV === "production";
+}
+
 const JWT_EXPIRY = "7d";
 
 function getSecret() {

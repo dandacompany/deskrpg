@@ -10,12 +10,8 @@
  * 4. 사용자는 아무 시점에나 개입 가능
  */
 
-const {
-  formatPollMessage,
-  formatSpeakMessage,
-  generateTranscript,
-  parseHandRaise,
-} = require("./meeting-formatter.js");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { formatPollMessage, formatSpeakMessage, generateTranscript, parseHandRaise, sanitizeSpokenResponse, sanitizeStreamingSpokenResponse } = require("./meeting-formatter.js");
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -395,7 +391,8 @@ class MeetingBroker {
           }
         },
       );
-      return response || null;
+      const sanitizedResponse = sanitizeSpokenResponse(response || "");
+      return sanitizedResponse || null;
     } catch (err) {
       if (this.callbacks.onError) {
         this.callbacks.onError(err, agent.agentId);
@@ -428,22 +425,27 @@ class MeetingBroker {
       remaining,
     );
 
-    let partialText = "";
+    let rawText = "";
+    let emittedText = "";
     try {
       const response = await this.gateway.chatSend(
         agent.agentId,
         sessionKey,
         message,
         (chunk) => {
-          partialText += chunk;
-          if (this.callbacks.onTurnChunk) {
-            this.callbacks.onTurnChunk(agent.agentId, chunk);
+          rawText += chunk;
+          const sanitizedText = sanitizeStreamingSpokenResponse(rawText);
+          const delta = sanitizedText.slice(emittedText.length);
+          emittedText = sanitizedText;
+          if (delta && this.callbacks.onTurnChunk) {
+            this.callbacks.onTurnChunk(agent.agentId, delta);
           }
         },
       );
       this._currentSessionKey = null;
       this._currentAgentId = null;
-      return response || null;
+      const sanitizedResponse = sanitizeSpokenResponse(response || rawText);
+      return sanitizedResponse || null;
     } catch (err) {
       this._currentSessionKey = null;
       this._currentAgentId = null;

@@ -1,15 +1,17 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Download, Trash2, Copy, Search, ArrowLeft, Pencil, Plus } from "lucide-react";
+import { Download, Trash2, Copy, Search, ArrowLeft } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import ProjectBrowser from "@/components/map-editor/ProjectBrowser";
 
 export default function MapEditorPage() {
+  const t = useT();
   return (
-    <Suspense fallback={<div className="theme-web min-h-screen flex items-center justify-center bg-bg text-text">Loading...</div>}>
+    <Suspense fallback={<div className="theme-web min-h-screen flex items-center justify-center bg-bg text-text">{t("common.loading")}</div>}>
       <MapEditorListPage />
     </Suspense>
   );
@@ -47,22 +49,25 @@ function MapEditorListPage() {
         const list = data.templates || [];
         setTemplates(list);
 
+        // Use DB thumbnails if available, fallback to generated thumbnails
         try {
           const { generateMapThumbnail, generateTiledThumbnail } = await import("@/lib/map-thumbnail");
           const thumbs: Record<string, string> = {};
           for (const t of list) {
+            // Use stored thumbnail if available
+            if ((t as Record<string, unknown>).thumbnail) {
+              thumbs[t.id] = (t as Record<string, unknown>).thumbnail as string;
+              continue;
+            }
             try {
               const res = await fetch(`/api/map-templates/${t.id}`);
               const detail = await res.json();
               const tmpl = detail.template;
 
               if (tmpl.tiledJson) {
-                const tiled = typeof tmpl.tiledJson === "string" ? JSON.parse(tmpl.tiledJson) : tmpl.tiledJson;
-                thumbs[t.id] = generateTiledThumbnail(tiled, 6);
+                thumbs[t.id] = generateTiledThumbnail(tmpl.tiledJson, 6);
               } else if (tmpl.layers) {
-                const layers = typeof tmpl.layers === "string" ? JSON.parse(tmpl.layers) : tmpl.layers;
-                const objects = typeof tmpl.objects === "string" ? JSON.parse(tmpl.objects) : (tmpl.objects || []);
-                thumbs[t.id] = generateMapThumbnail(layers, objects, tmpl.cols, tmpl.rows, 6);
+                thumbs[t.id] = generateMapThumbnail(tmpl.layers, tmpl.objects || [], tmpl.cols, tmpl.rows, 6);
               }
             } catch { /* skip */ }
           }
@@ -84,37 +89,46 @@ function MapEditorListPage() {
     try {
       // Fetch template detail to get tiledJson
       const res = await fetch(`/api/map-templates/${templateId}`);
-      if (!res.ok) throw new Error("Failed to fetch template");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToFetchTemplate"));
+      }
       const { template } = await res.json();
 
-      const tiledJson = typeof template.tiledJson === "string"
-        ? JSON.parse(template.tiledJson)
-        : template.tiledJson;
+      const tiledJson = template.tiledJson;
 
-      // Create a new project from this template
+      // Create a new project from this template (include thumbnail)
       const createRes = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: template.name,
           tiledJson,
+          thumbnail: template.thumbnail || thumbnails[templateId] || null,
           settings: { cols: template.cols, rows: template.rows },
         }),
       });
-      if (!createRes.ok) throw new Error("Failed to create project");
+      if (!createRes.ok) {
+        const errorData = await createRes.json().catch(() => ({}));
+        throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToCreateProject"));
+      }
       const project = await createRes.json();
 
       router.push(`/map-editor/${project.createdBy ?? project.created_by}/${project.id}`);
     } catch (err) {
       console.error("Failed to create project from template:", err);
-      alert("Failed to open template for editing.");
+      alert(t("mapEditor.template.openFailed"));
       setCreatingFrom(null);
     }
   };
 
   const handleDownload = async (id: string) => {
     const res = await fetch(`/api/map-templates/${id}/download`);
-    if (!res.ok) return;
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      alert(getLocalizedErrorMessage(t, errorData, "errors.failedToDownloadTemplate"));
+      return;
+    }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -128,7 +142,11 @@ function MapEditorListPage() {
 
   const handleDuplicate = async (id: string) => {
     const res = await fetch(`/api/map-templates/${id}`);
-    if (!res.ok) return;
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      alert(getLocalizedErrorMessage(t, errorData, "errors.failedToFetchTemplate"));
+      return;
+    }
     const { template } = await res.json();
 
     const createRes = await fetch("/api/map-templates", {
@@ -152,14 +170,20 @@ function MapEditorListPage() {
     if (createRes.ok) {
       const { template: newTemplate } = await createRes.json();
       setTemplates((prev) => [newTemplate, ...prev]);
+    } else {
+      const errorData = await createRes.json().catch(() => ({}));
+      alert(getLocalizedErrorMessage(t, errorData, "errors.failedToCreateTemplate"));
     }
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    if (!confirm(t("mapEditor.template.deleteConfirm", { name }))) return;
     const res = await fetch(`/api/map-templates/${id}`, { method: "DELETE" });
     if (res.ok) {
       setTemplates((prev) => prev.filter((t) => t.id !== id));
+    } else {
+      const errorData = await res.json().catch(() => ({}));
+      alert(getLocalizedErrorMessage(t, errorData, "errors.failedToDeleteTemplate"));
     }
   };
 
@@ -206,7 +230,7 @@ function MapEditorListPage() {
         </div>
 
         {loading ? (
-          <div className="text-gray-500">Loading...</div>
+          <div className="text-gray-500">{t("common.loading")}</div>
         ) : filteredTemplates.length === 0 ? (
           <div className="text-gray-500 text-center py-12">
             {search ? t("mapEditor.template.noResults") : t("mapEditor.template.noTemplates")}
@@ -220,12 +244,11 @@ function MapEditorListPage() {
                   {thumbnails[tmpl.id] ? (
                     <img src={thumbnails[tmpl.id]} alt={tmpl.name} className="w-full h-full object-contain" style={{ imageRendering: "pixelated" }} />
                   ) : (
-                    <div className="text-gray-600 text-xs">No preview</div>
+                    <div className="text-gray-600 text-xs">{t("common.noPreview")}</div>
                   )}
                 </div>
                 <div className="p-3">
                   <div className="flex items-center gap-1">
-                    <span className="text-sm">{tmpl.icon}</span>
                     <span className="text-sm font-medium truncate">{tmpl.name}</span>
                   </div>
                   {tmpl.description && <p className="text-xs text-gray-500 mt-0.5 truncate">{tmpl.description}</p>}
@@ -238,7 +261,7 @@ function MapEditorListPage() {
                 )}
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"
-                    onClick={(e) => { e.stopPropagation(); handleDownload(tmpl.id); }} title=".tmj">
+                    onClick={(e) => { e.stopPropagation(); handleDownload(tmpl.id); }} title={t("mapEditor.template.downloadTmj")} aria-label={t("mapEditor.template.downloadTmj")}>
                     <Download size={14} />
                   </button>
                   <button className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"

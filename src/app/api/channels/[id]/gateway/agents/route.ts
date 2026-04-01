@@ -3,6 +3,19 @@ import { channels, npcs } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { internalRpc, getUserId } from "@/lib/internal-rpc";
+import { parseDbObject } from "@/lib/db-json";
+
+function normalizeGatewayAgents(
+  result: unknown,
+): { id: string; name: string; workspace: string }[] {
+  if (Array.isArray(result)) {
+    return result as { id: string; name: string; workspace: string }[];
+  }
+  if (result && typeof result === "object" && Array.isArray((result as { agents?: unknown[] }).agents)) {
+    return (result as { agents: { id: string; name: string; workspace: string }[] }).agents;
+  }
+  return [];
+}
 
 // GET /api/channels/:id/gateway/agents — owner-only, lists gateway agents with NPC usage info
 export async function GET(
@@ -10,7 +23,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   const { id } = await params;
 
   const [channel] = await db
@@ -19,12 +32,12 @@ export async function GET(
     .where(eq(channels.id, id))
     .limit(1);
 
-  if (!channel) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (channel.ownerId !== userId) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!channel) return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
+  if (channel.ownerId !== userId) return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
 
   try {
     const result = await internalRpc(id, "agents.list");
-    const gatewayAgents = (result.agents || []) as { id: string; name: string; workspace: string }[];
+    const gatewayAgents = normalizeGatewayAgents(result);
 
     // Query NPCs for this channel to check agent usage
     const channelNpcs = await db
@@ -35,9 +48,10 @@ export async function GET(
     // Build a map of agentId -> NPC name for quick lookup
     const agentIdToNpcName = new Map<string, string>();
     for (const npc of channelNpcs) {
-      const openclawConfig = npc.openclawConfig as { agentId?: string } | null;
-      if (openclawConfig?.agentId) {
-        agentIdToNpcName.set(openclawConfig.agentId, npc.name);
+      const openclawConfig = parseDbObject(npc.openclawConfig);
+      const agentId = typeof openclawConfig?.agentId === "string" ? openclawConfig.agentId : null;
+      if (agentId) {
+        agentIdToNpcName.set(agentId, npc.name);
       }
     }
 
@@ -55,7 +69,13 @@ export async function GET(
     return NextResponse.json({ agents });
   } catch (err) {
     console.error("Failed to list agents:", err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to list agents" }, { status: 500 });
+    return NextResponse.json(
+      {
+        errorCode: "failed_to_list_agents",
+        error: err instanceof Error ? err.message : "Failed to list agents",
+      },
+      { status: 500 },
+    );
   }
 }
 
@@ -65,12 +85,22 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   const { id } = await params;
 
   const agentId = req.nextUrl.searchParams.get("agentId");
-  if (!agentId) return NextResponse.json({ error: "agentId required" }, { status: 400 });
-  if (agentId === "main") return NextResponse.json({ error: "Cannot delete main agent" }, { status: 400 });
+  if (!agentId) {
+    return NextResponse.json(
+      { errorCode: "agent_id_required", error: "agentId required" },
+      { status: 400 },
+    );
+  }
+  if (agentId === "main") {
+    return NextResponse.json(
+      { errorCode: "cannot_delete_main_agent", error: "Cannot delete main agent" },
+      { status: 400 },
+    );
+  }
 
   const [channel] = await db
     .select({ ownerId: channels.ownerId })
@@ -78,22 +108,35 @@ export async function DELETE(
     .where(eq(channels.id, id))
     .limit(1);
 
-  if (!channel) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (channel.ownerId !== userId) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!channel) {
+    return NextResponse.json({ errorCode: "channel_not_found", error: "not found" }, { status: 404 });
+  }
+  if (channel.ownerId !== userId) return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
 
   // Check if agent is in use by any NPC
   const channelNpcs = await db.select().from(npcs).where(eq(npcs.channelId, id));
   const inUse = channelNpcs.some((npc) => {
-    const oc = npc.openclawConfig as Record<string, unknown> | null;
+    const oc = parseDbObject(npc.openclawConfig);
     return oc?.agentId === agentId;
   });
-  if (inUse) return NextResponse.json({ error: "Agent is in use by an NPC" }, { status: 409 });
+  if (inUse) {
+    return NextResponse.json(
+      { errorCode: "agent_in_use_by_npc", error: "Agent is in use by an NPC" },
+      { status: 409 },
+    );
+  }
 
   try {
     await internalRpc(id, "agents.delete", { agentId, deleteFiles: true });
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Failed to remove agent:", err);
-    return NextResponse.json({ error: "Failed to remove agent from gateway" }, { status: 500 });
+    return NextResponse.json(
+      {
+        errorCode: "failed_to_remove_agent_from_gateway",
+        error: "Failed to remove agent from gateway",
+      },
+      { status: 500 },
+    );
   }
 }

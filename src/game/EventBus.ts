@@ -44,23 +44,35 @@ class SimpleEventEmitter {
 
 export const EventBus = new SimpleEventEmitter();
 
-// Pending channel data — set before GameScene creates, read during create()
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export let pendingChannelData: {
+export type PendingChannelData = {
   channelId: string;
-  mapData: any;
-  tiledJson?: any;
-  mapConfig?: any;
+  mapData: unknown;
+  tiledJson?: unknown;
+  mapConfig?: unknown;
   savedPosition?: { x: number; y: number } | null;
-} | null = null;
+  reportWaitSeconds?: number;
+} | null;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function setPendingChannelData(data: {
-  channelId: string;
-  mapData: any;
-  tiledJson?: any;
-  mapConfig?: any;
-  savedPosition?: { x: number; y: number } | null;
-} | null) {
+const PENDING_CHANNEL_DATA_KEY = "__deskrpgPendingChannelData";
+
+function readPendingChannelData(): PendingChannelData {
+  if (typeof globalThis === "undefined") return null;
+  return (globalThis as typeof globalThis & { [PENDING_CHANNEL_DATA_KEY]?: PendingChannelData })[
+    PENDING_CHANNEL_DATA_KEY
+  ] ?? null;
+}
+
+function writePendingChannelData(data: PendingChannelData) {
+  if (typeof globalThis === "undefined") return;
+  (globalThis as typeof globalThis & { [PENDING_CHANNEL_DATA_KEY]?: PendingChannelData })[
+    PENDING_CHANNEL_DATA_KEY
+  ] = data;
+}
+
+// Pending channel data — set before GameScene creates, read during create()
+export let pendingChannelData: PendingChannelData = readPendingChannelData();
+
+export function setPendingChannelData(data: PendingChannelData) {
   pendingChannelData = data;
+  writePendingChannelData(data);
 }

@@ -1,16 +1,23 @@
 import { randomUUID } from "node:crypto";
 
-import { db, groupInvites, users } from "@/db";
+import { db, groupInvites, isPostgres, users } from "@/db";
 import {
+  deriveGroupInviteStatus,
   getAuthenticatedUserId,
   getGroupActorContext,
   groupAdminRequiredResponse,
   groupNotFoundResponse,
   hasGroupPermission,
+  normalizeInviteCreationInput,
   unauthorizedResponse,
 } from "@/lib/rbac/group-api";
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+
+function normalizeTimestamp(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : value;
+}
 
 async function requireInviteManager(groupId: string, userId: string) {
   const context = await getGroupActorContext(groupId, userId);
@@ -36,6 +43,7 @@ export async function GET(
   const { id: groupId } = await params;
   const auth = await requireInviteManager(groupId, userId);
   if ("response" in auth) return auth.response;
+  const now = new Date().toISOString();
 
   const rows = await db
     .select({
@@ -56,7 +64,18 @@ export async function GET(
     .where(eq(groupInvites.groupId, groupId))
     .orderBy(groupInvites.createdAt);
 
-  return NextResponse.json({ invites: rows });
+  return NextResponse.json({
+    invites: rows.map((row) => ({
+      ...row,
+      status: deriveGroupInviteStatus({
+        acceptedAt: normalizeTimestamp(row.acceptedAt),
+        revokedAt: normalizeTimestamp(row.revokedAt),
+        expiresAt: normalizeTimestamp(row.expiresAt),
+        now,
+      }),
+      isReusable: !row.targetUserId && !row.targetLoginId,
+    })),
+  });
 }
 
 export async function POST(
@@ -72,22 +91,24 @@ export async function POST(
 
   const body = await req.json();
   const { targetUserId, targetLoginId, expiresAt } = body ?? {};
-
-  if (
-    (typeof targetUserId !== "string" || !targetUserId) &&
-    (typeof targetLoginId !== "string" || !targetLoginId)
-  ) {
+  const normalized = normalizeInviteCreationInput({
+    targetUserId,
+    targetLoginId,
+    expiresAt,
+    now: new Date().toISOString(),
+  });
+  if (!normalized.ok) {
     return NextResponse.json(
-      { errorCode: "missing_required_fields", error: "invite target is required" },
-      { status: 400 },
+      { errorCode: normalized.errorCode, error: "invite expiration is invalid" },
+      { status: normalized.status },
     );
   }
 
-  if (typeof targetUserId === "string" && targetUserId) {
+  if (normalized.targetUserId) {
     const [targetUser] = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.id, targetUserId))
+      .where(eq(users.id, normalized.targetUserId))
       .limit(1);
 
     if (!targetUser) {
@@ -104,9 +125,11 @@ export async function POST(
       groupId,
       token: randomUUID().replace(/-/g, ""),
       createdBy: userId,
-      targetUserId: typeof targetUserId === "string" ? targetUserId : null,
-      targetLoginId: typeof targetLoginId === "string" ? targetLoginId.trim() : null,
-      expiresAt: typeof expiresAt === "string" ? expiresAt : null,
+      targetUserId: normalized.targetUserId,
+      targetLoginId: normalized.targetLoginId,
+      expiresAt: normalized.expiresAt
+        ? ((isPostgres ? new Date(normalized.expiresAt) : normalized.expiresAt) as unknown as Date)
+        : null,
     })
     .returning();
 
@@ -136,7 +159,7 @@ export async function DELETE(
   const now = new Date().toISOString();
   const revoked = await db
     .update(groupInvites)
-    .set({ revokedAt: now })
+    .set({ revokedAt: (isPostgres ? new Date(now) : now) as unknown as Date })
     .where(and(eq(groupInvites.id, inviteId), eq(groupInvites.groupId, groupId)))
     .returning();
 

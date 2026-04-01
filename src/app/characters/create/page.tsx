@@ -3,17 +3,19 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useT } from "@/lib/i18n";
+import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import CharacterPreview from "@/components/CharacterPreview";
 import AppearanceEditor from "@/components/AppearanceEditor";
-import { useCharacterAppearance, getDefaultLayers } from "@/hooks/useCharacterAppearance";
+import { useCharacterAppearance } from "@/hooks/useCharacterAppearance";
 import { OFFICE_PRESETS, type OfficePreset } from "@/lib/office-presets";
 import type { CharacterAppearance } from "@/lib/lpc-registry";
 import { useEffect } from "react";
 
 export default function CharacterCreatePage() {
+  const t = useT();
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">{t("common.loading")}</div>}>
       <CharacterCreatePageInner />
     </Suspense>
   );
@@ -56,10 +58,10 @@ function CharacterCreatePageInner() {
         setLoadingEdit(false);
       })
       .catch(() => {
-        setError("Failed to load character");
+        setError(t("errors.failedToLoadCharacter"));
         setLoadingEdit(false);
       });
-  }, [editId, setBodyType, setLayers]);
+  }, [editId, setBodyType, setLayers, t]);
 
   // Apply a preset outfit
   const applyPreset = (preset: OfficePreset) => {
@@ -69,7 +71,7 @@ function CharacterCreatePageInner() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      setError("Name is required");
+      setError(t("errors.characterNameRequired"));
       return;
     }
     setSaving(true);
@@ -84,7 +86,7 @@ function CharacterCreatePageInner() {
         });
         if (!res.ok) {
           const data = await res.json();
-          setError(data.error || "Failed to update character");
+          setError(getLocalizedErrorMessage(t, data, "errors.failedToUpdateCharacter"));
           setSaving(false);
           return;
         }
@@ -97,7 +99,7 @@ function CharacterCreatePageInner() {
         });
         if (!res.ok) {
           const data = await res.json();
-          setError(data.error || "Failed to create character");
+          setError(getLocalizedErrorMessage(t, data, "errors.failedToCreateCharacter"));
           setSaving(false);
           return;
         }
@@ -109,7 +111,7 @@ function CharacterCreatePageInner() {
         }
       }
     } catch {
-      setError("Network error");
+      setError(t("common.networkError"));
       setSaving(false);
     }
   };

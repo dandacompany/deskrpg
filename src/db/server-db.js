@@ -6,6 +6,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 
@@ -532,7 +533,8 @@ if (isPostgres) {
   const Database = require("better-sqlite3");
 
   // Ensure data/ directory exists for the DB file
-  const dbPath = process.env.SQLITE_PATH || path.join(__dirname, "../../data/deskrpg.db");
+  const deskRpgHome = process.env.DESKRPG_HOME || path.join(os.homedir(), ".deskrpg");
+  const dbPath = process.env.SQLITE_PATH || path.join(deskRpgHome, "data", "deskrpg.db");
   const dbDir = path.dirname(dbPath);
   if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true });

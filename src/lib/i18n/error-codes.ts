@@ -32,6 +32,12 @@ export type ErrorCode =
   | "failed_to_join_channel"
   | "failed_to_reach_test_endpoint"
   | "failed_to_resolve_invite_code"
+  | "invite_expiration_invalid"
+  | "group_invite_expired"
+  | "group_invite_revoked"
+  | "group_invite_target_mismatch"
+  | "group_invite_already_used"
+  | "already_group_member"
   | "failed_to_load_character"
   | "character_name_required"
   | "character_name_length_invalid"
@@ -97,6 +103,9 @@ export type ErrorCode =
   | "position_required"
   | "failed_to_save_position"
   | "file_required"
+  | "upload_file_too_large"
+  | "upload_archive_too_large"
+  | "upload_archive_too_many_entries"
   | "failed_to_upload_template"
   | "failed_to_fetch_stamps"
   | "failed_to_fetch_stamp"
@@ -147,6 +156,12 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   failed_to_join_channel: "errors.failedToJoinChannel",
   failed_to_reach_test_endpoint: "errors.failedToReachTestEndpoint",
   failed_to_resolve_invite_code: "errors.failedToResolveInviteCode",
+  invite_expiration_invalid: "errors.inviteExpirationInvalid",
+  group_invite_expired: "errors.groupInviteExpired",
+  group_invite_revoked: "errors.groupInviteRevoked",
+  group_invite_target_mismatch: "errors.groupInviteTargetMismatch",
+  group_invite_already_used: "errors.groupInviteAlreadyUsed",
+  already_group_member: "errors.alreadyGroupMember",
   failed_to_load_character: "errors.failedToLoadCharacter",
   character_name_required: "errors.characterNameRequired",
   character_name_length_invalid: "errors.characterNameLengthInvalid",
@@ -212,6 +227,9 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   position_required: "errors.positionRequired",
   failed_to_save_position: "errors.failedToSavePosition",
   file_required: "errors.fileRequired",
+  upload_file_too_large: "errors.uploadFileTooLarge",
+  upload_archive_too_large: "errors.uploadArchiveTooLarge",
+  upload_archive_too_many_entries: "errors.uploadArchiveTooManyEntries",
   failed_to_upload_template: "errors.failedToUploadTemplate",
   failed_to_fetch_stamps: "errors.failedToFetchStamps",
   failed_to_fetch_stamp: "errors.failedToFetchStamp",

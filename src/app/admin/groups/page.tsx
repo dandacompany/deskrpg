@@ -63,7 +63,7 @@ function AdminGroupsPageInner() {
         return data;
       })
       .then((data) => {
-        const nextGroups = Array.isArray(data.groups) ? data.groups : [];
+        const nextGroups: GroupRow[] = Array.isArray(data.groups) ? data.groups : [];
         setGroups(nextGroups);
         const nextManageableGroups = nextGroups.filter((group) => group.canManageGroup);
         setSelectedGroupId(nextManageableGroups[0]?.id ?? "");
@@ -154,7 +154,15 @@ function AdminGroupsPageInner() {
 
               <main>
                 {selectedGroup
-                  ? <GroupAccessPanel groupId={selectedGroup.id} groupName={selectedGroup.name} />
+                  ? (
+                    <GroupAccessPanel
+                      groupId={selectedGroup.id}
+                      groupName={selectedGroup.name}
+                      canManageMembers={selectedGroup.canManageMembers ?? false}
+                      canManagePermissions={selectedGroup.canManagePermissions ?? false}
+                      canApproveJoinRequests={selectedGroup.canApproveJoinRequests ?? false}
+                    />
+                  )
                   : null}
               </main>
             </div>

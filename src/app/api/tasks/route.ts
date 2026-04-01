@@ -5,13 +5,15 @@ import { eq, desc } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
   const userId = req.headers.get("x-user-id");
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) {
+    return NextResponse.json({ errorCode: "unauthorized", error: "Unauthorized" }, { status: 401 });
+  }
 
   const channelId = req.nextUrl.searchParams.get("channelId");
   const npcId = req.nextUrl.searchParams.get("npcId");
 
   if (!channelId) {
-    return NextResponse.json({ error: "channelId required" }, { status: 400 });
+    return NextResponse.json({ errorCode: "channel_id_required", error: "channelId required" }, { status: 400 });
   }
 
   try {
@@ -47,6 +49,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     console.error("[Tasks API] Error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ errorCode: "internal_server_error", error: "Internal server error" }, { status: 500 });
   }
 }

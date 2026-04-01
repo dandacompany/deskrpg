@@ -1,10 +1,28 @@
-import { db } from "@/db";
+import { db, tilesetImages, isPostgres, jsonForDb } from "@/db";
 import { channels, channelMembers, groupMembers, groups } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
 import { getUserId } from "@/lib/internal-rpc";
+import { parseDbJson, parseDbObject } from "@/lib/db-json";
+import { buildGatewayConfig, getTaskAutomationConfig } from "@/lib/task-reporting";
 import { summarizeChannelDetailAccess, summarizeChannelJoinAccess } from "@/lib/rbac/channel-access";
+import { isChannelPasswordValid } from "@/lib/security-policy";
+import internalTransport from "@/lib/internal-transport.js";
+
+const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport as {
+  buildInternalAuthHeaders: () => Record<string, string>;
+  getInternalSocketBaseUrl: () => string;
+};
+
+type RestorableMapTileset = {
+  name?: string;
+  image?: string;
+};
+
+type RestorableMapData = {
+  tilesets?: RestorableMapTileset[];
+};
 
 // GET /api/channels/:id — get channel details + map data
 export async function GET(
@@ -12,7 +30,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
 
@@ -40,7 +58,10 @@ export async function GET(
       .limit(1);
 
     if (rows.length === 0) {
-      return NextResponse.json({ error: "Channel not found" }, { status: 404 });
+      return NextResponse.json(
+        { errorCode: "channel_not_found", error: "Channel not found" },
+        { status: 404 },
+      );
     }
 
     const channel = rows[0];
@@ -79,7 +100,10 @@ export async function GET(
 
     if (!detailAccess.allowed) {
       if (detailAccess.reason === "legacy_private_password_required") {
-        return NextResponse.json({ error: "password_required" }, { status: 403 });
+        return NextResponse.json(
+          { errorCode: "password_required", error: "password_required" },
+          { status: 403 },
+        );
       }
 
       return NextResponse.json(
@@ -88,10 +112,38 @@ export async function GET(
       );
     }
 
-    const { gatewayConfig, ...channelWithoutGateway } = channel;
+    // Restore tileset images in mapData if they were stripped
+    const parsedMapData = parseDbJson<Record<string, unknown>>(channel.mapData) ?? channel.mapData;
+    const parsedMapConfig = parseDbJson<Record<string, unknown>>(channel.mapConfig) ?? channel.mapConfig;
+
+    if (parsedMapData && typeof parsedMapData === "object" && !Array.isArray(parsedMapData)) {
+      try {
+        const mapObj = parsedMapData as RestorableMapData;
+        if (mapObj?.tilesets) {
+          let restored = false;
+          for (const ts of mapObj.tilesets) {
+            if ((!ts.image || ts.image === '') && ts.name) {
+              const [dbTs] = await db.select({ image: tilesetImages.image })
+                .from(tilesetImages).where(eq(tilesetImages.name, ts.name)).limit(1);
+              if (dbTs) { ts.image = dbTs.image; restored = true; }
+            }
+          }
+          if (restored) {
+            (channel as Record<string, unknown>).mapData = mapObj;
+          }
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
+    const parsedGatewayConfig = parseDbObject(channel.gatewayConfig);
+    const normalizedGatewayConfig = buildGatewayConfig(parsedGatewayConfig);
+    const channelWithoutGateway = { ...channel } as Record<string, unknown>;
+    delete channelWithoutGateway.gatewayConfig;
     return NextResponse.json({
       channel: {
         ...channelWithoutGateway,
+        mapData: (channel as Record<string, unknown>).mapData ?? parsedMapData,
+        mapConfig: parsedMapConfig,
         isOwner,
         isMember,
         canView: true,
@@ -101,14 +153,20 @@ export async function GET(
         requiresPassword: detailAccess.requiresPassword,
         groupId: channel.groupId,
         groupName: channel.groupName,
-        hasGateway: !!(gatewayConfig as { url?: string } | null)?.url,
+        hasGateway: !!normalizedGatewayConfig.url,
+        gatewayConfig: {
+          taskAutomation: getTaskAutomationConfig(parsedGatewayConfig),
+        },
         lastX,
         lastY,
       },
     });
   } catch (err) {
     console.error("Failed to fetch channel:", err);
-    return NextResponse.json({ error: "Failed to fetch channel" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_fetch_channel", error: "Failed to fetch channel" },
+      { status: 500 },
+    );
   }
 }
 
@@ -118,7 +176,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
 
@@ -131,11 +189,11 @@ export async function PUT(
       .limit(1);
 
     if (rows.length === 0) {
-      return NextResponse.json({ error: "Channel not found" }, { status: 404 });
+      return NextResponse.json({ errorCode: "channel_not_found", error: "Channel not found" }, { status: 404 });
     }
 
     if (rows[0].ownerId !== userId) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return NextResponse.json({ errorCode: "forbidden", error: "Not authorized" }, { status: 403 });
     }
 
     const body = await req.json();
@@ -144,8 +202,8 @@ export async function PUT(
     if (body.name !== undefined) updates.name = body.name.trim();
     if (body.description !== undefined) updates.description = body.description?.trim() || null;
     if (body.maxPlayers !== undefined) updates.maxPlayers = body.maxPlayers;
-    if (body.mapData !== undefined) updates.mapData = body.mapData;
-    if (body.mapConfig !== undefined) updates.mapConfig = body.mapConfig;
+    if (body.mapData !== undefined) updates.mapData = jsonForDb(body.mapData);
+    if (body.mapConfig !== undefined) updates.mapConfig = jsonForDb(body.mapConfig);
 
     if (body.isPublic !== undefined) {
       updates.isPublic = body.isPublic;
@@ -157,13 +215,16 @@ export async function PUT(
 
     // Handle password update
     if (body.password !== undefined) {
-      if (typeof body.password !== "string" || body.password.length < 4) {
-        return NextResponse.json({ error: "Password must be at least 4 characters" }, { status: 400 });
+      if (typeof body.password !== "string" || !isChannelPasswordValid(body.password)) {
+        return NextResponse.json(
+          { errorCode: "channel_password_length_invalid", error: "Password must be at least 8 characters" },
+          { status: 400 },
+        );
       }
       updates.password = await hashPassword(body.password);
     }
 
-    updates.updatedAt = new Date();
+    updates.updatedAt = (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date;
 
     const [updated] = await db
       .update(channels)
@@ -185,10 +246,12 @@ export async function PUT(
 
     // Emit socket event to notify clients of channel update
     try {
-      const socketPort = (parseInt(process.env.PORT ?? "3000") + 1).toString();
-      await fetch(`http://localhost:${socketPort}/_internal/emit`, {
+      await fetch(`${getInternalSocketBaseUrl()}/_internal/emit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...buildInternalAuthHeaders(),
+        },
         body: JSON.stringify({
           event: "channel:updated",
           room: id,
@@ -203,7 +266,10 @@ export async function PUT(
     return NextResponse.json({ channel: updated });
   } catch (err) {
     console.error("Failed to update channel:", err);
-    return NextResponse.json({ error: "Failed to update channel" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_update_channel", error: "Failed to update channel" },
+      { status: 500 },
+    );
   }
 }
 
@@ -213,7 +279,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
 
@@ -225,19 +291,21 @@ export async function DELETE(
       .limit(1);
 
     if (rows.length === 0) {
-      return NextResponse.json({ error: "Channel not found" }, { status: 404 });
+      return NextResponse.json({ errorCode: "channel_not_found", error: "Channel not found" }, { status: 404 });
     }
 
     if (rows[0].ownerId !== userId) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return NextResponse.json({ errorCode: "forbidden", error: "Not authorized" }, { status: 403 });
     }
 
     // Notify connected players before deletion
     try {
-      const socketPort = (parseInt(process.env.PORT ?? "3000") + 1).toString();
-      await fetch(`http://localhost:${socketPort}/_internal/emit`, {
+      await fetch(`${getInternalSocketBaseUrl()}/_internal/emit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...buildInternalAuthHeaders(),
+        },
         body: JSON.stringify({
           event: "channel:deleted",
           room: id,
@@ -256,6 +324,9 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Failed to delete channel:", err);
-    return NextResponse.json({ error: "Failed to delete channel" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_delete_channel", error: "Failed to delete channel" },
+      { status: 500 },
+    );
   }
 }

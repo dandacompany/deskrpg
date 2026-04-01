@@ -1,11 +1,33 @@
+import { getLocalRpcHandler } from "./rpc-registry";
+import internalTransport from "./internal-transport.js";
+
+const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport as {
+  buildInternalAuthHeaders: () => Record<string, string>;
+  getInternalSocketBaseUrl: () => string;
+};
+
 /**
- * Internal RPC helper — calls server.js /_internal/rpc to proxy WebSocket RPC calls to OpenClaw gateway.
+ * Calls the OpenClaw gateway RPC.
+ *
+ * - Same process (dev): delegates to the in-process handler registered by
+ *   dev-server.ts via registerRpcHandler(). No HTTP, no port dependency.
+ * - Separate process (production): HTTP POST to server.js on PORT+1.
  */
-export async function internalRpc(channelId: string, method: string, params: Record<string, unknown> = {}) {
-  const socketPort = (parseInt(process.env.PORT ?? "3000") + 1).toString();
-  const res = await fetch(`http://localhost:${socketPort}/_internal/rpc`, {
+export async function internalRpc(
+  channelId: string,
+  method: string,
+  params: Record<string, unknown> = {},
+) {
+  const local = getLocalRpcHandler();
+  if (local) return local(channelId, method, params);
+
+  // Production fallback: server.js runs Socket.io on PORT+1
+  const res = await fetch(`${getInternalSocketBaseUrl()}/_internal/rpc`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...buildInternalAuthHeaders(),
+    },
     body: JSON.stringify({ channelId, method, params }),
     signal: AbortSignal.timeout(30_000),
   });

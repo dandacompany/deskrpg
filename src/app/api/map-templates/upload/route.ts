@@ -5,6 +5,14 @@ import { tmxToJson } from "@/lib/tmx-parser";
 import JSZip from "jszip";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import {
+  UploadLimitError,
+  consumeArchiveEntry,
+  throwIfUploadLimitExceeded,
+  validateAuxiliaryUploadSize,
+  validateMainUploadSize,
+} from "@/lib/upload-limits";
+import { getDeskRpgTemplateUploadDir } from "@/lib/runtime-paths";
 
 /**
  * Upload map template — supports:
@@ -13,7 +21,7 @@ import * as path from "node:path";
  */
 export async function POST(req: NextRequest) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   try {
     const formData = await req.formData();
@@ -24,8 +32,9 @@ export async function POST(req: NextRequest) {
     const tags = (formData.get("tags") as string) || null;
 
     if (!file) {
-      return NextResponse.json({ error: "File is required" }, { status: 400 });
+      return NextResponse.json({ errorCode: "file_required", error: "File is required" }, { status: 400 });
     }
+    throwIfUploadLimitExceeded(validateMainUploadSize(file.size));
 
     const fileName = file.name.toLowerCase();
     let tiledJson: Record<string, unknown>;
@@ -68,6 +77,7 @@ export async function POST(req: NextRequest) {
     // Also collect any separately uploaded tileset files
     for (const [key, value] of formData.entries()) {
       if (key === "tilesetFiles" && value instanceof File) {
+        throwIfUploadLimitExceeded(validateAuxiliaryUploadSize(value.size));
         const buf = Buffer.from(await value.arrayBuffer());
         imageFiles.set(value.name, buf);
       }
@@ -92,7 +102,7 @@ export async function POST(req: NextRequest) {
 
     // Save tileset images
     if (imageFiles.size > 0) {
-      const uploadDir = path.join(process.cwd(), "public", "assets", "uploads", template.id);
+      const uploadDir = getDeskRpgTemplateUploadDir(template.id);
 
       for (const [relPath, buffer] of imageFiles) {
         // Flatten to just filename (strip directory prefixes)
@@ -128,8 +138,14 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ template }, { status: 201 });
   } catch (err) {
+    if (err instanceof UploadLimitError) {
+      return NextResponse.json({ errorCode: err.errorCode, error: err.message }, { status: err.status });
+    }
     console.error("Failed to upload map template:", err);
-    return NextResponse.json({ error: `Upload failed: ${err instanceof Error ? err.message : "unknown"}` }, { status: 500 });
+    return NextResponse.json({
+      errorCode: "failed_to_upload_template",
+      error: `Upload failed: ${err instanceof Error ? err.message : "unknown"}`,
+    }, { status: 500 });
   }
 }
 
@@ -148,6 +164,7 @@ async function processZip(buffer: ArrayBuffer): Promise<{
 }> {
   const zip = await JSZip.loadAsync(buffer);
   const files = Object.entries(zip.files);
+  let archiveBudget = { entries: 0, totalBytes: 0 };
 
   // Find map files (.tmj, .tmx, .json with tiled content)
   let mapFile: { name: string; content: string } | null = null;
@@ -164,11 +181,24 @@ async function processZip(buffer: ArrayBuffer): Promise<{
 
     if (lower.endsWith(".tmj") || lower.endsWith(".tmx")) {
       if (!mapFile) {
-        mapFile = { name: filePath, content: await zipEntry.async("text") };
+        const content = await zipEntry.async("text");
+        const budgetResult = consumeArchiveEntry(archiveBudget, Buffer.byteLength(content));
+        if (!budgetResult.ok) {
+          throwIfUploadLimitExceeded(budgetResult.errorCode);
+        } else {
+          archiveBudget = budgetResult.budget;
+        }
+        mapFile = { name: filePath, content };
       }
     } else if (lower.endsWith(".json") && !mapFile) {
       // Could be a Tiled JSON map — check content
       const text = await zipEntry.async("text");
+      const budgetResult = consumeArchiveEntry(archiveBudget, Buffer.byteLength(text));
+      if (!budgetResult.ok) {
+        throwIfUploadLimitExceeded(budgetResult.errorCode);
+      } else {
+        archiveBudget = budgetResult.budget;
+      }
       try {
         const parsed = JSON.parse(text);
         if (parsed.tiledversion || parsed.layers) {
@@ -177,6 +207,13 @@ async function processZip(buffer: ArrayBuffer): Promise<{
       } catch { /* not JSON, skip */ }
     } else if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp")) {
       const buf = await zipEntry.async("nodebuffer");
+      throwIfUploadLimitExceeded(validateAuxiliaryUploadSize(buf.length));
+      const budgetResult = consumeArchiveEntry(archiveBudget, buf.length);
+      if (!budgetResult.ok) {
+        throwIfUploadLimitExceeded(budgetResult.errorCode);
+      } else {
+        archiveBudget = budgetResult.budget;
+      }
       // Store with both full relative path and basename for matching
       imageFiles.set(filePath, buf);
       imageFiles.set(path.basename(filePath), buf);

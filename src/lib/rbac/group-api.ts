@@ -9,6 +9,7 @@ import { resolvePermission, type PermissionEffect } from "./permissions";
 
 type JoinRequestStatus = "pending" | "approved" | "rejected";
 type JoinRequestAction = "approve" | "reject";
+type GroupInviteStatus = "active" | "expired" | "revoked" | "accepted";
 
 export type GroupActorContext = {
   userId: string;
@@ -31,6 +32,138 @@ export type GroupManagementCapabilities = {
   canApproveJoinRequests: boolean;
   canManageGroup: boolean;
 };
+
+export function normalizeInviteCreationInput(input: {
+  targetUserId: string | null | undefined;
+  targetLoginId: string | null | undefined;
+  expiresAt: string | null | undefined;
+  now: string;
+}) {
+  const targetUserId =
+    typeof input.targetUserId === "string" && input.targetUserId.trim()
+      ? input.targetUserId.trim()
+      : null;
+  const targetLoginId =
+    typeof input.targetLoginId === "string" && input.targetLoginId.trim()
+      ? input.targetLoginId.trim()
+      : null;
+
+  let normalizedExpiresAt: string | null = null;
+  if (typeof input.expiresAt === "string" && input.expiresAt.trim()) {
+    const expiresAtTime = Date.parse(input.expiresAt);
+    const nowTime = Date.parse(input.now);
+    if (Number.isNaN(expiresAtTime) || expiresAtTime <= nowTime) {
+      return {
+        ok: false as const,
+        errorCode: "invite_expiration_invalid" as const,
+        status: 400,
+      };
+    }
+    normalizedExpiresAt = new Date(expiresAtTime).toISOString();
+  }
+
+  return {
+    ok: true as const,
+    targetUserId,
+    targetLoginId,
+    expiresAt: normalizedExpiresAt,
+  };
+}
+
+export function deriveGroupInviteStatus(input: {
+  acceptedAt: string | null;
+  revokedAt: string | null;
+  expiresAt: string | null;
+  now: string;
+}): GroupInviteStatus {
+  if (input.revokedAt) {
+    return "revoked";
+  }
+  if (input.acceptedAt) {
+    return "accepted";
+  }
+  if (input.expiresAt) {
+    const expiresAtTime = Date.parse(input.expiresAt);
+    const nowTime = Date.parse(input.now);
+    if (!Number.isNaN(expiresAtTime) && expiresAtTime <= nowTime) {
+      return "expired";
+    }
+  }
+  return "active";
+}
+
+export function resolveInviteAcceptance(input: {
+  targetUserId: string | null;
+  targetLoginId: string | null;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+  expiresAt: string | null;
+  currentUserId: string;
+  currentLoginId: string;
+  currentMembershipRole: GroupMemberRole | null;
+  now: string;
+}) {
+  const status = deriveGroupInviteStatus({
+    acceptedAt: input.acceptedAt,
+    revokedAt: input.revokedAt,
+    expiresAt: input.expiresAt,
+    now: input.now,
+  });
+
+  if (status === "revoked") {
+    return {
+      ok: false as const,
+      errorCode: "group_invite_revoked" as const,
+      status: 410,
+    };
+  }
+
+  if (status === "accepted") {
+    return {
+      ok: false as const,
+      errorCode: "group_invite_already_used" as const,
+      status: 409,
+    };
+  }
+
+  if (status === "expired") {
+    return {
+      ok: false as const,
+      errorCode: "group_invite_expired" as const,
+      status: 410,
+    };
+  }
+
+  if (input.currentMembershipRole) {
+    return {
+      ok: false as const,
+      errorCode: "already_group_member" as const,
+      status: 409,
+    };
+  }
+
+  if (input.targetUserId && input.targetUserId !== input.currentUserId) {
+    return {
+      ok: false as const,
+      errorCode: "group_invite_target_mismatch" as const,
+      status: 403,
+    };
+  }
+
+  if (input.targetLoginId && input.targetLoginId !== input.currentLoginId) {
+    return {
+      ok: false as const,
+      errorCode: "group_invite_target_mismatch" as const,
+      status: 403,
+    };
+  }
+
+  return {
+    ok: true as const,
+    shouldCreateMembership: true,
+    shouldMarkAccepted: Boolean(input.targetUserId || input.targetLoginId),
+  };
+}
 
 export function canWriteGroupPermissionEffect(input: {
   permissionKey: PermissionKey;

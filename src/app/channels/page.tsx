@@ -24,6 +24,7 @@ interface Channel {
   maxPlayers: number;
   playerCount: number;
   createdAt: string;
+  canView?: boolean;
   canJoin?: boolean;
   requiresGroupMembership?: boolean;
   requiresPassword?: boolean;
@@ -41,11 +42,12 @@ interface GroupOption {
 }
 
 export default function ChannelsPage() {
+  const t = useT();
   return (
     <Suspense
       fallback={
         <div className="theme-web min-h-screen flex items-center justify-center bg-bg text-text">
-          Loading...
+          {t("common.loading")}
         </div>
       }
     >
@@ -64,9 +66,27 @@ function ChannelsPageInner() {
   const [loading, setLoading] = useState(true);
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
+  const [groupInviteCode, setGroupInviteCode] = useState("");
+  const [groupInviteError, setGroupInviteError] = useState("");
+  const [groupInviteSuccess, setGroupInviteSuccess] = useState("");
   const [passwordChannel, setPasswordChannel] = useState<Channel | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [availableGroups, setAvailableGroups] = useState<GroupOption[]>([]);
+
+  const fetchLobbyData = async () => {
+    const [channelResponse, groupResponse] = await Promise.all([
+      fetch("/api/channels"),
+      fetch("/api/groups")
+        .then((res) => (res.ok ? res.json() : { groups: [] }))
+        .catch(() => ({ groups: [] })),
+    ]);
+    const channelData = await channelResponse.json();
+    return {
+      channels: channelData.channels || [],
+      currentUserId: channelData.currentUserId || null,
+      availableGroups: groupResponse.groups || [],
+    };
+  };
 
   useEffect(() => {
     if (!characterId) {
@@ -74,21 +94,16 @@ function ChannelsPageInner() {
       return;
     }
 
-    Promise.all([
-      fetch("/api/channels").then((res) => res.json()),
-      fetch("/api/groups")
-        .then((res) => (res.ok ? res.json() : { groups: [] }))
-        .catch(() => ({ groups: [] })),
-    ])
-      .then(([channelData, groupData]) => {
-        setChannels(channelData.channels || []);
-        setCurrentUserId(channelData.currentUserId || null);
-        setAvailableGroups(groupData.groups || []);
+    void (async () => {
+      try {
+        const data = await fetchLobbyData();
+        setChannels(data.channels);
+        setCurrentUserId(data.currentUserId);
+        setAvailableGroups(data.availableGroups);
+      } finally {
         setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
+      }
+    })();
   }, [characterId, router]);
 
   const handleDeleteChannel = async (e: React.MouseEvent, channelId: string) => {
@@ -127,19 +142,22 @@ function ChannelsPageInner() {
     }
   };
 
-  const handlePasswordSubmit = async (password: string): Promise<boolean> => {
-    if (!passwordChannel) return false;
+  const handlePasswordSubmit = async (password: string): Promise<string | null> => {
+    if (!passwordChannel) return t("password.wrong");
     try {
       const res = await fetch(`/api/channels/${passwordChannel.id}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
       });
-      if (!res.ok) return false;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return getLocalizedErrorMessage(t, data, "password.wrong");
+      }
       router.push(`/game?channelId=${passwordChannel.id}&characterId=${characterId}`);
-      return true;
+      return null;
     } catch {
-      return false;
+      return t("channels.joinFailed");
     }
   };
 
@@ -159,6 +177,36 @@ function ChannelsPageInner() {
       router.push(`/game?channelId=${data.channel.id}&characterId=${characterId}`);
     } catch {
       setJoinError(t("channels.joinFailed"));
+    }
+  };
+
+  const handleGroupInviteAccept = async () => {
+    if (!groupInviteCode.trim()) return;
+    setGroupInviteError("");
+    setGroupInviteSuccess("");
+
+    try {
+      const res = await fetch(`/api/groups/invites/${groupInviteCode.trim()}`, {
+        method: "POST",
+      });
+      const inviteData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setGroupInviteError(getLocalizedErrorMessage(t, inviteData, "channels.invalidInvite"));
+        return;
+      }
+
+      const lobbyData = await fetchLobbyData();
+      setChannels(lobbyData.channels);
+      setCurrentUserId(lobbyData.currentUserId);
+      setAvailableGroups(lobbyData.availableGroups);
+      setGroupInviteSuccess(
+        t("channels.groupInviteAccepted", {
+          name: inviteData?.group?.name || t("channels.group"),
+        }),
+      );
+      setGroupInviteCode("");
+    } catch {
+      setGroupInviteError(t("channels.groupInviteFailed"));
     }
   };
 
@@ -244,6 +292,35 @@ function ChannelsPageInner() {
           )}
         </div>
 
+        <div className="mb-8 rounded-xl border border-border bg-surface p-4">
+          <div className="mb-3">
+            <h2 className="text-lg font-semibold">{t("channels.groupInviteTitle")}</h2>
+            <p className="text-sm text-text-muted">{t("channels.groupInviteSubtitle")}</p>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <input
+              type="text"
+              placeholder={t("channels.groupInvitePlaceholder")}
+              value={groupInviteCode}
+              onChange={(e) => setGroupInviteCode(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleGroupInviteAccept()}
+              className="px-3 py-2 bg-bg border border-border rounded text-text placeholder-text-dim focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent w-72"
+            />
+            <button
+              onClick={handleGroupInviteAccept}
+              className="px-4 py-2 bg-surface-raised hover:bg-surface-raised/80 rounded font-semibold"
+            >
+              {t("channels.groupInviteJoin")}
+            </button>
+          </div>
+          {groupInviteError && (
+            <p className="mt-2 text-sm text-danger">{groupInviteError}</p>
+          )}
+          {groupInviteSuccess && (
+            <p className="mt-2 text-sm text-primary-light">{groupInviteSuccess}</p>
+          )}
+        </div>
+
         {/* Channel grid */}
         {channels.length === 0 ? (
           <div className="text-center py-20">
@@ -300,7 +377,7 @@ function ChannelsPageInner() {
                   </p>
                 )}
                 <div className="flex items-center justify-between text-xs text-text-dim">
-                  <span>{t("channels.owner", { name: channel.ownerNickname || "Unknown" })}</span>
+                  <span>{t("channels.owner", { name: channel.ownerNickname || t("common.unknown") })}</span>
                   <span>
                     {t("channels.players", { count: channel.playerCount, max: channel.maxPlayers })}
                   </span>

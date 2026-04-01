@@ -16,6 +16,7 @@ export async function GET() {
         cols: mapTemplates.cols,
         rows: mapTemplates.rows,
         tags: mapTemplates.tags,
+        thumbnail: mapTemplates.thumbnail,
         createdAt: mapTemplates.createdAt,
       })
       .from(mapTemplates)
@@ -24,22 +25,25 @@ export async function GET() {
     return NextResponse.json({ templates: rows });
   } catch (err) {
     console.error("Failed to list map templates:", err);
-    return NextResponse.json({ error: "Failed to list templates" }, { status: 500 });
+    return NextResponse.json({ errorCode: "failed_to_list_templates", error: "Failed to list templates" }, { status: 500 });
   }
 }
 
 // POST /api/map-templates — create new template
 export async function POST(req: NextRequest) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   try {
     const body = await req.json();
-    const { name, icon, description, cols, rows, layers, objects, spawnCol, spawnRow, tags, tiledJson } = body;
+    const { name, icon, description, cols, rows, layers, objects, spawnCol, spawnRow, tags, tiledJson, thumbnail } = body;
 
     const validationError = validateMapTemplate({ name, cols, rows, layers, spawnCol, spawnRow, tiledJson });
     if (validationError) {
-      return NextResponse.json({ error: validationError }, { status: 400 });
+      return NextResponse.json(
+        { errorCode: "map_template_invalid", error: validationError },
+        { status: 400 },
+      );
     }
 
     const [template] = await db
@@ -53,6 +57,7 @@ export async function POST(req: NextRequest) {
         layers: layers ? jsonForDb(layers) : null,
         objects: objects ? jsonForDb(objects) : null,
         tiledJson: tiledJson ? jsonForDb(tiledJson) : null,
+        thumbnail: thumbnail || null,
         spawnCol,
         spawnRow,
         tags: tags?.trim() || null,
@@ -63,6 +68,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ template }, { status: 201 });
   } catch (err) {
     console.error("Failed to create map template:", err);
-    return NextResponse.json({ error: "Failed to create template" }, { status: 500 });
+    return NextResponse.json({ errorCode: "failed_to_create_template", error: "Failed to create template" }, { status: 500 });
   }
 }

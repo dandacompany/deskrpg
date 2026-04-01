@@ -14,16 +14,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
 import { internalRpc, getUserId } from "@/lib/internal-rpc";
+import { parseDbArray, parseDbJson } from "@/lib/db-json";
+import { getDefaultMeetingProtocol } from "@/lib/npc-agent-defaults";
+import { normalizeLocale } from "@/lib/i18n/server";
 import { resolvePermission, type PermissionEffect } from "@/lib/rbac/permissions";
+import type { GroupMemberRole, SystemRole } from "@/lib/rbac/constants";
+import { generateChannelInviteCode, isChannelPasswordValid } from "@/lib/security-policy";
 import {
   summarizeChannelCreateAccess,
   summarizeChannelDetailAccess,
   summarizeChannelJoinAccess,
 } from "@/lib/rbac/channel-access";
-
-function generateInviteCode(): string {
-  return Math.random().toString(36).substring(2, 10);
-}
 
 async function canCreateChannel(userId: string, groupId: string) {
   const [user] = await db
@@ -64,8 +65,8 @@ async function canCreateChannel(userId: string, groupId: string) {
     );
 
   const permissionDecision = resolvePermission({
-    systemRole: user.systemRole,
-    groupRole: membership?.role ?? null,
+    systemRole: user.systemRole as SystemRole,
+    groupRole: (membership?.role as GroupMemberRole | undefined) ?? null,
     permissionKey: "create_channel",
     groupEffects: groupEffectRows.map((row) => row.effect as PermissionEffect),
     userEffects: userEffectRows.map((row) => row.effect as PermissionEffect),
@@ -80,7 +81,9 @@ async function canCreateChannel(userId: string, groupId: string) {
 // GET /api/channels — list all channels (public + private) with membership info
 export async function GET(req: NextRequest) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) {
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  }
 
   try {
     const rows = await db
@@ -152,7 +155,7 @@ export async function GET(req: NextRequest) {
           requiresPassword: detailAccess.requiresPassword,
           groupId: r.groupId,
           groupName: r.groupName,
-          playerCount: 0,
+          playerCount: 0, // TODO: query from socket.io state
         };
       })
       .filter((channel): channel is NonNullable<typeof channel> => channel !== null);
@@ -160,25 +163,45 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ channels: result, currentUserId: userId });
   } catch (err) {
     console.error("Failed to fetch channels:", err);
-    return NextResponse.json({ error: "Failed to fetch channels" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_fetch_channels", error: "Failed to fetch channels" },
+      { status: 500 },
+    );
   }
 }
 
 // POST /api/channels — create new channel
 export async function POST(req: NextRequest) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) {
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  }
 
   try {
     const body = await req.json();
-    const { name, description, isPublic, mapTemplateId, password, gatewayConfig, defaultNpc, groupId } = body;
+    const {
+      name,
+      description,
+      isPublic,
+      mapTemplateId,
+      password,
+      gatewayConfig,
+      defaultNpc,
+      groupId,
+    } = body;
 
     if (!name || typeof name !== "string" || name.length < 1 || name.length > 100) {
-      return NextResponse.json({ error: "name is required (1-100 chars)" }, { status: 400 });
+      return NextResponse.json(
+        { errorCode: "channel_name_required", error: "name is required (1-100 chars)" },
+        { status: 400 },
+      );
     }
 
     if (!mapTemplateId) {
-      return NextResponse.json({ error: "mapTemplateId is required" }, { status: 400 });
+      return NextResponse.json(
+        { errorCode: "map_template_required", error: "mapTemplateId is required" },
+        { status: 400 },
+      );
     }
 
     if (!groupId || typeof groupId !== "string") {
@@ -223,30 +246,46 @@ export async function POST(req: NextRequest) {
       .limit(1);
 
     if (!template) {
-      return NextResponse.json({ error: "Map template not found" }, { status: 404 });
+      return NextResponse.json(
+        { errorCode: "map_template_not_found", error: "Map template not found" },
+        { status: 404 },
+      );
     }
 
     // Parse layers/objects if stored as JSON string (SQLite)
-    const templateLayers = typeof template.layers === "string" ? JSON.parse(template.layers) : template.layers;
-    const templateObjects = typeof template.objects === "string" ? JSON.parse(template.objects) : template.objects;
+    const templateLayers = parseDbJson(template.layers) ?? template.layers;
+    const templateObjects = parseDbArray(template.objects);
 
     // If template has tiledJson, store it directly as channel mapData
-    const templateTiledJson = template.tiledJson
-      ? (typeof template.tiledJson === "string" ? JSON.parse(template.tiledJson) : template.tiledJson)
-      : null;
+    const templateTiledJson = parseDbJson(template.tiledJson);
 
     const channelIsPublic = isPublic !== false;
 
     // Private channels require a password
     let passwordHash: string | null = null;
     if (!channelIsPublic) {
-      if (!password || typeof password !== "string" || password.length < 4) {
-        return NextResponse.json({ error: "Private channels require a password (min 4 chars)" }, { status: 400 });
+      if (!password || typeof password !== "string") {
+        return NextResponse.json(
+          {
+            errorCode: "private_channel_password_required",
+            error: "Private channels require a password",
+          },
+          { status: 400 },
+        );
+      }
+      if (!isChannelPasswordValid(password)) {
+        return NextResponse.json(
+          {
+            errorCode: "channel_password_length_invalid",
+            error: "Password must be at least 8 characters",
+          },
+          { status: 400 },
+        );
       }
       passwordHash = await hashPassword(password);
     }
 
-    const inviteCode = generateInviteCode();
+    const inviteCode = generateChannelInviteCode();
 
     const [channel] = await db
       .insert(channels)
@@ -277,12 +316,13 @@ export async function POST(req: NextRequest) {
       try {
         const agentId = defaultNpc.agentId || "main";
         const isMainAgent = agentId === "main";
+        const defaultNpcLocale = normalizeLocale(defaultNpc.locale);
+        const meetingProtocol = defaultNpc.meetingProtocol || getDefaultMeetingProtocol(defaultNpcLocale);
 
         // Setup agent on gateway via RPC (non-blocking on failure)
         try {
           if (!isMainAgent) {
             await internalRpc(channel.id, "agents.create", { name: agentId, workspace: `/workspace/${agentId}` });
-            console.log(`[channel] Created new agent: ${agentId}`);
           }
 
           // Write persona files
@@ -300,20 +340,16 @@ export async function POST(req: NextRequest) {
               content: defaultNpc.soul,
             });
           }
-          if (defaultNpc.meetingProtocol) {
-            await internalRpc(channel.id, "agents.files.set", {
-              agentId,
-              name: "AGENTS.md",
-              content: defaultNpc.meetingProtocol,
-            });
-          }
+          await internalRpc(channel.id, "agents.files.set", {
+            agentId,
+            name: "AGENTS.md",
+            content: meetingProtocol,
+          });
           await internalRpc(channel.id, "agents.files.set", {
             agentId,
             name: "USER.md",
             content: `# User\n- Name: Channel Owner\n`,
           });
-
-          console.log(`[channel] Initialized agent ${agentId} with persona files`);
         } catch (agentErr) {
           console.warn("Agent setup failed (NPC will still be created):", agentErr instanceof Error ? agentErr.message : agentErr);
         }
@@ -342,6 +378,8 @@ export async function POST(req: NextRequest) {
           openclawConfig: jsonForDb({
             agentId,
             sessionKeyPrefix: `ot-${channel.id.slice(0, 8)}-${agentId}`,
+            locale: defaultNpcLocale,
+            meetingProtocol,
             personaConfig: {
               identity: defaultNpc.identity || "",
               soul: defaultNpc.soul || "",
@@ -354,11 +392,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Return channel without password hash
-    const { password: _pw, ...channelWithoutPassword } = channel;
+    const { password: channelPassword, ...channelWithoutPassword } = channel;
+    void channelPassword;
 
     return NextResponse.json({ channel: channelWithoutPassword }, { status: 201 });
   } catch (err) {
     console.error("Failed to create channel:", err);
-    return NextResponse.json({ error: "Failed to create channel" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_create_channel", error: "Failed to create channel" },
+      { status: 500 },
+    );
   }
 }

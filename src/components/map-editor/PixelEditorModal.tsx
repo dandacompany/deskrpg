@@ -71,6 +71,80 @@ const ZOOM_LEVELS = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32] as const;
 const MIN_ZOOM = ZOOM_LEVELS[0];
 const MAX_ZOOM = ZOOM_LEVELS[ZOOM_LEVELS.length - 1];
 
+// === Dial Input (number input with drag-to-scrub) ===
+
+function DialInput({ value, onChange, min, max, step = 1, label, width = 'w-10' }: {
+  value: number; onChange: (v: number) => void;
+  min: number; max: number; step?: number; label?: string; width?: string;
+}) {
+  const dragRef = useRef<{ startX: number; startVal: number } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState(false);
+
+  const clamp = (v: number) => Math.max(min, Math.min(max, v));
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (editing) return;
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragRef.current = { startX: e.clientX, startVal: value };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const sensitivity = e.shiftKey ? 0.1 : 1;
+    const newVal = clamp(Math.round(dragRef.current.startVal + dx * sensitivity * step));
+    if (newVal !== value) onChange(newVal);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const dx = Math.abs(e.clientX - dragRef.current.startX);
+    if (dx < 3) {
+      // Click without drag → enter edit mode
+      setEditing(true);
+      setTimeout(() => inputRef.current?.select(), 0);
+    }
+    dragRef.current = null;
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const dir = e.deltaY < 0 ? 1 : -1;
+    onChange(clamp(value + dir * step));
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        defaultValue={value}
+        onBlur={(e) => { onChange(clamp(Number(e.target.value) || min)); setEditing(false); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { onChange(clamp(Number((e.target as HTMLInputElement).value) || min)); setEditing(false); } if (e.key === 'Escape') setEditing(false); }}
+        className={`${width} h-5 text-center text-micro bg-surface border border-primary-light rounded text-text outline-none`}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`${width} h-5 flex items-center justify-center text-micro text-text bg-surface-raised border border-border rounded cursor-ew-resize select-none hover:border-primary-light/50 tabular-nums`}
+      title={label ? `${label}: ${value} (drag to adjust, click to edit)` : `${value}`}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onWheel={handleWheel}
+    >
+      {value}
+    </div>
+  );
+}
+
 // === Flood fill helper (used by magic eraser) ===
 
 function floodFillRegion(
@@ -571,8 +645,8 @@ export default function PixelEditorModal({
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.strokeRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
         ctx.restore();
-      } else if (tool === 'rect-select' && !isRectSelectingRef.current) {
-        // Completed selection: marching ants + 8 handles
+      } else if (tool === 'rect-select' && !isRectSelectingRef.current && !transformActive) {
+        // Completed selection (not in transform mode): marching ants + 8 handles
         ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
         ctx.fillRect(ps.x * zoom, ps.y * zoom, ps.width * zoom, ps.height * zoom);
         ctx.save();
@@ -1469,6 +1543,15 @@ export default function PixelEditorModal({
         e.preventDefault();
         if (transformActive) return; // Block redo during transform
         redo();
+      } else if (mod && (e.key === 'a' || e.key === 'A')) {
+        // Select all
+        e.preventDefault();
+        const ec = editCanvasRef.current;
+        if (ec) {
+          setPixelSelection({ x: 0, y: 0, width: ec.width, height: ec.height });
+          switchTool('rect-select');
+          renderCanvas();
+        }
       } else if (mod && (e.key === 'c' || e.key === 'C')) {
         // Copy pixel selection → auto enter paste mode
         e.preventDefault();
@@ -1498,6 +1581,16 @@ export default function PixelEditorModal({
             commitTransform();
           }
         }
+        else if ((e.key === 'Delete' || e.key === 'Backspace') && pixelSelection && !transformActive) {
+          e.preventDefault();
+          const ec = editCanvasRef.current;
+          if (ec) {
+            pushUndo();
+            const ctx = ec.getContext('2d')!;
+            ctx.clearRect(pixelSelection.x, pixelSelection.y, pixelSelection.width, pixelSelection.height);
+            renderCanvas();
+          }
+        }
         else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); switchTool('eraser'); }
         else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); switchTool('pen'); }
         else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); switchTool('eyedropper'); }
@@ -1516,6 +1609,23 @@ export default function PixelEditorModal({
 
   // --- Save handlers ---
   const getDataUrl = useCallback(() => {
+    // Auto-commit transform before saving
+    if (transformRef.current) {
+      const t = transformRef.current;
+      const ec = editCanvasRef.current;
+      if (ec) {
+        const ctx = ec.getContext('2d')!;
+        ctx.imageSmoothingEnabled = t.smooth;
+        ctx.drawImage(t.floatingCanvas, t.x, t.y, t.width, t.height);
+        ctx.imageSmoothingEnabled = false;
+      }
+      transformRef.current = null;
+      transformDragRef.current = null;
+      setTransformActive(false);
+      setPixelSelection(null);
+      setSmoothScaling(false);
+      setTransformCursor('default');
+    }
     const ec = editCanvasRef.current;
     if (!ec) return '';
     return ec.toDataURL('image/png');
@@ -1758,19 +1868,12 @@ export default function PixelEditorModal({
           {/* Magic eraser tolerance */}
           {tool === 'magic-eraser' && (
             <div className="flex items-center gap-1.5 px-2 border-l border-border">
-              <span className="text-micro text-secondary whitespace-nowrap">Tolerance</span>
-              <input
-                type="range"
-                min={0}
-                max={100}
+              <span className="text-micro text-secondary whitespace-nowrap">{t('mapEditor.pixel.tolerance')}</span>
+              <DialInput
                 value={magicEraserTolerance}
-                onChange={(e) => {
-                  setMagicEraserTolerance(Number(e.target.value));
-                  magicEraserCacheKeyRef.current = '';
-                }}
-                className="w-20 h-1 accent-primary-light"
+                onChange={(v) => { setMagicEraserTolerance(v); magicEraserCacheKeyRef.current = ''; }}
+                min={0} max={100} label={t('mapEditor.pixel.tolerance')}
               />
-              <span className="text-micro text-secondary w-5 text-right">{magicEraserTolerance}</span>
             </div>
           )}
 
@@ -1790,14 +1893,14 @@ export default function PixelEditorModal({
                   }}
                   className="w-3 h-3"
                 />
-                Smooth
+                {t('mapEditor.pixel.smooth')}
               </label>
             </div>
           )}
 
           {/* Canvas Operations: Magic Eraser, Trim */}
           <div className="flex items-center gap-0.5 px-2 border-r border-border">
-            <Tooltip label="Magic Eraser" shortcut="G">
+            <Tooltip label={t('mapEditor.pixel.magicEraser')} shortcut="G">
               <Button variant={!tileEditMode && tool === 'magic-eraser' ? 'primary' : 'ghost'} size="sm" onClick={() => switchTool('magic-eraser')}>
                 <Wand2 className="w-4 h-4" />
               </Button>
@@ -1845,15 +1948,7 @@ export default function PixelEditorModal({
             <Tooltip label={t('mapEditor.pixel.brushSizeTooltip')} shortcut="[ / ]">
               <span className="text-caption text-text-secondary">{t('mapEditor.pixel.brushSize')}</span>
             </Tooltip>
-            <input
-              type="range"
-              min={1}
-              max={16}
-              value={brushSize}
-              onChange={(e) => setBrushSize(Number(e.target.value))}
-              className="w-16"
-            />
-            <span className="text-caption text-text-secondary w-5 text-right tabular-nums">{brushSize}</span>
+            <DialInput value={brushSize} onChange={setBrushSize} min={1} max={16} label="Brush Size" />
 
             <div className="w-px h-4 bg-border mx-0.5" />
 
@@ -1867,17 +1962,28 @@ export default function PixelEditorModal({
             </Tooltip>
 
             <Tooltip label={t('mapEditor.pixel.alpha')}>
-              <span className="text-caption text-text-secondary">A</span>
+              <span className="text-caption text-text-secondary">{t('mapEditor.pixel.alpha')}</span>
             </Tooltip>
-            <input
-              type="range"
-              min={0}
-              max={255}
-              value={alpha}
-              onChange={(e) => setAlpha(Number(e.target.value))}
-              className="w-16"
-            />
-            <span className="text-caption text-text-secondary w-8 text-right tabular-nums">{alpha}</span>
+            <DialInput value={alpha} onChange={(v) => {
+              setAlpha(v);
+              // Apply alpha to selection if one exists
+              if (pixelSelection && !transformActive) {
+                const ec = editCanvasRef.current;
+                if (ec) {
+                  pushUndo();
+                  const ctx = ec.getContext('2d')!;
+                  const sel = pixelSelection;
+                  const imgData = ctx.getImageData(sel.x, sel.y, sel.width, sel.height);
+                  for (let i = 3; i < imgData.data.length; i += 4) {
+                    if (imgData.data[i] > 0) { // only affect non-transparent pixels
+                      imgData.data[i] = v;
+                    }
+                  }
+                  ctx.putImageData(imgData, sel.x, sel.y);
+                  renderCanvas();
+                }
+              }
+            }} min={0} max={255} label="Alpha" />
           </div>
 
           {/* Undo / Redo */}
@@ -2040,7 +2146,7 @@ export default function PixelEditorModal({
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-heading text-text">{t('mapEditor.pixel.keyboardShortcuts')}</h3>
-              <button onClick={() => setShowHelp(false)} className="text-text-muted hover:text-text">&times;</button>
+              <button onClick={() => setShowHelp(false)} className="text-text-muted hover:text-text" aria-label={t('common.close')}>&times;</button>
             </div>
             <div className="grid grid-cols-2 gap-y-1 gap-x-6 text-caption">
               {[
@@ -2081,9 +2187,10 @@ export default function PixelEditorModal({
               {t('common.cancel')}
             </Button>
             <Button variant="primary" size="sm" onClick={() => {
-              const ec = editCanvasRef.current;
-              if (!ec) return;
-              onApply(ec.toDataURL('image/png'), expandedCols, expandedRows);
+              const dataUrl = getDataUrl();
+              if (!dataUrl) return;
+              onApply(dataUrl, expandedCols, expandedRows);
+              onClose();
             }}>
               {t('mapEditor.pixel.apply')}
             </Button>
@@ -2095,10 +2202,10 @@ export default function PixelEditorModal({
             </Button>
             {onSaveAsStamp && (
               <Button variant="secondary" size="sm" onClick={() => {
-                const ec = editCanvasRef.current;
-                if (!ec) return;
-                const dataUrl = ec.toDataURL('image/png');
+                const dataUrl = getDataUrl();
+                if (!dataUrl) return;
                 onSaveAsStamp(dataUrl, expandedCols, expandedRows, effectiveTileWidth, effectiveTileHeight);
+                onClose();
               }}>
                 {t('mapEditor.pixel.saveAsStamp')}
               </Button>

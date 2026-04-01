@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useT } from "@/lib/i18n";
+import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import CityScapeBackground from "@/components/CityScapeBackground";
 
@@ -14,21 +15,25 @@ export default function AuthPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [hasUsers, setHasUsers] = useState(true);
   const router = useRouter();
   const t = useT();
 
   useEffect(() => {
-    fetch("/api/characters", { redirect: "manual" })
-      .then((res) => {
-        if (res.ok) {
-          router.replace("/characters");
-        } else {
-          setChecking(false);
-        }
-      })
-      .catch(() => {
+    Promise.all([
+      fetch("/api/characters", { redirect: "manual" }),
+      fetch("/api/auth/status").then((r) => r.ok ? r.json() : { hasUsers: true }).catch(() => ({ hasUsers: true })),
+    ]).then(([charRes, status]) => {
+      if (charRes.ok) {
+        router.replace("/characters");
+      } else {
+        setHasUsers(status.hasUsers);
+        if (!status.hasUsers) setMode("register");
         setChecking(false);
-      });
+      }
+    }).catch(() => {
+      setChecking(false);
+    });
   }, [router]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -52,7 +57,7 @@ export default function AuthPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || t("common.error"));
+        setError(getLocalizedErrorMessage(t, data));
         return;
       }
 
@@ -99,7 +104,10 @@ export default function AuthPage() {
               className="text-[10px] text-primary-light tracking-[6px] mt-1"
               style={{ textShadow: "0 0 12px rgba(129,140,248,0.3)" }}
             >
-              VIRTUAL OFFICE ADVENTURE
+              {t("auth.heroTagline")}
+            </p>
+            <p className="mt-3 text-sm text-text-secondary">
+              {t("auth.heroSubtitle")}
             </p>
           </div>
 
@@ -113,29 +121,38 @@ export default function AuthPage() {
               boxShadow: "0 8px 48px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.03),inset 0 1px 0 rgba(255,255,255,0.04)",
             }}
           >
-            {/* Tab switcher */}
-            <div className="flex mb-5 rounded-lg overflow-hidden border border-border">
-              <button
-                onClick={() => setMode("login")}
-                className={`flex-1 py-2.5 text-center text-sm font-semibold transition-colors ${
-                  mode === "login"
-                    ? "bg-primary text-white"
-                    : "bg-[#0a0f1e] text-text-dim hover:text-text-secondary"
-                }`}
-              >
-                {t("auth.login")}
-              </button>
-              <button
-                onClick={() => setMode("register")}
-                className={`flex-1 py-2.5 text-center text-sm font-semibold transition-colors ${
-                  mode === "register"
-                    ? "bg-primary text-white"
-                    : "bg-[#0a0f1e] text-text-dim hover:text-text-secondary"
-                }`}
-              >
-                {t("auth.register")}
-              </button>
-            </div>
+            {/* Tab switcher — hidden during fresh setup */}
+            {hasUsers && (
+              <div className="flex mb-5 rounded-lg overflow-hidden border border-border">
+                <button
+                  onClick={() => setMode("login")}
+                  className={`flex-1 py-2.5 text-center text-sm font-semibold transition-colors ${
+                    mode === "login"
+                      ? "bg-primary text-white"
+                      : "bg-[#0a0f1e] text-text-dim hover:text-text-secondary"
+                  }`}
+                >
+                  {t("auth.login")}
+                </button>
+                <button
+                  onClick={() => setMode("register")}
+                  className={`flex-1 py-2.5 text-center text-sm font-semibold transition-colors ${
+                    mode === "register"
+                      ? "bg-primary text-white"
+                      : "bg-[#0a0f1e] text-text-dim hover:text-text-secondary"
+                  }`}
+                >
+                  {t("auth.register")}
+                </button>
+              </div>
+            )}
+
+            {/* Fresh install description */}
+            {!hasUsers && (
+              <p className="text-center text-sm text-text-secondary mb-5">
+                {t("auth.setupDescription")}
+              </p>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-3">
               <input
@@ -183,6 +200,8 @@ export default function AuthPage() {
                   ? mode === "login"
                     ? t("auth.loggingIn")
                     : t("auth.registering")
+                  : !hasUsers
+                  ? t("auth.getStarted")
                   : mode === "login"
                   ? t("auth.login")
                   : t("auth.register")}

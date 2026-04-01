@@ -125,9 +125,38 @@ function parseHandRaise(response) {
   return { wantsToSpeak: false, reason: "" };
 }
 
+/**
+ * 회의 발언 응답에서 남아 있는 제어 프리픽스를 제거
+ * @param {string} response
+ * @returns {string}
+ */
+function sanitizeSpokenResponse(response) {
+  if (typeof response !== "string") return "";
+  return response.replace(/^\s*SPEAK\s*:?\s*/i, "");
+}
+
+/**
+ * 스트리밍 중 prefix 후보 조각(S, SP, SPE...)은 보류하고,
+ * prefix가 끝나거나 일반 텍스트로 판명되면 그때부터 노출
+ * @param {string} response
+ * @returns {string}
+ */
+function sanitizeStreamingSpokenResponse(response) {
+  if (typeof response !== "string") return "";
+
+  const trimmedStart = response.replace(/^\s+/, "");
+  if (/^S(?:P(?:E(?:A(?:K(?::?)?)?)?)?)?$/i.test(trimmedStart)) {
+    return "";
+  }
+
+  return sanitizeSpokenResponse(response);
+}
+
 module.exports = {
   formatPollMessage,
   formatSpeakMessage,
   generateTranscript,
   parseHandRaise,
+  sanitizeSpokenResponse,
+  sanitizeStreamingSpokenResponse,
 };

@@ -1,26 +1,16 @@
 import { db, projects, projectTilesets, projectStamps, tilesetImages, stamps, jsonForDb, isPostgres } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
-import { getUserId } from "@/lib/internal-rpc";
-
-async function getOwnedProject(req: NextRequest, id: string) {
-  const userId = getUserId(req);
-  if (!userId) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-
-  const [project] = await db.select().from(projects).where(
-    and(eq(projects.id, id), eq(projects.createdBy, userId))
-  );
-  if (!project) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
-
-  return { project, userId };
-}
+import { eq } from "drizzle-orm";
+import { parseDbArray, parseDbJson } from "@/lib/db-json";
+import { requireOwnedProject } from "@/lib/project-access";
 
 // GET /api/projects/[id] — project detail with linked tilesets + stamps
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const result = await getOwnedProject(req, id);
-  if ("error" in result && !("project" in result)) return result.error;
-  const { project } = result as { project: typeof projects.$inferSelect };
+  try {
+    const { id } = await params;
+    const result = await requireOwnedProject(req, id);
+    if ("error" in result && !("project" in result)) return result.error;
+    const { project } = result as { project: typeof projects.$inferSelect };
 
   // Load linked tilesets
   const tilesetRows = await db
@@ -54,46 +44,74 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const parsedProject = {
     ...project,
-    tiledJson: typeof project.tiledJson === "string" ? JSON.parse(project.tiledJson) : project.tiledJson,
-    settings: typeof project.settings === "string" ? JSON.parse(project.settings) : project.settings,
+    tiledJson: parseDbJson(project.tiledJson) ?? project.tiledJson,
+    settings: parseDbJson(project.settings) ?? project.settings,
   };
 
   const parsedStamps = stampRows.map((s) => ({
     ...s,
-    layers: typeof s.layers === "string" ? JSON.parse(s.layers) : s.layers,
-    layerNames: (typeof s.layers === "string" ? JSON.parse(s.layers) : s.layers)?.map((l: { name: string }) => l.name) ?? [],
+    layers: parseDbJson(s.layers) ?? s.layers,
+    layerNames: parseDbArray<{ name: string }>(s.layers).map((l) => l.name) ?? [],
   }));
 
-  return NextResponse.json({ project: parsedProject, tilesets: tilesetRows, stamps: parsedStamps });
+    return NextResponse.json({ project: parsedProject, tilesets: tilesetRows, stamps: parsedStamps });
+  } catch (err) {
+    console.error("Failed to fetch project:", err);
+    return NextResponse.json({ errorCode: "failed_to_fetch_project", error: "Failed to fetch project" }, { status: 500 });
+  }
 }
 
 // PUT /api/projects/[id] — save project (owner only)
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const result = await getOwnedProject(req, id);
-  if ("error" in result && !("project" in result)) return result.error;
+  try {
+    const { id } = await params;
+    const result = await requireOwnedProject(req, id);
+    if ("error" in result && !("project" in result)) return result.error;
 
-  const body = await req.json();
-  const { tiledJson, thumbnail, settings, name } = body;
+    const body = await req.json();
+    const { tiledJson, thumbnail, settings, name } = body;
 
-  const updates: Record<string, unknown> = {
-    updatedAt: isPostgres ? new Date() : new Date().toISOString(),
-  };
-  if (tiledJson !== undefined) updates.tiledJson = jsonForDb(tiledJson);
-  if (thumbnail !== undefined) updates.thumbnail = thumbnail;
-  if (settings !== undefined) updates.settings = jsonForDb(settings);
-  if (name !== undefined) updates.name = name;
+    const updates: Record<string, unknown> = {
+      updatedAt: (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date,
+    };
+    if (tiledJson !== undefined) {
+      // Restore tileset images from DB if stripped (empty string)
+      if (tiledJson.tilesets) {
+        for (const ts of tiledJson.tilesets) {
+          if (ts.image === '' || !ts.image) {
+            try {
+              const [dbTs] = await db.select({ image: tilesetImages.image })
+                .from(tilesetImages).where(eq(tilesetImages.name, ts.name)).limit(1);
+              if (dbTs) ts.image = dbTs.image;
+            } catch { /* ignore */ }
+          }
+        }
+      }
+      updates.tiledJson = jsonForDb(tiledJson);
+    }
+    if (thumbnail !== undefined) updates.thumbnail = thumbnail;
+    if (settings !== undefined) updates.settings = jsonForDb(settings);
+    if (name !== undefined) updates.name = name;
 
-  await db.update(projects).set(updates).where(eq(projects.id, id));
-  return NextResponse.json({ ok: true });
+    await db.update(projects).set(updates).where(eq(projects.id, id));
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("Failed to save project:", err);
+    return NextResponse.json({ errorCode: "failed_to_save_project", error: "Failed to save project" }, { status: 500 });
+  }
 }
 
 // DELETE /api/projects/[id] — delete project (owner only)
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const result = await getOwnedProject(req, id);
-  if ("error" in result && !("project" in result)) return result.error;
+  try {
+    const { id } = await params;
+    const result = await requireOwnedProject(req, id);
+    if ("error" in result && !("project" in result)) return result.error;
 
-  await db.delete(projects).where(eq(projects.id, id));
-  return NextResponse.json({ ok: true });
+    await db.delete(projects).where(eq(projects.id, id));
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("Failed to delete project:", err);
+    return NextResponse.json({ errorCode: "failed_to_delete_project", error: "Failed to delete project" }, { status: 500 });
+  }
 }

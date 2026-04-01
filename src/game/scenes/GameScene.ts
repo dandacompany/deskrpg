@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import type { Socket } from "socket.io-client";
 import { MapObject, MapData, OBJECT_TYPES, OBJECT_TYPE_LIST, computeOccupiedTiles, detectAndConvertMapData, generateObjectId, canPlaceObject, getObjectDimensions } from "@/lib/object-types";
+import { getCenteredCameraBounds } from "../camera-layout";
 
 // ---------------------------------------------------------------------------
 // Map constants
@@ -26,6 +27,7 @@ const NPC_INTERACT_RADIUS = 64;
 const MINIMAP_SIZE = 150;
 const MINIMAP_PADDING = 10;
 const MINIMAP_TOP = 50;
+const MAIN_CAMERA_ZOOM = 2;
 
 const DIR_NAME_MAP: Record<string, number> = {
   up: DIR_UP,
@@ -79,299 +81,6 @@ const TILE_NAMES = [
   "Reception",
   "Cubicle",
 ];
-
-// ---------------------------------------------------------------------------
-// Office Map Data — 3 layers (floor, walls/structure, furniture)
-// ---------------------------------------------------------------------------
-
-function buildOfficeMap(): MapData {
-  const floor: number[][] = [];
-  const walls: number[][] = [];
-  const objects: MapObject[] = [];
-
-  for (let r = 0; r < MAP_ROWS; r++) {
-    floor.push(new Array(MAP_COLS).fill(T.FLOOR));
-    walls.push(new Array(MAP_COLS).fill(T.EMPTY));
-  }
-
-  // Tile-to-object-type mapping
-  const tileToType: Record<number, string> = {
-    [T.DESK]: "desk", [T.CHAIR]: "chair", [T.COMPUTER]: "computer",
-    [T.PLANT]: "plant", [T.MEETING_TABLE]: "meeting_table", [T.COFFEE]: "coffee",
-    [T.WATER_COOLER]: "water_cooler", [T.BOOKSHELF]: "bookshelf",
-    [T.WHITEBOARD]: "whiteboard", [T.RECEPTION_DESK]: "reception_desk",
-    [T.CUBICLE_WALL]: "cubicle_wall",
-  };
-
-  // Helper functions
-  const setWall = (r: number, c: number) => { walls[r][c] = T.WALL; };
-  const setDoor = (r: number, c: number) => { walls[r][c] = T.DOOR; floor[r][c] = T.FLOOR; };
-  const addObject = (r: number, c: number, tile: number) => {
-    const type = tileToType[tile];
-    if (type) objects.push({ id: generateObjectId(), type, col: c, row: r });
-  };
-  const setFloor = (r: number, c: number, tile: number) => { floor[r][c] = tile; };
-
-  // --- Outer walls ---
-  for (let c = 0; c < MAP_COLS; c++) {
-    setWall(0, c);
-    setWall(MAP_ROWS - 1, c);
-  }
-  for (let r = 0; r < MAP_ROWS; r++) {
-    setWall(r, 0);
-    setWall(r, MAP_COLS - 1);
-  }
-
-  // --- Room dividers ---
-
-  // Reception area: top-left (cols 0-14, rows 0-6)
-  // Horizontal wall at row 6, cols 0-14 with door at col 7
-  for (let c = 1; c < 15; c++) setWall(6, c);
-  setDoor(6, 7);
-
-  // Vertical wall at col 15, rows 0-6 (separating reception from corridor)
-  for (let r = 1; r < 6; r++) setWall(r, 15);
-  // Continue col 15 wall down to row 14
-  for (let r = 7; r < 15; r++) setWall(r, 15);
-  setDoor(6, 15);
-
-  // Break room: bottom-left (cols 0-11, rows 14-MAP_ROWS)
-  // Horizontal wall at row 14, cols 0-11 with door at col 10
-  for (let c = 1; c < 12; c++) setWall(14, c);
-  setDoor(14, 10);
-  // Vertical wall at col 11, rows 14-MAP_ROWS
-  for (let r = 15; r < MAP_ROWS - 1; r++) setWall(r, 11);
-  // Horizontal wall at row 19, cols 11-24 (under break room corridor)
-  for (let c = 12; c < 25; c++) setWall(19, c);
-  setDoor(19, 17);
-
-  // Meeting room: right side (cols 25-39, rows 0-10)
-  // Vertical wall at col 25, rows 0-10 with door at row 3
-  for (let r = 1; r < 10; r++) setWall(r, 25);
-  setDoor(3, 25);
-
-  // Meeting room inner: cols 25-39, rows 10 (bottom wall)
-  for (let c = 25; c < MAP_COLS - 1; c++) setWall(10, c);
-  setDoor(10, 30);
-
-  // Small office: cols 25-39, rows 12-19
-  for (let c = 25; c < MAP_COLS - 1; c++) setWall(12, c);
-  setDoor(12, 30);
-  for (let c = 25; c < MAP_COLS - 1; c++) setWall(19, c);
-  setDoor(19, 30);
-  for (let r = 13; r < 19; r++) setWall(r, 25);
-
-  // Server/storage room: cols 25-39, rows 20-29
-  for (let r = 20; r < MAP_ROWS - 1; r++) setWall(r, 25);
-  setDoor(22, 25);
-
-  // --- Reception area furniture (rows 1-5, cols 1-14) ---
-  addObject(2, 3, T.RECEPTION_DESK);
-  addObject(2, 4, T.RECEPTION_DESK);
-  addObject(3, 3, T.RECEPTION_DESK);
-  addObject(3, 4, T.RECEPTION_DESK);
-  addObject(2, 6, T.PLANT);
-  addObject(1, 1, T.PLANT);
-  addObject(1, 14, T.PLANT);
-  addObject(4, 3, T.CHAIR); // Sarah sits here, facing up toward reception desk
-  addObject(4, 10, T.COMPUTER);
-  addObject(4, 11, T.DESK);
-  addObject(4, 12, T.CHAIR);
-
-  // --- Open workspace (rows 7-13, cols 1-14) ---
-  // Row of desks with chairs (workstation pairs)
-  // Row 8
-  addObject(8, 2, T.DESK);
-  addObject(8, 3, T.COMPUTER);
-  addObject(9, 2, T.CHAIR);
-
-  addObject(8, 5, T.DESK);
-  addObject(8, 6, T.COMPUTER);
-  addObject(9, 5, T.CHAIR);
-
-  addObject(8, 8, T.DESK);
-  addObject(8, 9, T.COMPUTER);
-  addObject(9, 8, T.CHAIR);
-
-  // Row 11
-  addObject(11, 2, T.DESK);
-  addObject(11, 3, T.COMPUTER);
-  addObject(12, 2, T.CHAIR);
-
-  addObject(11, 5, T.DESK);
-  addObject(11, 6, T.COMPUTER);
-  addObject(12, 5, T.CHAIR);
-
-  addObject(11, 8, T.DESK);
-  addObject(11, 9, T.COMPUTER);
-  addObject(12, 8, T.CHAIR);
-
-  // Cubicle walls between desk rows
-  addObject(8, 11, T.CUBICLE_WALL);
-  addObject(9, 11, T.CUBICLE_WALL);
-  addObject(10, 11, T.CUBICLE_WALL);
-  addObject(11, 11, T.CUBICLE_WALL);
-  addObject(12, 11, T.CUBICLE_WALL);
-
-  // More desks on the other side of cubicle
-  addObject(8, 13, T.COMPUTER);
-  addObject(8, 12, T.DESK);
-  addObject(9, 13, T.CHAIR);
-
-  addObject(11, 13, T.COMPUTER);
-  addObject(11, 12, T.DESK);
-  addObject(12, 13, T.CHAIR);
-
-  // Plants in workspace
-  addObject(7, 14, T.PLANT);
-  addObject(13, 14, T.PLANT);
-  addObject(10, 1, T.PLANT);
-
-  // --- Meeting room (cols 26-38, rows 1-9) ---
-  // Meeting room carpet
-  for (let r = 1; r < 10; r++) {
-    for (let c = 26; c < MAP_COLS - 1; c++) {
-      setFloor(r, c, T.CARPET);
-    }
-  }
-
-  // Large meeting table (center)
-  addObject(3, 30, T.MEETING_TABLE);
-  addObject(3, 31, T.MEETING_TABLE);
-  addObject(3, 32, T.MEETING_TABLE);
-  addObject(3, 33, T.MEETING_TABLE);
-  addObject(4, 30, T.MEETING_TABLE);
-  addObject(4, 31, T.MEETING_TABLE);
-  addObject(4, 32, T.MEETING_TABLE);
-  addObject(4, 33, T.MEETING_TABLE);
-  addObject(5, 30, T.MEETING_TABLE);
-  addObject(5, 31, T.MEETING_TABLE);
-  addObject(5, 32, T.MEETING_TABLE);
-  addObject(5, 33, T.MEETING_TABLE);
-
-  // Chairs around the table
-  addObject(2, 30, T.CHAIR);
-  addObject(2, 31, T.CHAIR);
-  addObject(2, 32, T.CHAIR);
-  addObject(2, 33, T.CHAIR);
-  addObject(6, 30, T.CHAIR);
-  addObject(6, 31, T.CHAIR);
-  addObject(6, 32, T.CHAIR);
-  addObject(6, 33, T.CHAIR);
-  addObject(3, 29, T.CHAIR);
-  addObject(4, 29, T.CHAIR);
-  addObject(5, 29, T.CHAIR);
-  addObject(3, 34, T.CHAIR);
-  addObject(4, 34, T.CHAIR);
-  addObject(5, 34, T.CHAIR);
-
-  // Whiteboard on the wall
-  addObject(1, 30, T.WHITEBOARD);
-  addObject(1, 31, T.WHITEBOARD);
-
-  // Plants in meeting room
-  addObject(1, 38, T.PLANT);
-  addObject(9, 38, T.PLANT);
-  addObject(9, 26, T.PLANT);
-
-  // --- Break room (cols 1-10, rows 15-MAP_ROWS-1) ---
-  addObject(16, 2, T.COFFEE);
-  addObject(16, 3, T.COFFEE);
-  addObject(16, 5, T.WATER_COOLER);
-  addObject(18, 2, T.DESK);
-  addObject(18, 3, T.DESK);
-  addObject(17, 2, T.CHAIR);
-  addObject(17, 3, T.CHAIR);
-  addObject(18, 5, T.CHAIR);
-  addObject(18, 6, T.CHAIR);
-  addObject(16, 8, T.PLANT);
-
-  // Break room also stretches below row 19 on left
-  for (let r = 20; r < MAP_ROWS - 1; r++) {
-    for (let c = 1; c < 11; c++) {
-      setFloor(r, c, T.CARPET);
-    }
-  }
-  // Bookshelves along the back wall
-  addObject(20, 1, T.BOOKSHELF);
-  addObject(20, 2, T.BOOKSHELF);
-  addObject(20, 3, T.BOOKSHELF);
-  addObject(20, 4, T.BOOKSHELF);
-
-  // Lounge furniture
-  addObject(22, 2, T.DESK);
-  addObject(22, 3, T.DESK);
-  addObject(23, 2, T.CHAIR);
-  addObject(23, 3, T.CHAIR);
-  addObject(22, 6, T.DESK);
-  addObject(22, 7, T.DESK);
-  addObject(23, 6, T.CHAIR);
-  addObject(23, 7, T.CHAIR);
-
-  // --- Corridor area (cols 12-24, rows 15-18) ---
-  addObject(15, 13, T.BOOKSHELF);
-  addObject(15, 14, T.BOOKSHELF);
-  addObject(15, 16, T.BOOKSHELF);
-  addObject(18, 20, T.PLANT);
-  addObject(18, 23, T.PLANT);
-
-  // --- Private offices (cols 26-38, rows 13-18) ---
-  // Office carpet
-  for (let r = 13; r < 19; r++) {
-    for (let c = 26; c < MAP_COLS - 1; c++) {
-      setFloor(r, c, T.CARPET);
-    }
-  }
-
-  // Desk + chair
-  addObject(14, 27, T.DESK);
-  addObject(14, 28, T.COMPUTER);
-  addObject(15, 27, T.CHAIR);
-
-  addObject(14, 33, T.DESK);
-  addObject(14, 34, T.COMPUTER);
-  addObject(15, 33, T.CHAIR);
-
-  addObject(17, 27, T.BOOKSHELF);
-  addObject(17, 28, T.BOOKSHELF);
-  addObject(17, 33, T.BOOKSHELF);
-  addObject(17, 34, T.BOOKSHELF);
-
-  // Plants
-  addObject(13, 38, T.PLANT);
-  addObject(18, 38, T.PLANT);
-
-  // --- Storage/Server room (cols 26-38, rows 20-28) ---
-  for (let r = 20; r < MAP_ROWS - 1; r++) {
-    for (let c = 26; c < MAP_COLS - 1; c++) {
-      setFloor(r, c, T.CARPET);
-    }
-  }
-  addObject(21, 27, T.BOOKSHELF);
-  addObject(21, 28, T.BOOKSHELF);
-  addObject(21, 29, T.BOOKSHELF);
-  addObject(21, 30, T.BOOKSHELF);
-  addObject(23, 27, T.DESK);
-  addObject(23, 28, T.COMPUTER);
-  addObject(24, 27, T.CHAIR);
-  addObject(26, 34, T.PLANT);
-  addObject(26, 38, T.PLANT);
-
-  // Central corridor area (cols 16-24, rows 7-13) — open
-  addObject(7, 16, T.PLANT);
-  addObject(7, 24, T.PLANT);
-  addObject(13, 16, T.PLANT);
-  addObject(13, 24, T.PLANT);
-
-  // Add some corridor decorations (rows 20-28, cols 12-24)
-  addObject(21, 14, T.PLANT);
-  addObject(21, 22, T.PLANT);
-  addObject(25, 14, T.DESK);
-  addObject(25, 15, T.COMPUTER);
-  addObject(26, 14, T.CHAIR);
-
-  return { layers: { floor, walls }, objects };
-}
 
 // ---------------------------------------------------------------------------
 // A* Pathfinding
@@ -483,8 +192,9 @@ class RemotePlayer {
       this.sprite.setFrame(dirIdx * SPRITE_COLS);
     }
     this.sprite.setOrigin(0.5, 0.85);
+    this.sprite.setDisplaySize(48, 48);
 
-    this.nameLabel = scene.add.text(data.x, data.y - 40, data.characterName, {
+    this.nameLabel = scene.add.text(data.x, data.y - 44, data.characterName, {
       fontSize: "11px",
       color: "#ffffff",
       stroke: "#000000",
@@ -517,7 +227,7 @@ class RemotePlayer {
       this.sprite.y += dy * LERP_FACTOR;
     }
 
-    this.nameLabel.setPosition(this.sprite.x, this.sprite.y - 40);
+    this.nameLabel.setPosition(this.sprite.x, this.sprite.y - 44);
 
     const dirIdx = DIR_NAME_MAP[this.direction] ?? DIR_DOWN;
     const animKey = `${this.textureKey}-walk-${this.direction}`;
@@ -552,11 +262,11 @@ class RemotePlayer {
       this.highlightGlow.clear();
       this.highlightGlow.lineStyle(3, 0x60a5fa, 0.8);
       this.highlightGlow.strokeRoundedRect(
-        this.sprite.x - 20, this.sprite.y - 52, 40, 64, 6
+        this.sprite.x - 15, this.sprite.y - 39, 30, 48, 6
       );
       this.highlightGlow.lineStyle(5, 0x60a5fa, 0.3);
       this.highlightGlow.strokeRoundedRect(
-        this.sprite.x - 22, this.sprite.y - 54, 44, 68, 8
+        this.sprite.x - 17, this.sprite.y - 41, 34, 52, 8
       );
     } else {
       this.highlightGlow?.clear();
@@ -568,11 +278,11 @@ class RemotePlayer {
       this.highlightGlow.clear();
       this.highlightGlow.lineStyle(3, 0x60a5fa, 0.8);
       this.highlightGlow.strokeRoundedRect(
-        this.sprite.x - 20, this.sprite.y - 52, 40, 64, 6
+        this.sprite.x - 15, this.sprite.y - 39, 30, 48, 6
       );
       this.highlightGlow.lineStyle(5, 0x60a5fa, 0.3);
       this.highlightGlow.strokeRoundedRect(
-        this.sprite.x - 22, this.sprite.y - 54, 44, 68, 8
+        this.sprite.x - 17, this.sprite.y - 41, 34, 52, 8
       );
     }
   }
@@ -611,11 +321,16 @@ class NpcSprite {
   // Movement fields (runtime-only, not persisted)
   homeCol: number;
   homeRow: number;
+  homeDirection: number;
   currentPath: { x: number; y: number }[] | null = null;
   pathIndex = 0;
   moveState: "idle" | "moving-to-player" | "waiting" | "returning" = "idle";
   moveSpeed = 150; // px/s (faster than player's 120)
   pendingMessage: string | null = null;
+  pendingReportId: string | null = null;
+  pendingReportKind: string | null = null;
+  arrivalBubbleText: string | null = null;
+  waitDurationMs = 10000;
   private pathRecalcTimer = 0; // ms accumulated
   private stuckFrames = 0;
   private lastDist = Infinity;
@@ -630,12 +345,13 @@ class NpcSprite {
     this.direction = DIR_NAME_MAP[data.direction] ?? DIR_DOWN;
     this.homeCol = data.positionX;
     this.homeRow = data.positionY;
+    this.homeDirection = this.direction;
 
     const color = data.id === "sarah" ? 0xe879a0 : 0x5b9bd5;
     this.sprite = scene.add.rectangle(this.pixelX, this.pixelY, 28, 28, color);
     (this.sprite as Phaser.GameObjects.Rectangle).setStrokeStyle(2, 0xffffff);
 
-    this.nameLabel = scene.add.text(this.pixelX, this.pixelY - 56, data.name, {
+    this.nameLabel = scene.add.text(this.pixelX, this.pixelY - 44, data.name, {
       fontSize: "11px",
       color: "#fbbf24",
       stroke: "#000000",
@@ -683,6 +399,7 @@ class NpcSprite {
         const oldSprite = this.sprite;
         const newSprite = this.scene.add.sprite(this.pixelX, this.pixelY, uniqueKey);
         newSprite.setOrigin(0.5, 0.85);
+        newSprite.setDisplaySize(48, 48);
 
         const idleFrame = this.direction * SPRITE_COLS;
         const totalFrames = tex.frameTotal - 1;
@@ -754,11 +471,11 @@ class NpcSprite {
       this.highlightGlow.clear();
       this.highlightGlow.lineStyle(3, 0xfbbf24, 0.8);
       this.highlightGlow.strokeRoundedRect(
-        this.pixelX - 20, this.pixelY - 52, 40, 64, 6
+        this.pixelX - 15, this.pixelY - 39, 30, 48, 6
       );
       this.highlightGlow.lineStyle(5, 0xfbbf24, 0.3);
       this.highlightGlow.strokeRoundedRect(
-        this.pixelX - 22, this.pixelY - 54, 44, 68, 8
+        this.pixelX - 17, this.pixelY - 41, 34, 52, 8
       );
     } else {
       if (this.highlightGlow) {
@@ -779,12 +496,58 @@ class NpcSprite {
     if (this.highlightGlow) this.highlightGlow.destroy();
   }
 
+  updateName(name: string): void {
+    this.name = name;
+    this.nameLabel.setText(name);
+  }
+
+  updateDirection(direction: string): void {
+    this.homeDirection = DIR_NAME_MAP[direction] ?? DIR_DOWN;
+    this.direction = this.homeDirection;
+    this.stopWalkAnimation();
+  }
+
+  updateAppearance(appearance: unknown): void {
+    if (!appearance) return;
+    const textureKey = `npc-${this.id}`;
+    EventBus.emit("composite-remote-player", {
+      id: this.id,
+      appearance,
+      textureKey,
+    });
+
+    const onReady = (result: { id: string; textureKey: string; dataUrl: string }) => {
+      if (result.id !== this.id) return;
+      EventBus.off("remote-spritesheet-ready", onReady);
+      this.applyTexture(result.textureKey, result.dataUrl);
+    };
+    EventBus.on("remote-spritesheet-ready", onReady);
+  }
+
+  updateFromData(data: { name?: string; direction?: string; appearance?: unknown }): void {
+    if (typeof data.name === "string" && data.name.trim()) {
+      this.updateName(data.name);
+    }
+    if (typeof data.direction === "string") {
+      this.updateDirection(data.direction);
+    }
+    if (data.appearance !== undefined) {
+      this.updateAppearance(data.appearance);
+    }
+  }
+
   moveTo(
     targetCol: number,
     targetRow: number,
     findPathFn: (sx: number, sy: number, ex: number, ey: number, walkable: (tx: number, ty: number) => boolean) => { x: number; y: number }[] | null,
     isWalkableFn: (tx: number, ty: number) => boolean,
-    message?: string,
+    options?: {
+      message?: string;
+      reportId?: string;
+      reportKind?: string;
+      bubbleText?: string;
+      waitDurationMs?: number;
+    },
   ): boolean {
     const startCol = Math.floor(this.pixelX / TILE_SIZE);
     const startRow = Math.floor(this.pixelY / TILE_SIZE);
@@ -799,7 +562,11 @@ class NpcSprite {
     this.stuckFrames = 0;
     this.lastDist = Infinity;
     this.pathRecalcTimer = 0;
-    this.pendingMessage = message || null;
+    this.pendingMessage = options?.message || null;
+    this.pendingReportId = options?.reportId || null;
+    this.pendingReportKind = options?.reportKind || null;
+    this.arrivalBubbleText = options?.bubbleText || null;
+    this.waitDurationMs = options?.waitDurationMs ?? 10000;
     this.moveState = "moving-to-player";
     return true;
   }
@@ -836,6 +603,10 @@ class NpcSprite {
     this.lastDist = Infinity;
     this.pathRecalcTimer = 0;
     this.pendingMessage = null;
+    this.pendingReportId = null;
+    this.pendingReportKind = null;
+    this.arrivalBubbleText = null;
+    this.waitDurationMs = 10000;
     this.moveState = "returning";
     return true;
   }
@@ -843,8 +614,9 @@ class NpcSprite {
   private snapToHome(): void {
     this.pixelX = this.homeCol * TILE_SIZE + TILE_SIZE / 2;
     this.pixelY = this.homeRow * TILE_SIZE + TILE_SIZE / 2;
+    this.direction = this.homeDirection;
     this.sprite.setPosition(this.pixelX, this.pixelY);
-    this.nameLabel.setPosition(this.pixelX, this.pixelY - 56);
+    this.nameLabel.setPosition(this.pixelX, this.pixelY - 44);
     if (this.highlightGlow) this.highlightGlow.clear();
     this.stopWalkAnimation();
   }
@@ -991,7 +763,7 @@ class NpcSprite {
 
     // Update visual positions every frame
     this.sprite.setPosition(this.pixelX, this.pixelY);
-    this.nameLabel.setPosition(this.pixelX, this.pixelY - 56);
+    this.nameLabel.setPosition(this.pixelX, this.pixelY - 44);
     if (this.highlightGlow) {
       this.highlightGlow.clear();
       if (this.isHighlighted) this.setHighlight(true);
@@ -1057,6 +829,8 @@ export class GameScene extends Phaser.Scene {
   private collisionData: number[][] = []; // Tiled Collision layer data
   private effectiveMapCols: number = MAP_COLS;
   private effectiveMapRows: number = MAP_ROWS;
+  private currentMapPixelWidth: number = MAP_COLS * TILE_SIZE;
+  private currentMapPixelHeight: number = MAP_ROWS * TILE_SIZE;
   private mapObjects: MapObject[] = [];
   private objectSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private ySortObjectSprites = new Map<string, Phaser.GameObjects.Sprite>();
@@ -1065,6 +839,8 @@ export class GameScene extends Phaser.Scene {
   // Tilemap references
   private floorLayer: Phaser.Tilemaps.TilemapLayer | null = null;
   private wallsLayer: Phaser.Tilemaps.TilemapLayer | null = null;
+  // Individual sprites for foreground tile layers (depth >= 10000), for per-tile y-sort
+  private foregroundTileSprites: Phaser.GameObjects.Sprite[] = [];
 
   // Auto-greeting tracking
   private greetedNpcs: Set<string> = new Set();
@@ -1082,6 +858,7 @@ export class GameScene extends Phaser.Scene {
   // Channel
   private channelId: string = "";
   private channelMapData: MapData | null = null;
+  private tiledMode: boolean = false; // true when using Tiled JSON map (not legacy tilemap)
   private tiledSpawnCol: number | null = null;
   private tiledSpawnRow: number | null = null;
   private savedPosition: { x: number; y: number } | null = null;
@@ -1094,8 +871,31 @@ export class GameScene extends Phaser.Scene {
   private placementHighlight: Phaser.GameObjects.Rectangle | null = null;
   private isChannelOwner = false;
 
+  // Spawn set mode (channel owner sets spawn point)
+  private spawnSetMode = false;
+  private spawnHighlight: Phaser.GameObjects.Rectangle | null = null;
+  private mapConfigSpawnCol: number | null = null;
+  private mapConfigSpawnRow: number | null = null;
+  private reportWaitMs = 20000;
+
   constructor() {
     super({ key: "GameScene" });
+  }
+
+  private applyMainCameraBounds(mapWidth: number, mapHeight: number): void {
+    this.currentMapPixelWidth = mapWidth;
+    this.currentMapPixelHeight = mapHeight;
+    this.physics.world.setBounds(0, 0, mapWidth, mapHeight);
+
+    const bounds = getCenteredCameraBounds({
+      viewportWidth: this.cameras.main.width,
+      viewportHeight: this.cameras.main.height,
+      zoom: this.cameras.main.zoom || MAIN_CAMERA_ZOOM,
+      mapWidth,
+      mapHeight,
+    });
+
+    this.cameras.main.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
   }
 
   private isWalkable(tileX: number, tileY: number): boolean {
@@ -1196,32 +996,44 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     // Read pending channel data set by game page before scene creation
     let tiledJsonData: Record<string, unknown> | null = null;
+    const initialChannelData = pendingChannelData;
 
-    if (pendingChannelData) {
-      this.channelId = pendingChannelData.channelId;
+    if (initialChannelData) {
+      this.channelId = initialChannelData.channelId;
 
-      if (pendingChannelData.tiledJson) {
+      if (initialChannelData.tiledJson) {
         // Explicit Tiled JSON passed from game page
-        tiledJsonData = pendingChannelData.tiledJson;
-      } else if (pendingChannelData.mapData) {
+        tiledJsonData = initialChannelData.tiledJson as Record<string, unknown>;
+      } else if (initialChannelData.mapData) {
         // Check if mapData IS Tiled JSON (has tiledversion field)
-        if (pendingChannelData.mapData.tiledversion) {
-          tiledJsonData = pendingChannelData.mapData;
+        const mapData = initialChannelData.mapData as Record<string, unknown>;
+        if ("tiledversion" in mapData) {
+          tiledJsonData = mapData;
         } else {
-          this.channelMapData = detectAndConvertMapData(pendingChannelData.mapData, MAP_COLS, MAP_ROWS);
+          this.channelMapData = detectAndConvertMapData(mapData, MAP_COLS, MAP_ROWS);
         }
       }
 
       // Store spawn from mapConfig if available
-      if (pendingChannelData.mapConfig) {
-        const config = pendingChannelData.mapConfig;
-        if (typeof config.spawnCol === "number") this.tiledSpawnCol = config.spawnCol;
-        if (typeof config.spawnRow === "number") this.tiledSpawnRow = config.spawnRow;
+      if (initialChannelData.mapConfig) {
+        const config = initialChannelData.mapConfig as Record<string, unknown>;
+        if (typeof config.spawnCol === "number") {
+          this.tiledSpawnCol = config.spawnCol;
+          this.mapConfigSpawnCol = config.spawnCol;
+        }
+        if (typeof config.spawnRow === "number") {
+          this.tiledSpawnRow = config.spawnRow;
+          this.mapConfigSpawnRow = config.spawnRow;
+        }
       }
 
       // Restore saved position from last session
-      if (pendingChannelData.savedPosition) {
-        this.savedPosition = pendingChannelData.savedPosition;
+      if (initialChannelData.savedPosition) {
+        this.savedPosition = initialChannelData.savedPosition;
+      }
+
+      if (typeof initialChannelData.reportWaitSeconds === "number") {
+        this.reportWaitMs = Math.max(5000, initialChannelData.reportWaitSeconds * 1000);
       }
 
       setPendingChannelData(null); // consumed
@@ -1230,28 +1042,39 @@ export class GameScene extends Phaser.Scene {
     if (tiledJsonData) {
       // Tiled JSON path — use Phaser's built-in Tiled JSON loader
       this.loadTiledMap(tiledJsonData);
-    } else {
-      // Legacy path: channel map data > localStorage > default office map
-      let mapData: MapData;
+    } else if (this.channelMapData) {
+      this.floorData = this.channelMapData.layers.floor;
+      this.wallsData = this.channelMapData.layers.walls;
+      this.mapObjects = this.channelMapData.objects;
 
-      if (this.channelMapData) {
-        mapData = this.channelMapData;
-      } else {
-        const savedMap = this.loadMapFromLocalStorage();
-        if (savedMap) {
-          mapData = detectAndConvertMapData(savedMap, MAP_COLS, MAP_ROWS);
-        } else {
-          mapData = buildOfficeMap();
-        }
-      }
-
-      this.floorData = mapData.layers.floor;
-      this.wallsData = mapData.layers.walls;
-      this.mapObjects = mapData.objects;
-
-      // Create tilemap and render objects
       this.createTilemap();
       this.renderObjects();
+    } else {
+      const waitingText = this.add
+        .text(this.scale.width / 2, this.scale.height / 2, "Loading channel map...", {
+          fontSize: "20px",
+          color: "#ffffff",
+          backgroundColor: "#111827",
+          padding: { x: 12, y: 8 },
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(20000);
+
+      const handleChannelDataReady = () => {
+        EventBus.off("channel-data-ready", handleChannelDataReady);
+        if (waitingText.active) waitingText.destroy();
+        this.scene.restart();
+      };
+
+      EventBus.on("channel-data-ready", handleChannelDataReady);
+      const cleanupChannelDataListener = () => {
+        EventBus.off("channel-data-ready", handleChannelDataReady);
+        if (waitingText.active) waitingText.destroy();
+      };
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupChannelDataListener);
+      this.events.once(Phaser.Scenes.Events.DESTROY, cleanupChannelDataListener);
+      return;
     }
 
     // Input keys
@@ -1280,18 +1103,34 @@ export class GameScene extends Phaser.Scene {
         Phaser.Input.Keyboard.KeyCodes.RIGHT,
         Phaser.Input.Keyboard.KeyCodes.SPACE,
       ];
+      // Capture keys immediately on scene init so the browser never intercepts them
+      // (e.g. Firefox Quick Find on '/', browser scroll on Space/Arrow keys).
+      // addKey() with enableCapture=false only tracks the key without capture,
+      // so we must call addCapture explicitly here.
+      kbd.addCapture(capturedKeys);
+      const shouldReleaseKeyboardCapture = (target: EventTarget | null) => {
+        const el = target as HTMLElement | null;
+        if (!el) return false;
+        const tag = el.tagName;
+        return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+      };
       // Editor keys (ONE, TWO, THREE, O) are NOT captured globally —
       // they only work in editor mode which is not active during dialogs
       document.addEventListener("focusin", (e) => {
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) {
+        if (!kbd) return;
+        if (shouldReleaseKeyboardCapture(e.target)) {
           kbd.enabled = false;
           kbd.removeCapture(capturedKeys);
         }
       });
       document.addEventListener("focusout", () => {
+        if (!kbd) return;
         kbd.enabled = false;
         this.time.delayedCall(50, () => {
+          if (!kbd) return;
+          if (shouldReleaseKeyboardCapture(document.activeElement)) {
+            return;
+          }
           kbd.addCapture(capturedKeys);
           kbd.enabled = true;
         });
@@ -1301,9 +1140,8 @@ export class GameScene extends Phaser.Scene {
     const mapWidth = MAP_COLS * TILE_SIZE;
     const mapHeight = MAP_ROWS * TILE_SIZE;
 
-    this.physics.world.setBounds(0, 0, mapWidth, mapHeight);
-    this.cameras.main.setBounds(0, 0, mapWidth, mapHeight);
-    this.cameras.main.setZoom(2);
+    this.cameras.main.setZoom(MAIN_CAMERA_ZOOM);
+    this.applyMainCameraBounds(mapWidth, mapHeight);
     this.cameras.main.setRoundPixels(true);
 
     // Minimap
@@ -1342,6 +1180,7 @@ export class GameScene extends Phaser.Scene {
 
     this.scale.on("resize", (gameSize: Phaser.Structs.Size) => {
       this.cameras.main.setSize(gameSize.width, gameSize.height);
+      this.applyMainCameraBounds(this.currentMapPixelWidth, this.currentMapPixelHeight);
       if (this.minimap) {
         this.minimap.setPosition(
           gameSize.width - MINIMAP_SIZE - MINIMAP_PADDING,
@@ -1380,6 +1219,19 @@ export class GameScene extends Phaser.Scene {
       this.placementHighlight?.destroy();
       this.placementHighlight = null;
     });
+
+    // Spawn set mode events
+    EventBus.on("spawn-set-mode-start", () => { this.spawnSetMode = true; });
+    EventBus.on("spawn-set-mode-end", () => {
+      this.spawnSetMode = false;
+      this.spawnHighlight?.destroy();
+      this.spawnHighlight = null;
+    });
+    EventBus.on("task-automation-updated", (data: { reportWaitSeconds?: number }) => {
+      if (typeof data.reportWaitSeconds === "number") {
+        this.reportWaitMs = Math.max(5000, data.reportWaitSeconds * 1000);
+      }
+    });
     EventBus.on("owner-status", (data: { isOwner: boolean }) => { this.isChannelOwner = data.isOwner; });
 
     // Local NPC spawn/remove (from own hire/fire actions)
@@ -1393,6 +1245,11 @@ export class GameScene extends Phaser.Scene {
     EventBus.on("npc:remove-local", (data: { npcId: string }) => {
       this.removeNpcById(data.npcId);
     });
+    EventBus.on("npc:update-local", (data: { npcId: string; name?: string; direction?: string; appearance?: unknown }) => {
+      const npc = this.npcSprites.find(n => n.id === data.npcId);
+      if (!npc) return;
+      npc.updateFromData(data);
+    });
 
     EventBus.on("npc:start-move", (data: { npcId: string; targetCol: number; targetRow: number; message?: string }) => {
       const npc = this.npcSprites.find(n => n.id === data.npcId);
@@ -1403,23 +1260,60 @@ export class GameScene extends Phaser.Scene {
         data.targetRow,
         findPath,
         (tx: number, ty: number) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
-        data.message,
+        data.message ? { message: data.message } : undefined,
       );
     });
 
-    EventBus.on("npc:call-to-player", (data: { npcId: string; message?: string }) => {
+    EventBus.on("npc:call-to-player", (data: {
+      npcId: string;
+      message?: string;
+      reportId?: string;
+      reportKind?: string;
+      bubbleText?: string;
+      npcName?: string;
+    }) => {
       if (!this.player) return;
       const playerCol = Math.floor(this.player.x / TILE_SIZE);
       const playerRow = Math.floor(this.player.y / TILE_SIZE);
       const npc = this.npcSprites.find(n => n.id === data.npcId);
       if (!npc || npc.moveState !== "idle") return;
+
+      const dist = npc.distanceTo(this.player.x, this.player.y);
+      if (dist < TILE_SIZE + 4) {
+        npc.pendingMessage = data.message || null;
+        npc.pendingReportId = data.reportId || null;
+        npc.pendingReportKind = data.reportKind || null;
+        npc.arrivalBubbleText = data.bubbleText || null;
+        npc.waitDurationMs = data.reportKind === "complete" ? this.reportWaitMs : 10000;
+        npc.moveState = "waiting";
+        npc.waitTimer = 0;
+        EventBus.emit("npc:bubble", { npcId: npc.id, text: npc.arrivalBubbleText || undefined });
+        EventBus.emit("toast:show", {
+          message: `Press / to talk to ${data.npcName || npc.name}`,
+        });
+        EventBus.emit("npc:movement-arrived", {
+          npcId: npc.id,
+          npcName: data.npcName || npc.name,
+          pendingMessage: npc.pendingMessage,
+          reportId: npc.pendingReportId,
+          reportKind: npc.pendingReportKind,
+        });
+        return;
+      }
+
       this.npcTilePositions.delete(`${npc.homeCol},${npc.homeRow}`);
       npc.moveTo(
         playerCol,
         playerRow,
         findPath,
         this.createNpcWalkValidator(npc, playerCol, playerRow),
-        data.message,
+        {
+          message: data.message,
+          reportId: data.reportId,
+          reportKind: data.reportKind,
+          bubbleText: data.bubbleText,
+          waitDurationMs: data.reportKind === "complete" ? this.reportWaitMs : 10000,
+        },
       );
     });
 
@@ -1446,7 +1340,9 @@ export class GameScene extends Phaser.Scene {
         playerRow,
         findPath,
         this.createNpcWalkValidator(npc, playerCol, playerRow),
-        `${data.npcName}이(가) 대화를 원합니다`,
+        {
+          message: `${data.npcName}이(가) 대화를 원합니다`,
+        },
       );
     });
 
@@ -1459,9 +1355,14 @@ export class GameScene extends Phaser.Scene {
       );
     });
 
+    EventBus.on("npc:approach-and-interact", (data: { npcId: string; npcName?: string }) => {
+      this.approachNpcAndInteract(data.npcId, data.npcName);
+    });
+
     // ESC key handler
     this.input.keyboard?.on("keydown-ESC", () => {
       if (this.placementMode) { EventBus.emit("placement-cancel"); }
+      if (this.spawnSetMode) { EventBus.emit("spawn-set-cancel"); }
     });
 
     // Disable browser context menu so right-click is available for game use
@@ -1523,10 +1424,11 @@ export class GameScene extends Phaser.Scene {
 
       const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
 
-      // Check NPC hover
+      // Check NPC hover — use 1.5× tile radius because NPC sprite origin (0.5, 0.85)
+      // places the visual top ~40 px above pixelY, so TILE_SIZE alone misses head clicks
       let hoveredNpc: NpcSprite | null = null;
       for (const npc of this.npcSprites) {
-        if (npc.distanceTo(worldPoint.x, worldPoint.y) < TILE_SIZE) {
+        if (npc.distanceTo(worldPoint.x, worldPoint.y) < TILE_SIZE * 1.5) {
           hoveredNpc = npc;
           break;
         }
@@ -1565,6 +1467,17 @@ export class GameScene extends Phaser.Scene {
         const row = Math.floor(worldPoint.y / TILE_SIZE);
         if (this.isWalkable(col, row) && !this.isTileOccupied(col, row)) {
           EventBus.emit("placement-complete", { col, row });
+        }
+        return;
+      }
+
+      // Spawn set mode: set spawn point on clicked tile
+      if (this.spawnSetMode) {
+        const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        const col = Math.floor(worldPoint.x / TILE_SIZE);
+        const row = Math.floor(worldPoint.y / TILE_SIZE);
+        if (this.isWalkable(col, row)) {
+          EventBus.emit("spawn:selected", { col, row });
         }
         return;
       }
@@ -1615,7 +1528,7 @@ export class GameScene extends Phaser.Scene {
       if (pointer.rightButtonDown()) {
         const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
         for (const npc of this.npcSprites) {
-          if (npc.distanceTo(worldPoint.x, worldPoint.y) < TILE_SIZE) {
+          if (npc.distanceTo(worldPoint.x, worldPoint.y) < TILE_SIZE * 1.5) {
             EventBus.emit("npc:context-menu", {
               npcId: npc.id,
               npcName: npc.name,
@@ -1638,7 +1551,7 @@ export class GameScene extends Phaser.Scene {
 
       let clickedNpc: NpcSprite | null = null;
       for (const npc of this.npcSprites) {
-        if (npc.distanceTo(worldX, worldY) < TILE_SIZE) {
+        if (npc.distanceTo(worldX, worldY) < TILE_SIZE * 1.5) {
           clickedNpc = npc;
           break;
         }
@@ -1724,8 +1637,8 @@ export class GameScene extends Phaser.Scene {
     EventBus.on("chat:bubble", (data: { senderId: string }) => {
       this.showPlayerBubble(data.senderId);
     });
-    EventBus.on("npc:bubble", (data: { npcId: string }) => {
-      this.showNpcBubbleIcon(data.npcId);
+    EventBus.on("npc:bubble", (data: { npcId: string; text?: string }) => {
+      this.showNpcBubbleIcon(data.npcId, data.text);
     });
     EventBus.on("npc:bubble-clear", (data: { npcId: string }) => {
       this.clearNpcBubble(data.npcId);
@@ -1741,6 +1654,28 @@ export class GameScene extends Phaser.Scene {
     // Tell React the scene is ready
     EventBus.emit("scene-ready");
 
+    // Clean up GameScene's own EventBus listeners when this scene is destroyed.
+    // This prevents stale listeners from accumulating across game recreations
+    // (e.g. React Strict Mode double-invocation).
+    this.events.once("destroy", () => {
+      const gameSceneEvents = [
+        "dialog:open", "dialog:close",
+        "placement-mode-start", "placement-mode-end",
+        "spawn-set-mode-start", "spawn-set-mode-end",
+        "task-automation-updated",
+        "owner-status",
+        "npc:spawn-local", "npc:remove-local", "npc:update-local",
+        "npc:start-move", "npc:call-to-player",
+        "npc:deliver-response", "npc:start-return", "npc:approach-and-interact",
+        "spritesheet-ready", "socket-ready",
+        "chat:bubble", "npc:bubble", "npc:bubble-clear",
+        "request-player-position",
+      ];
+      for (const ev of gameSceneEvents) {
+        EventBus.removeAllListeners(ev);
+      }
+    });
+
     // Also re-request socket in case it was already sent before we registered
     EventBus.emit("request-socket");
   }
@@ -1750,6 +1685,7 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   private loadTiledMap(tiledJson: Record<string, unknown>): void {
+    this.tiledMode = true;
     // Resolve external tileset references — Phaser doesn't support them
     const tilesetArr = tiledJson.tilesets as Array<Record<string, unknown>>;
     if (tilesetArr) {
@@ -1768,7 +1704,6 @@ export class GameScene extends Phaser.Scene {
             imagewidth: 512,
             imageheight: 32,
           };
-          console.log("[GameScene] Resolved external tileset reference to embedded format");
         }
       }
     }
@@ -1776,6 +1711,8 @@ export class GameScene extends Phaser.Scene {
     // Destroy existing layers if any
     if (this.floorLayer) { this.floorLayer.destroy(); this.floorLayer = null; }
     if (this.wallsLayer) { this.wallsLayer.destroy(); this.wallsLayer = null; }
+    for (const s of this.foregroundTileSprites) s.destroy();
+    this.foregroundTileSprites = [];
 
     // Add Tiled JSON to Phaser's tilemap cache
     this.cache.tilemap.add("channel-map", {
@@ -1804,7 +1741,10 @@ export class GameScene extends Phaser.Scene {
       if (this.textures.exists(tsName)) continue;
 
       // Determine image URL
-      if (tsImage.startsWith("/")) {
+      if (tsImage.startsWith("data:")) {
+        // Base64 data URL — load directly
+        imagesToLoad.push({ key: tsName, url: tsImage, tileWidth: tileW, tileHeight: tileH });
+      } else if (tsImage.startsWith("/")) {
         // Absolute path (e.g. /assets/uploads/{id}/tileset.png)
         imagesToLoad.push({ key: tsName, url: tsImage, tileWidth: tileW, tileHeight: tileH });
       } else if (tsImage && tsImage !== "deskrpg-tileset.png") {
@@ -1863,6 +1803,26 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // Ensure each tileset's texture has per-tile frame entries so foreground
+    // tile sprites can reference individual frames via (texKey, localFrameIndex).
+    for (const ts of tilesetDefs) {
+      const tsName = ts.name || ts.source?.replace(/\.tsx$/, "") || "deskrpg-tileset";
+      const phaserTs = map.getTileset(tsName);
+      if (!phaserTs || !phaserTs.image) continue;
+      const texture = phaserTs.image as Phaser.Textures.Texture;
+      const cols = phaserTs.columns || 1;
+      const total = phaserTs.total || 1;
+      const tw = phaserTs.tileWidth;
+      const th = phaserTs.tileHeight;
+      for (let fi = 0; fi < total; fi++) {
+        if (!texture.has(String(fi))) {
+          const col = fi % cols;
+          const row = Math.floor(fi / cols);
+          texture.add(String(fi), 0, col * tw, row * th, tw, th);
+        }
+      }
+    }
+
     // Create tile layers — try by name first, fallback to order
     const mapWidth = (tiledJson.width as number) || MAP_COLS;
     const mapHeight = (tiledJson.height as number) || MAP_ROWS;
@@ -1871,6 +1831,10 @@ export class GameScene extends Phaser.Scene {
     this.effectiveMapCols = mapWidth;
     this.effectiveMapRows = mapHeight;
 
+    // Update physics/camera bounds to actual Tiled map size
+    const tiledPixelW = mapWidth * TILE_SIZE;
+    const tiledPixelH = mapHeight * TILE_SIZE;
+    this.applyMainCameraBounds(tiledPixelW, tiledPixelH);
     // Extract collision layer data for walkability checks
     this.collisionData = [];
     const tiledLayersRaw = (tiledJson.layers as Array<{ name: string; type: string; data?: number[]; width?: number }>) || [];
@@ -1910,22 +1874,76 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Create any remaining tile layers (3rd, 4th, etc.)
-    // Special layers (case-insensitive):
-    //   "collision" → hidden, used for collision data only
-    //   "foreground" → rendered above characters (depth 10000+)
+    // Depth rules (matching map editor CHARACTER_DEPTH_THRESHOLD = 10000):
+    //   "collision"   → semi-transparent debug overlay (depth 9999)
+    //   depth >= 10000 (by name or "depth" property) → per-tile sprites for y-sort
+    //   depth <  10000 → static TilemapLayer at assigned depth
+    const allRawLayers = (tiledJson.layers as Array<Record<string, unknown>>) || [];
+
+    /** Read the numeric `depth` property from a Tiled layer's properties array. */
+    const getLayerDepthProp = (layerName: string, fallback: number): number => {
+      const raw = allRawLayers.find(l => l.name === layerName);
+      if (!raw) return fallback;
+      const props = raw.properties as Array<{ name: string; type: string; value: unknown }> | undefined;
+      if (!props) return fallback;
+      const dp = props.find(p => p.name === 'depth');
+      if (!dp) return fallback;
+      if (dp.type === 'int' || dp.type === 'float') return Number(dp.value) || fallback;
+      if (dp.type === 'string' && dp.value === 'y-sort') return 5000;
+      return fallback;
+    };
+
     for (let i = 0; i < tileLayerNames.length; i++) {
       const name = tileLayerNames[i];
       if (name === floorLayerName || name === wallsLayerName) continue;
       const nameLower = name.toLowerCase();
-      const extraLayer = map.createLayer(name, map.tilesets);
-      if (extraLayer) {
-        if (nameLower === "collision") {
-          extraLayer.setVisible(false);
-        } else if (nameLower === "foreground" || nameLower === "above" || nameLower === "overlay") {
-          // Foreground layer: renders above characters but below UI
-          extraLayer.setDepth(10000);
-        } else {
-          extraLayer.setDepth(i + 2);
+
+      // Determine target depth
+      let layerDepth: number;
+      if (nameLower === "collision") {
+        layerDepth = 9999;
+      } else if (nameLower === "foreground" || nameLower === "above" || nameLower === "overlay") {
+        layerDepth = getLayerDepthProp(name, 10000);
+      } else {
+        layerDepth = getLayerDepthProp(name, i + 2);
+      }
+
+      if (layerDepth >= 10000) {
+        // Foreground layer: convert to individual sprites so every tile gets
+        // its own depth (10000 + tile bottom pixel) — enabling per-tile y-sort
+        // that matches the map editor's charAboveRow split-render logic.
+        const tempLayer = map.createLayer(name, map.tilesets);
+        if (tempLayer) {
+          const layerAlpha = (allRawLayers.find(l => l.name === name)?.opacity as number) ?? 1;
+          tempLayer.forEachTile((tile: Phaser.Tilemaps.Tile) => {
+            if (tile.index < 0) return;
+            const tileset = tile.tileset;
+            if (!tileset || !tileset.image) return;
+            const texKey = (tileset.image as Phaser.Textures.Texture).key;
+            const localFrame = String(tile.index - tileset.firstgid);
+            const px = tile.pixelX + tile.width / 2;
+            const py = tile.pixelY + tile.height / 2;
+            const sprite = this.add.sprite(px, py, texKey, localFrame);
+            sprite.setOrigin(0.5, 0.5);
+            sprite.setAlpha(layerAlpha);
+            if (tile.flipX) sprite.setFlipX(true);
+            if (tile.flipY) sprite.setFlipY(true);
+            // Depth = layerDepth base + bottom edge of tile row → y-sort with player
+            sprite.setDepth(layerDepth + tile.pixelY + tile.height);
+            this.foregroundTileSprites.push(sprite);
+          });
+          tempLayer.destroy();
+        }
+      } else {
+        // Background layer: static TilemapLayer
+        const extraLayer = map.createLayer(name, map.tilesets);
+        if (extraLayer) {
+          if (nameLower === "collision") {
+            extraLayer.setAlpha(0.7);
+            extraLayer.setDepth(9999);
+          } else {
+            extraLayer.setDepth(layerDepth);
+          }
         }
       }
     }
@@ -1993,10 +2011,11 @@ export class GameScene extends Phaser.Scene {
             }
           }
         }
-        // Hide the collision tile layer if it was created
+        // Show collision tile layer with transparency
         const collisionTileLayer = map.getLayer(layer.name as string);
         if (collisionTileLayer?.tilemapLayer) {
-          collisionTileLayer.tilemapLayer.setVisible(false);
+          collisionTileLayer.tilemapLayer.setAlpha(0.7);
+          collisionTileLayer.tilemapLayer.setDepth(9999);
         }
         continue;
       }
@@ -2005,10 +2024,14 @@ export class GameScene extends Phaser.Scene {
       if (layer.type === "objectgroup") {
         const objects = layer.objects as Array<Record<string, unknown>> | undefined;
         for (const obj of objects || []) {
-          // Spawn point
+          // Spawn point — use Objects layer as fallback only if mapConfig hasn't set one
           if (obj.name === "spawn" || obj.type === "spawn") {
-            this.tiledSpawnCol = Math.floor((obj.x as number) / TILE_SIZE);
-            this.tiledSpawnRow = Math.floor((obj.y as number) / TILE_SIZE);
+            if (this.mapConfigSpawnCol === null) {
+              this.tiledSpawnCol = Math.floor((obj.x as number) / TILE_SIZE);
+            }
+            if (this.mapConfigSpawnRow === null) {
+              this.tiledSpawnRow = Math.floor((obj.y as number) / TILE_SIZE);
+            }
             continue;
           }
 
@@ -2327,6 +2350,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleEditorClick(pointer: Phaser.Input.Pointer): void {
+    if (this.tiledMode) return; // Legacy tile editor not supported for Tiled JSON maps
     const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const tileX = Math.floor(worldPoint.x / TILE_SIZE);
     const tileY = Math.floor(worldPoint.y / TILE_SIZE);
@@ -2400,7 +2424,6 @@ export class GameScene extends Phaser.Scene {
     })
       .then((res) => {
         if (res.ok) {
-          console.log("[MapEditor] Map saved to server");
           // Flash the save button green
           const saveBtn = this.children.getByName("editor-save-btn") as Phaser.GameObjects.Text | null;
           if (saveBtn) {
@@ -2418,19 +2441,6 @@ export class GameScene extends Phaser.Scene {
       });
   }
 
-  private loadMapFromLocalStorage(): unknown | null {
-    try {
-      if (typeof localStorage === "undefined") return null;
-      const saved = localStorage.getItem("deskrpg-map-office");
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch {
-      // Storage access denied or parse error — ignore
-    }
-    return null;
-  }
-
   // ---------------------------------------------------------------------------
   // Load NPCs
   // ---------------------------------------------------------------------------
@@ -2446,8 +2456,8 @@ export class GameScene extends Phaser.Scene {
         this.npcTilePositions.add(`${npc.positionX},${npc.positionY}`);
       }
       return npcs;
-    } catch {
-      // Non-critical — spawn overlap check will still use sprite positions
+    } catch (err) {
+      console.error("[GameScene] prefetchNpcPositions failed:", err);
       return [];
     }
   }
@@ -2514,13 +2524,10 @@ export class GameScene extends Phaser.Scene {
       this.npcTilePositions.add(`${npcData.positionX},${npcData.positionY}`);
     });
 
-    this.socket.on("npc:updated", (data: { npcId: string; name?: string; appearance?: unknown }) => {
+    this.socket.on("npc:updated", (data: { npcId: string; name?: string; direction?: string; appearance?: unknown }) => {
       const npc = this.npcSprites.find(n => n.id === data.npcId);
       if (!npc) return;
-      if (data.name && npc.nameLabel) npc.nameLabel.setText(data.name);
-      if (data.name) npc.name = data.name;
-      // Appearance updates would require re-compositing, which is complex.
-      // For now, just update the name. Full appearance update can be added later.
+      npc.updateFromData(data);
     });
 
     this.socket.on("npc:removed", (data: { npcId: string }) => {
@@ -2539,6 +2546,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.socket.on("map:tiles-updated", (data: { layer: string; row: number; col: number; tileId: number }) => {
+      if (this.tiledMode) return; // Tiled JSON maps don't use legacy tile editing
       if (data.layer === "floor" && this.floorData[data.row]) {
         this.floorData[data.row][data.col] = data.tileId;
       } else if (data.layer === "walls" && this.wallsData[data.row]) {
@@ -2564,7 +2572,7 @@ export class GameScene extends Phaser.Scene {
       npc.pixelY = data.y;
       npc.direction = DIR_NAME_MAP[data.direction] ?? DIR_DOWN;
       npc.sprite.setPosition(data.x, data.y);
-      npc.nameLabel.setPosition(data.x, data.y - 56);
+      npc.nameLabel.setPosition(data.x, data.y - 44);
 
       // Play walk animation matching direction (on other clients)
       if (npc.sprite instanceof Phaser.GameObjects.Sprite) {
@@ -2715,7 +2723,14 @@ export class GameScene extends Phaser.Scene {
     let spawnX: number;
     let spawnY: number;
 
-    if (this.savedPosition) {
+    // Priority: mapConfig spawn (owner-set) > savedPosition (last session) > Objects layer / default
+    if (this.mapConfigSpawnCol !== null && this.mapConfigSpawnRow !== null) {
+      // Owner explicitly configured spawn — always use it, ignore saved position
+      const { col: spawnCol, row: spawnRow } = this.findFreeSpawn(this.mapConfigSpawnCol, this.mapConfigSpawnRow);
+      spawnX = spawnCol * TILE_SIZE + TILE_SIZE / 2;
+      spawnY = spawnRow * TILE_SIZE + TILE_SIZE / 2;
+      this.savedPosition = null;
+    } else if (this.savedPosition) {
       // Restore saved position from last session (pixel coordinates)
       spawnX = this.savedPosition.x;
       spawnY = this.savedPosition.y;
@@ -2732,12 +2747,13 @@ export class GameScene extends Phaser.Scene {
     const playerTex = this.textures.exists("player") ? "player" : "fallback-char";
     this.player = this.physics.add.sprite(spawnX, spawnY, playerTex, playerTex === "player" ? DIR_DOWN * SPRITE_COLS : 0);
     this.player.setOrigin(0.5, 0.85);
-    this.player.setSize(20, 16);
-    this.player.setOffset(22, 44);
+    this.player.setDisplaySize(48, 48);
+    this.player.setSize(15, 12);
+    this.player.setOffset(17, 32);
     this.player.setCollideWorldBounds(true);
 
     // Player name label (same style as remote players)
-    this.playerNameLabel = this.add.text(spawnX, spawnY - 40, this.characterName, {
+    this.playerNameLabel = this.add.text(spawnX, spawnY - 44, this.characterName, {
       fontSize: "11px",
       color: "#ffffff",
       stroke: "#000000",
@@ -2829,25 +2845,47 @@ export class GameScene extends Phaser.Scene {
 
   private npcBubbles: Map<string, Phaser.GameObjects.Container> = new Map();
 
-  private createBubbleIcon(x: number, y: number): Phaser.GameObjects.Container {
+  private createBubbleIcon(x: number, y: number, text?: string): Phaser.GameObjects.Container {
     const container = this.add.container(x, y - 44);
     const gfx = this.add.graphics();
-    // White bubble with subtle border
-    gfx.fillStyle(0xffffff, 0.95);
-    gfx.fillRoundedRect(-12, -11, 24, 18, 5);
-    gfx.lineStyle(1, 0xcccccc, 0.8);
-    gfx.strokeRoundedRect(-12, -11, 24, 18, 5);
-    // Tail
-    gfx.fillStyle(0xffffff, 0.95);
-    gfx.fillTriangle(-3, 7, 3, 7, 0, 13);
-    container.add(gfx);
-    // Black dots
-    const dots = this.add.graphics();
-    dots.fillStyle(0x333333, 1);
-    dots.fillCircle(-5, -2, 2);
-    dots.fillCircle(0, -2, 2);
-    dots.fillCircle(5, -2, 2);
-    container.add(dots);
+
+    if (text) {
+      const label = this.add.text(0, -2, text, {
+        fontSize: "11px",
+        color: "#111827",
+        fontStyle: "bold",
+        padding: { left: 6, right: 6, top: 3, bottom: 3 },
+      });
+      label.setOrigin(0.5, 0.5);
+      const width = Math.max(64, label.width + 12);
+      const height = label.height + 8;
+      gfx.fillStyle(0xffffff, 0.95);
+      gfx.fillRoundedRect(-width / 2, -height / 2, width, height, 6);
+      gfx.lineStyle(1, 0xcccccc, 0.8);
+      gfx.strokeRoundedRect(-width / 2, -height / 2, width, height, 6);
+      gfx.fillStyle(0xffffff, 0.95);
+      gfx.fillTriangle(-4, height / 2 - 1, 4, height / 2 - 1, 0, height / 2 + 6);
+      container.add(gfx);
+      container.add(label);
+    } else {
+      // White bubble with subtle border
+      gfx.fillStyle(0xffffff, 0.95);
+      gfx.fillRoundedRect(-12, -11, 24, 18, 5);
+      gfx.lineStyle(1, 0xcccccc, 0.8);
+      gfx.strokeRoundedRect(-12, -11, 24, 18, 5);
+      // Tail
+      gfx.fillStyle(0xffffff, 0.95);
+      gfx.fillTriangle(-3, 7, 3, 7, 0, 13);
+      container.add(gfx);
+      // Black dots
+      const dots = this.add.graphics();
+      dots.fillStyle(0x333333, 1);
+      dots.fillCircle(-5, -2, 2);
+      dots.fillCircle(0, -2, 2);
+      dots.fillCircle(5, -2, 2);
+      container.add(dots);
+    }
+
     container.setDepth(20002);
     return container;
   }
@@ -2868,13 +2906,16 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private showNpcBubbleIcon(npcId: string): void {
-    if (this.npcBubbles.has(npcId)) return;
+  private showNpcBubbleIcon(npcId: string, text?: string): void {
+    if (this.npcBubbles.has(npcId)) {
+      if (!text) return;
+      this.clearNpcBubble(npcId);
+    }
 
     const npc = this.npcSprites.find((n) => n.id === npcId);
     if (!npc) return;
 
-    const bubble = this.createBubbleIcon(npc.pixelX, npc.pixelY);
+    const bubble = this.createBubbleIcon(npc.pixelX, npc.pixelY, text);
     this.npcBubbles.set(npcId, bubble);
   }
 
@@ -2959,8 +3000,69 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   private updateYSortDepth(sprite: { y: number; displayHeight: number; originY: number; setDepth(v: number): void }): void {
+    // footY = pixel y of the character's bottom edge.
+    // Base 10000 puts characters in the same depth range as foreground tile sprites
+    // (depth = 10000 + tile.bottom) so per-tile y-sort works for all players/NPCs.
     const footY = sprite.y + sprite.displayHeight * (1 - sprite.originY);
-    sprite.setDepth(100 + footY);
+    sprite.setDepth(10000 + footY);
+  }
+
+  private approachNpcAndInteract(npcId: string, npcName?: string): void {
+    if (!this.player || !this.playerReady) return;
+
+    const npc = this.npcSprites.find((entry) => entry.id === npcId);
+    if (!npc || npc.moveState !== "idle") return;
+
+    if (npc.distanceTo(this.player.x, this.player.y) < NPC_INTERACT_RADIUS) {
+      EventBus.emit("npc:interact", { npcId: npc.id, npcName: npcName || npc.name });
+      return;
+    }
+
+    const npcTileX = Math.floor(npc.pixelX / TILE_SIZE);
+    const npcTileY = Math.floor(npc.pixelY / TILE_SIZE);
+    const startTileX = Math.floor(this.player.x / TILE_SIZE);
+    const startTileY = Math.floor(this.player.y / TILE_SIZE);
+
+    let destTileX = npcTileX;
+    let destTileY = npcTileY;
+    const neighbors = [
+      [npcTileX, npcTileY + 1],
+      [npcTileX, npcTileY - 1],
+      [npcTileX - 1, npcTileY],
+      [npcTileX + 1, npcTileY],
+    ];
+    const walkable = neighbors.find(([x, y]) => this.isWalkable(x, y) && !this.isTileOccupied(x, y));
+    if (walkable) {
+      destTileX = walkable[0];
+      destTileY = walkable[1];
+    }
+
+    if (!this.isWalkable(destTileX, destTileY) || this.isTileOccupied(destTileX, destTileY)) {
+      const nearest = this.findNearestWalkableTile(destTileX, destTileY);
+      if (!nearest) return;
+      destTileX = nearest.x;
+      destTileY = nearest.y;
+    }
+
+    const path = findPath(
+      startTileX,
+      startTileY,
+      destTileX,
+      destTileY,
+      (tx, ty) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
+    );
+
+    if (!path || path.length <= 1) {
+      EventBus.emit("npc:interact", { npcId: npc.id, npcName: npcName || npc.name });
+      return;
+    }
+
+    this.currentPath = path;
+    this.pathIndex = 1;
+    this.pathStuckTimer = 0;
+    this.pathLastDist = Infinity;
+    this.targetNpcId = npc.id;
+    this.drawPathLine(path);
   }
 
   // ---------------------------------------------------------------------------
@@ -2975,11 +3077,11 @@ export class GameScene extends Phaser.Scene {
 
     // Update NPC movement
     if (this.player) {
-      // Auto-return NPCs that have been waiting for 10 seconds
+      // Auto-return NPCs that have been waiting long enough without an open dialog
       for (const npc of this.npcSprites) {
         if (npc.moveState === "waiting" && !this.dialogOpen) {
           npc.waitTimer += this.game.loop.delta;
-          if (npc.waitTimer >= 10000) {
+          if (npc.waitTimer >= npc.waitDurationMs) {
             npc.waitTimer = 0;
             this.clearNpcBubble(npc.id);
             npc.returnToHome(
@@ -3021,7 +3123,10 @@ export class GameScene extends Phaser.Scene {
           },
         );
         if (result === "arrived") {
-          EventBus.emit("npc:bubble", { npcId: npc.id });
+          EventBus.emit("npc:bubble", {
+            npcId: npc.id,
+            text: npc.arrivalBubbleText || undefined,
+          });
           EventBus.emit("toast:show", {
             message: `Press / to talk to ${npc.name}`,
           });
@@ -3029,6 +3134,8 @@ export class GameScene extends Phaser.Scene {
             npcId: npc.id,
             npcName: npc.name,
             pendingMessage: npc.pendingMessage,
+            reportId: npc.pendingReportId,
+            reportKind: npc.pendingReportKind,
           });
           this.socket?.emit("npc:arrived", {
             channelId: this.channelId,
@@ -3129,24 +3236,55 @@ export class GameScene extends Phaser.Scene {
       return; // Skip normal movement in placement mode
     }
 
+    // Spawn set mode: show green tile highlight under cursor
+    if (this.spawnSetMode) {
+      const pointer = this.input.activePointer;
+      const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      const col = Math.floor(worldPoint.x / TILE_SIZE);
+      const row = Math.floor(worldPoint.y / TILE_SIZE);
+      if (this.isWalkable(col, row)) {
+        if (!this.spawnHighlight) {
+          this.spawnHighlight = this.add.rectangle(0, 0, TILE_SIZE, TILE_SIZE, 0x22c55e, 0.5);
+          this.spawnHighlight.setDepth(20020);
+        }
+        this.spawnHighlight.setPosition(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2);
+        this.spawnHighlight.setVisible(true);
+      } else {
+        this.spawnHighlight?.setVisible(false);
+      }
+      return; // Skip normal movement in spawn set mode
+    }
+
     if (!this.playerReady || !this.player?.body) return;
 
     this.checkNpcProximity();
 
-    // E key for NPC/player interaction
-    if (this.interactKey && Phaser.Input.Keyboard.JustDown(this.interactKey) && !this.dialogOpen) {
-      const npcEntries = this.nearbyNpcs.map((n) => ({ id: n.id, name: n.name, type: "npc" as const }));
-      const playerEntries = this.nearbyPlayers.map((p) => ({ id: p.id, name: p.name, type: "player" as const }));
-      const allNearby = [...npcEntries, ...playerEntries];
+    // / key for NPC/player interaction
+    if (this.interactKey && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+      const activeEl = document.activeElement as HTMLElement | null;
+      const isTypingTarget = !!activeEl && (
+        activeEl.tagName === "INPUT" ||
+        activeEl.tagName === "TEXTAREA" ||
+        activeEl.tagName === "SELECT" ||
+        activeEl.isContentEditable
+      );
+      if (isTypingTarget) {
+        return;
+      }
+      if (!this.dialogOpen) {
+        const npcEntries = this.nearbyNpcs.map((n) => ({ id: n.id, name: n.name, type: "npc" as const }));
+        const playerEntries = this.nearbyPlayers.map((p) => ({ id: p.id, name: p.name, type: "player" as const }));
+        const allNearby = [...npcEntries, ...playerEntries];
 
-      if (allNearby.length === 1) {
-        if (allNearby[0].type === "npc") {
-          EventBus.emit("npc:interact", { npcId: allNearby[0].id, npcName: allNearby[0].name });
-        } else {
-          EventBus.emit("player:chat-open");
+        if (allNearby.length === 1) {
+          if (allNearby[0].type === "npc") {
+            EventBus.emit("npc:interact", { npcId: allNearby[0].id, npcName: allNearby[0].name });
+          } else {
+            EventBus.emit("player:chat-open");
+          }
+        } else if (allNearby.length > 1) {
+          EventBus.emit("interact:select", { targets: allNearby });
         }
-      } else if (allNearby.length > 1) {
-        EventBus.emit("interact:select", { targets: allNearby });
       }
     }
 
@@ -3231,7 +3369,7 @@ export class GameScene extends Phaser.Scene {
 
       // Update player name label position
       if (this.playerNameLabel && this.player) {
-        this.playerNameLabel.setPosition(this.player.x, this.player.y - 40);
+        this.playerNameLabel.setPosition(this.player.x, this.player.y - 44);
       }
       // Y-sort depth ordering (path following early-return path)
       if (this.player) this.updateYSortDepth(this.player);

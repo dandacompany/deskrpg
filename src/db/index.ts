@@ -3,9 +3,14 @@ import { randomUUID } from "node:crypto";
 import * as pgSchema from "./schema";
 import type BetterSqlite3 from "better-sqlite3";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { getDeskRpgSqlitePath } from "../lib/runtime-paths";
 
 const DB_TYPE = (process.env.DB_TYPE || "postgresql").toLowerCase();
 export const isPostgres = DB_TYPE === "postgresql" || DB_TYPE === "postgres";
+
+export function getDefaultSqlitePath() {
+  return process.env.SQLITE_PATH || getDeskRpgSqlitePath();
+}
 
 /** Serialize JSON for DB insert — PG handles objects natively, SQLite needs strings */
 export function jsonForDb(value: unknown): unknown {
@@ -331,7 +336,7 @@ export function getDb(): DbInstance {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const path = require("node:path") as typeof import("node:path");
 
-      const dbPath = process.env.SQLITE_PATH || path.join(process.cwd(), "data", "deskrpg.db");
+      const dbPath = getDefaultSqlitePath();
       const dbDir = path.dirname(dbPath);
       if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 

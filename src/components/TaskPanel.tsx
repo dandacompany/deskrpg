@@ -10,35 +10,48 @@ interface TaskPanelProps {
   npcId: string;
   npcName: string;
   socket: Socket | null;
+  onDeleteTask?: (taskId: string) => void;
+  onRequestReportTask?: (taskId: string) => void;
+  onResumeTask?: (taskId: string) => void;
+  onCompleteTask?: (taskId: string) => void;
 }
 
-export default function TaskPanel({ npcId, npcName, socket }: TaskPanelProps) {
+export default function TaskPanel({
+  npcId,
+  npcName,
+  socket,
+  onDeleteTask,
+  onRequestReportTask,
+  onResumeTask,
+  onCompleteTask,
+}: TaskPanelProps) {
   const t = useT();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadedNpcId, setLoadedNpcId] = useState<string | null>(null);
+  const loading = Boolean(socket && npcId) && loadedNpcId !== npcId;
 
   useEffect(() => {
     if (!socket || !npcId) return;
 
-    socket.emit("task:list", { channelId: null, npcId });
-
     const handleTaskList = ({ tasks: taskList, npcId: responseNpcId }: { tasks: Task[]; npcId: string | null }) => {
       if (responseNpcId !== npcId) return;
       setTasks(taskList);
-      setLoading(false);
+      setLoadedNpcId(npcId);
     };
 
     socket.on("task:list-response", handleTaskList);
+    socket.emit("task:list", { channelId: null, npcId });
     return () => { socket.off("task:list-response", handleTaskList); };
   }, [socket, npcId]);
 
   useEffect(() => {
     if (!socket) return;
 
-    const handleTaskUpdated = ({ task, action }: { task: Task; action: string }) => {
+    const handleTaskUpdated = ({ task }: { task: Task; action: string }) => {
       const taskNpcId = task.npcId;
       if (taskNpcId !== npcId) return;
 
+      setLoadedNpcId(npcId);
       setTasks((prev) => {
         const idx = prev.findIndex((t) => t.id === task.id);
         if (idx >= 0) {
@@ -60,11 +73,43 @@ export default function TaskPanel({ npcId, npcName, socket }: TaskPanelProps) {
   }, [socket, npcId]);
 
   const handleDelete = (taskId: string) => {
+    if (onDeleteTask) {
+      onDeleteTask(taskId);
+      return;
+    }
     if (!socket) return;
     socket.emit("task:delete", { taskId });
   };
 
+  const handleRequestReport = (taskId: string) => {
+    if (onRequestReportTask) {
+      onRequestReportTask(taskId);
+      return;
+    }
+    if (!socket) return;
+    socket.emit("task:request-report", { taskId });
+  };
+
+  const handleResume = (taskId: string) => {
+    if (onResumeTask) {
+      onResumeTask(taskId);
+      return;
+    }
+    if (!socket) return;
+    socket.emit("task:resume", { taskId });
+  };
+
+  const handleComplete = (taskId: string) => {
+    if (onCompleteTask) {
+      onCompleteTask(taskId);
+      return;
+    }
+    if (!socket) return;
+    socket.emit("task:complete", { taskId });
+  };
+
   const activeTasks = tasks.filter((t) => t.status === "in_progress" || t.status === "pending");
+  const stalledTasks = tasks.filter((t) => t.status === "stalled");
   const doneTasks = tasks.filter((t) => t.status === "complete" || t.status === "cancelled");
 
   if (loading) {
@@ -85,7 +130,15 @@ export default function TaskPanel({ npcId, npcName, socket }: TaskPanelProps) {
         <>
           <div className="text-micro text-text-dim font-bold px-1">{t("task.active")} ({activeTasks.length})</div>
           {activeTasks.map((task) => (
-            <TaskCard key={task.id} task={task} onDelete={handleDelete} />
+            <TaskCard key={task.id} task={task} onDelete={handleDelete} onRequestReport={handleRequestReport} onResume={handleResume} onComplete={handleComplete} />
+          ))}
+        </>
+      )}
+      {stalledTasks.length > 0 && (
+        <>
+          <div className="text-micro text-text-dim font-bold px-1 mt-2">{t("task.stalled")} ({stalledTasks.length})</div>
+          {stalledTasks.map((task) => (
+            <TaskCard key={task.id} task={task} onDelete={handleDelete} onRequestReport={handleRequestReport} onResume={handleResume} onComplete={handleComplete} />
           ))}
         </>
       )}
@@ -93,7 +146,7 @@ export default function TaskPanel({ npcId, npcName, socket }: TaskPanelProps) {
         <>
           <div className="text-micro text-text-dim font-bold px-1 mt-2">{t("task.done")} ({doneTasks.length})</div>
           {doneTasks.map((task) => (
-            <TaskCard key={task.id} task={task} onDelete={handleDelete} />
+            <TaskCard key={task.id} task={task} onDelete={handleDelete} onRequestReport={handleRequestReport} onResume={handleResume} onComplete={handleComplete} />
           ))}
         </>
       )}

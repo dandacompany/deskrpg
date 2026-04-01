@@ -1,5 +1,6 @@
-import { db, groupJoinRequests, groupMembers, userPermissionOverrides, users } from "@/db";
+import { db, groupJoinRequests, groupMembers, isPostgres, userPermissionOverrides, users } from "@/db";
 import { GROUP_MEMBER_ROLES } from "@/lib/rbac/constants";
+import type { GroupMemberRole } from "@/lib/rbac/constants";
 import {
   canChangeGroupAdminStatus,
   getAuthenticatedUserId,
@@ -85,13 +86,14 @@ export async function POST(
   const body = await req.json();
   const { targetUserId, targetLoginId, role } = body ?? {};
 
-  const memberRole = typeof role === "string" ? role : "member";
-  if (!GROUP_MEMBER_ROLES.includes(memberRole)) {
+  const requestedRole = typeof role === "string" ? role : "member";
+  if (!GROUP_MEMBER_ROLES.includes(requestedRole as GroupMemberRole)) {
     return NextResponse.json(
       { errorCode: "missing_required_fields", error: "invalid role" },
       { status: 400 },
     );
   }
+  const memberRole = requestedRole as GroupMemberRole;
 
   const [targetUser] = await db
     .select({ id: users.id, loginId: users.loginId, nickname: users.nickname })
@@ -144,14 +146,14 @@ export async function POST(
       userId: targetUser.id,
       role: memberRole,
       approvedBy: userId,
-      approvedAt: now,
+      approvedAt: (isPostgres ? new Date(now) : now) as unknown as Date,
     })
     .onConflictDoUpdate({
       target: [groupMembers.groupId, groupMembers.userId],
       set: {
         role: memberRole,
         approvedBy: userId,
-        approvedAt: now,
+        approvedAt: (isPostgres ? new Date(now) : now) as unknown as Date,
       },
     })
     .returning();

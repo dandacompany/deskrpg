@@ -48,6 +48,7 @@ export default function ImportTilesetModal({
   onLinkTileset,
 }: ImportTilesetModalProps) {
   const t = useT();
+  const importedTilesetName = t('mapEditor.tilesets.importedTileset');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -289,7 +290,7 @@ export default function ImportTilesetModal({
 
     const tileset: TiledTileset = {
       firstgid,
-      name: name || 'Imported Tileset',
+      name: name || importedTilesetName,
       tilewidth: tileWidth,
       tileheight: tileHeight,
       tilecount,
@@ -310,7 +311,7 @@ export default function ImportTilesetModal({
       tilewidth: tileWidth,
       tileheight: tileHeight,
       tilecount,
-      name: name || 'Imported Tileset',
+      name: name || importedTilesetName,
     };
 
     onImport({ tileset, imageInfo, imageDataUrl });
@@ -322,7 +323,7 @@ export default function ImportTilesetModal({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            name: name || 'Imported Tileset',
+            name: name || importedTilesetName,
             tilewidth: tileWidth,
             tileheight: tileHeight,
             columns: selW,
@@ -336,11 +337,12 @@ export default function ImportTilesetModal({
         }
       } catch (err) {
         console.error('Failed to save tileset to DB:', err);
+        alert(err instanceof Error ? err.message : t('errors.failedToLinkTileset'));
       }
     }
 
     onClose();
-  }, [image, calcGrid, selection, tileWidth, tileHeight, margin, spacing, name, existingTilesets, onImport, onClose, projectId, onLinkTileset]);
+  }, [image, calcGrid, selection, tileWidth, tileHeight, margin, spacing, name, existingTilesets, onImport, onClose, projectId, onLinkTileset, importedTilesetName, t]);
 
   return (
     <Modal open={open} onClose={onClose} title={t('mapEditor.importTileset.title')} size="lg">
@@ -433,7 +435,7 @@ export default function ImportTilesetModal({
         {activeTab !== 'upload' && (
           <div className="grid grid-cols-3 gap-3 max-h-80 overflow-auto p-4">
             {libraryLoading ? (
-              <div className="col-span-3 text-center text-gray-500 py-8">Loading...</div>
+              <div className="col-span-3 text-center text-gray-500 py-8">{t("common.loading")}</div>
             ) : libraryTilesets.length === 0 ? (
               <div className="col-span-3 text-center text-gray-500 py-8">{t('mapEditor.assets.noTilesets')}</div>
             ) : (
@@ -441,14 +443,18 @@ export default function ImportTilesetModal({
                 <button
                   key={ts.id}
                   className="flex flex-col items-center p-2 bg-gray-800 rounded border border-gray-700 hover:border-blue-500"
-                  onClick={() => {
+                  onClick={async () => {
+                    const nextFirstgid = existingTilesets.reduce(
+                      (max, t) => Math.max(max, t.firstgid + t.tilecount),
+                      1,
+                    );
                     const img = new Image();
-                    img.src = ts.image;
-                    img.onload = () => {
-                      const nextFirstgid = existingTilesets.reduce(
-                        (max, t) => Math.max(max, t.firstgid + t.tilecount),
-                        1,
-                      );
+                    try {
+                      await new Promise<void>((resolve, reject) => {
+                        img.onload = () => resolve();
+                        img.onerror = () => reject(new Error(t('errors.failedToLinkTileset')));
+                        img.src = ts.image;
+                      });
                       onImport({
                         tileset: {
                           firstgid: nextFirstgid,
@@ -472,9 +478,11 @@ export default function ImportTilesetModal({
                         },
                         imageDataUrl: ts.image,
                       });
-                      onLinkTileset?.(ts.id, nextFirstgid);
+                      await onLinkTileset?.(ts.id, nextFirstgid);
                       onClose();
-                    };
+                    } catch (err) {
+                      alert(err instanceof Error ? err.message : t('errors.failedToLinkTileset'));
+                    }
                   }}
                 >
                   <img src={ts.image} alt={ts.name} className="w-16 h-16 object-contain bg-gray-900 rounded" />

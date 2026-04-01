@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { compositeCharacter } from "@/lib/sprite-compositor";
+import { useT } from "@/lib/i18n";
+import { createWalkerSpeed, shouldAdvanceWalkerFrame } from "./cityscape-motion";
 
 // Hair variants: blonde, black, chestnut, raven, ginger, platinum, ash, red, sandy
 // (NO "brown" — use chestnut/raven instead)
@@ -166,6 +168,7 @@ function generateWindows(cols: number, rows: number, baseOffChance: number): Win
 }
 
 export default function CityScapeBackground() {
+  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const walkersRef = useRef<Walker[]>([]);
   const carsRef = useRef<Car[]>([]);
@@ -192,7 +195,7 @@ export default function CityScapeBackground() {
         walkers.push({
           sheet: offscreen,
           x: Math.random() * window.innerWidth,
-          speed: 1.2 + Math.random() * 0.8,
+          speed: createWalkerSpeed(Math.random()),
           direction: dir,
           frame: Math.floor(Math.random() * WALK_COLS),
         });
@@ -247,8 +250,8 @@ export default function CityScapeBackground() {
       }
 
       if (readyRef.current) {
-        // Advance walk frame every 5 ticks (faster animation)
-        if (frameCount % 5 === 0) {
+        // Advance the walk cycle more slowly so pedestrians feel less frantic.
+        if (shouldAdvanceWalkerFrame(frameCount)) {
           for (const walker of walkersRef.current) {
             walker.frame = (walker.frame + 1) % WALK_COLS;
           }
@@ -431,7 +434,7 @@ export default function CityScapeBackground() {
                     <div className="text-[clamp(8px,1.2vw,14px)] font-black text-indigo-200 font-mono tracking-widest" style={{ textShadow: "0 0 8px rgba(199,210,254,0.5)" }}>
                       DeskRPG
                     </div>
-                    <div className="text-[clamp(4px,0.5vw,7px)] text-indigo-400 tracking-widest">VIRTUAL OFFICE</div>
+                    <div className="text-[clamp(4px,0.5vw,7px)] text-indigo-400 tracking-widest">{t("auth.subtitle")}</div>
                     <div className="absolute inset-0 pointer-events-none" style={{ background: "repeating-linear-gradient(0deg,transparent 0px,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px)" }} />
                     <div className="absolute left-0 right-0 h-0.5 animate-scan-line" style={{ background: "rgba(255,255,255,0.05)" }} />
                   </div>

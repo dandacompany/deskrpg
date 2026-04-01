@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       .limit(1);
 
     if (!template) {
-      return NextResponse.json({ error: "Template not found" }, { status: 404 });
+      return NextResponse.json({ errorCode: "template_not_found", error: "Template not found" }, { status: 404 });
     }
 
     const tiledJson = typeof template.tiledJson === "string"
@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       : JSON.stringify(template.tiledJson, null, 2);
 
     if (!tiledJson || tiledJson === "null") {
-      return NextResponse.json({ error: "No Tiled JSON data available" }, { status: 404 });
+      return NextResponse.json({ errorCode: "no_tiled_json_available", error: "No Tiled JSON data available" }, { status: 404 });
     }
 
     return new NextResponse(tiledJson, {
@@ -33,6 +33,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
     });
   } catch (err) {
     console.error("Failed to download template:", err);
-    return NextResponse.json({ error: "Failed to download" }, { status: 500 });
+    return NextResponse.json({ errorCode: "failed_to_download_template", error: "Failed to download" }, { status: 500 });
   }
 }

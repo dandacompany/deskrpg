@@ -1,4 +1,4 @@
-import { db, groupJoinRequests, groupMembers, users } from "@/db";
+import { db, groupJoinRequests, groupMembers, isPostgres, users } from "@/db";
 import {
   getAuthenticatedUserId,
   getGroupActorContext,
@@ -10,6 +10,10 @@ import {
 } from "@/lib/rbac/group-api";
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+
+function toDbTimestamp(value: string): Date | string {
+  return isPostgres ? new Date(value) : value;
+}
 
 async function requireJoinRequestManager(groupId: string, userId: string) {
   const context = await getGroupActorContext(groupId, userId);
@@ -88,7 +92,7 @@ export async function POST(
       status: "pending",
       reviewedBy: null,
       reviewedAt: null,
-      createdAt: now,
+      createdAt: toDbTimestamp(now) as unknown as Date,
     })
     .onConflictDoUpdate({
       target: [groupJoinRequests.groupId, groupJoinRequests.userId],
@@ -97,7 +101,7 @@ export async function POST(
         message: typeof body?.message === "string" ? body.message.trim() : null,
         reviewedBy: null,
         reviewedAt: null,
-        createdAt: now,
+        createdAt: toDbTimestamp(now) as unknown as Date,
       },
     })
     .returning();
@@ -178,45 +182,43 @@ export async function PATCH(
   const now = new Date().toISOString();
   let result;
   try {
-    result = await db.transaction(async (tx) => {
-      const updatedRows = await tx
-        .update(groupJoinRequests)
-        .set({
-          status: review.nextStatus,
-          reviewedBy: userId,
-          reviewedAt: now,
+    const updatedRows = await db
+      .update(groupJoinRequests)
+      .set({
+        status: review.nextStatus,
+        reviewedBy: userId,
+        reviewedAt: toDbTimestamp(now) as unknown as Date,
+      })
+      .where(
+        and(
+          eq(groupJoinRequests.id, requestId),
+          eq(groupJoinRequests.groupId, groupId),
+          eq(groupJoinRequests.status, "pending"),
+        ),
+      )
+      .returning();
+
+    const updatedRequest = updatedRows[0];
+    if (!updatedRequest) {
+      throw new Error("join_request_not_pending");
+    }
+
+    if (review.shouldUpsertMembership) {
+      await db
+        .insert(groupMembers)
+        .values({
+          groupId,
+          userId: existing.userId,
+          role: review.membershipRole,
+          approvedBy: userId,
+          approvedAt: toDbTimestamp(now) as unknown as Date,
         })
-        .where(
-          and(
-            eq(groupJoinRequests.id, requestId),
-            eq(groupJoinRequests.groupId, groupId),
-            eq(groupJoinRequests.status, "pending"),
-          ),
-        )
-        .returning();
+        .onConflictDoNothing({
+          target: [groupMembers.groupId, groupMembers.userId],
+        });
+    }
 
-      const updatedRequest = updatedRows[0];
-      if (!updatedRequest) {
-        throw new Error("join_request_not_pending");
-      }
-
-      if (review.shouldUpsertMembership) {
-        await tx
-          .insert(groupMembers)
-          .values({
-            groupId,
-            userId: existing.userId,
-            role: review.membershipRole,
-            approvedBy: userId,
-            approvedAt: now,
-          })
-          .onConflictDoNothing({
-            target: [groupMembers.groupId, groupMembers.userId],
-          });
-      }
-
-      return updatedRequest;
-    });
+    result = updatedRequest;
   } catch (error) {
     if (error instanceof Error && error.message === "join_request_not_pending") {
       return NextResponse.json(

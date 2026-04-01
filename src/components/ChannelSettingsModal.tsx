@@ -1,6 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/lib/i18n";
+import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
+
+type ChannelSettingsTab = "settings" | "members" | "gateway";
 
 interface ChannelSettingsModalProps {
   channelId: string;
@@ -8,8 +11,21 @@ interface ChannelSettingsModalProps {
   channelDescription: string | null;
   isPublic: boolean;
   inviteCode: string | null;
+  initialTab?: ChannelSettingsTab;
   onClose: () => void;
-  onUpdated: (data: { name?: string; description?: string | null; isPublic?: boolean }) => void;
+  onUpdated: (data: {
+    name?: string;
+    description?: string | null;
+    isPublic?: boolean;
+    gatewayConfig?: {
+      taskAutomation?: {
+        autoProgressNudgeEnabled?: boolean;
+        autoProgressNudgeMinutes?: number;
+        autoProgressNudgeMax?: number;
+        reportWaitSeconds?: number;
+      };
+    };
+  }) => void;
 }
 
 interface Member {
@@ -22,10 +38,10 @@ interface Member {
 
 export default function ChannelSettingsModal({
   channelId, channelName, channelDescription, isPublic, inviteCode,
-  onClose, onUpdated,
+  initialTab = "settings", onClose, onUpdated,
 }: ChannelSettingsModalProps) {
   const t = useT();
-  const [tab, setTab] = useState<"settings" | "members" | "gateway">("settings");
+  const [tab, setTab] = useState<ChannelSettingsTab>(initialTab);
   const [name, setName] = useState(channelName);
   const [description, setDescription] = useState(channelDescription || "");
   const [visibility, setVisibility] = useState(isPublic);
@@ -36,6 +52,7 @@ export default function ChannelSettingsModal({
   const [copied, setCopied] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState("");
   const [kickingUserId, setKickingUserId] = useState<string | null>(null);
   const [confirmKick, setConfirmKick] = useState<Member | null>(null);
 
@@ -47,18 +64,28 @@ export default function ChannelSettingsModal({
   const [gatewaySaving, setGatewaySaving] = useState(false);
   const [gatewayTestResult, setGatewayTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [gatewayError, setGatewayError] = useState("");
+  const [autoProgressNudgeEnabled, setAutoProgressNudgeEnabled] = useState(false);
+  const [autoProgressNudgeMinutes, setAutoProgressNudgeMinutes] = useState(5);
+  const [autoProgressNudgeMax, setAutoProgressNudgeMax] = useState(5);
+  const [reportWaitSeconds, setReportWaitSeconds] = useState(20);
 
   const loadMembers = useCallback(async () => {
     setMembersLoading(true);
+    setMembersError("");
     try {
       const res = await fetch(`/api/channels/${channelId}/members`);
       if (res.ok) {
         const data = await res.json();
         setMembers(data.members || []);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setMembersError(getLocalizedErrorMessage(t, data, "errors.failedToFetchMembers"));
       }
-    } catch {}
+    } catch {
+      setMembersError(t("errors.failedToFetchMembers"));
+    }
     setMembersLoading(false);
-  }, [channelId]);
+  }, [channelId, t]);
 
   const loadGateway = useCallback(async () => {
     setGatewayLoading(true);
@@ -71,6 +98,10 @@ export default function ChannelSettingsModal({
         if (gc) {
           setGatewayUrl(gc.url || "");
           setGatewayToken(gc.token || "");
+          setAutoProgressNudgeEnabled(gc.taskAutomation?.autoProgressNudgeEnabled ?? false);
+          setAutoProgressNudgeMinutes(gc.taskAutomation?.autoProgressNudgeMinutes ?? 5);
+          setAutoProgressNudgeMax(gc.taskAutomation?.autoProgressNudgeMax ?? 5);
+          setReportWaitSeconds(gc.taskAutomation?.reportWaitSeconds ?? 20);
         }
       }
     } catch {}
@@ -78,9 +109,21 @@ export default function ChannelSettingsModal({
   }, [channelId]);
 
   useEffect(() => {
-    if (tab === "members") loadMembers();
-    if (tab === "gateway") loadGateway();
-  }, [tab, loadMembers, loadGateway]);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (tab === "members") {
+      timer = setTimeout(() => {
+        void loadMembers();
+      }, 0);
+    }
+    if (tab === "gateway") {
+      timer = setTimeout(() => {
+        void loadGateway();
+      }, 0);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [tab, loadGateway, loadMembers]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -112,7 +155,7 @@ export default function ChannelSettingsModal({
       });
       if (!res.ok) {
         const data = await res.json();
-        setSaveError(data.error || t("settings.failedToSave"));
+        setSaveError(getLocalizedErrorMessage(t, data, "settings.failedToSave"));
       } else {
         setSaveSuccess(true);
         setPassword("");
@@ -127,12 +170,18 @@ export default function ChannelSettingsModal({
 
   const handleKick = async (member: Member) => {
     setKickingUserId(member.userId);
+    setMembersError("");
     try {
       const res = await fetch(`/api/channels/${channelId}/members/${member.userId}`, { method: "DELETE" });
       if (res.ok) {
         setMembers((prev) => prev.filter((m) => m.userId !== member.userId));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setMembersError(getLocalizedErrorMessage(t, data, "errors.failedToKickMember"));
       }
-    } catch {}
+    } catch {
+      setMembersError(t("errors.failedToKickMember"));
+    }
     setKickingUserId(null);
     setConfirmKick(null);
   };
@@ -154,10 +203,13 @@ export default function ChannelSettingsModal({
       if (res.ok) {
         setGatewayTestResult({ success: true, message: data.message || t("settings.connected") });
       } else {
-        setGatewayTestResult({ success: false, message: data.error || t("settings.connectionFailed") });
+        setGatewayTestResult({
+          success: false,
+          message: getLocalizedErrorMessage(t, data, "errors.connectionFailed"),
+        });
       }
     } catch {
-      setGatewayTestResult({ success: false, message: t("settings.connectionFailed") });
+      setGatewayTestResult({ success: false, message: t("errors.connectionFailed") });
     }
   };
 
@@ -167,6 +219,12 @@ export default function ChannelSettingsModal({
     const gatewayConfig = {
       url: gatewayUrl.trim() || null,
       token: gatewayToken.trim() || null,
+      taskAutomation: {
+        autoProgressNudgeEnabled,
+        autoProgressNudgeMinutes: Math.max(1, Math.floor(autoProgressNudgeMinutes) || 5),
+        autoProgressNudgeMax: Math.max(1, Math.floor(autoProgressNudgeMax) || 5),
+        reportWaitSeconds: Math.max(5, Math.floor(reportWaitSeconds) || 20),
+      },
     };
     try {
       const res = await fetch(`/api/channels/${channelId}/gateway`, {
@@ -176,12 +234,18 @@ export default function ChannelSettingsModal({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setGatewayError(data.error || t("settings.failedToSave"));
+        setGatewayError(getLocalizedErrorMessage(t, data, "settings.failedToSave"));
       } else {
+        const data = await res.json().catch(() => ({}));
+        onUpdated({
+          gatewayConfig: {
+            taskAutomation: data?.gatewayConfig?.taskAutomation || gatewayConfig.taskAutomation,
+          },
+        });
         setGatewayTestResult({ success: true, message: t("settings.saved") });
         setTimeout(() => setGatewayTestResult(null), 3000);
       }
-    } catch (err) {
+    } catch {
       setGatewayError(t("settings.failedToSave"));
     }
     setGatewaySaving(false);
@@ -192,7 +256,7 @@ export default function ChannelSettingsModal({
       <div className="bg-gray-800 rounded-xl w-full max-w-lg border border-gray-700 max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
           <h2 className="text-lg font-bold text-white">{t("settings.title")}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl" aria-label={t("common.close")}>&times;</button>
         </div>
 
         <div className="flex border-b border-gray-700">
@@ -260,6 +324,8 @@ export default function ChannelSettingsModal({
             <div>
               {membersLoading ? (
                 <p className="text-gray-400 text-sm py-4 text-center">{t("settings.loadingMembers")}</p>
+              ) : membersError ? (
+                <p className="text-red-400 text-sm py-4 text-center">{membersError}</p>
               ) : members.length === 0 ? (
                 <p className="text-gray-400 text-sm py-4 text-center">{t("settings.noMembers")}</p>
               ) : (
@@ -324,6 +390,71 @@ export default function ChannelSettingsModal({
                       >
                         {showToken ? t("common.hide") : t("common.show")}
                       </button>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-200">{t("settings.taskAutomation")}</p>
+                        <p className="text-xs text-gray-400 mt-1">{t("settings.autoProgressNudgeHelp")}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAutoProgressNudgeEnabled((prev) => !prev)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                          autoProgressNudgeEnabled ? "bg-indigo-600" : "bg-gray-700"
+                        }`}
+                        aria-pressed={autoProgressNudgeEnabled}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                            autoProgressNudgeEnabled ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-400 mb-1">
+                          {t("settings.progressNudgeMinutes")}
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={autoProgressNudgeMinutes}
+                          onChange={(e) => setAutoProgressNudgeMinutes(Number(e.target.value) || 1)}
+                          disabled={!autoProgressNudgeEnabled}
+                          className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded text-white disabled:opacity-50 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-400 mb-1">
+                          {t("settings.autoProgressNudgeMax")}
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={autoProgressNudgeMax}
+                          onChange={(e) => setAutoProgressNudgeMax(Number(e.target.value) || 1)}
+                          disabled={!autoProgressNudgeEnabled}
+                          className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded text-white disabled:opacity-50 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-400 mb-1">
+                          {t("settings.reportWaitSeconds")}
+                        </label>
+                        <input
+                          type="number"
+                          min={5}
+                          step={1}
+                          value={reportWaitSeconds}
+                          onChange={(e) => setReportWaitSeconds(Number(e.target.value) || 5)}
+                          className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded text-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
                     </div>
                   </div>
                   {gatewayTestResult && (
