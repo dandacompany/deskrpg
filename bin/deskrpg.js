@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const { spawn } = require("node:child_process");
 
 const EXTERNAL_ALIAS_PACKAGE_MAP = new Map([
@@ -308,7 +309,11 @@ async function runStart() {
   const serverRoot = getPackageRoot();
   ensureExternalModuleAliases(serverRoot);
 
-  const childArgs = ["--import", getTsxLoaderPath(), path.join(serverRoot, "server.js")];
+  const childArgs = [
+    "--import",
+    pathToFileURL(getTsxLoaderPath()).href,
+    path.join(serverRoot, "server.js"),
+  ];
 
   const child = spawn(
     process.execPath,
