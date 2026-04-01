@@ -19,8 +19,10 @@ interface ChannelSettingsModalProps {
     description?: string | null;
     isPublic?: boolean;
     gatewayConfig?: {
+      gatewayId?: string | null;
       url?: string | null;
       token?: string | null;
+      canEditCredentials?: boolean;
       taskAutomation?: {
         autoProgressNudgeEnabled?: boolean;
         autoProgressNudgeMinutes?: number;
@@ -43,6 +45,15 @@ interface GatewayConnectionState {
   status: OpenClawPairingStatus;
   requestId?: string | null;
   error?: string | null;
+}
+
+interface AccessibleGatewayOption {
+  id: string;
+  displayName: string | null;
+  baseUrl: string;
+  canEditCredentials: boolean;
+  isOwner: boolean;
+  shareRole: string | null;
 }
 
 function isGatewayPairingRequired(payload: unknown): payload is {
@@ -78,9 +89,15 @@ export default function ChannelSettingsModal({
   // AI Gateway state
   const [gatewayUrl, setGatewayUrl] = useState("");
   const [gatewayToken, setGatewayToken] = useState("");
+  const [gatewayId, setGatewayId] = useState<string | null>(null);
+  const [gatewayMode, setGatewayMode] = useState<"resource" | "direct">("direct");
+  const [gatewayOptions, setGatewayOptions] = useState<AccessibleGatewayOption[]>([]);
+  const [selectedGatewayId, setSelectedGatewayId] = useState<string>("");
+  const [gatewayCanEditCredentials, setGatewayCanEditCredentials] = useState(true);
   const [showToken, setShowToken] = useState(false);
   const [gatewayLoading, setGatewayLoading] = useState(false);
   const [gatewaySaving, setGatewaySaving] = useState(false);
+  const [gatewayTesting, setGatewayTesting] = useState(false);
   const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({ status: "idle" });
   const [gatewayNotice, setGatewayNotice] = useState<{ success: boolean; message: string } | null>(null);
   const [gatewayError, setGatewayError] = useState("");
@@ -111,18 +128,52 @@ export default function ChannelSettingsModal({
     setGatewayLoading(true);
     setGatewayError("");
     try {
-      const res = await fetch(`/api/channels/${channelId}/gateway`);
-      if (res.ok) {
-        const data = await res.json();
-        const gc = data?.gatewayConfig;
-        if (gc) {
-          setGatewayUrl(gc.url || "");
-          setGatewayToken(gc.token || "");
-          setAutoProgressNudgeEnabled(gc.taskAutomation?.autoProgressNudgeEnabled ?? false);
-          setAutoProgressNudgeMinutes(gc.taskAutomation?.autoProgressNudgeMinutes ?? 5);
-          setAutoProgressNudgeMax(gc.taskAutomation?.autoProgressNudgeMax ?? 5);
-          setReportWaitSeconds(gc.taskAutomation?.reportWaitSeconds ?? 20);
-        }
+      const [gatewayRes, optionsRes] = await Promise.all([
+        fetch(`/api/channels/${channelId}/gateway`),
+        fetch("/api/gateways"),
+      ]);
+
+      if (optionsRes.ok) {
+        const optionsData = await optionsRes.json().catch(() => ({}));
+        setGatewayOptions(Array.isArray(optionsData.gateways) ? optionsData.gateways : []);
+      } else {
+        setGatewayOptions([]);
+      }
+
+      if (!gatewayRes.ok) {
+        return;
+      }
+
+      const data = await gatewayRes.json();
+      const gc = data?.gatewayConfig;
+      if (gc) {
+        const nextGatewayId = typeof gc.gatewayId === "string" ? gc.gatewayId : null;
+        const currentOption = nextGatewayId
+          ? {
+              id: nextGatewayId,
+              displayName: gc.displayName || gc.url || nextGatewayId,
+              baseUrl: gc.url || "",
+              canEditCredentials: gc.canEditCredentials !== false,
+              isOwner: gc.canEditCredentials !== false,
+              shareRole: null,
+            }
+          : null;
+        setGatewayOptions((prev) => {
+          if (!currentOption || prev.some((item) => item.id === currentOption.id)) {
+            return prev;
+          }
+          return [currentOption, ...prev];
+        });
+        setGatewayId(nextGatewayId);
+        setSelectedGatewayId(nextGatewayId ?? "");
+        setGatewayMode(nextGatewayId ? "resource" : "direct");
+        setGatewayUrl(gc.url || "");
+        setGatewayToken(gc.token || "");
+        setGatewayCanEditCredentials(gc.canEditCredentials !== false);
+        setAutoProgressNudgeEnabled(gc.taskAutomation?.autoProgressNudgeEnabled ?? false);
+        setAutoProgressNudgeMinutes(gc.taskAutomation?.autoProgressNudgeMinutes ?? 5);
+        setAutoProgressNudgeMax(gc.taskAutomation?.autoProgressNudgeMax ?? 5);
+        setReportWaitSeconds(gc.taskAutomation?.reportWaitSeconds ?? 20);
       }
     } catch {}
     setGatewayLoading(false);
@@ -215,11 +266,22 @@ export default function ChannelSettingsModal({
   };
 
   const handleTestConnection = async () => {
+    setGatewayTesting(true);
     setGatewayNotice(null);
     setGatewayConnectionState({ status: "idle" });
     setGatewayError("");
     try {
-      const res = await fetch(`/api/channels/${channelId}/gateway/test`, { method: "POST" });
+      const shouldUseResource = gatewayMode === "resource" && !!selectedGatewayId;
+      const res = shouldUseResource
+        ? await fetch(`/api/gateways/${selectedGatewayId}/test`, { method: "POST" })
+        : await fetch("/api/channels/test-gateway", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: gatewayUrl.trim(),
+            token: gatewayToken.trim(),
+          }),
+        });
       const data = await res.json();
       if (res.ok) {
         setGatewayConnectionState({ status: "connected" });
@@ -238,15 +300,19 @@ export default function ChannelSettingsModal({
       }
     } catch {
       setGatewayConnectionState({ status: "error", error: t("errors.connectionFailed") });
+    } finally {
+      setGatewayTesting(false);
     }
   };
 
-  const handleSaveGateway = async () => {
+  const handleSaveGateway = async (confirmNpcReset = false) => {
+    if (gatewayMode === "resource" && !selectedGatewayId) {
+      setGatewayError(t("settings.gatewaySelect"));
+      return;
+    }
     setGatewaySaving(true);
     setGatewayError("");
-    const gatewayConfig = {
-      url: gatewayUrl.trim() || null,
-      token: gatewayToken.trim() || null,
+    const gatewayConfig: Record<string, unknown> = {
       taskAutomation: {
         autoProgressNudgeEnabled,
         autoProgressNudgeMinutes: Math.max(1, Math.floor(autoProgressNudgeMinutes) || 5),
@@ -254,6 +320,15 @@ export default function ChannelSettingsModal({
         reportWaitSeconds: Math.max(5, Math.floor(reportWaitSeconds) || 20),
       },
     };
+    if (confirmNpcReset) {
+      gatewayConfig.confirmNpcReset = true;
+    }
+    if (gatewayMode === "resource" && selectedGatewayId) {
+      gatewayConfig.gatewayId = selectedGatewayId;
+    } else {
+      gatewayConfig.url = gatewayUrl.trim() || null;
+      gatewayConfig.token = gatewayToken.trim() || null;
+    }
     try {
       const res = await fetch(`/api/channels/${channelId}/gateway`, {
         method: "PUT",
@@ -262,14 +337,77 @@ export default function ChannelSettingsModal({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (
+          data?.errorCode === "gateway_change_requires_npc_reset"
+          && !confirmNpcReset
+          && window.confirm(t("settings.gatewayChangeResetWarning"))
+        ) {
+          await handleSaveGateway(true);
+          return;
+        }
         setGatewayError(getLocalizedErrorMessage(t, data, "settings.failedToSave"));
       } else {
         const data = await res.json().catch(() => ({}));
+        const nextGatewayId = typeof data?.gatewayConfig?.gatewayId === "string" ? data.gatewayConfig.gatewayId : null;
+        setGatewayId(nextGatewayId);
+        setSelectedGatewayId(nextGatewayId ?? "");
+        setGatewayMode(nextGatewayId ? "resource" : "direct");
+        setGatewayCanEditCredentials(data?.gatewayConfig?.canEditCredentials !== false);
+        setGatewayUrl(data?.gatewayConfig?.url ?? gatewayUrl);
+        setGatewayToken(data?.gatewayConfig?.token ?? gatewayToken);
         onUpdated({
           gatewayConfig: {
+            gatewayId: data?.gatewayConfig?.gatewayId ?? gatewayId,
             url: data?.gatewayConfig?.url ?? gatewayConfig.url,
             token: data?.gatewayConfig?.token ?? gatewayConfig.token,
+            canEditCredentials: data?.gatewayConfig?.canEditCredentials ?? gatewayCanEditCredentials,
             taskAutomation: data?.gatewayConfig?.taskAutomation || gatewayConfig.taskAutomation,
+          },
+        });
+        setGatewayNotice({ success: true, message: t("settings.saved") });
+        setTimeout(() => setGatewayNotice(null), 3000);
+      }
+    } catch {
+      setGatewayError(t("settings.failedToSave"));
+    }
+    setGatewaySaving(false);
+  };
+
+  const handleDeleteGateway = async (confirmNpcReset = false) => {
+    setGatewaySaving(true);
+    setGatewayError("");
+    try {
+      const res = await fetch(
+        `/api/channels/${channelId}/gateway${confirmNpcReset ? "?confirmNpcReset=1" : ""}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (
+          data?.errorCode === "gateway_disconnect_requires_npc_reset"
+          && !confirmNpcReset
+          && window.confirm(t("settings.gatewayDisconnectResetWarning"))
+        ) {
+          await handleDeleteGateway(true);
+          return;
+        }
+        setGatewayError(getLocalizedErrorMessage(t, data, "settings.failedToSave"));
+      } else {
+        setGatewayId(null);
+        setSelectedGatewayId("");
+        setGatewayMode("direct");
+        setGatewayUrl("");
+        setGatewayToken("");
+        setGatewayCanEditCredentials(true);
+        setGatewayConnectionState({ status: "idle" });
+        const data = await res.json().catch(() => ({}));
+        onUpdated({
+          gatewayConfig: {
+            gatewayId: null,
+            url: null,
+            token: null,
+            canEditCredentials: true,
+            taskAutomation: data?.gatewayConfig?.taskAutomation,
           },
         });
         setGatewayNotice({ success: true, message: t("settings.saved") });
@@ -394,13 +532,89 @@ export default function ChannelSettingsModal({
               ) : (
                 <>
                   <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">{t("settings.gatewaySource")}</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGatewayMode("resource");
+                          setGatewayConnectionState({ status: "idle" });
+                          setGatewayNotice(null);
+                        }}
+                        className={`px-3 py-2 rounded text-sm font-semibold ${
+                          gatewayMode === "resource" ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-300"
+                        }`}
+                      >
+                        {t("settings.gatewayUseSaved")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGatewayMode("direct");
+                          setGatewayCanEditCredentials(true);
+                          setGatewayConnectionState({ status: "idle" });
+                          setGatewayNotice(null);
+                        }}
+                        className={`px-3 py-2 rounded text-sm font-semibold ${
+                          gatewayMode === "direct" ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-300"
+                        }`}
+                      >
+                        {t("settings.gatewayUseCustom")}
+                      </button>
+                    </div>
+                  </div>
+                  {gatewayMode === "resource" ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-300 mb-1">{t("settings.gatewaySaved")}</label>
+                        <select
+                          value={selectedGatewayId}
+                          onChange={(e) => {
+                            const nextId = e.target.value;
+                            const option = gatewayOptions.find((item) => item.id === nextId);
+                            setSelectedGatewayId(nextId);
+                            setGatewayCanEditCredentials(option?.canEditCredentials ?? true);
+                            setGatewayId(nextId || null);
+                            setGatewayUrl(option?.baseUrl ?? "");
+                            if (!option?.canEditCredentials) {
+                              setGatewayToken("");
+                            }
+                            setGatewayConnectionState({ status: "idle" });
+                            setGatewayNotice(null);
+                          }}
+                          className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-indigo-500"
+                        >
+                          <option value="">{t("settings.gatewaySelect")}</option>
+                          {gatewayOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.displayName || option.baseUrl}
+                            </option>
+                          ))}
+                        </select>
+                        {selectedGatewayId && (
+                          <p className="mt-2 text-xs text-gray-400">
+                            {gatewayOptions.find((option) => option.id === selectedGatewayId)?.baseUrl ?? ""}
+                          </p>
+                        )}
+                        {gatewayOptions.length === 0 && (
+                          <p className="mt-2 text-xs text-amber-300">{t("settings.gatewayNoSaved")}</p>
+                        )}
+                      </div>
+                      {!gatewayCanEditCredentials && selectedGatewayId && (
+                        <p className="text-xs text-amber-300">{t("settings.gatewaySharedReadOnly")}</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                  <div>
                     <label className="block text-sm font-semibold text-gray-300 mb-1">{t("settings.gatewayUrl")}</label>
                     <input
                       type="text"
                       value={gatewayUrl}
                       onChange={(e) => setGatewayUrl(e.target.value)}
                       placeholder={t("settings.gatewayUrlPlaceholder")}
-                      className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+                      disabled={!gatewayCanEditCredentials}
+                      className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
                     />
                   </div>
                   <div>
@@ -411,7 +625,8 @@ export default function ChannelSettingsModal({
                         value={gatewayToken}
                         onChange={(e) => setGatewayToken(e.target.value)}
                         placeholder={t("settings.gatewayTokenPlaceholder")}
-                        className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+                        disabled={!gatewayCanEditCredentials}
+                        className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
                       />
                       <button
                         type="button"
@@ -422,6 +637,8 @@ export default function ChannelSettingsModal({
                       </button>
                     </div>
                   </div>
+                    </>
+                  )}
                   <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3 space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -502,17 +719,28 @@ export default function ChannelSettingsModal({
                   )}
                   {gatewayError && <p className="text-red-400 text-sm">{gatewayError}</p>}
                   <div className="flex gap-2">
+                    {gatewayId && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteGateway()}
+                        disabled={gatewaySaving}
+                        className="px-4 py-2 bg-red-700/70 hover:bg-red-700 rounded font-semibold text-white disabled:opacity-50"
+                      >
+                        {t("settings.disconnectGateway")}
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={handleTestConnection}
-                      className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded font-semibold text-white"
+                      onClick={() => void handleTestConnection()}
+                      disabled={gatewayTesting || (gatewayMode === "resource" ? !selectedGatewayId : !gatewayUrl.trim())}
+                      className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded font-semibold text-white disabled:opacity-50"
                     >
-                      {t("settings.testConnection")}
+                      {gatewayTesting ? t("common.loading") : t("settings.testConnection")}
                     </button>
                     <button
                       type="button"
-                      onClick={handleSaveGateway}
-                      disabled={gatewaySaving}
+                      onClick={() => void handleSaveGateway()}
+                      disabled={gatewaySaving || (gatewayMode === "resource" && !selectedGatewayId)}
                       className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded font-semibold text-white disabled:opacity-50"
                     >
                       {gatewaySaving ? t("common.loading") : t("common.save")}

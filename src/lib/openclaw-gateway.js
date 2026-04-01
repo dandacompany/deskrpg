@@ -5,11 +5,20 @@
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 
+const fs = require("node:fs");
+const path = require("node:path");
 const WebSocket = require("ws");
-const { randomUUID } = require("crypto");
+const { createHash, generateKeyPairSync, randomUUID, sign } = require("crypto");
+const runtimePaths = require("./runtime-paths.js");
 
 const PROTOCOL_MIN = 1;
 const PROTOCOL_MAX = 3;
+const MODERN_PROTOCOL = 3;
+const MODERN_CLIENT_ID = "cli";
+const MODERN_CLIENT_MODE = "cli";
+const MODERN_ROLE = "operator";
+const MODERN_SCOPES = ["operator.read", "operator.write", "operator.admin"];
+const DEVICE_IDENTITIES_DIRNAME = "openclaw-devices";
 
 class OpenClawGatewayError extends Error {
   constructor({
@@ -17,12 +26,15 @@ class OpenClawGatewayError extends Error {
     error,
     requestId = null,
     details = null,
+    pairingRequired = false,
   }) {
     super(error);
     this.name = "OpenClawGatewayError";
     this.errorCode = errorCode || "gateway_error";
+    this.code = this.errorCode;
     this.requestId = requestId;
     this.details = details;
+    this.pairingRequired = pairingRequired;
   }
 }
 
@@ -39,19 +51,125 @@ function createGatewayError(error, fallbackErrorCode = "gateway_error", fallback
         ? error.code
         : fallbackErrorCode)
     : fallbackErrorCode;
-  const requestId = error && typeof error === "object" && typeof error.requestId === "string"
-    ? error.requestId
-    : null;
   const details = error && typeof error === "object" && "details" in error
     ? error.details ?? null
     : null;
+  const requestId = error && typeof error === "object" && typeof error.requestId === "string"
+    ? error.requestId
+    : details && typeof details === "object"
+      ? (typeof details.requestId === "string"
+        ? details.requestId
+        : typeof details.request_id === "string"
+          ? details.request_id
+          : null)
+      : null;
+  const pairingRequired = Boolean(
+    errorCode === "PAIRING_REQUIRED"
+    || errorCode === "NOT_PAIRED"
+    || (details && typeof details === "object" && details.code === "PAIRING_REQUIRED"),
+  );
 
   return new OpenClawGatewayError({
     errorCode,
     error: message,
     requestId,
     details,
+    pairingRequired,
   });
+}
+
+function base64Url(buffer) {
+  return Buffer.from(buffer)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function extractRawEd25519PublicKey(spkiDer) {
+  return spkiDer.slice(-32);
+}
+
+function normalizeIdentityKey(input) {
+  try {
+    const parsed = new URL(input);
+    const pathname = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.protocol}//${parsed.host}${pathname}`;
+  } catch {
+    return input;
+  }
+}
+
+function getDeviceIdentityPath(identityKey) {
+  const keyHash = createHash("sha256").update(normalizeIdentityKey(identityKey)).digest("hex");
+  return path.join(
+    runtimePaths.getDeskRpgHomeDir(),
+    DEVICE_IDENTITIES_DIRNAME,
+    `${keyHash}.json`,
+  );
+}
+
+function generateDeviceIdentity() {
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const publicSpkiDer = publicKey.export({ type: "spki", format: "der" });
+  const publicRaw = extractRawEd25519PublicKey(publicSpkiDer);
+  const deviceId = createHash("sha256").update(publicRaw).digest("hex");
+
+  return {
+    id: deviceId,
+    publicKey: base64Url(publicRaw),
+    privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function loadOrCreateDeviceIdentity(identityKey) {
+  const identityPath = getDeviceIdentityPath(identityKey);
+  fs.mkdirSync(path.dirname(identityPath), { recursive: true });
+
+  if (fs.existsSync(identityPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(identityPath, "utf8"));
+      if (
+        parsed
+        && typeof parsed.id === "string"
+        && typeof parsed.publicKey === "string"
+        && typeof parsed.privateKeyPem === "string"
+      ) {
+        return parsed;
+      }
+    } catch {
+      // Fall through and regenerate a clean identity.
+    }
+  }
+
+  const identity = generateDeviceIdentity();
+  fs.writeFileSync(identityPath, `${JSON.stringify(identity, null, 2)}\n`, { mode: 0o600 });
+  return identity;
+}
+
+function buildModernDeviceAuth({ challenge, token, identity }) {
+  const nonce = challenge?.nonce;
+  const signedAt = challenge?.ts;
+  const payload = [
+    "v2",
+    identity.id,
+    MODERN_CLIENT_ID,
+    MODERN_CLIENT_MODE,
+    MODERN_ROLE,
+    MODERN_SCOPES.join(","),
+    String(signedAt),
+    token,
+    nonce,
+  ].join("|");
+
+  return {
+    id: identity.id,
+    publicKey: identity.publicKey,
+    signature: base64Url(sign(null, Buffer.from(payload), identity.privateKeyPem)),
+    signedAt,
+    nonce,
+  };
 }
 
 function buildGatewayErrorPayload(
@@ -63,7 +181,7 @@ function buildGatewayErrorPayload(
   } = {},
 ) {
   const normalized = createGatewayError(error, fallbackErrorCode, fallbackError);
-  const responseErrorCode = normalized.errorCode === "PAIRING_REQUIRED"
+  const responseErrorCode = normalized.pairingRequired
     ? "gateway_pairing_required"
     : normalized.errorCode;
   const payload = {
@@ -80,10 +198,7 @@ function buildGatewayErrorPayload(
 
 function getGatewayErrorStatus(error, fallbackStatus = 500) {
   const normalized = createGatewayError(error);
-  if (
-    normalized.errorCode === "PAIRING_REQUIRED"
-    || normalized.errorCode === "gateway_pairing_required"
-  ) return 409;
+  if (normalized.pairingRequired || normalized.errorCode === "gateway_pairing_required") return 409;
   return fallbackStatus;
 }
 
@@ -113,6 +228,9 @@ class OpenClawGateway {
     this._status = "disconnected";
     this._url = null;
     this._token = null;
+    this._connectChallenge = null;
+    this._deviceIdentity = null;
+    this._deviceIdentityKey = null;
 
     // RPC pending requests
     this._pending = new Map();
@@ -132,6 +250,8 @@ class OpenClawGateway {
     return new Promise((resolve, reject) => {
       this._url = url;
       this._token = token;
+      this._deviceIdentityKey = url;
+      this._connectChallenge = null;
       this._closed = false;
       this._connectResolve = resolve;
       this._connectReject = reject;
@@ -329,18 +449,40 @@ class OpenClawGateway {
     if (this._connectTimer) { clearTimeout(this._connectTimer); this._connectTimer = null; }
 
     const id = randomUUID();
+    const modernDevice = this._connectChallenge
+      ? buildModernDeviceAuth({
+        challenge: this._connectChallenge,
+        token: this._token,
+        identity: this._loadDeviceIdentity(),
+      })
+      : null;
     const frame = {
       type: "req",
       id,
       method: "connect",
-      params: {
-        minProtocol: PROTOCOL_MIN,
-        maxProtocol: PROTOCOL_MAX,
-        client: { id: "openclaw-control-ui", version: "1.0.0", platform: "node", mode: "ui" },
-        caps: ["tool-events"],
-        scopes: ["operator.admin"],
-        auth: this._token ? { token: this._token } : undefined,
-      },
+      params: modernDevice
+        ? {
+          minProtocol: MODERN_PROTOCOL,
+          maxProtocol: MODERN_PROTOCOL,
+          client: {
+            id: MODERN_CLIENT_ID,
+            version: "1.0.0",
+            platform: "node",
+            mode: MODERN_CLIENT_MODE,
+          },
+          role: MODERN_ROLE,
+          scopes: MODERN_SCOPES,
+          auth: this._token ? { token: this._token } : undefined,
+          device: modernDevice,
+        }
+        : {
+          minProtocol: PROTOCOL_MIN,
+          maxProtocol: PROTOCOL_MAX,
+          client: { id: "openclaw-control-ui", version: "1.0.0", platform: "node", mode: "ui" },
+          caps: ["tool-events"],
+          scopes: ["operator.admin"],
+          auth: this._token ? { token: this._token } : undefined,
+        },
     };
     this._ws.send(JSON.stringify(frame));
     this._connectRequestId = id;
@@ -354,6 +496,7 @@ class OpenClawGateway {
     if (parsed.type === "event") {
       // Challenge
       if (parsed.event === "connect.challenge") {
+        this._connectChallenge = parsed.payload || null;
         this._connectSent = false;
         this._sendConnect();
         return;
@@ -469,6 +612,13 @@ class OpenClawGateway {
         this._ws?.close(4000, "tick timeout");
       }
     }, Math.max(this._tickIntervalMs, 1000));
+  }
+
+  _loadDeviceIdentity() {
+    if (!this._deviceIdentity) {
+      this._deviceIdentity = loadOrCreateDeviceIdentity(this._deviceIdentityKey || this._url || "default");
+    }
+    return this._deviceIdentity;
   }
 }
 

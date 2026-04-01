@@ -235,6 +235,12 @@ function ChannelsPageInner() {
           <div className="flex items-center gap-3">
             <LogoutButton />
             <LocaleSwitcher />
+            <Link
+              href="/gateways"
+              className="px-4 py-2 bg-surface-raised hover:bg-surface-raised/80 rounded font-semibold"
+            >
+              {t("gateways.nav")}
+            </Link>
             {canManageGroups && (
               <Link
                 href="/admin/groups"

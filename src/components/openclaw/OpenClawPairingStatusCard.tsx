@@ -85,7 +85,7 @@ export function normalizeOpenClawPairingStatus(
 }
 
 export function buildOpenClawPairingApproveCommand(requestId: string) {
-  return `openclaw devices approve ${requestId} --notify`;
+  return `openclaw devices approve ${requestId}`;
 }
 
 export default function OpenClawPairingStatusCard({

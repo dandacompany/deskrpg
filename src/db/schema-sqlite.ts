@@ -51,6 +51,45 @@ export const channels = sqliteTable("channels", {
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
 });
 
+export const gatewayResources = sqliteTable("gateway_resources", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  ownerUserId: text("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  displayName: text("display_name").notNull(),
+  baseUrl: text("base_url").notNull(),
+  tokenEncrypted: text("token_encrypted").notNull(),
+  pairedDeviceId: text("paired_device_id"),
+  lastValidatedAt: text("last_validated_at"),
+  lastValidationStatus: text("last_validation_status"),
+  lastValidationError: text("last_validation_error"),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()).notNull(),
+  updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()).notNull(),
+}, (table) => [
+  index("idx_gateway_resources_owner_user_id").on(table.ownerUserId),
+]);
+
+export const gatewayShares = sqliteTable("gateway_shares", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  gatewayId: text("gateway_id").notNull().references(() => gatewayResources.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull().default("use"),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()).notNull(),
+}, (table) => [
+  index("idx_gateway_shares_gateway_id").on(table.gatewayId),
+  index("idx_gateway_shares_user_id").on(table.userId),
+  uniqueIndex("gateway_shares_gateway_user_idx").on(table.gatewayId, table.userId),
+]);
+
+export const channelGatewayBindings = sqliteTable("channel_gateway_bindings", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  channelId: text("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+  gatewayId: text("gateway_id").notNull().references(() => gatewayResources.id, { onDelete: "cascade" }),
+  boundByUserId: text("bound_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  boundAt: text("bound_at").$defaultFn(() => new Date().toISOString()).notNull(),
+}, (table) => [
+  index("idx_channel_gateway_bindings_gateway_id").on(table.gatewayId),
+  uniqueIndex("channel_gateway_bindings_channel_idx").on(table.channelId),
+]);
+
 export const groupMembers = sqliteTable("group_members", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),

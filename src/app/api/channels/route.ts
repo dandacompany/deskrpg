@@ -15,6 +15,11 @@ import { eq, and } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
 import { internalRpc, getUserId } from "@/lib/internal-rpc";
 import { parseDbArray, parseDbJson } from "@/lib/db-json";
+import {
+  bindGatewayToChannel,
+  getAccessibleGatewayResource,
+  upsertOwnedGatewayResource,
+} from "@/lib/gateway-resources";
 import { getDefaultMeetingProtocol } from "@/lib/npc-agent-defaults";
 import { normalizeLocale } from "@/lib/i18n/server";
 import { resolvePermission, type PermissionEffect } from "@/lib/rbac/permissions";
@@ -300,9 +305,39 @@ export async function POST(req: NextRequest) {
         mapData: jsonForDb(templateTiledJson || { layers: templateLayers, objects: templateObjects }),
         mapConfig: jsonForDb({ cols: template.cols, rows: template.rows, spawnCol: template.spawnCol, spawnRow: template.spawnRow }),
         password: passwordHash,
-        gatewayConfig: jsonForDb(gatewayConfig || null),
+        gatewayConfig: jsonForDb(gatewayConfig ? { taskAutomation: gatewayConfig.taskAutomation || null } : null),
       })
       .returning();
+
+    if (gatewayConfig?.gatewayId || gatewayConfig?.url) {
+      try {
+        const resource = typeof gatewayConfig.gatewayId === "string" && gatewayConfig.gatewayId
+          ? (await getAccessibleGatewayResource(userId, gatewayConfig.gatewayId))?.resource ?? null
+          : gatewayConfig?.url
+            ? await upsertOwnedGatewayResource({
+              ownerUserId: userId,
+              baseUrl: gatewayConfig.url,
+              token: typeof gatewayConfig.token === "string" ? gatewayConfig.token : "",
+              displayName: typeof gatewayConfig.displayName === "string" ? gatewayConfig.displayName : undefined,
+            })
+            : null;
+
+        if (!resource) {
+          return NextResponse.json(
+            { errorCode: "gateway_access_denied", error: "Gateway access denied" },
+            { status: 403 },
+          );
+        }
+
+        await bindGatewayToChannel({
+          channelId: channel.id,
+          gatewayId: resource.id,
+          boundByUserId: userId,
+        });
+      } catch (gatewayErr) {
+        console.error("Failed to bind gateway resource during channel creation:", gatewayErr);
+      }
+    }
 
     // Auto-insert owner as member with role=owner
     await db.insert(channelMembers).values({
@@ -312,7 +347,7 @@ export async function POST(req: NextRequest) {
     });
 
     // --- Default NPC creation ---
-    if (defaultNpc && gatewayConfig) {
+    if (defaultNpc && (gatewayConfig?.gatewayId || gatewayConfig?.url)) {
       try {
         const agentId = defaultNpc.agentId || "main";
         const isMainAgent = agentId === "main";

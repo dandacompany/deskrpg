@@ -5,7 +5,8 @@ import { eq, and } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
 import { getUserId } from "@/lib/internal-rpc";
 import { parseDbJson, parseDbObject } from "@/lib/db-json";
-import { buildGatewayConfig, getTaskAutomationConfig } from "@/lib/task-reporting";
+import { getChannelGatewayBinding } from "@/lib/gateway-resources";
+import { getTaskAutomationConfig } from "@/lib/task-reporting";
 import { summarizeChannelDetailAccess, summarizeChannelJoinAccess } from "@/lib/rbac/channel-access";
 import { isChannelPasswordValid } from "@/lib/security-policy";
 import internalTransport from "@/lib/internal-transport.js";
@@ -136,7 +137,7 @@ export async function GET(
     }
 
     const parsedGatewayConfig = parseDbObject(channel.gatewayConfig);
-    const normalizedGatewayConfig = buildGatewayConfig(parsedGatewayConfig);
+    const gatewayBinding = await getChannelGatewayBinding(id);
     const channelWithoutGateway = { ...channel } as Record<string, unknown>;
     delete channelWithoutGateway.gatewayConfig;
     return NextResponse.json({
@@ -153,8 +154,11 @@ export async function GET(
         requiresPassword: detailAccess.requiresPassword,
         groupId: channel.groupId,
         groupName: channel.groupName,
-        hasGateway: !!normalizedGatewayConfig.url,
+        hasGateway: !!gatewayBinding?.resource.id,
         gatewayConfig: {
+          gatewayId: gatewayBinding?.resource.id ?? null,
+          displayName: gatewayBinding?.resource.displayName ?? null,
+          url: gatewayBinding?.resource.baseUrl ?? null,
           taskAutomation: getTaskAutomationConfig(parsedGatewayConfig),
         },
         lastX,

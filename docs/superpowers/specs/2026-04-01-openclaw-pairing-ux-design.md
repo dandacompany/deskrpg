@@ -40,7 +40,7 @@ This design does not cover:
 6. The user runs the approval command on the OpenClaw server:
 
 ```bash
-openclaw devices approve <requestId> --notify
+openclaw devices approve <requestId>
 ```
 
 7. The user returns to DeskRPG and clicks `연결 테스트` again.
@@ -103,7 +103,7 @@ For `pairing_required`, the UI should show:
 The exact command displayed is:
 
 ```bash
-openclaw devices approve <requestId> --notify
+openclaw devices approve <requestId>
 ```
 
 ## Surface-by-Surface Behavior

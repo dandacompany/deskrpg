@@ -75,6 +75,7 @@ interface ChannelInfo {
   isOwner?: boolean;
   hasGateway: boolean;
   gatewayConfig?: {
+    gatewayId?: string | null;
     url?: string | null;
     token?: string | null;
     taskAutomation?: {
@@ -1490,10 +1491,10 @@ function GamePageInner() {
           {channel?.hasGateway ? (
             <button
               onClick={() => openChannelSettings("gateway")}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-400/20 text-caption text-emerald-300 hover:bg-emerald-500/20"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-sky-500/10 border border-sky-400/20 text-caption text-sky-200 hover:bg-sky-500/20"
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span>{t("game.aiConnected")}</span>
+              <span className="w-2 h-2 rounded-full bg-sky-300" />
+              <span>{t("game.aiGateway")}</span>
             </button>
           ) : (
             <button
@@ -2024,9 +2025,10 @@ function GamePageInner() {
                 hasGateway:
                   data.gatewayConfig
                     ? Boolean(
-                        typeof data.gatewayConfig.url === "string"
-                          ? data.gatewayConfig.url.trim()
-                          : prev.gatewayConfig?.url,
+                        (typeof data.gatewayConfig.gatewayId === "string" && data.gatewayConfig.gatewayId.trim())
+                        || (typeof data.gatewayConfig.url === "string" && data.gatewayConfig.url.trim())
+                        || prev.gatewayConfig?.gatewayId
+                        || prev.gatewayConfig?.url,
                       )
                     : prev.hasGateway,
                 gatewayConfig: data.gatewayConfig

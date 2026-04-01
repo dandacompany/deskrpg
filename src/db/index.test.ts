@@ -3,7 +3,19 @@ import test from "node:test";
 
 import Database from "better-sqlite3";
 
-import { ensureSqliteCompatibility, getDefaultSqlitePath } from "./index.ts";
+import {
+  channelGatewayBindings,
+  ensureSqliteCompatibility,
+  gatewayResources,
+  gatewayShares,
+  getDefaultSqlitePath,
+} from "./index.ts";
+
+test("gateway resource schema exports are available", () => {
+  assert.ok(gatewayResources);
+  assert.ok(gatewayShares);
+  assert.ok(channelGatewayBindings);
+});
 
 test("getDefaultSqlitePath falls back to the DeskRPG home data directory", () => {
   process.env.DESKRPG_HOME = "/tmp/deskrpg-runtime";
@@ -47,9 +59,15 @@ test("ensureSqliteCompatibility does not pre-create bootstrap RBAC rows for an e
 
   const groupsCount = sqlite.prepare("SELECT COUNT(*) AS count FROM groups").get() as { count: number };
   const groupMembersCount = sqlite.prepare("SELECT COUNT(*) AS count FROM group_members").get() as { count: number };
+  const gatewayResourcesCount = sqlite.prepare("SELECT COUNT(*) AS count FROM gateway_resources").get() as { count: number };
+  const gatewaySharesCount = sqlite.prepare("SELECT COUNT(*) AS count FROM gateway_shares").get() as { count: number };
+  const channelGatewayBindingsCount = sqlite.prepare("SELECT COUNT(*) AS count FROM channel_gateway_bindings").get() as { count: number };
 
   assert.equal(groupsCount.count, 0);
   assert.equal(groupMembersCount.count, 0);
+  assert.equal(gatewayResourcesCount.count, 0);
+  assert.equal(gatewaySharesCount.count, 0);
+  assert.equal(channelGatewayBindingsCount.count, 0);
 });
 
 test("ensureSqliteCompatibility creates RBAC tables and backfills a legacy sqlite deployment", () => {
@@ -100,6 +118,9 @@ test("ensureSqliteCompatibility creates RBAC tables and backfills a legacy sqlit
   assert.ok(tableNames.some((table) => table.name === "group_join_requests"));
   assert.ok(tableNames.some((table) => table.name === "group_permissions"));
   assert.ok(tableNames.some((table) => table.name === "user_permission_overrides"));
+  assert.ok(tableNames.some((table) => table.name === "gateway_resources"));
+  assert.ok(tableNames.some((table) => table.name === "gateway_shares"));
+  assert.ok(tableNames.some((table) => table.name === "channel_gateway_bindings"));
   assert.ok(userColumns.some((column) => column.name === "system_role"));
   assert.ok(channelColumns.some((column) => column.name === "group_id"));
 

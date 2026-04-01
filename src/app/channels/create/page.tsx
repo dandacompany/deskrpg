@@ -26,6 +26,18 @@ interface GatewayAgentOption {
   name: string;
 }
 
+interface GatewayResourceOption {
+  id: string;
+  displayName: string;
+  baseUrl: string;
+  ownerUserId?: string;
+  canEditCredentials?: boolean;
+  shareRole?: string | null;
+  isOwner?: boolean;
+  lastValidationStatus?: string | null;
+  lastValidationError?: string | null;
+}
+
 interface GatewayConnectionState {
   status: OpenClawPairingStatus;
   requestId?: string | null;
@@ -40,6 +52,10 @@ function isGatewayPairingRequired(payload: unknown): payload is {
   if (!payload || typeof payload !== "object") return false;
   const errorCode = (payload as { errorCode?: unknown }).errorCode;
   return errorCode === "gateway_pairing_required" || errorCode === "PAIRING_REQUIRED";
+}
+
+function formatGatewayLabel(gateway: GatewayResourceOption) {
+  return [gateway.displayName, gateway.baseUrl].filter(Boolean).join(" · ");
 }
 
 export default function CreateChannelPage() {
@@ -78,6 +94,11 @@ function CreateChannelPageInner() {
 
   // --- AI Gateway ---
   const [gatewayOpen, setGatewayOpen] = useState(false);
+  const [gatewayMode, setGatewayMode] = useState<"direct" | "stored">("direct");
+  const [storedGateways, setStoredGateways] = useState<GatewayResourceOption[]>([]);
+  const [storedGatewaysLoading, setStoredGatewaysLoading] = useState(false);
+  const [storedGatewaysError, setStoredGatewaysError] = useState("");
+  const [selectedGatewayId, setSelectedGatewayId] = useState("");
   const [gatewayUrl, setGatewayUrl] = useState("");
   const [gatewayToken, setGatewayToken] = useState("");
   const [showGatewayToken, setShowGatewayToken] = useState(false);
@@ -101,6 +122,31 @@ function CreateChannelPageInner() {
     const urlTemplateId = searchParams.get("templateId");
     if (urlTemplateId) setMapTemplateId(urlTemplateId);
   }, [searchParams]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStoredGatewaysLoading(true);
+    setStoredGatewaysError("");
+
+    fetch("/api/gateways")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("failed"))))
+      .then((data) => {
+        if (cancelled) return;
+        setStoredGateways(Array.isArray(data.gateways) ? data.gateways : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStoredGateways([]);
+        setStoredGatewaysError(t("errors.failedToReachTestEndpoint"));
+      })
+      .finally(() => {
+        if (!cancelled) setStoredGatewaysLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,10 +180,32 @@ function CreateChannelPageInner() {
     };
   }, []);
 
-  const hasGatewayUrl = gatewayUrl.trim().length > 0;
+  useEffect(() => {
+    if (gatewayMode !== "stored") return;
+    if (storedGateways.length === 0) {
+      if (selectedGatewayId) setSelectedGatewayId("");
+      return;
+    }
+    if (!selectedGatewayId || !storedGateways.some((gateway) => gateway.id === selectedGatewayId)) {
+      setSelectedGatewayId(storedGateways[0].id);
+    }
+  }, [gatewayMode, selectedGatewayId, storedGateways]);
+
+  const selectedStoredGateway = storedGateways.find((gateway) => gateway.id === selectedGatewayId) ?? null;
+  const hasGatewaySelection = gatewayMode === "stored"
+    ? Boolean(selectedGatewayId)
+    : gatewayUrl.trim().length > 0;
   const hasTestAgents = gatewayConnectionState.status === "connected" && gatewayAgents.length > 0;
   const creatableGroups = groups.filter((group) => group.canCreateChannel);
   const hasAvailableGroups = creatableGroups.length > 0;
+
+  const resetGatewayTestState = useCallback(() => {
+    setTestingConnection(false);
+    setGatewayConnectionState({ status: "idle" });
+    setGatewayAgents([]);
+    setSelectedAgentId("");
+    setAgentAction("create");
+  }, []);
 
   const handlePersonaPresetChange = useCallback((presetId: string) => {
     setPersonaPresetId(presetId);
@@ -175,14 +243,16 @@ function CreateChannelPageInner() {
     setGatewayAgents([]);
     setSelectedAgentId("");
     try {
-      const res = await fetch("/api/channels/test-gateway", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: gatewayUrl.trim(),
-          token: gatewayToken,
-        }),
-      });
+      const res = gatewayMode === "stored"
+        ? await fetch(`/api/gateways/${selectedGatewayId}/test`, { method: "POST" })
+        : await fetch("/api/channels/test-gateway", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: gatewayUrl.trim(),
+            token: gatewayToken.trim(),
+          }),
+        });
       const data = await res.json();
       if (data.ok && data.agents?.length > 0) {
         setGatewayAgents(data.agents);
@@ -244,14 +314,18 @@ function CreateChannelPageInner() {
         password: isPublic ? undefined : password,
       };
 
-      if (hasGatewayUrl) {
+      if (gatewayMode === "stored") {
+        if (selectedGatewayId) {
+          payload.gatewayConfig = { gatewayId: selectedGatewayId };
+        }
+      } else if (gatewayUrl.trim()) {
         payload.gatewayConfig = {
           url: gatewayUrl.trim(),
           token: gatewayToken.trim() || null,
         };
       }
 
-      if (hasGatewayUrl && npcName.trim()) {
+      if (hasGatewaySelection && npcName.trim()) {
         payload.defaultNpc = {
           name: npcName.trim(),
           agentId: effectiveAgentId,
@@ -438,45 +512,122 @@ function CreateChannelPageInner() {
 
             {gatewayOpen && (
               <div className="p-4 space-y-4 bg-surface/50">
-                {/* Gateway URL */}
-                <div>
-                  <label className="block text-xs font-semibold mb-1 text-text-secondary">{t("gateway.url")}</label>
-                  <input
-                    type="text"
-                    value={gatewayUrl}
-                    onChange={(e) => setGatewayUrl(e.target.value)}
-                    className="w-full px-3 py-2 bg-surface border border-border rounded text-text placeholder-text-dim focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent text-sm"
-                    placeholder={t("gateway.urlPlaceholder")}
-                  />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGatewayMode("direct");
+                      resetGatewayTestState();
+                    }}
+                    className={`px-3 py-1.5 rounded text-xs font-semibold ${
+                      gatewayMode === "direct"
+                        ? "bg-primary text-white"
+                        : "bg-surface-raised text-text-muted"
+                    }`}
+                  >
+                    {t("settings.gatewayUseCustom")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGatewayMode("stored");
+                      resetGatewayTestState();
+                    }}
+                    className={`px-3 py-1.5 rounded text-xs font-semibold ${
+                      gatewayMode === "stored"
+                        ? "bg-primary text-white"
+                        : "bg-surface-raised text-text-muted"
+                    }`}
+                  >
+                    {t("settings.gatewayUseSaved")}
+                  </button>
                 </div>
 
-                {/* Gateway Token */}
-                <div>
-                  <label className="block text-xs font-semibold mb-1 text-text-secondary">{t("gateway.token")}</label>
-                  <div className="relative">
-                    <input
-                      type={showGatewayToken ? "text" : "password"}
-                      value={gatewayToken}
-                      onChange={(e) => setGatewayToken(e.target.value)}
-                      className="w-full px-3 py-2 bg-surface border border-border rounded text-text placeholder-text-dim focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent text-sm pr-16"
-                      placeholder={t("gateway.tokenPlaceholder")}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowGatewayToken(!showGatewayToken)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text text-xs px-2 py-1"
-                    >
-                      {showGatewayToken ? t("common.hide") : t("common.show")}
-                    </button>
+                {gatewayMode === "stored" ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-text-secondary">
+                        {storedGatewaysLoading ? t("settings.loadingGateway") : t("settings.gatewaySaved")}
+                      </label>
+                      <select
+                        value={selectedGatewayId}
+                        onChange={(e) => {
+                          setSelectedGatewayId(e.target.value);
+                          resetGatewayTestState();
+                        }}
+                        disabled={storedGatewaysLoading || storedGateways.length === 0}
+                        className="w-full px-3 py-2 bg-surface border border-border rounded text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent disabled:opacity-60"
+                      >
+                        {storedGateways.length > 0 ? (
+                          <>
+                            <option value="">{storedGatewaysLoading ? t("settings.loadingGateway") : t("settings.gatewaySelect")}</option>
+                            {storedGateways.map((gateway) => (
+                              <option key={gateway.id} value={gateway.id}>
+                                {formatGatewayLabel(gateway)}
+                              </option>
+                            ))}
+                          </>
+                        ) : (
+                          <option value="">
+                            {storedGatewaysLoading ? t("settings.loadingGateway") : t("settings.gatewayNoSaved")}
+                          </option>
+                        )}
+                      </select>
+                      {storedGatewaysError && (
+                        <p className="mt-1 text-xs text-danger">{storedGatewaysError}</p>
+                      )}
+                      {selectedStoredGateway && (
+                        <p className="mt-1 text-xs text-text-muted">
+                          {selectedStoredGateway.canEditCredentials
+                            ? selectedStoredGateway.baseUrl
+                            : t("settings.gatewaySharedReadOnly")}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-text-secondary">{t("gateway.url")}</label>
+                      <input
+                        type="text"
+                        value={gatewayUrl}
+                        onChange={(e) => setGatewayUrl(e.target.value)}
+                        className="w-full px-3 py-2 bg-surface border border-border rounded text-text placeholder-text-dim focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent text-sm"
+                        placeholder={t("gateway.urlPlaceholder")}
+                      />
+                    </div>
 
-                {/* Test Connection */}
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-text-secondary">{t("gateway.token")}</label>
+                      <div className="relative">
+                        <input
+                          type={showGatewayToken ? "text" : "password"}
+                          value={gatewayToken}
+                          onChange={(e) => setGatewayToken(e.target.value)}
+                          className="w-full px-3 py-2 bg-surface border border-border rounded text-text placeholder-text-dim focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent text-sm pr-16"
+                          placeholder={t("gateway.tokenPlaceholder")}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowGatewayToken(!showGatewayToken)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text text-xs px-2 py-1"
+                        >
+                          {showGatewayToken ? t("common.hide") : t("common.show")}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <button
                     type="button"
                     onClick={handleTestConnection}
-                    disabled={testingConnection || !gatewayUrl.trim()}
+                    disabled={
+                      testingConnection
+                      || (gatewayMode === "stored" ? !selectedGatewayId : !gatewayUrl.trim())
+                    }
                     className="px-4 py-2 bg-primary hover:bg-primary-hover rounded text-sm font-semibold disabled:opacity-50"
                   >
                     {testingConnection ? t("gateway.testing") : t("gateway.testConnection")}
@@ -502,7 +653,7 @@ function CreateChannelPageInner() {
           {/* ============================================================= */}
           {/* Default NPC (visible only when gateway URL is filled) */}
           {/* ============================================================= */}
-          {hasGatewayUrl && (
+          {hasGatewaySelection && (
             <div className="border border-border rounded-lg p-4 space-y-4 bg-surface/50">
               <h3 className="text-sm font-semibold text-text-secondary">{t("npc.default")}</h3>
 

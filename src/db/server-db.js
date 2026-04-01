@@ -226,6 +226,41 @@ function ensureSqliteCompatibility(sqlite) {
     );
     CREATE INDEX IF NOT EXISTS idx_user_permission_overrides_group_id ON user_permission_overrides(group_id);
     CREATE INDEX IF NOT EXISTS idx_user_permission_overrides_user_id ON user_permission_overrides(user_id);
+    CREATE TABLE IF NOT EXISTS gateway_resources (
+      id TEXT PRIMARY KEY NOT NULL,
+      owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      display_name TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      token_encrypted TEXT NOT NULL,
+      paired_device_id TEXT,
+      last_validated_at TEXT,
+      last_validation_status TEXT,
+      last_validation_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_gateway_resources_owner_user_id ON gateway_resources(owner_user_id);
+    CREATE TABLE IF NOT EXISTS gateway_shares (
+      id TEXT PRIMARY KEY NOT NULL,
+      gateway_id TEXT NOT NULL REFERENCES gateway_resources(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'use',
+      created_at TEXT NOT NULL,
+      UNIQUE(gateway_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_gateway_shares_gateway_id ON gateway_shares(gateway_id);
+    CREATE INDEX IF NOT EXISTS idx_gateway_shares_user_id ON gateway_shares(user_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS gateway_shares_gateway_user_idx ON gateway_shares(gateway_id, user_id);
+    CREATE TABLE IF NOT EXISTS channel_gateway_bindings (
+      id TEXT PRIMARY KEY NOT NULL,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      gateway_id TEXT NOT NULL REFERENCES gateway_resources(id) ON DELETE CASCADE,
+      bound_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      bound_at TEXT NOT NULL,
+      UNIQUE(channel_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_channel_gateway_bindings_gateway_id ON channel_gateway_bindings(gateway_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS channel_gateway_bindings_channel_idx ON channel_gateway_bindings(channel_id);
     CREATE TABLE IF NOT EXISTS npc_reports (
       id TEXT PRIMARY KEY NOT NULL,
       channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
@@ -344,6 +379,45 @@ if (isPostgres) {
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   });
+
+  const gatewayResources = pgTable("gateway_resources", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: uuid("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    displayName: varchar("display_name", { length: 120 }).notNull(),
+    baseUrl: text("base_url").notNull(),
+    tokenEncrypted: text("token_encrypted").notNull(),
+    pairedDeviceId: text("paired_device_id"),
+    lastValidatedAt: timestamp("last_validated_at", { withTimezone: true }),
+    lastValidationStatus: varchar("last_validation_status", { length: 40 }),
+    lastValidationError: text("last_validation_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  }, (table) => [
+    index("idx_gateway_resources_owner_user_id").on(table.ownerUserId),
+  ]);
+
+  const gatewayShares = pgTable("gateway_shares", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    gatewayId: uuid("gateway_id").notNull().references(() => gatewayResources.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: varchar("role", { length: 32 }).notNull().default("use"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  }, (table) => [
+    index("idx_gateway_shares_gateway_id").on(table.gatewayId),
+    index("idx_gateway_shares_user_id").on(table.userId),
+    uniqueIndex("gateway_shares_gateway_user_idx").on(table.gatewayId, table.userId),
+  ]);
+
+  const channelGatewayBindings = pgTable("channel_gateway_bindings", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    channelId: uuid("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+    gatewayId: uuid("gateway_id").notNull().references(() => gatewayResources.id, { onDelete: "cascade" }),
+    boundByUserId: uuid("bound_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+    boundAt: timestamp("bound_at", { withTimezone: true }).defaultNow().notNull(),
+  }, (table) => [
+    index("idx_channel_gateway_bindings_gateway_id").on(table.gatewayId),
+    uniqueIndex("channel_gateway_bindings_channel_idx").on(table.channelId),
+  ]);
 
   const groupMembers = pgTable("group_members", {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -503,6 +577,9 @@ if (isPostgres) {
     characters,
     groups,
     channels,
+    gatewayResources,
+    gatewayShares,
+    channelGatewayBindings,
     groupMembers,
     groupInvites,
     groupJoinRequests,
@@ -591,6 +668,45 @@ if (isPostgres) {
     createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
     updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
   });
+
+  const gatewayResources = sqliteTable("gateway_resources", {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    ownerUserId: text("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    baseUrl: text("base_url").notNull(),
+    tokenEncrypted: text("token_encrypted").notNull(),
+    pairedDeviceId: text("paired_device_id"),
+    lastValidatedAt: text("last_validated_at"),
+    lastValidationStatus: text("last_validation_status"),
+    lastValidationError: text("last_validation_error"),
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()).notNull(),
+    updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()).notNull(),
+  }, (table) => [
+    index("idx_gateway_resources_owner_user_id").on(table.ownerUserId),
+  ]);
+
+  const gatewayShares = sqliteTable("gateway_shares", {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    gatewayId: text("gateway_id").notNull().references(() => gatewayResources.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("use"),
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()).notNull(),
+  }, (table) => [
+    index("idx_gateway_shares_gateway_id").on(table.gatewayId),
+    index("idx_gateway_shares_user_id").on(table.userId),
+    uniqueIndex("gateway_shares_gateway_user_idx").on(table.gatewayId, table.userId),
+  ]);
+
+  const channelGatewayBindings = sqliteTable("channel_gateway_bindings", {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    channelId: text("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+    gatewayId: text("gateway_id").notNull().references(() => gatewayResources.id, { onDelete: "cascade" }),
+    boundByUserId: text("bound_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+    boundAt: text("bound_at").$defaultFn(() => new Date().toISOString()).notNull(),
+  }, (table) => [
+    index("idx_channel_gateway_bindings_gateway_id").on(table.gatewayId),
+    uniqueIndex("channel_gateway_bindings_channel_idx").on(table.channelId),
+  ]);
 
   const groupMembers = sqliteTable("group_members", {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -750,6 +866,9 @@ if (isPostgres) {
     characters,
     groups,
     channels,
+    gatewayResources,
+    gatewayShares,
+    channelGatewayBindings,
     groupMembers,
     groupInvites,
     groupJoinRequests,

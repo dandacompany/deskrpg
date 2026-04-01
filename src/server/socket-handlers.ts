@@ -14,6 +14,7 @@ import {
   jsonForDb,
 } from "../db";
 import { parseDbObject } from "../lib/db-json";
+import { getGatewayRuntimeConfigForChannel } from "../lib/gateway-resources";
 import {
   buildChannelAccessDeniedPayload,
   type ChannelAccessDeniedReason,
@@ -114,13 +115,14 @@ const lastChatTime = new Map<string, number>();
 
 // Meeting rooms: channelId -> MeetingRoom
 const meetingRooms = new Map<string, MeetingRoom>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const activeBrokers = new Map<string, any>();
 const discussionInitiators = new Map<string, string>();
 
 // NPC chat history: `${channelId}:${npcId}` -> [{ role, content, timestamp }]
 const npcChatHistory = new Map<string, { role: "player" | "npc"; content: string; timestamp: number }[]>();
 
-// OpenClaw gateway connections: channelId -> gateway instance
+// OpenClaw gateway connections: gatewayId -> gateway instance
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const channelGateways = new Map<string, any>();
 
@@ -427,34 +429,23 @@ async function scanProgressNudges(io: Server) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getOrConnectGateway(channelId: string): Promise<any | null> {
-  if (channelGateways.has(channelId)) {
-    const gw = channelGateways.get(channelId)!;
+  const gatewayConfig = await getGatewayRuntimeConfigForChannel(channelId);
+  if (!gatewayConfig) {
+    return null;
+  }
+
+  const gatewayKey = gatewayConfig.gatewayId;
+
+  if (channelGateways.has(gatewayKey)) {
+    const gw = channelGateways.get(gatewayKey)!;
     if (gw.isConnected()) return gw;
-    channelGateways.delete(channelId);
+    channelGateways.delete(gatewayKey);
   }
 
   try {
-    const rows = await db
-      .select()
-      .from(channels)
-      .where(eq(channels.id, channelId))
-      .limit(1);
-
-    if (rows.length === 0) {
-      console.error(`[gateway] Channel not found: ${channelId}`);
-      return null;
-    }
-
-    const ch = rows[0];
-    const gwCfg = parseDbObject(ch.gatewayConfig);
-
-    if (!gwCfg?.url || !gwCfg?.token) {
-      return null;
-    }
-
     const gw = new OpenClawGateway();
-    await gw.connect(gwCfg.url, gwCfg.token);
-    channelGateways.set(channelId, gw);
+    await gw.connect(gatewayConfig.baseUrl, gatewayConfig.token);
+    channelGateways.set(gatewayKey, gw);
     return gw;
   } catch (err) {
     console.error(`[gateway] Connect failed for channel ${channelId}:`, err);

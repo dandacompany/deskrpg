@@ -51,6 +51,45 @@ export const channels = pgTable("channels", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
+export const gatewayResources = pgTable("gateway_resources", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerUserId: uuid("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  displayName: varchar("display_name", { length: 120 }).notNull(),
+  baseUrl: text("base_url").notNull(),
+  tokenEncrypted: text("token_encrypted").notNull(),
+  pairedDeviceId: text("paired_device_id"),
+  lastValidatedAt: timestamp("last_validated_at", { withTimezone: true }),
+  lastValidationStatus: varchar("last_validation_status", { length: 40 }),
+  lastValidationError: text("last_validation_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_gateway_resources_owner_user_id").on(table.ownerUserId),
+]);
+
+export const gatewayShares = pgTable("gateway_shares", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  gatewayId: uuid("gateway_id").notNull().references(() => gatewayResources.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: varchar("role", { length: 32 }).notNull().default("use"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_gateway_shares_gateway_id").on(table.gatewayId),
+  index("idx_gateway_shares_user_id").on(table.userId),
+  uniqueIndex("gateway_shares_gateway_user_idx").on(table.gatewayId, table.userId),
+]);
+
+export const channelGatewayBindings = pgTable("channel_gateway_bindings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  channelId: uuid("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+  gatewayId: uuid("gateway_id").notNull().references(() => gatewayResources.id, { onDelete: "cascade" }),
+  boundByUserId: uuid("bound_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  boundAt: timestamp("bound_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_channel_gateway_bindings_gateway_id").on(table.gatewayId),
+  uniqueIndex("channel_gateway_bindings_channel_idx").on(table.channelId),
+]);
+
 export const groupMembers = pgTable("group_members", {
   id: uuid("id").primaryKey().defaultRandom(),
   groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
