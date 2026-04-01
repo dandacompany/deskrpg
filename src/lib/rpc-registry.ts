@@ -26,7 +26,8 @@ export function registerRpcHandler(handler: RpcHandler): void {
 }
 
 export function getLocalRpcHandler(): RpcHandler | undefined {
-  return g[KEY];
+  const handler = g[KEY];
+  return typeof handler === "function" ? (handler as RpcHandler) : undefined;
 }
 
 export function registerGatewayConfigUpdatedHandler(handler: GatewayConfigUpdatedHandler): void {
