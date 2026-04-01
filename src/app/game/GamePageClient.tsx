@@ -219,7 +219,7 @@ function GamePageInner() {
   const [gameChannelData, setGameChannelData] = useState<PendingChannelData>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [playerCount, setPlayerCount] = useState(1);
+  // playerCount is derived from channelPlayers array length
   const [socket, setSocket] = useState<Socket | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -526,7 +526,6 @@ function GamePageInner() {
       });
 
       socketInstance.on("players:state", (data: { players: unknown[] }) => {
-        setPlayerCount(data.players.length + 1);
         setChannelPlayers([
           {
             id: "__self__",
@@ -541,14 +540,12 @@ function GamePageInner() {
         ]);
       });
       socketInstance.on("player:joined", (player: { id: string; characterName: string; appearance?: CharacterAppearance | LegacyCharacterAppearance | null }) => {
-        setPlayerCount((c) => c + 1);
         setChannelPlayers((prev) => {
           if (prev.some((existing) => existing.id === player.id)) return prev;
           return [...prev, { id: player.id, name: player.characterName, appearance: player.appearance ?? null }];
         });
       });
       socketInstance.on("player:left", ({ id }: { id: string }) => {
-        setPlayerCount((c) => Math.max(1, c - 1));
         setChannelPlayers((prev) => prev.filter((player) => player.id !== id));
       });
 
@@ -1519,7 +1516,7 @@ function GamePageInner() {
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-caption text-text-secondary"
               >
                 <span className="w-2 h-2 rounded-full bg-sky-400" />
-                <span>{t("game.playersOnlineCount", { count: playerCount })}</span>
+                <span>{t("game.playersOnlineCount", { count: channelPlayers.length })}</span>
               </button>
               <button
                 onClick={() => {
@@ -1537,7 +1534,7 @@ function GamePageInner() {
               <div className="absolute top-full left-0 mt-2 w-64 bg-surface border border-border rounded-lg shadow-xl z-50 overflow-hidden">
                 <div className="px-3 py-2 border-b border-border text-caption text-text-dim flex items-center justify-between gap-2">
                   <span>
-                    {showRosterMenu === "players" ? t("game.playersOnlineCount", { count: playerCount }) : t("game.npcsAtWorkCount", { count: channelNpcs.length })}
+                    {showRosterMenu === "players" ? t("game.playersOnlineCount", { count: channelPlayers.length }) : t("game.npcsAtWorkCount", { count: channelNpcs.length })}
                   </span>
                   {showRosterMenu === "players" && (
                     <button
