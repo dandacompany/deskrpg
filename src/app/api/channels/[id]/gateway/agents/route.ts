@@ -2,9 +2,17 @@ import { db } from "@/db";
 import { channels, npcs } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { internalRpc, getUserId } from "@/lib/internal-rpc";
+import { getUserId, internalRpc } from "@/lib/internal-rpc";
 import { parseDbObject } from "@/lib/db-json";
-import { buildGatewayErrorPayload, getGatewayErrorStatus } from "@/lib/openclaw-gateway.js";
+import {
+  decryptGatewayToken,
+  getChannelGatewayBinding,
+} from "@/lib/gateway-resources";
+import {
+  buildGatewayErrorPayload,
+  getGatewayErrorStatus,
+  testGatewayConnection,
+} from "@/lib/openclaw-gateway.js";
 
 function normalizeGatewayAgents(
   result: unknown,
@@ -37,7 +45,18 @@ export async function GET(
   if (channel.ownerId !== userId) return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
 
   try {
-    const result = await internalRpc(id, "agents.list");
+    const binding = await getChannelGatewayBinding(id);
+    if (!binding) {
+      return NextResponse.json(
+        { errorCode: "gateway_not_connected", error: "Gateway not connected" },
+        { status: 409 },
+      );
+    }
+
+    const result = await testGatewayConnection(
+      binding.resource.baseUrl,
+      decryptGatewayToken(binding.resource.tokenEncrypted),
+    );
     const gatewayAgents = normalizeGatewayAgents(result);
 
     // Query NPCs for this channel to check agent usage
