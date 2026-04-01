@@ -33,3 +33,4 @@ db.sqlite
 *.db-wal
 .env*
 !.env.example
+tests

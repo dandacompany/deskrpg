@@ -32,6 +32,7 @@
     "setup": "docker compose up -d deskrpg-db && dotenv -e .env.local -- drizzle-kit migrate && echo '✓ Ready — run: npm run dev'",
     "setup:lite": "node scripts/setup/setup-lite.js",
     "build": "next build",
+    "pack:npm": "mkdir -p .artifacts/npm .artifacts/.npm-cache && npm_config_cache=.artifacts/.npm-cache npm pack --pack-destination .artifacts/npm",
     "start": "node server.js",
     "test": "tsx --test src/**/*.test.ts src/**/*.test.js",
     "runtime:doctor": "node bin/deskrpg.js doctor",

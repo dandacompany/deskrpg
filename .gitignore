@@ -19,6 +19,8 @@
 
 # production
 /build
+/.artifacts/
+*.tgz
 
 # misc
 .DS_Store
@@ -42,9 +44,10 @@ yarn-error.log*
 next-env.d.ts
 
 # LPC spritesheet assets (downloaded via scripts/download-lpc-assets.sh)
-public/assets/spritesheets/
 .superpowers/
 .github/
+.claude/
+.codex/
 scripts/local/
 data/
 db.sqlite
@@ -59,5 +62,6 @@ AGENTS.md
 CLAUDE.md
 assets/lpc-office-tilesets/
 public/assets/built-in/downloads/
-tmp/
-**/*.tgz
+tmp/*
+!tmp/.gitkeep
+tests/
