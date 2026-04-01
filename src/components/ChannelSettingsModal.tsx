@@ -18,6 +18,8 @@ interface ChannelSettingsModalProps {
     description?: string | null;
     isPublic?: boolean;
     gatewayConfig?: {
+      url?: string | null;
+      token?: string | null;
       taskAutomation?: {
         autoProgressNudgeEnabled?: boolean;
         autoProgressNudgeMinutes?: number;
@@ -239,6 +241,8 @@ export default function ChannelSettingsModal({
         const data = await res.json().catch(() => ({}));
         onUpdated({
           gatewayConfig: {
+            url: data?.gatewayConfig?.url ?? gatewayConfig.url,
+            token: data?.gatewayConfig?.token ?? gatewayConfig.token,
             taskAutomation: data?.gatewayConfig?.taskAutomation || gatewayConfig.taskAutomation,
           },
         });

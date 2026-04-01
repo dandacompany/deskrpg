@@ -49,6 +49,9 @@ const ko: Record<string, string> = {
   "auth.registering": "가입 중...",
   "auth.checkingAuth": "인증 확인 중...",
   "auth.logout": "로그아웃",
+  "auth.comingSoon": "Coming Soon",
+  "auth.comingSoonDesc": "DeskRPG가 SaaS 출시를 준비하고 있습니다. 곧 만나요!",
+  "auth.comingSoonGithub": "GitHub에서 보기",
 
   // Channels
   "channels.title": "채널 선택",
@@ -1767,6 +1770,7 @@ const ko: Record<string, string> = {
   "chat.options": "채팅 옵션",
   "npc.aiAgent": "AI 에이전트",
   "npc.connectGatewayAgent": "게이트웨이 에이전트 연결",
+  "npc.gatewaySetupHint": "채널 설정의 AI 연결 탭에서 OpenClaw 게이트웨이를 먼저 저장하세요.",
   "npc.noAiStatic": "AI 없음 (정적 NPC)",
   "npc.loadingAgents": "에이전트 불러오는 중...",
   "npc.createNewAgent": "+ 새 에이전트 만들기",

@@ -7,6 +7,8 @@ import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import CityScapeBackground from "@/components/CityScapeBackground";
 
+const isComingSoon = process.env.NEXT_PUBLIC_COMING_SOON === "true";
+
 export default function AuthPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [loginId, setLoginId] = useState("");
@@ -121,6 +123,24 @@ export default function AuthPage() {
               boxShadow: "0 8px 48px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.03),inset 0 1px 0 rgba(255,255,255,0.04)",
             }}
           >
+            {isComingSoon ? (
+              <div className="text-center">
+                <div className="text-2xl font-bold text-white mb-5">{t("auth.comingSoon")}</div>
+                <a
+                  href="https://github.com/dandacompany/deskrpg"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block w-full py-2.5 rounded-lg text-white font-semibold text-sm text-center"
+                  style={{
+                    background: "linear-gradient(135deg,#4f46e5,#6d28d9)",
+                    boxShadow: "0 4px 20px rgba(79,70,229,0.4)",
+                  }}
+                >
+                  {t("auth.comingSoonGithub")}
+                </a>
+              </div>
+            ) : (
+            <>
             {/* Tab switcher — hidden during fresh setup */}
             {hasUsers && (
               <div className="flex mb-5 rounded-lg overflow-hidden border border-border">
@@ -207,6 +227,8 @@ export default function AuthPage() {
                   : t("auth.register")}
               </button>
             </form>
+            </>
+            )}
           </div>
         </div>
       </div>

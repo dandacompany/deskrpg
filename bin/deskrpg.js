@@ -300,15 +300,11 @@ async function runStart() {
   process.env.DESKRPG_HOME = runtimePaths.getDeskRpgHomeDir();
   process.env.DESKRPG_ENV_PATH = envPath;
   loadEnvFile(envPath);
-  const serverRoot = prepareStandaloneRuntime() || getPackageRoot();
-  const useStandaloneRuntime = serverRoot !== getPackageRoot();
-  if (!useStandaloneRuntime) {
-    ensureExternalModuleAliases(serverRoot);
-  }
+  prepareStandaloneRuntime();
+  const serverRoot = getPackageRoot();
+  ensureExternalModuleAliases(serverRoot);
 
-  const childArgs = useStandaloneRuntime
-    ? [path.join(serverRoot, "server.js")]
-    : ["--import", getTsxLoaderPath(), path.join(serverRoot, "server.js")];
+  const childArgs = ["--import", getTsxLoaderPath(), path.join(serverRoot, "server.js")];
 
   const child = spawn(
     process.execPath,

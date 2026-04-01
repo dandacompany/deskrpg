@@ -65,3 +65,4 @@ public/assets/built-in/downloads/
 tmp/*
 !tmp/.gitkeep
 tests/
+deploy/

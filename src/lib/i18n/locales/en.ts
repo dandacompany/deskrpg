@@ -49,6 +49,9 @@ const en: Record<string, string> = {
   "auth.registering": "Registering...",
   "auth.checkingAuth": "Checking authentication...",
   "auth.logout": "Logout",
+  "auth.comingSoon": "Coming Soon",
+  "auth.comingSoonDesc": "DeskRPG is preparing for SaaS launch. Stay tuned!",
+  "auth.comingSoonGithub": "View on GitHub",
 
   // Channels
   "channels.title": "Choose a Channel",
@@ -1766,6 +1769,7 @@ const en: Record<string, string> = {
   "chat.options": "Chat options",
   "npc.aiAgent": "AI Agent",
   "npc.connectGatewayAgent": "Connect to Gateway Agent",
+  "npc.gatewaySetupHint": "Save your OpenClaw gateway first in Channel Settings > AI Connection.",
   "npc.noAiStatic": "No AI (static NPC)",
   "npc.loadingAgents": "Loading agents...",
   "npc.createNewAgent": "+ Create New Agent",

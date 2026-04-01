@@ -49,6 +49,9 @@ const zh: Record<string, string> = {
   "auth.registering": "注册中...",
   "auth.checkingAuth": "验证中...",
   "auth.logout": "退出登录",
+  "auth.comingSoon": "Coming Soon",
+  "auth.comingSoonDesc": "DeskRPG 正在准备 SaaS 上线，敬请期待！",
+  "auth.comingSoonGithub": "在 GitHub 上查看",
 
   // Channels
   "channels.title": "选择频道",
@@ -1765,6 +1768,7 @@ const zh: Record<string, string> = {
   "chat.options": "聊天选项",
   "npc.aiAgent": "AI 代理",
   "npc.connectGatewayAgent": "连接到网关代理",
+  "npc.gatewaySetupHint": "请先在频道设置的 AI 连接标签页中保存 OpenClaw 网关。",
   "npc.noAiStatic": "无 AI（静态 NPC）",
   "npc.loadingAgents": "正在加载代理...",
   "npc.createNewAgent": "+ 创建新代理",
