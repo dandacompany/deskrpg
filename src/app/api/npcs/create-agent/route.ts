@@ -11,6 +11,7 @@ import {
   localizeNpcPromptDocument,
 } from "@/lib/npc-agent-defaults";
 import { normalizeLocale } from "@/lib/i18n/server";
+import { buildGatewayErrorPayload, getGatewayErrorStatus } from "@/lib/openclaw-gateway.js";
 
 export async function POST(req: NextRequest) {
   try {
@@ -82,10 +83,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, agentId: agentId.trim(), files: files.map((file) => file.name) });
   } catch (err) {
     console.error("Failed to create agent:", err);
-    const message = err instanceof Error ? err.message : "Failed to create agent";
     return NextResponse.json(
-      { errorCode: "failed_to_create_agent", error: message },
-      { status: 500 },
+      buildGatewayErrorPayload(err, {
+        fallbackErrorCode: "failed_to_create_agent",
+        fallbackError: "Failed to create agent",
+      }),
+      { status: getGatewayErrorStatus(err, 502) },
     );
   }
 }

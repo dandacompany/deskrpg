@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { internalRpc, getUserId } from "@/lib/internal-rpc";
 import { parseDbObject } from "@/lib/db-json";
+import { buildGatewayErrorPayload, getGatewayErrorStatus } from "@/lib/openclaw-gateway.js";
 
 function normalizeGatewayAgents(
   result: unknown,
@@ -70,11 +71,11 @@ export async function GET(
   } catch (err) {
     console.error("Failed to list agents:", err);
     return NextResponse.json(
-      {
-        errorCode: "failed_to_list_agents",
-        error: err instanceof Error ? err.message : "Failed to list agents",
-      },
-      { status: 500 },
+      buildGatewayErrorPayload(err, {
+        fallbackErrorCode: "failed_to_list_agents",
+        fallbackError: "Failed to list agents",
+      }),
+      { status: getGatewayErrorStatus(err, 502) },
     );
   }
 }
@@ -132,11 +133,11 @@ export async function DELETE(
   } catch (err) {
     console.error("Failed to remove agent:", err);
     return NextResponse.json(
-      {
-        errorCode: "failed_to_remove_agent_from_gateway",
-        error: "Failed to remove agent from gateway",
-      },
-      { status: 500 },
+      buildGatewayErrorPayload(err, {
+        fallbackErrorCode: "failed_to_remove_agent_from_gateway",
+        fallbackError: "Failed to remove agent from gateway",
+      }),
+      { status: getGatewayErrorStatus(err, 502) },
     );
   }
 }

@@ -3,11 +3,94 @@
  * Ported from claws-office/src/lib/openclaw-client.ts
  */
 
+/* eslint-disable @typescript-eslint/no-require-imports */
+
 const WebSocket = require("ws");
 const { randomUUID } = require("crypto");
 
 const PROTOCOL_MIN = 1;
 const PROTOCOL_MAX = 3;
+
+class OpenClawGatewayError extends Error {
+  constructor({
+    errorCode,
+    error,
+    requestId = null,
+    details = null,
+  }) {
+    super(error);
+    this.name = "OpenClawGatewayError";
+    this.errorCode = errorCode || "gateway_error";
+    this.requestId = requestId;
+    this.details = details;
+  }
+}
+
+function createGatewayError(error, fallbackErrorCode = "gateway_error", fallbackError = "Gateway error") {
+  if (error instanceof OpenClawGatewayError) return error;
+
+  const message = error && typeof error === "object" && typeof error.message === "string"
+    ? error.message
+    : fallbackError;
+  const errorCode = error && typeof error === "object"
+    ? (typeof error.errorCode === "string"
+      ? error.errorCode
+      : typeof error.code === "string"
+        ? error.code
+        : fallbackErrorCode)
+    : fallbackErrorCode;
+  const requestId = error && typeof error === "object" && typeof error.requestId === "string"
+    ? error.requestId
+    : null;
+  const details = error && typeof error === "object" && "details" in error
+    ? error.details ?? null
+    : null;
+
+  return new OpenClawGatewayError({
+    errorCode,
+    error: message,
+    requestId,
+    details,
+  });
+}
+
+function buildGatewayErrorPayload(
+  error,
+  {
+    ok = false,
+    fallbackErrorCode = "gateway_error",
+    fallbackError = "Gateway error",
+  } = {},
+) {
+  const normalized = createGatewayError(error, fallbackErrorCode, fallbackError);
+  const payload = {
+    ok,
+    errorCode: normalized.errorCode,
+    error: normalized.message || fallbackError,
+  };
+
+  if (normalized.requestId) payload.requestId = normalized.requestId;
+  if (normalized.details != null) payload.details = normalized.details;
+
+  return payload;
+}
+
+function getGatewayErrorStatus(error, fallbackStatus = 500) {
+  const normalized = createGatewayError(error);
+  if (normalized.errorCode === "PAIRING_REQUIRED") return 409;
+  return fallbackStatus;
+}
+
+async function testGatewayConnection(url, token, GatewayClass = OpenClawGateway) {
+  const gateway = new GatewayClass();
+  try {
+    await gateway.connect(url, token);
+    const agents = await gateway.agentsList();
+    return { agents };
+  } finally {
+    gateway.disconnect();
+  }
+}
 
 class OpenClawGateway {
   constructor() {
@@ -58,12 +141,12 @@ class OpenClawGateway {
     if (this._connectTimer) { clearTimeout(this._connectTimer); this._connectTimer = null; }
     if (this._ws) { this._ws.close(); this._ws = null; }
     // Reject all pending
-    for (const [id, p] of this._pending) {
+    for (const [, p] of this._pending) {
       clearTimeout(p.timer);
       p.reject(new Error("Gateway disconnected"));
     }
     this._pending.clear();
-    for (const [key, stream] of this._chatStreams) {
+    for (const [, stream] of this._chatStreams) {
       stream.reject(new Error("Gateway disconnected"));
     }
     this._chatStreams.clear();
@@ -345,7 +428,7 @@ class OpenClawGateway {
       // Connect error
       if (parsed.id === this._connectRequestId && !parsed.ok) {
         if (this._connectReject) {
-          this._connectReject(new Error(parsed.error?.message || "Connect failed"));
+          this._connectReject(createGatewayError(parsed.error, "connect_failed", "Connect failed"));
           this._connectResolve = null;
           this._connectReject = null;
         }
@@ -358,7 +441,7 @@ class OpenClawGateway {
         this._pending.delete(parsed.id);
         clearTimeout(p.timer);
         if (parsed.ok) p.resolve(parsed.payload || {});
-        else p.reject(new Error(parsed.error?.message || "RPC error"));
+        else p.reject(createGatewayError(parsed.error, "rpc_error", "RPC error"));
       }
     }
   }
@@ -383,4 +466,11 @@ class OpenClawGateway {
   }
 }
 
-module.exports = { OpenClawGateway };
+module.exports = {
+  OpenClawGateway,
+  OpenClawGatewayError,
+  buildGatewayErrorPayload,
+  createGatewayError,
+  getGatewayErrorStatus,
+  testGatewayConnection,
+};

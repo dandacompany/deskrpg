@@ -3,6 +3,7 @@ import { channels } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { internalRpc, getUserId } from "@/lib/internal-rpc";
+import { buildGatewayErrorPayload, getGatewayErrorStatus } from "@/lib/openclaw-gateway.js";
 
 function normalizeGatewayAgents(result: unknown) {
   if (Array.isArray(result)) return result;
@@ -38,10 +39,13 @@ export async function POST(
       agents: normalizeGatewayAgents(result),
     });
   } catch (err) {
-    return NextResponse.json({
-      ok: false,
-      errorCode: "connection_failed",
-      error: err instanceof Error ? err.message : "Connection failed",
-    });
+    return NextResponse.json(
+      buildGatewayErrorPayload(err, {
+        ok: false,
+        fallbackErrorCode: "connection_failed",
+        fallbackError: "Connection failed",
+      }),
+      { status: getGatewayErrorStatus(err, 502) },
+    );
   }
 }
