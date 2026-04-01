@@ -2,7 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { execFileSync, spawn } = require("node:child_process");
+const { spawn } = require("node:child_process");
 
 const EXTERNAL_ALIAS_PACKAGE_MAP = new Map([
   ["better-sqlite3-", "better-sqlite3"],
@@ -15,21 +15,6 @@ function getPackageRoot() {
 
 function loadRuntimePathsModule() {
   return require(path.join(getPackageRoot(), "src", "lib", "runtime-paths.js"));
-}
-
-function getPackageBinaryPath(binaryName) {
-  const resolvedEntryPath = require.resolve(binaryName, {
-    paths: [getPackageRoot(), process.cwd()],
-  });
-  const packageJsonPath = path.join(path.dirname(resolvedEntryPath), "package.json");
-  const packageJson = require(packageJsonPath);
-  const relativeBinPath = typeof packageJson.bin === "string" ? packageJson.bin : packageJson.bin?.[binaryName];
-
-  if (!relativeBinPath) {
-    throw new Error(`Unable to resolve binary path for ${binaryName}`);
-  }
-
-  return path.join(path.dirname(packageJsonPath), relativeBinPath);
 }
 
 function getInstalledPackageRoot(packageName) {
@@ -208,7 +193,43 @@ function loadEnvFile(envPath) {
 }
 
 function printUsage() {
-  console.error("Usage: deskrpg <init|start|doctor>");
+  console.error("Usage: deskrpg <init|start|doctor|remove|uninstall>");
+}
+
+function initializeSqliteRuntime(packageRoot, sqlitePath) {
+  const serverDbModulePath = path.join(packageRoot, "src", "db", "server-db.js");
+  if (!fs.existsSync(serverDbModulePath)) {
+    throw new Error(`Missing SQLite runtime initializer at ${serverDbModulePath}`);
+  }
+
+  const previousDbType = process.env.DB_TYPE;
+  const previousSqlitePath = process.env.SQLITE_PATH;
+
+  process.env.DB_TYPE = "sqlite";
+  process.env.SQLITE_PATH = sqlitePath;
+
+  try {
+    delete require.cache[require.resolve(serverDbModulePath)];
+    require(serverDbModulePath);
+  } finally {
+    if (previousDbType == null) delete process.env.DB_TYPE;
+    else process.env.DB_TYPE = previousDbType;
+
+    if (previousSqlitePath == null) delete process.env.SQLITE_PATH;
+    else process.env.SQLITE_PATH = previousSqlitePath;
+  }
+}
+
+function removeDeskRpgHome(runtimePaths) {
+  const homeDir = runtimePaths.getDeskRpgHomeDir();
+  if (!fs.existsSync(homeDir)) {
+    console.log(`DeskRPG home does not exist at ${homeDir}`);
+    return homeDir;
+  }
+
+  fs.rmSync(homeDir, { recursive: true, force: true });
+  console.log(`Removed DeskRPG home at ${homeDir}`);
+  return homeDir;
 }
 
 async function runInit() {
@@ -218,24 +239,7 @@ async function runInit() {
   const runtimeHome = runtimePaths.ensureDeskRpgHome({ envExamplePath });
 
   if (process.env.DESKRPG_SKIP_DB_PUSH !== "1") {
-    const drizzleKitBin = getPackageBinaryPath("drizzle-kit");
-    if (!fs.existsSync(drizzleKitBin)) {
-      throw new Error(`Missing drizzle-kit binary at ${drizzleKitBin}`);
-    }
-
-    execFileSync(
-      drizzleKitBin,
-      ["push", "--config=drizzle-sqlite.config.ts", "--force"],
-      {
-        cwd: packageRoot,
-        stdio: "inherit",
-        env: {
-          ...process.env,
-          DB_TYPE: "sqlite",
-          SQLITE_PATH: runtimeHome.sqlitePath,
-        },
-      },
-    );
+    initializeSqliteRuntime(packageRoot, runtimeHome.sqlitePath);
   }
 
   console.log(`DeskRPG home ready at ${runtimeHome.homeDir}`);
@@ -344,10 +348,24 @@ async function runStart() {
   });
 }
 
+async function runRemove() {
+  const runtimePaths = loadRuntimePathsModule();
+  removeDeskRpgHome(runtimePaths);
+}
+
+async function runUninstall() {
+  const runtimePaths = loadRuntimePathsModule();
+  const homeDir = removeDeskRpgHome(runtimePaths);
+  console.log("DeskRPG runtime data was removed.");
+  console.log("If you installed the CLI globally, run: npm uninstall -g deskrpg");
+  console.log("If you installed it locally in a project, run: npm uninstall deskrpg");
+  console.log(`Runtime home path: ${homeDir}`);
+}
+
 async function main() {
   const command = process.argv[2];
 
-  if (!command || !["init", "start", "doctor"].includes(command)) {
+  if (!command || !["init", "start", "doctor", "remove", "uninstall"].includes(command)) {
     printUsage();
     process.exit(1);
   }
@@ -359,6 +377,16 @@ async function main() {
 
   if (command === "doctor") {
     await runDoctor();
+    return;
+  }
+
+  if (command === "remove") {
+    await runRemove();
+    return;
+  }
+
+  if (command === "uninstall") {
+    await runUninstall();
     return;
   }
 
