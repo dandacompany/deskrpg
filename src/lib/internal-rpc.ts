@@ -32,7 +32,26 @@ export async function internalRpc(
     signal: AbortSignal.timeout(30_000),
   });
   const data = await res.json();
-  if (!data.ok) throw new Error(data.error || `RPC ${method} failed`);
+  if (!data.ok) {
+    const message = typeof data.error === "string" ? data.error : `RPC ${method} failed`;
+    const error = new Error(message) as Error & {
+      errorCode?: string;
+      code?: string;
+      requestId?: string;
+      details?: unknown;
+    };
+    if (typeof data.errorCode === "string") {
+      error.errorCode = data.errorCode;
+      error.code = data.errorCode;
+    }
+    if (typeof data.requestId === "string") {
+      error.requestId = data.requestId;
+    }
+    if ("details" in data) {
+      error.details = data.details;
+    }
+    throw error;
+  }
   return data.result;
 }
 

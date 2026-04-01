@@ -9,6 +9,7 @@ import { Trash2, Maximize2 } from "lucide-react";
 import { useCharacterAppearance } from "@/hooks/useCharacterAppearance";
 import CharacterPreview from "@/components/CharacterPreview";
 import AppearanceEditor from "@/components/AppearanceEditor";
+import OpenClawPairingStatusCard, { type OpenClawPairingStatus } from "@/components/openclaw/OpenClawPairingStatusCard";
 import { getAgentProgressMeter, type AgentProgressPhase } from "@/lib/npc-agent-progress";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { localizeNpcPromptDocument } from "@/lib/npc-agent-defaults";
@@ -36,6 +37,22 @@ interface GatewayAgent {
   workspace: string;
   inUse: boolean;
   usedByNpcName: string | null;
+}
+
+interface GatewayConnectionState {
+  status: OpenClawPairingStatus;
+  requestId?: string | null;
+  error?: string | null;
+}
+
+function isGatewayPairingRequired(payload: unknown): payload is {
+  errorCode?: string;
+  requestId?: string;
+  error?: string;
+} {
+  if (!payload || typeof payload !== "object") return false;
+  const errorCode = (payload as { errorCode?: unknown }).errorCode;
+  return errorCode === "gateway_pairing_required" || errorCode === "PAIRING_REQUIRED";
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +135,7 @@ export default function NpcHireModal({
   // Agent selection state
   const [gatewayAgents, setGatewayAgents] = useState<GatewayAgent[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
+  const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({ status: "idle" });
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [createNewAgent, setCreateNewAgent] = useState(false);
   const [newAgentId, setNewAgentId] = useState("");
@@ -247,21 +265,52 @@ export default function NpcHireModal({
         setNewAgentId("");
         setNewAgentIdError(null);
       }
+      setGatewayConnectionState({ status: "idle" });
+      setGatewayAgents([]);
     });
   }, [isOpen, editingNpc, hasGateway, setBodyType, setLayers, setActiveCategory]);
+
+  const loadGatewayAgents = useCallback(async () => {
+    if (!hasGateway) return;
+    setAgentsLoading(true);
+    setGatewayConnectionState({ status: "idle" });
+    try {
+      const res = await fetch(`/api/channels/${channelId}/gateway/agents`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setGatewayAgents(Array.isArray(data.agents) ? data.agents : []);
+        setGatewayConnectionState({ status: "connected" });
+        return;
+      }
+
+      setGatewayAgents([]);
+      if (isGatewayPairingRequired(data)) {
+        setGatewayConnectionState({
+          status: "pairing_required",
+          requestId: typeof data.requestId === "string" ? data.requestId : null,
+        });
+      } else {
+        setGatewayConnectionState({
+          status: "error",
+          error: getLocalizedErrorMessage(t, data, "errors.failedToListAgents"),
+        });
+      }
+    } catch {
+      setGatewayAgents([]);
+      setGatewayConnectionState({
+        status: "error",
+        error: t("errors.failedToListAgents"),
+      });
+    } finally {
+      setAgentsLoading(false);
+    }
+  }, [channelId, hasGateway, t]);
 
   // --- Fetch gateway agents ---
   useEffect(() => {
     if (!isOpen || !hasGateway) return;
-    startTransition(() => {
-      setAgentsLoading(true);
-    });
-    fetch(`/api/channels/${channelId}/gateway/agents`)
-      .then((r) => r.json())
-      .then((data) => setGatewayAgents(data.agents ?? []))
-      .catch(() => setGatewayAgents([]))
-      .finally(() => setAgentsLoading(false));
-  }, [isOpen, hasGateway, channelId]);
+    void loadGatewayAgents();
+  }, [isOpen, hasGateway, loadGatewayAgents]);
 
   // --- Fetch presets ---
   useEffect(() => {
@@ -353,6 +402,15 @@ export default function NpcHireModal({
       });
       if (!res.ok) {
         const data = await res.json();
+        if (isGatewayPairingRequired(data)) {
+          setGatewayConnectionState({
+            status: "pairing_required",
+            requestId: typeof data.requestId === "string" ? data.requestId : null,
+          });
+          setStep("configure");
+          setAgentProgress({ phase: "idle", status: "" });
+          return;
+        }
         setAgentProgress({
           phase: "failed",
           status: t("npc.agentCreateFailed"),
@@ -436,6 +494,8 @@ export default function NpcHireModal({
               isEdit={isEdit}
               gatewayAgents={gatewayAgents} setGatewayAgents={setGatewayAgents}
               agentsLoading={agentsLoading}
+              gatewayConnectionState={gatewayConnectionState}
+              onRetryConnection={loadGatewayAgents}
               selectedAgentId={selectedAgentId} setSelectedAgentId={setSelectedAgentId}
               createNewAgent={createNewAgent} setCreateNewAgent={setCreateNewAgent}
               newAgentId={newAgentId} setNewAgentId={setNewAgentId}
@@ -617,6 +677,8 @@ function AgentSection({
   isEdit,
   gatewayAgents, setGatewayAgents,
   agentsLoading,
+  gatewayConnectionState,
+  onRetryConnection,
   selectedAgentId, setSelectedAgentId,
   createNewAgent, setCreateNewAgent,
   newAgentId, setNewAgentId,
@@ -630,6 +692,8 @@ function AgentSection({
   gatewayAgents: GatewayAgent[];
   setGatewayAgents: React.Dispatch<React.SetStateAction<GatewayAgent[]>>;
   agentsLoading: boolean;
+  gatewayConnectionState: GatewayConnectionState;
+  onRetryConnection: () => void | Promise<void>;
   selectedAgentId: string | null;
   setSelectedAgentId: (id: string | null) => void;
   createNewAgent: boolean;
@@ -649,10 +713,29 @@ function AgentSection({
           {t("npc.gatewaySetupHint")}
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
+          {gatewayConnectionState.status !== "idle" && (
+            <OpenClawPairingStatusCard
+              status={gatewayConnectionState.status}
+              requestId={gatewayConnectionState.requestId}
+              error={gatewayConnectionState.error}
+              detail={gatewayConnectionState.status === "connected" ? t("settings.connected") : undefined}
+            />
+          )}
+          {(gatewayConnectionState.status === "pairing_required" || gatewayConnectionState.status === "error") && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => void onRetryConnection()}
+                className="px-3 py-1.5 rounded bg-gray-700 text-white text-xs font-semibold hover:bg-gray-600"
+              >
+                {t("gateway.testConnection")}
+              </button>
+            </div>
+          )}
           {agentsLoading ? (
             <p className="text-sm text-gray-500">{t("npc.loadingAgents")}</p>
-          ) : (
+          ) : gatewayConnectionState.status === "pairing_required" || gatewayConnectionState.status === "error" ? null : (
             <>
               <div className="flex gap-2">
                 <select

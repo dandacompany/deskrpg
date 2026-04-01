@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
+import OpenClawPairingStatusCard, { type OpenClawPairingStatus } from "@/components/openclaw/OpenClawPairingStatusCard";
 
 type ChannelSettingsTab = "settings" | "members" | "gateway";
 
@@ -38,6 +39,22 @@ interface Member {
   isOnline: boolean;
 }
 
+interface GatewayConnectionState {
+  status: OpenClawPairingStatus;
+  requestId?: string | null;
+  error?: string | null;
+}
+
+function isGatewayPairingRequired(payload: unknown): payload is {
+  errorCode?: string;
+  requestId?: string;
+  error?: string;
+} {
+  if (!payload || typeof payload !== "object") return false;
+  const errorCode = (payload as { errorCode?: unknown }).errorCode;
+  return errorCode === "gateway_pairing_required" || errorCode === "PAIRING_REQUIRED";
+}
+
 export default function ChannelSettingsModal({
   channelId, channelName, channelDescription, isPublic, inviteCode,
   initialTab = "settings", onClose, onUpdated,
@@ -64,7 +81,8 @@ export default function ChannelSettingsModal({
   const [showToken, setShowToken] = useState(false);
   const [gatewayLoading, setGatewayLoading] = useState(false);
   const [gatewaySaving, setGatewaySaving] = useState(false);
-  const [gatewayTestResult, setGatewayTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({ status: "idle" });
+  const [gatewayNotice, setGatewayNotice] = useState<{ success: boolean; message: string } | null>(null);
   const [gatewayError, setGatewayError] = useState("");
   const [autoProgressNudgeEnabled, setAutoProgressNudgeEnabled] = useState(false);
   const [autoProgressNudgeMinutes, setAutoProgressNudgeMinutes] = useState(5);
@@ -197,21 +215,29 @@ export default function ChannelSettingsModal({
   };
 
   const handleTestConnection = async () => {
-    setGatewayTestResult(null);
+    setGatewayNotice(null);
+    setGatewayConnectionState({ status: "idle" });
     setGatewayError("");
     try {
       const res = await fetch(`/api/channels/${channelId}/gateway/test`, { method: "POST" });
       const data = await res.json();
       if (res.ok) {
-        setGatewayTestResult({ success: true, message: data.message || t("settings.connected") });
+        setGatewayConnectionState({ status: "connected" });
       } else {
-        setGatewayTestResult({
-          success: false,
-          message: getLocalizedErrorMessage(t, data, "errors.connectionFailed"),
-        });
+        if (isGatewayPairingRequired(data)) {
+          setGatewayConnectionState({
+            status: "pairing_required",
+            requestId: typeof data.requestId === "string" ? data.requestId : null,
+          });
+        } else {
+          setGatewayConnectionState({
+            status: "error",
+            error: getLocalizedErrorMessage(t, data, "errors.connectionFailed"),
+          });
+        }
       }
     } catch {
-      setGatewayTestResult({ success: false, message: t("errors.connectionFailed") });
+      setGatewayConnectionState({ status: "error", error: t("errors.connectionFailed") });
     }
   };
 
@@ -246,8 +272,8 @@ export default function ChannelSettingsModal({
             taskAutomation: data?.gatewayConfig?.taskAutomation || gatewayConfig.taskAutomation,
           },
         });
-        setGatewayTestResult({ success: true, message: t("settings.saved") });
-        setTimeout(() => setGatewayTestResult(null), 3000);
+        setGatewayNotice({ success: true, message: t("settings.saved") });
+        setTimeout(() => setGatewayNotice(null), 3000);
       }
     } catch {
       setGatewayError(t("settings.failedToSave"));
@@ -461,9 +487,17 @@ export default function ChannelSettingsModal({
                       </div>
                     </div>
                   </div>
-                  {gatewayTestResult && (
-                    <p className={`text-sm ${gatewayTestResult.success ? "text-green-400" : "text-red-400"}`}>
-                      {gatewayTestResult.message}
+                  {gatewayConnectionState.status !== "idle" && (
+                    <OpenClawPairingStatusCard
+                      status={gatewayConnectionState.status}
+                      requestId={gatewayConnectionState.requestId}
+                      error={gatewayConnectionState.error}
+                      detail={gatewayConnectionState.status === "connected" ? t("settings.connected") : undefined}
+                    />
+                  )}
+                  {gatewayNotice && (
+                    <p className={`text-sm ${gatewayNotice.success ? "text-green-400" : "text-red-400"}`}>
+                      {gatewayNotice.message}
                     </p>
                   )}
                   {gatewayError && <p className="text-red-400 text-sm">{gatewayError}</p>}

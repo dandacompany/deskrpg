@@ -165,7 +165,7 @@ const zh: Record<string, string> = {
   "openclaw.statusCard.command": "批准命令",
   "openclaw.statusCard.copyRequestId": "复制请求 ID",
   "openclaw.statusCard.copyCommand": "复制命令",
-  "openclaw.statusCard.help": "必须在 OpenClaw 服务器终端上运行此命令，才能批准该配对请求。",
+  "openclaw.statusCard.help": "请在 OpenClaw 服务器终端运行此命令以批准配对请求，然后回到 DeskRPG 再次执行连接测试。",
   // Default NPC
   "npc.default": "默认NPC",
   "npc.name": "NPC名称",
@@ -1867,6 +1867,7 @@ const zh: Record<string, string> = {
   "errors.notAMember": "你不是此频道的成员",
   "errors.invalidJson": "JSON 请求无效",
   "errors.connectionFailed": "连接失败",
+  "errors.gatewayPairingRequired": "需要批准 OpenClaw 配对请求",
   "errors.failedToFetchMeetings": "无法获取会议纪要列表",
   "errors.failedToFetchMeeting": "无法获取会议纪要详情",
   "errors.failedToFetchChannel": "无法获取频道信息",

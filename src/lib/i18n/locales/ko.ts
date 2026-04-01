@@ -165,7 +165,7 @@ const ko: Record<string, string> = {
   "openclaw.statusCard.command": "승인 명령어",
   "openclaw.statusCard.copyRequestId": "요청 ID 복사",
   "openclaw.statusCard.copyCommand": "명령어 복사",
-  "openclaw.statusCard.help": "이 명령어는 OpenClaw 서버 터미널에서 실행해 페어링 요청을 승인해야 합니다.",
+  "openclaw.statusCard.help": "이 명령어를 OpenClaw 서버 터미널에서 실행해 페어링 요청을 승인한 뒤, DeskRPG에서 다시 연결 테스트를 실행하세요.",
   // Default NPC
   "npc.default": "기본 NPC",
   "npc.name": "NPC 이름",
@@ -1869,6 +1869,7 @@ const ko: Record<string, string> = {
   "errors.notAMember": "이 채널의 멤버가 아닙니다",
   "errors.invalidJson": "잘못된 JSON 요청입니다",
   "errors.connectionFailed": "연결에 실패했습니다",
+  "errors.gatewayPairingRequired": "OpenClaw 페어링 승인이 필요합니다",
   "errors.failedToFetchMeetings": "회의록 목록을 불러오지 못했습니다",
   "errors.failedToFetchMeeting": "회의록 상세를 불러오지 못했습니다",
   "errors.failedToFetchChannel": "채널 정보를 불러오지 못했습니다",

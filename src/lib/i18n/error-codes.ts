@@ -59,6 +59,7 @@ export type ErrorCode =
   | "not_a_member"
   | "invalid_json"
   | "connection_failed"
+  | "gateway_pairing_required"
   | "failed_to_fetch_meetings"
   | "failed_to_fetch_meeting"
   | "failed_to_fetch_channel"
@@ -183,6 +184,7 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   not_a_member: "errors.notAMember",
   invalid_json: "errors.invalidJson",
   connection_failed: "errors.connectionFailed",
+  gateway_pairing_required: "errors.gatewayPairingRequired",
   failed_to_fetch_meetings: "errors.failedToFetchMeetings",
   failed_to_fetch_meeting: "errors.failedToFetchMeeting",
   failed_to_fetch_channel: "errors.failedToFetchChannel",

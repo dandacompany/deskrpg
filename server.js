@@ -4,7 +4,11 @@
 
 const path = require("node:path");
 const { Server } = require("socket.io");
-const { OpenClawGateway } = require("./src/lib/openclaw-gateway.js");
+const {
+  OpenClawGateway,
+  buildGatewayErrorPayload,
+  getGatewayErrorStatus,
+} = require("./src/lib/openclaw-gateway.js");
 const { parseNpcResponse, isValidTaskAction } = require("./src/lib/task-parser.js");
 const { TaskManager } = require("./src/lib/task-manager.js");
 const { withTaskReminder, normalizeTaskPromptLocale } = require("./src/lib/task-prompt.js");
@@ -1019,8 +1023,9 @@ ${transcript}
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: true, result }));
         } catch (err) {
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ ok: false, error: err.message }));
+          const status = getGatewayErrorStatus(err, 500);
+          res.writeHead(status, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(buildGatewayErrorPayload(err)));
         }
       });
       return;

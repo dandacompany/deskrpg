@@ -63,9 +63,12 @@ function buildGatewayErrorPayload(
   } = {},
 ) {
   const normalized = createGatewayError(error, fallbackErrorCode, fallbackError);
+  const responseErrorCode = normalized.errorCode === "PAIRING_REQUIRED"
+    ? "gateway_pairing_required"
+    : normalized.errorCode;
   const payload = {
     ok,
-    errorCode: normalized.errorCode,
+    errorCode: responseErrorCode,
     error: normalized.message || fallbackError,
   };
 
@@ -77,7 +80,10 @@ function buildGatewayErrorPayload(
 
 function getGatewayErrorStatus(error, fallbackStatus = 500) {
   const normalized = createGatewayError(error);
-  if (normalized.errorCode === "PAIRING_REQUIRED") return 409;
+  if (
+    normalized.errorCode === "PAIRING_REQUIRED"
+    || normalized.errorCode === "gateway_pairing_required"
+  ) return 409;
   return fallbackStatus;
 }
 

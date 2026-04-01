@@ -9,6 +9,7 @@ import { useLocale, useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { ChevronRight } from "lucide-react";
 import MapTemplateGrid from "@/components/map-editor/MapTemplateGrid";
+import OpenClawPairingStatusCard, { type OpenClawPairingStatus } from "@/components/openclaw/OpenClawPairingStatusCard";
 import { getDefaultMeetingProtocol, localizeNpcPromptDocument } from "@/lib/npc-agent-defaults";
 import { CHANNEL_PASSWORD_MIN_LENGTH } from "@/lib/security-policy";
 import type { GroupMemberRole } from "@/lib/rbac/constants";
@@ -18,6 +19,27 @@ interface GroupOption {
   name: string;
   role?: GroupMemberRole;
   canCreateChannel?: boolean;
+}
+
+interface GatewayAgentOption {
+  id: string;
+  name: string;
+}
+
+interface GatewayConnectionState {
+  status: OpenClawPairingStatus;
+  requestId?: string | null;
+  error?: string | null;
+}
+
+function isGatewayPairingRequired(payload: unknown): payload is {
+  errorCode?: string;
+  requestId?: string;
+  error?: string;
+} {
+  if (!payload || typeof payload !== "object") return false;
+  const errorCode = (payload as { errorCode?: unknown }).errorCode;
+  return errorCode === "gateway_pairing_required" || errorCode === "PAIRING_REQUIRED";
 }
 
 export default function CreateChannelPage() {
@@ -60,13 +82,8 @@ function CreateChannelPageInner() {
   const [gatewayToken, setGatewayToken] = useState("");
   const [showGatewayToken, setShowGatewayToken] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
-  const [testResult, setTestResult] = useState<{
-    ok: boolean;
-    agents?: { id: string; name: string }[];
-    error?: string;
-    errorCode?: string;
-    messageCode?: string;
-  } | null>(null);
+  const [gatewayAgents, setGatewayAgents] = useState<GatewayAgentOption[]>([]);
+  const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({ status: "idle" });
 
   // --- Default NPC ---
   const [npcName, setNpcName] = useState("");
@@ -118,7 +135,7 @@ function CreateChannelPageInner() {
   }, []);
 
   const hasGatewayUrl = gatewayUrl.trim().length > 0;
-  const hasTestAgents = testResult?.ok && testResult.agents && testResult.agents.length > 0;
+  const hasTestAgents = gatewayConnectionState.status === "connected" && gatewayAgents.length > 0;
   const creatableGroups = groups.filter((group) => group.canCreateChannel);
   const hasAvailableGroups = creatableGroups.length > 0;
 
@@ -154,7 +171,9 @@ function CreateChannelPageInner() {
 
   const handleTestConnection = async () => {
     setTestingConnection(true);
-    setTestResult(null);
+    setGatewayConnectionState({ status: "idle" });
+    setGatewayAgents([]);
+    setSelectedAgentId("");
     try {
       const res = await fetch("/api/channels/test-gateway", {
         method: "POST",
@@ -165,13 +184,30 @@ function CreateChannelPageInner() {
         }),
       });
       const data = await res.json();
-      setTestResult(data.ok ? data : { ...data, error: getLocalizedErrorMessage(t, data) });
       if (data.ok && data.agents?.length > 0) {
+        setGatewayAgents(data.agents);
+        setGatewayConnectionState({ status: "connected" });
         setAgentAction("select");
         setSelectedAgentId(data.agents[0].id);
+      } else if (data.ok) {
+        setGatewayAgents(Array.isArray(data.agents) ? data.agents : []);
+        setGatewayConnectionState({ status: "connected" });
+        setAgentAction("create");
+      } else if (isGatewayPairingRequired(data)) {
+        setAgentAction("create");
+        setGatewayConnectionState({
+          status: "pairing_required",
+          requestId: typeof data.requestId === "string" ? data.requestId : null,
+        });
+      } else {
+        setAgentAction("create");
+        setGatewayConnectionState({
+          status: "error",
+          error: getLocalizedErrorMessage(t, data, "errors.connectionFailed"),
+        });
       }
     } catch {
-      setTestResult({ ok: false, error: t("errors.failedToReachTestEndpoint") });
+      setGatewayConnectionState({ status: "error", error: t("errors.failedToReachTestEndpoint") });
     } finally {
       setTestingConnection(false);
     }
@@ -445,12 +481,18 @@ function CreateChannelPageInner() {
                   >
                     {testingConnection ? t("gateway.testing") : t("gateway.testConnection")}
                   </button>
-                  {testResult && (
-                    <div className={`mt-2 text-xs ${testResult.ok ? "text-green-400" : "text-danger"}`}>
-                      {testResult.ok
-                        ? t("gateway.connected", { count: testResult.agents?.length ?? 0 })
-                        : t("gateway.failed", { error: testResult.error ?? "" })}
-                    </div>
+                  {gatewayConnectionState.status !== "idle" && (
+                    <OpenClawPairingStatusCard
+                      className="mt-3"
+                      status={gatewayConnectionState.status}
+                      requestId={gatewayConnectionState.requestId}
+                      error={gatewayConnectionState.error}
+                      detail={
+                        gatewayConnectionState.status === "connected"
+                          ? t("gateway.connected", { count: gatewayAgents.length })
+                          : undefined
+                      }
+                    />
                   )}
                 </div>
               </div>
@@ -513,7 +555,7 @@ function CreateChannelPageInner() {
                         onChange={(e) => setSelectedAgentId(e.target.value)}
                         className="w-full px-3 py-2 bg-surface border border-border rounded text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent"
                       >
-                        {testResult!.agents!.map((a) => (
+                        {gatewayAgents.map((a) => (
                           <option key={a.id} value={a.id}>
                             {a.name || a.id}
                           </option>

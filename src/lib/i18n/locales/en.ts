@@ -165,7 +165,7 @@ const en: Record<string, string> = {
   "openclaw.statusCard.command": "Approval command",
   "openclaw.statusCard.copyRequestId": "Copy request ID",
   "openclaw.statusCard.copyCommand": "Copy command",
-  "openclaw.statusCard.help": "Run this command on the OpenClaw server terminal to approve the pairing request.",
+  "openclaw.statusCard.help": "Run this command on the OpenClaw server terminal to approve the pairing request, then run the connection test again in DeskRPG.",
   // Default NPC
   "npc.default": "Default NPC",
   "npc.name": "NPC Name",
@@ -1868,6 +1868,7 @@ const en: Record<string, string> = {
   "errors.notAMember": "You are not a member of this channel",
   "errors.invalidJson": "Invalid JSON payload",
   "errors.connectionFailed": "Connection failed",
+  "errors.gatewayPairingRequired": "OpenClaw pairing approval is required",
   "errors.failedToFetchMeetings": "Failed to fetch meeting minutes",
   "errors.failedToFetchMeeting": "Failed to fetch meeting details",
   "errors.failedToFetchChannel": "Failed to fetch channel",

@@ -165,7 +165,7 @@ const ja: Record<string, string> = {
   "openclaw.statusCard.command": "承認コマンド",
   "openclaw.statusCard.copyRequestId": "リクエスト ID をコピー",
   "openclaw.statusCard.copyCommand": "コマンドをコピー",
-  "openclaw.statusCard.help": "このコマンドは OpenClaw サーバーのターミナルで実行して、ペアリング要求を承認してください。",
+  "openclaw.statusCard.help": "このコマンドを OpenClaw サーバーのターミナルで実行してペアリング要求を承認し、その後 DeskRPG で接続テストを再実行してください。",
   // Default NPC
   "npc.default": "デフォルトNPC",
   "npc.name": "NPC名",
@@ -1867,6 +1867,7 @@ const ja: Record<string, string> = {
   "errors.notAMember": "このチャンネルのメンバーではありません",
   "errors.invalidJson": "JSON リクエストが不正です",
   "errors.connectionFailed": "接続に失敗しました",
+  "errors.gatewayPairingRequired": "OpenClaw のペアリング承認が必要です",
   "errors.failedToFetchMeetings": "議事録一覧の取得に失敗しました",
   "errors.failedToFetchMeeting": "議事録詳細の取得に失敗しました",
   "errors.failedToFetchChannel": "チャンネルの取得に失敗しました",
