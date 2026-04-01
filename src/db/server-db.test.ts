@@ -10,7 +10,11 @@ import Database from "better-sqlite3";
 const require = createRequire(import.meta.url);
 
 test("server-db sqlite compatibility does not pre-create bootstrap RBAC rows for an empty legacy sqlite deployment", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-server-db-legacy-"));
+  const sqlitePath = path.join(tempDir, "legacy.sqlite");
+
   process.env.DB_TYPE = "sqlite";
+  process.env.SQLITE_PATH = sqlitePath;
 
   const modulePath = require.resolve("./server-db.js");
   delete require.cache[modulePath];
@@ -157,4 +161,32 @@ test("server-db sqlite exports RBAC schema and backfills a legacy sqlite deploym
   assert.equal(defaultGroupCount.count, 1);
   assert.equal(membershipCount.count, 1);
   assert.equal(systemAdminCount.count, 1);
+});
+
+test("server-db sqlite bootstraps base tables for a fresh empty database", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-server-db-fresh-"));
+  const sqlitePath = path.join(tempDir, "fresh.sqlite");
+
+  process.env.DB_TYPE = "sqlite";
+  process.env.SQLITE_PATH = sqlitePath;
+
+  const modulePath = require.resolve("./server-db.js");
+  delete require.cache[modulePath];
+  require("./server-db.js");
+
+  const sqlite = new Database(sqlitePath);
+  const tableNames = sqlite
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+    .all()
+    .map((row: { name: string }) => row.name);
+
+  assert.ok(tableNames.includes("users"));
+  assert.ok(tableNames.includes("channels"));
+  assert.ok(tableNames.includes("characters"));
+  assert.ok(tableNames.includes("channel_members"));
+  assert.ok(tableNames.includes("npcs"));
+  assert.ok(tableNames.includes("tasks"));
+  assert.ok(tableNames.includes("meeting_minutes"));
+  assert.ok(tableNames.includes("map_templates"));
+  assert.ok(tableNames.includes("tileset_images"));
 });

@@ -4,6 +4,10 @@ import * as pgSchema from "./schema";
 import type BetterSqlite3 from "better-sqlite3";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { getDeskRpgSqlitePath } from "../lib/runtime-paths";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { ensureSqliteBaseSchema } = require("./sqlite-base-schema.js") as {
+  ensureSqliteBaseSchema: (sqlite: BetterSqlite3.Database) => void;
+};
 
 const DB_TYPE = (process.env.DB_TYPE || "postgresql").toLowerCase();
 export const isPostgres = DB_TYPE === "postgresql" || DB_TYPE === "postgres";
@@ -343,6 +347,7 @@ export function getDb(): DbInstance {
       const sqlite = new Database(dbPath);
       sqlite.pragma("journal_mode = WAL");
       sqlite.pragma("foreign_keys = ON");
+      ensureSqliteBaseSchema(sqlite);
       ensureSqliteCompatibility(sqlite);
       _db = drizzle(sqlite, { schema: activeSchema }) as unknown as DbInstance;
     }

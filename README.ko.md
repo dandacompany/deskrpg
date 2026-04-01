@@ -10,7 +10,7 @@ DeskRPG는 평범한 채팅방 대신, 조금 더 살아 있는 업무 공간을
 
 - 웹사이트: `https://deskrpg.com` (예정)
 - 소스 코드: `https://github.com/dandacompany/deskrpg`
-- 버전: `v0.1.4`
+- 버전: `v0.1.5`
 
 ## 무엇을 할 수 있나요
 
@@ -110,7 +110,7 @@ docker compose --env-file .env.docker up -d
 DeskRPG는 `http://localhost:3102`에서 열립니다.
 
 기본 이미지는 `dandacompany/deskrpg:latest`입니다.
-특정 릴리스를 고정하고 싶다면 `.env.docker`의 `DESKRPG_IMAGE`를 `dandacompany/deskrpg:0.1.4`처럼 바꾸면 됩니다.
+특정 릴리스를 고정하고 싶다면 `.env.docker`의 `DESKRPG_IMAGE`를 `dandacompany/deskrpg:0.1.5`처럼 바꾸면 됩니다.
 
 명시적으로 파일 경로를 지정하고 싶다면 아래 명령을 사용해도 됩니다.
 
@@ -159,7 +159,7 @@ JWT_SECRET=change-me docker compose -f docker/docker-compose.lite.yml up -d
 
 DeskRPG는 `http://localhost:3102`에서 열립니다.
 
-특정 이미지 버전을 쓰고 싶다면 명령 앞에 `DESKRPG_IMAGE=dandacompany/deskrpg:0.1.4`을 붙이면 됩니다.
+특정 이미지 버전을 쓰고 싶다면 명령 앞에 `DESKRPG_IMAGE=dandacompany/deskrpg:0.1.5`을 붙이면 됩니다.
 
 빠르게 시작하려면 SQLite, 오래 운영하려면 PostgreSQL을 선택하면 됩니다.
 

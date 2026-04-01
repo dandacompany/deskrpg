@@ -9,6 +9,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
+const { ensureSqliteBaseSchema } = require("./sqlite-base-schema.js");
 
 const DB_TYPE = (process.env.DB_TYPE || "postgresql").toLowerCase();
 const isPostgres = DB_TYPE === "postgresql" || DB_TYPE === "postgres";
@@ -766,6 +767,7 @@ if (isPostgres) {
   // Enable WAL mode and foreign key enforcement
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
+  ensureSqliteBaseSchema(sqlite);
   ensureSqliteCompatibility(sqlite);
 
   db = drizzle(sqlite, { schema });
@@ -773,4 +775,4 @@ if (isPostgres) {
   console.log(`[server-db] SQLite mode — Drizzle ORM initialized (${dbPath})`);
 }
 
-module.exports = { db, schema, isPostgres, eq, and, desc, sql, ensureSqliteCompatibility };
+module.exports = { db, schema, isPostgres, eq, and, desc, sql, ensureSqliteBaseSchema, ensureSqliteCompatibility };

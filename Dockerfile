@@ -34,6 +34,7 @@ COPY --from=builder /app/src/lib/task-parser.js ./src/lib/task-parser.js
 COPY --from=builder /app/src/lib/task-block-utils.js ./src/lib/task-block-utils.js
 COPY --from=builder /app/src/lib/task-manager.js ./src/lib/task-manager.js
 COPY --from=builder /app/src/db/server-db.js ./src/db/server-db.js
+COPY --from=builder /app/src/db/sqlite-base-schema.js ./src/db/sqlite-base-schema.js
 COPY --from=builder /app/src/db/normalize.js ./src/db/normalize.js
 COPY --from=builder /app/src/lib/task-prompt.js ./src/lib/task-prompt.js
 COPY --from=builder /app/src/lib/i18n/task-prompt-messages.js ./src/lib/i18n/task-prompt-messages.js
