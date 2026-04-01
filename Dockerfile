@@ -10,6 +10,8 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ARG NEXT_PUBLIC_COMING_SOON=false
+ENV NEXT_PUBLIC_COMING_SOON=$NEXT_PUBLIC_COMING_SOON
 RUN npm run build
 
 FROM base AS runner

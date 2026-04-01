@@ -49,6 +49,9 @@ const ja: Record<string, string> = {
   "auth.registering": "登録中...",
   "auth.checkingAuth": "認証確認中...",
   "auth.logout": "ログアウト",
+  "auth.comingSoon": "Coming Soon",
+  "auth.comingSoonDesc": "DeskRPGはSaaSローンチの準備中です。お楽しみに！",
+  "auth.comingSoonGithub": "GitHubで見る",
 
   // Channels
   "channels.title": "チャンネルを選ぶ",
@@ -1765,6 +1768,7 @@ const ja: Record<string, string> = {
   "chat.options": "チャットオプション",
   "npc.aiAgent": "AIエージェント",
   "npc.connectGatewayAgent": "ゲートウェイエージェントに接続",
+  "npc.gatewaySetupHint": "チャンネル設定の AI 接続タブで、先に OpenClaw ゲートウェイを保存してください。",
   "npc.noAiStatic": "AIなし (静的NPC)",
   "npc.loadingAgents": "エージェントを読み込み中...",
   "npc.createNewAgent": "+ 新しいエージェントを作成",

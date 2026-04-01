@@ -29,6 +29,19 @@ const { startServer } = require("next/dist/server/lib/start-server");
 
 async function main() {
   const { jwtVerify } = await import("jose");
+  const unwrapTsModule = (moduleNamespace) => {
+    if (
+      moduleNamespace &&
+      typeof moduleNamespace === "object" &&
+      "default" in moduleNamespace &&
+      moduleNamespace.default &&
+      typeof moduleNamespace.default === "object"
+    ) {
+      return moduleNamespace.default;
+    }
+    return moduleNamespace;
+  };
+  const taskReporting = unwrapTsModule(await import("./src/lib/task-reporting.ts"));
   const {
     buildAutoExecutionPrompt,
     buildCompletionReportRow,
@@ -45,17 +58,20 @@ async function main() {
     markReportDelivered,
     shouldDeliverCompletionReport,
     toReportReadyPayload,
-  } = await import("./src/lib/task-reporting.ts");
+  } = taskReporting;
+  const channelAccess = unwrapTsModule(await import("./src/lib/rbac/channel-access.ts"));
   const {
     buildChannelAccessDeniedPayload,
     summarizeChannelParticipationAccess,
-  } = await import("./src/lib/rbac/channel-access.ts");
+  } = channelAccess;
+  const meetingSocket = unwrapTsModule(await import("./src/server/meeting-socket.ts"));
   const {
     registerMeetingSocketHandlers,
-  } = await import("./src/server/meeting-socket.ts");
+  } = meetingSocket;
+  const meetingDiscussion = unwrapTsModule(await import("./src/server/meeting-discussion.ts"));
   const {
     registerMeetingDiscussionHandlers,
-  } = await import("./src/server/meeting-discussion.ts");
+  } = meetingDiscussion;
 
   const { db, schema } = require("./src/db/server-db.js");
   const { eq, and } = require("drizzle-orm");

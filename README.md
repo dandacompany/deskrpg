@@ -10,7 +10,7 @@ DeskRPG is built for people who want a playful, self-hosted workspace rather tha
 
 - Website: `https://deskrpg.com` (planned)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v0.1.1`
+- Version: `v0.1.2`
 
 ## What You Can Do
 
@@ -110,7 +110,7 @@ Before the first run, open `.env.docker` and set:
 DeskRPG will open on `http://localhost:3102`.
 
 The default image is `dandacompany/deskrpg:latest`.
-If you want to pin a release, change `DESKRPG_IMAGE` in `.env.docker` to something like `dandacompany/deskrpg:0.1.1`.
+If you want to pin a release, change `DESKRPG_IMAGE` in `.env.docker` to something like `dandacompany/deskrpg:0.1.2`.
 
 If you prefer the explicit file path version, you can run:
 
@@ -159,7 +159,7 @@ JWT_SECRET=change-me docker compose -f docker/docker-compose.lite.yml up -d
 
 DeskRPG will open on `http://localhost:3102`.
 
-To pin a specific image version, add `DESKRPG_IMAGE=dandacompany/deskrpg:0.1.1` before the command.
+To pin a specific image version, add `DESKRPG_IMAGE=dandacompany/deskrpg:0.1.2` before the command.
 
 Use SQLite if you want to get started quickly. Use PostgreSQL if you want a setup that is easier to keep long term.
 

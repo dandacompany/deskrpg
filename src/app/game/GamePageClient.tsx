@@ -25,7 +25,7 @@ import { getLocalizedErrorMessage, getLocalizedMessage } from "@/lib/i18n/error-
 import { resolveNpcResponseChunk, type NpcResponsePayload } from "@/lib/npc-response-messages";
 import { sanitizeNpcResponseText } from "@/lib/task-block-utils.js";
 
-const APP_VERSION = "0.1.1";
+const APP_VERSION = "0.1.2";
 const BUG_REPORT_BASE_URL = "https://github.com/dandacompany/deskrpg/issues/new";
 const SOURCE_CODE_URL = "https://github.com/dandacompany/deskrpg";
 const LICENSE_URL = `${SOURCE_CODE_URL}/blob/main/LICENSE.md`;
@@ -75,6 +75,8 @@ interface ChannelInfo {
   isOwner?: boolean;
   hasGateway: boolean;
   gatewayConfig?: {
+    url?: string | null;
+    token?: string | null;
     taskAutomation?: {
       autoProgressNudgeEnabled?: boolean;
       autoProgressNudgeMinutes?: number;
@@ -173,6 +175,21 @@ function RosterAvatar({
       style={{ width: size, height: size, imageRendering: "pixelated" }}
     />
   );
+}
+
+function getSocketServerUrl(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+
+  const explicitUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+  if (explicitUrl) return explicitUrl;
+
+  if (process.env.NODE_ENV !== "production") return undefined;
+
+  const { protocol, hostname, port } = window.location;
+  const currentPort = Number.parseInt(port, 10);
+  if (!Number.isFinite(currentPort)) return undefined;
+
+  return `${protocol}//${hostname}:${currentPort + 1}`;
 }
 
 export default function GamePage() {
@@ -470,7 +487,7 @@ function GamePageInner() {
 
     import("socket.io-client").then(({ io }) => {
       if (cancelled) return;
-      socketInstance = io({
+      socketInstance = io(getSocketServerUrl(), {
         path: "/socket.io",
         transports: ["websocket"],
         upgrade: false,
@@ -2007,6 +2024,14 @@ function GamePageInner() {
               return {
                 ...prev,
                 ...data,
+                hasGateway:
+                  data.gatewayConfig
+                    ? Boolean(
+                        typeof data.gatewayConfig.url === "string"
+                          ? data.gatewayConfig.url.trim()
+                          : prev.gatewayConfig?.url,
+                      )
+                    : prev.hasGateway,
                 gatewayConfig: data.gatewayConfig
                   ? {
                       ...(prev.gatewayConfig || {}),
