@@ -443,6 +443,20 @@ async function main() {
     }
   }
 
+  function decryptGatewayToken(payload) {
+    const crypto = require("node:crypto");
+    const secret = process.env.INTERNAL_RPC_SECRET || process.env.JWT_SECRET;
+    if (!secret) throw new Error("Missing JWT_SECRET for gateway token decryption");
+    const key = crypto.createHash("sha256").update(secret).digest();
+    const [version, ivB64, tagB64, encryptedB64] = payload.split(":");
+    if (version !== "v1" || !ivB64 || !tagB64 || !encryptedB64) {
+      throw new Error("Invalid gateway token payload");
+    }
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivB64, "base64url"));
+    decipher.setAuthTag(Buffer.from(tagB64, "base64url"));
+    return Buffer.concat([decipher.update(Buffer.from(encryptedB64, "base64url")), decipher.final()]).toString("utf8");
+  }
+
   async function getOrConnectGateway(channelId) {
     if (channelGateways.has(channelId)) {
       const gw = channelGateways.get(channelId);
@@ -452,12 +466,26 @@ async function main() {
     }
 
     try {
-      const rows = await db.select({ gatewayConfig: schema.channels.gatewayConfig }).from(schema.channels).where(eq(schema.channels.id, channelId));
-      const config = parseJson(rows[0]?.gatewayConfig);
-      if (!config?.url || !config?.token) return null;
+      // Look up gateway via channel_gateway_bindings → gateway_resources
+      const bindings = await db
+        .select({ gatewayId: schema.channelGatewayBindings.gatewayId })
+        .from(schema.channelGatewayBindings)
+        .where(eq(schema.channelGatewayBindings.channelId, channelId))
+        .limit(1);
 
+      if (!bindings.length) return null;
+
+      const [resource] = await db
+        .select({ baseUrl: schema.gatewayResources.baseUrl, tokenEncrypted: schema.gatewayResources.tokenEncrypted })
+        .from(schema.gatewayResources)
+        .where(eq(schema.gatewayResources.id, bindings[0].gatewayId))
+        .limit(1);
+
+      if (!resource?.baseUrl || !resource?.tokenEncrypted) return null;
+
+      const token = decryptGatewayToken(resource.tokenEncrypted);
       const gateway = new OpenClawGateway();
-      await gateway.connect(config.url, config.token);
+      await gateway.connect(resource.baseUrl, token);
       channelGateways.set(channelId, gateway);
       return gateway;
     } catch (err) {
