@@ -71,7 +71,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       };
     } else if (body.agentAction === "create" && body.agentId) {
       // Create agent via RPC
-      await internalRpc(npc.channelId, "agents.create", { name: body.agentId, workspace: `/workspace/${body.agentId}` });
+      await internalRpc(npc.channelId, "agents.create", {
+        name: body.agentId,
+        workspace: `~/.openclaw/workspace-${body.agentId}`,
+      });
 
       const files = hasNpcPresetDefaults(body.presetId)
         ? buildGatewayAgentFiles({

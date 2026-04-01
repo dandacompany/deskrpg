@@ -453,6 +453,26 @@ export async function getOrConnectGateway(channelId: string): Promise<any | null
   }
 }
 
+export async function invalidateGatewayConnectionForChannel(channelId: string) {
+  const gatewayConfig = await getGatewayRuntimeConfigForChannel(channelId);
+  if (!gatewayConfig) {
+    return;
+  }
+
+  const gatewayKey = gatewayConfig.gatewayId;
+  if (!channelGateways.has(gatewayKey)) {
+    return;
+  }
+
+  const gw = channelGateways.get(gatewayKey);
+  try {
+    gw?.disconnect?.();
+  } catch {
+    // Best effort cache invalidation only.
+  }
+  channelGateways.delete(gatewayKey);
+}
+
 // ---------------------------------------------------------------------------
 // NPC config loader
 // ---------------------------------------------------------------------------

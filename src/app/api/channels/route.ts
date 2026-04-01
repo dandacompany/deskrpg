@@ -357,7 +357,10 @@ export async function POST(req: NextRequest) {
         // Setup agent on gateway via RPC (non-blocking on failure)
         try {
           if (!isMainAgent) {
-            await internalRpc(channel.id, "agents.create", { name: agentId, workspace: `/workspace/${agentId}` });
+            await internalRpc(channel.id, "agents.create", {
+              name: agentId,
+              workspace: `~/.openclaw/workspace-${agentId}`,
+            });
           }
 
           // Write persona files

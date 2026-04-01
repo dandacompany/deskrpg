@@ -364,7 +364,7 @@ function CreateChannelPageInner() {
 
   return (
     <div className="theme-web min-h-screen bg-bg text-text p-8">
-      <div className="max-w-lg mx-auto">
+      <div className="max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">{t("channels.create.title")}</h1>
 
         <form onSubmit={handleSubmit} className="space-y-5">

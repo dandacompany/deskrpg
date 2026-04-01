@@ -47,7 +47,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Create agent via RPC
-    await internalRpc(channelId, "agents.create", { name: agentId.trim(), workspace: `/workspace/${agentId.trim()}` });
+    await internalRpc(channelId, "agents.create", {
+      name: agentId.trim(),
+      workspace: `~/.openclaw/workspace-${agentId.trim()}`,
+    });
 
     const files = hasNpcPresetDefaults(presetId)
       ? buildGatewayAgentFiles({

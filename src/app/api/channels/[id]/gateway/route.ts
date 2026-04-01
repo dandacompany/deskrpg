@@ -15,6 +15,7 @@ import {
 } from "@/lib/gateway-resources";
 import { buildGatewayConfig, mergeGatewayConfig } from "@/lib/task-reporting";
 import internalTransport from "@/lib/internal-transport.js";
+import { getGatewayConfigUpdatedHandler } from "@/lib/rpc-registry";
 
 const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport as {
   buildInternalAuthHeaders: () => Record<string, string>;
@@ -41,6 +42,12 @@ function buildResponseGatewayConfig(input: {
 }
 
 async function emitGatewayConfigUpdated(channelId: string) {
+  const localHandler = getGatewayConfigUpdatedHandler();
+  if (localHandler) {
+    await localHandler(channelId);
+    return;
+  }
+
   try {
     await fetch(`${getInternalSocketBaseUrl()}/_internal/emit`, {
       method: "POST",

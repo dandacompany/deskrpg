@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { parse } from "node:url";
 import next from "next";
 import { Server as SocketServer } from "socket.io";
-import { registerRpcHandler } from "./src/lib/rpc-registry";
+import { registerGatewayConfigUpdatedHandler, registerRpcHandler } from "./src/lib/rpc-registry";
 
 const envLoader = (process as typeof process & {
   loadEnvFile?: (path?: string) => void;
@@ -25,7 +25,7 @@ const app = next({ dev: true, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(async () => {
-  const { setupSocketHandlers, getOrConnectGateway } = await import("./src/server/socket-handlers");
+  const { setupSocketHandlers, getOrConnectGateway, invalidateGatewayConnectionForChannel } = await import("./src/server/socket-handlers");
 
   // Register in-process RPC handler so Next.js API routes can call the gateway
   // directly without HTTP — no port dependency.
@@ -39,6 +39,10 @@ app.prepare().then(async () => {
     if (method === "agents.list") return gateway.agentsList();
     if (method === "agents.delete") return gateway.agentsDelete(params.agentId, params.deleteFiles);
     throw new Error(`Unknown RPC method: ${method}`);
+  });
+
+  registerGatewayConfigUpdatedHandler(async (channelId) => {
+    await invalidateGatewayConnectionForChannel(channelId);
   });
 
   const httpServer = createServer((req, res) => {
