@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 
-import { db, groupMembers, groups } from "@/db";
+import { db, groupMembers, groups, isPostgres } from "@/db";
 import {
   buildGroupSlugCandidates,
   getAuthenticatedUserId,
+  type GroupActorContext,
   hasGroupPermission,
   getUserSystemRole,
   summarizeGroupManagementCapabilities,
@@ -11,6 +12,7 @@ import {
   unauthorizedResponse,
 } from "@/lib/rbac/group-api";
 import { GROUP_MEMBER_ROLES } from "@/lib/rbac/constants";
+import type { GroupMemberRole } from "@/lib/rbac/constants";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -72,7 +74,7 @@ export async function GET(req: NextRequest) {
     .orderBy(groups.name);
 
   const groupsWithCapabilities = await Promise.all(rows.map(async (row) => {
-    const context = {
+    const context: GroupActorContext = {
       userId,
       systemRole,
       group: {
@@ -83,8 +85,8 @@ export async function GET(req: NextRequest) {
         isDefault: row.isDefault,
         createdBy: row.createdBy,
       },
-      groupRole: row.role,
-    } as const;
+      groupRole: (row.role as GroupMemberRole | undefined) ?? null,
+    };
 
     return {
       id: row.id,
@@ -140,68 +142,65 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const memberRole = typeof role === "string" ? role : "group_admin";
-  if (!GROUP_MEMBER_ROLES.includes(memberRole)) {
+  const requestedRole = typeof role === "string" ? role : "group_admin";
+  if (!GROUP_MEMBER_ROLES.includes(requestedRole as GroupMemberRole)) {
     return NextResponse.json(
       { errorCode: "missing_required_fields", error: "invalid member role" },
       { status: 400 },
     );
   }
+  const memberRole = requestedRole as GroupMemberRole;
 
   const requestedSlug = typeof slug === "string" && slug.trim()
     ? slugifyGroupName(slug)
     : slugifyGroupName(name);
   const now = new Date().toISOString();
 
-  const created = await db.transaction(async (tx) => {
-    const slugCandidates = [
-      ...buildGroupSlugCandidates(requestedSlug, 8),
-      `${requestedSlug}-${randomUUID().slice(0, 8)}`,
-    ];
+  const slugCandidates = [
+    ...buildGroupSlugCandidates(requestedSlug, 8),
+    `${requestedSlug}-${randomUUID().slice(0, 8)}`,
+  ];
 
-    let group: typeof groups.$inferSelect | null = null;
-    for (const candidate of slugCandidates) {
-      const inserted = await tx
-        .insert(groups)
-        .values({
-          name: name.trim(),
-          slug: candidate,
-          description: typeof description === "string" ? description.trim() : null,
-          createdBy: userId,
-        })
-        .onConflictDoNothing({
-          target: groups.slug,
-        })
-        .returning();
-
-      if (inserted[0]) {
-        group = inserted[0];
-        break;
-      }
-    }
-
-    if (!group) {
-      throw new Error("failed_to_allocate_group_slug");
-    }
-
-    const [membership] = await tx
-      .insert(groupMembers)
+  let group: typeof groups.$inferSelect | null = null;
+  for (const candidate of slugCandidates) {
+    const inserted = await db
+      .insert(groups)
       .values({
-        groupId: group.id,
-        userId,
-        role: memberRole,
-        approvedBy: userId,
-        approvedAt: now,
+        name: name.trim(),
+        slug: candidate,
+        description: typeof description === "string" ? description.trim() : null,
+        createdBy: userId,
+      })
+      .onConflictDoNothing({
+        target: groups.slug,
       })
       .returning();
 
-    return { group, membership };
-  });
+    if (inserted[0]) {
+      group = inserted[0];
+      break;
+    }
+  }
+
+  if (!group) {
+    throw new Error("failed_to_allocate_group_slug");
+  }
+
+  const [membership] = await db
+    .insert(groupMembers)
+    .values({
+      groupId: group.id,
+      userId,
+      role: memberRole,
+      approvedBy: userId,
+      approvedAt: (isPostgres ? new Date(now) : now) as unknown as Date,
+    })
+    .returning();
 
   return NextResponse.json(
     {
-      group: created.group,
-      membership: created.membership,
+      group,
+      membership,
     },
     { status: 201 },
   );

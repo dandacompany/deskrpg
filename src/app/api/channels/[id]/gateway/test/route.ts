@@ -4,13 +4,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { internalRpc, getUserId } from "@/lib/internal-rpc";
 
+function normalizeGatewayAgents(result: unknown) {
+  if (Array.isArray(result)) return result;
+  if (result && typeof result === "object" && Array.isArray((result as { agents?: unknown[] }).agents)) {
+    return (result as { agents: unknown[] }).agents;
+  }
+  return [];
+}
+
 // POST /api/channels/:id/gateway/test — owner-only, tests gateway connection
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   const { id } = await params;
 
   // Verify ownership
@@ -20,18 +28,19 @@ export async function POST(
     .where(eq(channels.id, id))
     .limit(1);
 
-  if (!channel) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (channel.ownerId !== userId) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!channel) return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
+  if (channel.ownerId !== userId) return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
 
   try {
     const result = await internalRpc(id, "agents.list");
     return NextResponse.json({
       ok: true,
-      agents: result.agents || [],
+      agents: normalizeGatewayAgents(result),
     });
   } catch (err) {
     return NextResponse.json({
       ok: false,
+      errorCode: "connection_failed",
       error: err instanceof Error ? err.message : "Connection failed",
     });
   }

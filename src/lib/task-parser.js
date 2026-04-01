@@ -2,27 +2,17 @@
 // NPC 응답에서 태스크 메타데이터를 추출하는 파서.
 // 두 가지 모드: block (기본), structured. 동일한 출력 형태 반환.
 
+/* eslint-disable @typescript-eslint/no-require-imports */
+const { extractTaskBlocks } = require("./task-block-utils.js");
+
 /**
  * 파서 A: json:task 코드블록 추출
  * @param {string} responseText
  * @returns {{ message: string, tasks: object[] }}
  */
 function parseBlockMode(responseText) {
-  const regex = /```json:task\s*\n([\s\S]*?)\n```/g;
-  const tasks = [];
-  let cleanText = responseText;
-
-  for (const match of responseText.matchAll(regex)) {
-    try {
-      tasks.push(JSON.parse(match[1]));
-    } catch (e) {
-      console.warn("[TaskParser] Failed to parse task block JSON:", e.message);
-      continue;
-    }
-    cleanText = cleanText.replace(match[0], "").trim();
-  }
-
-  return { message: cleanText, tasks };
+  const { sanitizedText, taskPayloads } = extractTaskBlocks(responseText);
+  return { message: sanitizedText, tasks: taskPayloads };
 }
 
 /**
@@ -63,7 +53,7 @@ function parseNpcResponse(responseText, mode = "block") {
 
 /**
  * 태스크 액션 유효성 검증
- * @param {object} taskAction
+ * @param {unknown} taskAction
  * @returns {boolean}
  */
 function isValidTaskAction(taskAction) {

@@ -3,23 +3,38 @@ import { meetingMinutes, channelMembers, channels } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and, desc } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
+import { resolveMeetingMinutesAccess } from "./meeting-access";
+import { normalizeMeetingMinutesRecord } from "@/lib/meeting-minutes";
 
 export async function GET(req: NextRequest) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) {
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  }
 
   const channelId = req.nextUrl.searchParams.get("channelId");
-  if (!channelId) return NextResponse.json({ error: "channelId required" }, { status: 400 });
+  if (!channelId) {
+    return NextResponse.json({ errorCode: "channel_id_required", error: "channelId required" }, { status: 400 });
+  }
 
-  // Verify channel membership
-  const [channel] = await db.select({ ownerId: channels.ownerId }).from(channels).where(eq(channels.id, channelId)).limit(1);
-  if (!channel) return NextResponse.json({ error: "Channel not found" }, { status: 404 });
+  const access = await resolveMeetingMinutesAccess({
+    userId,
+    channelId,
+    deps: {
+      loadChannelOwner: async (channelIdToLoad) => {
+        const [channel] = await db.select({ ownerId: channels.ownerId }).from(channels).where(eq(channels.id, channelIdToLoad)).limit(1);
+        return channel?.ownerId ?? null;
+      },
+      loadMembership: async (channelIdToLoad, userIdToLoad) => {
+        const [member] = await db.select({ role: channelMembers.role }).from(channelMembers)
+          .where(and(eq(channelMembers.channelId, channelIdToLoad), eq(channelMembers.userId, userIdToLoad))).limit(1);
+        return Boolean(member);
+      },
+    },
+  });
 
-  const isOwner = channel.ownerId === userId;
-  if (!isOwner) {
-    const [member] = await db.select({ role: channelMembers.role }).from(channelMembers)
-      .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, userId))).limit(1);
-    if (!member) return NextResponse.json({ error: "Not a member" }, { status: 403 });
+  if (!access.ok) {
+    return NextResponse.json({ errorCode: access.errorCode, error: access.error }, { status: access.status });
   }
 
   try {
@@ -36,9 +51,12 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(meetingMinutes.createdAt))
       .limit(50);
 
-    return NextResponse.json({ minutes: rows });
+    return NextResponse.json({ minutes: rows.map((row) => normalizeMeetingMinutesRecord(row)) });
   } catch (err) {
     console.error("Failed to fetch meetings:", err);
-    return NextResponse.json({ error: "Failed to fetch meetings" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_fetch_meetings", error: "Failed to fetch meetings" },
+      { status: 500 },
+    );
   }
 }

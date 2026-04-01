@@ -1,0 +1,72 @@
+# docker/docker-compose.openclaw.yml — DeskRPG + PostgreSQL + OpenClaw
+services:
+  deskrpg-db:
+    image: postgres:16-alpine
+    container_name: deskrpg-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: deskrpg
+      POSTGRES_USER: deskrpg
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-deskrpg_dev_pw}
+    ports:
+      - "5437:5432"
+    volumes:
+      - deskrpg-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deskrpg -d deskrpg"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  openclaw:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.openclaw
+    image: ${OPENCLAW_IMAGE:-deskrpg-openclaw:latest}
+    container_name: deskrpg-openclaw
+    restart: unless-stopped
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+    dns_opt:
+      - no-aaaa
+    ports:
+      - "18789:18789"
+    environment:
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+      OPENCLAW_TOKEN: ${OPENCLAW_TOKEN:-change-me-openclaw-token}
+      OPENCLAW_PORT: 18789
+      OPENCLAW_MODEL: ${OPENCLAW_MODEL:-openai-codex/gpt-5.4}
+      OPENCLAW_ALLOWED_ORIGINS: ${OPENCLAW_ALLOWED_ORIGINS:-http://localhost:18789,http://127.0.0.1:18789,http://localhost:3102,http://127.0.0.1:3102}
+    volumes:
+      - openclaw-data:/home/node/.openclaw
+      - openclaw-workspace:/workspace
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:18789/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  deskrpg-app:
+    image: ${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}
+    container_name: deskrpg-app
+    restart: unless-stopped
+    ports:
+      - "3102:3000"
+      - "3103:3001"
+    volumes:
+      - ../public/assets:/app/public/assets
+    environment:
+      DATABASE_URL: postgresql://deskrpg:${POSTGRES_PASSWORD:-deskrpg_dev_pw}@deskrpg-db:5432/deskrpg
+      JWT_SECRET: ${JWT_SECRET}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    depends_on:
+      deskrpg-db:
+        condition: service_healthy
+      openclaw:
+        condition: service_healthy
+
+volumes:
+  deskrpg-pgdata:
+  openclaw-data:
+  openclaw-workspace:

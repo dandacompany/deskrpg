@@ -2,6 +2,12 @@ import { db } from "@/db";
 import { channels, channelMembers, users } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
+import internalTransport from "@/lib/internal-transport.js";
+
+const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport as {
+  buildInternalAuthHeaders: () => Record<string, string>;
+  getInternalSocketBaseUrl: () => string;
+};
 
 function getUserId(req: NextRequest): string | null {
   return req.headers.get("x-user-id");
@@ -13,7 +19,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
 
@@ -24,8 +30,8 @@ export async function GET(
       .where(eq(channels.id, id))
       .limit(1);
 
-    if (!channel) return NextResponse.json({ error: "Channel not found" }, { status: 404 });
-    if (channel.ownerId !== userId) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    if (!channel) return NextResponse.json({ errorCode: "channel_not_found", error: "Channel not found" }, { status: 404 });
+    if (channel.ownerId !== userId) return NextResponse.json({ errorCode: "forbidden", error: "Not authorized" }, { status: 403 });
 
     const members = await db
       .select({
@@ -41,8 +47,9 @@ export async function GET(
 
     let onlineUserIds: string[] = [];
     try {
-      const socketPort = (parseInt(process.env.PORT || "3000", 10)) + 1;
-      const res = await fetch(`http://localhost:${socketPort}/_internal/room-members?channelId=${id}`);
+      const res = await fetch(`${getInternalSocketBaseUrl()}/_internal/room-members?channelId=${encodeURIComponent(id)}`, {
+        headers: buildInternalAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         onlineUserIds = data.userIds || [];
@@ -57,6 +64,9 @@ export async function GET(
     return NextResponse.json({ members: result });
   } catch (err) {
     console.error("Failed to fetch members:", err);
-    return NextResponse.json({ error: "Failed to fetch members" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_fetch_members", error: "Failed to fetch members" },
+      { status: 500 },
+    );
   }
 }

@@ -131,11 +131,11 @@ export function isCoreLayer(layer: TiledLayer): boolean {
 
 export function getDeskRPGRole(layer: TiledLayer, idx: number, layers: TiledLayer[]) {
   const n = (layer.name || '').toLowerCase();
-  if (n === 'collision') return { label: 'COL', desc: 'Collision (hidden in game)', color: 'bg-danger/20 text-danger' };
-  if (n === 'floor') return { label: 'D:0', desc: 'Floor (depth 0)', color: 'bg-success/20 text-success' };
-  if (n === 'walls') return { label: 'D:1', desc: 'Walls (depth 1)', color: 'bg-info/20 text-info' };
-  if (n === 'foreground' || n === 'above' || n === 'overlay') return { label: 'D:10K', desc: 'Foreground (depth 10000)', color: 'bg-npc/20 text-npc' };
-  if (layer.type === 'objectgroup') return { label: 'OBJ', desc: 'Objects (y-sort)', color: 'bg-meeting/20 text-meeting' };
+  if (n === 'collision') return { label: 'COL', descKey: 'mapEditor.layers.roleCollision', color: 'bg-danger/20 text-danger' };
+  if (n === 'floor') return { label: 'D:0', descKey: 'mapEditor.layers.roleFloor', color: 'bg-success/20 text-success' };
+  if (n === 'walls') return { label: 'D:1', descKey: 'mapEditor.layers.roleWalls', color: 'bg-info/20 text-info' };
+  if (n === 'foreground' || n === 'above' || n === 'overlay') return { label: 'D:10K', descKey: 'mapEditor.layers.roleForeground', color: 'bg-npc/20 text-npc' };
+  if (layer.type === 'objectgroup') return { label: 'OBJ', descKey: 'mapEditor.layers.roleObjects', color: 'bg-meeting/20 text-meeting' };
   return null;
 }
 
@@ -144,7 +144,7 @@ export const LAYER_COLORS: Record<string, { solid: string; overlay: string }> = 
   floor:      { solid: '#22c55e', overlay: 'rgba(34, 197, 94, 0.12)' },
   walls:      { solid: '#3b82f6', overlay: 'rgba(59, 130, 246, 0.12)' },
   foreground: { solid: '#eab308', overlay: 'rgba(234, 179, 8, 0.12)' },
-  collision:  { solid: '#ef4444', overlay: 'rgba(239, 68, 68, 0.12)' },
+  collision:  { solid: '#ef4444', overlay: 'rgba(239, 68, 68, 0.55)' },
   objects:    { solid: '#8b5cf6', overlay: 'rgba(139, 92, 246, 0.12)' },
 };
 
@@ -235,7 +235,7 @@ export function createDefaultMap(name: string, width: number, height: number, ti
       { id: 1, name: 'Floor', type: 'tilelayer', width, height, x: 0, y: 0, opacity: 1, visible: true, data: [...empty], properties: [{ name: 'depth', type: 'int', value: 0 }] },
       { id: 2, name: 'Walls', type: 'tilelayer', width, height, x: 0, y: 0, opacity: 1, visible: true, data: [...empty], properties: [{ name: 'depth', type: 'int', value: 1 }] },
       { id: 3, name: 'Foreground', type: 'tilelayer', width, height, x: 0, y: 0, opacity: 1, visible: true, data: [...empty], properties: [{ name: 'depth', type: 'int', value: 10000 }] },
-      { id: 4, name: 'Collision', type: 'tilelayer', width, height, x: 0, y: 0, opacity: 0.5, visible: true, data: [...empty], properties: [{ name: 'depth', type: 'int', value: -1 }] },
+      { id: 4, name: 'Collision', type: 'tilelayer', width, height, x: 0, y: 0, opacity: 0.7, visible: true, data: [...empty], properties: [{ name: 'depth', type: 'int', value: -1 }] },
       { id: 5, name: 'Objects', type: 'objectgroup', x: 0, y: 0, opacity: 1, visible: true, draworder: 'topdown', objects: [{ id: 1, name: 'spawn', type: 'spawn', x: Math.floor(width / 2) * tileSize, y: Math.floor(height / 2) * tileSize, width: tileSize, height: tileSize, visible: true }], properties: [{ name: 'depth', type: 'string', value: 'y-sort' }] },
     ],
   };
@@ -297,6 +297,9 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       };
     }
     case 'SET_TOOL':
+      if (action.tool !== 'select' && state.selection) {
+        return { ...state, tool: action.tool, selection: null };
+      }
       return { ...state, tool: action.tool };
     case 'SET_ACTIVE_LAYER':
       return { ...state, activeLayerIndex: action.index };
@@ -437,10 +440,21 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     }
     case 'ADD_LAYER': {
       if (!state.mapData) return state;
+      const newLayers = [...state.mapData.layers, action.layer];
+      // New layer added at end → assign depth below character (lowest rank among below-layers)
+      const belowCount = newLayers.filter(l => l.type === 'tilelayer' && (() => {
+        const dp = l.properties?.find((p: { name: string }) => p.name === 'depth');
+        return !dp || Number(dp.value) < CHARACTER_DEPTH_THRESHOLD;
+      })()).length;
+      const addedIdx = newLayers.length - 1;
+      const addedLayer = newLayers[addedIdx];
+      const props = (addedLayer.properties ?? []).filter((p: { name: string }) => p.name !== 'depth');
+      props.push({ name: 'depth', type: 'int', value: belowCount - 1 });
+      newLayers[addedIdx] = { ...addedLayer, properties: props };
       return {
         ...state,
-        mapData: { ...state.mapData, layers: [...state.mapData.layers, action.layer], nextlayerid: state.mapData.nextlayerid + 1 },
-        activeLayerIndex: state.mapData.layers.length,
+        mapData: { ...state.mapData, layers: newLayers, nextlayerid: state.mapData.nextlayerid + 1 },
+        activeLayerIndex: newLayers.length - 1,
         dirty: true,
       };
     }
@@ -489,6 +503,31 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       layers.splice(insertAt, 0, moved);
       let newActive = state.activeLayerIndex;
       if (state.activeLayerIndex === action.fromIndex) newActive = insertAt;
+
+      // Reassign depth preserving above/below character divider
+      const tileLayers = layers.map((l, i) => {
+        const dp = l.properties?.find((p: { name: string }) => p.name === 'depth');
+        const currentDepth = dp ? Number(dp.value) || 0 : 0;
+        return { l, i, above: currentDepth >= CHARACTER_DEPTH_THRESHOLD };
+      }).filter(({ l }) => l.type === 'tilelayer');
+
+      // Separate into above/below groups, assign depth within each group
+      const aboveLayers = tileLayers.filter(e => e.above);
+      const belowLayers = tileLayers.filter(e => !e.above);
+
+      for (let rank = 0; rank < belowLayers.length; rank++) {
+        const { l, i } = belowLayers[rank];
+        const newProps = (l.properties ?? []).filter((p: { name: string }) => p.name !== 'depth');
+        newProps.push({ name: 'depth', type: 'int', value: rank });
+        layers[i] = { ...l, properties: newProps };
+      }
+      for (let rank = 0; rank < aboveLayers.length; rank++) {
+        const { l, i } = aboveLayers[rank];
+        const newProps = (l.properties ?? []).filter((p: { name: string }) => p.name !== 'depth');
+        newProps.push({ name: 'depth', type: 'int', value: CHARACTER_DEPTH_THRESHOLD + rank });
+        layers[i] = { ...l, properties: newProps };
+      }
+
       return { ...state, mapData: { ...state.mapData, layers }, activeLayerIndex: newActive, dirty: true };
     }
     case 'ADD_TILESET': {
@@ -818,7 +857,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 }
 
 const initialState: EditorState = {
-  projectName: 'Untitled Map',
+  projectName: '',
   dirty: false,
   templateId: null,
   projectId: null,

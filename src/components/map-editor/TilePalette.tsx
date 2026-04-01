@@ -314,7 +314,7 @@ function TilesetSection({
             </Button>
             </Tooltip>
           )}
-          {onEditPixels && hasSelectionInThisTileset && (
+          {onEditPixels && hasSelectionInThisTileset && name !== BUILTIN_TILESET_NAME && (
             <Tooltip label={t('mapEditor.tilesets.editPixels')}>
             <Button
               variant="ghost"
@@ -372,17 +372,6 @@ export default function TilePalette({
   const [dragFromFirstgid, setDragFromFirstgid] = useState<number | null>(null);
   const [dragOverFirstgid, setDragOverFirstgid] = useState<number | null>(null);
 
-  // Compute selection info text
-  let selectionInfo = '';
-  if (selectedRegion) {
-    const { width, height, gids } = selectedRegion;
-    if (width === 1 && height === 1) {
-      selectionInfo = `GID ${gids[0][0]}`;
-    } else {
-      selectionInfo = `Selected: ${width}x${height} region (${width * height} tiles)`;
-    }
-  }
-
   return (
     <div>
       {/* Header */}
@@ -395,12 +384,7 @@ export default function TilePalette({
         </div>
       )}
 
-      {/* Selection info */}
-      {selectionInfo && (
-        <div className="px-3 py-1.5 bg-surface-raised text-caption text-text-secondary border-b border-border flex-shrink-0">
-          {selectionInfo}
-        </div>
-      )}
+      {/* Selection info removed — no longer needed */}
 
       {/* Tileset list */}
       <div className="px-2 py-2">

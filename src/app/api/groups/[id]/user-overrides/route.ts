@@ -1,5 +1,6 @@
-import { db, groupMembers, userPermissionOverrides, users } from "@/db";
+import { db, groupMembers, isPostgres, userPermissionOverrides, users } from "@/db";
 import { PERMISSION_KEYS } from "@/lib/rbac/constants";
+import type { PermissionKey } from "@/lib/rbac/constants";
 import {
   canWriteGroupPermissionEffect,
   getAuthenticatedUserId,
@@ -88,7 +89,9 @@ export async function PUT(
     );
   }
 
-  if (!canWriteGroupPermissionEffect({ permissionKey, effect })) {
+  const normalizedPermissionKey = permissionKey as PermissionKey;
+
+  if (!canWriteGroupPermissionEffect({ permissionKey: normalizedPermissionKey, effect })) {
     return NextResponse.json(
       { errorCode: "forbidden", error: "cannot deny manage_group_permissions" },
       { status: 403 },
@@ -125,7 +128,7 @@ export async function PUT(
         and(
           eq(userPermissionOverrides.groupId, groupId),
           eq(userPermissionOverrides.userId, targetUserId),
-          eq(userPermissionOverrides.permissionKey, permissionKey),
+          eq(userPermissionOverrides.permissionKey, normalizedPermissionKey),
         ),
       );
 
@@ -138,10 +141,10 @@ export async function PUT(
     .values({
       groupId,
       userId: targetUserId,
-      permissionKey,
+      permissionKey: normalizedPermissionKey,
       effect,
       createdBy: userId,
-      createdAt: now,
+      createdAt: (isPostgres ? new Date(now) : now) as unknown as Date,
     })
     .onConflictDoUpdate({
       target: [
@@ -152,7 +155,7 @@ export async function PUT(
       set: {
         effect,
         createdBy: userId,
-        createdAt: now,
+        createdAt: (isPostgres ? new Date(now) : now) as unknown as Date,
       },
     })
     .returning();

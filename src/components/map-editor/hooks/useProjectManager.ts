@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback } from 'react';
+import { getLocalizedErrorMessage } from '@/lib/i18n/error-codes';
 import type { TiledMap, TiledTileset } from './useMapEditor';
 import type { TilesetImageInfo } from './useMapEditor';
 import { createDefaultMap } from './useMapEditor';
+import { getProjectMapDataForLoad } from '../project-load';
 
 // === Types ===
 
@@ -39,11 +41,20 @@ export interface UseProjectManagerOptions {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   dispatch: (action: any) => void;
   addBuiltinTileset: (mapData: TiledMap) => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 // === Hook ===
 
-export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectManagerOptions) {
+export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProjectManagerOptions) {
+  const getResponseErrorMessage = useCallback(
+    async (res: Response, fallbackKey: string) => {
+      const data = await res.json().catch(() => null);
+      return getLocalizedErrorMessage(t, data, fallbackKey);
+    },
+    [t]
+  );
+
   /**
    * Load a project from the API, convert tileset base64 images to HTMLImageElement,
    * and dispatch SET_MAP + ADD_TILESET actions.
@@ -52,14 +63,14 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
     async (projectId: string): Promise<ProjectData> => {
       const res = await fetch(`/api/projects/${projectId}`);
       if (!res.ok) {
-        throw new Error(`Failed to load project: ${res.status} ${res.statusText}`);
+        throw new Error(await getResponseErrorMessage(res, 'errors.failedToFetchProject'));
       }
       const data: ProjectData = await res.json();
 
       const { project, tilesets } = data;
 
-      // Clear tilesets from tiledJson to avoid duplicates — DB tilesets are the source of truth
-      const mapData = { ...project.tiledJson, tilesets: [] as TiledTileset[] };
+      // Prefer linked DB tilesets when available, but preserve embedded tilesets for built-in samples.
+      const mapData = getProjectMapDataForLoad(project.tiledJson, tilesets) as TiledMap;
 
       dispatch({
         type: 'SET_MAP',
@@ -75,7 +86,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
         img.src = ts.image;
         await new Promise<void>((resolve, reject) => {
           img.onload = () => resolve();
-          img.onerror = () => reject(new Error(`Failed to load tileset: ${ts.name}`));
+          img.onerror = () => reject(new Error(t('errors.failedToFetchProject')));
         });
 
         const tileset: TiledTileset = {
@@ -105,7 +116,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
 
       return data;
     },
-    [dispatch]
+    [dispatch, getResponseErrorMessage, t]
   );
 
   /**
@@ -130,12 +141,12 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
       });
 
       if (!res.ok) {
-        throw new Error(`Failed to save project: ${res.status} ${res.statusText}`);
+        throw new Error(await getResponseErrorMessage(res, 'errors.failedToSaveProject'));
       }
 
       dispatch({ type: 'MARK_CLEAN' });
     },
-    [dispatch]
+    [dispatch, getResponseErrorMessage]
   );
 
   /**
@@ -149,6 +160,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
       tileWidth: number,
       tileHeight: number
     ): Promise<{ id: string; createdBy: string | null }> => {
+      void tileHeight;
       const mapData = createDefaultMap(name, cols, rows, tileWidth);
 
       const res = await fetch('/api/projects', {
@@ -158,7 +170,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
       });
 
       if (!res.ok) {
-        throw new Error(`Failed to create project: ${res.status} ${res.statusText}`);
+        throw new Error(await getResponseErrorMessage(res, 'errors.failedToCreateProject'));
       }
 
       const created = await res.json();
@@ -175,7 +187,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
 
       return { id: created.id as string, createdBy: (created.createdBy ?? created.created_by ?? null) as string | null };
     },
-    [dispatch, addBuiltinTileset]
+    [dispatch, addBuiltinTileset, getResponseErrorMessage]
   );
 
   /**
@@ -190,10 +202,10 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
       });
 
       if (!res.ok) {
-        throw new Error(`Failed to link tileset: ${res.status} ${res.statusText}`);
+        throw new Error(await getResponseErrorMessage(res, 'errors.failedToLinkTileset'));
       }
     },
-    []
+    [getResponseErrorMessage]
   );
 
   /**
@@ -206,10 +218,10 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
       });
 
       if (!res.ok) {
-        throw new Error(`Failed to unlink tileset: ${res.status} ${res.statusText}`);
+        throw new Error(await getResponseErrorMessage(res, 'errors.failedToUnlinkTileset'));
       }
     },
-    []
+    [getResponseErrorMessage]
   );
 
   /**
@@ -224,10 +236,10 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
       });
 
       if (!res.ok) {
-        throw new Error(`Failed to link stamp: ${res.status} ${res.statusText}`);
+        throw new Error(await getResponseErrorMessage(res, 'errors.failedToLinkStamp'));
       }
     },
-    []
+    [getResponseErrorMessage]
   );
 
   /**
@@ -240,10 +252,10 @@ export function useProjectManager({ dispatch, addBuiltinTileset }: UseProjectMan
       });
 
       if (!res.ok) {
-        throw new Error(`Failed to unlink stamp: ${res.status} ${res.statusText}`);
+        throw new Error(await getResponseErrorMessage(res, 'errors.failedToUnlinkStamp'));
       }
     },
-    []
+    [getResponseErrorMessage]
   );
 
   return {

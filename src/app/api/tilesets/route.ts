@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   }
 
   const [row] = await db.select().from(tilesetImages).where(eq(tilesetImages.name, name));
-  if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!row) return NextResponse.json({ errorCode: "not_found", error: "Not found" }, { status: 404 });
   return NextResponse.json(row);
 }
 
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const { name, tilewidth, tileheight, columns, tilecount, image } = body;
 
   if (!name || !image || !columns || !tilecount) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    return NextResponse.json({ errorCode: "missing_required_fields", error: "Missing required fields" }, { status: 400 });
   }
 
   // Upsert: if name exists, update; otherwise insert

@@ -2,16 +2,12 @@
 # Lightweight single-container deployment. Ideal for self-hosting without PostgreSQL.
 services:
   deskrpg-app:
-    build:
-      context: ..
-      dockerfile: Dockerfile
+    image: ${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}
     container_name: deskrpg-app
     restart: unless-stopped
     ports:
       - "3102:3000"
       - "3103:3001"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - ../public/assets:/app/public/assets
       - deskrpg-data:/app/data
@@ -19,8 +15,7 @@ services:
       DB_TYPE: sqlite
       SQLITE_PATH: /app/data/deskrpg.db
       JWT_SECRET: ${JWT_SECRET}
-      OPENCLAW_WS_URL: ${OPENCLAW_WS_URL:-ws://156.67.219.3:18800}
-      OPENCLAW_TOKEN: ${OPENCLAW_TOKEN}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
 
 volumes:
   deskrpg-data:

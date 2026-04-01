@@ -4,6 +4,7 @@ import en from "./locales/en";
 import ko from "./locales/ko";
 import zh from "./locales/zh";
 import ja from "./locales/ja";
+import { LOCALE_COOKIE_MAX_AGE, LOCALE_COOKIE_NAME, LOCALE_STORAGE_KEY } from "./constants";
 
 export type Locale = "en" | "ko" | "zh" | "ja";
 export const LOCALES: { code: Locale; label: string }[] = [
@@ -24,29 +25,50 @@ interface I18nContextValue {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-const STORAGE_KEY = "deskrpg-locale";
+function readCookieLocale(): Locale | null {
+  if (typeof document === "undefined") return null;
+  const cookieValue = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${LOCALE_COOKIE_NAME}=`))
+    ?.slice(`${LOCALE_COOKIE_NAME}=`.length);
 
-function detectLocale(): Locale {
-  if (typeof window === "undefined") return "en";
-  const stored = localStorage.getItem(STORAGE_KEY);
+  return cookieValue && translations[cookieValue as Locale] ? (cookieValue as Locale) : null;
+}
+
+function persistLocale(locale: Locale) {
+  localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  document.cookie = `${LOCALE_COOKIE_NAME}=${locale}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE}; samesite=lax`;
+}
+
+function detectLocale(initialLocale: Locale): Locale {
+  if (typeof window === "undefined") return initialLocale;
+  const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
   if (stored && translations[stored as Locale]) return stored as Locale;
+  const cookieLocale = readCookieLocale();
+  if (cookieLocale) return cookieLocale;
   const lang = navigator.language.slice(0, 2);
   if (lang === "ko") return "ko";
   if (lang === "zh") return "zh";
   if (lang === "ja") return "ja";
-  return "en";
+  return initialLocale;
 }
 
-export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("en");
+export function I18nProvider({
+  children,
+  initialLocale = "en",
+}: {
+  children: ReactNode;
+  initialLocale?: Locale;
+}) {
+  const [locale, setLocaleState] = useState<Locale>(() => detectLocale(initialLocale));
 
   useEffect(() => {
-    setLocaleState(detectLocale());
-  }, []);
+    persistLocale(locale);
+  }, [locale]);
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);
-    localStorage.setItem(STORAGE_KEY, l);
   }, []);
 
   const t = useCallback(

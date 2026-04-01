@@ -7,7 +7,7 @@ import { Input } from "./ui/Input";
 
 interface PasswordModalProps {
   channelName: string;
-  onSubmit: (password: string) => Promise<boolean>;
+  onSubmit: (password: string) => Promise<string | null>;
   onClose: () => void;
 }
 
@@ -25,9 +25,9 @@ export default function PasswordModal({ channelName, onSubmit, onClose }: Passwo
     if (!password.trim() || submitting) return;
     setSubmitting(true);
     setError("");
-    const success = await onSubmit(password);
-    if (!success) {
-      setError(t("password.wrong"));
+    const nextError = await onSubmit(password);
+    if (nextError) {
+      setError(nextError);
       setSubmitting(false);
     }
   };

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DeskRPG Third-Party Licenses</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0f172a;
+        --panel: #162031;
+        --border: #2c3952;
+        --text: #e5edf9;
+        --muted: #9fb0cc;
+        --link: #7dd3fc;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px 80px;
+      }
+      h1, h2 { margin: 0 0 16px; }
+      p, li { color: var(--muted); }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 24px;
+        margin-top: 20px;
+      }
+      a { color: var(--link); }
+      code {
+        background: rgba(255,255,255,0.08);
+        border-radius: 6px;
+        padding: 2px 6px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 16px;
+      }
+      th, td {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      th { color: var(--text); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>DeskRPG Third-Party Licenses</h1>
+      <p>
+        This page summarizes major third-party software and asset sources used by DeskRPG.
+        Each dependency remains licensed under its original license.
+      </p>
+
+      <section>
+        <h2>Application Dependencies</h2>
+        <p>
+          The project source is available on
+          <a href="https://github.com/dandacompany/deskrpg" target="_blank" rel="noopener noreferrer">GitHub</a>.
+          Full resolved package versions are recorded in <code>package-lock.json</code>.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Package</th>
+              <th>Version</th>
+              <th>Homepage</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Next.js</td><td>16.2.1</td><td><a href="https://nextjs.org/" target="_blank" rel="noopener noreferrer">nextjs.org</a></td></tr>
+            <tr><td>React</td><td>19.2.4</td><td><a href="https://react.dev/" target="_blank" rel="noopener noreferrer">react.dev</a></td></tr>
+            <tr><td>Phaser</td><td>3.90.0</td><td><a href="https://phaser.io/" target="_blank" rel="noopener noreferrer">phaser.io</a></td></tr>
+            <tr><td>Socket.IO</td><td>4.8.3</td><td><a href="https://socket.io/" target="_blank" rel="noopener noreferrer">socket.io</a></td></tr>
+            <tr><td>Drizzle ORM</td><td>0.45.1</td><td><a href="https://orm.drizzle.team/" target="_blank" rel="noopener noreferrer">orm.drizzle.team</a></td></tr>
+            <tr><td>better-sqlite3</td><td>12.8.0</td><td><a href="https://github.com/WiseLibs/better-sqlite3" target="_blank" rel="noopener noreferrer">GitHub</a></td></tr>
+            <tr><td>pg</td><td>8.20.0</td><td><a href="https://node-postgres.com/" target="_blank" rel="noopener noreferrer">node-postgres.com</a></td></tr>
+            <tr><td>jose</td><td>6.2.2</td><td><a href="https://github.com/panva/jose" target="_blank" rel="noopener noreferrer">GitHub</a></td></tr>
+            <tr><td>lucide-react</td><td>1.7.0</td><td><a href="https://lucide.dev/" target="_blank" rel="noopener noreferrer">lucide.dev</a></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Game Assets</h2>
+        <p>
+          DeskRPG currently ships LPC character avatar assets under mixed open
+          licenses. Built-in office tiles and default office props are generated
+          in code at runtime and are not bundled as third-party sprite packs.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Asset Set</th>
+              <th>Summary</th>
+              <th>Credits</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>LPC Character Assets</td>
+              <td>Character sprite layers sourced from the Liberated Pixel Cup / Universal LPC project under mixed open licenses.</td>
+              <td><a href="/assets/spritesheets/CREDITS.md" target="_blank" rel="noopener noreferrer">Summary</a> · <a href="/assets/spritesheets/CREDITS.csv" target="_blank" rel="noopener noreferrer">Full CREDITS.csv</a> · <a href="/assets/spritesheets/LICENSE-assets.md" target="_blank" rel="noopener noreferrer">License notes</a></td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          LPC character assets require attribution. Keep the bundled credits file available with any redistribution that includes those sprites.
+        </p>
+      </section>
+
+      <section>
+        <h2>Notes</h2>
+        <ul>
+          <li>DeskRPG itself is licensed under the terms in <a href="https://github.com/dandacompany/deskrpg/blob/main/LICENSE.md" target="_blank" rel="noopener noreferrer">LICENSE.md</a>.</li>
+          <li>Third-party components keep their original licenses.</li>
+          <li>Default office map tiles and office prop textures are generated by DeskRPG code at runtime rather than bundled from third-party sprite packs.</li>
+          <li>LPC avatar assets are documented separately in <a href="/assets/spritesheets/CREDITS.md" target="_blank" rel="noopener noreferrer">LPC Character Asset Credits</a> and <a href="/assets/spritesheets/LICENSE-assets.md" target="_blank" rel="noopener noreferrer">LPC Character Asset License Notes</a>.</li>
+          <li>This page is a static summary for in-app reference and may not be exhaustive.</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

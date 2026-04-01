@@ -3,13 +3,16 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import Link from "next/link";
+import { useT } from "@/lib/i18n";
+import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 
 export default function JoinChannelPage() {
+  const t = useT();
   return (
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
-          Loading...
+          {t("common.loading")}
         </div>
       }
     >
@@ -24,6 +27,7 @@ function JoinChannelPageInner() {
   const searchParams = useSearchParams();
   const code = params.code as string;
   const characterId = searchParams.get("characterId");
+  const t = useT();
 
   const [error, setError] = useState("");
 
@@ -34,7 +38,7 @@ function JoinChannelPageInner() {
       .then((res) => res.json())
       .then((data) => {
         if (data.error) {
-          setError(data.error);
+          setError(getLocalizedErrorMessage(t, data));
           return;
         }
 
@@ -49,9 +53,9 @@ function JoinChannelPageInner() {
         }
       })
       .catch(() => {
-        setError("Failed to resolve invite code");
+        setError(t("errors.failedToResolveInviteCode"));
       });
-  }, [code, characterId, router]);
+  }, [code, characterId, router, t]);
 
   if (error) {
     return (
@@ -62,7 +66,7 @@ function JoinChannelPageInner() {
             href="/channels"
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded font-semibold"
           >
-            Back to Channels
+            {t("channels.backToChannels")}
           </Link>
         </div>
       </div>
@@ -71,7 +75,7 @@ function JoinChannelPageInner() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
-      Joining channel...
+      {t("password.joining")}
     </div>
   );
 }

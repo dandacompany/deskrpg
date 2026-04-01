@@ -3,7 +3,21 @@ import test from "node:test";
 
 import Database from "better-sqlite3";
 
-import { ensureSqliteCompatibility } from "./index";
+import { ensureSqliteCompatibility, getDefaultSqlitePath } from "./index.ts";
+
+test("getDefaultSqlitePath falls back to the DeskRPG home data directory", () => {
+  process.env.DESKRPG_HOME = "/tmp/deskrpg-runtime";
+  const originalSqlitePath = process.env.SQLITE_PATH;
+  delete process.env.SQLITE_PATH;
+
+  assert.equal(getDefaultSqlitePath(), "/tmp/deskrpg-runtime/data/deskrpg.db");
+
+  if (originalSqlitePath === undefined) {
+    delete process.env.SQLITE_PATH;
+  } else {
+    process.env.SQLITE_PATH = originalSqlitePath;
+  }
+});
 
 test("ensureSqliteCompatibility does not pre-create bootstrap RBAC rows for an empty legacy sqlite deployment", () => {
   const sqlite = new Database(":memory:");

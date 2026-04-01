@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { useT } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
 import { BookOpen, X, Pin, CheckCircle, MessageSquare, FileDown, FileText, ClipboardCopy, ChevronDown, ChevronUp } from "lucide-react";
+import { normalizeMeetingMinutesRecord } from "@/lib/meeting-minutes";
 
 interface MeetingMinutesItem {
   id: string;
@@ -25,18 +26,26 @@ interface MinutesModalProps {
 
 export default function MinutesModal({ channelId, onClose }: MinutesModalProps) {
   const t = useT();
+  const { locale } = useLocale();
   const [items, setItems] = useState<MeetingMinutesItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<MeetingMinutesDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [exportMenu, setExportMenu] = useState(false);
 
   useEffect(() => {
     fetch(`/api/meetings?channelId=${channelId}`)
       .then((r) => r.json())
-      .then((data) => { setItems(data.minutes || []); setLoading(false); })
+      .then((data) => {
+        const minutes = Array.isArray(data.minutes)
+          ? data.minutes.map((item: MeetingMinutesItem) => normalizeMeetingMinutesRecord(item))
+          : [];
+        setItems(minutes);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, [channelId]);
 
@@ -46,30 +55,62 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
     setShowTranscript(false);
     fetch(`/api/meetings/${id}`)
       .then((r) => r.json())
-      .then((data) => { setDetail(data.minutes || null); setDetailLoading(false); })
+      .then((data) => {
+        setDetail(data.minutes ? normalizeMeetingMinutesRecord(data.minutes as MeetingMinutesDetail) : null);
+        setDetailLoading(false);
+      })
       .catch(() => setDetailLoading(false));
   }, []);
 
   const handleExport = useCallback(async (format: string) => {
     if (!selectedId) return;
     setExportMenu(false);
+    const params = new URLSearchParams({ format, locale });
     if (format === "clipboard") {
-      const res = await fetch(`/api/meetings/${selectedId}/export?format=clipboard`);
+      const res = await fetch(`/api/meetings/${selectedId}/export?${params.toString()}`);
       const data = await res.json();
       await navigator.clipboard.writeText(data.text);
       return;
     }
     // Download MD
     const a = document.createElement("a");
-    a.href = `/api/meetings/${selectedId}/export?format=${format}`;
+    a.href = `/api/meetings/${selectedId}/export?${params.toString()}`;
     a.download = "";
     a.click();
-  }, [selectedId]);
+  }, [locale, selectedId]);
+
+  const handleDelete = useCallback(async () => {
+    if (!selectedId || !detail || deleting) return;
+    if (!window.confirm(t("minutes.deleteConfirm", { topic: detail.topic }))) return;
+
+    setDeleting(true);
+    setExportMenu(false);
+
+    try {
+      const res = await fetch(`/api/meetings/${selectedId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || t("minutes.deleteFailed"));
+        return;
+      }
+
+      setItems((prev) => prev.filter((item) => item.id !== selectedId));
+      setSelectedId(null);
+      setDetail(null);
+      setShowTranscript(false);
+    } catch {
+      alert(t("minutes.deleteFailed"));
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleting, detail, selectedId, t]);
 
   const formatDuration = (s: number | null) => {
-    if (!s) return "N/A";
-    const m = Math.floor(s / 60);
-    return m > 0 ? `${m}분` : `${s}초`;
+    if (s == null) return t("minutes.notAvailable");
+    return t("meeting.duration", {
+      min: Math.floor(s / 60),
+      sec: s % 60,
+    });
   };
 
   return (
@@ -105,7 +146,7 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
                 >
                   <div className="font-bold truncate">{item.topic}</div>
                   <div className="text-text-dim mt-1">
-                    {new Date(item.createdAt).toLocaleDateString("ko-KR")} · {item.participants.length}명 · {item.totalTurns}턴
+                    {new Date(item.createdAt).toLocaleDateString(locale)} · {item.participants.length}{t("minutes.participantsSuffix")} · {t("minutes.turnCount", { count: item.totalTurns })}
                   </div>
                 </div>
               ))
@@ -124,17 +165,17 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
               <div className="text-xs">
                 <div className="font-bold text-base mb-1">{detail.topic}</div>
                 <div className="text-text-dim mb-3">
-                  {new Date(detail.createdAt).toLocaleString("ko-KR")} · {formatDuration(detail.durationSeconds)}
+                  {new Date(detail.createdAt).toLocaleString(locale)} · {formatDuration(detail.durationSeconds)}
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   <div className="bg-surface rounded-lg p-2 text-center">
-                    <div className="text-[10px] text-text-dim">참가자</div>
-                    <div className="text-lg font-bold text-info">{detail.participants.length}명</div>
+                    <div className="text-[10px] text-text-dim">{t("meeting.participantCount")}</div>
+                    <div className="text-lg font-bold text-info">{detail.participants.length}{t("minutes.participantsSuffix")}</div>
                   </div>
                   <div className="bg-surface rounded-lg p-2 text-center">
-                    <div className="text-[10px] text-text-dim">총 턴</div>
-                    <div className="text-lg font-bold text-info">{detail.totalTurns}턴</div>
+                    <div className="text-[10px] text-text-dim">{t("meeting.totalTurns")}</div>
+                    <div className="text-lg font-bold text-info">{t("minutes.turnCount", { count: detail.totalTurns })}</div>
                   </div>
                 </div>
 
@@ -169,18 +210,31 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
                 </div>
 
                 <div className="relative">
-                  <button
-                    onClick={() => setExportMenu(!exportMenu)}
-                    className="px-3 py-1.5 bg-surface-raised hover:brightness-125 rounded-lg text-text-secondary"
-                  >
-                    <FileDown className="w-3.5 h-3.5 inline mr-1" />{t("meeting.export")} <ChevronDown className="w-3 h-3 inline ml-0.5" />
-                  </button>
-                  {exportMenu && (
-                    <div className="absolute bottom-full mb-1 bg-surface border border-border rounded-lg shadow-xl py-1 min-w-[160px]">
-                      <button onClick={() => handleExport("md")} className="w-full text-left px-3 py-1.5 hover:bg-surface-raised flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" />{t("meeting.exportMd")}</button>
-                      <button onClick={() => handleExport("clipboard")} className="w-full text-left px-3 py-1.5 hover:bg-surface-raised flex items-center gap-1.5"><ClipboardCopy className="w-3.5 h-3.5" />{t("meeting.exportClipboard")}</button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className={`px-3 py-1.5 rounded-lg ${
+                        deleting
+                          ? "bg-surface text-text-dim cursor-not-allowed"
+                          : "bg-danger-bg hover:bg-danger-hover text-text"
+                      }`}
+                    >
+                      {deleting ? t("common.loading") : t("common.delete")}
+                    </button>
+                    <button
+                      onClick={() => setExportMenu(!exportMenu)}
+                      className="px-3 py-1.5 bg-surface-raised hover:brightness-125 rounded-lg text-text-secondary"
+                    >
+                      <FileDown className="w-3.5 h-3.5 inline mr-1" />{t("meeting.export")} <ChevronDown className="w-3 h-3 inline ml-0.5" />
+                    </button>
+                    {exportMenu && (
+                      <div className="absolute bottom-full left-[calc(100%+0.5rem)] mb-1 bg-surface border border-border rounded-lg shadow-xl py-1 min-w-[160px]">
+                        <button onClick={() => handleExport("md")} className="w-full text-left px-3 py-1.5 hover:bg-surface-raised flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" />{t("meeting.exportMd")}</button>
+                        <button onClick={() => handleExport("clipboard")} className="w-full text-left px-3 py-1.5 hover:bg-surface-raised flex items-center gap-1.5"><ClipboardCopy className="w-3.5 h-3.5" />{t("meeting.exportClipboard")}</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : null}

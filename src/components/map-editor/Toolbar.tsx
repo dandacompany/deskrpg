@@ -15,6 +15,8 @@ export interface ToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   dirty: boolean;
+  projectName?: string;
+  onProjectNameChange?: (name: string) => void;
   onToolChange: (tool: Tool) => void;
   onNewMap: () => void;
   onLoad: () => void;
@@ -23,6 +25,7 @@ export interface ToolbarProps {
   onExportTMJ: () => void;
   onExportTMX: () => void;
   onExportPNG: () => void;
+  onSaveAsTemplate?: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onToggleGrid: () => void;
@@ -215,6 +218,8 @@ export default function Toolbar({
   canUndo,
   canRedo,
   dirty,
+  projectName,
+  onProjectNameChange,
   onToolChange,
   onNewMap,
   onLoad,
@@ -223,6 +228,7 @@ export default function Toolbar({
   onExportTMJ,
   onExportTMX,
   onExportPNG,
+  onSaveAsTemplate,
   onZoomIn,
   onZoomOut,
   onToggleGrid,
@@ -235,6 +241,31 @@ export default function Toolbar({
   onToggleSection,
 }: ToolbarProps) {
   const t = useT();
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const startEditName = () => {
+    if (!onProjectNameChange || !projectName) return;
+    setEditNameValue(projectName);
+    setEditingName(true);
+  };
+
+  const commitEditName = () => {
+    const trimmed = editNameValue.trim();
+    if (trimmed && trimmed !== projectName) {
+      onProjectNameChange?.(trimmed);
+    }
+    setEditingName(false);
+  };
+
+  const cancelEditName = () => {
+    setEditingName(false);
+  };
+
+  useEffect(() => {
+    if (editingName) nameInputRef.current?.select();
+  }, [editingName]);
 
   const tools: Array<{ tool: Tool; icon: React.ReactNode; label: string; shortcut: string }> = [
     { tool: 'paint', icon: <Paintbrush className="w-4 h-4" />, label: t('mapEditor.toolbar.paint'), shortcut: 'B' },
@@ -246,8 +277,35 @@ export default function Toolbar({
   return (
     <div className="flex items-center h-10 bg-surface border-b border-border px-1 select-none flex-shrink-0">
       {/* Title */}
-      <div className="px-3 flex items-center">
+      <div className="px-3 flex items-center gap-2">
         <span className="text-body font-bold text-primary-light tracking-wide select-none">{t('mapEditor.toolbar.title')}</span>
+        {projectName && (
+          editingName ? (
+            <input
+              ref={nameInputRef}
+              value={editNameValue}
+              onChange={(e) => setEditNameValue(e.target.value)}
+              onBlur={commitEditName}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitEditName(); }
+                if (e.key === 'Escape') { e.preventDefault(); cancelEditName(); }
+              }}
+              className="text-sm font-medium text-white bg-surface border border-primary-light/50 rounded px-1.5 py-0 h-6 outline-none focus:border-primary-light min-w-0 w-40"
+              style={{ maxWidth: 240 }}
+            />
+          ) : (
+            <>
+              <span className="text-text-muted text-sm select-none">·</span>
+              <span
+                className="text-sm font-medium text-text-muted hover:text-white cursor-pointer select-none transition-colors"
+                onDoubleClick={startEditName}
+                title={t("common.renameOnDoubleClick")}
+              >
+                {projectName}{dirty ? ' *' : ''}
+              </span>
+            </>
+          )
+        )}
       </div>
 
       {/* File Menu */}
@@ -263,6 +321,12 @@ export default function Toolbar({
             <DropdownItem onClick={onExportTMX}>{t('mapEditor.toolbar.exportTmx')}</DropdownItem>
             <DropdownItem onClick={onExportPNG}>{t('mapEditor.toolbar.exportPng')}</DropdownItem>
           </DropdownSubmenu>
+          {onSaveAsTemplate && (
+            <>
+              <DropdownSeparator />
+              <DropdownItem onClick={onSaveAsTemplate}>{t('mapEditor.toolbar.saveAsTemplate')}</DropdownItem>
+            </>
+          )}
           <DropdownSeparator />
           <DropdownItem onClick={onGoBack}>{t('mapEditor.toolbar.backToDeskRPG')}</DropdownItem>
         </Dropdown>

@@ -1,166 +1,253 @@
 # DeskRPG
 
-2D pixel art multiplayer virtual office game. Create LPC characters, join channels, walk around, chat with AI NPCs, and collaborate in real-time.
+한국어 문서: [README.ko.md](README.ko.md)
 
-**Website:** https://deskrpg.com (Coming Soon)
-**Guide:** [docs/GUIDE.md](docs/GUIDE.md)
-**YouTube:** [@dante-labs](https://youtube.com/@dante-labs)
+<img src="public/readme/home-screenshot.png" alt="DeskRPG home screen" width="100%" />
 
-## Tech Stack
+DeskRPG is a 2D pixel-art virtual office you can self-host. Create LPC characters, enter shared channels, walk around a live office map, hire AI NPC coworkers through OpenClaw, assign tasks, receive reports in-world, and run AI meetings in a browser.
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 16 (App Router) |
-| Game Engine | Phaser.js 3 (WebGL, arcade physics) |
-| ORM | Drizzle ORM |
-| Database | PostgreSQL 16 (default) / SQLite (lite mode) |
-| Real-time | Socket.io |
-| Auth | JWT (jose) + bcryptjs |
-| AI | OpenRouter API via OpenClaw Gateway |
-| Deploy | Docker Compose + Caddy |
+DeskRPG is built for people who want a playful, self-hosted workspace rather than another plain chat room.
+
+- Website: `https://deskrpg.com` (planned)
+- Source code: `https://github.com/dandacompany/deskrpg`
+- Version: `v0.1.0`
+
+## What You Can Do
+
+- Create your own pixel-art office avatar with LPC-based character customization.
+- Join or self-host shared office channels with live multiplayer movement.
+- Hire AI NPCs, connect them to OpenClaw agents, and talk to them in-world.
+- Delegate tasks, request reports, resume stalled work, and review progress in a task board.
+- Run AI meetings in a dedicated meeting room with meeting notes and multi-agent discussion.
+- Build or upload your own office maps with the browser-based map editor.
+
+## Screenshots
+
+<table width="100%">
+  <tr>
+    <td width="50%" valign="top"><img src="public/readme/deskrpg-login-to-office.gif" alt="DeskRPG getting started" width="100%" /></td>
+    <td width="50%" valign="top"><img src="public/readme/deskrpg-npc-task-loop.gif" alt="DeskRPG NPC chat and tasks" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><strong>Getting Started</strong></td>
+    <td width="50%" align="center"><strong>NPC Chat and Tasks</strong></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="public/readme/deskrpg-meeting-room.gif" alt="DeskRPG meeting room" width="100%" /></td>
+    <td width="50%" valign="top"><img src="public/readme/deskrpg-map-editor.gif" alt="DeskRPG map editor" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><strong>Meeting Room</strong></td>
+    <td width="50%" align="center"><strong>Map Editor</strong></td>
+  </tr>
+</table>
 
 ## Quick Start
 
-### With Docker (PostgreSQL) — Recommended
+Choose one of these six ways to start DeskRPG.
+
+### Option 1: npm Install Runtime
+
+This is the simplest self-hosted path if you want DeskRPG as an installed app instead of a cloned repo.
+
+```bash
+npx deskrpg init
+npx deskrpg start
+```
+
+DeskRPG stores mutable runtime state under `~/.deskrpg/`:
+
+- `~/.deskrpg/.env.local`
+- `~/.deskrpg/data/deskrpg.db`
+- `~/.deskrpg/uploads/`
+- `~/.deskrpg/logs/`
+
+Open `http://localhost:3000`.
+
+Published npm package: `deskrpg`
+
+### Option 2: Local Run with PostgreSQL
 
 ```bash
 git clone https://github.com/dandacompany/deskrpg.git
 cd deskrpg
 npm install
 cp .env.example .env.local
-npm run setup                 # starts PostgreSQL + syncs schema
-npm run dev                   # http://localhost:3000
+npm run setup
+npm run dev
 ```
 
-### Without Docker (SQLite)
+Open `http://localhost:3000`.
 
-No Docker? No problem. Run with SQLite instead.
+This is the best option if you want to run the full app directly from the repo.
+
+### Option 3: Local Run with SQLite
 
 ```bash
 git clone https://github.com/dandacompany/deskrpg.git
 cd deskrpg
 npm install
-npm run setup:lite            # configures SQLite + syncs schema
-npm run dev                   # http://localhost:3000
+npm run setup:lite
+npm run dev
 ```
 
-> For production, change `JWT_SECRET` in `.env.local` to a random string (`openssl rand -hex 32`).
+SQLite stores data in `data/deskrpg.db`.
 
-## Database
+### Option 4: Docker with PostgreSQL
 
-### PostgreSQL (Default)
-
-The default mode. Schema is defined in `src/db/schema.ts`.
+Recommended if you expect multiple users or want a more durable database.
 
 ```bash
-# Interactive schema sync (prompts for destructive changes)
-npm run db:push
-
-# Force schema sync (no prompts — use for fresh DBs)
-npm run db:setup
-
-# Open Drizzle Studio (browser DB explorer)
-npm run db:studio
-
-# Generate SQL migration files
-npm run db:migrate
+cp .env.example .env.docker
+docker compose --env-file .env.docker up -d
 ```
 
-### SQLite (Lite Mode)
+Before the first run, open `.env.docker` and set:
 
-For lightweight self-hosting without a separate database server.
+- `JWT_SECRET`
+- `POSTGRES_PASSWORD`
+
+DeskRPG will open on `http://localhost:3102`.
+
+The default image is `dandacompany/deskrpg:latest`.
+If you want to pin a release, change `DESKRPG_IMAGE` in `.env.docker` to something like `dandacompany/deskrpg:0.1.0`.
+
+If you prefer the explicit file path version, you can run:
 
 ```bash
-DB_TYPE=sqlite npm run dev
+docker compose --env-file .env.docker -f docker/docker-compose.external.yml up -d
 ```
 
-Schema: `src/db/schema-sqlite.ts`. Data stored in `data/deskrpg.db`.
+### Option 5: Docker with PostgreSQL and OpenClaw
 
-## Docker Deployment
-
-### Full Stack (PostgreSQL + App + SSH Tunnel)
+Use this stack if you want DeskRPG, PostgreSQL, and an OpenClaw gateway in one compose setup.
 
 ```bash
-docker compose up -d --build
+cp .env.example .env.docker
+docker compose --env-file .env.docker -f docker/docker-compose.openclaw.yml up -d --build
 ```
 
-Ports: App `3102:3000`, Socket `3103:3001`, DB `5437:5432`
+Before the first run, open `.env.docker` and set:
 
-Database migrations run automatically on container startup.
+- `JWT_SECRET`
+- `POSTGRES_PASSWORD`
+- `OPENCLAW_TOKEN`
 
-### Deployment Profiles
+Default endpoints:
 
-Three Docker Compose profiles are available in `docker/`:
+- DeskRPG: `http://localhost:3102`
+- OpenClaw: `http://localhost:18789/openclaw?token=<OPENCLAW_TOKEN>`
 
-| File | Description |
-|------|-------------|
-| `docker/docker-compose.yml` | Full stack with PostgreSQL + SSH tunnel proxy |
-| `docker/docker-compose.external.yml` | PostgreSQL only (bring your own gateway) |
-| `docker/docker-compose.lite.yml` | SQLite mode (no DB container needed) |
+This stack has been verified end to end, but OpenClaw still needs provider/model onboarding before AI features will work.
+
+1. Open `http://localhost:18789/openclaw?token=<OPENCLAW_TOKEN>`.
+2. Complete provider and model onboarding in the OpenClaw dashboard.
+3. Then save these values inside DeskRPG from `Settings -> Channel Settings -> AI Connection`:
+
+- `OpenClaw Gateway URL`: `http://localhost:18789`
+- `Token`: the same `OPENCLAW_TOKEN` from `.env.docker`
+
+Until this is done, NPC hiring, task automation, and AI meetings will not work.
+
+### Option 6: Docker with SQLite
+
+Recommended if you want the simplest single-machine setup.
 
 ```bash
-# SQLite-only deployment
-docker compose -f docker/docker-compose.lite.yml up -d --build
+JWT_SECRET=change-me docker compose -f docker/docker-compose.lite.yml up -d
 ```
 
-## Project Structure
+DeskRPG will open on `http://localhost:3102`.
 
-```
-src/
-├── app/
-│   ├── api/           # REST API routes (auth, channels, characters, npcs, etc.)
-│   ├── game/          # Main game page (Phaser + chat UI)
-│   ├── channels/      # Channel list, create, join
-│   ├── characters/    # Character select + create (LPC customizer)
-│   └── auth/          # Login / register
-├── components/        # React components (ChatPanel, NpcHireModal, MeetingRoom, etc.)
-├── game/
-│   ├── EventBus.ts    # Phaser <-> React event bridge
-│   └── scenes/        # BootScene, GameScene
-├── lib/               # Utilities (sprite compositor, JWT, i18n, etc.)
-├── db/
-│   ├── schema.ts      # PostgreSQL Drizzle schema
-│   ├── schema-sqlite.ts  # SQLite Drizzle schema
-│   ├── index.ts       # DB connection (auto-selects PG/SQLite via DB_TYPE)
-│   ├── server-db.js   # CJS Drizzle wrapper for server.js
-│   └── normalize.js   # JSON field PG/SQLite compatibility
-server.js              # Custom server: Next.js standalone + Socket.io
-migrate.js             # Auto-migration runner (Docker startup)
-docker-compose.yml     # Production deployment
-```
+To pin a specific image version, add `DESKRPG_IMAGE=dandacompany/deskrpg:0.1.0` before the command.
 
-## NPM Scripts
+Use SQLite if you want to get started quickly. Use PostgreSQL if you want a setup that is easier to keep long term.
 
-| Script | Description |
-|--------|-------------|
-| `npm run setup` | Start PostgreSQL (Docker) + sync schema |
-| `npm run setup:lite` | Configure SQLite mode + sync schema (no Docker) |
-| `npm run dev` | Start dev server (Next.js + Socket.io) |
-| `npm run build` | Production build |
-| `npm start` | Start production server |
-| `npm run db:push` | Sync schema to DB (interactive) |
-| `npm run db:setup` | Sync schema to DB (force, no prompts) |
-| `npm run db:studio` | Open Drizzle Studio |
-| `npm run db:migrate` | Generate migration SQL files |
-| `npm run lint` | Run ESLint |
+### Environment
 
-## Environment Variables
+Important environment variables:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DATABASE_URL` | Yes (PG mode) | — | PostgreSQL connection string |
-| `JWT_SECRET` | Yes | — | Secret for JWT signing |
-| `DB_TYPE` | No | `postgresql` | Database type: `postgresql` or `sqlite` |
-| `SQLITE_PATH` | No | `data/deskrpg.db` | SQLite database file path |
-| `OPENCLAW_WS_URL` | No | — | OpenClaw gateway WebSocket URL |
-| `OPENCLAW_TOKEN` | No | — | OpenClaw gateway auth token |
+- `JWT_SECRET`
+- `POSTGRES_PASSWORD` (PostgreSQL Docker setup)
+- `OPENCLAW_TOKEN` (integrated OpenClaw Docker setup)
 
-## License
+For production, always set a real `JWT_SECRET`.
 
-[Sustainable Use License](LICENSE.md) — Free for self-hosting and non-commercial use. See [LICENSE.md](LICENSE.md) for details.
+OpenClaw gateway URL and token are configured inside the app from `설정 -> 채널 설정 -> AI 연결`.
+Even in the integrated Docker setup, provider/model onboarding is still completed in the OpenClaw dashboard.
+
+## OpenClaw Connection
+
+AI NPCs, task automation, and AI meetings depend on an OpenClaw gateway connection.
+
+After entering a channel:
+
+1. Open `Settings` in the top-right menu.
+2. Open `Channel Settings`.
+3. Go to `AI Connection`.
+4. Enter:
+   - `OpenClaw Gateway URL`
+   - `Token`
+5. Save and test the connection.
+
+Once connected, you can hire NPCs and bind them to available OpenClaw agents.
+
+## How DeskRPG Works
+
+### 1. Characters
+
+- Every user enters as a character.
+- Character appearance is LPC-based and composed from layered sprite parts.
+- Character creation is required before entering a channel.
+
+### 2. Channels
+
+- A channel is a shared office space.
+- Channels can be public or restricted depending on access and group rules.
+- Channel maps come from map templates.
+
+### 3. AI NPCs
+
+- NPCs live inside channels.
+- NPCs can be connected to OpenClaw agents.
+- NPCs can be called over, sent back, edited, reset, and fired from in-app menus.
+
+### 4. Tasks
+
+- You can assign work to NPCs through conversation.
+- Tasks move through `대기`, `진행중`, `중단`, `완료`.
+- NPCs can be nudged automatically or manually to continue working.
+- Important reports are delivered in-world by the NPC walking over to the player.
+
+### 5. Meetings
+
+- DeskRPG includes a dedicated meeting room.
+- AI meetings are channel-scoped and orchestrated through OpenClaw.
+- Meeting notes are stored and visible from the header.
+
+### 6. Map Editor
+
+- The browser map editor supports Tiled-style map workflows.
+- You can upload templates, manage project-linked assets, and reuse maps for new channels.
+- This is a major subsystem of the project, not a side tool.
+
+## Product Notes
+
+- Login is required even if you have an invite code.
+- Invite codes are channel access helpers, not anonymous access tokens.
+- The current default in-app office tiles and object textures are generated in code at runtime.
+- LPC avatar sprite assets are bundled separately and have their own credits and license notes.
+
+## Licenses And Credits
+
+- Project license: [LICENSE.md](LICENSE.md)
+- Third-party licenses: [public/third-party-licenses.html](public/third-party-licenses.html)
+- LPC avatar credits: [public/assets/spritesheets/CREDITS.md](public/assets/spritesheets/CREDITS.md)
+- LPC avatar license notes: [public/assets/spritesheets/LICENSE-assets.md](public/assets/spritesheets/LICENSE-assets.md)
+- Full LPC credits data: [public/assets/spritesheets/CREDITS.csv](public/assets/spritesheets/CREDITS.csv)
 
 ## Support
 
 - YouTube: [@dante-labs](https://youtube.com/@dante-labs)
-- Email: dante@dante-labs.com
-- Buy Me a Coffee: https://buymeacoffee.com/dante.labs
+- Email: `dante@dante-labs.com`
+- Buy Me a Coffee: `https://buymeacoffee.com/dante.labs`

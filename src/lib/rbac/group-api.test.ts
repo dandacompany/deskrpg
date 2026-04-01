@@ -5,7 +5,10 @@ import {
   buildGroupSlugCandidates,
   canChangeGroupAdminStatus,
   canWriteGroupPermissionEffect,
+  deriveGroupInviteStatus,
+  normalizeInviteCreationInput,
   resolveJoinRequestReview,
+  resolveInviteAcceptance,
   sanitizeGroupPermissionEffects,
   summarizeGroupManagementCapabilities,
 } from "./group-api";
@@ -141,4 +144,83 @@ test("group admin changes are allowed when another admin remains", () => {
   });
 
   assert.equal(result.ok, true);
+});
+
+test("shared invite can be created without a target and without expiration", () => {
+  const result = normalizeInviteCreationInput({
+    targetLoginId: null,
+    targetUserId: null,
+    expiresAt: null,
+    now: "2026-03-31T00:00:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) throw new Error("expected success");
+  assert.equal(result.targetLoginId, null);
+  assert.equal(result.targetUserId, null);
+  assert.equal(result.expiresAt, null);
+});
+
+test("invite creation rejects past expiration timestamps", () => {
+  const result = normalizeInviteCreationInput({
+    targetLoginId: null,
+    targetUserId: null,
+    expiresAt: "2026-03-30T23:59:59.000Z",
+    now: "2026-03-31T00:00:00.000Z",
+  });
+
+  assert.equal(result.ok, false);
+  if (result.ok) throw new Error("expected failure");
+  assert.equal(result.errorCode, "invite_expiration_invalid");
+  assert.equal(result.status, 400);
+});
+
+test("expired invite status is derived before active", () => {
+  assert.equal(
+    deriveGroupInviteStatus({
+      expiresAt: "2026-03-30T23:59:59.000Z",
+      acceptedAt: null,
+      revokedAt: null,
+      now: "2026-03-31T00:00:00.000Z",
+    }),
+    "expired",
+  );
+});
+
+test("targeted invite blocks a mismatched user", () => {
+  const result = resolveInviteAcceptance({
+    targetUserId: null,
+    targetLoginId: "alice",
+    acceptedAt: null,
+    revokedAt: null,
+    expiresAt: null,
+    currentUserId: "user-2",
+    currentLoginId: "bob",
+    currentMembershipRole: null,
+    now: "2026-03-31T00:00:00.000Z",
+  });
+
+  assert.equal(result.ok, false);
+  if (result.ok) throw new Error("expected failure");
+  assert.equal(result.errorCode, "group_invite_target_mismatch");
+  assert.equal(result.status, 403);
+});
+
+test("shared invite accepts an ungrouped user", () => {
+  const result = resolveInviteAcceptance({
+    targetUserId: null,
+    targetLoginId: null,
+    acceptedAt: null,
+    revokedAt: null,
+    expiresAt: null,
+    currentUserId: "user-2",
+    currentLoginId: "bob",
+    currentMembershipRole: null,
+    now: "2026-03-31T00:00:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) throw new Error("expected success");
+  assert.equal(result.shouldCreateMembership, true);
+  assert.equal(result.shouldMarkAccepted, false);
 });

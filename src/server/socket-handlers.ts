@@ -1,10 +1,22 @@
 import { Server, Socket } from "socket.io";
 import { jwtVerify } from "jose";
 import { eq, and } from "drizzle-orm";
-import { db, channels, npcs, channelMembers, tasks, npcReports, characters, groupMembers } from "../db";
+import {
+  db,
+  channels,
+  npcs,
+  channelMembers,
+  tasks,
+  npcReports,
+  characters,
+  groupMembers,
+  meetingMinutes,
+  jsonForDb,
+} from "../db";
 import { parseDbObject } from "../lib/db-json";
 import {
   buildChannelAccessDeniedPayload,
+  type ChannelAccessDeniedReason,
   summarizeChannelParticipationAccess,
 } from "../lib/rbac/channel-access";
 import {
@@ -28,6 +40,11 @@ import {
   shouldDeliverCompletionReport,
   toReportReadyPayload,
 } from "../lib/task-reporting";
+import {
+  emitMeetingNpcStream,
+  registerMeetingSocketHandlers,
+} from "./meeting-socket";
+import { registerMeetingDiscussionHandlers } from "./meeting-discussion";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
 const { OpenClawGateway } = require("../lib/openclaw-gateway.js") as { OpenClawGateway: new () => any };
@@ -36,9 +53,9 @@ const { parseNpcResponse, isValidTaskAction } = require("../lib/task-parser.js")
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { sanitizeNpcResponseText } = require("../lib/task-block-utils.js") as typeof import("../lib/task-block-utils.js");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { TaskManager } = require("../lib/task-manager.js") as { TaskManager: new (db: typeof import("../db").db, schema: { tasks: typeof tasks; npcs: typeof npcs }) => { handleTaskAction: (...args: unknown[]) => Promise<unknown>; getTasksByNpc: (npcId: string) => Promise<unknown[]>; getTasksByChannel: (channelId: string) => Promise<unknown[]>; deleteTask: (taskId: string, channelId: string) => Promise<unknown>; getStaleInProgressTasks: (channelId: string, olderThanIso: string) => Promise<unknown[]>; resumeTask: (taskId: string, channelId: string) => Promise<unknown>; completeTask: (taskId: string, channelId: string) => Promise<unknown>; getTaskById: (taskId: string, channelId: string) => Promise<unknown>; }; };
+const { TaskManager } = require("../lib/task-manager.js") as { TaskManager: new (db: typeof import("../db").db, schema: { tasks: typeof tasks; npcs: typeof npcs }) => { handleTaskAction: (...args: unknown[]) => Promise<unknown>; getTasksByNpc: (npcId: string) => Promise<unknown[]>; getTasksByChannel: (channelId: string) => Promise<unknown[]>; deleteTask: (taskId: string, channelId: string) => Promise<unknown>; getStaleInProgressTasks: (channelId: string, olderThanIso: string) => Promise<unknown[]>; markTaskNudged: (taskId: string, channelId: string) => Promise<unknown>; markTaskStalled: (taskId: string, channelId: string, reason: string) => Promise<unknown>; resumeTask: (taskId: string, channelId: string) => Promise<unknown>; completeTask: (taskId: string, channelId: string) => Promise<unknown>; getTaskById: (taskId: string, channelId: string) => Promise<unknown>; }; };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { withTaskReminder } = require("../lib/task-prompt.js") as typeof import("../lib/task-prompt.js");
+const { withTaskReminder, normalizeTaskPromptLocale } = require("../lib/task-prompt.js") as typeof import("../lib/task-prompt.js");
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,10 +75,14 @@ export interface PlayerState {
 }
 
 interface NpcConfig {
+  id: string;
+  name: string;
   agentId: string | null;
   sessionKeyPrefix: string;
   _channelId: string;
   _name: string;
+  role?: string | null;
+  passPolicy?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +114,8 @@ const lastChatTime = new Map<string, number>();
 
 // Meeting rooms: channelId -> MeetingRoom
 const meetingRooms = new Map<string, MeetingRoom>();
+const activeBrokers = new Map<string, any>();
+const discussionInitiators = new Map<string, string>();
 
 // NPC chat history: `${channelId}:${npcId}` -> [{ role, content, timestamp }]
 const npcChatHistory = new Map<string, { role: "player" | "npc"; content: string; timestamp: number }[]>();
@@ -107,6 +130,12 @@ const taskManager = new TaskManager(db, { tasks, npcs });
 const progressNudgeInFlight = new Set<string>();
 const progressNudgeCooldowns = new Map<string, number>();
 let progressNudgeTimer: NodeJS.Timeout | null = null;
+
+function getSocketLocale(socket: Socket) {
+  const cookieHeader = socket.handshake.headers.cookie || "";
+  const localeMatch = cookieHeader.match(/(?:^|;\s*)deskrpg-locale=([^;]+)/);
+  return normalizeTaskPromptLocale(localeMatch?.[1]);
+}
 
 type ManagedTask = {
   id: string;
@@ -420,14 +449,12 @@ export async function getOrConnectGateway(channelId: string): Promise<any | null
     const gwCfg = parseDbObject(ch.gatewayConfig);
 
     if (!gwCfg?.url || !gwCfg?.token) {
-      console.log(`[gateway] Channel ${channelId} has no gatewayConfig`);
       return null;
     }
 
     const gw = new OpenClawGateway();
     await gw.connect(gwCfg.url, gwCfg.token);
     channelGateways.set(channelId, gw);
-    console.log(`[gateway] Connected for channel ${channelId}: ${gwCfg.url}`);
     return gw;
   } catch (err) {
     console.error(`[gateway] Connect failed for channel ${channelId}:`, err);
@@ -453,10 +480,14 @@ async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
     const oc = parseDbObject(npc.openclawConfig) || {};
 
     return {
+      id: npc.id,
+      name: npc.name,
       agentId: (oc.agentId as string) || null,
       sessionKeyPrefix: (oc.sessionKeyPrefix as string) || npcId,
       _channelId: npc.channelId as string,
       _name: npc.name,
+      role: "Participant",
+      passPolicy: typeof oc.passPolicy === "string" ? oc.passPolicy : null,
     };
   } catch (err) {
     console.error(`[npc] Failed to load config for ${npcId}:`, err);
@@ -474,10 +505,14 @@ async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> 
     return rows.map((npc) => {
       const oc = parseDbObject(npc.openclawConfig) || {};
       return {
+        id: npc.id,
+        name: npc.name,
         agentId: (oc.agentId as string) || null,
         sessionKeyPrefix: (oc.sessionKeyPrefix as string) || npc.id,
         _channelId: channelId,
         _name: npc.name,
+        role: "Participant",
+        passPolicy: typeof oc.passPolicy === "string" ? oc.passPolicy : null,
       };
     });
   } catch (err) {
@@ -498,7 +533,6 @@ async function streamNpcResponse(
   message: string,
 ): Promise<string> {
   const { agentId, _channelId, sessionKeyPrefix } = npcConfig;
-  const debugNpcLogging = process.env.NODE_ENV !== "production";
 
   if (!agentId) {
     emitNpcSystemResponse(socket, npcId, "no_agent");
@@ -514,22 +548,8 @@ async function streamNpcResponse(
   const sessionKey = `${sessionKeyPrefix || npcId}-dm-${userId}`;
   try {
     const response = await gateway.chatSend(agentId, sessionKey, message, (delta: string) => {
-      if (debugNpcLogging) {
-        console.log("[npc:response:chunk]", {
-          npcId,
-          agentId,
-          chunkPreview: delta.slice(0, 40),
-        });
-      }
       socket.emit("npc:response", { npcId, chunk: delta, done: false });
     });
-    if (debugNpcLogging) {
-      console.log("[npc:response:done]", {
-        npcId,
-        agentId,
-        responseLength: response?.length ?? 0,
-      });
-    }
     socket.emit("npc:response", { npcId, chunk: "", done: true });
     return response || "";
   } catch (err) {
@@ -579,7 +599,7 @@ async function streamMeetingNpcResponse(
     await gateway.chatSend(agentId, sessionKey, prompt, (delta: string) => {
       fullText += delta;
       npcMessage.content = fullText;
-      io.to(`meeting-${channelId}`).emit("meeting:npc-chunk", {
+      emitMeetingNpcStream(io, channelId, {
         messageId: npcMessage.id,
         sender: _name,
         chunk: delta,
@@ -587,7 +607,7 @@ async function streamMeetingNpcResponse(
       });
     });
     npcMessage.content = fullText;
-    io.to(`meeting-${channelId}`).emit("meeting:npc-chunk", {
+    emitMeetingNpcStream(io, channelId, {
       messageId: npcMessage.id,
       sender: _name,
       chunk: "",
@@ -597,6 +617,107 @@ async function streamMeetingNpcResponse(
   } catch (err) {
     console.error(`[meeting] OpenClaw error for NPC ${_name}:`, err);
     room.messages.pop();
+  }
+}
+
+async function generateMeetingSummary(
+  gateway: {
+    chatSend: (
+      agentId: string,
+      sessionKey: string,
+      message: string,
+      onChunk: (delta: string) => void,
+    ) => Promise<string>;
+  },
+  agentId: string,
+  sessionKeyPrefix: string,
+  meetingId: string,
+  topic: string,
+  transcript: string,
+) {
+  const summaryPrompt = `다음 회의 내용을 분석하여 JSON으로 응답하세요.
+
+회의 주제: ${topic}
+
+${transcript}
+
+응답 형식 (JSON만, 다른 텍스트 없이):
+{
+  "keyTopics": ["주제1", "주제2", "주제3"],
+  "conclusions": "결론 요약 2-3문장"
+}`;
+
+  try {
+    const sessionKey = `${sessionKeyPrefix}-summary-${meetingId}`;
+    const response = await Promise.race([
+      gateway.chatSend(agentId, sessionKey, summaryPrompt, () => {}),
+      new Promise<string>((_, reject) => {
+        setTimeout(() => reject(new Error("Summary timeout")), 60_000);
+      }),
+    ]);
+    const jsonMatch = (response || "").match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return { keyTopics: [], conclusions: null };
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]) as { keyTopics?: unknown; conclusions?: unknown };
+    return {
+      keyTopics: Array.isArray(parsed.keyTopics)
+        ? parsed.keyTopics.filter((topic): topic is string => typeof topic === "string")
+        : [],
+      conclusions: typeof parsed.conclusions === "string" ? parsed.conclusions : null,
+    };
+  } catch (err) {
+    console.warn("[meeting] Summary generation failed:", err);
+    return { keyTopics: [], conclusions: null };
+  }
+}
+
+async function canControlMeeting(channelId: string, userId: string) {
+  if (discussionInitiators.get(channelId) === userId) {
+    return true;
+  }
+
+  const rows = await db
+    .select({ ownerId: channels.ownerId })
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .limit(1);
+
+  return rows[0]?.ownerId === userId;
+}
+
+async function persistMeetingMinutes(input: {
+  channelId: string;
+  topic: string;
+  transcript: string;
+  participants: Array<{ id: string; name: string; type: "npc" | "player"; agentId?: string }>;
+  totalTurns: number;
+  durationSeconds?: number;
+  initiatorId: string | null;
+  keyTopics: string[];
+  conclusions: string | null;
+}) {
+  try {
+    const inserted = await db
+      .insert(meetingMinutes)
+      .values({
+        channelId: input.channelId,
+        topic: input.topic,
+        transcript: input.transcript,
+        participants: jsonForDb(input.participants),
+        totalTurns: input.totalTurns,
+        durationSeconds: input.durationSeconds ?? null,
+        initiatorId: input.initiatorId,
+        keyTopics: jsonForDb(input.keyTopics),
+        conclusions: input.conclusions,
+      })
+      .returning({ id: meetingMinutes.id });
+
+    return inserted[0]?.id ?? null;
+  } catch (err) {
+    console.error("[meeting] Failed to save minutes:", err);
+    return null;
   }
 }
 
@@ -613,8 +734,8 @@ function getJwtSecret() {
 async function authenticateSocket(
   socket: Socket,
 ): Promise<{ userId: string; nickname: string } | null> {
+  const cookieHeader = socket.handshake.headers.cookie || "";
   try {
-    const cookieHeader = socket.handshake.headers.cookie || "";
     const tokenCookie = cookieHeader
       .split(";")
       .map((part) => part.trim())
@@ -731,8 +852,6 @@ export function setupSocketHandlers(io: Server) {
       return;
     }
 
-    console.log(`[socket] Player connected: ${user.nickname} (${socket.id})`);
-
     // ----- player:join -----
     socket.on(
       "player:join",
@@ -759,7 +878,7 @@ export function setupSocketHandlers(io: Server) {
           emitChannelAccessDenied(socket, {
             channelId: data.mapId,
             action: "player:join",
-            reason: accessResult.access.reason,
+            reason: accessResult.access.reason as ChannelAccessDeniedReason,
           });
           return;
         }
@@ -824,19 +943,11 @@ export function setupSocketHandlers(io: Server) {
       "npc:chat",
       async (data: { npcId: string; message: string }) => {
         const { npcId, message } = data;
-        const debugNpcLogging = process.env.NODE_ENV !== "production";
 
         // Validate
         if (!npcId || !message || typeof message !== "string") return;
         const trimmed = message.trim().slice(0, 500);
         if (!trimmed) return;
-        if (debugNpcLogging) {
-          console.log("[npc:chat]", {
-            socketId: socket.id,
-            npcId,
-            message: trimmed,
-          });
-        }
 
         // Rate limit
         const now = Date.now();
@@ -860,7 +971,7 @@ export function setupSocketHandlers(io: Server) {
         history.push({ role: "player", content: trimmed, timestamp: Date.now() });
 
         // Inject task reminder on every NPC DM so task actions can be parsed consistently.
-        const messageToSend = withTaskReminder(trimmed);
+        const messageToSend = withTaskReminder(trimmed, getSocketLocale(socket));
 
         // Stream response via OpenClaw
         const response = await streamNpcResponse(socket, npcId, npcConfig, user.userId, messageToSend);
@@ -868,13 +979,6 @@ export function setupSocketHandlers(io: Server) {
           const parsed = parseNpcResponse(response);
           const sanitizedResponse = sanitizeNpcResponseText(response);
           history.push({ role: "npc", content: sanitizedResponse, timestamp: Date.now() });
-          if (debugNpcLogging) {
-            console.log("[npc:chat:tasks]", {
-              socketId: socket.id,
-              npcId,
-              taskCount: parsed.tasks.length,
-            });
-          }
           if (player?.characterId) {
             await processNpcTaskActions(io, parsed, {
               channelId: npcConfig._channelId,
@@ -885,13 +989,6 @@ export function setupSocketHandlers(io: Server) {
             });
           } else {
             console.warn("[TaskManager] No characterId for socket", socket.id);
-          }
-          if (debugNpcLogging) {
-            console.log("[npc:chat:complete]", {
-              socketId: socket.id,
-              npcId,
-              responseLength: response.length,
-            });
           }
           socket.emit("npc:response-complete", { npcId, npcName: npcConfig._name || npcId });
         }
@@ -932,7 +1029,6 @@ export function setupSocketHandlers(io: Server) {
         npcId,
         targetPlayerId: socket.id,
       });
-      console.log(`[npc] ${player.characterName} called NPC ${npcId} in ${channelId}`);
     });
 
     socket.on("npc:return-home", ({ channelId, npcId }: { channelId: string; npcId: string }) => {
@@ -951,7 +1047,6 @@ export function setupSocketHandlers(io: Server) {
     socket.on("npc:arrived", ({ channelId, npcId }: { channelId: string; npcId: string }) => {
       if (!channelId || !npcId) return;
       socket.to(channelId).emit("npc:stop-moving", { npcId });
-      console.log(`[npc] NPC ${npcId} arrived at player in ${channelId}`);
     });
 
     // NPC management broadcasts (re-broadcast to room)
@@ -1099,159 +1194,65 @@ export function setupSocketHandlers(io: Server) {
       }
     });
 
-    // ----- meeting:join -----
-    socket.on("meeting:join", async ({ channelId }: { channelId: string }) => {
-      if (!channelId) return;
-
-      const accessResult = await getSocketChannelParticipationAccess(channelId, user.userId);
-      if (!accessResult) {
-        socket.emit("channel:access-denied", {
-          channelId,
-          action: "meeting:join",
-          reason: "forbidden",
-          errorCode: "forbidden",
-        });
-        return;
-      }
-
-      if (!accessResult.access.allowed) {
-        emitChannelAccessDenied(socket, {
-          channelId,
-          action: "meeting:join",
-          reason: accessResult.access.reason,
-        });
-        return;
-      }
-
-      let room = meetingRooms.get(channelId);
-      if (!room) {
-        room = { participants: new Set(), messages: [] };
-        meetingRooms.set(channelId, room);
-      }
-      room.participants.add(socket.id);
-      socket.join(`meeting-${channelId}`);
-
-      // Send current state to the joining user
-      const participantList = Array.from(room.participants)
-        .map((sid) => {
-          const p = players.get(sid);
-          return p
-            ? { id: sid, name: p.characterName, appearance: p.appearance }
-            : null;
-        })
-        .filter(Boolean);
-
-      socket.emit("meeting:state", {
-        participants: participantList,
-        messages: room.messages.slice(-50),
-      });
-
-      // Notify others
-      const player = players.get(socket.id);
-      socket.to(`meeting-${channelId}`).emit("meeting:participant-joined", {
-        id: socket.id,
-        name: player?.characterName || "Unknown",
-        appearance: player?.appearance,
-      });
-
-      console.log(
-        `[meeting] ${player?.characterName || socket.id} joined meeting in channel ${channelId}`,
-      );
-    });
-
-    // ----- meeting:leave -----
-    socket.on("meeting:leave", ({ channelId }: { channelId: string }) => {
-      if (!channelId) return;
-      const room = meetingRooms.get(channelId);
-      if (room) {
-        room.participants.delete(socket.id);
-        socket.leave(`meeting-${channelId}`);
-        socket
-          .to(`meeting-${channelId}`)
-          .emit("meeting:participant-left", { id: socket.id });
-      }
-    });
-
-    // ----- meeting:chat -----
-    socket.on(
-      "meeting:chat",
-      async ({ channelId, message }: { channelId: string; message: string }) => {
-        if (!channelId || !message) return;
-
-        const accessResult = await getSocketChannelParticipationAccess(channelId, user.userId);
-        if (!accessResult) {
-          socket.emit("channel:access-denied", {
-            channelId,
-            action: "meeting:chat",
-            reason: "forbidden",
-            errorCode: "forbidden",
-          });
-          return;
-        }
-
-        if (!accessResult.access.allowed) {
-          emitChannelAccessDenied(socket, {
-            channelId,
-            action: "meeting:chat",
-            reason: accessResult.access.reason,
-          });
-          return;
-        }
-
-        const room = meetingRooms.get(channelId);
-        if (!room || !room.participants.has(socket.id)) {
-          socket.emit("channel:access-denied", {
-            channelId,
-            action: "meeting:chat",
-            reason: "forbidden",
-            errorCode: "forbidden",
-          });
-          return;
-        }
-
-        // Rate limit
-        const now = Date.now();
-        if (now - (lastChatTime.get(socket.id) || 0) < CHAT_COOLDOWN_MS) return;
-        lastChatTime.set(socket.id, now);
-
-        const player = players.get(socket.id);
-        const trimmed = String(message).trim().slice(0, 500);
-        if (!trimmed) return;
-
-        const userMessage: MeetingMessage = {
-          id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          sender: player?.characterName || "Unknown",
-          senderId: socket.id,
-          senderType: "user",
-          content: trimmed,
-          timestamp: Date.now(),
-        };
-
-        // Store and broadcast
-        room.messages.push(userMessage);
-        if (room.messages.length > 100) {
-          room.messages.splice(0, room.messages.length - 100);
-        }
-
-        io.to(`meeting-${channelId}`).emit("meeting:message", userMessage);
-
-        // Trigger NPC responses with staggered delays
-        const npcConfigs = await getNpcConfigsForChannel(channelId);
-        for (const npc of npcConfigs) {
-          const delay = 1000 + Math.random() * 2000;
-          setTimeout(async () => {
-            await streamMeetingNpcResponse(
-              io,
-              channelId,
-              npc,
-              room!,
-              trimmed,
-              player?.characterName || "Unknown",
-            );
-          }, delay);
-        }
+    registerMeetingSocketHandlers({
+      io,
+      socket,
+      deps: {
+        meetingRooms,
+        players,
+        lastChatTime,
+        chatCooldownMs: CHAT_COOLDOWN_MS,
+        user,
+        getParticipationAccess: getSocketChannelParticipationAccess,
+        emitChannelAccessDenied: (meetingSocket, input) => {
+          emitChannelAccessDenied(
+            meetingSocket as unknown as Socket,
+            input as Parameters<typeof emitChannelAccessDenied>[1],
+          );
+        },
+        onMeetingChat: async ({ channelId, message, room, player }) => {
+          const npcConfigs = await getNpcConfigsForChannel(channelId);
+          for (const npc of npcConfigs) {
+            const delay = 1000 + Math.random() * 2000;
+            setTimeout(async () => {
+              await streamMeetingNpcResponse(
+                io,
+                channelId,
+                npc,
+                room,
+                message,
+                player?.characterName || "Unknown",
+              );
+            }, delay);
+          }
+        },
       },
-    );
+    });
+
+    registerMeetingDiscussionHandlers({
+      io,
+      socket,
+      deps: {
+        activeBrokers,
+        discussionInitiators,
+        meetingRooms,
+        players,
+        user,
+        getOrConnectGateway,
+        getNpcConfigsForChannel,
+        canControlMeeting,
+        generateMeetingSummary: (gateway, agentId, sessionKeyPrefix, meetingId, topic, transcript) =>
+          generateMeetingSummary(
+            gateway as Parameters<typeof generateMeetingSummary>[0],
+            agentId,
+            sessionKeyPrefix,
+            meetingId,
+            topic,
+            transcript,
+          ),
+        persistMeetingMinutes,
+      },
+    });
 
     // ----- disconnect -----
     socket.on("disconnect", () => {
@@ -1262,7 +1263,6 @@ export function setupSocketHandlers(io: Server) {
         // Save last position to DB
         const px = Math.round(player.x);
         const py = Math.round(player.y);
-        console.log(`[socket] Saving position for ${player.characterName}: (${px}, ${py}) channel=${player.mapId} user=${player.userId}`);
         try {
           const result = db
             .update(channelMembers)
@@ -1275,9 +1275,7 @@ export function setupSocketHandlers(io: Server) {
             );
           // Handle both sync (SQLite) and async (PG)
           if (result && typeof (result as unknown as Promise<unknown>).then === "function") {
-            (result as unknown as Promise<unknown>).then(() => {
-              console.log(`[socket] Position saved OK for ${player.characterName}`);
-            }).catch((err: Error) => {
+            (result as unknown as Promise<unknown>).catch((err: Error) => {
               console.error("[socket] Position save failed (async):", err.message);
             });
           }
@@ -1286,9 +1284,6 @@ export function setupSocketHandlers(io: Server) {
         }
 
         players.delete(socket.id);
-        console.log(
-          `[socket] Player disconnected: ${user.nickname} (${socket.id})`,
-        );
       }
 
       // Clean up meeting room participation
@@ -1298,6 +1293,15 @@ export function setupSocketHandlers(io: Server) {
           socket
             .to(`meeting-${channelId}`)
             .emit("meeting:participant-left", { id: socket.id });
+        }
+      }
+
+      for (const [channelId, broker] of activeBrokers.entries()) {
+        const room = meetingRooms.get(channelId);
+        if (room && room.participants.size === 0) {
+          broker.stop();
+          activeBrokers.delete(channelId);
+          discussionInitiators.delete(channelId);
         }
       }
 

@@ -44,5 +44,20 @@ next-env.d.ts
 # LPC spritesheet assets (downloaded via scripts/download-lpc-assets.sh)
 public/assets/spritesheets/
 .superpowers/
-.superpowers/
+.github/
+scripts/local/
 data/
+db.sqlite
+:memory-file-not-used:*
+*.db
+*.db-shm
+*.db-wal
+docs/
+.claude/
+.codex/
+AGENTS.md
+CLAUDE.md
+assets/lpc-office-tilesets/
+public/assets/built-in/downloads/
+tmp/
+**/*.tgz

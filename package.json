@@ -1,25 +1,54 @@
 {
   "name": "deskrpg",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "bin": {
+    "deskrpg": "bin/deskrpg.js"
+  },
+  "files": [
+    "bin",
+    "server.js",
+    "public",
+    "src/db",
+    "src/lib",
+    "src/server",
+    "drizzle",
+    ".env.example",
+    "drizzle-sqlite.config.ts",
+    "next.config.ts",
+    ".next/BUILD_ID",
+    ".next/app-path-routes-manifest.json",
+    ".next/build-manifest.json",
+    ".next/prerender-manifest.json",
+    ".next/required-server-files.json",
+    ".next/routes-manifest.json",
+    ".next/standalone/**/*",
+    ".next/server/**/*",
+    ".next/static/**/*"
+  ],
   "scripts": {
     "dev": "npx tsx dev-server.ts",
     "dev:next": "next dev",
-    "setup": "docker compose up -d deskrpg-db && dotenv -e .env.local -- drizzle-kit push --force && echo '✓ Ready — run: npm run dev'",
-    "setup:lite": "node scripts/setup-lite.js",
+    "setup": "docker compose up -d deskrpg-db && dotenv -e .env.local -- drizzle-kit migrate && echo '✓ Ready — run: npm run dev'",
+    "setup:lite": "node scripts/setup/setup-lite.js",
     "build": "next build",
     "start": "node server.js",
+    "test": "tsx --test src/**/*.test.ts src/**/*.test.js",
+    "runtime:doctor": "node bin/deskrpg.js doctor",
+    "prepack": "npm run build",
     "lint": "eslint",
+    "db:generate": "drizzle-kit generate",
     "db:push": "dotenv -e .env.local -- drizzle-kit push",
     "db:migrate": "dotenv -e .env.local -- drizzle-kit migrate",
     "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
-    "db:setup": "dotenv -e .env.local -- drizzle-kit push --force"
+    "db:setup": "dotenv -e .env.local -- drizzle-kit migrate"
   },
   "dependencies": {
     "@imgly/background-removal": "^1.7.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.8.0",
     "drizzle-orm": "^0.45.1",
+    "drizzle-kit": "^0.31.10",
     "jose": "^6.2.2",
     "jszip": "^3.10.1",
     "lucide-react": "^1.7.0",
@@ -30,6 +59,7 @@
     "react-dom": "19.2.4",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
+    "tsx": "^4.21.0",
     "ws": "^8.20.0"
   },
   "devDependencies": {
@@ -43,11 +73,9 @@
     "@types/ssh2": "^1.15.5",
     "canvas": "^3.2.2",
     "dotenv-cli": "^11.0.0",
-    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
-    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

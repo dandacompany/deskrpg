@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
+import { db, isPostgres } from "@/db";
 import { maps } from "@/db";
 import { eq } from "drizzle-orm";
 
@@ -13,7 +13,7 @@ export async function GET(
     const rows = await db.select().from(maps).where(eq(maps.id, id));
 
     if (rows.length === 0) {
-      return NextResponse.json({ error: "Map not found" }, { status: 404 });
+      return NextResponse.json({ errorCode: "map_not_found", error: "Map not found" }, { status: 404 });
     }
 
     const map = rows[0];
@@ -24,7 +24,7 @@ export async function GET(
     });
   } catch (err) {
     console.error("Failed to fetch map:", err);
-    return NextResponse.json({ error: "Failed to fetch map" }, { status: 500 });
+    return NextResponse.json({ errorCode: "failed_to_fetch_map", error: "Failed to fetch map" }, { status: 500 });
   }
 }
 
@@ -39,7 +39,7 @@ export async function POST(
     const { layers } = body;
 
     if (!layers || !layers.floor || !layers.walls || !layers.furniture) {
-      return NextResponse.json({ error: "Invalid map data" }, { status: 400 });
+      return NextResponse.json({ errorCode: "invalid_map_data", error: "Invalid map data" }, { status: 400 });
     }
 
     // Upsert: update if exists, insert if not
@@ -50,7 +50,7 @@ export async function POST(
         .update(maps)
         .set({
           config: layers,
-          updatedAt: new Date(),
+          updatedAt: (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date,
         })
         .where(eq(maps.id, id));
     } else {
@@ -65,6 +65,6 @@ export async function POST(
     return NextResponse.json({ success: true, id });
   } catch (err) {
     console.error("Failed to save map:", err);
-    return NextResponse.json({ error: "Failed to save map" }, { status: 500 });
+    return NextResponse.json({ errorCode: "failed_to_save_map", error: "Failed to save map" }, { status: 500 });
   }
 }

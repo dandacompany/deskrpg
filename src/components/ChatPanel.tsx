@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Socket } from "socket.io-client";
 import { useT } from "@/lib/i18n";
 import { Pencil, UserMinus, RotateCcw, MessageSquare, ClipboardList, Undo2 } from "lucide-react";
 import type { NpcChatMessage } from "./NpcDialog";
@@ -20,6 +21,8 @@ interface ChatPanelProps {
   dialogNpc: { npcId: string; npcName: string } | null;
   npcMessages: NpcChatMessage[];
   isNpcStreaming: boolean;
+  npcChatInputDisabled?: boolean;
+  npcChatDisabledPlaceholder?: string;
   onSend: (message: string) => void;
   onClose: () => void;
   npcSelectList: { npcId: string; npcName: string }[] | null;
@@ -30,7 +33,11 @@ interface ChatPanelProps {
   onResetNpcChat?: (npcId: string) => void;
   npcMoveState?: string;
   onReturnNpc?: (npcId: string) => void;
-  socket?: any; // Socket.io client instance
+  socket?: Socket | null;
+  onDeleteTask?: (taskId: string) => void;
+  onRequestReportTask?: (taskId: string) => void;
+  onResumeTask?: (taskId: string) => void;
+  onCompleteTask?: (taskId: string) => void;
   // Channel chat
   channelMessages: ChannelChatMessage[];
   channelChatOpen?: boolean;
@@ -44,35 +51,26 @@ const MAX_WIDTH = 600;
 const DEFAULT_WIDTH = 320;
 
 export default function ChatPanel({
-  dialogNpc, npcMessages, isNpcStreaming, onSend, onClose,
+  dialogNpc, npcMessages, isNpcStreaming, npcChatInputDisabled, npcChatDisabledPlaceholder, onSend, onClose,
   npcSelectList, onSelectNpc, isOwner, onEditNpc, onFireNpc, onResetNpcChat,
   channelMessages, channelChatOpen, channelChatInputDisabled, onSendChannelChat, currentPlayerName,
-  npcMoveState, onReturnNpc, socket,
+  npcMoveState, onReturnNpc, socket, onDeleteTask, onRequestReportTask, onResumeTask, onCompleteTask,
 }: ChatPanelProps) {
   const [width, setWidth] = useState(DEFAULT_WIDTH);
-  const [isOpen, setIsOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showGearMenu, setShowGearMenu] = useState(false);
-  const [activeTab, setActiveTab] = useState<"chat" | "tasks">("chat");
+  const [activeTabState, setActiveTabState] = useState<{ npcId: string | null; tab: "chat" | "tasks" }>({
+    npcId: null,
+    tab: "chat",
+  });
   const t = useT();
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelScrollRef = useRef<HTMLDivElement>(null);
-
-  // Open panel when NPC dialog or channel chat starts, close when all end
-  useEffect(() => {
-    if (dialogNpc || npcSelectList || channelChatOpen) {
-      setIsOpen(true);
-      setShowGearMenu(false);
-    } else {
-      setIsOpen(false);
-    }
-  }, [dialogNpc, npcSelectList, channelChatOpen]);
-
-  // Reset tab when NPC changes
-  useEffect(() => {
-    setActiveTab("chat");
-  }, [dialogNpc?.npcId]);
+  const activeNpcId = dialogNpc?.npcId ?? null;
+  const activeTab = activeTabState.npcId === activeNpcId ? activeTabState.tab : "chat";
+  const isOpen = manualOpen || !!dialogNpc || !!npcSelectList || !!channelChatOpen;
 
   // Auto-scroll NPC messages
   useEffect(() => {
@@ -101,7 +99,9 @@ export default function ChatPanel({
 
   // Drag handle
   const widthRef = useRef(width);
-  widthRef.current = width;
+  useEffect(() => {
+    widthRef.current = width;
+  }, [width]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -127,7 +127,7 @@ export default function ChatPanel({
   if (!isOpen) {
     return (
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={() => setManualOpen(true)}
         className="fixed left-0 top-1/2 -translate-y-1/2 z-20 bg-surface/80 hover:bg-surface-raised text-white px-1 py-4 rounded-r-lg"
         title={t("chat.openChat")}
       >
@@ -154,7 +154,7 @@ export default function ChatPanel({
               if (inNpcDialog) {
                 onClose(); // Return to channel chat
               } else {
-                setIsOpen(false);
+                setManualOpen(false);
               }
             }}
             className="text-text-muted hover:text-text text-sm"
@@ -170,7 +170,7 @@ export default function ChatPanel({
               <button
                 onClick={() => onReturnNpc(dialogNpc!.npcId)}
                 className="text-xs px-2 py-1 rounded bg-surface-raised hover:brightness-125 text-npc font-medium"
-                title="NPC를 원래 자리로 복귀"
+                title={t("chat.returnNpcToOrigin")}
               >
                 <Undo2 className="w-3.5 h-3.5 inline mr-1" />{t("npc.return")}
               </button>
@@ -179,7 +179,7 @@ export default function ChatPanel({
               <button
                 onClick={() => setShowGearMenu(!showGearMenu)}
                 className="text-text-muted hover:text-text text-sm px-1"
-                title="Chat options"
+                title={t("chat.options")}
               >
                 &#9881;
               </button>
@@ -191,13 +191,13 @@ export default function ChatPanel({
                         onClick={() => { setShowGearMenu(false); onEditNpc?.(dialogNpc!.npcId); }}
                         className="w-full text-left px-3 py-2 text-sm text-text hover:bg-surface-raised"
                       >
-                        <Pencil className="w-3.5 h-3.5 inline mr-1" />{t("npc.edit")}
+                        <Pencil className="w-3.5 h-3.5 inline mr-1" />{t("context.edit")}
                       </button>
                       <button
                         onClick={() => { setShowGearMenu(false); onFireNpc?.(dialogNpc!.npcId); }}
                         className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-surface-raised"
                       >
-                        <UserMinus className="w-3.5 h-3.5 inline mr-1" />{t("npc.fire")}
+                        <UserMinus className="w-3.5 h-3.5 inline mr-1" />{t("context.fire")}
                       </button>
                     </>
                   )}
@@ -205,7 +205,7 @@ export default function ChatPanel({
                     onClick={() => { setShowGearMenu(false); onResetNpcChat?.(dialogNpc!.npcId); }}
                     className="w-full text-left px-3 py-2 text-sm text-npc hover:bg-surface-raised"
                   >
-                    <RotateCcw className="w-3.5 h-3.5 inline mr-1" />{t("npc.resetChat")}
+                    <RotateCcw className="w-3.5 h-3.5 inline mr-1" />{t("context.resetChat")}
                   </button>
                 </div>
               )}
@@ -240,7 +240,7 @@ export default function ChatPanel({
                 { key: "tasks", label: t("task.title"), icon: <ClipboardList className="w-3.5 h-3.5" /> },
               ]}
               activeKey={activeTab}
-              onChange={(key) => setActiveTab(key as "chat" | "tasks")}
+              onChange={(key) => setActiveTabState({ npcId: activeNpcId, tab: key as "chat" | "tasks" })}
             />
             {activeTab === "chat" ? (
               <>
@@ -260,13 +260,23 @@ export default function ChatPanel({
                     </ChatBubble>
                   ))}
                 </div>
-                <ChatInput onSend={onSend} placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })} disabled={isNpcStreaming} autoFocus />
+                <ChatInput
+                  onSend={onSend}
+                  placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
+                  disabled={!!npcChatInputDisabled || isNpcStreaming}
+                  disabledPlaceholder={npcChatInputDisabled ? (npcChatDisabledPlaceholder ?? t("chat.disconnected")) : t("chat.responding")}
+                  autoFocus
+                />
               </>
             ) : (
               <TaskPanel
                 npcId={dialogNpc!.npcId}
                 npcName={dialogNpc!.npcName}
                 socket={socket ?? null}
+                onDeleteTask={onDeleteTask}
+                onRequestReportTask={onRequestReportTask}
+                onResumeTask={onResumeTask}
+                onCompleteTask={onCompleteTask}
               />
             )}
           </>

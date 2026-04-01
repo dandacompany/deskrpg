@@ -1,18 +1,17 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, startTransition } from "react";
 import type { CharacterAppearance } from "@/lib/lpc-registry";
 import type { NpcPreset } from "@/lib/npc-presets";
 import { PERSONA_PRESETS, applyPresetName } from "@/lib/npc-persona-presets";
-import { useT } from "@/lib/i18n";
-import { Trash2 } from "lucide-react";
+import { useLocale, useT } from "@/lib/i18n";
+import { Trash2, Maximize2 } from "lucide-react";
 import { useCharacterAppearance } from "@/hooks/useCharacterAppearance";
 import CharacterPreview from "@/components/CharacterPreview";
 import AppearanceEditor from "@/components/AppearanceEditor";
-import {
-  FRAME_WIDTH,
-  FRAME_HEIGHT,
-} from "@/lib/sprite-compositor";
+import { getAgentProgressMeter, type AgentProgressPhase } from "@/lib/npc-agent-progress";
+import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
+import { localizeNpcPromptDocument } from "@/lib/npc-agent-defaults";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -48,6 +47,7 @@ interface NpcHireModalProps {
   isOpen: boolean;
   onClose: () => void;
   onPlaceOnMap: (npcData: {
+    presetId?: string;
     name: string;
     persona: string;
     appearance: unknown;
@@ -56,16 +56,18 @@ interface NpcHireModalProps {
     agentAction?: "select" | "create";
     identity?: string;
     soul?: string;
+    locale?: string;
   }) => void;
   onSaveEdit?: (
     npcId: string,
-    updates: { name?: string; persona?: string; appearance?: unknown; identity?: string; soul?: string; agentId?: string; agentAction?: "select" | "create" },
+    updates: { presetId?: string; name?: string; persona?: string; appearance?: unknown; direction?: string; identity?: string; soul?: string; agentId?: string; agentAction?: "select" | "create"; locale?: string },
   ) => void;
   editingNpc?: {
     id: string;
     name: string;
     persona: string;
     appearance: unknown;
+    direction?: string;
     agentId?: string | null;
   } | null;
   currentNpcCount: number;
@@ -87,6 +89,7 @@ export default function NpcHireModal({
   hasGateway,
 }: NpcHireModalProps) {
   const t = useT();
+  const { locale } = useLocale();
 
   // --- Appearance (shared hook) ---
   const {
@@ -106,10 +109,13 @@ export default function NpcHireModal({
 
   // Step flow state
   const [step, setStep] = useState<"configure" | "creating-agent" | "place">("configure");
-  const [agentProgress, setAgentProgress] = useState<{ status: string; error?: string }>({ status: "" });
+  const [agentProgress, setAgentProgress] = useState<{
+    phase: AgentProgressPhase;
+    status: string;
+    error?: string;
+  }>({ phase: "idle", status: "" });
 
   // Agent selection state
-  const [agentMode, setAgentMode] = useState<"connect" | "none">("connect");
   const [gatewayAgents, setGatewayAgents] = useState<GatewayAgent[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
@@ -127,13 +133,18 @@ export default function NpcHireModal({
   const [presets, setPresets] = useState<NpcPreset[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [presetsLoading, setPresetsLoading] = useState(false);
+  const [identityCustomized, setIdentityCustomized] = useState(false);
+  const [soulCustomized, setSoulCustomized] = useState(false);
 
   // --- Derived ---
   const isEdit = !!editingNpc;
   const atLimit = currentNpcCount >= MAX_NPC_COUNT;
-  const isExistingAgentSelected = hasGateway && agentMode === "connect" && selectedAgentId && !createNewAgent;
+  const isExistingAgentSelected = hasGateway && selectedAgentId && !createNewAgent;
   const personaCompat = identity.trim();
-  const canSubmit = name.trim().length > 0 && (personaCompat.length > 0 || isExistingAgentSelected);
+  const canSubmit =
+    hasGateway &&
+    name.trim().length > 0 &&
+    (personaCompat.length > 0 || isExistingAgentSelected);
 
   // --- Build appearance (with preset support) ---
   const buildAppearance = useCallback((): CharacterAppearance => {
@@ -145,67 +156,106 @@ export default function NpcHireModal({
   }, [appearanceMode, selectedPresetId, presets, buildAppearanceFromHook]);
 
   // --- Validate new agent ID ---
-  const validateNewAgentId = (value: string) => {
+  const validateNewAgentId = useCallback((value: string) => {
     if (!value) { setNewAgentIdError(null); return; }
-    if (!/^[a-zA-Z0-9-]+$/.test(value)) setNewAgentIdError("Only alphanumeric characters and hyphens allowed");
-    else if (value.length < 3) setNewAgentIdError("At least 3 characters");
-    else if (value.length > 30) setNewAgentIdError("Maximum 30 characters");
-    else if (gatewayAgents.some((a) => a.id === value)) setNewAgentIdError("Agent ID already exists on gateway");
+    if (!/^[a-zA-Z0-9-]+$/.test(value)) setNewAgentIdError(t("npc.agentIdValidationChars"));
+    else if (value.length < 3) setNewAgentIdError(t("npc.agentIdValidationMin"));
+    else if (value.length > 30) setNewAgentIdError(t("npc.agentIdValidationMax"));
+    else if (gatewayAgents.some((a) => a.id === value)) setNewAgentIdError(t("npc.agentIdExists"));
     else setNewAgentIdError(null);
-  };
+  }, [gatewayAgents, t]);
+
+  const findPreset = useCallback((presetId: string | null) => {
+    if (!presetId) return null;
+    return presets.find((preset) => preset.id === presetId) || null;
+  }, [presets]);
+
+  const applyPresetSelection = useCallback((presetId: string) => {
+    const preset = findPreset(presetId);
+    if (!preset) return;
+
+    const resolvedName = name.trim() || preset.displayName || preset.name || t("npc.defaultName");
+
+    setSelectedPresetId(preset.id);
+    setAppearanceMode("presets");
+    setPersonaPresetId(preset.id);
+
+    if (!name.trim()) {
+      setName(preset.displayName || preset.name);
+    }
+
+    setIdentity(localizeNpcPromptDocument(applyPresetName(preset.identity, resolvedName), locale, "identity"));
+    setSoul(localizeNpcPromptDocument(applyPresetName(preset.soul, resolvedName), locale, "soul"));
+    setIdentityCustomized(false);
+    setSoulCustomized(false);
+
+    if (hasGateway && (!isEdit || createNewAgent || !selectedAgentId)) {
+      if (!isEdit) {
+        setCreateNewAgent(true);
+        setSelectedAgentId(null);
+      }
+      setNewAgentId(preset.defaultAgentId);
+      validateNewAgentId(preset.defaultAgentId);
+    }
+  }, [createNewAgent, findPreset, hasGateway, isEdit, locale, name, selectedAgentId, t, validateNewAgentId]);
 
   // --- Initialise / reset on open or editingNpc change ---
   useEffect(() => {
     if (!isOpen) return;
-    setStep("configure");
-    setAgentProgress({ status: "" });
-
-    if (editingNpc) {
-      setName(editingNpc.name);
-      setIdentity(editingNpc.persona || "");
-      setSoul("");
-      setShowAdvanced(false);
-      const app = editingNpc.appearance as CharacterAppearance | null;
-      if (app && app.bodyType && app.layers) {
-        setBodyType(app.bodyType);
-        setLayers(app.layers);
-        setAppearanceMode("custom");
-        setSelectedPresetId(null);
-      }
-      setPersonaPresetId("custom");
-      if (editingNpc.agentId) {
-        setAgentMode("connect");
-        setSelectedAgentId(editingNpc.agentId);
-        setCreateNewAgent(false);
+    startTransition(() => {
+      setStep("configure");
+      setAgentProgress({ phase: "idle", status: "" });
+      if (editingNpc) {
+        setName(editingNpc.name);
+        setIdentity(editingNpc.persona || "");
+        setSoul("");
+        setShowAdvanced(false);
+        setDirection(editingNpc.direction || "down");
+        const app = editingNpc.appearance as CharacterAppearance | null;
+        if (app && app.bodyType && app.layers) {
+          setBodyType(app.bodyType);
+          setLayers(app.layers);
+          setAppearanceMode("custom");
+          setSelectedPresetId(null);
+        }
+        setPersonaPresetId("custom");
+        setIdentityCustomized(true);
+        setSoulCustomized(true);
+        if (editingNpc.agentId) {
+          setSelectedAgentId(editingNpc.agentId);
+          setCreateNewAgent(false);
+        } else {
+          setSelectedAgentId(null);
+          setCreateNewAgent(hasGateway);
+        }
       } else {
-        setAgentMode(hasGateway ? "connect" : "none");
+        setName("");
+        setIdentity("");
+        setSoul("");
+        setShowAdvanced(false);
+        setBodyType("male");
+        setLayers({ body: { itemKey: "body", variant: "light" }, eye_color: { itemKey: "eye_color", variant: "brown" } });
+        setActiveCategory("body");
+        setDirection("down");
+        setAppearanceMode("presets");
+        setSelectedPresetId(null);
+        setPersonaPresetId("custom");
+        setIdentityCustomized(false);
+        setSoulCustomized(false);
         setSelectedAgentId(null);
-        setCreateNewAgent(false);
+        setCreateNewAgent(hasGateway);
+        setNewAgentId("");
+        setNewAgentIdError(null);
       }
-    } else {
-      setName("");
-      setIdentity("");
-      setSoul("");
-      setShowAdvanced(false);
-      setBodyType("male");
-      setLayers({ body: { itemKey: "body", variant: "light" }, eye_color: { itemKey: "eye_color", variant: "brown" } });
-      setActiveCategory("body");
-      setDirection("down");
-      setAppearanceMode("presets");
-      setSelectedPresetId(null);
-      setPersonaPresetId("custom");
-      setAgentMode(hasGateway ? "connect" : "none");
-      setSelectedAgentId(null);
-      setCreateNewAgent(false);
-      setNewAgentId("");
-      setNewAgentIdError(null);
-    }
+    });
   }, [isOpen, editingNpc, hasGateway, setBodyType, setLayers, setActiveCategory]);
 
   // --- Fetch gateway agents ---
   useEffect(() => {
     if (!isOpen || !hasGateway) return;
-    setAgentsLoading(true);
+    startTransition(() => {
+      setAgentsLoading(true);
+    });
     fetch(`/api/channels/${channelId}/gateway/agents`)
       .then((r) => r.json())
       .then((data) => setGatewayAgents(data.agents ?? []))
@@ -216,84 +266,133 @@ export default function NpcHireModal({
   // --- Fetch presets ---
   useEffect(() => {
     if (!isOpen) return;
-    setPresetsLoading(true);
-    fetch("/api/npcs/presets")
+    startTransition(() => {
+      setPresetsLoading(true);
+    });
+    fetch(`/api/npcs/presets?locale=${locale}`)
       .then((r) => r.json())
-      .then((data) => setPresets(data.presets ?? []))
+      .then((data) => {
+        const nextPresets = data.presets ?? [];
+        setPresets(nextPresets);
+
+        if (personaPresetId === "custom" || identityCustomized || soulCustomized) {
+          return;
+        }
+
+        const nextPreset = nextPresets.find((preset: NpcPreset) => preset.id === personaPresetId);
+        if (!nextPreset) return;
+
+        const resolvedName = name.trim() || nextPreset.displayName || nextPreset.name || t("npc.defaultName");
+        setIdentity(localizeNpcPromptDocument(applyPresetName(nextPreset.identity, resolvedName), locale, "identity"));
+        setSoul(localizeNpcPromptDocument(applyPresetName(nextPreset.soul, resolvedName), locale, "soul"));
+      })
       .catch(() => {})
       .finally(() => setPresetsLoading(false));
-  }, [isOpen]);
+  }, [identityCustomized, isOpen, locale, name, personaPresetId, soulCustomized, t]);
 
   // --- Apply persona preset ---
-  const handlePersonaPresetChange = (presetId: string) => {
+  const handlePersonaPresetChange = useCallback((presetId: string) => {
     setPersonaPresetId(presetId);
-    if (presetId === "custom") { setIdentity(""); setSoul(""); return; }
+    if (presetId === "custom") {
+      setIdentity("");
+      setSoul("");
+      setIdentityCustomized(false);
+      setSoulCustomized(false);
+      return;
+    }
+    if (findPreset(presetId)) {
+      applyPresetSelection(presetId);
+      return;
+    }
     const preset = PERSONA_PRESETS.find((p) => p.id === presetId);
     if (!preset) return;
-    const currentName = name.trim() || "NPC";
-    setIdentity(applyPresetName(preset.identity, currentName));
-    setSoul(applyPresetName(preset.soul, currentName));
-  };
+    const currentName = name.trim() || t("npc.defaultName");
+    setIdentity(localizeNpcPromptDocument(applyPresetName(preset.identity, currentName), locale, "identity"));
+    setSoul(localizeNpcPromptDocument(applyPresetName(preset.soul, currentName), locale, "soul"));
+    setIdentityCustomized(false);
+    setSoulCustomized(false);
+  }, [applyPresetSelection, findPreset, locale, name, t]);
 
   const handleNameChange = (newName: string) => {
     setName(newName);
     if (personaPresetId !== "custom") {
       const preset = PERSONA_PRESETS.find((p) => p.id === personaPresetId);
       if (preset) {
-        const n = newName.trim() || "NPC";
-        setIdentity(applyPresetName(preset.identity, n));
-        setSoul(applyPresetName(preset.soul, n));
+        const n = newName.trim() || t("npc.defaultName");
+        if (!identityCustomized) {
+          setIdentity(localizeNpcPromptDocument(applyPresetName(preset.identity, n), locale, "identity"));
+        }
+        if (!soulCustomized) {
+          setSoul(localizeNpcPromptDocument(applyPresetName(preset.soul, n), locale, "soul"));
+        }
       }
     }
   };
 
   // --- Create agent on gateway ---
   const handleCreateAgent = async () => {
-    if (!hasGateway || agentMode !== "connect" || !createNewAgent || !newAgentId.trim()) {
+    if (!hasGateway || !createNewAgent || !newAgentId.trim()) {
       handleSubmit();
       return;
     }
     setStep("creating-agent");
-    setAgentProgress({ status: "1/3 -- SSH connecting..." });
+    setAgentProgress({ phase: "connecting", status: t("npc.agentCreateConnecting") });
     try {
       const res = await fetch("/api/npcs/create-agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId, agentId: newAgentId.trim(), identity: identity.trim(), soul: soul.trim() }),
+        body: JSON.stringify({
+          channelId,
+          agentId: newAgentId.trim(),
+          presetId: selectedPresetId,
+          npcName: name.trim(),
+          identity: identity.trim(),
+          soul: soul.trim(),
+          locale,
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
-        setAgentProgress({ status: "Failed", error: data.error || "Agent creation failed" });
+        setAgentProgress({
+          phase: "failed",
+          status: t("npc.agentCreateFailed"),
+          error: getLocalizedErrorMessage(t, data, "npc.agentCreateFailed"),
+        });
         return;
       }
-      setAgentProgress({ status: "3/3 -- Done!" });
+      setAgentProgress({ phase: "done", status: t("npc.agentCreateDone") });
       setTimeout(() => setStep("place"), 500);
     } catch {
-      setAgentProgress({ status: "Failed", error: "Network error" });
+      setAgentProgress({
+        phase: "failed",
+        status: t("npc.agentCreateFailed"),
+        error: t("npc.agentCreateNetworkError"),
+      });
     }
   };
 
   // --- Submit ---
   const handleSubmit = () => {
     if (!canSubmit) return;
-    const appearance = buildAppearance();
+      const appearance = buildAppearance();
+      const activePresetId = appearanceMode === "presets" ? selectedPresetId ?? undefined : undefined;
 
     if (isEdit && onSaveEdit) {
       let agentId: string | undefined;
       let agentAction: "select" | "create" | undefined;
-      if (hasGateway && agentMode === "connect") {
+      if (hasGateway) {
         if (createNewAgent && newAgentId.trim()) { agentId = newAgentId.trim(); agentAction = "create"; }
         else if (selectedAgentId) { agentId = selectedAgentId; agentAction = selectedAgentId !== editingNpc!.agentId ? "select" : undefined; }
       }
-      onSaveEdit(editingNpc!.id, { name: name.trim(), persona: personaCompat, appearance, identity: identity.trim(), soul: soul.trim(), agentId, agentAction });
+      onSaveEdit(editingNpc!.id, { presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, identity: identity.trim(), soul: soul.trim(), agentId, agentAction, locale });
     } else {
       let agentId: string | undefined;
       let agentAction: "select" | "create" | undefined;
-      if (hasGateway && agentMode === "connect") {
+      if (hasGateway) {
         if (createNewAgent && newAgentId.trim()) { agentId = newAgentId.trim(); agentAction = "create"; }
         else if (selectedAgentId) { agentId = selectedAgentId; agentAction = "select"; }
       }
-      onPlaceOnMap({ name: name.trim(), persona: personaCompat, appearance, direction, agentId, agentAction, identity: identity.trim(), soul: soul.trim() });
+      onPlaceOnMap({ presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, agentId, agentAction, identity: identity.trim(), soul: soul.trim(), locale });
     }
   };
 
@@ -303,6 +402,8 @@ export default function NpcHireModal({
 
   if (!isOpen) return null;
 
+  const agentProgressMeter = getAgentProgressMeter(agentProgress.phase);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={handleBackdropClick}>
       <div className="relative max-w-4xl w-full mx-4 max-h-[90vh] bg-gray-900 rounded-xl shadow-2xl flex flex-col overflow-hidden">
@@ -311,7 +412,7 @@ export default function NpcHireModal({
           <h2 className="text-lg font-semibold text-white">
             {isEdit ? t("npc.edit") : t("npc.hire")}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none" aria-label={t("common.close")}>&times;</button>
         </div>
 
         {/* Body */}
@@ -330,20 +431,19 @@ export default function NpcHireModal({
             </div>
 
             {/* AI Agent Section */}
-            {hasGateway && !isEdit && (
-              <AgentSection
-                agentMode={agentMode} setAgentMode={setAgentMode}
-                gatewayAgents={gatewayAgents} setGatewayAgents={setGatewayAgents}
-                agentsLoading={agentsLoading}
-                selectedAgentId={selectedAgentId} setSelectedAgentId={setSelectedAgentId}
-                createNewAgent={createNewAgent} setCreateNewAgent={setCreateNewAgent}
-                newAgentId={newAgentId} setNewAgentId={setNewAgentId}
-                newAgentIdError={newAgentIdError}
-                validateNewAgentId={validateNewAgentId}
-                channelId={channelId}
-                t={t}
-              />
-            )}
+            <AgentSection
+              hasGateway={hasGateway}
+              isEdit={isEdit}
+              gatewayAgents={gatewayAgents} setGatewayAgents={setGatewayAgents}
+              agentsLoading={agentsLoading}
+              selectedAgentId={selectedAgentId} setSelectedAgentId={setSelectedAgentId}
+              createNewAgent={createNewAgent} setCreateNewAgent={setCreateNewAgent}
+              newAgentId={newAgentId} setNewAgentId={setNewAgentId}
+              newAgentIdError={newAgentIdError}
+              validateNewAgentId={validateNewAgentId}
+              channelId={channelId}
+              t={t}
+            />
 
             {/* Persona Section */}
             <PersonaSection
@@ -352,6 +452,8 @@ export default function NpcHireModal({
               onPersonaPresetChange={handlePersonaPresetChange}
               identity={identity} setIdentity={setIdentity}
               soul={soul} setSoul={setSoul}
+              setIdentityCustomized={setIdentityCustomized}
+              setSoulCustomized={setSoulCustomized}
               showAdvanced={showAdvanced} setShowAdvanced={setShowAdvanced}
               t={t}
             />
@@ -387,7 +489,7 @@ export default function NpcHireModal({
                           key={preset.id}
                           preset={preset}
                           isSelected={selectedPresetId === preset.id}
-                          onSelect={() => setSelectedPresetId(preset.id)}
+                          onSelect={() => applyPresetSelection(preset.id)}
                         />
                       ))}
                     </div>
@@ -429,7 +531,7 @@ export default function NpcHireModal({
               direction={direction}
               active={isOpen}
             />
-            <p className="text-xs text-gray-500 mb-2">Preview</p>
+            <p className="text-xs text-gray-500 mb-2">{t("common.preview")}</p>
             <div className="flex gap-1">
               {DIRECTION_LABELS.map((d) => (
                 <button
@@ -449,7 +551,7 @@ export default function NpcHireModal({
           <div>
             {!isEdit && atLimit && (
               <p className="text-xs text-amber-400">
-                NPC limit reached ({MAX_NPC_COUNT}/{MAX_NPC_COUNT}). Remove an existing NPC to hire a new one.
+                {t("npc.limitReached", { count: MAX_NPC_COUNT, max: MAX_NPC_COUNT })}
               </p>
             )}
           </div>
@@ -462,13 +564,13 @@ export default function NpcHireModal({
               <button
                 onClick={() => {
                   if (isEdit) handleSubmit();
-                  else if (hasGateway && agentMode === "connect" && createNewAgent && newAgentId.trim()) handleCreateAgent();
+                  else if (hasGateway && createNewAgent && newAgentId.trim()) handleCreateAgent();
                   else handleSubmit();
                 }}
                 disabled={!canSubmit || (!isEdit && atLimit)}
                 className="px-5 py-2 rounded text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {isEdit ? t("common.save") : (hasGateway && agentMode === "connect" && createNewAgent && newAgentId.trim()) ? t("common.next") : t("npc.placeOnMap")}
+                {isEdit ? t("common.save") : (hasGateway && createNewAgent && newAgentId.trim()) ? t("common.next") : t("npc.placeOnMap")}
               </button>
             )}
 
@@ -476,10 +578,8 @@ export default function NpcHireModal({
               <div className="flex-1 flex flex-col gap-2 min-w-[200px]">
                 <div className="w-full bg-gray-700 rounded-full h-2">
                   <div
-                    className={`h-2 rounded-full transition-all duration-500 ${
-                      agentProgress.error ? "bg-red-500" : agentProgress.status.includes("Done") ? "bg-green-500" : "bg-indigo-500 animate-pulse"
-                    }`}
-                    style={{ width: agentProgress.error ? "100%" : agentProgress.status.includes("1/3") ? "33%" : agentProgress.status.includes("2/3") ? "66%" : agentProgress.status.includes("Done") ? "100%" : "10%" }}
+                    className={`h-2 rounded-full transition-all duration-500 ${agentProgressMeter.className}`}
+                    style={{ width: agentProgressMeter.width }}
                   />
                 </div>
                 <p className={`text-xs ${agentProgress.error ? "text-red-400" : "text-gray-400"}`}>
@@ -487,7 +587,7 @@ export default function NpcHireModal({
                 </p>
                 {agentProgress.error && (
                   <button
-                    onClick={() => { setStep("configure"); setAgentProgress({ status: "" }); }}
+                    onClick={() => { setStep("configure"); setAgentProgress({ phase: "idle", status: "" }); }}
                     className="px-3 py-1 rounded text-xs bg-gray-700 text-gray-300 hover:bg-gray-600 self-start"
                   >{t("common.back")}</button>
                 )}
@@ -513,7 +613,8 @@ export default function NpcHireModal({
 // ---------------------------------------------------------------------------
 
 function AgentSection({
-  agentMode, setAgentMode,
+  hasGateway,
+  isEdit,
   gatewayAgents, setGatewayAgents,
   agentsLoading,
   selectedAgentId, setSelectedAgentId,
@@ -524,8 +625,8 @@ function AgentSection({
   channelId,
   t,
 }: {
-  agentMode: "connect" | "none";
-  setAgentMode: (m: "connect" | "none") => void;
+  hasGateway: boolean;
+  isEdit: boolean;
   gatewayAgents: GatewayAgent[];
   setGatewayAgents: React.Dispatch<React.SetStateAction<GatewayAgent[]>>;
   agentsLoading: boolean;
@@ -538,34 +639,19 @@ function AgentSection({
   newAgentIdError: string | null;
   validateNewAgentId: (v: string) => void;
   channelId: string;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-300 mb-2">AI Agent</label>
-      <div className="flex gap-2 mb-3">
-        <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm cursor-pointer ${
-          agentMode === "connect" ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-        }`}>
-          <input type="radio" name="agentMode" value="connect" checked={agentMode === "connect"}
-            onChange={() => { setAgentMode("connect"); setCreateNewAgent(false); setSelectedAgentId(null); }}
-            className="sr-only" />
-          Connect to Gateway Agent
-        </label>
-        <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm cursor-pointer ${
-          agentMode === "none" ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-        }`}>
-          <input type="radio" name="agentMode" value="none" checked={agentMode === "none"}
-            onChange={() => { setAgentMode("none"); setSelectedAgentId(null); setCreateNewAgent(false); }}
-            className="sr-only" />
-          No AI (static NPC)
-        </label>
-      </div>
-
-      {agentMode === "connect" && (
+      <label className="block text-sm font-medium text-gray-300 mb-2">{t("npc.aiAgent")}</label>
+      {!hasGateway ? (
+        <div className="rounded border border-dashed border-gray-700 bg-gray-800/60 px-3 py-3 text-sm text-gray-400">
+          {t("npc.gatewaySetupHint")}
+        </div>
+      ) : (
         <div className="space-y-2">
           {agentsLoading ? (
-            <p className="text-sm text-gray-500">Loading agents...</p>
+            <p className="text-sm text-gray-500">{t("npc.loadingAgents")}</p>
           ) : (
             <>
               <div className="flex gap-2">
@@ -578,25 +664,31 @@ function AgentSection({
                   }}
                   className="flex-1 px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="">-- Select agent --</option>
+                  <option value="__create__">{t("npc.createNewAgent")}</option>
+                  <option value="">{t("npc.selectAgent")}</option>
                   {gatewayAgents.map((agent) => (
                     <option key={agent.id} value={agent.id} disabled={agent.inUse}>
-                      {agent.name || agent.id}{agent.inUse ? ` (in use: ${agent.usedByNpcName})` : " (available)"}
+                      {agent.inUse
+                        ? t("npc.agentInUse", { name: agent.name || agent.id, npcName: agent.usedByNpcName || agent.id })
+                        : t("npc.agentAvailable", { name: agent.name || agent.id })}
                     </option>
                   ))}
-                  <option value="__create__">+ Create New Agent</option>
                 </select>
-                {selectedAgentId && !createNewAgent && (() => {
+                {isEdit && selectedAgentId && !createNewAgent && (() => {
                   const agent = gatewayAgents.find(a => a.id === selectedAgentId);
-                  return agent && !agent.inUse ? (
+                  return agent && agent.id !== "main" && !agent.inUse ? (
                     <button
                       type="button"
                       onClick={async () => {
+                        if (agent.id === "main") return;
                         if (!confirm(`${t("npc.deleteAgent")}: ${agent.name || agent.id}?`)) return;
                         try {
                           const res = await fetch(`/api/channels/${channelId}/gateway/agents?agentId=${agent.id}`, { method: "DELETE" });
                           if (res.ok) { setGatewayAgents(prev => prev.filter(a => a.id !== agent.id)); setSelectedAgentId(null); }
-                          else { const data = await res.json(); alert(data.error || t("npc.deleteFailed")); }
+                          else {
+                            const data = await res.json().catch(() => ({}));
+                            alert(getLocalizedErrorMessage(t, data, "npc.deleteFailed"));
+                          }
                         } catch { alert(t("npc.deleteFailed")); }
                       }}
                       className="px-2 py-2 rounded bg-red-800 hover:bg-red-700 text-white text-sm shrink-0"
@@ -635,6 +727,8 @@ function PersonaSection({
   personaPresetId, onPersonaPresetChange,
   identity, setIdentity,
   soul, setSoul,
+  setIdentityCustomized,
+  setSoulCustomized,
   showAdvanced, setShowAdvanced,
   t,
 }: {
@@ -645,10 +739,33 @@ function PersonaSection({
   setIdentity: (v: string) => void;
   soul: string;
   setSoul: (v: string) => void;
+  setIdentityCustomized: (v: boolean) => void;
+  setSoulCustomized: (v: boolean) => void;
   showAdvanced: boolean;
   setShowAdvanced: (v: boolean) => void;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }) {
+  const [identityHeight, setIdentityHeight] = useState(128);
+  const [showFullEditor, setShowFullEditor] = useState(false);
+  const dragStartY = useRef<number>(0);
+  const dragStartHeight = useRef<number>(0);
+
+  const handleDragMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    dragStartY.current = e.clientY;
+    dragStartHeight.current = identityHeight;
+    const onMouseMove = (ev: MouseEvent) => {
+      const delta = ev.clientY - dragStartY.current;
+      setIdentityHeight(Math.max(80, dragStartHeight.current + delta));
+    };
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
   return (
     <div>
       <label className="block text-sm font-medium text-gray-300 mb-1">{t("npc.persona")}</label>
@@ -675,12 +792,33 @@ function PersonaSection({
         </div>
       ) : (
         <>
-          <textarea
-            maxLength={2000} rows={4} value={identity}
-            onChange={(e) => setIdentity(e.target.value)}
-            placeholder={t("npc.identityPlaceholder")}
-            className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+          <div className="relative">
+            <textarea
+              maxLength={2000} value={identity}
+              onChange={(e) => { setIdentity(e.target.value); setIdentityCustomized(true); }}
+              placeholder={t("npc.identityPlaceholder")}
+              style={{ height: identityHeight }}
+              className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <button
+              type="button"
+              onClick={() => setShowFullEditor(true)}
+              title={t("npc.edit")}
+              className="absolute top-1.5 right-1.5 p-1 rounded bg-gray-700/80 hover:bg-gray-600 text-gray-400 hover:text-white transition-colors"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+            <div
+              onMouseDown={handleDragMouseDown}
+              className="absolute bottom-0 right-0 w-5 h-5 cursor-s-resize flex items-end justify-end pr-0.5 pb-0.5"
+              title={t("mapEditor.pixel.resize")}
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" className="text-gray-500">
+                <line x1="2" y1="9" x2="9" y2="2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <line x1="5" y1="9" x2="9" y2="5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
+          </div>
           <p className="text-xs text-gray-500 mt-1 text-right">{identity.length}/2000</p>
 
           <button
@@ -699,11 +837,42 @@ function PersonaSection({
               </label>
               <textarea
                 maxLength={3000} rows={6} value={soul}
-                onChange={(e) => setSoul(e.target.value)}
+                onChange={(e) => { setSoul(e.target.value); setSoulCustomized(true); }}
                 placeholder={t("npc.soulPlaceholder")}
                 className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <p className="text-xs text-gray-500 mt-1 text-right">{soul.length}/3000</p>
+            </div>
+          )}
+
+          {showFullEditor && (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70"
+              onClick={(e) => { if (e.target === e.currentTarget) setShowFullEditor(false); }}
+            >
+              <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col" style={{ maxHeight: "80vh" }}>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+                  <h3 className="text-sm font-semibold text-white">{t("npc.persona")}</h3>
+                  <button onClick={() => setShowFullEditor(false)} className="text-gray-400 hover:text-white text-xl leading-none" aria-label={t("common.close")}>&times;</button>
+                </div>
+                <div className="flex-1 p-4 flex flex-col overflow-hidden min-h-0">
+                  <textarea
+                    maxLength={2000} value={identity}
+                    onChange={(e) => { setIdentity(e.target.value); setIdentityCustomized(true); }}
+                    placeholder={t("npc.identityPlaceholder")}
+                    className="flex-1 w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    style={{ minHeight: "300px" }}
+                    autoFocus
+                  />
+                  <p className="text-xs text-gray-500 mt-1 text-right">{identity.length}/2000</p>
+                </div>
+                <div className="px-4 py-3 border-t border-gray-700 flex justify-end">
+                  <button
+                    onClick={() => setShowFullEditor(false)}
+                    className="px-4 py-2 rounded text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
+                  >{t("common.done")}</button>
+                </div>
+              </div>
             </div>
           )}
         </>

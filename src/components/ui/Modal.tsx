@@ -35,6 +35,7 @@ function ModalRoot({ open, onClose, title, size = "md", disableEscapeClose, chil
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      data-modal-overlay
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div

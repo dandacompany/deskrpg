@@ -1,16 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import type { Socket } from "socket.io-client";
 import ChatInput from "./ChatInput";
 import type {
   CharacterAppearance,
   LegacyCharacterAppearance,
 } from "@/lib/lpc-registry";
-import { compositeCharacter } from "@/lib/sprite-compositor";
 import MinutesModal from "./MinutesModal";
-import { useT } from "@/lib/i18n";
-import { Pause, Play } from "lucide-react";
+import { useLocale, useT } from "@/lib/i18n";
+import { ChevronDown, ChevronUp, Pause, Play } from "lucide-react";
+import { buildSpeechBubblePreview } from "./meeting-room/speech-preview";
+import { appendMeetingMessage } from "./meeting-room/message-state";
+import { formatPollRaises, type PollRaiseItem } from "./meeting-room/poll-status";
+import { clampMeetingSidebarWidth } from "./meeting-room/responsive";
+import { computeMeetingTopicRows } from "./meeting-room/start-form";
+import { consumeNpcStreamBuffer } from "./meeting-room/stream-state";
+import { sanitizeClientFinalSpeech, sanitizeClientStreamingSpeech } from "./meeting-room/stream-text";
+import MeetingSidebar from "./meeting-room/MeetingSidebar";
+import MeetingTableScene, { type MeetingSceneSeat } from "./meeting-room/MeetingTableScene";
+import { computeMeetingTableLayout } from "./meeting-room/layout";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,7 +44,7 @@ interface MeetingMessage {
 
 interface PollStatus {
   status?: string;
-  raises?: string[];
+  raises?: Array<string | PollRaiseItem>;
   passes?: string[];
 }
 
@@ -51,144 +61,12 @@ interface MeetingRoomProps {
 }
 
 // ---------------------------------------------------------------------------
-// Avatar component — renders LPC sprite on a tiny canvas
-// ---------------------------------------------------------------------------
-
-function SpriteAvatar({
-  appearance,
-  size = 48,
-}: {
-  appearance: CharacterAppearance | LegacyCharacterAppearance | null;
-  size?: number;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    if (!canvasRef.current || !appearance) return;
-    const canvas = canvasRef.current;
-
-    // Composite the full spritesheet, then draw just the "down idle" frame
-    const offscreen = document.createElement("canvas");
-    compositeCharacter(offscreen, appearance)
-      .then(() => {
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        canvas.width = size;
-        canvas.height = size;
-        // Draw row 2 (facing down), frame 0 — each frame is 64x64
-        ctx.clearRect(0, 0, size, size);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(offscreen, 0, 128, 64, 64, 0, 0, size, size);
-      })
-      .catch(() => {
-        // Failed to composite — just leave blank
-      });
-  }, [appearance, size]);
-
-  if (!appearance) {
-    return (
-      <div
-        className="rounded-full bg-surface-raised flex items-center justify-center text-text-secondary text-caption font-bold"
-        style={{ width: size, height: size }}
-      >
-        ?
-      </div>
-    );
-  }
-
-  return (
-    <canvas
-      ref={canvasRef}
-      width={size}
-      height={size}
-      className="rounded-full bg-surface-raised"
-      style={{ width: size, height: size, imageRendering: "pixelated" }}
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Seat layout — arrange participants around a table
-// ---------------------------------------------------------------------------
-
-interface Seat {
-  participant: Participant;
-  x: number; // percent
-  y: number; // percent
-  isChair: boolean; // is this the chairperson (current user)?
-}
-
-function computeSeats(
-  currentUser: Participant,
-  others: Participant[],
-): Seat[] {
-  const seats: Seat[] = [];
-
-  // Rectangular long table layout:
-  // Chairperson at the head (top center)
-  // Others distributed along left and right sides, then bottom
-  //
-  //        [Chair - YOU]
-  //   [P1]               [P2]
-  //   [P3]               [P4]
-  //   [P5]               [P6]
-  //        [P7]
-
-  seats.push({ participant: currentUser, x: 50, y: 3, isChair: true });
-
-  if (others.length === 0) return seats;
-
-  // Split into: left side, right side, bottom
-  // For 1 person: bottom center
-  // For 2: left + right
-  // For 3+: alternate left/right, overflow to bottom
-  if (others.length === 1) {
-    seats.push({ participant: others[0], x: 50, y: 95, isChair: false });
-    return seats;
-  }
-
-  const left: Participant[] = [];
-  const right: Participant[] = [];
-  let bottom: Participant | null = null;
-
-  for (let i = 0; i < others.length; i++) {
-    if (i === others.length - 1 && others.length % 2 === 1) {
-      // Odd last person goes to bottom center
-      bottom = others[i];
-    } else if (i % 2 === 0) {
-      left.push(others[i]);
-    } else {
-      right.push(others[i]);
-    }
-  }
-
-  // Place left side (evenly spaced vertically)
-  for (let i = 0; i < left.length; i++) {
-    const t = (i + 1) / (left.length + 1);
-    seats.push({ participant: left[i], x: 5, y: 10 + t * 80, isChair: false });
-  }
-
-  // Place right side
-  for (let i = 0; i < right.length; i++) {
-    const t = (i + 1) / (right.length + 1);
-    seats.push({ participant: right[i], x: 95, y: 10 + t * 80, isChair: false });
-  }
-
-  // Bottom center
-  if (bottom) {
-    seats.push({ participant: bottom, x: 50, y: 95, isChair: false });
-  }
-
-  return seats;
-}
-
-// ---------------------------------------------------------------------------
 // MeetingControlBar — mode toggle, next turn, direct speak, stop
 // ---------------------------------------------------------------------------
 
 function MeetingControlBar({
   mode, isWaiting, currentSpeaker, npcs, lastSpokeTimes,
-  onSetMode, onNextTurn, onDirectSpeak, onAbortTurn, onStop,
+  nowMs, onSetMode, onNextTurn, onDirectSpeak, onStop,
   t,
 }: {
   mode: "auto" | "manual" | "directed";
@@ -196,10 +74,10 @@ function MeetingControlBar({
   currentSpeaker: { npcId: string; npcName: string } | null;
   npcs: { id: string; name: string }[];
   lastSpokeTimes: Record<string, number>;
+  nowMs: number;
   onSetMode: (mode: "auto" | "manual") => void;
   onNextTurn: () => void;
   onDirectSpeak: (npcId: string) => void;
-  onAbortTurn: () => void;
   onStop: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
@@ -208,7 +86,7 @@ function MeetingControlBar({
   const formatElapsed = (npcId: string) => {
     const lastTime = lastSpokeTimes[npcId];
     if (!lastTime) return t("meeting.waiting");
-    const sec = Math.floor((Date.now() - lastTime) / 1000);
+    const sec = Math.floor((nowMs - lastTime) / 1000);
     if (sec < 60) return t("meeting.secAgo", { sec });
     return t("meeting.minAgo", { min: Math.floor(sec / 60) });
   };
@@ -217,7 +95,7 @@ function MeetingControlBar({
     <div className="border-t border-border bg-surface/80">
       {mode !== "auto" && (
         <div className="px-3 py-2 border-b border-border flex flex-wrap gap-1.5">
-          <span className="text-caption text-text-dim self-center mr-1">NPC:</span>
+          <span className="text-caption text-text-dim self-center mr-1">{t("meeting.npcLabel")}</span>
           {npcs.map((npc) => {
             const isSpeaking = currentSpeaker?.npcId === npc.id;
             return (
@@ -294,18 +172,33 @@ export default function MeetingRoom({
   onLeave,
 }: MeetingRoomProps) {
   const t = useT();
+  const { locale } = useLocale();
   const [messages, setMessages] = useState<MeetingMessage[]>([]);
   const [npcStreams, setNpcStreams] = useState<Record<string, string>>({});
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [input, setInput] = useState("");
   const [cooldown, setCooldown] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const joinedRef = useRef(false);
+  const npcRawStreamsRef = useRef<Record<string, string>>({});
+  const npcStreamsRef = useRef<Record<string, string>>({});
+  const [meetingTopic, setMeetingTopic] = useState("");
+  const [showStartOptions, setShowStartOptions] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(360);
+  const [contentWidth, setContentWidth] = useState(0);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const characterRef = useRef({
+    name: character.name,
+    appearance: character.appearance,
+  });
+  const contentRef = useRef<HTMLDivElement>(null);
+  const meetingTopicRef = useRef(meetingTopic);
+  const npcsRef = useRef(npcs);
+  const tRef = useRef(t);
+  const suppressNextMeetingEndRef = useRef(false);
 
   // --- New state for broker-driven discussions ---
   const [meetingActive, setMeetingActive] = useState(false);
-  const [meetingTopic, setMeetingTopic] = useState("");
   const [startingMeeting, setStartingMeeting] = useState(false);
   const [currentSpeaker, setCurrentSpeaker] = useState<{
     npcId: string;
@@ -322,8 +215,15 @@ export default function MeetingRoom({
   const [hybridMode, setHybridMode] = useState(false);
   const [hybridResumeMode, setHybridResumeMode] = useState<"manual" | "timer">("manual");
   const [hybridResumeSeconds, setHybridResumeSeconds] = useState(30);
-  const [selectedNpcIds, setSelectedNpcIds] = useState<Set<string>>(new Set());
+  const npcSelectionKey = npcs.map((npc) => npc.id).join("|");
+  const [selectedNpcIds, setSelectedNpcIds] = useState<Set<string>>(
+    () => new Set(npcs.map((npc) => npc.id)),
+  );
+  const syncSelectedNpcIds = useEffectEvent((nextNpcs: MeetingRoomProps["npcs"]) => {
+    setSelectedNpcIds(new Set(nextNpcs.map((npc) => npc.id)));
+  });
   const [maxTurns, setMaxTurns] = useState(20);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   // Post-meeting state
   const [meetingEnded, setMeetingEnded] = useState(false);
@@ -360,12 +260,89 @@ export default function MeetingRoom({
     ...npcParticipants,
   ];
 
-  const seats = computeSeats(currentUser, otherParticipants);
-
-  // Auto-select all NPCs when npcs prop changes
   useEffect(() => {
-    setSelectedNpcIds(new Set(npcs.map((n) => n.id)));
+    characterRef.current = {
+      name: character.name,
+      appearance: character.appearance,
+    };
+  }, [character.appearance, character.name]);
+
+  useEffect(() => {
+    meetingTopicRef.current = meetingTopic;
+  }, [meetingTopic]);
+
+  useEffect(() => {
+    npcsRef.current = npcs;
   }, [npcs]);
+
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
+  useEffect(() => {
+    syncSelectedNpcIds(npcs);
+  }, [npcSelectionKey, npcs]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    const node = contentRef.current;
+    if (!node) return;
+
+    const updateWidth = () => {
+      const nextWidth = node.getBoundingClientRect().width;
+      setContentWidth(nextWidth);
+      setSidebarWidth((prev) => clampMeetingSidebarWidth(prev, nextWidth));
+    };
+
+    updateWidth();
+
+    const observer = new ResizeObserver(() => {
+      updateWidth();
+    });
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isResizingSidebar) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const rect = contentRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const nextWidth = rect.right - event.clientX;
+      setSidebarWidth(clampMeetingSidebarWidth(nextWidth, rect.width));
+    };
+
+    const stopResizing = () => {
+      setIsResizingSidebar(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    window.addEventListener("pointercancel", stopResizing);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+      window.removeEventListener("pointercancel", stopResizing);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizingSidebar]);
 
   // Join meeting room on mount
   useEffect(() => {
@@ -374,8 +351,8 @@ export default function MeetingRoom({
 
     socket.emit("meeting:join", {
       channelId,
-      characterName: character.name,
-      appearance: character.appearance,
+      characterName: characterRef.current.name,
+      appearance: characterRef.current.appearance,
     });
 
     // Listen for state sync (on join)
@@ -392,6 +369,9 @@ export default function MeetingRoom({
       );
       // Start with empty chat — past messages are preserved in meeting minutes DB
       setMessages([]);
+      npcRawStreamsRef.current = {};
+      npcStreamsRef.current = {};
+      setNpcStreams({});
     };
 
     const handleParticipantJoined = (data: {
@@ -418,7 +398,13 @@ export default function MeetingRoom({
     };
 
     const handleMessage = (msg: MeetingMessage) => {
-      setMessages((prev) => [...prev.slice(-99), msg]);
+      const nextMessage = msg.senderType === "npc"
+        ? {
+          ...msg,
+          content: sanitizeClientFinalSpeech(msg.content),
+        }
+        : msg;
+      setMessages((prev) => appendMeetingMessage(prev, nextMessage));
     };
 
     const handleNpcStream = (data: {
@@ -428,35 +414,44 @@ export default function MeetingRoom({
       done: boolean;
     }) => {
       if (data.done) {
+        const npc = npcsRef.current.find((n) => n.id === data.npcId);
+        const senderName = data.npcName || npc?.name || data.npcId;
+        const timestamp = Date.now();
+
         // Track last spoke time
-        setLastSpokeTimes((prev) => ({ ...prev, [data.npcId]: Date.now() }));
-        // Finalize: move from stream buffer to messages
-        setNpcStreams((prev) => {
-          const content = prev[data.npcId];
-          if (content) {
-            const npc = npcs.find((n) => n.id === data.npcId);
-            const senderName = data.npcName || npc?.name || data.npcId;
-            const finalMsg: MeetingMessage = {
-              id: `msg-${Date.now()}-${data.npcId}`,
-              sender: senderName,
-              senderId: `npc-${data.npcId}`,
-              senderType: "npc",
-              content,
-              timestamp: Date.now(),
-            };
-            setMessages((msgs) => [...msgs.slice(-99), finalMsg]);
-          }
-          const next = { ...prev };
-          delete next[data.npcId];
-          return next;
+        setLastSpokeTimes((prev) => ({ ...prev, [data.npcId]: timestamp }));
+        const result = consumeNpcStreamBuffer({
+          streams: npcStreamsRef.current,
+          npcId: data.npcId,
+          fallbackSenderName: senderName,
+          timestamp,
         });
+        const nextRawStreams = { ...npcRawStreamsRef.current };
+        delete nextRawStreams[data.npcId];
+        npcRawStreamsRef.current = nextRawStreams;
+      npcStreamsRef.current = result.nextStreams;
+      setNpcStreams(result.nextStreams);
+      if (result.finalizedMessage) {
+        const finalizedMessage: MeetingMessage = {
+          ...result.finalizedMessage,
+          content: sanitizeClientFinalSpeech(result.finalizedMessage.content),
+        };
+        setMessages((msgs) => appendMeetingMessage(msgs, finalizedMessage));
+      }
         setCurrentSpeaker(null);
       } else {
         if (data.chunk) {
-          setNpcStreams((prev) => ({
-            ...prev,
-            [data.npcId]: (prev[data.npcId] || "") + data.chunk,
-          }));
+          const nextRawStreams = {
+            ...npcRawStreamsRef.current,
+            [data.npcId]: (npcRawStreamsRef.current[data.npcId] || "") + data.chunk,
+          };
+          npcRawStreamsRef.current = nextRawStreams;
+          const nextStreams = {
+            ...npcStreamsRef.current,
+            [data.npcId]: sanitizeClientStreamingSpeech(nextRawStreams[data.npcId]),
+          };
+          npcStreamsRef.current = nextStreams;
+          setNpcStreams(nextStreams);
         }
       }
     };
@@ -477,13 +472,18 @@ export default function MeetingRoom({
       totalTurns?: number;
       durationSeconds?: number | null;
     }) => {
+      if (suppressNextMeetingEndRef.current) {
+        suppressNextMeetingEndRef.current = false;
+        return;
+      }
+
       setMeetingActive(false);
       setCurrentSpeaker(null);
       setPollStatus(null);
 
       setMeetingEnded(true);
       setLastMeetingResult({
-        topic: meetingTopic,
+        topic: meetingTopicRef.current,
         keyTopics: data.keyTopics || [],
         conclusions: data.conclusions || null,
         minutesId: data.minutesId || null,
@@ -494,26 +494,26 @@ export default function MeetingRoom({
       if (data.transcript) {
         const transcriptMsg: MeetingMessage = {
           id: `transcript-${Date.now()}`,
-          sender: "System",
+          sender: tRef.current("meeting.systemSender"),
           senderId: "system",
           senderType: "npc",
-          content: `[Meeting ended]\n${data.transcript}`,
+          content: `${tRef.current("meeting.endedTranscriptPrefix")}\n${data.transcript}`,
           timestamp: Date.now(),
         };
-        setMessages((prev) => [...prev.slice(-99), transcriptMsg]);
+        setMessages((prev) => appendMeetingMessage(prev, transcriptMsg));
       }
     };
 
     const handleMeetingError = (data: { error: string }) => {
       const errorMsg: MeetingMessage = {
         id: `error-${Date.now()}`,
-        sender: "System",
+        sender: tRef.current("meeting.systemSender"),
         senderId: "system",
         senderType: "npc",
-        content: `[Error] ${data.error}`,
+        content: `${tRef.current("meeting.errorPrefix")} ${data.error}`,
         timestamp: Date.now(),
       };
-      setMessages((prev) => [...prev.slice(-99), errorMsg]);
+      setMessages((prev) => appendMeetingMessage(prev, errorMsg));
     };
 
     const handleModeChanged = (data: { mode: "auto" | "manual" | "directed"; by: string; initiatorId?: string }) => {
@@ -527,25 +527,28 @@ export default function MeetingRoom({
     };
 
     const handleTurnAborted = (data: { npcId: string }) => {
-      setLastSpokeTimes((prev) => ({ ...prev, [data.npcId]: Date.now() }));
-      setNpcStreams((prev) => {
-        const content = prev[data.npcId];
-        if (content) {
-          const npc = npcs.find((n) => n.id === data.npcId);
-          const finalMsg: MeetingMessage = {
-            id: `msg-${Date.now()}-abort-${data.npcId}`,
-            sender: npc?.name || data.npcId,
-            senderId: `npc-${data.npcId}`,
-            senderType: "npc",
-            content: content + " " + t("meeting.aborted"),
-            timestamp: Date.now(),
-          };
-          setMessages((msgs) => [...msgs, finalMsg]);
-        }
-        const next = { ...prev };
-        delete next[data.npcId];
-        return next;
+      const timestamp = Date.now();
+      setLastSpokeTimes((prev) => ({ ...prev, [data.npcId]: timestamp }));
+      const npc = npcsRef.current.find((n) => n.id === data.npcId);
+      const result = consumeNpcStreamBuffer({
+        streams: npcStreamsRef.current,
+        npcId: data.npcId,
+        fallbackSenderName: npc?.name || data.npcId,
+        timestamp,
       });
+      const nextRawStreams = { ...npcRawStreamsRef.current };
+      delete nextRawStreams[data.npcId];
+      npcRawStreamsRef.current = nextRawStreams;
+      npcStreamsRef.current = result.nextStreams;
+      setNpcStreams(result.nextStreams);
+      if (result.finalizedMessage) {
+        const abortedMessage: MeetingMessage = {
+          ...result.finalizedMessage,
+          id: `${result.finalizedMessage.id}-abort`,
+          content: `${sanitizeClientFinalSpeech(result.finalizedMessage.content)} ${tRef.current("meeting.aborted")}`,
+        };
+        setMessages((msgs) => appendMeetingMessage(msgs, abortedMessage));
+      }
       setCurrentSpeaker(null);
     };
 
@@ -587,11 +590,6 @@ export default function MeetingRoom({
     }
   }, [messages, npcStreams]);
 
-  // Refocus input whenever it loses focus (e.g. DOM changes from NPC streaming)
-  const refocusInput = useCallback(() => {
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, []);
-
   const handleStartDiscussion = useCallback(() => {
     const topic = meetingTopic.trim();
     if (!topic || startingMeeting || !socket) return;
@@ -622,8 +620,35 @@ export default function MeetingRoom({
 
   const handleSetMode = useCallback((mode: "auto" | "manual") => {
     if (!socket) return;
+    setMeetingMode(mode);
+    setIsWaitingInput(mode !== "auto");
     socket.emit("meeting:set-mode", { channelId, mode });
   }, [socket, channelId]);
+
+  const handleResetDiscussion = useCallback(() => {
+    if (!socket || !meetingActive) return;
+    if (!window.confirm(t("meeting.restartConfirm"))) return;
+
+    suppressNextMeetingEndRef.current = true;
+    socket.emit("meeting:stop", { channelId });
+    setMeetingActive(false);
+    setMeetingEnded(false);
+    setLastMeetingResult(null);
+    setMeetingMode(startMode);
+    setIsWaitingInput(false);
+    setCurrentSpeaker(null);
+    setPollStatus(null);
+    npcRawStreamsRef.current = {};
+    npcStreamsRef.current = {};
+    setNpcStreams({});
+    setMessages([]);
+    setShowExportMenu(false);
+  }, [socket, meetingActive, t, channelId, startMode]);
+
+  const handleSidebarResizeStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsResizingSidebar(true);
+  }, []);
 
   const handleNextTurn = useCallback(() => {
     if (!socket) return;
@@ -635,11 +660,6 @@ export default function MeetingRoom({
     if (!socket) return;
     socket.emit("meeting:direct-speak", { channelId, npcId });
     setIsWaitingInput(false);
-  }, [socket, channelId]);
-
-  const handleAbortTurn = useCallback(() => {
-    if (!socket) return;
-    socket.emit("meeting:abort-turn", { channelId });
   }, [socket, channelId]);
 
   const handleSend = useCallback((msg?: string) => {
@@ -655,202 +675,191 @@ export default function MeetingRoom({
     setTimeout(() => setCooldown(false), 2000);
   }, [input, cooldown, socket, channelId, meetingActive]);
 
+  const sceneParticipants = [currentUser, ...otherParticipants];
+  const layout = computeMeetingTableLayout({
+    participantIds: sceneParticipants.map((participant) => participant.id),
+  });
+  const participantMap = new Map(
+    sceneParticipants.map((participant) => [participant.id, participant] as const),
+  );
+  const currentSpeechPreview = currentSpeaker
+    ? buildSpeechBubblePreview(npcStreams[currentSpeaker.npcId] || "")
+    : null;
+  const raiseNames = formatPollRaises(pollStatus?.raises);
+  const tableAvailableWidth = contentWidth > 0
+    ? Math.max(contentWidth - sidebarWidth - 32, 320)
+    : 980;
+  const sceneSeats: MeetingSceneSeat[] = layout.seats.map((seat) => {
+    const participant = participantMap.get(seat.participantId);
+    const isChair = seat.participantId === currentUser.id;
+    const isSpeaking = Boolean(
+      currentSpeaker &&
+      participant?.type === "npc" &&
+      participant.id === `npc-${currentSpeaker.npcId}`,
+    );
+
+    return {
+      ...seat,
+      name: participant?.name || "Unknown",
+      appearance: participant?.appearance || null,
+      isChair,
+      isNpc: participant?.type === "npc",
+      isSpeaking,
+      speechPreview: isSpeaking ? currentSpeechPreview : null,
+      isClickable: Boolean(participant?.type === "npc" && meetingActive && isInitiator),
+      onClick:
+        participant?.type === "npc" && meetingActive && isInitiator
+          ? () => handleDirectSpeak(participant.id.replace(/^npc-/, ""))
+          : undefined,
+    };
+  });
+
   // Collect streaming NPC messages for display
   const streamingEntries = Object.entries(npcStreams);
 
   // Shared meeting start form (used in pre-meeting and post-meeting views)
   const renderMeetingStartForm = () => (
     <>
-      <input
-        type="text"
+      <button
+        type="button"
+        onClick={() => setShowStartOptions((prev) => !prev)}
+        className="flex items-center justify-between rounded-lg border border-border bg-surface-raised/40 px-3 py-2 text-caption text-text-secondary hover:bg-surface-raised/60"
+      >
+        <span className="truncate">
+          {`${showStartOptions ? t("common.hide") : t("common.show")} ${t("meeting.settings")} · ${selectedNpcIds.size}/${npcs.length} NPC · ${maxTurns}`}
+        </span>
+        {showStartOptions ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+      </button>
+      {showStartOptions && (
+        <>
+          {/* NPC Participant selection */}
+          <div className="space-y-2 pt-2 border-t border-border">
+            <p className="text-caption text-text-dim font-medium">{t("meeting.npcParticipants")}</p>
+            {npcs.length === 0 ? (
+              <p className="text-caption text-text-dim italic">{t("meeting.noNpcs")}</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {npcs.map((npc) => {
+                  const isSelected = selectedNpcIds.has(npc.id);
+                  return (
+                    <label
+                      key={npc.id}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-caption cursor-pointer border transition-colors ${
+                        isSelected
+                          ? "border-info bg-info/15 text-info"
+                          : "border-border bg-surface-raised/50 text-text-muted"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          const next = new Set(selectedNpcIds);
+                          if (e.target.checked) {
+                            next.add(npc.id);
+                          } else {
+                            next.delete(npc.id);
+                          }
+                          setSelectedNpcIds(next);
+                        }}
+                        className="accent-info w-3 h-3"
+                      />
+                      {npc.name}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Turn count slider */}
+          <div className="space-y-1.5 pt-2 border-t border-border">
+            <div className="flex items-center justify-between">
+              <p className="text-caption text-text-dim font-medium">
+                {t("meeting.maxTurns")}: <span className="text-info font-semibold">{maxTurns}</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-caption text-text-dim">5</span>
+              <input
+                type="range"
+                min={5}
+                max={50}
+                step={5}
+                value={maxTurns}
+                onChange={(e) => setMaxTurns(Number(e.target.value))}
+                className="flex-1 accent-info"
+              />
+              <span className="text-caption text-text-dim">50</span>
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t border-border">
+            <p className="text-caption text-text-dim font-medium">{t("meeting.settings")}</p>
+            <div className="flex items-center gap-3 text-caption">
+              <span className="text-text-muted w-16">{t("meeting.startMode")}</span>
+              <label className="flex items-center gap-1 text-text-secondary cursor-pointer">
+                <input type="radio" name="startMode" checked={startMode === "auto"} onChange={() => setStartMode("auto")} className="accent-primary" />
+                {t("meeting.modeAuto")}
+              </label>
+              <label className="flex items-center gap-1 text-text-secondary cursor-pointer">
+                <input type="radio" name="startMode" checked={startMode === "manual"} onChange={() => setStartMode("manual")} className="accent-primary" />
+                {t("meeting.modeManual")}
+              </label>
+            </div>
+            <label className="flex items-center gap-2 text-caption text-text-secondary cursor-pointer">
+              <input type="checkbox" checked={hybridMode} onChange={(e) => setHybridMode(e.target.checked)} className="accent-primary" />
+              {t("meeting.hybridModeDesc")}
+            </label>
+            {hybridMode && (
+              <div className="ml-5 space-y-1">
+                <label className="flex items-center gap-1 text-caption text-text-muted cursor-pointer">
+                  <input type="radio" name="hybridResume" checked={hybridResumeMode === "manual"} onChange={() => setHybridResumeMode("manual")} className="accent-primary" />
+                  {t("meeting.manualResume")}
+                </label>
+                <label className="flex items-center gap-1 text-caption text-text-muted cursor-pointer">
+                  <input type="radio" name="hybridResume" checked={hybridResumeMode === "timer"} onChange={() => setHybridResumeMode("timer")} className="accent-primary" />
+                  <input type="number" min={5} max={120} value={hybridResumeSeconds} onChange={(e) => setHybridResumeSeconds(Math.max(5, Math.min(120, Number(e.target.value) || 30)))} className="w-12 bg-surface-raised text-text px-1 py-0.5 rounded border border-border text-caption text-center" disabled={hybridResumeMode !== "timer"} />
+                  {t("meeting.timerResumeAfter")}
+                </label>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+      <textarea
         value={meetingTopic}
         onChange={(e) => setMeetingTopic(e.target.value.slice(0, 200))}
+        rows={computeMeetingTopicRows(meetingTopic)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+          if (
+            e.key === "Enter" &&
+            !e.nativeEvent.isComposing &&
+            (e.metaKey || e.ctrlKey)
+          ) {
             e.preventDefault();
             handleStartDiscussion();
           }
         }}
         placeholder={t("meeting.topicPlaceholder")}
-        className="w-full bg-surface-raised text-text px-3 py-2 rounded border border-border focus:ring-2 focus:ring-primary-light focus:border-transparent focus:outline-none text-body"
+        className="w-full resize-none overflow-y-auto bg-surface-raised text-text px-3 py-2 rounded border border-border focus:ring-2 focus:ring-primary-light focus:border-transparent focus:outline-none text-body leading-relaxed"
         maxLength={200}
       />
-      {/* NPC Participant selection */}
-      <div className="space-y-2 pt-2 border-t border-border">
-        <p className="text-caption text-text-dim font-medium">{t("meeting.npcParticipants")}</p>
-        {npcs.length === 0 ? (
-          <p className="text-caption text-text-dim italic">{t("meeting.noNpcs")}</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {npcs.map((npc) => {
-              const isSelected = selectedNpcIds.has(npc.id);
-              return (
-                <label
-                  key={npc.id}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-caption cursor-pointer border transition-colors ${
-                    isSelected
-                      ? "border-info bg-info/15 text-info"
-                      : "border-border bg-surface-raised/50 text-text-muted"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={(e) => {
-                      const next = new Set(selectedNpcIds);
-                      if (e.target.checked) {
-                        next.add(npc.id);
-                      } else {
-                        next.delete(npc.id);
-                      }
-                      setSelectedNpcIds(next);
-                    }}
-                    className="accent-info w-3 h-3"
-                  />
-                  {npc.name}
-                </label>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Turn count slider */}
-      <div className="space-y-1.5 pt-2 border-t border-border">
-        <div className="flex items-center justify-between">
-          <p className="text-caption text-text-dim font-medium">
-            {t("meeting.maxTurns")}: <span className="text-info font-semibold">{maxTurns}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-caption text-text-dim">5</span>
-          <input
-            type="range"
-            min={5}
-            max={50}
-            step={5}
-            value={maxTurns}
-            onChange={(e) => setMaxTurns(Number(e.target.value))}
-            className="flex-1 accent-info"
-          />
-          <span className="text-caption text-text-dim">50</span>
-        </div>
-      </div>
-
-      <div className="space-y-2 pt-2 border-t border-border">
-        <p className="text-caption text-text-dim font-medium">{t("meeting.settings")}</p>
-        <div className="flex items-center gap-3 text-caption">
-          <span className="text-text-muted w-16">{t("meeting.startMode")}</span>
-          <label className="flex items-center gap-1 text-text-secondary cursor-pointer">
-            <input type="radio" name="startMode" checked={startMode === "auto"} onChange={() => setStartMode("auto")} className="accent-primary" />
-            {t("meeting.modeAuto")}
-          </label>
-          <label className="flex items-center gap-1 text-text-secondary cursor-pointer">
-            <input type="radio" name="startMode" checked={startMode === "manual"} onChange={() => setStartMode("manual")} className="accent-primary" />
-            {t("meeting.modeManual")}
-          </label>
-        </div>
-        <label className="flex items-center gap-2 text-caption text-text-secondary cursor-pointer">
-          <input type="checkbox" checked={hybridMode} onChange={(e) => setHybridMode(e.target.checked)} className="accent-primary" />
-          {t("meeting.hybridModeDesc")}
-        </label>
-        {hybridMode && (
-          <div className="ml-5 space-y-1">
-            <label className="flex items-center gap-1 text-caption text-text-muted cursor-pointer">
-              <input type="radio" name="hybridResume" checked={hybridResumeMode === "manual"} onChange={() => setHybridResumeMode("manual")} className="accent-primary" />
-              {t("meeting.manualResume")}
-            </label>
-            <label className="flex items-center gap-1 text-caption text-text-muted cursor-pointer">
-              <input type="radio" name="hybridResume" checked={hybridResumeMode === "timer"} onChange={() => setHybridResumeMode("timer")} className="accent-primary" />
-              <input type="number" min={5} max={120} value={hybridResumeSeconds} onChange={(e) => setHybridResumeSeconds(Math.max(5, Math.min(120, Number(e.target.value) || 30)))} className="w-12 bg-surface-raised text-text px-1 py-0.5 rounded border border-border text-caption text-center" disabled={hybridResumeMode !== "timer"} />
-              {t("meeting.timerResumeAfter")}
-            </label>
-          </div>
-        )}
-      </div>
     </>
   );
 
   return (
     <div className="fixed inset-0 z-5 flex flex-col bg-bg text-text">
       {/* Main content: table + chat side by side */}
-      <div className="flex-1 flex min-h-0 pt-[44px]">
+      <div ref={contentRef} className="flex-1 flex min-h-0 pt-[44px]">
         {/* Left: Meeting Table visualization */}
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 flex items-center justify-center p-4">
-          <div className="relative w-full max-w-[500px]" style={{ height: `${Math.min(90, Math.max(40, 25 + seats.length * 12))}vh` }}>
-            {/* Rectangular long table — height scales with participant count */}
-            <div className="absolute left-[18%] right-[18%] top-[8%] bottom-[8%] rounded-lg bg-npc/10 border-2 border-npc/30 shadow-lg" />
-            <div className="absolute left-[20%] right-[20%] top-[10%] bottom-[10%] rounded-md bg-npc/10 border border-npc/30" />
-
-            {/* Table label */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-npc/40 text-body font-semibold tracking-wider uppercase">
-                {t("meeting.table")}
-              </span>
-            </div>
-
-            {/* Seats */}
-            {seats.map((seat, i) => {
-              const isClickableNpc = seat.participant.type === "npc" && meetingActive && isInitiator;
-              return (
-                <div
-                  key={seat.participant.id + "-" + i}
-                  className={`absolute flex flex-col items-center gap-1 -translate-x-1/2 -translate-y-1/2 ${isClickableNpc ? "cursor-pointer group" : ""}`}
-                  style={{ left: `${seat.x}%`, top: `${seat.y}%` }}
-                  onClick={isClickableNpc ? () => handleDirectSpeak(seat.participant.id.replace("npc-", "")) : undefined}
-                >
-                  <div
-                    className={`relative ${
-                      seat.isChair
-                        ? "ring-2 ring-primary rounded-full"
-                        : seat.participant.type === "npc"
-                          ? "ring-2 ring-npc rounded-full"
-                          : ""
-                    } ${isClickableNpc ? "group-hover:ring-npc group-hover:ring-4 transition-all" : ""}`}
-                  >
-                    <SpriteAvatar appearance={seat.participant.appearance} size={80} />
-                    {seat.isChair && (
-                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full flex items-center justify-center text-micro font-bold">
-                        C
-                      </div>
-                    )}
-                    {/* Speech bubble when NPC is speaking */}
-                    {currentSpeaker &&
-                      seat.participant.id === `npc-${currentSpeaker.npcId}` && (() => {
-                        const streamText = npcStreams[currentSpeaker.npcId] || "";
-                        const preview = streamText.length > 40 ? "..." + streamText.slice(-40) : streamText;
-                        return (
-                          <div className="absolute -top-12 left-1/2 -translate-x-1/2 max-w-[180px] z-10">
-                            <div className="bg-white text-gray-900 text-micro leading-tight px-2.5 py-1.5 rounded-lg shadow-lg relative">
-                              {preview || "..."}
-                              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rotate-45" />
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    {/* Hover tooltip for clickable NPC seats */}
-                    {isClickableNpc && (
-                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-npc text-black text-micro font-bold px-1.5 rounded-full whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-                        {t("meeting.directSpeak")}
-                      </div>
-                    )}
-                  </div>
-                  <span
-                    className={`text-caption font-medium max-w-[100px] truncate ${
-                      seat.isChair
-                        ? "text-primary-light"
-                        : seat.participant.type === "npc"
-                          ? "text-npc"
-                          : "text-text-secondary"
-                    }`}
-                  >
-                    {seat.participant.name}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          <div className="flex-1 p-4">
+            <MeetingTableScene
+              availableWidth={tableAvailableWidth}
+              layout={layout}
+              seats={sceneSeats}
+            />
           </div>
           {meetingActive && isInitiator && (
             <MeetingControlBar
@@ -859,33 +868,38 @@ export default function MeetingRoom({
               currentSpeaker={currentSpeaker}
               npcs={npcs}
               lastSpokeTimes={lastSpokeTimes}
+              nowMs={nowMs}
               onSetMode={handleSetMode}
               onNextTurn={handleNextTurn}
               onDirectSpeak={handleDirectSpeak}
-              onAbortTurn={handleAbortTurn}
               onStop={handleEndMeeting}
               t={t}
             />
           )}
         </div>
 
-        {/* Right: Chat Panel */}
-        <div className="w-[360px] flex flex-col border-l border-border bg-bg/95 shrink-0 h-full">
-          {/* Chat header */}
-          <div className="px-4 py-2 border-b border-border bg-surface/80 flex items-center justify-between flex-shrink-0">
-            <div>
-              <span className="text-title text-text-secondary">{t("meeting.groupChat")}</span>
-              <span className="text-caption text-text-dim ml-2">
-                {seats.length} {t("meeting.participantCount")}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
+        <MeetingSidebar
+          participantCount={sceneSeats.length}
+          title={t("meeting.groupChat")}
+          width={sidebarWidth}
+          onResizeStart={handleSidebarResizeStart}
+          isResizing={isResizingSidebar}
+          actions={(
+            <>
               <button
                 onClick={() => setShowMinutesModal(true)}
                 className="px-2.5 py-1 bg-surface-raised hover:bg-surface-raised border border-border rounded-lg text-info text-caption"
               >
                 {t("minutes.title")}
               </button>
+              {meetingActive && isInitiator && (
+                <button
+                  onClick={handleResetDiscussion}
+                  className="px-2.5 py-1 rounded-lg border border-border bg-surface-raised hover:bg-surface-raised text-text text-caption"
+                >
+                  {t("meeting.restart")}
+                </button>
+              )}
               {meetingActive && !isInitiator && (
                 <button
                   onClick={onLeave}
@@ -894,16 +908,14 @@ export default function MeetingRoom({
                   {t("common.leave")}
                 </button>
               )}
-            </div>
-          </div>
-
-          {/* Poll status bar */}
-          {meetingActive && pollStatus && (
-            <div className="px-3 py-1.5 bg-surface border-b border-border text-caption text-text-muted flex flex-wrap gap-1 items-center">
+            </>
+          )}
+          statusBar={meetingActive && pollStatus ? (
+            <div className="flex flex-wrap gap-1 items-center">
               <span className="text-npc font-semibold">{t("meeting.polling")}</span>
-              {pollStatus.raises && pollStatus.raises.length > 0 && (
+              {raiseNames.length > 0 && (
                 <span className="text-success">
-                  {t("meeting.raiseLabel")} {pollStatus.raises.join(", ")}
+                  {t("meeting.raiseLabel")} {raiseNames.join(", ")}
                 </span>
               )}
               {pollStatus.passes && pollStatus.passes.length > 0 && (
@@ -915,11 +927,12 @@ export default function MeetingRoom({
                 <span className="text-text-muted">{pollStatus.status}</span>
               )}
             </div>
-          )}
+          ) : null}
+        >
 
           {/* Messages or Topic Input */}
           {meetingActive ? (
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="h-full flex flex-col min-h-0 overflow-hidden">
               {/* Active meeting messages */}
               <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
                 {messages.length === 0 && streamingEntries.length === 0 && (
@@ -996,7 +1009,7 @@ export default function MeetingRoom({
               </div>
 
               {/* Input for active meeting */}
-              <div className="flex-shrink-0">
+              <div className="sticky bottom-0 z-10 flex-shrink-0 border-t border-border bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/85">
                 <ChatInput
                   onSend={(msg) => handleSend(msg)}
                   placeholder={t("meeting.speakToMeeting")}
@@ -1008,7 +1021,7 @@ export default function MeetingRoom({
             </div>
           ) : meetingEnded && lastMeetingResult ? (
             /* ---- Post-meeting hybrid view ---- */
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="h-full flex flex-col min-h-0 overflow-hidden">
               {/* Scrollable content */}
               <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
                 {/* Completion badge */}
@@ -1025,7 +1038,7 @@ export default function MeetingRoom({
                   {/* Stats grid */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-surface-raised/50 rounded px-3 py-2 text-center">
-                      <div className="text-heading font-bold text-info">{seats.length}</div>
+                      <div className="text-heading font-bold text-info">{sceneSeats.length}</div>
                       <div className="text-micro text-text-muted">{t("meeting.participantCount")}</div>
                     </div>
                     <div className="bg-surface-raised/50 rounded px-3 py-2 text-center">
@@ -1069,6 +1082,22 @@ export default function MeetingRoom({
                 <div className="space-y-3">
                   <h4 className="text-title text-text-secondary text-center">{t("meeting.newMeeting")}</h4>
                   {renderMeetingStartForm()}
+                  <button
+                    onClick={() => {
+                      setMeetingEnded(false);
+                      setLastMeetingResult(null);
+                      setMessages([]);
+                      handleStartDiscussion();
+                    }}
+                    disabled={!meetingTopic.trim() || startingMeeting || selectedNpcIds.size === 0}
+                    className={`w-full px-4 py-2 rounded font-semibold text-body ${
+                      meetingTopic.trim() && !startingMeeting && selectedNpcIds.size > 0
+                        ? "bg-primary hover:bg-primary-hover text-white"
+                        : "bg-surface-raised text-text-dim cursor-not-allowed"
+                    }`}
+                  >
+                    {startingMeeting ? t("meeting.starting") : t("meeting.startDiscussion")}
+                  </button>
                 </div>
               </div>
 
@@ -1087,17 +1116,11 @@ export default function MeetingRoom({
                         onClick={async () => {
                           if (!lastMeetingResult.minutesId) return;
                           try {
-                            const res = await fetch(`/api/channels/${channelId}/minutes/${lastMeetingResult.minutesId}`);
-                            const data = await res.json();
-                            if (data.markdown) {
-                              const blob = new Blob([data.markdown], { type: "text/markdown" });
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement("a");
-                              a.href = url;
-                              a.download = `meeting-${lastMeetingResult.topic.slice(0, 30)}.md`;
-                              a.click();
-                              URL.revokeObjectURL(url);
-                            }
+                            const params = new URLSearchParams({ format: "md", locale });
+                            const a = document.createElement("a");
+                            a.href = `/api/meetings/${lastMeetingResult.minutesId}/export?${params.toString()}`;
+                            a.download = "";
+                            a.click();
                           } catch { /* ignore */ }
                           setShowExportMenu(false);
                         }}
@@ -1109,10 +1132,11 @@ export default function MeetingRoom({
                         onClick={async () => {
                           if (!lastMeetingResult.minutesId) return;
                           try {
-                            const res = await fetch(`/api/channels/${channelId}/minutes/${lastMeetingResult.minutesId}`);
+                            const params = new URLSearchParams({ format: "clipboard", locale });
+                            const res = await fetch(`/api/meetings/${lastMeetingResult.minutesId}/export?${params.toString()}`);
                             const data = await res.json();
-                            if (data.markdown) {
-                              await navigator.clipboard.writeText(data.markdown);
+                            if (data.text) {
+                              await navigator.clipboard.writeText(data.text);
                             }
                           } catch { /* ignore */ }
                           setShowExportMenu(false);
@@ -1124,27 +1148,11 @@ export default function MeetingRoom({
                     </div>
                   )}
                 </div>
-                <button
-                  onClick={() => {
-                    setMeetingEnded(false);
-                    setLastMeetingResult(null);
-                    setMessages([]);
-                    handleStartDiscussion();
-                  }}
-                  disabled={!meetingTopic.trim() || startingMeeting || selectedNpcIds.size === 0}
-                  className={`flex-1 px-4 py-2 rounded font-semibold text-body ${
-                    meetingTopic.trim() && !startingMeeting && selectedNpcIds.size > 0
-                      ? "bg-primary hover:bg-primary-hover text-white"
-                      : "bg-surface-raised text-text-dim cursor-not-allowed"
-                  }`}
-                >
-                  {t("meeting.startDiscussion")}
-                </button>
               </div>
             </div>
           ) : (
             /* ---- Pre-meeting view ---- */
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="h-full flex flex-col min-h-0 overflow-hidden">
               {/* Existing messages area */}
               <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
                 {messages.length === 0 ? (
@@ -1191,9 +1199,6 @@ export default function MeetingRoom({
               {/* Topic input form */}
               <div className="px-4 py-4 border-t border-border bg-surface/60 flex-shrink-0">
                 <div className="bg-surface rounded-lg p-4 flex flex-col gap-3 border border-border">
-                  <p className="text-body text-text-muted font-medium text-center">
-                    {t("meeting.discussionIntro")}
-                  </p>
                   {renderMeetingStartForm()}
                   <button
                     onClick={handleStartDiscussion}
@@ -1210,7 +1215,7 @@ export default function MeetingRoom({
               </div>
             </div>
           )}
-        </div>
+        </MeetingSidebar>
       </div>
 
       {showMinutesModal && (

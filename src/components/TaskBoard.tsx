@@ -4,34 +4,46 @@ import { useState, useMemo } from "react";
 import TaskCard from "./TaskCard";
 import type { Task } from "./TaskCard";
 import { useT } from "@/lib/i18n";
-import { ClipboardList, X, Clock, Loader, CheckCircle } from "lucide-react";
+import { ClipboardList, X, Clock, Loader, CheckCircle, PauseCircle } from "lucide-react";
 
 interface TaskBoardProps {
   channelId: string;
   isOpen: boolean;
   onClose: () => void;
   onDeleteTask?: (taskId: string) => void;
+  onRequestReportTask?: (taskId: string) => void;
+  onResumeTask?: (taskId: string) => void;
+  onCompleteTask?: (taskId: string) => void;
   tasks: Task[];
 }
 
-export default function TaskBoard({ channelId, isOpen, onClose, tasks, onDeleteTask }: TaskBoardProps) {
+export default function TaskBoard({
+  isOpen,
+  onClose,
+  tasks,
+  onDeleteTask,
+  onRequestReportTask,
+  onResumeTask,
+  onCompleteTask,
+}: TaskBoardProps) {
   const t = useT();
   const [filterNpc, setFilterNpc] = useState<string | null>(null);
 
   const npcList = useMemo(() => {
     const map = new Map<string, string>();
-    tasks.forEach((t) => {
-      const npcId = t.npcId;
-      const npcName = t.npcName || "Unknown";
+    tasks.forEach((task) => {
+      const npcId = task.npcId;
+      const npcName = task.npcName || t("common.unknown");
       if (npcId && !map.has(npcId)) map.set(npcId, npcName);
     });
     return Array.from(map.entries());
-  }, [tasks]);
+  }, [tasks, t]);
 
   const filtered = filterNpc ? tasks.filter((t) => t.npcId === filterNpc) : tasks;
 
   const pending = filtered.filter((t) => t.status === "pending");
   const inProgress = filtered.filter((t) => t.status === "in_progress");
+  const stalled = filtered.filter((t) => t.status === "stalled");
   const done = filtered.filter((t) => t.status === "complete" || t.status === "cancelled");
 
   if (!isOpen) return null;
@@ -78,7 +90,7 @@ export default function TaskBoard({ channelId, isOpen, onClose, tasks, onDeleteT
             </div>
             <div className="flex-1 overflow-y-auto space-y-2">
               {pending.map((t) => (
-                <TaskCard key={t.id} task={t} showNpcName compact onDelete={onDeleteTask} />
+                <TaskCard key={t.id} task={t} showNpcName compact onDelete={onDeleteTask} onRequestReport={onRequestReportTask} onResume={onResumeTask} onComplete={onCompleteTask} />
               ))}
             </div>
           </div>
@@ -91,7 +103,20 @@ export default function TaskBoard({ channelId, isOpen, onClose, tasks, onDeleteT
             </div>
             <div className="flex-1 overflow-y-auto space-y-2">
               {inProgress.map((t) => (
-                <TaskCard key={t.id} task={t} showNpcName compact onDelete={onDeleteTask} />
+                <TaskCard key={t.id} task={t} showNpcName compact onDelete={onDeleteTask} onRequestReport={onRequestReportTask} onResume={onResumeTask} onComplete={onCompleteTask} />
+              ))}
+            </div>
+          </div>
+
+          {/* Stalled */}
+          <div className="flex-1 bg-surface rounded-lg p-2.5 flex flex-col">
+            <div className="text-[11px] text-warning font-bold mb-2 flex justify-between">
+              <span className="flex items-center gap-1"><PauseCircle className="w-3.5 h-3.5" />{t("task.stalled")}</span>
+              <span className="bg-warning/20 px-1.5 rounded">{stalled.length}</span>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {stalled.map((t) => (
+                <TaskCard key={t.id} task={t} showNpcName compact onDelete={onDeleteTask} onRequestReport={onRequestReportTask} onResume={onResumeTask} onComplete={onCompleteTask} />
               ))}
             </div>
           </div>
@@ -104,7 +129,7 @@ export default function TaskBoard({ channelId, isOpen, onClose, tasks, onDeleteT
             </div>
             <div className="flex-1 overflow-y-auto space-y-2">
               {done.map((t) => (
-                <TaskCard key={t.id} task={t} showNpcName compact onDelete={onDeleteTask} />
+                <TaskCard key={t.id} task={t} showNpcName compact onDelete={onDeleteTask} onRequestReport={onRequestReportTask} onResume={onResumeTask} onComplete={onCompleteTask} />
               ))}
             </div>
           </div>

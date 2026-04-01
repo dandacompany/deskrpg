@@ -102,8 +102,8 @@ function LayerItem({
   );
 
   const tooltipLabel = role
-    ? `${layer.type === 'tilelayer' ? 'Tile' : 'Object'} · ${role.desc}`
-    : layer.type === 'tilelayer' ? 'Tile Layer' : 'Object Layer';
+    ? `${layer.type === 'tilelayer' ? t('mapEditor.layers.tileLayerType') : t('mapEditor.layers.objectLayerType')} · ${t(role.descKey)}`
+    : layer.type === 'tilelayer' ? t('mapEditor.layers.tileLayerType') : t('mapEditor.layers.objectLayerType');
 
   return (
     <div
@@ -163,11 +163,6 @@ function LayerItem({
         )}
       </div>
 
-      {/* Depth badge */}
-      <span className="text-micro text-text-dim bg-surface-raised px-1 py-0.5 rounded font-mono flex-shrink-0">
-        {depthLabel}
-      </span>
-
       {/* Color chip */}
       <Tooltip label={showOverlay ? t('mapEditor.layers.hideOverlay') : t('mapEditor.layers.showOverlay')}>
         <button
@@ -203,6 +198,8 @@ function CharacterDivider({ isDragOver, onDragOver, onDrop }: {
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
 }) {
+  const t = useT();
+
   return (
     <div
       className={`
@@ -215,7 +212,7 @@ function CharacterDivider({ isDragOver, onDragOver, onDrop }: {
       <div className="flex-1 border-t border-border" />
       <div className="flex items-center gap-1 text-micro text-text-dim select-none whitespace-nowrap">
         <User className="w-3 h-3" />
-        <span>Character / NPC</span>
+        <span>{t("mapEditor.layers.characterNpcDivider")}</span>
       </div>
       <div className="flex-1 border-t border-border" />
     </div>

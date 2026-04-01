@@ -1,8 +1,15 @@
-import { db } from "@/db";
+import { db, isPostgres, jsonForDb } from "@/db";
 import { channels } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
+import { buildGatewayConfig, mergeGatewayConfig } from "@/lib/task-reporting";
+import internalTransport from "@/lib/internal-transport.js";
+
+const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport as {
+  buildInternalAuthHeaders: () => Record<string, string>;
+  getInternalSocketBaseUrl: () => string;
+};
 
 // GET /api/channels/:id/gateway — owner-only, returns full gatewayConfig
 export async function GET(
@@ -10,7 +17,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   const { id } = await params;
 
   const [channel] = await db
@@ -19,12 +26,11 @@ export async function GET(
     .where(eq(channels.id, id))
     .limit(1);
 
-  if (!channel) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (channel.ownerId !== userId) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!channel) return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
+  if (channel.ownerId !== userId) return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
 
-  const gc = channel.gatewayConfig as Record<string, unknown> | null;
   return NextResponse.json({
-    gatewayConfig: gc ? { url: gc.url ?? null, token: gc.token ?? null } : null,
+    gatewayConfig: buildGatewayConfig(channel.gatewayConfig),
   });
 }
 
@@ -34,43 +40,40 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   const { id } = await params;
 
   const [channel] = await db
-    .select({ ownerId: channels.ownerId })
+    .select({ ownerId: channels.ownerId, gatewayConfig: channels.gatewayConfig })
     .from(channels)
     .where(eq(channels.id, id))
     .limit(1);
 
-  if (!channel) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (channel.ownerId !== userId) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!channel) return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
+  if (channel.ownerId !== userId) return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
 
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
+    return NextResponse.json({ errorCode: "invalid_json", error: "invalid JSON" }, { status: 400 });
   }
 
-  const { url, token } = body as { url?: string; token?: string };
-
-  const gatewayConfig = {
-    url: typeof url === "string" ? url.trim() || null : null,
-    token: typeof token === "string" ? token.trim() || null : null,
-  };
+  const gatewayConfig = mergeGatewayConfig(channel.gatewayConfig, body);
 
   await db
     .update(channels)
-    .set({ gatewayConfig, updatedAt: new Date() })
+    .set({ gatewayConfig: jsonForDb(gatewayConfig), updatedAt: (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date })
     .where(eq(channels.id, id));
 
   // Emit cache invalidation via internal socket endpoint (non-critical)
   try {
-    const socketPort = (parseInt(process.env.PORT ?? "3000") + 1).toString();
-    await fetch(`http://localhost:${socketPort}/_internal/emit`, {
+    await fetch(`${getInternalSocketBaseUrl()}/_internal/emit`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...buildInternalAuthHeaders(),
+      },
       body: JSON.stringify({
         event: "gateway:config-updated",
         room: id,
@@ -81,5 +84,8 @@ export async function PUT(
     console.warn("Failed to emit gateway:config-updated socket event");
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    gatewayConfig: buildGatewayConfig(gatewayConfig),
+  });
 }

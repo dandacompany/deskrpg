@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { EventBus } from "@/game/EventBus";
+import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import { compositeCharacter } from "@/lib/sprite-compositor";
 import type {
   CharacterAppearance,
@@ -15,6 +15,7 @@ interface PhaserGameProps {
   characterId: string;
   characterName: string;
   appearance: CharacterAppearance | LegacyCharacterAppearance;
+  channelInitData: Exclude<PendingChannelData, null>;
 }
 
 export default function PhaserGame({
@@ -23,20 +24,25 @@ export default function PhaserGame({
   characterId,
   characterName,
   appearance,
+  channelInitData,
 }: PhaserGameProps) {
   const gameRef = useRef<Phaser.Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const spritesheetRef = useRef(spritesheetDataUrl);
   const socketRef = useRef(socket);
   const characterRef = useRef({ characterId, characterName, appearance });
+  const channelInitDataRef = useRef(channelInitData);
 
   // Keep refs in sync
   spritesheetRef.current = spritesheetDataUrl;
   socketRef.current = socket;
   characterRef.current = { characterId, characterName, appearance };
+  channelInitDataRef.current = channelInitData;
 
   useLayoutEffect(() => {
     if (gameRef.current || !containerRef.current) return;
+
+    setPendingChannelData(channelInitDataRef.current);
 
     // Ensure localStorage is accessible — Phaser accesses it internally.
     // In restricted contexts (Cloudflare, privacy mode), provide a no-op fallback.
@@ -59,6 +65,12 @@ export default function PhaserGame({
       });
     }
 
+    // Hoist listener refs so the cleanup closure can access them
+    // (they are set inside the async import callback below)
+    let onSceneReady: (() => void) | null = null;
+    let emitSocketIfReady: (() => void) | null = null;
+    let onCompositeRemote: ((data: { id: string; appearance: CharacterAppearance | LegacyCharacterAppearance; textureKey?: string }) => Promise<void>) | null = null;
+
     // Dynamically import to avoid SSR issues with Phaser
     import("@/game/main").then(({ createGame }) => {
       if (gameRef.current) return; // Guard against double-invoke in StrictMode
@@ -67,13 +79,13 @@ export default function PhaserGame({
       gameRef.current = game;
 
       // When the GameScene is ready, send the spritesheet
-      const onSceneReady = () => {
+      onSceneReady = () => {
         EventBus.emit("spritesheet-ready", spritesheetRef.current);
       };
       EventBus.on("scene-ready", onSceneReady);
 
       // Send socket info whenever requested or when player spawns
-      const emitSocketIfReady = () => {
+      emitSocketIfReady = () => {
         if (socketRef.current) {
           const c = characterRef.current;
           EventBus.emit("socket-ready", {
@@ -88,7 +100,7 @@ export default function PhaserGame({
       EventBus.on("request-socket", emitSocketIfReady);
 
       // Remote player compositing requests from GameScene
-      const onCompositeRemote = async (data: {
+      onCompositeRemote = async (data: {
         id: string;
         appearance: CharacterAppearance | LegacyCharacterAppearance;
         textureKey?: string;
@@ -114,9 +126,22 @@ export default function PhaserGame({
         gameRef.current.destroy(true);
         gameRef.current = null;
       }
-      EventBus.removeAllListeners();
+      // Remove only the listeners this component registered.
+      // GameScene cleans up its own EventBus listeners via its Phaser shutdown event.
+      // Never call EventBus.removeAllListeners() — it would wipe page.tsx listeners too.
+      if (onSceneReady) EventBus.off("scene-ready", onSceneReady);
+      if (emitSocketIfReady) {
+        EventBus.off("player-spawned", emitSocketIfReady);
+        EventBus.off("request-socket", emitSocketIfReady);
+      }
+      if (onCompositeRemote) EventBus.off("composite-remote-player", onCompositeRemote);
     };
   }, []);
+
+  useEffect(() => {
+    setPendingChannelData(channelInitData);
+    EventBus.emit("channel-data-ready", channelInitData);
+  }, [channelInitData]);
 
   // If the spritesheet changes after initial load, re-send it
   useEffect(() => {
