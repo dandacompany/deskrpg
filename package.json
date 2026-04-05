@@ -36,6 +36,7 @@
     "start": "node server.js",
     "test": "tsx --test src/**/*.test.ts src/**/*.test.js",
     "runtime:doctor": "node bin/deskrpg.js doctor",
+    "tc": "bash scripts/tc",
     "prepack": "npm run build",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",

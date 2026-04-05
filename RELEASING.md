@@ -27,10 +27,11 @@ Before tagging `0.2.3`, verify:
 
 1. `package.json` version is `0.2.3`
 2. `README.md` and `README.ko.md` reflect the current Docker flow
-3. [Deploy pre-checklist](deploy/pre-deploy-checklist.md) passed
-   - SQLite/PG smoke tests included in the checklist
-4. The working tree is clean enough to release
-5. The release commit is already on `master`
+3. Run `npm run tc pre-deploy` (this executes automatable deploy checks from
+   [Deploy pre-checklist](deploy/pre-deploy-checklist.md))
+4. [Deploy pre-checklist](deploy/pre-deploy-checklist.md) manual items passed
+5. The working tree is clean enough to release
+6. The release commit is already on `master`
 
 ## Release Steps
 

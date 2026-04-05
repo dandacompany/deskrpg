@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TASK="${1:-help}"
+shift || true
+
+case "$TASK" in
+  pre-deploy)
+    ;;
+  help|--help|-h|"")
+    echo "Usage: npm run tc -- pre-deploy [--smoke]"
+    echo "       npm run tc -- pre-deploy --smoke  # run optional container smoke test"
+    exit 0
+    ;;
+  *)
+    echo "Unknown task: $TASK"
+    echo "Usage: npm run tc -- pre-deploy [--smoke]"
+    exit 1
+    ;;
+esac
+
+SMOKE=0
+for arg in "$@"; do
+  if [[ "$arg" == "--smoke" ]]; then
+    SMOKE=1
+  fi
+done
+
+need_cmd() {
+  local cmd_name="$1"
+  command -v "$cmd_name" >/dev/null 2>&1 || {
+    echo "Missing required command: $cmd_name" >&2
+    exit 1
+  }
+}
+
+require_file() {
+  local file_path="$1"
+  if [[ ! -f "$file_path" ]]; then
+    echo "Required file not found: $file_path" >&2
+    exit 1
+  fi
+}
+
+require_env_value() {
+  local file_path="$1"
+  local key="$2"
+  if ! awk -F= -v k="$key" '{
+    if ($1 == k && $2 != "" && $2 !~ /^ *$/) found=1
+  } END { exit !found }' "$file_path"; then
+    echo "Environment variable $key is missing or empty in $file_path" >&2
+    exit 1
+  fi
+}
+
+echo "==> Pre-deploy checks: tc pre-deploy"
+
+need_cmd git
+need_cmd docker
+
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$BRANCH" != "master" ]]; then
+  echo "Pre-deploy checks must run on master branch. Current branch: $BRANCH" >&2
+  exit 1
+fi
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Working tree is not clean. Please commit or stash pending changes." >&2
+  exit 1
+fi
+
+require_file docker-compose.yml
+require_file deploy/.env.production
+
+echo "Validating docker compose config..."
+docker compose -f docker-compose.yml --env-file deploy/.env.production config >/dev/null
+
+require_env_value deploy/.env.production JWT_SECRET
+require_env_value deploy/.env.production POSTGRES_PASSWORD
+
+IMAGE="${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}"
+echo "Checking image availability: $IMAGE"
+docker pull "$IMAGE"
+
+if [[ "$SMOKE" == "1" ]]; then
+  need_cmd curl
+  echo "Running optional smoke test via docker-compose..."
+  TEST_ENV_FILE="deploy/.env.production"
+
+  cleanup() {
+    docker compose -f docker-compose.yml --env-file "$TEST_ENV_FILE" down -v
+  }
+  trap cleanup EXIT
+
+  DESKRPG_IMAGE="$IMAGE" docker compose -f docker-compose.yml --env-file "$TEST_ENV_FILE" up -d
+
+  for i in {1..30}; do
+    STATUS="$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:3102' || true)"
+    if [[ "$STATUS" == "307" || "$STATUS" == "200" ]]; then
+      echo "Smoke check passed (status: $STATUS)"
+      break
+    fi
+    if [[ "$i" == "30" ]]; then
+      echo "Smoke check failed: service did not return 200/307" >&2
+      docker compose -f docker-compose.yml --env-file "$TEST_ENV_FILE" logs --tail 200
+      exit 1
+    fi
+    sleep 2
+  done
+
+  echo "Smoke check complete."
+fi
+
+echo "Pre-deploy checks passed."

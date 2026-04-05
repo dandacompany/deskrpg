@@ -15,6 +15,7 @@ This folder is split by purpose.
 Current public entry points:
 
 - `node scripts/setup/setup-lite.js`
+- `bash scripts/tc` (run `npm run tc pre-deploy` for pre-deploy automated checks)
 
 Current local-only examples:
 
