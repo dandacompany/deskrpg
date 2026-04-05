@@ -69,3 +69,4 @@ tests/
 *.test.ts
 *.test.tsx
 deploy/
+deploy/pre-deploy-checklist.md
