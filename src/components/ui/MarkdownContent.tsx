@@ -1,8 +1,53 @@
 "use client";
 
+import { useCallback, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
+import { Copy, Check } from "lucide-react";
+
+// ─── Code block with copy button ────────────────────────────────────
+
+function CodeBlock({ lang, children }: { lang: string; children: ReactNode }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    const text = typeof children === "string" ? children : extractText(children);
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [children]);
+
+  return (
+    <div className="my-1.5 rounded-md overflow-hidden relative group">
+      <div className="flex items-center justify-between bg-surface px-2 py-0.5">
+        <span className="text-text-dim text-[10px]">{lang || "code"}</span>
+        <button
+          onClick={handleCopy}
+          className="text-text-dim hover:text-text transition-colors p-0.5"
+          title="Copy"
+        >
+          {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+        </button>
+      </div>
+      <pre className="bg-bg/80 px-2.5 py-2 overflow-x-auto text-xs leading-relaxed">
+        <code>{children}</code>
+      </pre>
+    </div>
+  );
+}
+
+function extractText(node: ReactNode): string {
+  if (typeof node === "string") return node;
+  if (Array.isArray(node)) return node.map(extractText).join("");
+  if (node && typeof node === "object" && "props" in node) {
+    return extractText((node as { props: { children?: ReactNode } }).props.children);
+  }
+  return "";
+}
+
+// ─── Markdown components ────────────────────────────────────────────
 
 const components: Components = {
   h1: ({ children }) => <h1 className="text-lg font-bold mt-3 mb-1">{children}</h1>,
@@ -32,14 +77,7 @@ const components: Components = {
     const isBlock = className?.startsWith("language-");
     if (isBlock) {
       const lang = className?.replace("language-", "") ?? "";
-      return (
-        <div className="my-1.5 rounded-md overflow-hidden">
-          {lang && <div className="bg-surface text-text-dim text-[10px] px-2 py-0.5">{lang}</div>}
-          <pre className="bg-bg/80 px-2.5 py-2 overflow-x-auto text-xs leading-relaxed">
-            <code>{children}</code>
-          </pre>
-        </div>
-      );
+      return <CodeBlock lang={lang}>{children}</CodeBlock>;
     }
     return (
       <code className="bg-bg/60 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
@@ -59,6 +97,8 @@ const components: Components = {
     <img src={src} alt={alt || ""} className="max-w-full rounded my-1 max-h-60 object-contain" />
   ),
 };
+
+// ─── Export ─────────────────────────────────────────────────────────
 
 export default function MarkdownContent({ content }: { content: string }) {
   return (
