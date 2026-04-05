@@ -13,6 +13,8 @@ import {
   meetingMinutes,
   jsonForDb,
 } from "../db";
+import { extractFileContent, buildFilePromptSection, buildAttachments, isAllowedFileType, FILE_LIMITS } from "@/lib/file-extractor";
+import type { ExtractedFile } from "@/lib/file-extractor";
 import { parseDbObject } from "../lib/db-json";
 import { getGatewayRuntimeConfigForChannel } from "../lib/gateway-resources";
 import {
@@ -542,6 +544,7 @@ async function streamNpcResponse(
   npcConfig: NpcConfig,
   userId: string,
   message: string,
+  attachments?: Array<{ name: string; mimeType: string; media: string }>,
 ): Promise<string> {
   const { agentId, _channelId, sessionKeyPrefix } = npcConfig;
 
@@ -558,9 +561,15 @@ async function streamNpcResponse(
 
   const sessionKey = `${sessionKeyPrefix || npcId}-dm-${userId}`;
   try {
-    const response = await gateway.chatSend(agentId, sessionKey, message, (delta: string) => {
-      socket.emit("npc:response", { npcId, chunk: delta, done: false });
-    });
+    const response = await gateway.chatSend(
+      agentId,
+      sessionKey,
+      message,
+      (delta: string) => {
+        socket.emit("npc:response", { npcId, chunk: delta, done: false });
+      },
+      attachments,
+    );
     socket.emit("npc:response", { npcId, chunk: "", done: true });
     return response || "";
   } catch (err) {
@@ -952,13 +961,17 @@ export function setupSocketHandlers(io: Server) {
     // ----- npc:chat -----
     socket.on(
       "npc:chat",
-      async (data: { npcId: string; message: string }) => {
-        const { npcId, message } = data;
+      async (data: {
+        npcId: string;
+        message: string;
+        files?: Array<{ name: string; type: string; size: number; data: ArrayBuffer }>;
+      }) => {
+        const { npcId, message, files } = data;
 
         // Validate
         if (!npcId || !message || typeof message !== "string") return;
         const trimmed = message.trim().slice(0, 500);
-        if (!trimmed) return;
+        if (!trimmed && (!files || files.length === 0)) return;
 
         // Rate limit
         const now = Date.now();
@@ -976,16 +989,42 @@ export function setupSocketHandlers(io: Server) {
           return;
         }
 
+        // --- File processing ---
+        let extractedFiles: ExtractedFile[] = [];
+        let fileAttachments: Array<{ name: string; mimeType: string; media: string }> | undefined;
+
+        if (files && files.length > 0) {
+          if (files.length > FILE_LIMITS.maxFileCount) {
+            emitNpcSystemResponse(socket, npcId, "too_many_files");
+            return;
+          }
+          for (const f of files) {
+            if (f.size > FILE_LIMITS.maxFileSize) {
+              emitNpcSystemResponse(socket, npcId, "file_too_large");
+              return;
+            }
+            if (!isAllowedFileType(f.name, f.type)) {
+              emitNpcSystemResponse(socket, npcId, "unsupported_file_type");
+              return;
+            }
+          }
+          extractedFiles = await Promise.all(
+            files.map((f) => extractFileContent(Buffer.from(f.data), f.name, f.type)),
+          );
+          fileAttachments = buildAttachments(extractedFiles);
+        }
+
         const player = players.get(socket.id);
         const historyKey = `${player?.mapId || npcConfig._channelId}:${npcId}`;
         const history = npcChatHistory.get(historyKey) || [];
         history.push({ role: "player", content: trimmed, timestamp: Date.now() });
 
         // Inject task reminder on every NPC DM so task actions can be parsed consistently.
-        const messageToSend = withTaskReminder(trimmed, getSocketLocale(socket));
+        const fileSection = buildFilePromptSection(extractedFiles);
+        const messageToSend = withTaskReminder(trimmed + fileSection, getSocketLocale(socket));
 
         // Stream response via OpenClaw
-        const response = await streamNpcResponse(socket, npcId, npcConfig, user.userId, messageToSend);
+        const response = await streamNpcResponse(socket, npcId, npcConfig, user.userId, messageToSend, fileAttachments);
         if (response) {
           const parsed = parseNpcResponse(response);
           const sanitizedResponse = sanitizeNpcResponseText(response);
