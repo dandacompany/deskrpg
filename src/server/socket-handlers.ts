@@ -15,6 +15,10 @@ import {
 } from "../db";
 import { extractFileContent, buildFilePromptSection, buildAttachments, isAllowedFileType, FILE_LIMITS } from "@/lib/file-extractor";
 import type { ExtractedFile } from "@/lib/file-extractor";
+
+const DEBUG_CHAT = process.env.DEBUG_CHAT === "1" || process.env.DEBUG_CHAT === "true";
+function chatLog(...args: unknown[]) { if (DEBUG_CHAT) console.log("[npc:chat]", ...args); }
+
 import { parseDbObject } from "../lib/db-json";
 import { getGatewayRuntimeConfigForChannel } from "../lib/gateway-resources";
 import {
@@ -967,6 +971,7 @@ export function setupSocketHandlers(io: Server) {
         files?: Array<{ name: string; type: string; size: number; data: ArrayBuffer }>;
       }) => {
         const { npcId, message, files } = data;
+        chatLog(`← user msg to ${npcId}:`, message?.slice(0, 100), files ? `+${files.length} files [${files.map(f => `${f.name}(${(f.size/1024).toFixed(0)}KB)`).join(", ")}]` : "");
 
         // Validate
         if (!npcId || !message || typeof message !== "string") return;
@@ -1012,6 +1017,7 @@ export function setupSocketHandlers(io: Server) {
             files.map((f) => extractFileContent(Buffer.from(f.data), f.name, f.type)),
           );
           fileAttachments = buildAttachments(extractedFiles);
+          chatLog("  extracted:", extractedFiles.map(f => `${f.name}(text=${f.textContent?.length ?? 0}, img=${!!f.base64Data}, trunc=${f.truncated})`).join(", "));
         }
 
         const player = players.get(socket.id);
@@ -1024,7 +1030,9 @@ export function setupSocketHandlers(io: Server) {
         const messageToSend = withTaskReminder(trimmed + fileSection, getSocketLocale(socket));
 
         // Stream response via OpenClaw
+        chatLog(`  → gateway (${npcConfig._name}):`, messageToSend.slice(0, 150) + (messageToSend.length > 150 ? "..." : ""), fileAttachments ? `+${fileAttachments.length} attachments` : "");
         const response = await streamNpcResponse(socket, npcId, npcConfig, user.userId, messageToSend, fileAttachments);
+        chatLog(`  ← npc response (${npcConfig._name}):`, response ? response.slice(0, 150) + (response.length > 150 ? "..." : "") : "(empty)");
         if (response) {
           const parsed = parseNpcResponse(response);
           const sanitizedResponse = sanitizeNpcResponseText(response);

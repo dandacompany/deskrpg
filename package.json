@@ -28,6 +28,7 @@
   ],
   "scripts": {
     "dev": "npx tsx dev-server.ts",
+    "dev:debug": "DEBUG_CHAT=1 npx tsx dev-server.ts",
     "dev:next": "next dev",
     "setup": "docker compose up -d deskrpg-db && dotenv -e .env.local -- drizzle-kit migrate && echo '✓ Ready — run: npm run dev'",
     "setup:lite": "node scripts/setup/setup-lite.js",
