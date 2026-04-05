@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import MarkdownContent from "./MarkdownContent";
 
 export interface ChatBubbleProps {
   sender: "player" | "npc" | "system";
@@ -19,6 +20,7 @@ export default function ChatBubble({ sender, name, streaming, children }: ChatBu
   }
 
   const isPlayer = sender === "player";
+  const isNpc = sender === "npc";
 
   return (
     <div className={`flex ${isPlayer ? "justify-end" : "justify-start"}`}>
@@ -31,7 +33,11 @@ export default function ChatBubble({ sender, name, streaming, children }: ChatBu
         {!isPlayer && name && (
           <div className="text-caption font-semibold text-npc mb-0.5">{name}</div>
         )}
-        {children}
+        {isNpc && typeof children === "string" ? (
+          <MarkdownContent content={children} />
+        ) : (
+          children
+        )}
         {streaming && (
           <span className="inline-block w-1.5 h-4 bg-npc ml-0.5 animate-pulse rounded-sm" />
         )}
