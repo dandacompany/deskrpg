@@ -1,7 +1,8 @@
 /**
  * file-extractor.ts
- * Extracts text content from uploaded files for NPC chat attachments.
- * Image files are not supported (OpenClaw lacks multimodal vision).
+ * Extracts text/image content from uploaded files for NPC chat attachments.
+ * Images are resized and sent as OpenClaw chat.send attachments (multimodal vision).
+ * Text-based files (PDF, XLSX, DOCX) are extracted and inlined in the message.
  */
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -17,6 +18,7 @@ const ALLOWED_EXTENSIONS = new Set([
   ".pdf",
   ".xlsx", ".xls",
   ".docx", ".doc",
+  ".png", ".jpg", ".jpeg", ".gif", ".webp",
 ]);
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -36,7 +38,17 @@ export interface ExtractedFile {
   name: string;
   mimeType: string;
   textContent: string | null;
+  /** Raw base64 image data (no data URI prefix) */
+  imageBase64: string | null;
   truncated: boolean;
+}
+
+/** OpenClaw chat.send attachment format */
+export interface OpenClawAttachment {
+  type: "image";
+  mimeType: string;
+  fileName: string;
+  content: string; // raw base64
 }
 
 // ─── Truncation ──────────────────────────────────────────────────────
@@ -84,6 +96,15 @@ async function extractDocx(buffer: Buffer): Promise<string> {
   return result.value;
 }
 
+async function extractImage(buffer: Buffer): Promise<string> {
+  const sharp = (await import("sharp")).default;
+  const resized = await sharp(buffer)
+    .resize({ width: 1024, height: 1024, fit: "inside" })
+    .jpeg({ quality: 80 })
+    .toBuffer();
+  return resized.toString("base64");
+}
+
 // ─── Main extract function ───────────────────────────────────────────
 
 export async function extractFileContent(
@@ -94,6 +115,13 @@ export async function extractFileContent(
   try {
     const ext = extOf(name);
 
+    // Images → resize and base64 encode for OpenClaw multimodal vision
+    if (mimeType.startsWith("image/")) {
+      const base64 = await extractImage(buffer);
+      return { name, mimeType: "image/jpeg", textContent: null, imageBase64: base64, truncated: false };
+    }
+
+    // Text-based files
     let rawText: string | null = null;
 
     if ([".txt", ".md", ".json", ".csv"].includes(ext)) {
@@ -109,34 +137,47 @@ export async function extractFileContent(
         name,
         mimeType,
         textContent: "지원하지 않는 파일 형식입니다.",
+        imageBase64: null,
         truncated: false,
       };
     }
 
     const { text, truncated } = truncateText(rawText);
-    return { name, mimeType, textContent: text, truncated };
+    return { name, mimeType, textContent: text, imageBase64: null, truncated };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return {
       name,
       mimeType,
       textContent: `[파일 처리 오류: ${name}] ${msg}`,
+      imageBase64: null,
       truncated: false,
     };
   }
 }
 
-// ─── Prompt builder ─────────────────────────────────────────────────
+// ─── Prompt builder (text files only) ───────────────────────────────
 
 export function buildFilePromptSection(files: ExtractedFile[]): string {
   if (files.length === 0) return "";
 
-  const sections = files.map((f) => {
-    if (f.textContent) {
-      return `📎 첨부파일: ${f.name}\n\`\`\`\n${f.textContent}\n\`\`\``;
-    }
-    return `📎 첨부파일: ${f.name} (내용을 읽을 수 없습니다)`;
-  });
+  const sections = files
+    .filter((f) => f.textContent) // skip images — they go via attachments
+    .map((f) => `📎 첨부파일: ${f.name}\n\`\`\`\n${f.textContent}\n\`\`\``);
 
+  if (sections.length === 0) return "";
   return "\n\n" + sections.join("\n\n");
+}
+
+// ─── OpenClaw attachments builder (images only) ─────────────────────
+
+export function buildAttachments(files: ExtractedFile[]): OpenClawAttachment[] | undefined {
+  const images = files.filter((f) => f.imageBase64);
+  if (images.length === 0) return undefined;
+  return images.map((f) => ({
+    type: "image" as const,
+    mimeType: f.mimeType,
+    fileName: f.name,
+    content: f.imageBase64!,
+  }));
 }

@@ -13,8 +13,8 @@ import {
   meetingMinutes,
   jsonForDb,
 } from "../db";
-import { extractFileContent, buildFilePromptSection, isAllowedFileType, FILE_LIMITS } from "@/lib/file-extractor";
-import type { ExtractedFile } from "@/lib/file-extractor";
+import { extractFileContent, buildFilePromptSection, buildAttachments, isAllowedFileType, FILE_LIMITS } from "@/lib/file-extractor";
+import type { ExtractedFile, OpenClawAttachment } from "@/lib/file-extractor";
 
 const DEBUG_CHAT = process.env.DEBUG_CHAT === "1" || process.env.DEBUG_CHAT === "true";
 function chatLog(...args: unknown[]) { if (DEBUG_CHAT) console.log("[npc:chat]", ...args); }
@@ -548,6 +548,7 @@ async function streamNpcResponse(
   npcConfig: NpcConfig,
   userId: string,
   message: string,
+  attachments?: OpenClawAttachment[],
 ): Promise<string> {
   const { agentId, _channelId, sessionKeyPrefix } = npcConfig;
 
@@ -571,6 +572,7 @@ async function streamNpcResponse(
       (delta: string) => {
         socket.emit("npc:response", { npcId, chunk: delta, done: false });
       },
+      attachments,
     );
     socket.emit("npc:response", { npcId, chunk: "", done: true });
     return response || "";
@@ -994,6 +996,7 @@ export function setupSocketHandlers(io: Server) {
 
         // --- File processing (text-based files only) ---
         let extractedFiles: ExtractedFile[] = [];
+        let fileAttachments: OpenClawAttachment[] | undefined;
 
         if (files && files.length > 0) {
           if (files.length > FILE_LIMITS.maxFileCount) {
@@ -1013,7 +1016,8 @@ export function setupSocketHandlers(io: Server) {
           extractedFiles = await Promise.all(
             files.map((f) => extractFileContent(Buffer.from(f.data), f.name, f.type)),
           );
-          chatLog("  extracted:", extractedFiles.map(f => `${f.name}(text=${f.textContent?.length ?? 0}, trunc=${f.truncated})`).join(", "));
+          fileAttachments = buildAttachments(extractedFiles);
+          chatLog("  extracted:", extractedFiles.map(f => `${f.name}(text=${f.textContent?.length ?? 0}, img=${f.imageBase64 ? (f.imageBase64.length/1024).toFixed(0)+'KB' : '-'}, trunc=${f.truncated})`).join(", "));
         }
 
         const player = players.get(socket.id);
@@ -1026,8 +1030,8 @@ export function setupSocketHandlers(io: Server) {
         const messageToSend = withTaskReminder(trimmed + fileSection, getSocketLocale(socket));
 
         // Stream response via OpenClaw
-        chatLog(`  → gateway (${npcConfig._name}): msgLen=${messageToSend.length}(${(messageToSend.length/1024).toFixed(0)}KB)`);
-        const response = await streamNpcResponse(socket, npcId, npcConfig, user.userId, messageToSend);
+        chatLog(`  → gateway (${npcConfig._name}): msgLen=${messageToSend.length}(${(messageToSend.length/1024).toFixed(0)}KB)`, fileAttachments ? `+${fileAttachments.length} att(${fileAttachments.map(a => `${a.fileName}:${(a.content.length/1024).toFixed(0)}KB`).join(",")})` : "");
+        const response = await streamNpcResponse(socket, npcId, npcConfig, user.userId, messageToSend, fileAttachments);
         chatLog(`  ← npc response (${npcConfig._name}):`, response ? response.slice(0, 150) + (response.length > 150 ? "..." : "") : "(empty)");
         if (response) {
           const parsed = parseNpcResponse(response);
