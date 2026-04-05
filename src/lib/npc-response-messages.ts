@@ -6,6 +6,9 @@ const NPC_RESPONSE_MESSAGE_KEYS = {
   gateway_error: "npc.gatewayError",
   wait_before_sending: "npc.waitBeforeSending",
   npc_not_found: "npc.notFound",
+  unsupported_file_type: "npc.unsupportedFileType",
+  file_too_large: "npc.fileTooLarge",
+  too_many_files: "npc.tooManyFiles",
 } as const;
 
 export type NpcResponseMessageCode = keyof typeof NPC_RESPONSE_MESSAGE_KEYS;
