@@ -49,12 +49,14 @@
     "@imgly/background-removal": "^1.7.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.8.0",
-    "drizzle-orm": "^0.45.1",
     "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.1",
     "jose": "^6.2.2",
     "jszip": "^3.10.1",
     "lucide-react": "^1.7.0",
+    "mammoth": "^1.12.0",
     "next": "16.2.1",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.20.0",
     "phaser": "^3.90.0",
     "react": "19.2.4",
@@ -62,7 +64,8 @@
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "tsx": "^4.21.0",
-    "ws": "^8.20.0"
+    "ws": "^8.20.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
