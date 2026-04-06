@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["ssh2"],
   experimental: {
     serverActions: {
-      bodySizeLimit: '50mb',
+      bodySizeLimit: "50mb",
     },
   },
 };

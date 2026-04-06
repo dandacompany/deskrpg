@@ -1,0 +1,34 @@
+services:
+  deskrpg-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: deskrpg
+      POSTGRES_USER: deskrpg
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-deskrpg_test_pw}
+    ports:
+      - "${DESKRPG_TEST_DB_PORT:-5439}:5432"
+    volumes:
+      - deskrpg-test-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deskrpg -d deskrpg"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  deskrpg-app:
+    image: ${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}
+    restart: unless-stopped
+    ports:
+      - "${DESKRPG_TEST_APP_PORT:-3104}:3000"
+      - "${DESKRPG_TEST_ADMIN_PORT:-3105}:3001"
+    environment:
+      DATABASE_URL: postgresql://deskrpg:${POSTGRES_PASSWORD:-deskrpg_test_pw}@deskrpg-db:5432/deskrpg
+      JWT_SECRET: ${JWT_SECRET}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    depends_on:
+      deskrpg-db:
+        condition: service_healthy
+
+volumes:
+  deskrpg-test-pgdata:

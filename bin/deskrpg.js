@@ -19,9 +19,12 @@ function loadRuntimePathsModule() {
 }
 
 function getInstalledPackageRoot(packageName) {
-  const packageJsonPath = require.resolve(path.join(packageName, "package.json"), {
-    paths: [getPackageRoot(), process.cwd()],
-  });
+  const packageJsonPath = require.resolve(
+    path.join(packageName, "package.json"),
+    {
+      paths: [getPackageRoot(), process.cwd()],
+    },
+  );
   return path.dirname(packageJsonPath);
 }
 
@@ -123,7 +126,10 @@ function collectExternalModuleAliases(runtimeRoot) {
     const matches = chunkText.matchAll(/require\("([^"]+)"\)/g);
     for (const match of matches) {
       const aliasName = match[1];
-      for (const [prefix, packageName] of EXTERNAL_ALIAS_PACKAGE_MAP.entries()) {
+      for (const [
+        prefix,
+        packageName,
+      ] of EXTERNAL_ALIAS_PACKAGE_MAP.entries()) {
         if (aliasName.startsWith(prefix)) {
           aliases.set(aliasName, packageName);
         }
@@ -202,13 +208,17 @@ function printHelp() {
   console.log(`deskrpg v${version} — Virtual Office RPG Platform\n`);
   console.log("Usage: deskrpg <command>\n");
   console.log("Commands:");
-  console.log("  init                  Initialize DeskRPG runtime (~/.deskrpg)");
+  console.log(
+    "  init                  Initialize DeskRPG runtime (~/.deskrpg)",
+  );
   console.log("  start [-p PORT] [-d]  Start the DeskRPG server");
   console.log("  stop                  Stop the running DeskRPG server");
   console.log("  update                Update to the latest version");
   console.log("  doctor                Check runtime health");
   console.log("  remove                Remove runtime data (~/.deskrpg)");
-  console.log("  uninstall             Remove runtime data and uninstall the package");
+  console.log(
+    "  uninstall             Remove runtime data and uninstall the package",
+  );
   console.log("  version, -v           Show current version");
   console.log("  help, -h              Show this help message");
   console.log("");
@@ -225,13 +235,22 @@ function printHelp() {
 }
 
 function printUsage() {
-  console.error("Usage: deskrpg <init|start|stop|update|doctor|remove|uninstall|version|help>");
+  console.error(
+    "Usage: deskrpg <init|start|stop|update|doctor|remove|uninstall|version|help>",
+  );
 }
 
 function initializeSqliteRuntime(packageRoot, sqlitePath) {
-  const serverDbModulePath = path.join(packageRoot, "src", "db", "server-db.js");
+  const serverDbModulePath = path.join(
+    packageRoot,
+    "src",
+    "db",
+    "server-db.js",
+  );
   if (!fs.existsSync(serverDbModulePath)) {
-    throw new Error(`Missing SQLite runtime initializer at ${serverDbModulePath}`);
+    throw new Error(
+      `Missing SQLite runtime initializer at ${serverDbModulePath}`,
+    );
   }
 
   const previousDbType = process.env.DB_TYPE;
@@ -267,7 +286,9 @@ function removeDeskRpgHome(runtimePaths) {
 async function runInit() {
   const runtimePaths = loadRuntimePathsModule();
   const packageRoot = getPackageRoot();
-  const envExamplePath = process.env.DESKRPG_ENV_EXAMPLE_PATH || path.join(packageRoot, ".env.example");
+  const envExamplePath =
+    process.env.DESKRPG_ENV_EXAMPLE_PATH ||
+    path.join(packageRoot, ".env.example");
   const runtimeHome = runtimePaths.ensureDeskRpgHome({ envExamplePath });
 
   if (process.env.DESKRPG_SKIP_DB_PUSH !== "1") {
@@ -288,13 +309,19 @@ async function runDoctor() {
   const standaloneAppRoot = findStandaloneAppRoot();
 
   if (!fs.existsSync(envPath)) {
-    console.error(`DeskRPG is not initialized at ${runtimePaths.getDeskRpgHomeDir()}. Run "deskrpg init" first.`);
+    console.error(
+      `DeskRPG is not initialized at ${runtimePaths.getDeskRpgHomeDir()}. Run "deskrpg init" first.`,
+    );
     process.exit(1);
   }
 
-  const missingDirs = [dataDir, uploadsDir, logsDir].filter((dirPath) => !fs.existsSync(dirPath));
+  const missingDirs = [dataDir, uploadsDir, logsDir].filter(
+    (dirPath) => !fs.existsSync(dirPath),
+  );
   if (missingDirs.length > 0) {
-    console.error(`DeskRPG runtime is incomplete. Missing: ${missingDirs.join(", ")}`);
+    console.error(
+      `DeskRPG runtime is incomplete. Missing: ${missingDirs.join(", ")}`,
+    );
     process.exit(1);
   }
 
@@ -314,14 +341,20 @@ async function runDoctor() {
           path.join(packageRoot, ".next", "static"),
         ];
 
-    const missingBuildPaths = requiredBuildPaths.filter((targetPath) => !fs.existsSync(targetPath));
+    const missingBuildPaths = requiredBuildPaths.filter(
+      (targetPath) => !fs.existsSync(targetPath),
+    );
     if (missingBuildPaths.length > 0) {
-      console.error(`DeskRPG package is incomplete. Missing runtime files: ${missingBuildPaths.join(", ")}`);
+      console.error(
+        `DeskRPG package is incomplete. Missing runtime files: ${missingBuildPaths.join(", ")}`,
+      );
       process.exit(1);
     }
   }
 
-  console.log(`DeskRPG runtime looks healthy at ${runtimePaths.getDeskRpgHomeDir()}`);
+  console.log(
+    `DeskRPG runtime looks healthy at ${runtimePaths.getDeskRpgHomeDir()}`,
+  );
 }
 
 function getPidFilePath() {
@@ -377,14 +410,18 @@ async function runStart() {
   const envPath = runtimePaths.getDeskRpgEnvPath();
 
   if (!fs.existsSync(envPath)) {
-    console.error(`DeskRPG is not initialized at ${runtimePaths.getDeskRpgHomeDir()}. Run "deskrpg init" first.`);
+    console.error(
+      `DeskRPG is not initialized at ${runtimePaths.getDeskRpgHomeDir()}. Run "deskrpg init" first.`,
+    );
     process.exit(1);
   }
 
   // Check if already running
   const existingPid = readPidFile();
   if (existingPid && isProcessRunning(existingPid)) {
-    console.error(`DeskRPG is already running (PID ${existingPid}). Use "deskrpg stop" first.`);
+    console.error(
+      `DeskRPG is already running (PID ${existingPid}). Use "deskrpg stop" first.`,
+    );
     process.exit(1);
   }
 
@@ -410,16 +447,12 @@ async function runStart() {
     const out = fs.openSync(logFile, "a");
     const err = fs.openSync(logFile, "a");
 
-    const child = spawn(
-      process.execPath,
-      childArgs,
-      {
-        cwd: serverRoot,
-        stdio: ["ignore", out, err],
-        env: process.env,
-        detached: true,
-      },
-    );
+    const child = spawn(process.execPath, childArgs, {
+      cwd: serverRoot,
+      stdio: ["ignore", out, err],
+      env: process.env,
+      detached: true,
+    });
 
     writePidFile(child.pid);
     child.unref();
@@ -433,15 +466,11 @@ async function runStart() {
   }
 
   // Foreground mode
-  const child = spawn(
-    process.execPath,
-    childArgs,
-    {
-      cwd: serverRoot,
-      stdio: "inherit",
-      env: process.env,
-    },
-  );
+  const child = spawn(process.execPath, childArgs, {
+    cwd: serverRoot,
+    stdio: "inherit",
+    env: process.env,
+  });
 
   writePidFile(child.pid);
 
@@ -502,7 +531,9 @@ async function runStop() {
   // Force kill if still alive
   try {
     process.kill(pid, "SIGKILL");
-  } catch { /* already dead */ }
+  } catch {
+    /* already dead */
+  }
   removePidFile();
   console.log("DeskRPG server forcefully stopped.");
 }
@@ -519,9 +550,13 @@ async function runUpdate() {
 
   let latestVersion;
   try {
-    latestVersion = execSync("npm view deskrpg version", { encoding: "utf8" }).trim();
+    latestVersion = execSync("npm view deskrpg version", {
+      encoding: "utf8",
+    }).trim();
   } catch {
-    console.error("Failed to check latest version. Check your network connection.");
+    console.error(
+      "Failed to check latest version. Check your network connection.",
+    );
     process.exit(1);
   }
 
@@ -553,7 +588,9 @@ async function runUninstall() {
     execSync("npm uninstall -g deskrpg", { stdio: "inherit" });
     console.log("DeskRPG has been completely uninstalled.");
   } catch {
-    console.error("Failed to uninstall global package. Try manually: npm uninstall -g deskrpg");
+    console.error(
+      "Failed to uninstall global package. Try manually: npm uninstall -g deskrpg",
+    );
   }
 }
 
@@ -565,12 +602,28 @@ async function main() {
     return;
   }
 
-  if (command === "version" || command === "--version" || command === "-v" || command === "-V") {
+  if (
+    command === "version" ||
+    command === "--version" ||
+    command === "-v" ||
+    command === "-V"
+  ) {
     console.log(getVersion());
     return;
   }
 
-  if (!command || !["init", "start", "stop", "update", "doctor", "remove", "uninstall"].includes(command)) {
+  if (
+    !command ||
+    ![
+      "init",
+      "start",
+      "stop",
+      "update",
+      "doctor",
+      "remove",
+      "uninstall",
+    ].includes(command)
+  ) {
     printUsage();
     process.exit(1);
   }

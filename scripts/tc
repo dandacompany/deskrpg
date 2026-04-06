@@ -7,9 +7,13 @@ shift || true
 case "$TASK" in
   pre-deploy)
     ;;
+  test-deploy)
+    ;;
   help|--help|-h|"")
-    echo "Usage: npm run tc -- pre-deploy [--smoke]"
-    echo "       npm run tc -- pre-deploy --smoke  # run optional container smoke test"
+    echo "Usage: npm run tc pre-deploy [--smoke]"
+    echo "       npm run tc pre-deploy -- --smoke  # optional smoke test using prod compose"
+    echo "       npm run tc test-deploy [--build] [--keep] [--image <name>] [--env-file <file>]"
+    echo "       npm run tc test-deploy -- --build --image deskrpg:tc-test-$(git rev-parse --short HEAD)"
     exit 0
     ;;
   *)
@@ -20,11 +24,67 @@ case "$TASK" in
 esac
 
 SMOKE=0
-for arg in "$@"; do
-  if [[ "$arg" == "--smoke" ]]; then
-    SMOKE=1
-  fi
-done
+TEST_BUILD=0
+TEST_KEEP=0
+TEST_PROJECT="deskrpg-tc-test"
+TEST_IMAGE="${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}"
+TEST_ENV_FILE="deploy/.env.production"
+TEST_APP_PORT="${DESKRPG_TEST_APP_PORT:-3104}"
+TEST_ADMIN_PORT="${DESKRPG_TEST_ADMIN_PORT:-3105}"
+TEST_DB_PORT="${DESKRPG_TEST_DB_PORT:-5439}"
+
+if [[ "$TASK" == "pre-deploy" ]]; then
+  for arg in "$@"; do
+    if [[ "$arg" == "--smoke" ]]; then
+      SMOKE=1
+    fi
+  done
+fi
+
+if [[ "$TASK" == "test-deploy" ]]; then
+  while (( "$#" )); do
+    case "$1" in
+      --build)
+        TEST_BUILD=1
+        ;;
+      --keep)
+        TEST_KEEP=1
+        ;;
+      --image)
+        shift
+        TEST_IMAGE="${1:?--image requires an image name}"
+        ;;
+      --env-file)
+        shift
+        TEST_ENV_FILE="${1:?--env-file requires a file path}"
+        ;;
+      --app-port)
+        shift
+        TEST_APP_PORT="${1:?--app-port requires a port number}"
+        ;;
+      --admin-port)
+        shift
+        TEST_ADMIN_PORT="${1:?--admin-port requires a port number}"
+        ;;
+      --db-port)
+        shift
+        TEST_DB_PORT="${1:?--db-port requires a port number}"
+        ;;
+      --project-name)
+        shift
+        TEST_PROJECT="${1:?--project-name requires a value}"
+        ;;
+      --smoke)
+        SMOKE=1
+        ;;
+      *)
+        echo "Unknown option for test-deploy: $1" >&2
+        exit 1
+        ;;
+    esac
+    shift
+  done
+fi
 
 need_cmd() {
   local cmd_name="$1"
@@ -53,62 +113,115 @@ require_env_value() {
   fi
 }
 
+wait_for_http_ok() {
+  local port="$1"
+  local label="$2"
+  local i
+  for i in {1..45}; do
+    status="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${port}" || true)"
+    if [[ "$status" == "200" || "$status" == "307" ]]; then
+      echo "$label passed with status $status"
+      return 0
+    fi
+    if [[ "$i" == "45" ]]; then
+      echo "$label failed: service did not return 200/307 (last status: ${status:-none})" >&2
+      return 1
+    fi
+    sleep 2
+  done
+}
+
 echo "==> Pre-deploy checks: tc pre-deploy"
 
 need_cmd git
 need_cmd docker
 
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-if [[ "$BRANCH" != "master" ]]; then
-  echo "Pre-deploy checks must run on master branch. Current branch: $BRANCH" >&2
-  exit 1
+if [[ "$TASK" == "pre-deploy" ]]; then
+  BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  if [[ "$BRANCH" != "master" ]]; then
+    echo "Pre-deploy checks must run on master branch. Current branch: $BRANCH" >&2
+    exit 1
+  fi
+
+  if [[ -n "$(git status --porcelain)" ]]; then
+    echo "Working tree is not clean. Please commit or stash pending changes." >&2
+    exit 1
+  fi
+
+  require_file docker-compose.yml
+  require_file "$TEST_ENV_FILE"
+
+  echo "Validating docker compose config..."
+  docker compose -f docker-compose.yml --env-file "$TEST_ENV_FILE" config >/dev/null
+
+  require_env_value "$TEST_ENV_FILE" JWT_SECRET
+  require_env_value "$TEST_ENV_FILE" POSTGRES_PASSWORD
+
+  IMAGE="${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}"
+  echo "Checking image availability: $IMAGE"
+  docker pull "$IMAGE"
+
+  if [[ "$SMOKE" == "1" ]]; then
+    need_cmd curl
+    echo "Running optional smoke test via docker-compose (production compose)..."
+    TEST_ENV_FILE="deploy/.env.production"
+    TEST_COMPOSE_FILE="docker-compose.yml"
+    TEST_PROJECT="deskrpg-tc-predeploy"
+    cleanup() {
+      docker compose -p "$TEST_PROJECT" -f "$TEST_COMPOSE_FILE" --env-file "$TEST_ENV_FILE" down -v
+    }
+    trap cleanup EXIT
+
+    DESKRPG_IMAGE="$IMAGE" docker compose -p "$TEST_PROJECT" -f "$TEST_COMPOSE_FILE" --env-file "$TEST_ENV_FILE" up -d
+    if ! wait_for_http_ok 3102 "Pre-deploy smoke check"; then
+      docker compose -p "$TEST_PROJECT" -f "$TEST_COMPOSE_FILE" --env-file "$TEST_ENV_FILE" logs --tail 200
+      exit 1
+    fi
+
+    echo "Smoke check complete."
+  fi
+
+  echo "Pre-deploy checks passed."
+  exit 0
 fi
 
-if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Working tree is not clean. Please commit or stash pending changes." >&2
-  exit 1
-fi
-
-require_file docker-compose.yml
-require_file deploy/.env.production
-
-echo "Validating docker compose config..."
-docker compose -f docker-compose.yml --env-file deploy/.env.production config >/dev/null
-
-require_env_value deploy/.env.production JWT_SECRET
-require_env_value deploy/.env.production POSTGRES_PASSWORD
-
-IMAGE="${DESKRPG_IMAGE:-dandacompany/deskrpg:latest}"
-echo "Checking image availability: $IMAGE"
-docker pull "$IMAGE"
-
-if [[ "$SMOKE" == "1" ]]; then
+if [[ "$TASK" == "test-deploy" ]]; then
   need_cmd curl
-  echo "Running optional smoke test via docker-compose..."
-  TEST_ENV_FILE="deploy/.env.production"
+  require_file docker-compose.test.yml
+  require_file "$TEST_ENV_FILE"
+  require_env_value "$TEST_ENV_FILE" JWT_SECRET
+  require_env_value "$TEST_ENV_FILE" POSTGRES_PASSWORD
 
+  if [[ "$TEST_BUILD" == "1" ]]; then
+    echo "Building image for test deploy: $TEST_IMAGE"
+    docker build -t "$TEST_IMAGE" .
+  fi
+
+  echo "Starting release-independent test stack..."
   cleanup() {
-    docker compose -f docker-compose.yml --env-file "$TEST_ENV_FILE" down -v
+    if [[ "$TEST_KEEP" == "0" ]]; then
+      docker compose -p "$TEST_PROJECT" -f docker-compose.test.yml --env-file "$TEST_ENV_FILE" down -v
+    else
+      echo "Keep flag set. Test stack kept running as project '$TEST_PROJECT'."
+    fi
   }
   trap cleanup EXIT
 
-  DESKRPG_IMAGE="$IMAGE" docker compose -f docker-compose.yml --env-file "$TEST_ENV_FILE" up -d
+  DESKRPG_IMAGE="$TEST_IMAGE" \
+    DESKRPG_TEST_APP_PORT="$TEST_APP_PORT" \
+    DESKRPG_TEST_ADMIN_PORT="$TEST_ADMIN_PORT" \
+    DESKRPG_TEST_DB_PORT="$TEST_DB_PORT" \
+    docker compose -p "$TEST_PROJECT" -f docker-compose.test.yml --env-file "$TEST_ENV_FILE" up -d
 
-  for i in {1..30}; do
-    STATUS="$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:3102' || true)"
-    if [[ "$STATUS" == "307" || "$STATUS" == "200" ]]; then
-      echo "Smoke check passed (status: $STATUS)"
-      break
-    fi
-    if [[ "$i" == "30" ]]; then
-      echo "Smoke check failed: service did not return 200/307" >&2
-      docker compose -f docker-compose.yml --env-file "$TEST_ENV_FILE" logs --tail 200
-      exit 1
-    fi
-    sleep 2
-  done
+  if ! wait_for_http_ok "$TEST_APP_PORT" "Test deploy smoke check"; then
+    docker compose -p "$TEST_PROJECT" -f docker-compose.test.yml --env-file "$TEST_ENV_FILE" logs --tail 200
+    exit 1
+  fi
 
-  echo "Smoke check complete."
+  echo "Test stack URL: http://127.0.0.1:${TEST_APP_PORT}"
+  echo "Test deploy complete."
+  exit 0
 fi
 
-echo "Pre-deploy checks passed."
+echo "Unknown task: $TASK" >&2
+exit 1

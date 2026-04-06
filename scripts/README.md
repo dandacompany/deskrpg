@@ -16,6 +16,7 @@ Current public entry points:
 
 - `node scripts/setup/setup-lite.js`
 - `bash scripts/tc` (run `npm run tc pre-deploy` for pre-deploy automated checks)
+- `bash scripts/tc` (run `npm run tc test-deploy -- --build` for a pre-release Docker test deployment)
 
 Current local-only examples:
 
