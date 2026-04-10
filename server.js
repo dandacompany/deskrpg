@@ -697,6 +697,12 @@ ${transcript}
             const { _fromStatus, ...taskData } = movedTask;
             io.to(player.mapId).emit("task:updated", { task: taskData, action: "create" });
             preRegisteredTaskId = taskId;
+            socket.emit("npc:task-registered", {
+              npcId,
+              taskId: taskData.id,
+              npcTaskId: taskId,
+              title: taskTitle,
+            });
           }
         }
       }
@@ -767,6 +773,14 @@ ${transcript}
 
         if (task) {
           io.to(player.mapId).emit("task:updated", { task, action: "create" });
+          if (npcId) {
+            socket.emit("npc:task-registered", {
+              npcId,
+              taskId: task.id,
+              npcTaskId: task.npcTaskId,
+              title: trimmedTitle,
+            });
+          }
         }
       } catch (err) {
         console.error("[TaskManager] Error creating task:", err);

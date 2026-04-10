@@ -1069,6 +1069,13 @@ export function setupSocketHandlers(io: Server) {
               const { _fromStatus, ...taskData } = movedTask as ManagedTask & { _fromStatus?: string };
               io.to(player.mapId).emit("task:updated", { task: taskData, action: "create" });
               preRegisteredTaskId = taskId;
+              // Notify chat tab that a task was registered
+              socket.emit("npc:task-registered", {
+                npcId,
+                taskId: taskData.id,
+                npcTaskId: taskId,
+                title: taskTitle,
+              });
             }
           }
         }
@@ -1318,6 +1325,15 @@ export function setupSocketHandlers(io: Server) {
 
         if (task) {
           io.to(player.mapId).emit("task:updated", { task, action: "create" });
+          // Notify chat that task was registered (with optional NPC assignment)
+          if (npcId) {
+            socket.emit("npc:task-registered", {
+              npcId,
+              taskId: (task as ManagedTask).id,
+              npcTaskId: (task as ManagedTask).npcTaskId,
+              title: trimmedTitle,
+            });
+          }
         }
       } catch (err) {
         console.error("[TaskManager] Error creating task:", err);

@@ -2006,6 +2006,7 @@ const ko: Record<string, string> = {
   "task.sendAsTask": "태스크로 보내기",
   "task.sendAsTaskOn": "태스크로 보내기 (활성)",
   "task.sendTask": "태스크 전송",
+  "task.registeredNotice": "📋 새 태스크가 등록되었습니다: \"{title}\"",
 };
 
 export default ko;

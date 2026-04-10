@@ -2005,6 +2005,7 @@ const en: Record<string, string> = {
   "task.sendAsTask": "Send as Task",
   "task.sendAsTaskOn": "Send as Task (active)",
   "task.sendTask": "Send Task",
+  "task.registeredNotice": "📋 New task registered: \"{title}\"",
 };
 
 export default en;

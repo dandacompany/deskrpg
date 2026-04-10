@@ -805,6 +805,21 @@ function GamePageInner() {
         }
       });
 
+      // Task registration notification in chat
+      socketInstance.on("npc:task-registered", ({ npcId, npcTaskId, title }: {
+        npcId: string; taskId: string; npcTaskId: string; title: string;
+      }) => {
+        if (dialogNpcRef.current?.npcId !== npcId) return;
+        setNpcMessages((prev) => [
+          ...prev,
+          {
+            role: "npc" as const,
+            content: t("task.registeredNotice", { title }),
+            taskCard: { taskId: "", npcTaskId, title, status: "in_progress" },
+          },
+        ]);
+      });
+
       // Mirror task execution results into NPC chat tab
       socketInstance.on("npc:task-chat-mirror", ({ npcId, npcTaskId, taskTitle, content }: {
         npcId: string; npcTaskId: string; taskTitle: string; content: string; action?: string;
@@ -834,6 +849,7 @@ function GamePageInner() {
         socketInstance.off("task:list-response");
         socketInstance.off("npc:broadcast-remove");
         socketInstance.off("npc:task-chat-mirror");
+        socketInstance.off("npc:task-registered");
         socketInstance.off("npc:task-created");
         socketInstance.off("npc:task-completed");
         socketInstance.off("npc:task-response");
