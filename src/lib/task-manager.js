@@ -40,6 +40,7 @@ function normalizeTask(row) {
     stalledAt: normalizeTimestamp(row.stalledAt),
     stalledReason: row.stalledReason ?? null,
     npcName: row.npcName || undefined,
+    scheduledTaskId: row.scheduledTaskId || null,
     createdAt: normalizeTimestamp(row.createdAt),
     updatedAt: normalizeTimestamp(row.updatedAt),
     completedAt: normalizeTimestamp(row.completedAt),
@@ -416,28 +417,31 @@ class TaskManager {
     return normalizeTask(row);
   }
 
-  async createBacklogTask(channelId, assignerId, title, summary, npcTaskIdOverride) {
+  async createBacklogTask(channelId, assignerId, title, summary, npcTaskIdOverride, scheduledTaskId) {
     const { db, schema } = this;
     const npcTaskId = npcTaskIdOverride || generateTaskId();
 
+    const values = {
+      channelId,
+      npcId: null,
+      assignerId,
+      npcTaskId,
+      title,
+      summary: summary || null,
+      status: "backlog",
+      autoNudgeCount: 0,
+      autoNudgeMax: 5,
+      lastNudgedAt: null,
+      lastReportedAt: null,
+      stalledAt: null,
+      stalledReason: null,
+      completedAt: null,
+    };
+    if (scheduledTaskId) values.scheduledTaskId = scheduledTaskId;
+
     const [row] = await db
       .insert(schema.tasks)
-      .values({
-        channelId,
-        npcId: null,
-        assignerId,
-        npcTaskId,
-        title,
-        summary: summary || null,
-        status: "backlog",
-        autoNudgeCount: 0,
-        autoNudgeMax: 5,
-        lastNudgedAt: null,
-        lastReportedAt: null,
-        stalledAt: null,
-        stalledReason: null,
-        completedAt: null,
-      })
+      .values(values)
       .returning();
 
     return normalizeTask(row);

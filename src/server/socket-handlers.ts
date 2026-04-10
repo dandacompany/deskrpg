@@ -7,12 +7,15 @@ import {
   npcs,
   channelMembers,
   tasks,
+  scheduledTasks,
   npcReports,
   characters,
   groupMembers,
   meetingMinutes,
   jsonForDb,
 } from "../db";
+import { ScheduledTaskManager } from "../lib/scheduled-task-manager";
+import { getNextCronRun, validateCronExpr } from "../lib/cron-parser";
 import { extractFileContent, buildFilePromptSection, buildAttachments, isAllowedFileType, FILE_LIMITS } from "@/lib/file-extractor";
 import type { ExtractedFile, OpenClawAttachment } from "@/lib/file-extractor";
 
@@ -134,10 +137,14 @@ const channelGateways = new Map<string, any>();
 
 const CHAT_COOLDOWN_MS = 2000;
 const PROGRESS_NUDGE_SCAN_MS = 60_000;
+const SCHEDULED_TASK_SCAN_MS = 60_000;
 const taskManager = new TaskManager(db, { tasks, npcs });
+const scheduledTaskManager = new ScheduledTaskManager(db, { scheduledTasks, tasks });
 const progressNudgeInFlight = new Set<string>();
 const progressNudgeCooldowns = new Map<string, number>();
+const scheduledTaskInFlight = new Set<string>();
 let progressNudgeTimer: NodeJS.Timeout | null = null;
+let scheduledTaskTimer: NodeJS.Timeout | null = null;
 
 function getSocketLocale(socket: Socket) {
   const cookieHeader = socket.handshake.headers.cookie || "";
@@ -450,6 +457,104 @@ async function scanProgressNudges(io: Server) {
     }
   } catch (err) {
     console.error("[task-reporting] Progress nudge scan failed:", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled task scanner — runs every 60s, executes due recurring tasks
+// ---------------------------------------------------------------------------
+
+async function scanScheduledTasks(io: Server) {
+  try {
+    const now = new Date();
+    const dueSchedules = await scheduledTaskManager.getDueSchedules(now);
+
+    for (const schedule of dueSchedules) {
+      if (scheduledTaskInFlight.has(schedule.id)) continue;
+      scheduledTaskInFlight.add(schedule.id);
+
+      try {
+        // Resolve assigner's userId for report delivery
+        const assignerRows = await db.select({ userId: characters.userId })
+          .from(characters).where(eq(characters.id, schedule.assignerId)).limit(1);
+        const targetUserId = assignerRows[0]?.userId;
+        if (!targetUserId) { console.warn("[scheduled-task] No user for assigner", schedule.assignerId); continue; }
+
+        // Create child task
+        const childTask = await taskManager.createBacklogTask(
+          schedule.channelId, schedule.assignerId, schedule.title, schedule.summary, undefined, schedule.id,
+        ) as ManagedTask | null;
+        if (!childTask) continue;
+
+        // Move to in_progress with NPC assignment
+        const movedTask = await taskManager.moveTask(childTask.id, schedule.channelId, "in_progress", schedule.npcId) as ManagedTask | null;
+        if (!movedTask) continue;
+
+        const { _fromStatus, ...taskData } = movedTask as ManagedTask & { _fromStatus?: string };
+        io.to(schedule.channelId).emit("task:updated", { task: taskData, action: "scheduled_execute" });
+
+        // Execute via NPC gateway (no socket needed — offline capable)
+        const npcConfig = await getNpcConfig(schedule.npcId);
+        if (!npcConfig) {
+          console.warn("[scheduled-task] No NPC config for", schedule.npcId);
+          continue;
+        }
+
+        const gateway = await getOrConnectGateway(schedule.channelId);
+        if (!gateway) {
+          console.warn("[scheduled-task] Gateway not available for channel", schedule.channelId);
+          continue;
+        }
+
+        const prompt = `[SCHEDULED TASK]\n제목: ${schedule.title}\n태스크 ID: ${taskData.npcTaskId}\n${schedule.summary ? `설명: ${schedule.summary}\n` : ""}이 태스크는 자동 스케줄에 의해 실행되었습니다. 즉시 작업을 수행하고 결과를 보고하세요.`;
+        const messageToSend = withTaskReminder(prompt, "ko");
+        const sessionKey = `${npcConfig.sessionKeyPrefix || schedule.npcId}-task-${taskData.npcTaskId}`;
+
+        let response = "";
+        try {
+          response = await gateway.chatSend(
+            npcConfig.agentId,
+            sessionKey,
+            messageToSend,
+            () => {}, // No streaming for offline execution
+          ) || "";
+        } catch (chatErr) {
+          console.error("[scheduled-task] Gateway chat error:", (chatErr as Error).message);
+        }
+
+        if (response) {
+          const parsed = parseNpcResponse(response);
+          await processNpcTaskActions(io, parsed, {
+            channelId: schedule.channelId,
+            npcId: schedule.npcId,
+            npcName: npcConfig._name,
+            assignerCharacterId: schedule.assignerId,
+            targetUserId,
+          });
+
+          // Emit execution notification to connected clients
+          io.to(schedule.channelId).emit("schedule:executed", {
+            scheduleId: schedule.id,
+            taskId: taskData.id,
+            npcId: schedule.npcId,
+            title: schedule.title,
+          });
+        }
+
+        // Advance schedule
+        const nextRunAt = getNextCronRun(schedule.cronExpr, schedule.timezone, now);
+        await scheduledTaskManager.markExecuted(schedule.id, now, nextRunAt);
+        await scheduledTaskManager.cleanupOldHistory(schedule.id, schedule.maxHistory);
+
+        console.log(`[scheduled-task] Executed "${schedule.title}" → next run: ${nextRunAt.toISOString()}`);
+      } catch (err) {
+        console.error(`[scheduled-task] Error executing schedule ${schedule.id}:`, err);
+      } finally {
+        scheduledTaskInFlight.delete(schedule.id);
+      }
+    }
+  } catch (err) {
+    console.error("[scheduled-task] Scan failed:", err);
   }
 }
 
@@ -896,6 +1001,11 @@ export function setupSocketHandlers(io: Server) {
     progressNudgeTimer = setInterval(() => {
       void scanProgressNudges(io);
     }, PROGRESS_NUDGE_SCAN_MS);
+  }
+  if (!scheduledTaskTimer) {
+    scheduledTaskTimer = setInterval(() => {
+      void scanScheduledTasks(io);
+    }, SCHEDULED_TASK_SCAN_MS);
   }
 
   io.on("connection", async (socket) => {
