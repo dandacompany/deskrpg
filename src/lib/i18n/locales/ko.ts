@@ -1267,6 +1267,7 @@ const ko: Record<string, string> = {
   "game.aiGateway": "AI 연결",
   "game.gatewayConnect": "연결하기",
   "game.tasks": "태스크",
+  "game.schedules": "반복스케줄",
   "game.channel": "채널",
   "game.notifications": "알림",
   "game.markAllRead": "모두 읽음",
@@ -2029,6 +2030,8 @@ const ko: Record<string, string> = {
   "schedule.enable": "활성화",
   "schedule.disable": "비활성화",
   "schedule.tab": "스케줄",
+  "schedule.boardTitle": "반복스케줄",
+  "schedule.boardHint": "등록된 스케줄은 매분 자동 검사되어 cron 시각에 NPC가 작업을 수행합니다.",
 };
 
 export default ko;

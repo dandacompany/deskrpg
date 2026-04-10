@@ -1266,6 +1266,7 @@ const en: Record<string, string> = {
   "game.aiGateway": "AI Gateway",
   "game.gatewayConnect": "Connect",
   "game.tasks": "Tasks",
+  "game.schedules": "Schedules",
   "game.channel": "Channel",
   "game.notifications": "Notifications",
   "game.markAllRead": "Mark all read",
@@ -2028,6 +2029,8 @@ const en: Record<string, string> = {
   "schedule.enable": "Enable",
   "schedule.disable": "Disable",
   "schedule.tab": "Schedules",
+  "schedule.boardTitle": "Recurring Schedules",
+  "schedule.boardHint": "Schedules are scanned every minute. NPCs execute the task automatically at the cron time.",
 };
 
 export default en;

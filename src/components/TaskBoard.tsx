@@ -7,9 +7,8 @@ import TaskCreateForm from "./TaskCreateForm";
 import NpcAssignModal from "./NpcAssignModal";
 import DroppableColumn from "./DroppableColumn";
 import DraggableTaskCard from "./DraggableTaskCard";
-import ScheduleListPanel from "./ScheduleListPanel";
 import { useT } from "@/lib/i18n";
-import { ClipboardList, X, Clock, Loader, CheckCircle, PauseCircle, Inbox, Timer } from "lucide-react";
+import { ClipboardList, X, Clock, Loader, CheckCircle, PauseCircle, Inbox } from "lucide-react";
 import type { Socket } from "socket.io-client";
 
 interface NpcInfo {
@@ -52,7 +51,6 @@ export default function TaskBoard({
   npcs = [],
 }: TaskBoardProps) {
   const t = useT();
-  const [activeTab, setActiveTab] = useState<"board" | "schedules">("board");
   const [filterNpc, setFilterNpc] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [assignModal, setAssignModal] = useState<{
@@ -136,64 +134,36 @@ export default function TaskBoard({
         {/* Header */}
         <div className="px-4 py-3 border-b border-border flex justify-between items-center">
           <div className="flex items-center gap-3">
+            <span className="text-title text-text flex items-center gap-1.5">
+              <ClipboardList className="w-4 h-4" />{t("task.board")}
+            </span>
             <div className="flex gap-1">
               <button
-                onClick={() => setActiveTab("board")}
-                className={`px-2.5 py-1 rounded text-[12px] font-bold flex items-center gap-1 ${
-                  activeTab === "board" ? "bg-primary text-white" : "bg-surface text-text-muted hover:text-text"
+                onClick={() => setFilterNpc(null)}
+                className={`px-2 py-0.5 rounded text-[10px] ${
+                  !filterNpc ? "bg-primary text-white" : "bg-surface text-text-muted"
                 }`}
               >
-                <ClipboardList className="w-3.5 h-3.5" />{t("task.board")}
+                {t("common.all")}
               </button>
-              <button
-                onClick={() => setActiveTab("schedules")}
-                className={`px-2.5 py-1 rounded text-[12px] font-bold flex items-center gap-1 ${
-                  activeTab === "schedules" ? "bg-primary text-white" : "bg-surface text-text-muted hover:text-text"
-                }`}
-              >
-                <Timer className="w-3.5 h-3.5" />{t("schedule.tab")}
-              </button>
-            </div>
-            {activeTab === "board" && (
-              <div className="flex gap-1">
+              {npcList.map(([id, name]) => (
                 <button
-                  onClick={() => setFilterNpc(null)}
+                  key={id}
+                  onClick={() => setFilterNpc(id)}
                   className={`px-2 py-0.5 rounded text-[10px] ${
-                    !filterNpc ? "bg-primary text-white" : "bg-surface text-text-muted"
+                    filterNpc === id ? "bg-primary text-white" : "bg-surface text-text-muted"
                   }`}
                 >
-                  {t("common.all")}
+                  {name}
                 </button>
-                {npcList.map(([id, name]) => (
-                  <button
-                    key={id}
-                    onClick={() => setFilterNpc(id)}
-                    className={`px-2 py-0.5 rounded text-[10px] ${
-                      filterNpc === id ? "bg-primary text-white" : "bg-surface text-text-muted"
-                    }`}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
-            )}
+              ))}
+            </div>
           </div>
           <button onClick={onClose} className="text-text-muted hover:text-white"><X className="w-5 h-5" /></button>
         </div>
 
-        {/* Schedules Tab */}
-        {activeTab === "schedules" && (
-          <div className="flex-1 overflow-y-auto p-4">
-            <ScheduleListPanel
-              channelId={channelId}
-              socket={socket}
-              npcs={npcs.map((n) => ({ id: n.id, name: n.name }))}
-            />
-          </div>
-        )}
-
         {/* Kanban Columns */}
-        {activeTab === "board" && <div className="flex-1 flex gap-2 p-3 overflow-hidden">
+        <div className="flex-1 flex gap-2 p-3 overflow-hidden">
           {COLUMNS.map((col) => {
             const colTasks = groupedTasks[col.status as keyof typeof groupedTasks] || [];
             return (
@@ -242,14 +212,12 @@ export default function TaskBoard({
               </DroppableColumn>
             );
           })}
-        </div>}
+        </div>
 
         {/* Drag hint */}
-        {activeTab === "board" && (
-          <div className="px-4 py-2 text-center text-[10px] text-text-dim border-t border-border">
-            {t("task.dragHint")}
-          </div>
-        )}
+        <div className="px-4 py-2 text-center text-[10px] text-text-dim border-t border-border">
+          {t("task.dragHint")}
+        </div>
       </div>
 
       {/* NPC Assign Modal */}

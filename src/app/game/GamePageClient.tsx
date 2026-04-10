@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useT, useLocale, LOCALES } from "@/lib/i18n";
-import { ClipboardList, MessageSquare, Undo2, Clock, Footprints, PhoneCall, Bell, ChevronDown, UserPlus, UserMinus, Settings, Share2, LogOut, Pencil, Users, Globe, RotateCcw, Bug, Info } from "lucide-react";
+import { ClipboardList, MessageSquare, Undo2, Clock, Footprints, PhoneCall, Bell, ChevronDown, UserPlus, UserMinus, Settings, Share2, LogOut, Pencil, Users, Globe, RotateCcw, Bug, Info, Timer } from "lucide-react";
 import type { Socket } from "socket.io-client";
 import {
   CharacterAppearance,
@@ -20,6 +20,7 @@ import type { NpcChatMessage } from "@/components/NpcDialog";
 import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
 import TaskBoard from "@/components/TaskBoard";
+import ScheduleBoard from "@/components/ScheduleBoard";
 import type { Task } from "@/components/TaskCard";
 import { getLocalizedErrorMessage, getLocalizedMessage } from "@/lib/i18n/error-codes";
 import { resolveNpcResponseChunk, type NpcResponsePayload } from "@/lib/npc-response-messages";
@@ -274,6 +275,7 @@ function GamePageInner() {
   const [showChannelSettings, setShowChannelSettings] = useState(false);
   const [channelSettingsInitialTab, setChannelSettingsInitialTab] = useState<"settings" | "members" | "gateway">("settings");
   const [showTaskBoard, setShowTaskBoard] = useState(false);
+  const [showScheduleBoard, setShowScheduleBoard] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [meetingMinutesCount, setMeetingMinutesCount] = useState(0);
@@ -1803,6 +1805,14 @@ function GamePageInner() {
             })()}
           </button>
 
+          {/* Schedule button */}
+          <button
+            onClick={() => setShowScheduleBoard(true)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-primary/80 hover:bg-primary text-white rounded-md text-caption font-semibold"
+          >
+            <Timer className="w-3 h-3" /> {t("game.schedules")}
+          </button>
+
           {/* Separator */}
           <div className="w-px h-5 bg-border" />
 
@@ -2216,6 +2226,14 @@ function GamePageInner() {
         onRequestReportTask={requestTaskReport}
         onResumeTask={resumeTask}
         onCompleteTask={completeTask}
+      />
+
+      <ScheduleBoard
+        channelId={channelId!}
+        socket={socketRef.current}
+        isOpen={showScheduleBoard}
+        onClose={() => setShowScheduleBoard(false)}
+        npcs={channelNpcs.map((npc: any) => ({ id: npc.id, name: npc.name }))}
       />
 
       {/* Placement mode indicator */}
