@@ -804,6 +804,7 @@ export class GameScene extends Phaser.Scene {
   private nearbyNpcs: NpcSprite[] = [];
   private nearbyPlayers: { id: string; name: string }[] = [];
   private dialogOpen = false;
+  private dialogManual = false; // true when dialog opened externally (e.g. from task board)
   private lastToastMessage: string | null = null;
   private lastChatInputEnabled: boolean | null = null;
   private editorKeys: { one?: Phaser.Input.Keyboard.Key; two?: Phaser.Input.Keyboard.Key; three?: Phaser.Input.Keyboard.Key; oKey?: Phaser.Input.Keyboard.Key } = {};
@@ -1208,8 +1209,13 @@ export class GameScene extends Phaser.Scene {
     EventBus.on("dialog:open", () => {
       this.dialogOpen = true;
     });
+    EventBus.on("dialog:open-manual", () => {
+      this.dialogOpen = true;
+      this.dialogManual = true;
+    });
     EventBus.on("dialog:close", () => {
       this.dialogOpen = false;
+      this.dialogManual = false;
     });
 
     // Placement mode events
@@ -1659,7 +1665,7 @@ export class GameScene extends Phaser.Scene {
     // (e.g. React Strict Mode double-invocation).
     this.events.once("destroy", () => {
       const gameSceneEvents = [
-        "dialog:open", "dialog:close",
+        "dialog:open", "dialog:open-manual", "dialog:close",
         "placement-mode-start", "placement-mode-end",
         "spawn-set-mode-start", "spawn-set-mode-end",
         "task-automation-updated",
@@ -2967,7 +2973,7 @@ export class GameScene extends Phaser.Scene {
     // NPC dialog: auto-close when no NPCs nearby
     // But don't auto-close if an NPC is walking toward the player (delivering response)
     const npcApproaching = this.npcSprites.some(n => n.moveState === "moving-to-player");
-    if (this.dialogOpen && nearby.length === 0 && this.nearbyPlayers.length === 0 && !npcApproaching) {
+    if (this.dialogOpen && !this.dialogManual && nearby.length === 0 && this.nearbyPlayers.length === 0 && !npcApproaching) {
       EventBus.emit("npc:dialog-auto-close");
     }
 

@@ -2247,7 +2247,7 @@ function GamePageInner() {
           dialogNpcRef.current = data;
           setDialogNpc(data);
           setActiveTaskId(npcTaskId);
-          EventBus.emit("dialog:open");
+          EventBus.emit("dialog:open-manual");
           if (socketRef.current) {
             socketRef.current.emit("npc:history", { npcId });
             socketRef.current.emit("npc:task-history", { npcId, npcTaskId });
