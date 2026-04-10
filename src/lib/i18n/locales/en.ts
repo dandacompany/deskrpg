@@ -2005,6 +2005,10 @@ const en: Record<string, string> = {
   "task.sendAsTask": "Send as Task",
   "task.sendAsTaskOn": "Send as Task (active)",
   "task.sendTask": "Send Task",
+  "task.toggleLabel": "Task Registration",
+  "task.helpLabel": "Task registration help",
+  "task.helpTitle": "What is Task Registration?",
+  "task.helpBody": "When ON, your message is registered as a task for the NPC. You can track progress on the task board. Turn OFF for casual chat or greetings.",
   "task.registeredNotice": "📋 New task registered: \"{title}\"",
 };
 

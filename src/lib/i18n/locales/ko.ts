@@ -2006,6 +2006,10 @@ const ko: Record<string, string> = {
   "task.sendAsTask": "태스크로 보내기",
   "task.sendAsTaskOn": "태스크로 보내기 (활성)",
   "task.sendTask": "태스크 전송",
+  "task.toggleLabel": "태스크 등록",
+  "task.helpLabel": "태스크 등록 도움말",
+  "task.helpTitle": "태스크 등록이란?",
+  "task.helpBody": "ON 상태에서 메시지를 보내면 NPC에게 업무로 등록되어 태스크 보드에서 진행 상황을 추적할 수 있습니다. 일반 대화나 인사는 OFF로 전환하세요.",
   "task.registeredNotice": "📋 새 태스크가 등록되었습니다: \"{title}\"",
 };
 

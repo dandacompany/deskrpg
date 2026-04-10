@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useT } from "@/lib/i18n";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, HelpCircle } from "lucide-react";
 
 interface ChatInputProps {
   onSend: (message: string, files?: File[], asTask?: boolean) => void;
@@ -32,7 +32,8 @@ export default function ChatInput({
   const t = useT();
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[]>([]);
-  const [asTask, setAsTask] = useState(false);
+  const [asTask, setAsTask] = useState(true);
+  const [showTaskHelp, setShowTaskHelp] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -106,6 +107,48 @@ export default function ChatInput({
 
   return (
     <div className="border-t border-gray-700 px-3 py-2">
+      {/* Task toggle bar */}
+      {showTaskToggle && (
+        <div className="flex items-center justify-between mb-1.5 relative">
+          <button
+            onClick={() => setAsTask((v) => !v)}
+            disabled={disabled}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+              asTask
+                ? "bg-primary/15 text-primary border border-primary/40"
+                : "bg-gray-800 text-gray-400 border border-gray-700 hover:border-gray-500"
+            }`}
+          >
+            <ClipboardList className="w-3 h-3" />
+            {t("task.toggleLabel")}
+            <span className={`px-1 py-px rounded text-[9px] font-bold ${
+              asTask ? "bg-primary/30 text-primary" : "bg-gray-700 text-gray-500"
+            }`}>
+              {asTask ? "ON" : "OFF"}
+            </span>
+          </button>
+          <button
+            onClick={() => setShowTaskHelp((v) => !v)}
+            className="text-gray-500 hover:text-gray-300 p-0.5"
+            aria-label={t("task.helpLabel")}
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+          </button>
+          {showTaskHelp && (
+            <div className="absolute bottom-full right-0 mb-1 w-56 bg-gray-800 border border-gray-600 rounded-lg p-2.5 text-[10px] text-gray-300 leading-relaxed shadow-xl z-10">
+              <p className="font-bold text-white mb-1">{t("task.helpTitle")}</p>
+              <p>{t("task.helpBody")}</p>
+              <button
+                onClick={() => setShowTaskHelp(false)}
+                className="mt-1.5 text-primary text-[10px] hover:underline"
+              >
+                {t("common.close")}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* File preview */}
       {files.length > 0 && (
         <div className="flex gap-2 mb-2 flex-wrap">
@@ -166,23 +209,6 @@ export default function ChatInput({
           }`}
           style={{ maxHeight: "120px" }}
         />
-
-        {/* Task toggle */}
-        {showTaskToggle && (
-          <button
-            onClick={() => setAsTask((v) => !v)}
-            disabled={disabled}
-            className={`p-2 rounded shrink-0 self-end transition-colors ${
-              asTask
-                ? "bg-primary/20 text-primary ring-1 ring-primary"
-                : "text-gray-400 hover:text-white hover:bg-white/10"
-            }`}
-            title={asTask ? t("task.sendAsTaskOn") : t("task.sendAsTask")}
-            aria-label={t("task.sendAsTask")}
-          >
-            <ClipboardList className="w-4 h-4" />
-          </button>
-        )}
 
         {/* Send button */}
         <button
