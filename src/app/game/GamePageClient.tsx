@@ -805,6 +805,21 @@ function GamePageInner() {
         }
       });
 
+      // Mirror task execution results into NPC chat tab
+      socketInstance.on("npc:task-chat-mirror", ({ npcId, npcTaskId, taskTitle, content }: {
+        npcId: string; npcTaskId: string; taskTitle: string; content: string; action?: string;
+      }) => {
+        if (dialogNpcRef.current?.npcId !== npcId) return;
+        setNpcMessages((prev) => [
+          ...prev,
+          {
+            role: "npc" as const,
+            content,
+            taskCard: { taskId: "", npcTaskId, title: taskTitle, status: "in_progress" },
+          },
+        ]);
+      });
+
       // Request initial task list for this channel
       if (channelId) {
         socketInstance.emit("task:list", { channelId });
@@ -818,6 +833,7 @@ function GamePageInner() {
         socketInstance.off("task:deleted");
         socketInstance.off("task:list-response");
         socketInstance.off("npc:broadcast-remove");
+        socketInstance.off("npc:task-chat-mirror");
         socketInstance.off("npc:task-created");
         socketInstance.off("npc:task-completed");
         socketInstance.off("npc:task-response");

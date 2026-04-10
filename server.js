@@ -825,6 +825,15 @@ ${transcript}
                 assignerCharacterId: player.characterId,
                 targetUserId: player.userId,
               });
+              // Mirror task execution result to chat tab
+              const sanitized = require("./src/lib/task-block-utils.js").sanitizeNpcResponseText(response);
+              socket.emit("npc:task-chat-mirror", {
+                npcId: task.npcId,
+                npcTaskId: task.npcTaskId,
+                taskTitle: task.title,
+                content: sanitized.slice(0, 500),
+                action: "auto_execute",
+              });
               socket.emit("npc:response-complete", {
                 npcId: task.npcId,
                 npcName: npcConfig._name || task.npcId,
