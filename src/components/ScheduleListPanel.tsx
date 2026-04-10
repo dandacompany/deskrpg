@@ -91,7 +91,7 @@ export default function ScheduleListPanel({ channelId, socket, npcs, selectedNpc
             <select
               value={createNpcId || ""}
               onChange={(e) => setCreateNpcId(e.target.value || null)}
-              className="w-full bg-surface text-text text-[11px] rounded px-2 py-1 border border-border"
+              className="w-full bg-surface text-text text-[13px] rounded px-2 py-1.5 border border-border"
             >
               <option value="">{t("schedule.selectNpc")}</option>
               {npcs.map((npc) => (
