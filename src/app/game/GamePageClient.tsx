@@ -2226,6 +2226,15 @@ function GamePageInner() {
         onRequestReportTask={requestTaskReport}
         onResumeTask={resumeTask}
         onCompleteTask={completeTask}
+        onOpenNpcChat={(npcId) => {
+          const npc = channelNpcs.find((n: { id: string; name: string }) => n.id === npcId);
+          if (!npc) return;
+          const data = { npcId: npc.id, npcName: npc.name };
+          dialogNpcRef.current = data;
+          setDialogNpc(data);
+          EventBus.emit("dialog:open");
+          if (socketRef.current) socketRef.current.emit("npc:history", { npcId });
+        }}
       />
 
       <ScheduleBoard

@@ -25,6 +25,7 @@ interface TaskBoardProps {
   onRequestReportTask?: (taskId: string) => void;
   onResumeTask?: (taskId: string) => void;
   onCompleteTask?: (taskId: string) => void;
+  onOpenNpcChat?: (npcId: string) => void;
   tasks: Task[];
   socket: Socket | null;
   npcs?: NpcInfo[];
@@ -47,6 +48,7 @@ export default function TaskBoard({
   onRequestReportTask,
   onResumeTask,
   onCompleteTask,
+  onOpenNpcChat,
   socket,
   npcs = [],
 }: TaskBoardProps) {
@@ -197,16 +199,26 @@ export default function TaskBoard({
                 )}
                 {colTasks.map((task) => (
                   <DraggableTaskCard key={task.id} taskId={task.id} status={col.status}>
-                    <TaskCard
-                      task={task}
-                      showNpcName
-                      compact
-                      onDelete={onDeleteTask}
-                      onRequestReport={onRequestReportTask}
-                      onResume={onResumeTask}
-                      onComplete={onCompleteTask}
-                      onAssign={handleAssignClick}
-                    />
+                    <div
+                      onClick={() => {
+                        if (task.npcId && onOpenNpcChat) {
+                          onOpenNpcChat(task.npcId);
+                          onClose();
+                        }
+                      }}
+                      className={task.npcId && onOpenNpcChat ? "cursor-pointer" : ""}
+                    >
+                      <TaskCard
+                        task={task}
+                        showNpcName
+                        compact
+                        onDelete={onDeleteTask}
+                        onRequestReport={onRequestReportTask}
+                        onResume={onResumeTask}
+                        onComplete={onCompleteTask}
+                        onAssign={handleAssignClick}
+                      />
+                    </div>
                   </DraggableTaskCard>
                 ))}
               </DroppableColumn>
