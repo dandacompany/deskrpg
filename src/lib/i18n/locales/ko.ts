@@ -2003,6 +2003,9 @@ const ko: Record<string, string> = {
   "task.chatPlaceholder": "태스크에 대해 추가 지시를 보내보세요.",
   "task.register": "등록",
   "task.registered": "등록됨",
+  "task.sendAsTask": "태스크로 보내기",
+  "task.sendAsTaskOn": "태스크로 보내기 (활성)",
+  "task.sendTask": "태스크 전송",
 };
 
 export default ko;

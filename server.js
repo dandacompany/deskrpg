@@ -666,7 +666,7 @@ ${transcript}
     });
 
     socket.on("npc:chat", async (data) => {
-      const { npcId, message } = data || {};
+      const { npcId, message, asTask } = data || {};
       if (!npcId || !message) return;
       const trimmed = String(message).trim().slice(0, 500);
       if (!trimmed) return;
@@ -682,8 +682,30 @@ ${transcript}
       const historyKey = player ? `${player.mapId}:${npcId}` : npcId;
       const npcHistory = npcChatHistory.get(historyKey) || [];
       npcHistory.push({ role: "player", content: trimmed, timestamp: Date.now() });
-      // 매 메시지에 태스크 프로토콜 리마인더 주입 (LLM 프로토콜 준수 강화)
-      const messageToSend = withTaskReminder(trimmed, getSocketLocale(socket));
+
+      // Pre-register task if user toggled "Send as Task"
+      let preRegisteredTaskId = null;
+      if (asTask && player?.characterId) {
+        const taskId = generateTaskId();
+        const taskTitle = trimmed.slice(0, 50);
+        const task = await taskManager.createBacklogTask(
+          npcConfig._channelId, player.characterId, taskTitle, trimmed, taskId,
+        );
+        if (task) {
+          const movedTask = await taskManager.moveTask(task.id, npcConfig._channelId, "in_progress", npcId);
+          if (movedTask) {
+            const { _fromStatus, ...taskData } = movedTask;
+            io.to(player.mapId).emit("task:updated", { task: taskData, action: "create" });
+            preRegisteredTaskId = taskId;
+          }
+        }
+      }
+
+      let userContent = trimmed;
+      if (preRegisteredTaskId) {
+        userContent = `[SYSTEM: The user has registered this as a task. Task ID: ${preRegisteredTaskId}. Title: "${trimmed.slice(0, 50)}". Execute immediately and include a json:task block with action "update" or "complete" using this exact ID in your response.]\n\n${userContent}`;
+      }
+      const messageToSend = withTaskReminder(userContent, getSocketLocale(socket));
       const response = await streamNpcResponse(socket, npcId, npcConfig, user.userId, messageToSend);
       if (response) {
         npcHistory.push({ role: "npc", content: response, timestamp: Date.now() });

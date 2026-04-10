@@ -2,9 +2,10 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useT } from "@/lib/i18n";
+import { ClipboardList } from "lucide-react";
 
 interface ChatInputProps {
-  onSend: (message: string, files?: File[]) => void;
+  onSend: (message: string, files?: File[], asTask?: boolean) => void;
   placeholder?: string;
   disabled?: boolean;
   disabledPlaceholder?: string;
@@ -12,6 +13,7 @@ interface ChatInputProps {
   maxLength?: number;
   autoFocus?: boolean;
   showFileUpload?: boolean;
+  showTaskToggle?: boolean;
   accentColor?: string; // tailwind color class for button, e.g. "amber" or "indigo"
 }
 
@@ -24,11 +26,13 @@ export default function ChatInput({
   maxLength = 500,
   autoFocus = false,
   showFileUpload = false,
+  showTaskToggle = false,
   accentColor = "amber",
 }: ChatInputProps) {
   const t = useT();
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [asTask, setAsTask] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -60,14 +64,15 @@ export default function ChatInput({
     const trimmed = input.trim();
     if (!trimmed && files.length === 0) return;
     if (cooldown || disabled) return;
-    onSend(trimmed, files.length > 0 ? files : undefined);
+    onSend(trimmed, files.length > 0 ? files : undefined, asTask || undefined);
     setInput("");
     setFiles([]);
+    setAsTask(false);
     // Reset height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [input, files, cooldown, disabled, onSend]);
+  }, [input, files, cooldown, disabled, onSend, asTask]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Prevent Phaser from capturing keys while focused
@@ -162,13 +167,34 @@ export default function ChatInput({
           style={{ maxHeight: "120px" }}
         />
 
+        {/* Task toggle */}
+        {showTaskToggle && (
+          <button
+            onClick={() => setAsTask((v) => !v)}
+            disabled={disabled}
+            className={`p-2 rounded shrink-0 self-end transition-colors ${
+              asTask
+                ? "bg-primary/20 text-primary ring-1 ring-primary"
+                : "text-gray-400 hover:text-white hover:bg-white/10"
+            }`}
+            title={asTask ? t("task.sendAsTaskOn") : t("task.sendAsTask")}
+            aria-label={t("task.sendAsTask")}
+          >
+            <ClipboardList className="w-4 h-4" />
+          </button>
+        )}
+
         {/* Send button */}
         <button
           onClick={handleSend}
           disabled={!canSend}
-          className={`px-3 py-2 rounded-lg font-semibold text-sm shrink-0 self-end transition-colors ${btnColor}`}
+          className={`px-3 py-2 rounded-lg font-semibold text-sm shrink-0 self-end transition-colors ${
+            asTask && canSend
+              ? "bg-primary hover:bg-primary/80 text-white"
+              : btnColor
+          }`}
         >
-          {t("common.send")}
+          {asTask ? t("task.sendTask") : t("common.send")}
         </button>
       </div>
 

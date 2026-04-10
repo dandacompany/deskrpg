@@ -22,7 +22,7 @@ interface NpcDialogProps {
   npcId: string;
   messages: NpcChatMessage[];
   isStreaming: boolean;
-  onSend: (message: string, files?: File[]) => void;
+  onSend: (message: string, files?: File[], asTask?: boolean) => void;
   onClose: () => void;
   // Task session props
   tasks?: Task[];
@@ -93,9 +93,9 @@ export default function NpcDialog({
   }, [onClose]);
 
   const handleSend = useCallback(
-    (message: string, files?: File[]) => {
+    (message: string, files?: File[], asTask?: boolean) => {
       if (cooldown || isStreaming) return;
-      onSend(message, files);
+      onSend(message, files, asTask);
       setCooldown(true);
       setTimeout(() => setCooldown(false), COOLDOWN_MS);
     },
@@ -202,6 +202,7 @@ export default function NpcDialog({
                 maxLength={500}
                 autoFocus
                 showFileUpload
+                showTaskToggle
                 accentColor="amber"
                 placeholder={t("chat.npcPlaceholder", { name: npcName })}
                 disabledPlaceholder={t("chat.responding")}

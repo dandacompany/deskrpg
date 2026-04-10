@@ -24,7 +24,7 @@ interface ChatPanelProps {
   isNpcStreaming: boolean;
   npcChatInputDisabled?: boolean;
   npcChatDisabledPlaceholder?: string;
-  onSend: (message: string, files?: File[]) => void;
+  onSend: (message: string, files?: File[], asTask?: boolean) => void;
   onClose: () => void;
   npcSelectList: { npcId: string; npcName: string }[] | null;
   onSelectNpc: (npcId: string, npcName: string) => void;
@@ -276,6 +276,7 @@ export default function ChatPanel({
                   disabledPlaceholder={npcChatInputDisabled ? (npcChatDisabledPlaceholder ?? t("chat.disconnected")) : t("chat.responding")}
                   autoFocus
                   showFileUpload
+                  showTaskToggle
                 />
               </>
             ) : activeTaskId ? (

@@ -1098,7 +1098,7 @@ function GamePageInner() {
   }, [resetDialog]);
 
   const handleDialogSend = useCallback(
-    async (message: string, files?: File[]) => {
+    async (message: string, files?: File[], asTask?: boolean) => {
       if (!socket || !dialogNpc) return;
       if (!socket.connected) {
         showToastNotification(
@@ -1131,6 +1131,7 @@ function GamePageInner() {
         npcId: dialogNpc.npcId,
         message,
         files: filePayloads,
+        asTask: asTask || undefined,
       });
     },
     [socket, dialogNpc, showToastNotification, t],

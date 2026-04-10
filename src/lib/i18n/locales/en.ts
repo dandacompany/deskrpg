@@ -2002,6 +2002,9 @@ const en: Record<string, string> = {
   "task.chatPlaceholder": "Send additional instructions about this task.",
   "task.register": "Register",
   "task.registered": "Registered",
+  "task.sendAsTask": "Send as Task",
+  "task.sendAsTaskOn": "Send as Task (active)",
+  "task.sendTask": "Send Task",
 };
 
 export default en;

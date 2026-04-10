@@ -998,8 +998,9 @@ export function setupSocketHandlers(io: Server) {
         npcId: string;
         message: string;
         files?: Array<{ name: string; type: string; size: number; data: ArrayBuffer }>;
+        asTask?: boolean;
       }) => {
-        const { npcId, message, files } = data;
+        const { npcId, message, files, asTask } = data;
         chatLog(`← user msg to ${npcId}:`, message?.slice(0, 100), files ? `+${files.length} files [${files.map(f => `${f.name}(${(f.size/1024).toFixed(0)}KB)`).join(", ")}]` : "");
 
         // Validate
@@ -1054,9 +1055,31 @@ export function setupSocketHandlers(io: Server) {
         const history = npcChatHistory.get(historyKey) || [];
         history.push({ role: "player", content: trimmed, timestamp: Date.now() });
 
+        // Pre-register task if user toggled "Send as Task"
+        let preRegisteredTaskId: string | null = null;
+        if (asTask && player?.characterId) {
+          const taskId = generateTaskId();
+          const taskTitle = trimmed.slice(0, 50);
+          const task = await taskManager.createBacklogTask(
+            npcConfig._channelId, player.characterId, taskTitle, trimmed, taskId,
+          ) as ManagedTask | null;
+          if (task) {
+            const movedTask = await taskManager.moveTask(task.id, npcConfig._channelId, "in_progress", npcId) as ManagedTask | null;
+            if (movedTask) {
+              const { _fromStatus, ...taskData } = movedTask as ManagedTask & { _fromStatus?: string };
+              io.to(player.mapId).emit("task:updated", { task: taskData, action: "create" });
+              preRegisteredTaskId = taskId;
+            }
+          }
+        }
+
         // Inject task reminder on every NPC DM so task actions can be parsed consistently.
         const fileSection = buildFilePromptSection(extractedFiles);
-        const messageToSend = withTaskReminder(trimmed + fileSection, getSocketLocale(socket));
+        let userContent = trimmed + fileSection;
+        if (preRegisteredTaskId) {
+          userContent = `[SYSTEM: The user has registered this as a task. Task ID: ${preRegisteredTaskId}. Title: "${trimmed.slice(0, 50)}". Execute immediately and include a json:task block with action "update" or "complete" using this exact ID in your response.]\n\n${userContent}`;
+        }
+        const messageToSend = withTaskReminder(userContent, getSocketLocale(socket));
 
         // Stream response via OpenClaw
         chatLog(`  → gateway (${npcConfig._name}): msgLen=${messageToSend.length}(${(messageToSend.length/1024).toFixed(0)}KB)`, fileAttachments ? `+${fileAttachments.length} att(${fileAttachments.map(a => `${a.fileName}:${(a.content.length/1024).toFixed(0)}KB`).join(",")})` : "");
