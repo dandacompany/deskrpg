@@ -2256,6 +2256,7 @@ function GamePageInner() {
             currentPlayerName={character?.name}
             npcMoveState={dialogNpc ? npcMoveStates[dialogNpc.npcId] : undefined}
             onReturnNpc={dialogNpc && npcCallers[dialogNpc.npcId] === socket?.id ? handleReturnNpc : undefined}
+            channelId={channelId || undefined}
             socket={socket}
             onDeleteTask={deleteTask}
             onRequestReportTask={requestTaskReport}

@@ -32,6 +32,7 @@ interface NpcDialogProps {
   activeTaskId?: string | null;
   onSetActiveTaskId?: (taskId: string | null) => void;
   // Socket + task actions (passed through to TaskPanel)
+  channelId?: string;
   socket?: Socket | null;
   onDeleteTask?: (taskId: string) => void;
   onRequestReportTask?: (taskId: string) => void;
@@ -56,6 +57,7 @@ export default function NpcDialog({
   activeTaskId = null,
   onSetActiveTaskId,
   // Socket + task actions
+  channelId,
   socket = null,
   onDeleteTask,
   onRequestReportTask,
@@ -221,6 +223,7 @@ export default function NpcDialog({
             <div className="h-48 overflow-y-auto">
               <TaskPanel
                 npcId={npcId}
+                channelId={channelId}
                 npcName={npcName}
                 socket={socket}
                 onTaskClick={(npcTaskId) => onSetActiveTaskId?.(npcTaskId)}

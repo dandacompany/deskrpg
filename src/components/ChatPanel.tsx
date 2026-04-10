@@ -34,6 +34,7 @@ interface ChatPanelProps {
   onResetNpcChat?: (npcId: string) => void;
   npcMoveState?: string;
   onReturnNpc?: (npcId: string) => void;
+  channelId?: string;
   socket?: Socket | null;
   onDeleteTask?: (taskId: string) => void;
   onRequestReportTask?: (taskId: string) => void;
@@ -61,7 +62,7 @@ export default function ChatPanel({
   dialogNpc, npcMessages, isNpcStreaming, npcChatInputDisabled, npcChatDisabledPlaceholder, onSend, onClose,
   npcSelectList, onSelectNpc, isOwner, onEditNpc, onFireNpc, onResetNpcChat,
   channelMessages, channelChatOpen, channelChatInputDisabled, onSendChannelChat, currentPlayerName,
-  npcMoveState, onReturnNpc, socket, onDeleteTask, onRequestReportTask, onResumeTask, onCompleteTask,
+  npcMoveState, onReturnNpc, channelId, socket, onDeleteTask, onRequestReportTask, onResumeTask, onCompleteTask,
   taskMessages, isTaskStreaming, onTaskSend, activeTaskId, onSetActiveTaskId,
 }: ChatPanelProps) {
   const [width, setWidth] = useState(DEFAULT_WIDTH);
@@ -290,6 +291,7 @@ export default function ChatPanel({
             ) : (
               <TaskPanel
                 npcId={dialogNpc!.npcId}
+                channelId={channelId}
                 npcName={dialogNpc!.npcName}
                 socket={socket ?? null}
                 onDeleteTask={onDeleteTask}
