@@ -25,7 +25,7 @@ interface TaskBoardProps {
   onRequestReportTask?: (taskId: string) => void;
   onResumeTask?: (taskId: string) => void;
   onCompleteTask?: (taskId: string) => void;
-  onOpenNpcChat?: (npcId: string) => void;
+  onOpenNpcTask?: (npcId: string, npcTaskId: string) => void;
   tasks: Task[];
   socket: Socket | null;
   npcs?: NpcInfo[];
@@ -48,7 +48,7 @@ export default function TaskBoard({
   onRequestReportTask,
   onResumeTask,
   onCompleteTask,
-  onOpenNpcChat,
+  onOpenNpcTask,
   socket,
   npcs = [],
 }: TaskBoardProps) {
@@ -201,12 +201,12 @@ export default function TaskBoard({
                   <DraggableTaskCard key={task.id} taskId={task.id} status={col.status}>
                     <div
                       onClick={() => {
-                        if (task.npcId && onOpenNpcChat) {
-                          onOpenNpcChat(task.npcId);
+                        if (task.npcId && task.npcTaskId && onOpenNpcTask) {
+                          onOpenNpcTask(task.npcId, task.npcTaskId);
                           onClose();
                         }
                       }}
-                      className={task.npcId && onOpenNpcChat ? "cursor-pointer" : ""}
+                      className={task.npcId && onOpenNpcTask ? "cursor-pointer" : ""}
                     >
                       <TaskCard
                         task={task}

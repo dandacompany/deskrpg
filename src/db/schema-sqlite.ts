@@ -291,6 +291,7 @@ export const tasks = sqliteTable("tasks", {
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
   completedAt: text("completed_at"),
   scheduledTaskId: text("scheduled_task_id"),
+  lastResponse: text("last_response"),
 }, (table) => [
   index("idx_tasks_channel").on(table.channelId),
   index("idx_tasks_npc").on(table.npcId),

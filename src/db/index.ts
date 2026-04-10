@@ -343,6 +343,7 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
     "ALTER TABLE tasks ADD COLUMN stalled_at TEXT",
     "ALTER TABLE tasks ADD COLUMN stalled_reason TEXT",
     "ALTER TABLE tasks ADD COLUMN scheduled_task_id TEXT REFERENCES scheduled_tasks(id) ON DELETE SET NULL",
+    "ALTER TABLE tasks ADD COLUMN last_response TEXT",
   ]);
 
   dedupeSqliteGroupJoinRequests(sqlite);

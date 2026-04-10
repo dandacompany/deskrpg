@@ -63,7 +63,7 @@ const { parseNpcResponse, isValidTaskAction } = require("../lib/task-parser.js")
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { sanitizeNpcResponseText } = require("../lib/task-block-utils.js") as typeof import("../lib/task-block-utils.js");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { TaskManager, generateTaskId } = require("../lib/task-manager.js") as { TaskManager: new (db: typeof import("../db").db, schema: { tasks: typeof tasks; npcs: typeof npcs }) => { handleTaskAction: (...args: unknown[]) => Promise<unknown>; getTasksByNpc: (npcId: string) => Promise<unknown[]>; getTasksByChannel: (channelId: string) => Promise<unknown[]>; deleteTask: (taskId: string, channelId: string) => Promise<unknown>; getStaleInProgressTasks: (channelId: string, olderThanIso: string) => Promise<unknown[]>; markTaskNudged: (taskId: string, channelId: string) => Promise<unknown>; markTaskStalled: (taskId: string, channelId: string, reason: string) => Promise<unknown>; resumeTask: (taskId: string, channelId: string) => Promise<unknown>; completeTask: (taskId: string, channelId: string) => Promise<unknown>; createBacklogTask: (channelId: string, assignerId: string, title: string, summary: string | null, npcTaskIdOverride?: string) => Promise<unknown>; moveTask: (taskId: string, channelId: string, toStatus: string, npcId: string | null) => Promise<unknown>; getTaskById: (taskId: string, channelId: string) => Promise<unknown>; getTaskByNpcTaskId: (npcId: string, npcTaskId: string) => Promise<unknown>; }; generateTaskId: () => string; };
+const { TaskManager, generateTaskId } = require("../lib/task-manager.js") as { TaskManager: new (db: typeof import("../db").db, schema: { tasks: typeof tasks; npcs: typeof npcs }) => { handleTaskAction: (...args: unknown[]) => Promise<unknown>; getTasksByNpc: (npcId: string) => Promise<unknown[]>; getTasksByChannel: (channelId: string) => Promise<unknown[]>; deleteTask: (taskId: string, channelId: string) => Promise<unknown>; getStaleInProgressTasks: (channelId: string, olderThanIso: string) => Promise<unknown[]>; markTaskNudged: (taskId: string, channelId: string) => Promise<unknown>; markTaskStalled: (taskId: string, channelId: string, reason: string) => Promise<unknown>; resumeTask: (taskId: string, channelId: string) => Promise<unknown>; completeTask: (taskId: string, channelId: string) => Promise<unknown>; createBacklogTask: (channelId: string, assignerId: string, title: string, summary: string | null, npcTaskIdOverride?: string, scheduledTaskId?: string) => Promise<unknown>; moveTask: (taskId: string, channelId: string, toStatus: string, npcId: string | null) => Promise<unknown>; getTaskById: (taskId: string, channelId: string) => Promise<unknown>; getTaskByNpcTaskId: (npcId: string, npcTaskId: string) => Promise<unknown>; setLastResponse: (npcId: string, npcTaskId: string, lastResponse: string) => Promise<unknown>; }; generateTaskId: () => string; };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { withTaskReminder, normalizeTaskPromptLocale, buildTaskSessionPrompt, buildTaskSummaryContext } = require("../lib/task-prompt.js") as typeof import("../lib/task-prompt.js");
 
@@ -531,6 +531,10 @@ async function scanScheduledTasks(io: Server) {
             assignerCharacterId: schedule.assignerId,
             targetUserId,
           });
+
+          // Persist response to task for chat history
+          const sanitized = sanitizeNpcResponseText(response);
+          await taskManager.setLastResponse(schedule.npcId, taskData.npcTaskId, sanitized);
 
           // Emit execution notification to connected clients
           io.to(schedule.channelId).emit("schedule:executed", {
@@ -1210,6 +1214,10 @@ export function setupSocketHandlers(io: Server) {
           const parsed = parseNpcResponse(response);
           const sanitizedResponse = sanitizeNpcResponseText(response);
           history.push({ role: "npc", content: sanitizedResponse, timestamp: Date.now() });
+          // If this was a pre-registered task message, persist response to task
+          if (preRegisteredTaskId) {
+            await taskManager.setLastResponse(npcId, preRegisteredTaskId, sanitizedResponse);
+          }
           if (player?.characterId) {
             await processNpcTaskActions(io, parsed, {
               channelId: npcConfig._channelId,
@@ -1323,6 +1331,7 @@ export function setupSocketHandlers(io: Server) {
         if (response) {
           const parsed = parseNpcResponse(response);
           const sanitizedResponse = sanitizeNpcResponseText(response);
+          await taskManager.setLastResponse(npcId, taskId, sanitizedResponse);
           const player = players.get(socket.id);
           if (player?.characterId) {
             await processNpcTaskActions(io, parsed, {
@@ -1337,6 +1346,64 @@ export function setupSocketHandlers(io: Server) {
         }
       },
     );
+
+    socket.on("npc:task-history", async ({ npcId, npcTaskId }: { npcId?: string; npcTaskId?: string }) => {
+      try {
+        if (!npcId || !npcTaskId) return;
+        const task = await taskManager.getTaskByNpcTaskId(npcId, npcTaskId) as ManagedTask & { lastResponse?: string | null; id?: string; title?: string } | null;
+        if (!task) {
+          socket.emit("npc:task-history-response", { npcId, npcTaskId, messages: [] });
+          return;
+        }
+
+        // Load reports from npcReports table for this task
+        const reportRows = await db
+          .select({
+            id: npcReports.id,
+            kind: npcReports.kind,
+            message: npcReports.message,
+            createdAt: npcReports.createdAt,
+          })
+          .from(npcReports)
+          .where(eq(npcReports.taskId, (task as { id: string }).id))
+          .orderBy(npcReports.createdAt);
+
+        const messages: Array<{ role: "npc" | "player"; content: string; kind?: string; timestamp?: string }> = [];
+
+        // Initial task description as player message
+        if ((task as { title?: string }).title) {
+          messages.push({
+            role: "player",
+            content: (task as { title: string }).title,
+            timestamp: (task as { createdAt?: string }).createdAt || undefined,
+          });
+        }
+
+        // Reports as NPC messages
+        for (const r of reportRows) {
+          messages.push({
+            role: "npc",
+            content: r.message,
+            kind: r.kind,
+            timestamp: typeof r.createdAt === "string" ? r.createdAt : (r.createdAt instanceof Date ? r.createdAt.toISOString() : undefined),
+          });
+        }
+
+        // Fallback: if no reports, show last_response
+        if (reportRows.length === 0 && task.lastResponse) {
+          messages.push({
+            role: "npc",
+            content: task.lastResponse,
+            timestamp: (task as { updatedAt?: string }).updatedAt || undefined,
+          });
+        }
+
+        socket.emit("npc:task-history-response", { npcId, npcTaskId, messages });
+      } catch (err) {
+        console.error("[npc:task-history] error:", err);
+        socket.emit("npc:task-history-response", { npcId, npcTaskId, messages: [] });
+      }
+    });
 
     socket.on("npc:reset-chat", ({ npcId }: { npcId: string }) => {
       if (!npcId) return;
@@ -1500,8 +1567,10 @@ export function setupSocketHandlers(io: Server) {
                 assignerCharacterId: player.characterId,
                 targetUserId: player.userId,
               });
-              // Mirror task execution result to chat tab
+              // Persist last response for task chat history
               const sanitized = sanitizeNpcResponseText(response);
+              await taskManager.setLastResponse(task.npcId, task.npcTaskId, sanitized);
+              // Mirror task execution result to chat tab
               socket.emit("npc:task-chat-mirror", {
                 npcId: task.npcId,
                 npcTaskId: task.npcTaskId,

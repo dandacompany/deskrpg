@@ -291,6 +291,7 @@ export const tasks = pgTable("tasks", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   scheduledTaskId: uuid("scheduled_task_id"),
+  lastResponse: text("last_response"),
 }, (table) => [
   index("idx_tasks_channel").on(table.channelId),
   index("idx_tasks_npc").on(table.npcId),

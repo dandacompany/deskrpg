@@ -713,6 +713,19 @@ function GamePageInner() {
         }
       });
 
+      // Task chat history (server response with persisted reports/last_response)
+      socketInstance.on("npc:task-history-response", ({ npcTaskId, messages }: {
+        npcId: string; npcTaskId: string;
+        messages: Array<{ role: "player" | "npc"; content: string; kind?: string; timestamp?: string }>;
+      }) => {
+        if (!npcTaskId || !messages) return;
+        setNpcTaskMessages((prev) => {
+          const next = new Map(prev);
+          next.set(npcTaskId, messages.map((m) => ({ role: m.role, content: m.content })));
+          return next;
+        });
+      });
+
       // NPC task response streaming — per-task session messages
       socketInstance.on("npc:task-response", ({ npcId, chunk, done }: { npcId: string; chunk: string; done: boolean }) => {
         const taskId = activeTaskIdRef.current;
@@ -852,6 +865,7 @@ function GamePageInner() {
         socketInstance.off("npc:broadcast-remove");
         socketInstance.off("npc:task-chat-mirror");
         socketInstance.off("npc:task-registered");
+        socketInstance.off("npc:task-history-response");
         socketInstance.off("npc:task-created");
         socketInstance.off("npc:task-completed");
         socketInstance.off("npc:task-response");
@@ -2226,14 +2240,18 @@ function GamePageInner() {
         onRequestReportTask={requestTaskReport}
         onResumeTask={resumeTask}
         onCompleteTask={completeTask}
-        onOpenNpcChat={(npcId) => {
+        onOpenNpcTask={(npcId, npcTaskId) => {
           const npc = channelNpcs.find((n: { id: string; name: string }) => n.id === npcId);
           if (!npc) return;
           const data = { npcId: npc.id, npcName: npc.name };
           dialogNpcRef.current = data;
           setDialogNpc(data);
+          setActiveTaskId(npcTaskId);
           EventBus.emit("dialog:open");
-          if (socketRef.current) socketRef.current.emit("npc:history", { npcId });
+          if (socketRef.current) {
+            socketRef.current.emit("npc:history", { npcId });
+            socketRef.current.emit("npc:task-history", { npcId, npcTaskId });
+          }
         }}
       />
 

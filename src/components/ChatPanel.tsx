@@ -78,7 +78,17 @@ export default function ChatPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelScrollRef = useRef<HTMLDivElement>(null);
   const activeNpcId = dialogNpc?.npcId ?? null;
-  const activeTab = activeTabState.npcId === activeNpcId ? activeTabState.tab : "chat";
+  // If activeTaskId is set externally (from task board click), force tasks tab
+  const activeTab = activeTaskId
+    ? "tasks"
+    : (activeTabState.npcId === activeNpcId ? activeTabState.tab : "chat");
+
+  // When activeTaskId changes externally, sync the tab state
+  useEffect(() => {
+    if (activeTaskId && activeNpcId) {
+      setActiveTabState({ npcId: activeNpcId, tab: "tasks" });
+    }
+  }, [activeTaskId, activeNpcId]);
   const isOpen = manualOpen || !!dialogNpc || !!npcSelectList || !!channelChatOpen;
 
   // Auto-scroll NPC messages

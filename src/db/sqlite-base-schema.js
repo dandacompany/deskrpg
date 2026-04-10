@@ -240,11 +240,14 @@ function ensureSqliteBaseSchema(sqlite) {
       stalled_reason TEXT,
       created_at TEXT,
       updated_at TEXT,
-      completed_at TEXT
+      completed_at TEXT,
+      scheduled_task_id TEXT,
+      last_response TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_tasks_channel ON tasks(channel_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_npc ON tasks(npc_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_npc_task_id ON tasks(npc_id, npc_task_id);
+    -- last_response added via ensureSqliteCompatibility for legacy DBs
 
     CREATE TABLE IF NOT EXISTS scheduled_tasks (
       id TEXT PRIMARY KEY NOT NULL,

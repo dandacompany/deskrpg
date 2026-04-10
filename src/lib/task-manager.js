@@ -41,6 +41,7 @@ function normalizeTask(row) {
     stalledReason: row.stalledReason ?? null,
     npcName: row.npcName || undefined,
     scheduledTaskId: row.scheduledTaskId || null,
+    lastResponse: row.lastResponse || null,
     createdAt: normalizeTimestamp(row.createdAt),
     updatedAt: normalizeTimestamp(row.updatedAt),
     completedAt: normalizeTimestamp(row.completedAt),
@@ -414,6 +415,22 @@ class TaskManager {
       )
       .returning();
 
+    return normalizeTask(row);
+  }
+
+  async setLastResponse(npcId, npcTaskId, lastResponse) {
+    const { db, schema } = this;
+    if (!lastResponse) return null;
+    const [row] = await db
+      .update(schema.tasks)
+      .set({ lastResponse, updatedAt: nowIso() })
+      .where(
+        and(
+          eq(schema.tasks.npcId, npcId),
+          eq(schema.tasks.npcTaskId, npcTaskId),
+        ),
+      )
+      .returning();
     return normalizeTask(row);
   }
 
