@@ -50,6 +50,7 @@ export const npcReports = activeSchema.npcReports;
 export const chatMessages = activeSchema.chatMessages;
 export const meetingMinutes = activeSchema.meetingMinutes;
 export const tasks = activeSchema.tasks;
+export const scheduledTasks = activeSchema.scheduledTasks;
 export const mapTemplates = activeSchema.mapTemplates;
 export const stamps = activeSchema.stamps;
 export const tilesetImages = activeSchema.tilesetImages;
@@ -341,6 +342,7 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
     "ALTER TABLE tasks ADD COLUMN last_reported_at TEXT",
     "ALTER TABLE tasks ADD COLUMN stalled_at TEXT",
     "ALTER TABLE tasks ADD COLUMN stalled_reason TEXT",
+    "ALTER TABLE tasks ADD COLUMN scheduled_task_id TEXT REFERENCES scheduled_tasks(id) ON DELETE SET NULL",
   ]);
 
   dedupeSqliteGroupJoinRequests(sqlite);

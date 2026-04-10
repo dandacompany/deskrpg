@@ -246,6 +246,25 @@ function ensureSqliteBaseSchema(sqlite) {
     CREATE INDEX IF NOT EXISTS idx_tasks_npc ON tasks(npc_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_npc_task_id ON tasks(npc_id, npc_task_id);
 
+    CREATE TABLE IF NOT EXISTS scheduled_tasks (
+      id TEXT PRIMARY KEY NOT NULL,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      npc_id TEXT NOT NULL REFERENCES npcs(id) ON DELETE CASCADE,
+      assigner_id TEXT NOT NULL REFERENCES characters(id),
+      title TEXT NOT NULL,
+      summary TEXT,
+      cron_expr TEXT NOT NULL,
+      timezone TEXT NOT NULL DEFAULT 'Asia/Seoul',
+      enabled INTEGER NOT NULL DEFAULT 1,
+      last_run_at TEXT,
+      next_run_at TEXT,
+      max_history INTEGER NOT NULL DEFAULT 30,
+      created_at TEXT,
+      updated_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_channel ON scheduled_tasks(channel_id);
+    CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks(next_run_at);
+
     CREATE TABLE IF NOT EXISTS npc_reports (
       id TEXT PRIMARY KEY NOT NULL,
       channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,

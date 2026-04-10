@@ -290,10 +290,32 @@ export const tasks = sqliteTable("tasks", {
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
   completedAt: text("completed_at"),
+  scheduledTaskId: text("scheduled_task_id"),
 }, (table) => [
   index("idx_tasks_channel").on(table.channelId),
   index("idx_tasks_npc").on(table.npcId),
   uniqueIndex("idx_tasks_npc_task_id").on(table.npcId, table.npcTaskId),
+  index("idx_tasks_scheduled").on(table.scheduledTaskId),
+]);
+
+export const scheduledTasks = sqliteTable("scheduled_tasks", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  channelId: text("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+  npcId: text("npc_id").notNull().references(() => npcs.id, { onDelete: "cascade" }),
+  assignerId: text("assigner_id").notNull().references(() => characters.id),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  cronExpr: text("cron_expr").notNull(),
+  timezone: text("timezone").notNull().default("Asia/Seoul"),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  lastRunAt: text("last_run_at"),
+  nextRunAt: text("next_run_at"),
+  maxHistory: integer("max_history").notNull().default(30),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  index("idx_scheduled_tasks_channel").on(table.channelId),
+  index("idx_scheduled_tasks_next_run").on(table.nextRunAt),
 ]);
 
 export const stamps = sqliteTable("stamps", {

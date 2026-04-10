@@ -290,10 +290,32 @@ export const tasks = pgTable("tasks", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
+  scheduledTaskId: uuid("scheduled_task_id"),
 }, (table) => [
   index("idx_tasks_channel").on(table.channelId),
   index("idx_tasks_npc").on(table.npcId),
   uniqueIndex("idx_tasks_npc_task_id").on(table.npcId, table.npcTaskId),
+  index("idx_tasks_scheduled").on(table.scheduledTaskId),
+]);
+
+export const scheduledTasks = pgTable("scheduled_tasks", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  channelId: uuid("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+  npcId: uuid("npc_id").notNull().references(() => npcs.id, { onDelete: "cascade" }),
+  assignerId: uuid("assigner_id").notNull().references(() => characters.id),
+  title: varchar("title", { length: 200 }).notNull(),
+  summary: text("summary"),
+  cronExpr: varchar("cron_expr", { length: 100 }).notNull(),
+  timezone: varchar("timezone", { length: 50 }).notNull().default("Asia/Seoul"),
+  enabled: boolean("enabled").notNull().default(true),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+  nextRunAt: timestamp("next_run_at", { withTimezone: true }),
+  maxHistory: integer("max_history").notNull().default(30),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index("idx_scheduled_tasks_channel").on(table.channelId),
+  index("idx_scheduled_tasks_next_run").on(table.nextRunAt),
 ]);
 
 export const stamps = pgTable("stamps", {
