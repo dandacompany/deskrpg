@@ -146,4 +146,20 @@ module.exports = {
   buildTaskReminder,
   buildTaskSessionPrompt,
   normalizeTaskPromptLocale,
+  buildTaskSummaryContext,
 };
+
+/**
+ * Build a summary of active tasks for context injection into DM messages.
+ * @param {Array<{npcTaskId: string, title: string, status: string, summary?: string | null}>} tasks
+ * @returns {string}
+ */
+function buildTaskSummaryContext(tasks) {
+  if (!tasks || tasks.length === 0) return "";
+  const lines = tasks
+    .filter((t) => ["in_progress", "pending", "stalled"].includes(t.status))
+    .slice(0, 10)
+    .map((t) => `- [${t.npcTaskId}] "${t.title}" (${t.status})${t.summary ? ": " + t.summary.slice(0, 100) : ""}`);
+  if (lines.length === 0) return "";
+  return `\n[CURRENT TASKS]\n${lines.join("\n")}\n`;
+}

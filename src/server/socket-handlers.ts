@@ -62,7 +62,7 @@ const { sanitizeNpcResponseText } = require("../lib/task-block-utils.js") as typ
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { TaskManager, generateTaskId } = require("../lib/task-manager.js") as { TaskManager: new (db: typeof import("../db").db, schema: { tasks: typeof tasks; npcs: typeof npcs }) => { handleTaskAction: (...args: unknown[]) => Promise<unknown>; getTasksByNpc: (npcId: string) => Promise<unknown[]>; getTasksByChannel: (channelId: string) => Promise<unknown[]>; deleteTask: (taskId: string, channelId: string) => Promise<unknown>; getStaleInProgressTasks: (channelId: string, olderThanIso: string) => Promise<unknown[]>; markTaskNudged: (taskId: string, channelId: string) => Promise<unknown>; markTaskStalled: (taskId: string, channelId: string, reason: string) => Promise<unknown>; resumeTask: (taskId: string, channelId: string) => Promise<unknown>; completeTask: (taskId: string, channelId: string) => Promise<unknown>; createBacklogTask: (channelId: string, assignerId: string, title: string, summary: string | null, npcTaskIdOverride?: string) => Promise<unknown>; moveTask: (taskId: string, channelId: string, toStatus: string, npcId: string | null) => Promise<unknown>; getTaskById: (taskId: string, channelId: string) => Promise<unknown>; getTaskByNpcTaskId: (npcId: string, npcTaskId: string) => Promise<unknown>; }; generateTaskId: () => string; };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { withTaskReminder, normalizeTaskPromptLocale, buildTaskSessionPrompt } = require("../lib/task-prompt.js") as typeof import("../lib/task-prompt.js");
+const { withTaskReminder, normalizeTaskPromptLocale, buildTaskSessionPrompt, buildTaskSummaryContext } = require("../lib/task-prompt.js") as typeof import("../lib/task-prompt.js");
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1073,9 +1073,13 @@ export function setupSocketHandlers(io: Server) {
           }
         }
 
+        // Inject active task summary so NPC is aware of board tasks during DM chat
+        const npcActiveTasks = await taskManager.getTasksByNpc(npcId) as ManagedTask[];
+        const taskContext = buildTaskSummaryContext(npcActiveTasks);
+
         // Inject task reminder on every NPC DM so task actions can be parsed consistently.
         const fileSection = buildFilePromptSection(extractedFiles);
-        let userContent = trimmed + fileSection;
+        let userContent = taskContext + trimmed + fileSection;
         if (preRegisteredTaskId) {
           userContent = `[SYSTEM: The user has registered this as a task. Task ID: ${preRegisteredTaskId}. Title: "${trimmed.slice(0, 50)}". Execute immediately and include a json:task block with action "update" or "complete" using this exact ID in your response.]\n\n${userContent}`;
         }
@@ -1177,12 +1181,18 @@ export function setupSocketHandlers(io: Server) {
           fileAttachments = buildAttachments(extractedFiles);
         }
 
+        // Inject recent DM context so the task session has conversational awareness
+        const dmHistoryKey = `${player?.mapId || npcConfig._channelId}:${npcId}`;
+        const dmHistory = npcChatHistory.get(dmHistoryKey) || [];
+        const recentDm = dmHistory.slice(-3).map((h) => `[${h.role}]: ${h.content.slice(0, 100)}`).join("\n");
+        const dmContext = recentDm ? `\n[RECENT DM CONTEXT]\n${recentDm}\n` : "";
+
         // Build message with task session context
         const fileSection = buildFilePromptSection(extractedFiles);
         const taskPrompt = task
           ? buildTaskSessionPrompt(task, getSocketLocale(socket))
           : "";
-        const messageToSend = (taskPrompt ? taskPrompt + "\n\n" : "") + withTaskReminder(trimmed + fileSection, getSocketLocale(socket));
+        const messageToSend = (taskPrompt ? taskPrompt + "\n\n" : "") + dmContext + withTaskReminder(trimmed + fileSection, getSocketLocale(socket));
 
         // Session key: per-task
         const sessionKey = `${npcConfig.sessionKeyPrefix || npcId}-task-${taskId}`;

@@ -11,7 +11,7 @@ const {
 } = require("./src/lib/openclaw-gateway.js");
 const { parseNpcResponse, isValidTaskAction } = require("./src/lib/task-parser.js");
 const { TaskManager, generateTaskId } = require("./src/lib/task-manager.js");
-const { withTaskReminder, normalizeTaskPromptLocale, buildTaskSessionPrompt } = require("./src/lib/task-prompt.js");
+const { withTaskReminder, normalizeTaskPromptLocale, buildTaskSessionPrompt, buildTaskSummaryContext } = require("./src/lib/task-prompt.js");
 const {
   getInternalSocketHostname,
   isInternalRequestAuthorized,
@@ -701,7 +701,11 @@ ${transcript}
         }
       }
 
-      let userContent = trimmed;
+      // Inject active task summary so NPC is aware of board tasks during DM chat
+      const npcActiveTasks = await taskManager.getTasksByNpc(npcId);
+      const taskContext = buildTaskSummaryContext(npcActiveTasks);
+
+      let userContent = taskContext + trimmed;
       if (preRegisteredTaskId) {
         userContent = `[SYSTEM: The user has registered this as a task. Task ID: ${preRegisteredTaskId}. Title: "${trimmed.slice(0, 50)}". Execute immediately and include a json:task block with action "update" or "complete" using this exact ID in your response.]\n\n${userContent}`;
       }
