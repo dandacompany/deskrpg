@@ -45,7 +45,7 @@ export default function ScheduleBoard({ channelId, isOpen, onClose, socket, npcs
         </div>
 
         {/* Footer hint */}
-        <div className="px-4 py-2 text-center text-[10px] text-text-dim border-t border-border">
+        <div className="px-4 py-2.5 text-center text-[12px] text-text-dim border-t border-border">
           {t("schedule.boardHint")}
         </div>
       </div>
