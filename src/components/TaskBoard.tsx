@@ -136,13 +136,13 @@ export default function TaskBoard({
         {/* Header */}
         <div className="px-4 py-3 border-b border-border flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <span className="text-title text-text flex items-center gap-1.5">
-              <ClipboardList className="w-4 h-4" />{t("task.board")}
+            <span className="text-text font-bold text-[16px] flex items-center gap-1.5">
+              <ClipboardList className="w-5 h-5" />{t("task.board")}
             </span>
-            <div className="flex gap-1">
+            <div className="flex gap-1.5">
               <button
                 onClick={() => setFilterNpc(null)}
-                className={`px-2 py-0.5 rounded text-[10px] ${
+                className={`px-2.5 py-1 rounded text-[13px] ${
                   !filterNpc ? "bg-primary text-white" : "bg-surface text-text-muted"
                 }`}
               >
@@ -152,7 +152,7 @@ export default function TaskBoard({
                 <button
                   key={id}
                   onClick={() => setFilterNpc(id)}
-                  className={`px-2 py-0.5 rounded text-[10px] ${
+                  className={`px-2.5 py-1 rounded text-[13px] ${
                     filterNpc === id ? "bg-primary text-white" : "bg-surface text-text-muted"
                   }`}
                 >
@@ -174,11 +174,11 @@ export default function TaskBoard({
                 status={col.status}
                 onDrop={handleDrop}
                 header={
-                  <div className={`text-[11px] ${col.colorClass} font-bold mb-2 flex justify-between`}>
-                    <span className="flex items-center gap-1">
-                      <col.Icon className="w-3.5 h-3.5" />{t(col.labelKey)}
+                  <div className={`text-[14px] ${col.colorClass} font-bold mb-2 flex justify-between`}>
+                    <span className="flex items-center gap-1.5">
+                      <col.Icon className="w-4 h-4" />{t(col.labelKey)}
                     </span>
-                    <span className={`${col.bgClass} px-1.5 rounded`}>{colTasks.length}</span>
+                    <span className={`${col.bgClass} px-2 py-0.5 rounded text-[12px]`}>{colTasks.length}</span>
                   </div>
                 }
               >
@@ -191,7 +191,7 @@ export default function TaskBoard({
                   ) : (
                     <button
                       onClick={() => setShowCreateForm(true)}
-                      className="w-full border border-dashed border-primary/50 rounded-lg py-2 text-[11px] text-primary hover:border-primary hover:bg-primary/5 transition mb-1"
+                      className="w-full border border-dashed border-primary/50 rounded-lg py-2.5 text-[14px] text-primary hover:border-primary hover:bg-primary/5 transition mb-1 font-semibold"
                     >
                       + {t("task.createNew")}
                     </button>
@@ -227,7 +227,7 @@ export default function TaskBoard({
         </div>
 
         {/* Drag hint */}
-        <div className="px-4 py-2 text-center text-[10px] text-text-dim border-t border-border">
+        <div className="px-4 py-2.5 text-center text-[12px] text-text-dim border-t border-border">
           {t("task.dragHint")}
         </div>
       </div>

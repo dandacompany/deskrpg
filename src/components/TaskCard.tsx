@@ -81,20 +81,20 @@ export default function TaskCard({
 
   return (
     <div
-      className={`bg-surface rounded-lg p-2.5 border-l-[3px] ${config.border} ${
+      className={`bg-surface rounded-lg p-3 border-l-[3px] ${config.border} ${
         isFinished ? "opacity-60" : ""
       }`}
     >
-      <div className="flex justify-between items-center mb-1">
-        <span className={`text-[10px] font-bold ${config.color}`}>
+      <div className="flex justify-between items-center mb-1.5">
+        <span className={`text-[13px] font-bold ${config.color}`}>
           {config.icon} {t(config.labelKey)}
         </span>
         <div className="flex items-center gap-1">
-          <span className="text-[9px] text-text-dim">{npcTaskId}</span>
+          <span className="text-[11px] text-text-dim">{npcTaskId}</span>
           {onDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
-              className="text-text-dim hover:text-danger text-[10px] ml-1"
+              className="text-text-dim hover:text-danger text-[13px] ml-1"
               title={t("common.delete")}
             >
               x
@@ -102,19 +102,19 @@ export default function TaskCard({
           )}
         </div>
       </div>
-      <div className="text-text text-caption font-bold mb-1">{task.title}</div>
+      <div className="text-text text-[15px] font-bold mb-1">{task.title}</div>
       {!compact && task.summary && (
-        <div className="text-text-muted text-[10px] mb-1.5 line-clamp-2">{task.summary}</div>
+        <div className="text-text-muted text-[13px] mb-2 line-clamp-2">{task.summary}</div>
       )}
       {nudgeLabel ? (
-        <div className="mb-1.5 text-[9px] text-text-dim">{nudgeLabel}</div>
+        <div className="mb-2 text-[12px] text-text-dim">{nudgeLabel}</div>
       ) : null}
       <div className="mb-2 flex flex-wrap gap-1.5">
         {(task.status === "pending" || task.status === "in_progress" || task.status === "stalled") && onComplete ? (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onComplete(task.id); }}
-            className="rounded bg-success/20 px-2 py-1 text-[10px] text-success hover:bg-success/30"
+            className="rounded bg-success/20 px-2.5 py-1 text-[13px] text-success hover:bg-success/30"
           >
             {t("task.markComplete")}
           </button>
@@ -123,7 +123,7 @@ export default function TaskCard({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onRequestReport(task.id); }}
-            className="rounded bg-primary/20 px-2 py-1 text-[10px] text-primary hover:bg-primary/30"
+            className="rounded bg-primary/20 px-2.5 py-1 text-[13px] text-primary hover:bg-primary/30"
           >
             {t("task.requestReport")}
           </button>
@@ -132,7 +132,7 @@ export default function TaskCard({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onResume(task.id); }}
-            className="rounded bg-warning/20 px-2 py-1 text-[10px] text-warning hover:bg-warning/30"
+            className="rounded bg-warning/20 px-2.5 py-1 text-[13px] text-warning hover:bg-warning/30"
           >
             {t("task.resume")}
           </button>
@@ -141,20 +141,20 @@ export default function TaskCard({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onAssign(task.id); }}
-            className="rounded bg-primary/20 px-2 py-1 text-[10px] text-primary hover:bg-primary/30"
+            className="rounded bg-primary/20 px-2.5 py-1 text-[13px] text-primary hover:bg-primary/30"
           >
             {t("task.assign")}
           </button>
         ) : null}
       </div>
-      <div className="flex justify-between items-center text-[9px] text-text-dim">
+      <div className="flex justify-between items-center text-[12px] text-text-dim">
         {showNpcName && (
           npcName ? (
             <Badge variant="npc" size="sm">
-              <Bot className="w-3 h-3" />{npcName}
+              <Bot className="w-3.5 h-3.5" />{npcName}
             </Badge>
           ) : (
-            <span className="text-[9px] text-text-dim">{t("task.unassigned")}</span>
+            <span className="text-[12px] text-text-dim">{t("task.unassigned")}</span>
           )
         )}
         <span>{formatTimestamp(updatedAt)}</span>
