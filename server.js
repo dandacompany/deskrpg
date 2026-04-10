@@ -10,7 +10,7 @@ const {
   getGatewayErrorStatus,
 } = require("./src/lib/openclaw-gateway.js");
 const { parseNpcResponse, isValidTaskAction } = require("./src/lib/task-parser.js");
-const { TaskManager } = require("./src/lib/task-manager.js");
+const { TaskManager, generateTaskId } = require("./src/lib/task-manager.js");
 const { withTaskReminder, normalizeTaskPromptLocale, buildTaskSessionPrompt } = require("./src/lib/task-prompt.js");
 const {
   getInternalSocketHostname,
@@ -269,6 +269,11 @@ async function main() {
       if (!isValidTaskAction(taskAction)) {
         console.warn("[TaskManager] Invalid task action:", taskAction);
         continue;
+      }
+
+      // Server assigns ID for create actions
+      if (taskAction.action === "create" && (!taskAction.id || taskAction.id.startsWith("{") || taskAction.id.includes("YYYYMMDD"))) {
+        taskAction.id = generateTaskId();
       }
 
       try {

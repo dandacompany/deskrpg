@@ -60,10 +60,11 @@ function isValidTaskAction(taskAction) {
   if (!taskAction || typeof taskAction !== "object") return false;
   const validActions = ["create", "update", "complete", "cancel"];
   const validStatuses = ["pending", "in_progress", "complete", "cancelled"];
+  const hasValidId = typeof taskAction.id === "string" && taskAction.id.length > 0;
+  const idOptionalForCreate = taskAction.action === "create";
   return (
     validActions.includes(taskAction.action) &&
-    typeof taskAction.id === "string" &&
-    taskAction.id.length > 0 &&
+    (hasValidId || idOptionalForCreate) &&
     typeof taskAction.title === "string" &&
     (!taskAction.status || validStatuses.includes(taskAction.status))
   );

@@ -36,23 +36,18 @@ function buildTaskCorePrompt(locale) {
 
 You have task management capabilities. Follow this protocol when interacting with players.
 
-### Detecting Tasks
-- If the player gives a work instruction (research, analysis, report, creation, summarization, etc.), this is a task.
-- If the message is casual conversation, a simple question, or small talk, do NOT create a task.
-- ${confirmInstruction}
-
-### Task ID Format
-- Generate IDs as: {your_name_lowercase}-{YYYYMMDD}-{4_random_hex}
-- Example: peter-20260324-a7f3
-- Use different random suffix for each new task.
+### How Tasks Work
+- Tasks are registered by the player or the system. You do NOT create tasks yourself.
+- When the system tells you a task has been pre-registered with a specific ID, work on it immediately.
+- If the player asks you to do something but it is NOT registered as a task, just respond normally without a task block.
 
 ### Responding with Task Metadata
-When creating, updating, or completing a task, append a task metadata block at the END of your natural response:
+When working on a registered task, append a task metadata block at the END of your natural response:
 
 ${'```'}json:task
 {
-  "action": "create",
-  "id": "peter-20260324-a7f3",
+  "action": "update",
+  "id": "task-20260410-a7f3",
   "title": "Concise task title (under 50 chars)",
   "status": "in_progress",
   "summary": "1-2 sentence description of current state"
@@ -60,8 +55,7 @@ ${'```'}json:task
 ${'```'}
 
 ### Actions
-- **create**: Player approved task registration. Set status to "in_progress".
-- **update**: You have progress to report. Keep status "in_progress". Update summary.
+- **update**: You have progress to report on a registered task. Keep status "in_progress". Update summary.
 - **complete**: You have finished the task and are delivering final results. Set status to "complete".
 - **cancel**: Player requested cancellation. Set status to "cancelled".
 
@@ -69,8 +63,10 @@ ${'```'}
 - Maximum ONE task block per response.
 - Always write your natural conversational response BEFORE the task block.
 - Keep title concise (under 50 chars). Put details in summary.
+- The "id" field must exactly match the task ID provided by the system.
 - When completing a task, deliver the full result in your message text, not in the task block.
 - If a player says "취소해", "그만해", "cancel" for an active task, use action "cancel".
+- Do NOT emit a task block for casual conversation or simple questions.
 `.trim();
 }
 
@@ -94,22 +90,15 @@ function injectTaskPrompt(userIdentity, locale) {
  * 사용자 메시지 앞에 [SYSTEM] 태그로 prepend된다.
  */
 function buildTaskReminder(locale) {
-  const confirmation = translateTaskPrompt(locale, "taskPrompt.confirmRegistration");
-  const header = translateTaskPrompt(locale, "taskPrompt.reminderHeader");
-  const confirmStep = translateTaskPrompt(locale, "taskPrompt.reminderConfirmStep", {
-    confirmation,
-  });
-  const createStep = translateTaskPrompt(locale, "taskPrompt.reminderCreateStep");
   const requiredFields = translateTaskPrompt(locale, "taskPrompt.reminderRequiredFields");
   const allowedFields = translateTaskPrompt(locale, "taskPrompt.reminderAllowedFields");
   const ignoreCasual = translateTaskPrompt(locale, "taskPrompt.reminderIgnoreCasual");
 
   return `[SYSTEM REMINDER - MANDATORY TASK PROTOCOL]
-${header}
-${confirmStep}
-${createStep}
+- Tasks are pre-registered by the system. Use the exact task ID provided.
+- When completing or updating a task, include a json:task block at the end of your response.
 ${'```'}json:task
-{"action":"create","id":"{name}-{YYYYMMDD}-{4hex}","title":"제목","status":"in_progress","summary":"요약"}
+{"action":"update","id":"task-XXXXXXXX-xxxx","title":"제목","status":"in_progress","summary":"요약"}
 ${'```'}
 ${requiredFields}
 ${allowedFields}

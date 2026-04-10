@@ -10,6 +10,12 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function generateTaskId() {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const rand = Math.random().toString(36).slice(2, 6).padEnd(4, "0");
+  return `task-${date}-${rand}`;
+}
+
 function normalizeTimestamp(value) {
   if (value == null) return null;
   return value instanceof Date ? value.toISOString() : value;
@@ -410,9 +416,9 @@ class TaskManager {
     return normalizeTask(row);
   }
 
-  async createBacklogTask(channelId, assignerId, title, summary) {
+  async createBacklogTask(channelId, assignerId, title, summary, npcTaskIdOverride) {
     const { db, schema } = this;
-    const npcTaskId = `backlog-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const npcTaskId = npcTaskIdOverride || generateTaskId();
 
     const [row] = await db
       .insert(schema.tasks)
@@ -438,4 +444,4 @@ class TaskManager {
   }
 }
 
-module.exports = { TaskManager };
+module.exports = { TaskManager, generateTaskId };

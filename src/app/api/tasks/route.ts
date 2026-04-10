@@ -98,7 +98,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ errorCode: "character_not_found", error: "Character not found" }, { status: 404 });
     }
 
-    const npcTaskId = `backlog-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6).padEnd(4, "0")}`;
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const rand = Math.random().toString(36).slice(2, 6).padEnd(4, "0");
+    const npcTaskId = `task-${date}-${rand}`;
 
     const createdTask = await db
       .insert(tasks)
