@@ -292,7 +292,6 @@ export default function ChatPanel({
             ) : (
               <TaskPanel
                 npcId={dialogNpc!.npcId}
-                channelId={channelId}
                 npcName={dialogNpc!.npcName}
                 socket={socket ?? null}
                 onDeleteTask={onDeleteTask}

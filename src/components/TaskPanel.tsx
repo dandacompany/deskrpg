@@ -5,11 +5,9 @@ import TaskCard from "./TaskCard";
 import type { Task } from "./TaskCard";
 import type { Socket } from "socket.io-client";
 import { useT } from "@/lib/i18n";
-import TaskCreateForm from './TaskCreateForm';
 
 interface TaskPanelProps {
   npcId: string;
-  channelId?: string;
   npcName: string;
   socket: Socket | null;
   onTaskClick?: (npcTaskId: string) => void;
@@ -22,7 +20,6 @@ interface TaskPanelProps {
 
 export default function TaskPanel({
   npcId,
-  channelId,
   npcName,
   socket,
   onTaskClick,
@@ -35,7 +32,6 @@ export default function TaskPanel({
   const t = useT();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loadedNpcId, setLoadedNpcId] = useState<string | null>(null);
-  const [showCreateForm, setShowCreateForm] = useState(false);
   const loading = Boolean(socket && npcId) && loadedNpcId !== npcId;
 
   useEffect(() => {
@@ -120,12 +116,6 @@ export default function TaskPanel({
     socket.emit("task:complete", { taskId });
   };
 
-  const handleCreateForNpc = (title: string, summary: string) => {
-    if (!socket) return;
-    socket.emit('task:create', { channelId, title, summary: summary || undefined, npcId });
-    setShowCreateForm(false);
-  };
-
   const activeTasks = tasks.filter((t) => t.status === "in_progress" || t.status === "pending");
   const stalledTasks = tasks.filter((t) => t.status === "stalled");
   const doneTasks = tasks.filter((t) => t.status === "complete" || t.status === "cancelled");
@@ -136,24 +126,7 @@ export default function TaskPanel({
 
   return (
     <div className='flex-1 overflow-y-auto p-2 space-y-2'>
-      {/* Add Task button */}
-      <div className='mb-2'>
-        {showCreateForm ? (
-          <TaskCreateForm
-            onSubmit={handleCreateForNpc}
-            onCancel={() => setShowCreateForm(false)}
-          />
-        ) : (
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className='w-full border border-dashed border-primary/50 rounded-lg py-1.5 text-[10px] text-primary hover:border-primary hover:bg-primary/5 transition'
-          >
-            + {t('task.addToNpc')}
-          </button>
-        )}
-      </div>
-
-      {tasks.length === 0 && !showCreateForm && (
+      {tasks.length === 0 && (
         <div className='flex items-center justify-center text-text-muted text-body py-8'>
           {t('task.noTasks', { name: npcName })}
         </div>

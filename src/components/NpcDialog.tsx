@@ -224,7 +224,6 @@ export default function NpcDialog({
             <div className="h-48 overflow-y-auto">
               <TaskPanel
                 npcId={npcId}
-                channelId={channelId}
                 npcName={npcName}
                 socket={socket}
                 onTaskClick={(npcTaskId) => onSetActiveTaskId?.(npcTaskId)}
