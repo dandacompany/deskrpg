@@ -1713,6 +1713,75 @@ export function setupSocketHandlers(io: Server) {
       },
     });
 
+    // ----- schedule CRUD -----
+    socket.on("schedule:create", async (data: { channelId?: string; npcId?: string; title?: string; summary?: string; cronExpr?: string; timezone?: string }) => {
+      try {
+        const player = players.get(socket.id);
+        if (!player) return;
+        const { channelId, npcId, title, cronExpr } = data;
+        if (!channelId || !npcId || !title || !cronExpr) return;
+        const validationError = validateCronExpr(cronExpr);
+        if (validationError) { socket.emit("schedule:error", { error: validationError }); return; }
+        const schedule = await scheduledTaskManager.create({
+          channelId, npcId, assignerId: player.characterId,
+          title: title.trim().slice(0, 200), summary: data.summary?.trim() || null,
+          cronExpr, timezone: data.timezone || "Asia/Seoul",
+        });
+        io.to(player.mapId).emit("schedule:updated", { schedule, action: "create" });
+      } catch (err) { console.error("[schedule] Create error:", err); }
+    });
+
+    socket.on("schedule:update", async (data: { scheduleId?: string; title?: string; summary?: string; cronExpr?: string; timezone?: string; maxHistory?: number }) => {
+      try {
+        const player = players.get(socket.id);
+        if (!player || !data.scheduleId) return;
+        if (data.cronExpr) {
+          const validationError = validateCronExpr(data.cronExpr);
+          if (validationError) { socket.emit("schedule:error", { error: validationError }); return; }
+        }
+        const schedule = await scheduledTaskManager.update(data.scheduleId, player.mapId, {
+          title: data.title, summary: data.summary, cronExpr: data.cronExpr,
+          timezone: data.timezone, maxHistory: data.maxHistory,
+        });
+        if (schedule) io.to(player.mapId).emit("schedule:updated", { schedule, action: "update" });
+      } catch (err) { console.error("[schedule] Update error:", err); }
+    });
+
+    socket.on("schedule:delete", async (data: { scheduleId?: string }) => {
+      try {
+        const player = players.get(socket.id);
+        if (!player || !data.scheduleId) return;
+        const deleted = await scheduledTaskManager.delete(data.scheduleId, player.mapId);
+        if (deleted) io.to(player.mapId).emit("schedule:updated", { schedule: { id: data.scheduleId }, action: "delete" });
+      } catch (err) { console.error("[schedule] Delete error:", err); }
+    });
+
+    socket.on("schedule:list", async (data: { channelId?: string }) => {
+      try {
+        const channelId = data?.channelId;
+        if (!channelId) return;
+        const schedules = await scheduledTaskManager.getByChannel(channelId);
+        socket.emit("schedule:list-response", { schedules });
+      } catch (err) { console.error("[schedule] List error:", err); }
+    });
+
+    socket.on("schedule:toggle", async (data: { scheduleId?: string; enabled?: boolean }) => {
+      try {
+        const player = players.get(socket.id);
+        if (!player || !data.scheduleId || data.enabled === undefined) return;
+        const schedule = await scheduledTaskManager.setEnabled(data.scheduleId, player.mapId, data.enabled);
+        if (schedule) io.to(player.mapId).emit("schedule:updated", { schedule, action: "toggle" });
+      } catch (err) { console.error("[schedule] Toggle error:", err); }
+    });
+
+    socket.on("schedule:history", async (data: { scheduleId?: string; limit?: number }) => {
+      try {
+        if (!data.scheduleId) return;
+        const tasks = await scheduledTaskManager.getExecutionHistory(data.scheduleId, data.limit || 20);
+        socket.emit("schedule:history-response", { scheduleId: data.scheduleId, tasks });
+      } catch (err) { console.error("[schedule] History error:", err); }
+    });
+
     // ----- disconnect -----
     socket.on("disconnect", () => {
       const player = players.get(socket.id);
