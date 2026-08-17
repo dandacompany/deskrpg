@@ -6,6 +6,7 @@ import Link from "next/link";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import LogoutButton from "@/components/LogoutButton";
 import OpenClawPairingStatusCard, { type OpenClawPairingStatus } from "@/components/openclaw/OpenClawPairingStatusCard";
+import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
 
@@ -556,6 +557,10 @@ function GatewayManagementPageInner() {
                 )}
               </div>
             </section>
+
+            {selectedGateway && (
+              <HermesProfileList gatewayId={selectedGateway.id} canRegister={!!selectedGateway.isOwner} />
+            )}
 
             <section className="rounded-xl border border-border bg-surface p-5">
               <div className="mb-4">

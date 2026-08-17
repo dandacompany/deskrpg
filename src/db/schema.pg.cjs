@@ -100,6 +100,24 @@ const gatewayShares = pgTable("gateway_shares", {
   uniqueIndex("gateway_shares_gateway_user_idx").on(table.gatewayId, table.userId),
 ]);
 
+const hermesProfiles = pgTable("hermes_profiles", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  gatewayId: uuid("gateway_id").notNull().references(() => gatewayResources.id, { onDelete: "cascade" }),
+  profileName: varchar("profile_name", { length: 120 }).notNull(),
+  tokenEncrypted: text("token_encrypted").notNull(),
+  displayName: varchar("display_name", { length: 120 }),
+  description: text("description"),
+  provisionedByDeskrpg: boolean("provisioned_by_deskrpg").notNull().default(false),
+  lastValidatedAt: timestamp("last_validated_at", { withTimezone: true }),
+  lastValidationStatus: varchar("last_validation_status", { length: 40 }),
+  lastValidationError: text("last_validation_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_hermes_profiles_gateway_id").on(table.gatewayId),
+  uniqueIndex("hermes_profiles_gateway_name_idx").on(table.gatewayId, table.profileName),
+]);
+
 const providerResources = pgTable("provider_resources", {
   id: uuid("id").defaultRandom().primaryKey(),
   ownerUserId: uuid("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -273,6 +291,8 @@ const npcs = pgTable("npcs", {
   openclawConfig: jsonb("openclaw_config").notNull(),
   adapterType: varchar("adapter_type", { length: 20 }).notNull().default("openclaw"),
   adapterConfig: jsonb("adapter_config"),
+  hermesProfileId: uuid("hermes_profile_id").references(() => hermesProfiles.id, { onDelete: "set null" }),
+  agentConfig: jsonb("agent_config"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 }, (table) => [
@@ -430,6 +450,7 @@ module.exports = {
   channels,
   gatewayResources,
   gatewayShares,
+  hermesProfiles,
   providerResources,
   providerShares,
   channelGatewayBindings,

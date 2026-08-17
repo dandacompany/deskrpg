@@ -10,6 +10,8 @@ const NPC_RESPONSE_MESSAGE_KEYS = {
   unsupported_file_type: "npc.unsupportedFileType",
   file_too_large: "npc.fileTooLarge",
   too_many_files: "npc.tooManyFiles",
+  npc_unbound: "npc.unbound",
+  hermes_image_unsupported: "npc.hermesImageUnsupported",
 } as const;
 
 export type NpcResponseMessageCode = keyof typeof NPC_RESPONSE_MESSAGE_KEYS;

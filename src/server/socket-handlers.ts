@@ -49,6 +49,7 @@ import {
   toReportReadyPayload,
 } from "../lib/task-reporting";
 import {
+  deliverMeetingNpcAnswer,
   emitMeetingNpcStream,
   registerMeetingSocketHandlers,
 } from "./meeting-socket";
@@ -60,6 +61,14 @@ import { CodexAdapter } from "../lib/adapters/codex-adapter.js";
 import { GeminiAdapter } from "../lib/adapters/gemini-adapter.js";
 import { OpencodeAdapter as OpenCodeAdapter } from "../lib/adapters/opencode-adapter.js";
 import { dmHub } from "../lib/adapters/dm-hub.js";
+import {
+  classifyNpcDispatch,
+  clearHermesRun,
+  createHermesAdapterForNpc,
+  deriveHermesContextKey,
+  persistHermesSessionRef,
+  registerHermesRun,
+} from "./hermes-dispatch";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
 const { OpenClawGateway } = require("../lib/openclaw-gateway.js") as { OpenClawGateway: new () => any };
@@ -104,6 +113,14 @@ export interface PlayerState {
   animation: string;
 }
 
+interface ChannelChatMessage {
+  id: string;
+  sender: string;
+  senderId: string;
+  content: string;
+  timestamp: number;
+}
+
 interface NpcConfig {
   id: string;
   name: string;
@@ -111,6 +128,7 @@ interface NpcConfig {
   sessionKeyPrefix: string;
   adapterType: string;
   adapterConfig: Record<string, unknown>;
+  hermesProfileId: string | null;
   _channelId: string;
   _name: string;
   role?: string | null;
@@ -143,6 +161,9 @@ const players = new Map<string, PlayerState>();
 
 // Rate limit: socketId -> last message timestamp
 const lastChatTime = new Map<string, number>();
+
+// Channel chat history: channelId -> message[] (kept for session lifetime)
+const channelChatHistory = new Map<string, ChannelChatMessage[]>();
 
 // Meeting rooms: channelId -> MeetingRoom
 const meetingRooms = new Map<string, MeetingRoom>();
@@ -206,6 +227,49 @@ function getJoinedSocketsForUserAndChannel(
     .filter((player) => player.userId === userId && player.mapId === channelId)
     .map((player) => io.sockets.sockets.get(player.id))
     .filter((joinedSocket): joinedSocket is Socket => Boolean(joinedSocket));
+}
+
+// ---------------------------------------------------------------------------
+// Cross-process bridge accessors (read-only)
+//
+// server.js runs Socket.io's connection handling entirely inside this
+// module now, so its `players` map is private to this file. The internal
+// HTTP bridges in server.js (loopback endpoints on SOCKET_PORT, used by
+// Next.js API routes running in the same process) still need to answer
+// "who is in this room" and "which socket(s) belong to this user" without
+// server.js owning a second, permanently-empty copy of player state.
+// ---------------------------------------------------------------------------
+
+/** User IDs of players currently joined to a Socket.io room (channel). */
+export function getRoomUserIds(io: Server, channelId: string): string[] {
+  const roomSockets = io.sockets.adapter.rooms.get(channelId);
+  if (!roomSockets) return [];
+
+  const userIds: string[] = [];
+  for (const socketId of roomSockets) {
+    const player = players.get(socketId);
+    if (player?.userId) userIds.push(player.userId);
+  }
+  return userIds;
+}
+
+/** Socket IDs currently associated with a given user (across all channels). */
+export function getSocketIdsForUser(userId: string): string[] {
+  const socketIds: string[] = [];
+  for (const player of players.values()) {
+    if (player.userId === userId) socketIds.push(player.id);
+  }
+  return socketIds;
+}
+
+/**
+ * Given all socket ids currently associated with a user and the socket id
+ * that is joining right now, return the ids of prior sessions that must be
+ * kicked to enforce single-session-per-user. Excludes the joining socket
+ * itself (a socket must never kick its own connection).
+ */
+export function getSocketIdsToKick(existingSocketIds: string[], joiningSocketId: string): string[] {
+  return existingSocketIds.filter((id) => id !== joiningSocketId);
 }
 
 function appendNpcHistoryMessage(channelId: string, npcId: string, content: string) {
@@ -396,12 +460,11 @@ async function runProgressNudgeForTask(
       if (!gateway) return;
 
       await taskManager.markTaskNudged(task.id, task.channelId);
-      ({ response } = await openclawAdapter.executeWithGateway(gateway, {
-        agentId: npcConfig.agentId,
-        channelId: task.channelId,
-        sessionKey,
-        prompt,
-      }));
+      ({ response } = await openclawAdapter.executeWithGateway(
+        gateway,
+        { sessionKey, prompt },
+        npcConfig.agentId,
+      ));
     } else if (adapterRegistry.has(npcConfig.adapterType)) {
       const adapter = adapterRegistry.get(npcConfig.adapterType);
 
@@ -414,6 +477,9 @@ async function runProgressNudgeForTask(
           : undefined,
       }));
     } else {
+      console.warn(
+        `[task-nudge] Unhandled adapterType "${npcConfig.adapterType}" for npc=${task.npcId} task=${task.id} — task stalled, no automation dispatched.`,
+      );
       return;
     }
 
@@ -582,6 +648,7 @@ async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
       sessionKeyPrefix: (oc.sessionKeyPrefix as string) || npcId,
       adapterType: typeof npc.adapterType === "string" ? npc.adapterType : "openclaw",
       adapterConfig,
+      hermesProfileId: typeof npc.hermesProfileId === "string" ? npc.hermesProfileId : null,
       _channelId: npc.channelId as string,
       _name: npc.name,
       role: "Participant",
@@ -610,6 +677,7 @@ async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> 
         sessionKeyPrefix: (oc.sessionKeyPrefix as string) || npc.id,
         adapterType: typeof npc.adapterType === "string" ? npc.adapterType : "openclaw",
         adapterConfig,
+        hermesProfileId: typeof npc.hermesProfileId === "string" ? npc.hermesProfileId : null,
         _channelId: channelId,
         _name: npc.name,
         role: "Participant",
@@ -636,10 +704,64 @@ async function streamNpcResponse(
   sessionKeyOverride?: string,
   emitEvent?: string,
 ): Promise<string> {
-  const { agentId, _channelId, sessionKeyPrefix, adapterType } = npcConfig;
+  const { agentId, _channelId, sessionKeyPrefix, adapterType, hermesProfileId } = npcConfig;
   const responseEvent = emitEvent || "npc:response";
+  const sessionKey = sessionKeyOverride || `${sessionKeyPrefix || npcId}-dm-${userId}`;
 
-  if (adapterType === "openclaw") {
+  const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
+
+  if (dispatchKind === "unbound") {
+    emitNpcSystemResponse(socket, npcId, "npc_unbound");
+    return "";
+  }
+
+  if (dispatchKind === "hermes") {
+    const adapter = await createHermesAdapterForNpc(
+      npcId,
+      userId,
+      deriveHermesContextKey(sessionKey, sessionKeyPrefix || npcId),
+    );
+    if (!adapter) {
+      emitNpcSystemResponse(socket, npcId, "npc_unbound");
+      return "";
+    }
+
+    if (attachments?.some((a) => a.type === "image")) {
+      socket.emit(responseEvent, { npcId, chunk: "", done: false, messageCode: "hermes_image_unsupported" });
+    }
+
+    try {
+      const { response, session } = await adapter.execute({
+        sessionKey,
+        prompt: message,
+        onDelta: (delta: string) => {
+          socket.emit(responseEvent, { npcId, chunk: delta, done: false });
+        },
+        onToolProgress: (_name: string, preview: string) => {
+          if (preview) socket.emit(responseEvent, { npcId, chunk: preview, done: false });
+        },
+        onRunStarted: (runId: string) => {
+          registerHermesRun(sessionKey, runId);
+        },
+      });
+      socket.emit(responseEvent, { npcId, chunk: "", done: true });
+      await persistHermesSessionRef(
+        npcId,
+        userId,
+        deriveHermesContextKey(sessionKey, sessionKeyPrefix || npcId),
+        session.sessionRef,
+      );
+      return response || "";
+    } catch (err) {
+      console.error("[npc] Hermes adapter error for " + npcId + ":", err);
+      emitNpcSystemResponse(socket, npcId, "gateway_error");
+      return "";
+    } finally {
+      clearHermesRun(sessionKey);
+    }
+  }
+
+  if (dispatchKind === "openclaw") {
     if (!agentId) {
       emitNpcSystemResponse(socket, npcId, "no_agent");
       return "";
@@ -651,18 +773,19 @@ async function streamNpcResponse(
       return "";
     }
 
-    const sessionKey = sessionKeyOverride || `${sessionKeyPrefix || npcId}-dm-${userId}`;
     try {
-      const { response } = await openclawAdapter.executeWithGateway(gateway, {
-        agentId,
-        channelId: _channelId,
-        sessionKey,
-        prompt: message,
-        onDelta: (delta: string) => {
-          socket.emit(responseEvent, { npcId, chunk: delta, done: false });
+      const { response } = await openclawAdapter.executeWithGateway(
+        gateway,
+        {
+          sessionKey,
+          prompt: message,
+          onDelta: (delta: string) => {
+            socket.emit(responseEvent, { npcId, chunk: delta, done: false });
+          },
+          attachments,
         },
-        attachments,
-      });
+        agentId,
+      );
       socket.emit(responseEvent, { npcId, chunk: "", done: true });
       return response || "";
     } catch (err) {
@@ -670,9 +793,11 @@ async function streamNpcResponse(
       emitNpcSystemResponse(socket, npcId, "gateway_error");
       return "";
     }
-  } else if (adapterRegistry.has(adapterType)) {
+  }
+
+  // dispatchKind === "registry"
+  if (adapterRegistry.has(adapterType)) {
     const adapter = adapterRegistry.get(adapterType);
-    const sessionKey = sessionKeyOverride || `${sessionKeyPrefix || npcId}-dm-${userId}`;
 
     try {
       const { response } = await adapter.execute({
@@ -711,12 +836,23 @@ async function streamMeetingNpcResponse(
   room: MeetingRoom,
   userMessage: string,
   senderName: string,
+  userId: string,
 ): Promise<void> {
-  const { id: npcId, agentId, sessionKeyPrefix, _name, adapterType } = npcConfig;
+  const { id: npcId, agentId, sessionKeyPrefix, _name, adapterType, hermesProfileId } = npcConfig;
+  const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
 
-  // Skip NPCs without an assigned agent in meeting rooms
-  if (!agentId) return;
-  if (!adapterRegistry.has(adapterType) || adapterType !== openclawAdapter.type) {
+  if (dispatchKind === "unbound") {
+    emitMeetingNpcStream(io, channelId, {
+      npcId,
+      npcName: _name,
+      chunk: "",
+      done: true,
+      messageCode: "npc_unbound",
+    });
+    return;
+  }
+
+  if (dispatchKind === "registry" && !adapterRegistry.has(adapterType)) {
     emitMeetingNpcStream(io, channelId, {
       npcId,
       npcName: _name,
@@ -727,11 +863,33 @@ async function streamMeetingNpcResponse(
     return;
   }
 
-  const gateway = await getOrConnectGateway(channelId);
-  if (!gateway) return;
+  // Skip openclaw NPCs without an assigned agent in meeting rooms (unchanged: silent no-op).
+  if (dispatchKind === "openclaw" && !agentId) return;
 
   const sessionKey = `${sessionKeyPrefix || _name}-meeting-${channelId}`;
   const prompt = `${senderName}: ${userMessage}`;
+
+  let gateway: unknown = null;
+  let hermesAdapter: Awaited<ReturnType<typeof createHermesAdapterForNpc>> = null;
+  let hermesContextKey = "";
+
+  if (dispatchKind === "openclaw") {
+    gateway = await getOrConnectGateway(channelId);
+    if (!gateway) return; // unchanged: silent no-op
+  } else if (dispatchKind === "hermes") {
+    hermesContextKey = deriveHermesContextKey(sessionKey, sessionKeyPrefix || _name);
+    hermesAdapter = await createHermesAdapterForNpc(npcId, userId, hermesContextKey);
+    if (!hermesAdapter) {
+      emitMeetingNpcStream(io, channelId, {
+        npcId,
+        npcName: _name,
+        chunk: "",
+        done: true,
+        messageCode: "npc_unbound",
+      });
+      return;
+    }
+  }
 
   const npcMessage: MeetingMessage = {
     id: `npc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -745,40 +903,72 @@ async function streamMeetingNpcResponse(
   room.messages.push(npcMessage);
   if (room.messages.length > 100) room.messages.splice(0, room.messages.length - 100);
 
+  // fullText는 onDelta 클로저보다 먼저 선언해야 한다 — 반대 순서는 오늘은 안전하지만
+  // (execute 안에서만 호출된다) 리팩터 한 번이면 TDZ 함정이 된다.
   let fullText = "";
-  try {
-    const { response } = await openclawAdapter.executeWithGateway(gateway, {
-      agentId,
-      channelId,
-      sessionKey,
-      prompt,
-      onDelta: (delta: string) => {
-        fullText += delta;
-        npcMessage.content = fullText;
-        emitMeetingNpcStream(io, channelId, {
-          npcId,
-          npcName: _name,
-          messageId: npcMessage.id,
-          sender: _name,
-          chunk: delta,
-          done: false,
-        });
-      },
-    });
-    fullText = response || fullText;
+  const onDelta = (delta: string) => {
+    fullText += delta;
     npcMessage.content = fullText;
     emitMeetingNpcStream(io, channelId, {
       npcId,
       npcName: _name,
       messageId: npcMessage.id,
       sender: _name,
-      chunk: "",
-      done: true,
+      chunk: delta,
+      done: false,
     });
-    io.to(`meeting-${channelId}`).emit("meeting:message", npcMessage);
+  };
+
+  /** hermes 분기에서만 채워진다 — 답변을 확정 전달한 뒤에 best-effort로 영속화한다(M6). */
+  let persistSessionRef: (() => Promise<void>) | null = null;
+  try {
+    if (dispatchKind === "openclaw") {
+      const { response } = await openclawAdapter.executeWithGateway(gateway, { sessionKey, prompt, onDelta }, agentId!);
+      fullText = response || fullText;
+    } else if (dispatchKind === "hermes") {
+      const { response, session } = await hermesAdapter!.execute({
+        sessionKey,
+        prompt,
+        onDelta,
+        onRunStarted: (runId: string) => registerHermesRun(sessionKey, runId),
+      });
+      fullText = response || fullText;
+      persistSessionRef = () =>
+        persistHermesSessionRef(npcId, userId, hermesContextKey, session.sessionRef);
+    } else {
+      // dispatchKind === "registry"
+      const adapter = adapterRegistry.get(adapterType);
+      const { response } = await adapter.execute({
+        sessionKey,
+        prompt,
+        model: typeof npcConfig.adapterConfig.model === "string" ? npcConfig.adapterConfig.model : undefined,
+        onDelta,
+        timeoutMs: 180_000,
+      });
+      fullText = response || fullText;
+    }
+
+    npcMessage.content = fullText;
+    await deliverMeetingNpcAnswer({
+      emitDone: () =>
+        emitMeetingNpcStream(io, channelId, {
+          npcId,
+          npcName: _name,
+          messageId: npcMessage.id,
+          sender: _name,
+          chunk: "",
+          done: true,
+        }),
+      emitMessage: () => io.to(`meeting-${channelId}`).emit("meeting:message", npcMessage),
+      persistSessionRef,
+      onPersistError: (err) =>
+        console.error(`[meeting] hermes session ref persist failed for NPC ${_name}:`, err),
+    });
   } catch (err) {
-    console.error(`[meeting] OpenClaw error for NPC ${_name}:`, err);
+    console.error(`[meeting] ${dispatchKind} error for NPC ${_name}:`, err);
     room.messages.pop();
+  } finally {
+    if (dispatchKind === "hermes") clearHermesRun(sessionKey);
   }
 }
 
@@ -998,6 +1188,16 @@ async function getSocketChannelParticipationAccess(channelId: string, userId: st
   return { channel, access };
 }
 
+async function isChannelOwner(channelId: string, userId: string): Promise<boolean> {
+  const rows = await db
+    .select({ ownerId: channels.ownerId })
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .limit(1);
+
+  return rows[0]?.ownerId === userId;
+}
+
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
@@ -1047,6 +1247,20 @@ export function setupSocketHandlers(io: Server) {
           return;
         }
 
+        // Enforce single session per user — disconnect any prior session(s)
+        // for this account now that the join is authorized and proceeding.
+        const priorSocketIds = getSocketIdsToKick(getSocketIdsForUser(user.userId), socket.id);
+        for (const prevSocketId of priorSocketIds) {
+          const prevSocket = io.sockets.sockets.get(prevSocketId);
+          if (prevSocket) {
+            prevSocket.emit("session:kicked", {
+              reason: "다른 위치에서 접속하여 현재 세션이 종료되었습니다.",
+            });
+            prevSocket.disconnect(true);
+          }
+          players.delete(prevSocketId);
+        }
+
         const playerState: PlayerState = {
           id: socket.id,
           userId: user.userId,
@@ -1068,6 +1282,13 @@ export function setupSocketHandlers(io: Server) {
           (p) => p.mapId === data.mapId && p.id !== socket.id,
         );
         socket.emit("players:state", { players: mapPlayers });
+
+        // Send channel chat history to the joining player
+        const chatHistory = channelChatHistory.get(data.mapId);
+        if (chatHistory && chatHistory.length > 0) {
+          socket.emit("chat:history", { messages: chatHistory });
+        }
+
         await deliverPendingReportsToSocket(socket, user.userId, data.mapId);
 
         // Broadcast to others in the same map
@@ -1101,6 +1322,54 @@ export function setupSocketHandlers(io: Server) {
         });
       },
     );
+
+    // ----- chat:send (channel chat, user-to-user) -----
+    socket.on("chat:send", ({ message }: { message: string }) => {
+      const player = players.get(socket.id);
+      if (!player) return;
+      const trimmed = String(message || "").trim().slice(0, 500);
+      if (!trimmed) return;
+      const now = Date.now();
+      if (now - (lastChatTime.get(socket.id) || 0) < CHAT_COOLDOWN_MS) return;
+      lastChatTime.set(socket.id, now);
+
+      const chatMessage: ChannelChatMessage = {
+        id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        sender: player.characterName || user.nickname,
+        senderId: socket.id,
+        content: trimmed,
+        timestamp: now,
+      };
+      // Store in channel chat history
+      const history = channelChatHistory.get(player.mapId) || [];
+      history.push(chatMessage);
+      channelChatHistory.set(player.mapId, history);
+      io.to(player.mapId).emit("chat:message", chatMessage);
+    });
+
+    // ----- map:object-add (map editing broadcast, owner only) -----
+    socket.on("map:object-add", async (data: unknown) => {
+      const player = players.get(socket.id);
+      if (!player) return;
+      if (!(await isChannelOwner(player.mapId, user.userId))) return;
+      socket.to(player.mapId).emit("map:object-added", data);
+    });
+
+    // ----- map:object-remove (map editing broadcast, owner only) -----
+    socket.on("map:object-remove", async (data: unknown) => {
+      const player = players.get(socket.id);
+      if (!player) return;
+      if (!(await isChannelOwner(player.mapId, user.userId))) return;
+      socket.to(player.mapId).emit("map:object-removed", data);
+    });
+
+    // ----- map:tiles-update (map editing broadcast, owner only) -----
+    socket.on("map:tiles-update", async (data: unknown) => {
+      const player = players.get(socket.id);
+      if (!player) return;
+      if (!(await isChannelOwner(player.mapId, user.userId))) return;
+      socket.to(player.mapId).emit("map:tiles-updated", data);
+    });
 
     // ----- npc:chat -----
     socket.on(
@@ -1700,6 +1969,7 @@ export function setupSocketHandlers(io: Server) {
                     room,
                     message,
                     player?.characterName || "Unknown",
+                    user.userId,
                   );
                 } catch (err) {
                   console.error(`[meeting] NPC ${npc._name} failed:`, err);
@@ -1730,6 +2000,7 @@ export function setupSocketHandlers(io: Server) {
         meetingRooms,
         players,
         user,
+        adapterRegistry,
         getOrConnectGateway,
         getNpcConfigsForChannel,
         canControlMeeting,

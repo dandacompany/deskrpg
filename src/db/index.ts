@@ -36,6 +36,7 @@ export const groups = activeSchema.groups;
 export const channels = activeSchema.channels;
 export const gatewayResources = activeSchema.gatewayResources;
 export const gatewayShares = activeSchema.gatewayShares;
+export const hermesProfiles = activeSchema.hermesProfiles;
 export const providerResources = activeSchema.providerResources;
 export const providerShares = activeSchema.providerShares;
 export const channelGatewayBindings = activeSchema.channelGatewayBindings;

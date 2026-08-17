@@ -251,6 +251,22 @@ function ensureSqliteCompatibility(sqlite) {
     CREATE INDEX IF NOT EXISTS idx_gateway_shares_gateway_id ON gateway_shares(gateway_id);
     CREATE INDEX IF NOT EXISTS idx_gateway_shares_user_id ON gateway_shares(user_id);
     CREATE UNIQUE INDEX IF NOT EXISTS gateway_shares_gateway_user_idx ON gateway_shares(gateway_id, user_id);
+    CREATE TABLE IF NOT EXISTS hermes_profiles (
+      id TEXT PRIMARY KEY NOT NULL,
+      gateway_id TEXT NOT NULL REFERENCES gateway_resources(id) ON DELETE CASCADE,
+      profile_name TEXT NOT NULL,
+      token_encrypted TEXT NOT NULL,
+      display_name TEXT,
+      description TEXT,
+      provisioned_by_deskrpg INTEGER NOT NULL DEFAULT 0,
+      last_validated_at TEXT,
+      last_validation_status TEXT,
+      last_validation_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_hermes_profiles_gateway_id ON hermes_profiles(gateway_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS hermes_profiles_gateway_name_idx ON hermes_profiles(gateway_id, profile_name);
     CREATE TABLE IF NOT EXISTS provider_resources (
       id TEXT PRIMARY KEY NOT NULL,
       owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -319,6 +335,14 @@ function ensureSqliteCompatibility(sqlite) {
 
   try { sqlite.exec("ALTER TABLE npcs ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'openclaw'"); } catch {}
   try { sqlite.exec("ALTER TABLE npcs ADD COLUMN adapter_config TEXT"); } catch {}
+
+  const npcCols = sqlite.prepare("PRAGMA table_info(npcs)").all().map((c) => c.name);
+  if (!npcCols.includes("hermes_profile_id")) {
+    sqlite.exec("ALTER TABLE npcs ADD COLUMN hermes_profile_id TEXT REFERENCES hermes_profiles(id) ON DELETE SET NULL");
+  }
+  if (!npcCols.includes("agent_config")) {
+    sqlite.exec("ALTER TABLE npcs ADD COLUMN agent_config TEXT");
+  }
 
   applySqliteAlterStatements(sqlite, "users", [
     "ALTER TABLE users ADD COLUMN system_role TEXT NOT NULL DEFAULT 'user'",

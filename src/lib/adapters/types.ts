@@ -4,17 +4,27 @@
 export interface AdapterExecuteOptions {
   sessionKey: string;
   prompt: string;
+  /**
+   * The caller owns the conversation (ConversationEngine): every turn carries its own
+   * transcript and nothing may be written to a persisted per-NPC session. Backends that
+   * have both a stateless and a persisted-session transport MUST pick the stateless one
+   * when this is true — including when `conversationHistory` is empty, which is the normal
+   * state of a poll call and of the first turn of a meeting.
+   * Absent/false means a 1:1 DM, which keeps its persisted session.
+   */
+  multiParty?: boolean;
+  /** Multi-party transcript owned by the caller (ConversationEngine). */
+  conversationHistory?: Array<{ role: string; content: string }>;
   onDelta?: (chunk: string) => void;
+  onToolProgress?: (toolName: string, preview: string) => void;
+  /** Fires as soon as the backend assigns a run handle, for abort/steer. */
+  onRunStarted?: (runId: string) => void;
   attachments?: AdapterAttachment[];
   model?: string;
   locale?: string;
   timeoutMs?: number;
   userId?: string;
   projectId?: string;
-  /** OpenClaw-specific: agent ID on the gateway */
-  agentId?: string;
-  /** OpenClaw-specific: channel ID for gateway resolution */
-  channelId?: string;
 }
 
 export interface AdapterAttachment {
@@ -59,6 +69,7 @@ export interface NpcAdapter {
   }>;
 
   abort?(sessionKey: string): Promise<void>;
+  steer?(text: string): Promise<void>;
 
   getSessionSummary?(sessionKey: string): Promise<string>;
   resetSession?(sessionKey: string): Promise<void>;

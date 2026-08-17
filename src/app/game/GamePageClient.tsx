@@ -284,7 +284,7 @@ function GamePageInner() {
   const [placementMode, setPlacementMode] = useState(false);
   const [spawnSetMode, setSpawnSetMode] = useState(false);
   const [pendingNpc, setPendingNpc] = useState<{ presetId?: string; name: string; persona: string; appearance: unknown; direction: string; agentId?: string; agentAction?: "select" | "create"; identity?: string; soul?: string; locale?: string } | null>(null);
-  const [editingNpc, setEditingNpc] = useState<{ id: string; name: string; persona: string; appearance: unknown; direction?: string; agentId?: string | null } | null>(null);
+  const [editingNpc, setEditingNpc] = useState<{ id: string; name: string; persona: string; appearance: unknown; direction?: string; agentId?: string | null; adapterType?: string | null; hermesProfileId?: string | null } | null>(null);
   // npcMenu removed — Edit/Fire now in ChatPanel gear menu
 
   // NPC context menu (right-click) state
@@ -1477,6 +1477,8 @@ function GamePageInner() {
         appearance: npc.appearance,
         direction: typeof (npc as Record<string, unknown>).direction === "string" ? (npc as Record<string, unknown>).direction as string : "down",
         agentId: (npc as Record<string, unknown>).agentId as string | null || null,
+        adapterType: (npc as Record<string, unknown>).adapterType as string | null || null,
+        hermesProfileId: (npc as Record<string, unknown>).hermesProfileId as string | null || null,
       });
       setShowHireModal(true);
     };
@@ -2117,6 +2119,7 @@ function GamePageInner() {
         editingNpc={editingNpc}
         currentNpcCount={channelNpcs.length}
         hasGateway={!!channel?.hasGateway}
+        gatewayId={channel?.gatewayConfig?.gatewayId ?? undefined}
       />
 
       {showPasswordModal && channelId && (

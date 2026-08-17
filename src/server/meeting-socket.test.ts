@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   MEETING_NPC_STREAM_EVENT,
+  deliverMeetingNpcAnswer,
   registerMeetingSocketHandlers,
 } from "./meeting-socket";
 
@@ -137,4 +138,35 @@ test("registerMeetingSocketHandlers rejects meeting chat from sockets outside th
 
 test("meeting socket contract uses the stream event name shared by UI and runtime", () => {
   assert.equal(MEETING_NPC_STREAM_EVENT, "meeting:npc-stream");
+});
+
+test("deliverMeetingNpcAnswer가 세션 참조 영속화 실패에도 답변과 done:true를 지켜낸다", async () => {
+  // M6 회귀 가드: 예전에는 persistHermesSessionRef를 종료 emit보다 먼저 await했고 감싸지도
+  // 않아서, 일시적인 DB 오류 하나로 (1) 답변이 room.messages에서 pop되고 (2) done:true가
+  // 나가지 않아 클라이언트 말풍선이 열린 채 남고 (3) meeting:message도 안 나갔다.
+  const order: string[] = [];
+  let loggedError: unknown = null;
+
+  await deliverMeetingNpcAnswer({
+    emitDone: () => order.push("done"),
+    emitMessage: () => order.push("message"),
+    persistSessionRef: async () => {
+      order.push("persist");
+      throw new Error("db down");
+    },
+    onPersistError: (err) => { loggedError = err; },
+  });
+
+  assert.deepEqual(order, ["done", "message", "persist"], "영속화는 확정 전달 이후에만 시도한다");
+  assert.equal((loggedError as Error)?.message, "db down", "영속화 실패는 삼키지 않고 로깅한다");
+});
+
+test("deliverMeetingNpcAnswer는 영속화 대상이 없으면(openclaw/registry) 전달만 한다", async () => {
+  const order: string[] = [];
+  await deliverMeetingNpcAnswer({
+    emitDone: () => order.push("done"),
+    emitMessage: () => order.push("message"),
+    persistSessionRef: null,
+  });
+  assert.deepEqual(order, ["done", "message"]);
 });

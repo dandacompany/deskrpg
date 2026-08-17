@@ -1,10 +1,16 @@
 import { MEETING_NPC_STREAM_EVENT } from "./meeting-socket";
 import { OpenClawAdapter } from "../lib/adapters/openclaw-adapter.js";
+import type { AdapterRegistry, NpcAdapter } from "../lib/adapters/types";
+import { ConversationEngine, type EngineParticipant, type RunMode } from "../lib/conversation/conversation-engine";
+import type { Turn } from "../lib/conversation/transcript";
+import {
+  classifyNpcDispatch,
+  createHermesAdapterForNpc,
+  deriveHermesContextKey,
+} from "./hermes-dispatch";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { MeetingBroker } = require("../lib/meeting-broker.js") as {
-  MeetingBroker: new (config: MeetingBrokerConfig, callbacks: MeetingBrokerCallbacks) => MeetingBrokerLike;
-};
+const { generateTranscript } = require("../lib/meeting-formatter.js") as typeof import("../lib/meeting-formatter.js");
 
 const openclawAdapter = new OpenClawAdapter();
 
@@ -31,6 +37,10 @@ type MeetingNpcConfig = {
   name: string;
   agentId: string | null;
   sessionKeyPrefix: string;
+  /** 백엔드 갈래 판정에 쓴다(classifyNpcDispatch). 실 소켓 배선은 항상 채워 보내지만,
+   * 이 파일의 단위 테스트가 최소 픽스처를 쓰므로 optional로 두고 기본값으로 방어한다. */
+  adapterType?: string;
+  hermesProfileId?: string | null;
   role?: string | null;
   passPolicy?: string | null;
 };
@@ -52,20 +62,33 @@ type MeetingUser = {
   nickname?: string | null;
 };
 
+/** run() 시작 시 참가자별로 한 번 해석해 회의 동안 재사용하는 결과 — 어댑터 인스턴스는
+ * 여기 담기지 않는다(콜백/조회용 뷰). 어댑터 자체는 회의 하나에 묶인 EngineParticipant로만 존재한다. */
 type MeetingBrokerParticipant = {
-  agentId: string;
+  npcId: string;
   displayName: string;
   role: string;
   passPolicy: string | null;
+  /** OpenClaw 실제 agentId. 회의 요약 생성(gateway.chatSend) 등 openclaw 전용 후속 작업에만 쓴다.
+   * npcId(참가자 식별자)와는 별개다 — 혼동하지 말 것. */
+  openclawAgentId: string | null;
+};
+
+type ExcludedMeetingNpc = {
+  npcId: string;
+  displayName: string;
+  reason: "unbound" | "hermes_profile_unavailable" | "no_agent" | "gateway_not_connected" | "adapter_unavailable";
 };
 
 type MeetingBrokerConfig = {
   topic: string;
-  participants: MeetingBrokerParticipant[];
+  npcs: MeetingNpcConfig[];
   gateway: unknown;
+  userId: string;
+  channelId: string;
+  adapterRegistry: AdapterRegistry;
   sessionKeyPrefix: string;
   meetingId: string;
-  adapterResolver?: (npcId: string) => unknown;
   settings: Record<string, unknown>;
   quota: {
     maxTotalTurns: number;
@@ -77,7 +100,7 @@ type MeetingSummary = {
   conclusions: string | null;
 };
 
-type MeetingBrokerLike = {
+export type MeetingBrokerLike = {
   config: {
     participants: MeetingBrokerParticipant[];
     sessionKeyPrefix?: string;
@@ -98,13 +121,15 @@ type MeetingBrokerCallbacks = {
   onPollStart?: () => void;
   onPollResult?: (raises: Array<{ agent: MeetingBrokerParticipant; reason: string }>, passes: string[]) => void;
   onTurnStart?: (agent: MeetingBrokerParticipant) => void;
-  onTurnChunk?: (agentId: string, chunk: string) => void;
-  onTurnEnd?: (agentId: string, fullResponse: string) => void;
+  onTurnChunk?: (npcId: string, chunk: string) => void;
+  onTurnEnd?: (npcId: string, fullResponse: string) => void;
   onModeChanged?: (mode: string, by: string) => void;
   onWaitingInput?: (pollResult: unknown) => void;
   onTurnAborted?: (npcId: string) => void;
   onMeetingEnd?: (transcript: string, durationSeconds?: number) => void | Promise<void>;
-  onError?: (error: string) => void;
+  onError?: (error: unknown) => void;
+  /** 어댑터를 해석하지 못해 참가자 목록에서 제외된 NPC. 조용히 빼지 않고 알린다(요구사항). */
+  onParticipantsExcluded?: (excluded: ExcludedMeetingNpc[]) => void;
 };
 
 type PersistMeetingMinutesInput = {
@@ -128,13 +153,14 @@ type RegisterMeetingDiscussionHandlersArgs = {
     meetingRooms: Map<string, MeetingRoom>;
     players: Map<string, MeetingPlayer>;
     user: MeetingUser;
+    adapterRegistry: AdapterRegistry;
     getOrConnectGateway: (channelId: string) => Promise<unknown | null>;
     getNpcConfigsForChannel: (channelId: string) => Promise<MeetingNpcConfig[]>;
     canControlMeeting: (channelId: string, userId: string) => Promise<boolean> | boolean;
     createMeetingBroker?: (
       config: MeetingBrokerConfig,
       callbacks: MeetingBrokerCallbacks,
-    ) => MeetingBrokerLike;
+    ) => MeetingBrokerLike | Promise<MeetingBrokerLike>;
     generateMeetingSummary: (
       gateway: unknown,
       agentId: string,
@@ -147,12 +173,219 @@ type RegisterMeetingDiscussionHandlersArgs = {
   };
 };
 
+/** setMode와 같은 기준으로 검증한다(conversation-engine.ts:setMode). 알 수 없는 값은 "auto". */
+function toRunMode(value: unknown): RunMode {
+  return value === "auto" || value === "manual" || value === "directed" ? value : "auto";
+}
+
 function getMeetingRoomId(channelId: string) {
   return `meeting-${channelId}`;
 }
 
-function defaultCreateMeetingBroker(config: MeetingBrokerConfig, callbacks: MeetingBrokerCallbacks) {
-  return new MeetingBroker(config, callbacks);
+/** OpenClaw 게이트웨이를 회의 하나(=참가자 하나) 범위로 닫아 NpcAdapter 모양으로 감싼다.
+ * OpenClawAdapter.execute()는 게이트웨이가 없어 못 쓰므로 이 어댑터가 필요하다. */
+function createOpenClawEngineAdapter(gateway: unknown, agentId: string): NpcAdapter {
+  return {
+    type: openclawAdapter.type,
+    execute: (options) => openclawAdapter.executeWithGateway(gateway, options, agentId),
+    abort: (sessionKey) => openclawAdapter.abortWithGateway(gateway, agentId, sessionKey),
+    testConnection: (config) => openclawAdapter.testConnection(config),
+  };
+}
+
+/** createHermesAdapterForNpc와 같은 모양 — 프로필을 못 찾으면 null. */
+type CreateHermesAdapter = (
+  npcId: string,
+  userId: string,
+  contextKey: string,
+) => Promise<NpcAdapter | null>;
+
+export type ResolvedMeetingParticipant = {
+  participant: MeetingBrokerParticipant;
+  adapter: NpcAdapter;
+  sessionKey: string;
+};
+
+/**
+ * NPC 한 명을 실제 백엔드 어댑터로 해석한다. P1b 판정(HermesAdapter는 회의 하나당 한 번만 만들고
+ * 그 회의 동안 재사용 — 여러 회의가 공유하는 싱글턴으로 등록하지 않는다)을 지키기 위해, 이 함수는
+ * 회의 시작 시점에 참가자별로 정확히 한 번만 호출된다.
+ */
+export async function resolveMeetingParticipant(
+  npc: MeetingNpcConfig,
+  ctx: {
+    meetingId: string;
+    userId: string;
+    gateway: unknown;
+    adapterRegistry: AdapterRegistry;
+    /** 테스트에서 DB·게이트웨이 없이 hermes 갈래를 관찰하기 위한 주입점. 기본값이 실제 배선이다. */
+    createHermesAdapter?: CreateHermesAdapter;
+  },
+): Promise<ResolvedMeetingParticipant | { excluded: ExcludedMeetingNpc }> {
+  const adapterType = npc.adapterType || "openclaw";
+  const hermesProfileId = npc.hermesProfileId ?? null;
+  const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
+  const sessionKeyBase = npc.sessionKeyPrefix || npc.id;
+  const sessionKey = `${sessionKeyBase}-meeting-${ctx.meetingId}`;
+
+  const participantBase: MeetingBrokerParticipant = {
+    npcId: npc.id,
+    displayName: npc.name,
+    role: npc.role || "Participant",
+    passPolicy: npc.passPolicy || null,
+    openclawAgentId: null,
+  };
+
+  if (dispatchKind === "unbound") {
+    return { excluded: { npcId: npc.id, displayName: npc.name, reason: "unbound" } };
+  }
+
+  if (dispatchKind === "hermes") {
+    const contextKey = deriveHermesContextKey(sessionKey, sessionKeyBase);
+    const createAdapter = ctx.createHermesAdapter ?? createHermesAdapterForNpc;
+    const adapter = await createAdapter(npc.id, ctx.userId, contextKey);
+    if (!adapter) {
+      return { excluded: { npcId: npc.id, displayName: npc.name, reason: "hermes_profile_unavailable" } };
+    }
+    return { participant: participantBase, adapter, sessionKey };
+  }
+
+  if (dispatchKind === "openclaw") {
+    if (!npc.agentId) {
+      return { excluded: { npcId: npc.id, displayName: npc.name, reason: "no_agent" } };
+    }
+    if (!ctx.gateway) {
+      return { excluded: { npcId: npc.id, displayName: npc.name, reason: "gateway_not_connected" } };
+    }
+    return {
+      participant: { ...participantBase, openclawAgentId: npc.agentId },
+      adapter: createOpenClawEngineAdapter(ctx.gateway, npc.agentId),
+      sessionKey,
+    };
+  }
+
+  // dispatchKind === "registry"
+  if (!ctx.adapterRegistry.has(adapterType)) {
+    return { excluded: { npcId: npc.id, displayName: npc.name, reason: "adapter_unavailable" } };
+  }
+  return { participant: participantBase, adapter: ctx.adapterRegistry.get(adapterType), sessionKey };
+}
+
+export async function defaultCreateMeetingBroker(
+  config: MeetingBrokerConfig,
+  callbacks: MeetingBrokerCallbacks,
+  deps: { createHermesAdapter?: CreateHermesAdapter } = {},
+): Promise<MeetingBrokerLike> {
+  const resolved: ResolvedMeetingParticipant[] = [];
+  const excluded: ExcludedMeetingNpc[] = [];
+
+  for (const npc of config.npcs) {
+    const result = await resolveMeetingParticipant(npc, {
+      meetingId: config.meetingId,
+      userId: config.userId,
+      gateway: config.gateway,
+      adapterRegistry: config.adapterRegistry,
+      createHermesAdapter: deps.createHermesAdapter,
+    });
+    if ("excluded" in result) {
+      excluded.push(result.excluded);
+    } else {
+      resolved.push(result);
+    }
+  }
+
+  if (excluded.length > 0) {
+    callbacks.onParticipantsExcluded?.(excluded);
+  }
+
+  const participantByNpcId = new Map(resolved.map((r) => [r.participant.npcId, r.participant]));
+
+  const engineParticipants: EngineParticipant[] = resolved.map(({ participant, adapter, sessionKey }) => ({
+    npcId: participant.npcId,
+    displayName: participant.displayName,
+    seated: true,
+    turnCount: 0,
+    lastSpokeAt: 0,
+    adapter,
+    sessionKey,
+    role: participant.role,
+    passPolicy: participant.passPolicy,
+  }));
+
+  let turns: Turn[] = [];
+  const startedAt = Date.now();
+
+  const engine = new ConversationEngine(
+    {
+      mode: "meeting",
+      topic: config.topic,
+      participants: engineParticipants,
+      quota: {
+        maxTurnsPerAgent: 20,
+        maxTotalTurns: config.quota.maxTotalTurns,
+        maxConsecutivePasses: 2,
+        cooldownMs: 1000,
+      },
+      // 캐스팅이 아니라 검증한다 — 엔진 생성자는 setMode와 달리 값을 검사하지 않아서,
+      // 잘못된 값은 auto처럼 동작하면서 meeting:mode-changed로 그 잘못된 문자열을
+      // 클라이언트에 되돌려주는 상태로 남는다.
+      initialRunMode: toRunMode(config.settings?.initialMode),
+      hybridMode: Boolean(config.settings?.hybridMode),
+      hybridAutoResumeMs: (config.settings?.hybridAutoResumeMs as number) ?? null,
+    },
+    {
+      onPollStart: () => callbacks.onPollStart?.(),
+      onPollResult: (raises, passes) => {
+        callbacks.onPollResult?.(
+          raises
+            .map((r) => {
+              const agent = participantByNpcId.get(r.npcId);
+              return agent ? { agent, reason: r.reason } : null;
+            })
+            .filter((r): r is { agent: MeetingBrokerParticipant; reason: string } => r !== null),
+          passes,
+        );
+      },
+      onTurnStart: (npcId) => {
+        const agent = participantByNpcId.get(npcId);
+        if (agent) callbacks.onTurnStart?.(agent);
+      },
+      onTurnChunk: (npcId, chunk) => callbacks.onTurnChunk?.(npcId, chunk),
+      onTurnEnd: (npcId, fullResponse) => callbacks.onTurnEnd?.(npcId, fullResponse),
+      onModeChanged: (mode, source) => callbacks.onModeChanged?.(mode, source),
+      onWaitingInput: (pollResult) => callbacks.onWaitingInput?.(pollResult),
+      onError: (err) => callbacks.onError?.(err),
+      onEnd: (finalTurns) => {
+        turns = finalTurns;
+        const transcript = generateTranscript(
+          config.topic,
+          finalTurns,
+          resolved.map(({ participant }) => ({ displayName: participant.displayName, role: participant.role })),
+        );
+        const durationSeconds = Math.floor((Date.now() - startedAt) / 1000);
+        void callbacks.onMeetingEnd?.(transcript, durationSeconds);
+      },
+    },
+  );
+
+  return {
+    config: {
+      participants: resolved.map((r) => r.participant),
+      sessionKeyPrefix: config.sessionKeyPrefix,
+      meetingId: config.meetingId,
+    },
+    get turns() {
+      return turns;
+    },
+    isRunning: () => engine.isRunning(),
+    run: () => engine.run(),
+    stop: () => engine.stop(),
+    setMode: (mode) => engine.setMode(mode),
+    nextTurn: () => engine.nextTurn(),
+    directSpeak: (npcId) => engine.directSpeak(npcId),
+    abortCurrentTurn: () => engine.abortCurrentTurn(),
+    addUserMessage: (userName, content) => engine.addUserMessage(userName, content),
+  };
 }
 
 export function registerMeetingDiscussionHandlers({
@@ -166,6 +399,7 @@ export function registerMeetingDiscussionHandlers({
     meetingRooms,
     players,
     user,
+    adapterRegistry,
     getOrConnectGateway,
     getNpcConfigsForChannel,
     canControlMeeting,
@@ -193,34 +427,25 @@ export function registerMeetingDiscussionHandlers({
       return;
     }
 
+    // 게이트웨이는 openclaw 참가자를 해석할 때만 필요하다 — hermes/registry 전용 회의는 게이트웨이가
+    // 없어도 시작할 수 있어야 한다(이번 전환의 취지). 없으면 openclaw NPC만 제외 대상이 된다.
     const gateway = await getOrConnectGateway(channelId);
-    if (!gateway) {
-      socket.emit("meeting:error", { error: "No AI Gateway connected" });
-      return;
-    }
 
     const npcConfigs = await getNpcConfigsForChannel(channelId);
-    let aiNpcs = npcConfigs.filter((npc) => npc.agentId);
+    let candidateNpcs = npcConfigs;
 
     if (selectedNpcIds && selectedNpcIds.length > 0) {
       const selectedSet = new Set(selectedNpcIds);
-      aiNpcs = aiNpcs.filter((npc) => selectedSet.has(npc.id));
+      candidateNpcs = candidateNpcs.filter((npc) => selectedSet.has(npc.id));
     }
 
-    if (aiNpcs.length === 0) {
+    if (candidateNpcs.length === 0) {
       socket.emit("meeting:error", { error: "No AI NPCs in this channel" });
       return;
     }
 
-    const participants: MeetingBrokerParticipant[] = aiNpcs.map((npc) => ({
-      agentId: npc.agentId!,
-      displayName: npc.name,
-      role: npc.role || "Participant",
-      passPolicy: npc.passPolicy || null,
-    }));
-
     const meetingParticipants: Array<{ id: string; name: string; type: "npc" | "player"; agentId?: string }> = [
-      ...aiNpcs.map((npc) => ({
+      ...candidateNpcs.map((npc) => ({
         id: npc.id,
         name: npc.name,
         type: "npc" as const,
@@ -242,14 +467,18 @@ export function registerMeetingDiscussionHandlers({
     }
 
     const meetingId = `meet-${Date.now()}`;
-    const brokerInstance = createMeetingBroker(
+    const sessionKeyPrefix = candidateNpcs[0].sessionKeyPrefix || channelId.slice(0, 8);
+
+    const brokerInstance = await createMeetingBroker(
       {
         topic,
-        participants,
+        npcs: candidateNpcs,
         gateway,
-        sessionKeyPrefix: aiNpcs[0].sessionKeyPrefix || channelId.slice(0, 8),
+        userId: user.userId,
+        channelId,
+        adapterRegistry,
+        sessionKeyPrefix,
         meetingId,
-        adapterResolver: (_npcId: string) => openclawAdapter,
         settings: settings || {},
         quota: {
           maxTotalTurns: settings?.maxTotalTurns || 50,
@@ -267,33 +496,36 @@ export function registerMeetingDiscussionHandlers({
         },
         onTurnStart: (agent) => {
           io.to(getMeetingRoomId(channelId)).emit("meeting:npc-turn-start", {
-            npcId: agent.agentId,
+            npcId: agent.npcId,
             npcName: agent.displayName,
           });
         },
-        onTurnChunk: (agentId, chunk) => {
+        onTurnChunk: (npcId, chunk) => {
           io.to(getMeetingRoomId(channelId)).emit(MEETING_NPC_STREAM_EVENT, {
-            npcId: agentId,
+            npcId,
             chunk,
             done: false,
           });
         },
-        onTurnEnd: (agentId, fullResponse) => {
+        onTurnEnd: (npcId, fullResponse) => {
+          const agent = brokerInstance.config.participants.find((participant) => participant.npcId === npcId);
           io.to(getMeetingRoomId(channelId)).emit(MEETING_NPC_STREAM_EVENT, {
-            npcId: agentId,
-            npcName: participants.find((participant) => participant.agentId === agentId)?.displayName || agentId,
+            npcId,
+            npcName: agent?.displayName || npcId,
             chunk: "",
             done: true,
           });
 
           const liveRoom = meetingRooms.get(channelId);
           if (!liveRoom) return;
+          // 중단된 턴은 부분 텍스트조차 없을 수 있다 — 말풍선은 위에서 닫아주되 빈 메시지를
+          // 회의 기록에 남기지는 않는다.
+          if (!fullResponse) return;
 
-          const agent = participants.find((participant) => participant.agentId === agentId);
           liveRoom.messages.push({
-            id: `msg-${Date.now()}-${agentId}`,
-            sender: agent?.displayName || agentId,
-            senderId: `npc-${agentId}`,
+            id: `msg-${Date.now()}-${npcId}`,
+            sender: agent?.displayName || npcId,
+            senderId: `npc-${npcId}`,
             senderType: "npc",
             content: fullResponse,
             timestamp: Date.now(),
@@ -311,15 +543,21 @@ export function registerMeetingDiscussionHandlers({
         onTurnAborted: (npcId) => {
           io.to(getMeetingRoomId(channelId)).emit("meeting:turn-aborted", { npcId });
         },
+        onParticipantsExcluded: (excluded) => {
+          const names = excluded.map((e) => e.displayName).join(", ");
+          io.to(getMeetingRoomId(channelId)).emit("meeting:error", {
+            error: `Excluded from the meeting (no usable backend): ${names}`,
+          });
+        },
         onMeetingEnd: async (transcript, durationSeconds) => {
           let summary: MeetingSummary = { keyTopics: [], conclusions: null };
-          const firstAgent = participants[0];
+          const firstAgent = brokerInstance.config.participants[0];
 
-          if (gateway && firstAgent?.agentId) {
+          if (gateway && firstAgent?.openclawAgentId) {
             summary = await generateMeetingSummary(
               gateway,
-              firstAgent.agentId,
-              brokerInstance.config.sessionKeyPrefix || aiNpcs[0].sessionKeyPrefix || channelId.slice(0, 8),
+              firstAgent.openclawAgentId,
+              brokerInstance.config.sessionKeyPrefix || sessionKeyPrefix,
               brokerInstance.config.meetingId || meetingId,
               topic,
               transcript,
@@ -355,6 +593,15 @@ export function registerMeetingDiscussionHandlers({
         },
       },
     );
+
+    // 어댑터 해석 결과 참가 가능한 NPC가 하나도 남지 않으면(전부 unbound/미해석) 조용히 빈 회의를
+    // 시작-즉시종료하지 않고, 시작 전 검사와 동일하게 실패로 끝낸다. 제외 사유는
+    // onParticipantsExcluded가 이미 개별 통지했다 — 이건 "그래서 회의 자체가 시작되지 않았다"는
+    // 별도의 최종 신호다.
+    if (brokerInstance.config.participants.length === 0) {
+      socket.emit("meeting:error", { error: "No AI NPCs in this channel" });
+      return;
+    }
 
     activeBrokers.set(channelId, brokerInstance);
     discussionInitiators.set(channelId, user.userId);
@@ -465,8 +712,8 @@ export function registerMeetingDiscussionHandlers({
     const broker = activeBrokers.get(channelId);
     if (!broker || !broker.isRunning()) return;
 
-    const agent = broker.config.participants.find((participant) => participant.agentId === npcId);
-    if (!agent?.agentId) {
+    const agent = broker.config.participants.find((participant) => participant.npcId === npcId);
+    if (!agent) {
       socket.emit("meeting:error", { error: "NPC not found or has no agent" });
       return;
     }

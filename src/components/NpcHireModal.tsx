@@ -13,6 +13,13 @@ import OpenClawPairingStatusCard, { type OpenClawPairingStatus } from "@/compone
 import { getAgentProgressMeter, type AgentProgressPhase } from "@/lib/npc-agent-progress";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { localizeNpcPromptDocument } from "@/lib/npc-agent-defaults";
+import { shouldRebindProfile } from "@/components/hermes/rebind-decision";
+
+interface HermesProfileOption {
+  id: string;
+  profileName: string;
+  displayName: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -75,10 +82,11 @@ interface NpcHireModalProps {
     soul?: string;
     locale?: string;
     adapterType?: string;
+    hermesProfileId?: string;
   }) => void;
   onSaveEdit?: (
     npcId: string,
-    updates: { presetId?: string; name?: string; persona?: string; appearance?: unknown; direction?: string; identity?: string; soul?: string; agentId?: string; agentAction?: "select" | "create"; locale?: string; adapterType?: string },
+    updates: { presetId?: string; name?: string; persona?: string; appearance?: unknown; direction?: string; identity?: string; soul?: string; agentId?: string; agentAction?: "select" | "create"; locale?: string; adapterType?: string; hermesProfileId?: string },
   ) => void;
   editingNpc?: {
     id: string;
@@ -87,11 +95,15 @@ interface NpcHireModalProps {
     appearance: unknown;
     direction?: string;
     agentId?: string | null;
+    adapterType?: string | null;
+    hermesProfileId?: string | null;
   } | null;
   currentNpcCount: number;
   hasGateway: boolean;
   availableAdapters?: string[];
   channelDefaultAdapter?: string;
+  /** Gateway to list Hermes profiles from. Without it the Hermes profile picker shows a "no gateway" hint. */
+  gatewayId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +121,7 @@ export default function NpcHireModal({
   hasGateway,
   availableAdapters,
   channelDefaultAdapter,
+  gatewayId,
 }: NpcHireModalProps) {
   const t = useT();
   const { locale } = useLocale();
@@ -124,6 +137,16 @@ export default function NpcHireModal({
 
   // --- Adapter selection ---
   const [adapterType, setAdapterType] = useState(channelDefaultAdapter || "openclaw");
+
+  // --- Hermes profile selection ---
+  const [hermesProfiles, setHermesProfiles] = useState<HermesProfileOption[]>([]);
+  const [hermesProfilesLoading, setHermesProfilesLoading] = useState(false);
+  const [hermesProfilesError, setHermesProfilesError] = useState("");
+  const [selectedHermesProfileId, setSelectedHermesProfileId] = useState<string | null>(null);
+  const [rebindError, setRebindError] = useState("");
+  // Guards the Save/Place button while handleSubmit's rebind fetch is in flight, so a
+  // second click can't fire a concurrent /rebind against the same NPC.
+  const [saving, setSaving] = useState(false);
 
   // --- NPC-specific state ---
   const [name, setName] = useState("");
@@ -168,6 +191,7 @@ export default function NpcHireModal({
   const isExistingAgentSelected = hasGateway && selectedAgentId && !createNewAgent;
   const personaCompat = identity.trim();
   const canSubmit =
+    !saving &&
     hasGateway &&
     name.trim().length > 0 &&
     (personaCompat.length > 0 || isExistingAgentSelected);
@@ -231,7 +255,10 @@ export default function NpcHireModal({
     startTransition(() => {
       setStep("configure");
       setAgentProgress({ phase: "idle", status: "" });
+      setRebindError("");
       if (editingNpc) {
+        setAdapterType(editingNpc.adapterType || channelDefaultAdapter || "openclaw");
+        setSelectedHermesProfileId(editingNpc.hermesProfileId || null);
         setName(editingNpc.name);
         setIdentity(editingNpc.persona || "");
         setSoul("");
@@ -255,6 +282,8 @@ export default function NpcHireModal({
           setCreateNewAgent(hasGateway);
         }
       } else {
+        setAdapterType(channelDefaultAdapter || "openclaw");
+        setSelectedHermesProfileId(null);
         setName("");
         setIdentity("");
         setSoul("");
@@ -276,7 +305,7 @@ export default function NpcHireModal({
       setGatewayConnectionState({ status: "idle" });
       setGatewayAgents([]);
     });
-  }, [isOpen, editingNpc, hasGateway, setBodyType, setLayers, setActiveCategory]);
+  }, [isOpen, editingNpc, hasGateway, channelDefaultAdapter, setBodyType, setLayers, setActiveCategory]);
 
   const loadGatewayAgents = useCallback(async () => {
     if (!hasGateway) return;
@@ -319,6 +348,29 @@ export default function NpcHireModal({
     if (!isOpen || !hasGateway) return;
     void loadGatewayAgents();
   }, [isOpen, hasGateway, loadGatewayAgents]);
+
+  // --- Fetch Hermes profiles for the selected gateway ---
+  const loadHermesProfiles = useCallback(async () => {
+    if (!gatewayId) return;
+    setHermesProfilesLoading(true);
+    setHermesProfilesError("");
+    try {
+      const res = await fetch(`/api/gateways/${gatewayId}/profiles`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw data;
+      setHermesProfiles(Array.isArray(data.profiles) ? data.profiles : []);
+    } catch (nextError) {
+      setHermesProfiles([]);
+      setHermesProfilesError(getLocalizedErrorMessage(t, nextError, "common.error"));
+    } finally {
+      setHermesProfilesLoading(false);
+    }
+  }, [gatewayId, t]);
+
+  useEffect(() => {
+    if (!isOpen || adapterType !== "hermes") return;
+    void loadHermesProfiles();
+  }, [isOpen, adapterType, loadHermesProfiles]);
 
   // --- Fetch presets ---
   useEffect(() => {
@@ -438,27 +490,55 @@ export default function NpcHireModal({
   };
 
   // --- Submit ---
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!canSubmit) return;
+    setSaving(true);
+    try {
       const appearance = buildAppearance();
       const activePresetId = appearanceMode === "presets" ? selectedPresetId ?? undefined : undefined;
 
-    if (isEdit && onSaveEdit) {
-      let agentId: string | undefined;
-      let agentAction: "select" | "create" | undefined;
-      if (hasGateway) {
-        if (createNewAgent && newAgentId.trim()) { agentId = newAgentId.trim(); agentAction = "create"; }
-        else if (selectedAgentId) { agentId = selectedAgentId; agentAction = selectedAgentId !== editingNpc!.agentId ? "select" : undefined; }
+      if (isEdit && onSaveEdit) {
+        let agentId: string | undefined;
+        let agentAction: "select" | "create" | undefined;
+        if (hasGateway) {
+          if (createNewAgent && newAgentId.trim()) { agentId = newAgentId.trim(); agentAction = "create"; }
+          else if (selectedAgentId) { agentId = selectedAgentId; agentAction = selectedAgentId !== editingNpc!.agentId ? "select" : undefined; }
+        }
+
+        // A Hermes profile is bound via a dedicated endpoint (it carries a live
+        // credential), not through the generic NPC PATCH — so bind it here before
+        // handing off the rest of the edit to onSaveEdit.
+        if (shouldRebindProfile(adapterType, selectedHermesProfileId, editingNpc!.hermesProfileId)) {
+          setRebindError("");
+          try {
+            const res = await fetch(`/api/npcs/${editingNpc!.id}/rebind`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ profileId: selectedHermesProfileId }),
+            });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              setRebindError(getLocalizedErrorMessage(t, data, "npc.hermesRebindFailed"));
+              return;
+            }
+          } catch {
+            setRebindError(t("npc.hermesRebindFailed"));
+            return;
+          }
+        }
+
+        onSaveEdit(editingNpc!.id, { presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, identity: identity.trim(), soul: soul.trim(), agentId, agentAction, locale, adapterType, hermesProfileId: selectedHermesProfileId ?? undefined });
+      } else {
+        let agentId: string | undefined;
+        let agentAction: "select" | "create" | undefined;
+        if (hasGateway) {
+          if (createNewAgent && newAgentId.trim()) { agentId = newAgentId.trim(); agentAction = "create"; }
+          else if (selectedAgentId) { agentId = selectedAgentId; agentAction = "select"; }
+        }
+        onPlaceOnMap({ presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, agentId, agentAction, identity: identity.trim(), soul: soul.trim(), locale, adapterType, hermesProfileId: selectedHermesProfileId ?? undefined });
       }
-      onSaveEdit(editingNpc!.id, { presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, identity: identity.trim(), soul: soul.trim(), agentId, agentAction, locale, adapterType });
-    } else {
-      let agentId: string | undefined;
-      let agentAction: "select" | "create" | undefined;
-      if (hasGateway) {
-        if (createNewAgent && newAgentId.trim()) { agentId = newAgentId.trim(); agentAction = "create"; }
-        else if (selectedAgentId) { agentId = selectedAgentId; agentAction = "select"; }
-      }
-      onPlaceOnMap({ presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, agentId, agentAction, identity: identity.trim(), soul: soul.trim(), locale, adapterType });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -504,9 +584,10 @@ export default function NpcHireModal({
                 onChange={(e) => setAdapterType(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                {(availableAdapters || ["openclaw"]).map((type) => (
+                {(availableAdapters || ["openclaw", "hermes"]).map((type) => (
                   <option key={type} value={type}>
                     {type === "openclaw" ? "OpenClaw Gateway" :
+                     type === "hermes" ? "Hermes Agent" :
                      type === "claude" ? "Claude Code" :
                      type === "codex" ? "Codex CLI" :
                      type === "gemini" ? "Gemini CLI" :
@@ -517,10 +598,23 @@ export default function NpcHireModal({
             </div>
 
             {/* CLI adapter note */}
-            {adapterType !== "openclaw" && (
+            {adapterType !== "openclaw" && adapterType !== "hermes" && (
               <div className="text-xs text-gray-400 bg-gray-800 rounded p-3">
                 <p>{t("npc.cliAdapterNote")}</p>
               </div>
+            )}
+
+            {/* Hermes profile picker */}
+            {adapterType === "hermes" && (
+              <HermesProfileSection
+                gatewayId={gatewayId}
+                profiles={hermesProfiles}
+                loading={hermesProfilesLoading}
+                error={hermesProfilesError}
+                selectedProfileId={selectedHermesProfileId}
+                onSelectProfile={setSelectedHermesProfileId}
+                t={t}
+              />
             )}
 
             {/* AI Agent Section (OpenClaw only) */}
@@ -649,6 +743,7 @@ export default function NpcHireModal({
                 {t("npc.limitReached", { count: MAX_NPC_COUNT, max: MAX_NPC_COUNT })}
               </p>
             )}
+            {rebindError && <p className="text-xs text-red-400">{rebindError}</p>}
           </div>
           <div className="flex gap-3 items-center">
             <button onClick={onClose} className="px-4 py-2 rounded text-sm bg-gray-700 text-gray-300 hover:bg-gray-600">
@@ -658,9 +753,9 @@ export default function NpcHireModal({
             {step === "configure" && (
               <button
                 onClick={() => {
-                  if (isEdit) handleSubmit();
+                  if (isEdit) void handleSubmit();
                   else if (hasGateway && createNewAgent && newAgentId.trim()) handleCreateAgent();
-                  else handleSubmit();
+                  else void handleSubmit();
                 }}
                 disabled={!canSubmit || (!isEdit && atLimit)}
                 className="px-5 py-2 rounded text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -691,7 +786,7 @@ export default function NpcHireModal({
 
             {step === "place" && (
               <button
-                onClick={handleSubmit}
+                onClick={() => void handleSubmit()}
                 disabled={!canSubmit || (!isEdit && atLimit)}
                 className="px-5 py-2 rounded text-sm font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
               >{t("npc.placeOnMap")}</button>
@@ -699,6 +794,60 @@ export default function NpcHireModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hermes Profile Section sub-component
+// ---------------------------------------------------------------------------
+
+function HermesProfileSection({
+  gatewayId,
+  profiles,
+  loading,
+  error,
+  selectedProfileId,
+  onSelectProfile,
+  t,
+}: {
+  gatewayId: string | undefined;
+  profiles: HermesProfileOption[];
+  loading: boolean;
+  error: string;
+  selectedProfileId: string | null;
+  onSelectProfile: (id: string | null) => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-300 mb-1">{t("npc.hermesProfile")}</label>
+      {!gatewayId ? (
+        <div className="rounded border border-dashed border-gray-700 bg-gray-800/60 px-3 py-3 text-sm text-gray-400">
+          {t("npc.hermesProfileNoGateway")}
+        </div>
+      ) : loading ? (
+        <p className="text-sm text-gray-500">{t("common.loading")}</p>
+      ) : error ? (
+        <p className="text-sm text-red-400">{error}</p>
+      ) : profiles.length === 0 ? (
+        <div className="rounded border border-dashed border-gray-700 bg-gray-800/60 px-3 py-3 text-sm text-gray-400">
+          {t("npc.hermesProfileEmpty")}
+        </div>
+      ) : (
+        <select
+          value={selectedProfileId ?? ""}
+          onChange={(e) => onSelectProfile(e.target.value || null)}
+          className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">{t("npc.hermesProfileSelect")}</option>
+          {profiles.map((profile) => (
+            <option key={profile.id} value={profile.id}>
+              {profile.displayName || profile.profileName}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }

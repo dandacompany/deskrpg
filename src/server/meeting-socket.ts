@@ -112,6 +112,31 @@ export function emitMeetingNpcStream(
   io.to(getMeetingRoomId(channelId)).emit(MEETING_NPC_STREAM_EVENT, payload);
 }
 
+/**
+ * 생성이 끝난 NPC 답변을 회의방에 확정 전달한 뒤, 세션 참조 영속화를 best-effort로 수행한다.
+ *
+ * 순서와 격리가 이 함수의 전부다. 영속화를 종료 emit보다 먼저 await하면(그리고 그것이
+ * 감싸이지 않으면) 일시적인 DB 오류 하나가 이미 생성된 답변을 통째로 날린다 —
+ * 호출부의 catch가 room.messages에서 답변을 pop하고, done:true가 나가지 않아 클라이언트의
+ * 스트리밍 말풍선이 영영 열린 채로 남는다. 세션 참조를 잃으면 대화 연속성을 잃지만,
+ * 답변을 잃으면 사용자의 턴 자체를 잃는다.
+ */
+export async function deliverMeetingNpcAnswer(steps: {
+  emitDone: () => void;
+  emitMessage: () => void;
+  persistSessionRef?: (() => Promise<void>) | null;
+  onPersistError?: (err: unknown) => void;
+}): Promise<void> {
+  steps.emitDone();
+  steps.emitMessage();
+  if (!steps.persistSessionRef) return;
+  try {
+    await steps.persistSessionRef();
+  } catch (err) {
+    (steps.onPersistError ?? ((e: unknown) => console.error("[meeting] session ref persist failed:", e)))(err);
+  }
+}
+
 export function registerMeetingSocketHandlers({
   io,
   socket,
