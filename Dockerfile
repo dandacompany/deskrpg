@@ -59,6 +59,13 @@ COPY --from=builder /app/src/lib/rbac/channel-access.ts ./src/lib/rbac/channel-a
 COPY --from=builder /app/src/server/meeting-socket.ts ./src/server/meeting-socket.ts
 COPY --from=builder /app/src/server/meeting-discussion.ts ./src/server/meeting-discussion.ts
 
+# conversation-engine.ts and its sibling modules (meeting-discussion.ts's deps,
+# not traced by Next.js standalone, same reason as the files above)
+COPY --from=builder /app/src/lib/conversation/conversation-engine.ts ./src/lib/conversation/conversation-engine.ts
+COPY --from=builder /app/src/lib/conversation/transcript.ts ./src/lib/conversation/transcript.ts
+COPY --from=builder /app/src/lib/conversation/turn-policy.ts ./src/lib/conversation/turn-policy.ts
+COPY --from=builder /app/src/lib/conversation/turn-timeout.ts ./src/lib/conversation/turn-timeout.ts
+
 # socket-handlers.ts (server.js entrypoint) and its transitive TS deps
 # (not traced by Next.js standalone, same reason as the files above)
 COPY --from=builder /app/src/server/socket-handlers.ts ./src/server/socket-handlers.ts
