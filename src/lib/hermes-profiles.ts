@@ -25,6 +25,28 @@ export function mapValidationError(err: unknown): Exclude<ProfileValidationStatu
   return "error";
 }
 
+// PostgreSQL raises SQLSTATE 23505 (unique_violation); better-sqlite3 raises a
+// SqliteError with code SQLITE_CONSTRAINT_UNIQUE (or _PRIMARYKEY). Detect both so a
+// lost registration race converges to an update instead of throwing.
+function isUniqueViolation(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const code = (err as { code?: unknown }).code;
+  return code === "23505" || code === "SQLITE_CONSTRAINT_UNIQUE" || code === "SQLITE_CONSTRAINT_PRIMARYKEY";
+}
+
+async function updateHermesProfileToken(
+  profileId: string,
+  input: { token: string; displayName?: string },
+  fallbackDisplayName: string | null,
+) {
+  const [updated] = await db.update(hermesProfiles).set({
+    tokenEncrypted: encryptGatewayToken(input.token.trim()),
+    displayName: input.displayName?.trim() || fallbackDisplayName,
+    updatedAt: nowForDb(),
+  }).where(eq(hermesProfiles.id, profileId)).returning();
+  return updated;
+}
+
 export function buildProfileClient(input: {
   baseUrl: string;
   profileName: string;
@@ -45,9 +67,11 @@ export async function registerHermesProfile(input: {
   profileName: string;
   token: string;
   displayName?: string;
-}): Promise<{ profile: typeof hermesProfiles.$inferSelect } | { error: "forbidden" | "duplicate" }> {
+}): Promise<{ profile: typeof hermesProfiles.$inferSelect } | { error: "forbidden" }> {
+  // Registering writes a credential onto the gateway, so this requires ownership —
+  // a shared "use" role is enough to read/validate profiles but not to write one.
   const access = await getAccessibleGatewayResource(input.userId, input.gatewayId);
-  if (!access) return { error: "forbidden" as const };
+  if (!access || !access.isOwner) return { error: "forbidden" as const };
 
   const profileName = input.profileName.trim();
   const existing = await db.select().from(hermesProfiles).where(and(
@@ -56,22 +80,33 @@ export async function registerHermesProfile(input: {
   )).limit(1);
 
   if (existing[0]) {
-    const [updated] = await db.update(hermesProfiles).set({
-      tokenEncrypted: encryptGatewayToken(input.token.trim()),
-      displayName: input.displayName?.trim() || existing[0].displayName,
-      updatedAt: nowForDb(),
-    }).where(eq(hermesProfiles.id, existing[0].id)).returning();
+    const updated = await updateHermesProfileToken(existing[0].id, input, existing[0].displayName);
     return { profile: updated };
   }
 
-  const [created] = await db.insert(hermesProfiles).values({
-    gatewayId: input.gatewayId,
-    profileName,
-    tokenEncrypted: encryptGatewayToken(input.token.trim()),
-    displayName: input.displayName?.trim() || profileName,
-  }).returning();
+  try {
+    const [created] = await db.insert(hermesProfiles).values({
+      gatewayId: input.gatewayId,
+      profileName,
+      tokenEncrypted: encryptGatewayToken(input.token.trim()),
+      displayName: input.displayName?.trim() || profileName,
+    }).returning();
+    return { profile: created };
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
 
-  return { profile: created };
+    // Lost the race: another registration for this (gatewayId, profileName) landed
+    // between our existence check and our insert. Converge to an update rather than
+    // surfacing a raw constraint violation.
+    const [raced] = await db.select().from(hermesProfiles).where(and(
+      eq(hermesProfiles.gatewayId, input.gatewayId),
+      eq(hermesProfiles.profileName, profileName),
+    )).limit(1);
+    if (!raced) throw err;
+
+    const updated = await updateHermesProfileToken(raced.id, input, raced.displayName);
+    return { profile: updated };
+  }
 }
 
 export async function listHermesProfiles(userId: string, gatewayId: string) {
