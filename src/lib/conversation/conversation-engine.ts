@@ -24,6 +24,9 @@ const DEFAULT_MAX_MS = 600_000;
 export type EngineParticipant = Participant & {
   adapter: NpcAdapter;
   sessionKey: string;
+  /** 폴링 프롬프트의 `[발언 지침]` 블록에 실린다(meeting-formatter.js:30-32). 옛 브로커는
+   * agent.passPolicy를 그대로 넘겼다(meeting-broker.js:307) — 값이 없으면 블록 자체가 빠진다. */
+  passPolicy?: string | null;
 };
 
 /** 회의 런타임 컨트롤 서브모드. meeting-broker.js:53 이식 — EngineConfig.mode(peer/meeting/group,
@@ -390,7 +393,7 @@ export class ConversationEngine {
             currentTurn,
             maxTurns,
             remaining,
-            null,
+            engineParticipant.passPolicy ?? null,
           );
           const { response } = await engineParticipant.adapter.execute({
             sessionKey: `${engineParticipant.sessionKey}-poll`,

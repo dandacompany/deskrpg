@@ -71,6 +71,38 @@ describe("MeetingBroker 기준선 — 폴링과 발언권", () => {
     assert.deepEqual(passes, ["b"]);
   });
 
+  test("폴링 프롬프트의 내용을 고정한다 — 주제·턴 카운터·SPEAK/PASS 지시, 그리고 passPolicy가 있으면 [발언 지침] 블록", async () => {
+    // 이 파일은 원래 제어 흐름(누가·언제 발언하는가)만 고정했고 프롬프트 문자열은 한 번도 보지 않았다.
+    // 그 사각지대 때문에 이관 과정에서 passPolicy가 프롬프트에서 조용히 빠진 것을 잡지 못했다(H1).
+    // 프롬프트 조립도 회의의 관찰 가능한 동작이므로 여기서 함께 고정한다.
+    const withPolicy = [
+      { agentId: "a", displayName: "에이", role: "Participant", passPolicy: "근거 없으면 PASS 하세요" },
+      { agentId: "b", displayName: "비", role: "Participant" },
+    ];
+    const gw = mockGateway({ a: [{ text: "PASS" }], b: [{ text: "PASS" }] });
+    const broker = new MeetingBroker(
+      { topic: "분기 계획", participants: withPolicy, gateway: gw, sessionKeyPrefix: "s", meetingId: "m",
+        quota: { maxTotalTurns: 7, cooldownMs: 0 } },
+      {},
+    );
+    await broker.pollAgents();
+
+    const promptFor = (agentId: string) => gw.calls.find((c) => c.agentId === agentId)!.message;
+    const aPrompt = promptFor("a");
+    assert.match(aPrompt, /📋 \[회의 알림: 분기 계획\]/);
+    assert.match(aPrompt, /현재 턴: 0\/7 \| 당신의 남은 발언: \d+/);
+    assert.match(aPrompt, /발언하고 싶으면 → SPEAK: \(한줄 이유\)/);
+    assert.ok(
+      aPrompt.includes("[발언 지침] 근거 없으면 PASS 하세요"),
+      `passPolicy가 있는 참가자의 폴링 프롬프트에는 [발언 지침] 블록이 들어가야 한다: ${JSON.stringify(aPrompt)}`,
+    );
+    assert.equal(
+      promptFor("b").includes("[발언 지침]"),
+      false,
+      "passPolicy가 없는 참가자에게는 [발언 지침] 블록이 붙지 않는다",
+    );
+  });
+
   test("여러 명이 손들면 가장 오래 발언하지 않은 쪽이 뽑힌다", () => {
     const gw = mockGateway({});
     const broker = new MeetingBroker(

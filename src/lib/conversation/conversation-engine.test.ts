@@ -79,6 +79,34 @@ describe("ConversationEngine — meeting 모드", () => {
   });
 });
 
+describe("ConversationEngine — 폴링 프롬프트 내용", () => {
+  test("participant.passPolicy가 폴링 프롬프트의 [발언 지침] 블록으로 실린다(옛 브로커와 동일)", async () => {
+    const a = participant("a", ["PASS"], { passPolicy: "근거 없으면 PASS 하세요" });
+    const b = participant("b", ["PASS"]);
+    const engine = new ConversationEngine(
+      { mode: "meeting", topic: "분기 계획", participants: [a, b],
+        quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 7, maxTurnsPerAgent: 20 } },
+      {},
+    );
+    await engine.run();
+
+    const promptFor = (p: EngineParticipant) =>
+      (p.adapter as unknown as { calls: AdapterExecuteOptions[] }).calls[0].prompt;
+    const aPrompt = promptFor(a);
+    assert.match(aPrompt, /📋 \[회의 알림: 분기 계획\]/);
+    assert.match(aPrompt, /발언하고 싶으면 → SPEAK: \(한줄 이유\)/);
+    assert.ok(
+      aPrompt.includes("[발언 지침] 근거 없으면 PASS 하세요"),
+      `passPolicy를 하드코딩 null로 되돌리면 이 단언이 깨진다: ${JSON.stringify(aPrompt)}`,
+    );
+    assert.equal(
+      promptFor(b).includes("[발언 지침]"),
+      false,
+      "passPolicy가 없는 참가자에게는 [발언 지침] 블록이 붙지 않는다",
+    );
+  });
+});
+
 describe("ConversationEngine — 착석 게이트", () => {
   test("착석하지 않은 참가자는 폴링도 발언도 하지 않는다", async () => {
     const a = participant("a", ["PASS"]);

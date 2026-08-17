@@ -291,6 +291,7 @@ async function defaultCreateMeetingBroker(
     lastSpokeAt: 0,
     adapter,
     sessionKey,
+    passPolicy: participant.passPolicy,
   }));
 
   let turns: Turn[] = [];
