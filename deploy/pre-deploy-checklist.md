@@ -23,6 +23,10 @@
 - OpenClaw/Provider 연동이 필요한 경우:
   - `OPENCLAW_TOKEN`, `OPENCLAW_MODEL`, `OPENCLAW_URL` 값 확인
   - 대시보드에서 페어링/온보딩 상태 점검
+- Hermes 프로필 연동이 필요한 경우:
+  - Hermes 게이트웨이에 `multiplex_profiles`가 활성화되어 있고, `api_server` 플랫폼으로 설정되어 있는지 확인
+  - 각 프로필이 16자 이상의 자체 `API_SERVER_KEY`를 보유하는지 확인 (프로필 간 키 공유 금지)
+  - 각 프로필이 `/p/<name>/health` 경로에서 정상 응답하는지 확인
 - 배포 후 초기 접근 경로 점검(`/auth` 리다이렉트 또는 대체 헬스체크)
 
 ## 3) 선택: 배포용 Smoke 테스트 (`tc` 플래그)
