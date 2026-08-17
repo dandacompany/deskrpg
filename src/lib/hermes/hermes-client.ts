@@ -4,7 +4,7 @@
 import { createSseParser, type SseEvent } from "./sse";
 import { isTerminalEvent, type HermesCapabilities } from "./types";
 
-export type HermesErrorCode = "unauthorized" | "unknown_profile" | "unreachable" | "http_error";
+export type HermesErrorCode = "unauthorized" | "unknown_profile" | "unreachable" | "http_error" | "run_failed";
 
 export class HermesError extends Error {
   readonly code: HermesErrorCode;
@@ -144,7 +144,10 @@ export class HermesClient {
     }
     parser.flush();
 
-    if (failure) throw new HermesError("http_error", failure, 200);
+    // A run.failed/error SSE event is a healthy 200 stream reporting that the
+    // agent run itself failed — not an HTTP-layer error. Callers (e.g. NPC
+    // chat surfaces) need to tell the two apart to render a useful message.
+    if (failure) throw new HermesError("run_failed", failure, 200);
     return { text: completed ?? accumulated, runId, sessionId };
   }
 
