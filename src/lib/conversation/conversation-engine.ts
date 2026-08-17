@@ -46,6 +46,27 @@ export type EngineParticipant = Participant & {
  * directSpeak만 받는다. */
 export type RunMode = "auto" | "manual" | "directed";
 
+/** 루프가 왜 끝났는지. onEnd로 함께 통지한다. */
+export type EngineEndReason =
+  | "max_turns"
+  | "consecutive_passes"
+  | "consecutive_failures"
+  | "no_candidates"
+  | "stopped";
+
+/**
+ * 연속 실패 한도. 이 횟수만큼 턴이 연속으로 실패하면 루프를 끝낸다.
+ *
+ * 실패한 턴은 트랜스크립트에 아무것도 남기지 않으므로 maxTotalTurns·remainingTurns·
+ * consecutivePasses 중 어느 것도 전진하지 않는다 — 폴링이 없는 peer 모드에서는 브레이크가
+ * 하나도 없어 루프가 무한히 돈다(리뷰 실측: maxTotalTurns 3에 50회 이상).
+ *
+ * 3인 이유: 1이면 일시적인 네트워크 오류 한 번에 회의가 죽고, 크게 잡으면 백엔드가 완전히
+ * 내려간 상황에서 사용자가 기다리는 시간만 길어진다. 3연속이면 "일시적"이라고 보기 어렵다.
+ * 설정값으로 빼지 않는다 — 이 값을 읽는 설정 경로가 아직 없다.
+ */
+const MAX_CONSECUTIVE_FAILURES = 3;
+
 export type EngineCallbacks = {
   onPollStart?: () => void;
   onPollResult?: (raises: Array<{ npcId: string; reason: string }>, passes: string[]) => void;
@@ -55,7 +76,7 @@ export type EngineCallbacks = {
    * 부분 텍스트(없을 수도 있다)이며 트랜스크립트에는 기록되지 않는다. 중단이든 아니든 항상
    * 호출되어야 클라이언트의 스트리밍 말풍선이 닫힌다. */
   onTurnEnd?: (npcId: string, fullResponse: string, meta?: { aborted: true; reason: string }) => void;
-  onEnd?: (turns: Turn[]) => void;
+  onEnd?: (turns: Turn[], reason: EngineEndReason) => void;
   onError?: (err: unknown, npcId: string) => void;
   /** RunMode가 바뀔 때. source: 사용자의 setMode 호출로 바뀌면 "user"(드레인 시점에 일괄 통지 —
    * hybridMode 자동 복귀도 setMode를 거치므로 "user"로 통지된다. meeting-broker.js:275-277 그대로
@@ -116,6 +137,9 @@ export class ConversationEngine {
 
   private running = false;
   private consecutivePasses = 0;
+  /** 연속으로 실패한 턴 수. 성공한 턴 하나로 0으로 돌아간다. */
+  private consecutiveFailures = 0;
+  private endReason: EngineEndReason | null = null;
   private lastSpeakerId: string | null = null;
   private userMessageQueue: Array<{ userName: string; content: string }> = [];
 
@@ -253,6 +277,7 @@ export class ConversationEngine {
 
   async run(): Promise<void> {
     this.running = true;
+    this.endReason = null;
 
     while (this.running && !this.isFinished()) {
       // 1. 커맨드 큐 비우기(setMode/directSpeak) — meeting-broker.js:84 이식
@@ -271,6 +296,7 @@ export class ConversationEngine {
         const engineSpeaker = this.findParticipant(directNpcId);
         if (engineSpeaker) {
           await this.speak(engineSpeaker);
+          if (this.failureBudgetExhausted()) break;
         }
         if (this.runMode !== "auto") {
           const waiting = this.armWait();
@@ -296,7 +322,10 @@ export class ConversationEngine {
         this.participantsView(),
         (npcId) => this.remainingTurns(npcId),
       );
-      if (candidates.length === 0) break;
+      if (candidates.length === 0) {
+        this.endReason = "no_candidates";
+        break;
+      }
 
       let speaker: Participant | null = null;
 
@@ -309,7 +338,10 @@ export class ConversationEngine {
 
         if (raises.length === 0) {
           this.consecutivePasses++;
-          if (this.consecutivePasses >= this.maxConsecutivePasses()) break;
+          if (this.consecutivePasses >= this.maxConsecutivePasses()) {
+            this.endReason = "consecutive_passes";
+            break;
+          }
         } else {
           this.consecutivePasses = 0;
           const raisedCandidates = candidates.filter((c) => raises.some((r) => r.npcId === c.npcId));
@@ -321,7 +353,12 @@ export class ConversationEngine {
 
       if (speaker) {
         const engineSpeaker = this.findParticipant(speaker.npcId);
-        if (engineSpeaker) await this.speak(engineSpeaker);
+        if (engineSpeaker) {
+          await this.speak(engineSpeaker);
+          // 실패한 턴은 트랜스크립트에 아무것도 남기지 않아 다른 어떤 종료 조건도 전진시키지
+          // 못한다 — 연속 실패 한도가 유일한 브레이크다(peer/group/meeting 모두 적용).
+          if (this.failureBudgetExhausted()) break;
+        }
       }
 
       // 6. manual은 발언 여부와 무관하게 매 라운드 끝에 항상 대기한다(쿨다운 없음).
@@ -344,7 +381,21 @@ export class ConversationEngine {
 
     this.running = false;
     this.clearAutoResumeTimer();
-    this.callbacks.onEnd?.(this.transcript.all());
+    this.callbacks.onEnd?.(this.transcript.all(), this.resolveEndReason());
+  }
+
+  /** 연속 실패 한도에 도달했으면 종료 사유를 기록하고 true를 돌려준다. */
+  private failureBudgetExhausted(): boolean {
+    if (this.consecutiveFailures < MAX_CONSECUTIVE_FAILURES) return false;
+    this.endReason = "consecutive_failures";
+    return true;
+  }
+
+  private resolveEndReason(): EngineEndReason {
+    if (this.endReason) return this.endReason;
+    if (this.transcript.all().length >= this.config.quota.maxTotalTurns) return "max_turns";
+    if (this.consecutivePasses >= this.maxConsecutivePasses()) return "consecutive_passes";
+    return "stopped";
   }
 
   private maxConsecutivePasses(): number {
@@ -523,6 +574,7 @@ export class ConversationEngine {
       this.currentSessionKey = null;
       this.currentAdapter = null;
       const sanitizedResponse = sanitizeSpokenResponse(response || rawText);
+      this.consecutiveFailures = 0;
       if (sanitizedResponse) {
         this.transcript.add(participant.npcId, participant.displayName, sanitizedResponse, this.now());
         this.lastSpeakerId = participant.npcId;
@@ -531,6 +583,7 @@ export class ConversationEngine {
     } catch (err) {
       this.currentSessionKey = null;
       this.currentAdapter = null;
+      this.consecutiveFailures++;
       this.callbacks.onError?.(err, participant.npcId);
       if (timedOutKind) {
         // 타임아웃으로 끊은 턴도 반드시 닫아준다 — onError만 보내면 클라이언트의 스트리밍

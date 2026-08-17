@@ -107,6 +107,78 @@ describe("ConversationEngine — 폴링 프롬프트 내용", () => {
   });
 });
 
+describe("ConversationEngine — 연속 실패 예산", () => {
+  function alwaysThrows(npcId: string): EngineParticipant {
+    return {
+      npcId, displayName: npcId, seated: true, turnCount: 0, lastSpokeAt: 0,
+      sessionKey: `sk-${npcId}`,
+      adapter: {
+        type: "mock",
+        async execute() { throw new Error("backend down"); },
+        async testConnection() { return { status: "ok" as const }; },
+      },
+    };
+  }
+
+  test("peer 모드에서 모든 턴이 실패하면 무한 루프 대신 연속 실패 한도에서 끝난다", { timeout: 5000 }, async () => {
+    // 수정 전에는 실패한 턴이 트랜스크립트에 아무것도 남기지 않아 maxTotalTurns가 전진하지
+    // 못했고, peer는 폴링이 없어 consecutivePasses도 오르지 않는다 — 루프가 영영 돌았다.
+    // 하드 가드: 회귀 시 CI가 매달리는 대신 이 단언에서 빠르게 실패한다.
+    const errors: string[] = [];
+    let endReason: string | null = null;
+    const engine = new ConversationEngine(
+      { mode: "peer", topic: "T", participants: [alwaysThrows("a"), alwaysThrows("b")],
+        quota: { cooldownMs: 0, maxTotalTurns: 3, maxTurnsPerAgent: 20 } },
+      {
+        onError: (err: unknown) => {
+          errors.push(String(err));
+          if (errors.length > 10) engine.stop(); // 하드 가드
+        },
+        onEnd: (_turns: unknown, reason: string) => { endReason = reason; },
+      },
+    );
+    await engine.run();
+
+    assert.equal(errors.length, 3, `연속 3회 실패에서 멈춰야 한다(실측: ${errors.length}회)`);
+    assert.equal(endReason, "consecutive_failures", "종료 사유가 다른 종료와 구분되어야 한다");
+  });
+
+  test("성공한 턴 하나가 연속 실패 카운터를 되돌린다", { timeout: 5000 }, async () => {
+    // 실패 2회 → 성공 1회 → 실패 3회. 카운터가 리셋되지 않으면 3회 실패 전에 끝난다.
+    let call = 0;
+    const flaky: EngineParticipant = {
+      npcId: "a", displayName: "a", seated: true, turnCount: 0, lastSpokeAt: 0,
+      sessionKey: "sk-a",
+      adapter: {
+        type: "mock",
+        async execute(options: AdapterExecuteOptions) {
+          call++;
+          if (call === 3) return { response: "말합니다", session: { sessionRef: options.sessionKey } };
+          throw new Error(`fail ${call}`);
+        },
+        async testConnection() { return { status: "ok" as const }; },
+      },
+    };
+    const errors: string[] = [];
+    let endReason: string | null = null;
+    const engine = new ConversationEngine(
+      { mode: "peer", topic: "T", participants: [flaky],
+        quota: { cooldownMs: 0, maxTotalTurns: 99, maxTurnsPerAgent: 20 } },
+      {
+        onError: (err: unknown) => {
+          errors.push(String(err));
+          if (errors.length > 10) engine.stop(); // 하드 가드
+        },
+        onEnd: (_turns: unknown, reason: string) => { endReason = reason; },
+      },
+    );
+    await engine.run();
+
+    assert.equal(errors.length, 5, `실패 2 + (성공) + 실패 3 = 5회여야 한다(실측: ${errors.length}회)`);
+    assert.equal(endReason, "consecutive_failures");
+  });
+});
+
 describe("ConversationEngine — 턴 타임아웃", () => {
   test("타임아웃으로 끊긴 턴도 onTurnEnd로 닫힌다(중단 사유를 함께 실어서)", { timeout: 5000 }, async () => {
     // onError만 보내고 끝내면 클라이언트의 스트리밍 말풍선이 done:true를 영영 못 받는다.
