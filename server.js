@@ -49,6 +49,7 @@ async function main() {
     setupSocketHandlers,
     getRoomUserIds,
     getSocketIdsForUser,
+    invalidateGatewayConnectionForChannel,
   } = socketHandlers;
 
   const { db, schema } = require("./src/db/server-db.js");
@@ -189,6 +190,9 @@ async function main() {
               gw.disconnect();
               channelGateways.delete(payload.channelId);
             }
+            // Also invalidate the socket-handlers cache (keyed by gatewayId) so NPC
+            // conversations pick up the new gateway config.
+            void invalidateGatewayConnectionForChannel(payload.channelId).catch(() => {});
           }
 
           if (targetUserId) {

@@ -63,6 +63,25 @@ test("socket-handlers still registers the events server.js used to own", () => {
   }
 });
 
+test("server.js invalidates the socket-handlers gateway cache on config-updated", () => {
+  // P1b 통합 이후, 게이트웨이 연결 캐시가 두 곳으로 갈라졌다:
+  //   - server.js의 channelGateways (channelId 키, /_internal/rpc 전용)
+  //   - socket-handlers.ts의 channelGateways (gatewayId 키, NPC 대화 전용)
+  // /_internal/emit의 gateway:config-updated 분기는 원래 앞쪽만 지웠다 —
+  // 토큰/URL을 바꿔도 NPC 대화 경로는 죽은 연결을 계속 쓰는 조용한 회귀였다.
+  // socket-handlers.ts가 내보내는 invalidateGatewayConnectionForChannel을
+  // server.js가 호출한다는 사실만 단언한다 — 앞으로 이 호출이 빠지면
+  // 이 테스트가 실패한다.
+  const src = readFileSync(path.join(repoRoot, "server.js"), "utf8");
+  assert.match(
+    src,
+    /invalidateGatewayConnectionForChannel/,
+    "server.js가 invalidateGatewayConnectionForChannel을 호출하지 않습니다 — "
+      + "gateway:config-updated 시 socket-handlers.ts의 게이트웨이 캐시(gatewayId 키)가 "
+      + "무효화되지 않아 NPC 대화가 오래된 연결을 계속 씁니다.",
+  );
+});
+
 test("socket-handlers extraction regex captures multi-line socket.on() registrations", () => {
   // 회귀 방지: 단순 `/socket\.on\("/` 정규식은 여러 줄에 걸친
   //   socket.on(
