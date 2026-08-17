@@ -671,6 +671,10 @@ async function streamNpcResponse(
       return "";
     }
 
+    if (attachments?.some((a) => a.type === "image")) {
+      socket.emit(responseEvent, { npcId, chunk: "", done: false, messageCode: "hermes_image_unsupported" });
+    }
+
     try {
       const { response, session } = await adapter.execute({
         sessionKey,
@@ -780,8 +784,6 @@ async function streamMeetingNpcResponse(
 ): Promise<void> {
   const { id: npcId, agentId, sessionKeyPrefix, _name, adapterType } = npcConfig;
 
-  // Skip NPCs without an assigned agent in meeting rooms
-  if (!agentId) return;
   if (!adapterRegistry.has(adapterType) || adapterType !== openclawAdapter.type) {
     emitMeetingNpcStream(io, channelId, {
       npcId,
@@ -792,6 +794,9 @@ async function streamMeetingNpcResponse(
     });
     return;
   }
+
+  // Skip openclaw NPCs without an assigned agent in meeting rooms
+  if (!agentId) return;
 
   const gateway = await getOrConnectGateway(channelId);
   if (!gateway) return;

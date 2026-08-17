@@ -1353,6 +1353,7 @@ const zh: Record<string, string> = {
   "npc.gatewayError": "AI网关错误",
   "npc.unsupportedAdapter": "此NPC使用了不受支持的适配器。",
   "npc.unbound": "此NPC尚未绑定Hermes配置文件。",
+  "npc.hermesImageUnsupported": "此NPC暂不支持接收图片。",
   "npc.notFound": "找不到NPC",
   "npc.waitBeforeSending": "请稍后再发送",
   "npc.unsupportedFileType": "不支持的文件类型。",
