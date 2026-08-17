@@ -422,6 +422,9 @@ async function runProgressNudgeForTask(
           : undefined,
       }));
     } else {
+      console.warn(
+        `[task-nudge] Unhandled adapterType "${npcConfig.adapterType}" for npc=${task.npcId} task=${task.id} — task stalled, no automation dispatched.`,
+      );
       return;
     }
 
