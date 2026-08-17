@@ -2062,6 +2062,7 @@ const ko: Record<string, string> = {
   "errors.invalidToken": "토큰은 16자 이상이어야 합니다",
   "errors.invalidProfileId": "프로필 ID가 필요합니다",
   "errors.profileNotFound": "프로필을 찾을 수 없습니다",
+  "errors.gatewayNotFound": "게이트웨이를 찾을 수 없습니다",
   "errors.templateDeleteConfirm": "\"{name}\"을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
   "task.chatPlaceholder": "태스크에 대해 추가 지시를 보내보세요.",
   "task.register": "등록",

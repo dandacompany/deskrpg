@@ -2060,6 +2060,7 @@ const zh: Record<string, string> = {
   "errors.invalidToken": "令牌长度必须至少为16个字符",
   "errors.invalidProfileId": "需要配置文件ID",
   "errors.profileNotFound": "未找到配置文件",
+  "errors.gatewayNotFound": "未找到网关",
   "errors.templateDeleteConfirm": "要删除“{name}”吗？此操作无法撤销。",
   "task.chatPlaceholder": "发送关于此任务的额外指示。",
   "task.register": "登记",

@@ -2060,6 +2060,7 @@ const ja: Record<string, string> = {
   "errors.invalidToken": "トークンは16文字以上である必要があります",
   "errors.invalidProfileId": "プロファイルIDが必要です",
   "errors.profileNotFound": "プロファイルが見つかりません",
+  "errors.gatewayNotFound": "ゲートウェイが見つかりません",
   "errors.templateDeleteConfirm": "「{name}」を削除しますか? この操作は元に戻せません。",
   "task.chatPlaceholder": "タスクについて追加の指示を送信してください。",
   "task.register": "登録",

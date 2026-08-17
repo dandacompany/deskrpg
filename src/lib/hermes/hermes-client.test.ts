@@ -121,7 +121,14 @@ describe("HermesClient.streamSessionChat", () => {
       'event: run.failed\ndata: {"message":"provider exploded"}\n\n',
     ]);
     const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: null, token: "t", fetchImpl: fetchImpl as typeof fetch });
-    await assert.rejects(() => c.streamSessionChat({ sessionId: "s", message: "m", onEvent: () => {} }), /provider exploded/);
+    await assert.rejects(
+      () => c.streamSessionChat({ sessionId: "s", message: "m", onEvent: () => {} }),
+      (err: unknown) => {
+        assert.match((err as Error).message, /provider exploded/);
+        assert.equal((err as { code?: string }).code, "run_failed");
+        return true;
+      },
+    );
   });
 
   test("sends the long-term memory scope header when a session key is given", async () => {
@@ -135,7 +142,7 @@ describe("HermesClient.streamSessionChat", () => {
     assert.equal(seen?.get("X-Hermes-Session-Key"), "npc-42");
   });
 
-  test("stops reading the outer loop once a terminal event arrives (does not hang on a held-open connection)", async () => {
+  test("stops reading the outer loop once a terminal event arrives (does not hang on a held-open connection)", { timeout: 5000 }, async () => {
     // A real Hermes server can keep the HTTP connection open past a terminal
     // event (run.completed/done/etc). Simulate that: one chunk carries a
     // non-terminal event followed by the terminal event, and the underlying

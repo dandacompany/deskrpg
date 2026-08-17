@@ -126,7 +126,8 @@ export type ErrorCode =
   | "invalid_profile_name"
   | "invalid_token"
   | "invalid_profile_id"
-  | "profile_not_found";
+  | "profile_not_found"
+  | "gateway_not_found";
 
 const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   invalid_credentials: "errors.invalidCredentials",
@@ -257,6 +258,7 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   invalid_token: "errors.invalidToken",
   invalid_profile_id: "errors.invalidProfileId",
   profile_not_found: "errors.profileNotFound",
+  gateway_not_found: "errors.gatewayNotFound",
 };
 
 type Translator = (key: string, params?: Record<string, string | number>) => string;

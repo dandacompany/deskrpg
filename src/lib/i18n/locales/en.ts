@@ -2061,6 +2061,7 @@ const en: Record<string, string> = {
   "errors.invalidToken": "Token must be at least 16 characters",
   "errors.invalidProfileId": "Profile ID is required",
   "errors.profileNotFound": "Profile not found",
+  "errors.gatewayNotFound": "Gateway not found",
   "errors.templateDeleteConfirm": "Delete \"{name}\"? This cannot be undone.",
   "task.chatPlaceholder": "Send additional instructions about this task.",
   "task.register": "Register",
