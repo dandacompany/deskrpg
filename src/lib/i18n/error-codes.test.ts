@@ -325,6 +325,12 @@ const TEST_CODES: Record<ErrorCode, string> = {
   cannot_delete_main_agent: "errors.cannotDeleteMainAgent",
   agent_in_use_by_npc: "errors.agentInUseByNpc",
   failed_to_remove_agent_from_gateway: "errors.failedToRemoveAgentFromGateway",
+  gateway_pairing_required: "errors.gatewayPairingRequired",
+  registration_disabled: "errors.registrationDisabled",
+  invalid_profile_name: "errors.invalidProfileName",
+  invalid_token: "errors.invalidToken",
+  invalid_profile_id: "errors.invalidProfileId",
+  profile_not_found: "errors.profileNotFound",
 } as const;
 
 for (const locale of [en, ko, ja, zh]) {

@@ -122,7 +122,11 @@ export type ErrorCode =
   | "cannot_delete_main_agent"
   | "agent_in_use_by_npc"
   | "failed_to_remove_agent_from_gateway"
-  | "registration_disabled";
+  | "registration_disabled"
+  | "invalid_profile_name"
+  | "invalid_token"
+  | "invalid_profile_id"
+  | "profile_not_found";
 
 const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   invalid_credentials: "errors.invalidCredentials",
@@ -249,6 +253,10 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   agent_in_use_by_npc: "errors.agentInUseByNpc",
   failed_to_remove_agent_from_gateway: "errors.failedToRemoveAgentFromGateway",
   registration_disabled: "errors.registrationDisabled",
+  invalid_profile_name: "errors.invalidProfileName",
+  invalid_token: "errors.invalidToken",
+  invalid_profile_id: "errors.invalidProfileId",
+  profile_not_found: "errors.profileNotFound",
 };
 
 type Translator = (key: string, params?: Record<string, string | number>) => string;
