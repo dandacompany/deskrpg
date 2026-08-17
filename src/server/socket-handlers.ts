@@ -261,6 +261,16 @@ export function getSocketIdsForUser(userId: string): string[] {
   return socketIds;
 }
 
+/**
+ * Given all socket ids currently associated with a user and the socket id
+ * that is joining right now, return the ids of prior sessions that must be
+ * kicked to enforce single-session-per-user. Excludes the joining socket
+ * itself (a socket must never kick its own connection).
+ */
+export function getSocketIdsToKick(existingSocketIds: string[], joiningSocketId: string): string[] {
+  return existingSocketIds.filter((id) => id !== joiningSocketId);
+}
+
 function appendNpcHistoryMessage(channelId: string, npcId: string, content: string) {
   const sanitizedContent = sanitizeNpcResponseText(content);
   if (!sanitizedContent.trim()) return null;
@@ -1172,6 +1182,20 @@ export function setupSocketHandlers(io: Server) {
             reason: accessResult.access.reason as ChannelAccessDeniedReason,
           });
           return;
+        }
+
+        // Enforce single session per user — disconnect any prior session(s)
+        // for this account now that the join is authorized and proceeding.
+        const priorSocketIds = getSocketIdsToKick(getSocketIdsForUser(user.userId), socket.id);
+        for (const prevSocketId of priorSocketIds) {
+          const prevSocket = io.sockets.sockets.get(prevSocketId);
+          if (prevSocket) {
+            prevSocket.emit("session:kicked", {
+              reason: "다른 위치에서 접속하여 현재 세션이 종료되었습니다.",
+            });
+            prevSocket.disconnect(true);
+          }
+          players.delete(prevSocketId);
         }
 
         const playerState: PlayerState = {

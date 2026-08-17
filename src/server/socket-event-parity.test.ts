@@ -82,6 +82,22 @@ test("server.js invalidates the socket-handlers gateway cache on config-updated"
   );
 });
 
+test("socket-handlers enforces single-session-per-user by emitting session:kicked", () => {
+  // Regression guard for the P1b unification: pre-refactor server.js kicked
+  // any prior live session for the same user account on player:join. The
+  // unification onto socket-handlers.ts silently dropped that rule (dev's
+  // handler never had it). This pins the emit so a future refactor that
+  // drops session:kicked again fails loudly instead of surviving unnoticed.
+  const src = readFileSync(path.join(repoRoot, "src/server/socket-handlers.ts"), "utf8");
+  assert.match(
+    src,
+    /session:kicked/,
+    "socket-handlers.ts가 \"session:kicked\"를 더 이상 emit하지 않습니다 — "
+      + "단일 세션 강제(single-session-per-user)가 다시 사라졌습니다. "
+      + "player:join 핸들러에서 이전 세션을 disconnect하는 로직을 복원하세요.",
+  );
+});
+
 test("socket-handlers extraction regex captures multi-line socket.on() registrations", () => {
   // 회귀 방지: 단순 `/socket\.on\("/` 정규식은 여러 줄에 걸친
   //   socket.on(
