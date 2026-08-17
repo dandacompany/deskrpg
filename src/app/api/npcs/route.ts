@@ -41,6 +41,8 @@ export async function GET(req: NextRequest) {
       appearance,
       hasAgent: !!openclawConfig?.agentId,
       agentId: (openclawConfig?.agentId as string) || null,
+      adapterType: npc.adapterType,
+      hermesProfileId: npc.hermesProfileId,
     };
     });
     return NextResponse.json({ npcs: result });
