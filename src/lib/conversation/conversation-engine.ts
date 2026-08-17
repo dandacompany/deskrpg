@@ -3,13 +3,7 @@
 // 게이트웨이 호출을 NpcAdapter.execute() 호출로 바꾸고, 정책 판단은 turn-policy.ts에 위임한다.
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const {
-  formatPollMessage,
-  formatSpeakMessage,
-  parseHandRaise,
-  sanitizeSpokenResponse,
-  sanitizeStreamingSpokenResponse,
-} = require("../meeting-formatter.js") as typeof import("../meeting-formatter.js");
+const { formatPollMessage, formatSpeakMessage, parseHandRaise, sanitizeSpokenResponse, sanitizeStreamingSpokenResponse } = require("../meeting-formatter.js") as typeof import("../meeting-formatter.js");
 
 import type { NpcAdapter } from "@/lib/adapters/types";
 import { Transcript, USER_SPEAKER_ID, type Turn } from "./transcript";
