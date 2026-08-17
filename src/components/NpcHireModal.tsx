@@ -13,6 +13,7 @@ import OpenClawPairingStatusCard, { type OpenClawPairingStatus } from "@/compone
 import { getAgentProgressMeter, type AgentProgressPhase } from "@/lib/npc-agent-progress";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { localizeNpcPromptDocument } from "@/lib/npc-agent-defaults";
+import { shouldRebindProfile } from "@/components/hermes/rebind-decision";
 
 interface HermesProfileOption {
   id: string;
@@ -143,6 +144,9 @@ export default function NpcHireModal({
   const [hermesProfilesError, setHermesProfilesError] = useState("");
   const [selectedHermesProfileId, setSelectedHermesProfileId] = useState<string | null>(null);
   const [rebindError, setRebindError] = useState("");
+  // Guards the Save/Place button while handleSubmit's rebind fetch is in flight, so a
+  // second click can't fire a concurrent /rebind against the same NPC.
+  const [saving, setSaving] = useState(false);
 
   // --- NPC-specific state ---
   const [name, setName] = useState("");
@@ -187,6 +191,7 @@ export default function NpcHireModal({
   const isExistingAgentSelected = hasGateway && selectedAgentId && !createNewAgent;
   const personaCompat = identity.trim();
   const canSubmit =
+    !saving &&
     hasGateway &&
     name.trim().length > 0 &&
     (personaCompat.length > 0 || isExistingAgentSelected);
@@ -487,48 +492,53 @@ export default function NpcHireModal({
   // --- Submit ---
   const handleSubmit = async () => {
     if (!canSubmit) return;
+    setSaving(true);
+    try {
       const appearance = buildAppearance();
       const activePresetId = appearanceMode === "presets" ? selectedPresetId ?? undefined : undefined;
 
-    if (isEdit && onSaveEdit) {
-      let agentId: string | undefined;
-      let agentAction: "select" | "create" | undefined;
-      if (hasGateway) {
-        if (createNewAgent && newAgentId.trim()) { agentId = newAgentId.trim(); agentAction = "create"; }
-        else if (selectedAgentId) { agentId = selectedAgentId; agentAction = selectedAgentId !== editingNpc!.agentId ? "select" : undefined; }
-      }
+      if (isEdit && onSaveEdit) {
+        let agentId: string | undefined;
+        let agentAction: "select" | "create" | undefined;
+        if (hasGateway) {
+          if (createNewAgent && newAgentId.trim()) { agentId = newAgentId.trim(); agentAction = "create"; }
+          else if (selectedAgentId) { agentId = selectedAgentId; agentAction = selectedAgentId !== editingNpc!.agentId ? "select" : undefined; }
+        }
 
-      // A Hermes profile is bound via a dedicated endpoint (it carries a live
-      // credential), not through the generic NPC PATCH — so bind it here before
-      // handing off the rest of the edit to onSaveEdit.
-      if (adapterType === "hermes" && selectedHermesProfileId && selectedHermesProfileId !== editingNpc!.hermesProfileId) {
-        setRebindError("");
-        try {
-          const res = await fetch(`/api/npcs/${editingNpc!.id}/rebind`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ profileId: selectedHermesProfileId }),
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            setRebindError(getLocalizedErrorMessage(t, data, "npc.hermesRebindFailed"));
+        // A Hermes profile is bound via a dedicated endpoint (it carries a live
+        // credential), not through the generic NPC PATCH — so bind it here before
+        // handing off the rest of the edit to onSaveEdit.
+        if (shouldRebindProfile(adapterType, selectedHermesProfileId, editingNpc!.hermesProfileId)) {
+          setRebindError("");
+          try {
+            const res = await fetch(`/api/npcs/${editingNpc!.id}/rebind`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ profileId: selectedHermesProfileId }),
+            });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              setRebindError(getLocalizedErrorMessage(t, data, "npc.hermesRebindFailed"));
+              return;
+            }
+          } catch {
+            setRebindError(t("npc.hermesRebindFailed"));
             return;
           }
-        } catch {
-          setRebindError(t("npc.hermesRebindFailed"));
-          return;
         }
-      }
 
-      onSaveEdit(editingNpc!.id, { presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, identity: identity.trim(), soul: soul.trim(), agentId, agentAction, locale, adapterType, hermesProfileId: selectedHermesProfileId ?? undefined });
-    } else {
-      let agentId: string | undefined;
-      let agentAction: "select" | "create" | undefined;
-      if (hasGateway) {
-        if (createNewAgent && newAgentId.trim()) { agentId = newAgentId.trim(); agentAction = "create"; }
-        else if (selectedAgentId) { agentId = selectedAgentId; agentAction = "select"; }
+        onSaveEdit(editingNpc!.id, { presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, identity: identity.trim(), soul: soul.trim(), agentId, agentAction, locale, adapterType, hermesProfileId: selectedHermesProfileId ?? undefined });
+      } else {
+        let agentId: string | undefined;
+        let agentAction: "select" | "create" | undefined;
+        if (hasGateway) {
+          if (createNewAgent && newAgentId.trim()) { agentId = newAgentId.trim(); agentAction = "create"; }
+          else if (selectedAgentId) { agentId = selectedAgentId; agentAction = "select"; }
+        }
+        onPlaceOnMap({ presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, agentId, agentAction, identity: identity.trim(), soul: soul.trim(), locale, adapterType, hermesProfileId: selectedHermesProfileId ?? undefined });
       }
-      onPlaceOnMap({ presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, agentId, agentAction, identity: identity.trim(), soul: soul.trim(), locale, adapterType, hermesProfileId: selectedHermesProfileId ?? undefined });
+    } finally {
+      setSaving(false);
     }
   };
 
