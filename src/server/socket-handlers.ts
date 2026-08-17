@@ -112,6 +112,14 @@ export interface PlayerState {
   animation: string;
 }
 
+interface ChannelChatMessage {
+  id: string;
+  sender: string;
+  senderId: string;
+  content: string;
+  timestamp: number;
+}
+
 interface NpcConfig {
   id: string;
   name: string;
@@ -152,6 +160,9 @@ const players = new Map<string, PlayerState>();
 
 // Rate limit: socketId -> last message timestamp
 const lastChatTime = new Map<string, number>();
+
+// Channel chat history: channelId -> message[] (kept for session lifetime)
+const channelChatHistory = new Map<string, ChannelChatMessage[]>();
 
 // Meeting rooms: channelId -> MeetingRoom
 const meetingRooms = new Map<string, MeetingRoom>();
@@ -1071,6 +1082,16 @@ async function getSocketChannelParticipationAccess(channelId: string, userId: st
   return { channel, access };
 }
 
+async function isChannelOwner(channelId: string, userId: string): Promise<boolean> {
+  const rows = await db
+    .select({ ownerId: channels.ownerId })
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .limit(1);
+
+  return rows[0]?.ownerId === userId;
+}
+
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
@@ -1174,6 +1195,54 @@ export function setupSocketHandlers(io: Server) {
         });
       },
     );
+
+    // ----- chat:send (channel chat, user-to-user) -----
+    socket.on("chat:send", ({ message }: { message: string }) => {
+      const player = players.get(socket.id);
+      if (!player) return;
+      const trimmed = String(message || "").trim().slice(0, 500);
+      if (!trimmed) return;
+      const now = Date.now();
+      if (now - (lastChatTime.get(socket.id) || 0) < CHAT_COOLDOWN_MS) return;
+      lastChatTime.set(socket.id, now);
+
+      const chatMessage: ChannelChatMessage = {
+        id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        sender: player.characterName || user.nickname,
+        senderId: socket.id,
+        content: trimmed,
+        timestamp: now,
+      };
+      // Store in channel chat history
+      const history = channelChatHistory.get(player.mapId) || [];
+      history.push(chatMessage);
+      channelChatHistory.set(player.mapId, history);
+      io.to(player.mapId).emit("chat:message", chatMessage);
+    });
+
+    // ----- map:object-add (map editing broadcast, owner only) -----
+    socket.on("map:object-add", async (data: unknown) => {
+      const player = players.get(socket.id);
+      if (!player) return;
+      if (!(await isChannelOwner(player.mapId, user.userId))) return;
+      socket.to(player.mapId).emit("map:object-added", data);
+    });
+
+    // ----- map:object-remove (map editing broadcast, owner only) -----
+    socket.on("map:object-remove", async (data: unknown) => {
+      const player = players.get(socket.id);
+      if (!player) return;
+      if (!(await isChannelOwner(player.mapId, user.userId))) return;
+      socket.to(player.mapId).emit("map:object-removed", data);
+    });
+
+    // ----- map:tiles-update (map editing broadcast, owner only) -----
+    socket.on("map:tiles-update", async (data: unknown) => {
+      const player = players.get(socket.id);
+      if (!player) return;
+      if (!(await isChannelOwner(player.mapId, user.userId))) return;
+      socket.to(player.mapId).emit("map:tiles-updated", data);
+    });
 
     // ----- npc:chat -----
     socket.on(
