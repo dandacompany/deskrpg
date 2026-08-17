@@ -114,6 +114,191 @@ describe("ConversationEngine — 폴링 청크", () => {
   });
 });
 
+describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / directSpeak / abortCurrentTurn", () => {
+  test(
+    "setMode에 잘못된 값을 주면 조용히 무시된다(보존된 결함 — meeting-broker.js:214를 이식. " +
+      "고치지 않고 그대로 옮긴 것이며 별도 후속 수정 후보다)",
+    { timeout: 5000 },
+    async () => {
+      const a = participant("a", ["PASS"]);
+      let modeChanged = false;
+      let waited = false;
+      const engine = new ConversationEngine(
+        { mode: "meeting", topic: "T", participants: [a],
+          quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+        { onModeChanged: () => { modeChanged = true; }, onWaitingInput: () => { waited = true; } },
+      );
+      engine.setMode("bogus-mode"); // 유효하지 않은 문자열 — 에러도 콜백도 없이 무시되어야 한다
+      await engine.run();
+      assert.equal(modeChanged, false, "잘못된 mode는 onModeChanged를 트리거하지 않는다");
+      assert.equal(waited, false, "runMode는 기본값 auto로 남아 대기 없이 전원 PASS로 자연 종료된다");
+    },
+  );
+
+  test(
+    "directSpeak에 알 수 없는 npcId를 주면 아무도 발언하지 않고 조용히 대기로 돌아간다" +
+      "(보존된 결함 — meeting-broker.js의 run()이 agent를 못 찾을 때와 동일한 무음 실패. 고치지 않는다)",
+    { timeout: 5000 },
+    async () => {
+      const a = participant("a", ["PASS"]);
+      const engine = new ConversationEngine(
+        { mode: "meeting", topic: "T", participants: [a], initialRunMode: "directed",
+          quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+        { onWaitingInput: () => { engine.stop(); } },
+      );
+      engine.directSpeak("no-such-npc");
+      await engine.run();
+      assert.equal(
+        (a.adapter as unknown as { calls: unknown[] }).calls.length, 0,
+        "참가자 목록에 없는 npcId는 어댑터를 한 번도 호출하지 않는다",
+      );
+    },
+  );
+
+  test("manual 모드는 매 라운드 뒤 항상 대기하고 nextTurn()으로 재개한다", { timeout: 5000 }, async () => {
+    const a = participant("a", ["SPEAK: 하나", "SPEAK: 둘", "PASS"]);
+    const spoken: string[] = [];
+    let waitCount = 0;
+    const engine = new ConversationEngine(
+      { mode: "meeting", topic: "T", participants: [a], initialRunMode: "manual",
+        // maxConsecutivePasses는 두 번째 라운드(PASS)에서 바로 break되지 않을 만큼 넉넉하게 둔다 —
+        // manual은 break되지 않는 한 발언 여부와 무관하게 매 라운드 뒤 대기한다는 것을 보고 싶어서다.
+        quota: { maxConsecutivePasses: 5, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+      {
+        onTurnEnd: (npcId: string) => spoken.push(npcId),
+        onWaitingInput: () => {
+          waitCount++;
+          if (waitCount < 2) engine.nextTurn();
+          else engine.stop();
+        },
+      },
+    );
+    await engine.run();
+    assert.ok(waitCount >= 2, "매 라운드 뒤 대기했다");
+    assert.ok(spoken.length >= 1, "대기 사이 라운드에서 발언이 일어났다");
+  });
+
+  test("nextTurn은 manual 모드가 아닐 때 아무 효과가 없다", () => {
+    const a = participant("a", ["PASS"]);
+    const engine = new ConversationEngine(
+      { mode: "meeting", topic: "T", participants: [a],
+        quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+      {},
+    );
+    assert.doesNotThrow(() => engine.nextTurn());
+  });
+
+  test("directed 모드는 폴링 없이 directSpeak로 지정된 NPC만 발언한다", { timeout: 5000 }, async () => {
+    const a = participant("a", ["SPEAK: 예", "PASS"]);
+    const b = participant("b", ["PASS"]);
+    const spoken: string[] = [];
+    const engine = new ConversationEngine(
+      { mode: "meeting", topic: "T", participants: [a, b], initialRunMode: "directed",
+        quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+      {
+        onTurnEnd: (npcId: string) => spoken.push(npcId),
+        onWaitingInput: () => { engine.stop(); },
+      },
+    );
+    engine.directSpeak("a");
+    await engine.run();
+    assert.deepEqual(spoken, ["a"]);
+    assert.equal(
+      (b.adapter as unknown as { calls: unknown[] }).calls.length, 0,
+      "directed는 폴링하지 않으므로 지정되지 않은 참가자의 어댑터는 한 번도 불리지 않는다",
+    );
+  });
+
+  test("hybridMode: auto 중 directSpeak을 받으면 manual로 전환된다(system 발신)", { timeout: 5000 }, async () => {
+    const a = participant("a", ["SPEAK: 예", "PASS"]);
+    const modeChanges: Array<[string, string]> = [];
+    const engine = new ConversationEngine(
+      { mode: "meeting", topic: "T", participants: [a], initialRunMode: "auto",
+        hybridMode: true, hybridAutoResumeMs: 100000,
+        quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+      {
+        onModeChanged: (mode: string, source: string) => { modeChanges.push([mode, source]); engine.stop(); },
+        onWaitingInput: () => { engine.stop(); },
+      },
+    );
+    engine.directSpeak("a");
+    await engine.run();
+    assert.deepEqual(modeChanges, [["manual", "system"]]);
+  });
+
+  test(
+    "hybridMode: manual 대기 재개 이후 유휴 시간이 지나면 자동으로 auto로 복귀한다" +
+      "(meeting-broker.js:162-167 그대로 이식 — 최초 대기가 아니라 재개된 대기부터 타이머가 걸리고, " +
+      "자동 복귀도 setMode()를 거치므로 drainCommands가 source를 \"user\"로 통지한다. 둘 다 원본의 " +
+      "특이 동작이며 고치지 않는다)",
+    { timeout: 5000 },
+    async () => {
+      const a = participant("a", ["PASS"]);
+      const modeChanges: Array<[string, string]> = [];
+      let waitCount = 0;
+      const engine = new ConversationEngine(
+        { mode: "meeting", topic: "T", participants: [a], initialRunMode: "manual",
+          hybridMode: true, hybridAutoResumeMs: 10,
+          quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+        {
+          onModeChanged: (mode: string, source: string) => {
+            modeChanges.push([mode, source]);
+            if (mode === "auto") engine.stop();
+          },
+          onWaitingInput: () => {
+            waitCount++;
+            if (waitCount === 1) engine.nextTurn(); // 첫 대기를 재개해야 재개-대기용 타이머가 걸린다
+          },
+        },
+      );
+      await engine.run();
+      assert.deepEqual(modeChanges, [["auto", "user"]]);
+      assert.equal(waitCount, 2, "재개 후 두 번째 대기에서 타이머가 만료되어 자동 복귀한다");
+    },
+  );
+
+  test("발언자가 없을 때 abortCurrentTurn은 아무 일도 하지 않는다", () => {
+    const a = participant("a", ["PASS"]);
+    const engine = new ConversationEngine(
+      { mode: "meeting", topic: "T", participants: [a],
+        quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+      {},
+    );
+    assert.doesNotThrow(() => engine.abortCurrentTurn());
+  });
+
+  test("abortCurrentTurn은 현재 발언 중인 참가자의 어댑터에 세션키와 함께 abort를 호출한다", { timeout: 5000 }, async () => {
+    let resolveExecute: (() => void) | null = null;
+    let abortedWith: string | null = null;
+    const adapter: NpcAdapter = {
+      type: "mock",
+      async execute(options: AdapterExecuteOptions) {
+        await new Promise<void>((resolve) => { resolveExecute = resolve; });
+        return { response: "PASS", session: { sessionRef: options.sessionKey } };
+      },
+      async abort(sessionKey: string) { abortedWith = sessionKey; },
+      async testConnection() { return { status: "ok" as const }; },
+    };
+    const a: EngineParticipant = {
+      npcId: "a", displayName: "a", seated: true, turnCount: 0, lastSpokeAt: 0,
+      adapter, sessionKey: "sk-a",
+    };
+    const engine = new ConversationEngine(
+      { mode: "meeting", topic: "T", participants: [a], initialRunMode: "directed",
+        quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+      { onWaitingInput: () => { engine.stop(); } },
+    );
+    engine.directSpeak("a");
+    const runPromise = engine.run();
+    // speak()가 adapter.execute를 호출해 pending 상태로 들어갈 때까지 한 틱 양보한다.
+    await new Promise((r) => setTimeout(r, 0));
+    engine.abortCurrentTurn();
+    assert.equal(abortedWith, "sk-a", "발언 중인 참가자의 세션키로 abort가 호출된다");
+    resolveExecute!();
+    await runPromise;
+  });
+});
+
 describe("ConversationEngine — 사용자 개입", () => {
   test("addUserMessage가 트랜스크립트에 들어가 다음 프롬프트에 실린다", async () => {
     const a = participant("a", ["SPEAK: 예", "답변"]);
