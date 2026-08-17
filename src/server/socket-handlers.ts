@@ -49,6 +49,7 @@ import {
   toReportReadyPayload,
 } from "../lib/task-reporting";
 import {
+  deliverMeetingNpcAnswer,
   emitMeetingNpcStream,
   registerMeetingSocketHandlers,
 } from "./meeting-socket";
@@ -916,6 +917,8 @@ async function streamMeetingNpcResponse(
   };
 
   let fullText = "";
+  /** hermes 분기에서만 채워진다 — 답변을 확정 전달한 뒤에 best-effort로 영속화한다(M6). */
+  let persistSessionRef: (() => Promise<void>) | null = null;
   try {
     if (dispatchKind === "openclaw") {
       const { response } = await openclawAdapter.executeWithGateway(gateway, { sessionKey, prompt, onDelta }, agentId!);
@@ -928,7 +931,8 @@ async function streamMeetingNpcResponse(
         onRunStarted: (runId: string) => registerHermesRun(sessionKey, runId),
       });
       fullText = response || fullText;
-      await persistHermesSessionRef(npcId, userId, hermesContextKey, session.sessionRef);
+      persistSessionRef = () =>
+        persistHermesSessionRef(npcId, userId, hermesContextKey, session.sessionRef);
     } else {
       // dispatchKind === "registry"
       const adapter = adapterRegistry.get(adapterType);
@@ -943,15 +947,21 @@ async function streamMeetingNpcResponse(
     }
 
     npcMessage.content = fullText;
-    emitMeetingNpcStream(io, channelId, {
-      npcId,
-      npcName: _name,
-      messageId: npcMessage.id,
-      sender: _name,
-      chunk: "",
-      done: true,
+    await deliverMeetingNpcAnswer({
+      emitDone: () =>
+        emitMeetingNpcStream(io, channelId, {
+          npcId,
+          npcName: _name,
+          messageId: npcMessage.id,
+          sender: _name,
+          chunk: "",
+          done: true,
+        }),
+      emitMessage: () => io.to(`meeting-${channelId}`).emit("meeting:message", npcMessage),
+      persistSessionRef,
+      onPersistError: (err) =>
+        console.error(`[meeting] hermes session ref persist failed for NPC ${_name}:`, err),
     });
-    io.to(`meeting-${channelId}`).emit("meeting:message", npcMessage);
   } catch (err) {
     console.error(`[meeting] ${dispatchKind} error for NPC ${_name}:`, err);
     room.messages.pop();
