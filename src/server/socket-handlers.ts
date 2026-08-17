@@ -60,6 +60,14 @@ import { CodexAdapter } from "../lib/adapters/codex-adapter.js";
 import { GeminiAdapter } from "../lib/adapters/gemini-adapter.js";
 import { OpencodeAdapter as OpenCodeAdapter } from "../lib/adapters/opencode-adapter.js";
 import { dmHub } from "../lib/adapters/dm-hub.js";
+import {
+  classifyNpcDispatch,
+  clearHermesRun,
+  createHermesAdapterForNpc,
+  deriveHermesContextKey,
+  persistHermesSessionRef,
+  registerHermesRun,
+} from "./hermes-dispatch";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
 const { OpenClawGateway } = require("../lib/openclaw-gateway.js") as { OpenClawGateway: new () => any };
@@ -111,6 +119,7 @@ interface NpcConfig {
   sessionKeyPrefix: string;
   adapterType: string;
   adapterConfig: Record<string, unknown>;
+  hermesProfileId: string | null;
   _channelId: string;
   _name: string;
   role?: string | null;
@@ -581,6 +590,7 @@ async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
       sessionKeyPrefix: (oc.sessionKeyPrefix as string) || npcId,
       adapterType: typeof npc.adapterType === "string" ? npc.adapterType : "openclaw",
       adapterConfig,
+      hermesProfileId: typeof npc.hermesProfileId === "string" ? npc.hermesProfileId : null,
       _channelId: npc.channelId as string,
       _name: npc.name,
       role: "Participant",
@@ -609,6 +619,7 @@ async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> 
         sessionKeyPrefix: (oc.sessionKeyPrefix as string) || npc.id,
         adapterType: typeof npc.adapterType === "string" ? npc.adapterType : "openclaw",
         adapterConfig,
+        hermesProfileId: typeof npc.hermesProfileId === "string" ? npc.hermesProfileId : null,
         _channelId: channelId,
         _name: npc.name,
         role: "Participant",
@@ -635,10 +646,60 @@ async function streamNpcResponse(
   sessionKeyOverride?: string,
   emitEvent?: string,
 ): Promise<string> {
-  const { agentId, _channelId, sessionKeyPrefix, adapterType } = npcConfig;
+  const { agentId, _channelId, sessionKeyPrefix, adapterType, hermesProfileId } = npcConfig;
   const responseEvent = emitEvent || "npc:response";
+  const sessionKey = sessionKeyOverride || `${sessionKeyPrefix || npcId}-dm-${userId}`;
 
-  if (adapterType === "openclaw") {
+  const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
+
+  if (dispatchKind === "unbound") {
+    emitNpcSystemResponse(socket, npcId, "npc_unbound");
+    return "";
+  }
+
+  if (dispatchKind === "hermes") {
+    const adapter = await createHermesAdapterForNpc(
+      npcId,
+      userId,
+      deriveHermesContextKey(sessionKey, sessionKeyPrefix || npcId),
+    );
+    if (!adapter) {
+      emitNpcSystemResponse(socket, npcId, "npc_unbound");
+      return "";
+    }
+
+    try {
+      const { response, session } = await adapter.execute({
+        sessionKey,
+        prompt: message,
+        onDelta: (delta: string) => {
+          socket.emit(responseEvent, { npcId, chunk: delta, done: false });
+        },
+        onToolProgress: (_name: string, preview: string) => {
+          if (preview) socket.emit(responseEvent, { npcId, chunk: preview, done: false });
+        },
+        onRunStarted: (runId: string) => {
+          registerHermesRun(sessionKey, runId);
+        },
+      });
+      socket.emit(responseEvent, { npcId, chunk: "", done: true });
+      await persistHermesSessionRef(
+        npcId,
+        userId,
+        deriveHermesContextKey(sessionKey, sessionKeyPrefix || npcId),
+        session.sessionRef,
+      );
+      return response || "";
+    } catch (err) {
+      console.error("[npc] Hermes adapter error for " + npcId + ":", err);
+      emitNpcSystemResponse(socket, npcId, "gateway_error");
+      return "";
+    } finally {
+      clearHermesRun(sessionKey);
+    }
+  }
+
+  if (dispatchKind === "openclaw") {
     if (!agentId) {
       emitNpcSystemResponse(socket, npcId, "no_agent");
       return "";
@@ -650,7 +711,6 @@ async function streamNpcResponse(
       return "";
     }
 
-    const sessionKey = sessionKeyOverride || `${sessionKeyPrefix || npcId}-dm-${userId}`;
     try {
       const { response } = await openclawAdapter.executeWithGateway(
         gateway,
@@ -671,9 +731,11 @@ async function streamNpcResponse(
       emitNpcSystemResponse(socket, npcId, "gateway_error");
       return "";
     }
-  } else if (adapterRegistry.has(adapterType)) {
+  }
+
+  // dispatchKind === "registry"
+  if (adapterRegistry.has(adapterType)) {
     const adapter = adapterRegistry.get(adapterType);
-    const sessionKey = sessionKeyOverride || `${sessionKeyPrefix || npcId}-dm-${userId}`;
 
     try {
       const { response } = await adapter.execute({

@@ -60,6 +60,7 @@ export interface NpcAdapter {
   }>;
 
   abort?(sessionKey: string): Promise<void>;
+  steer?(text: string): Promise<void>;
 
   getSessionSummary?(sessionKey: string): Promise<string>;
   resetSession?(sessionKey: string): Promise<void>;

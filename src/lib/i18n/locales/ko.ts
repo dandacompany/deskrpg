@@ -1332,6 +1332,7 @@ const ko: Record<string, string> = {
   "npc.gatewayNotConnected": "게이트웨이 미연결",
   "npc.gatewayError": "AI 게이트웨이 오류",
   "npc.unsupportedAdapter": "이 NPC는 지원하지 않는 어댑터를 사용합니다.",
+  "npc.unbound": "이 NPC는 아직 Hermes 프로필에 연결되지 않았습니다.",
   "npc.notFound": "NPC를 찾을 수 없습니다",
   "npc.waitBeforeSending": "잠시 후 다시 보내주세요.",
   "npc.unsupportedFileType": "지원하지 않는 파일 형식입니다.",
