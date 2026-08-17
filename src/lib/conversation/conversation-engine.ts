@@ -280,6 +280,8 @@ export class ConversationEngine {
   async run(): Promise<void> {
     this.running = true;
     this.endReason = null;
+    // 이전 run()이 남긴 실패 카운터를 물려받으면 두 번째 run()은 예산 3이 아니라 1로 시작한다.
+    this.consecutiveFailures = 0;
 
     while (this.running && !this.isFinished()) {
       // 1. 커맨드 큐 비우기(setMode/directSpeak) — meeting-broker.js:84 이식
@@ -577,11 +579,18 @@ export class ConversationEngine {
       this.currentSessionKey = null;
       this.currentAdapter = null;
       const sanitizedResponse = sanitizeSpokenResponse(response || rawText);
-      this.consecutiveFailures = 0;
       if (sanitizedResponse) {
+        this.consecutiveFailures = 0;
         this.transcript.add(participant.npcId, participant.displayName, sanitizedResponse, this.now());
         this.lastSpeakerId = participant.npcId;
         this.callbacks.onTurnEnd?.(participant.npcId, sanitizedResponse);
+      } else {
+        // 정상적으로 resolve했지만 쓸 만한 텍스트가 하나도 없는 턴은, 루프 입장에서는 실패한
+        // 턴이다 — 트랜스크립트에 아무것도 안 실리므로 maxTotalTurns·remainingTurns·
+        // consecutivePasses 중 무엇도 전진하지 않는다. 여기서 카운터를 리셋해버리면 예외를
+        // 던지는 어댑터에만 브레이크가 걸리고, 빈 응답을 돌려주는 어댑터는 그대로 무한 루프다
+        // (프로덕션은 cooldownMs가 1000이라 바쁜 루프가 아니라 "끝나지 않는 회의"로 나타난다).
+        this.consecutiveFailures++;
       }
     } catch (err) {
       this.currentSessionKey = null;

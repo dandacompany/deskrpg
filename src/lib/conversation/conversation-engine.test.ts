@@ -143,6 +143,57 @@ describe("ConversationEngine — 연속 실패 예산", () => {
     assert.equal(endReason, "consecutive_failures", "종료 사유가 다른 종료와 구분되어야 한다");
   });
 
+  test("빈 응답만 돌려주는 어댑터도(예외를 던지지 않아도) 루프를 끝낸다", { timeout: 5000 }, async () => {
+    // 정상 resolve + 쓸 만한 텍스트 없음 = 트랜스크립트에 아무것도 안 남는다. 예외 경로에만
+    // 브레이크를 걸면 이 경로는 그대로 무한 루프였다(리뷰 실측: maxTotalTurns 3에 20회 이상).
+    function silent(npcId: string): EngineParticipant {
+      return {
+        npcId, displayName: npcId, seated: true, turnCount: 0, lastSpokeAt: 0,
+        sessionKey: `sk-${npcId}`,
+        adapter: {
+          type: "mock",
+          async execute(options: AdapterExecuteOptions) {
+            return { response: "", session: { sessionRef: options.sessionKey } };
+          },
+          async testConnection() { return { status: "ok" as const }; },
+        },
+      };
+    }
+    let turnStarts = 0;
+    let endReason: string | null = null;
+    const engine = new ConversationEngine(
+      { mode: "peer", topic: "T", participants: [silent("a"), silent("b")],
+        quota: { cooldownMs: 0, maxTotalTurns: 3, maxTurnsPerAgent: 20 } },
+      {
+        onTurnStart: () => {
+          turnStarts++;
+          if (turnStarts > 10) engine.stop(); // 하드 가드 — 회귀 시 매달리지 않고 여기서 깨진다
+        },
+        onEnd: (_turns: unknown, reason: string) => { endReason = reason; },
+      },
+    );
+    await engine.run();
+
+    assert.equal(turnStarts, 3, `빈 응답 3회에서 멈춰야 한다(실측: ${turnStarts}회)`);
+    assert.equal(endReason, "consecutive_failures");
+  });
+
+  test("run()을 다시 부르면 실패 예산이 초기화된다", { timeout: 5000 }, async () => {
+    // 이전 run()의 카운터가 남아 있으면 두 번째 run()은 첫 실패에서 바로 끝난다.
+    let errors = 0;
+    const engine = new ConversationEngine(
+      { mode: "peer", topic: "T", participants: [alwaysThrows("a"), alwaysThrows("b")],
+        quota: { cooldownMs: 0, maxTotalTurns: 3, maxTurnsPerAgent: 20 } },
+      { onError: () => { errors++; if (errors > 10) engine.stop(); } }, // 하드 가드
+    );
+    await engine.run();
+    assert.equal(errors, 3);
+
+    errors = 0;
+    await engine.run();
+    assert.equal(errors, 3, `두 번째 run()도 예산 3으로 시작해야 한다(실측: ${errors}회)`);
+  });
+
   test("성공한 턴 하나가 연속 실패 카운터를 되돌린다", { timeout: 5000 }, async () => {
     // 실패 2회 → 성공 1회 → 실패 3회. 카운터가 리셋되지 않으면 3회 실패 전에 끝난다.
     let call = 0;
