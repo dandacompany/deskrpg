@@ -281,7 +281,7 @@ export class ConversationEngine {
 
       // 5. auto/manual 공통 — 후보 산출 → (필요 시) 폴링 → 발언. meeting-broker.js:114-157 이식.
       const candidates = eligibleParticipants(
-        this.config.participants,
+        this.participantsView(),
         (npcId) => this.remainingTurns(npcId),
       );
       if (candidates.length === 0) break;
@@ -341,6 +341,23 @@ export class ConversationEngine {
 
   private findParticipant(npcId: string): EngineParticipant | undefined {
     return this.config.participants.find((p) => p.npcId === npcId);
+  }
+
+  /**
+   * turn-policy(eligibleParticipants/selectNextSpeaker)에 넘길 참가자 스냅샷을 매 라운드
+   * 새로 만든다. Transcript가 lastSpokeAt/turnCount의 유일한 출처다 — EngineParticipant 쪽
+   * 필드는 생성 시 값(항상 0)에서 갱신되지 않으므로, 그걸 직접 참조하면 공정성 선택
+   * (meeting/group의 "가장 오래 발언하지 않은 참가자")이 사실상 배열의 첫 후보로 고착된다.
+   * 매번 파생시키면 갱신을 깜빡할 여지 자체가 없다.
+   */
+  private participantsView(): Participant[] {
+    return this.config.participants.map((p) => ({
+      npcId: p.npcId,
+      displayName: p.displayName,
+      seated: p.seated,
+      turnCount: this.transcript.turnCountFor(p.npcId),
+      lastSpokeAt: this.transcript.lastSpokeAt(p.npcId),
+    }));
   }
 
   private isFinished(): boolean {

@@ -299,6 +299,59 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
   });
 });
 
+describe("ConversationEngine — 공정성(가장 오래 발언하지 않은 참가자)", () => {
+  /** 폴링·발언 모두에 항상 같은 텍스트로 답한다(큐가 1개면 절대 shift되지 않으므로 매번 재사용된다) —
+   * 매 라운드 전원이 손을 드는 상황을 고정하기 위해서다. */
+  function alwaysRaises(npcId: string): EngineParticipant {
+    return participant(npcId, ["SPEAK: continue"]);
+  }
+
+  test("3인 이상이 매 라운드 전원 손을 들면 발언권이 배열 첫 번째로 고착되지 않고 순환한다", { timeout: 5000 }, async () => {
+    const a = alwaysRaises("a");
+    const b = alwaysRaises("b");
+    const c = alwaysRaises("c");
+    const spoken: string[] = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting", topic: "T", participants: [a, b, c],
+        // maxConsecutivePasses는 전원이 항상 SPEAK이므로 발동하지 않는다 — maxTotalTurns로 끊는다.
+        quota: { maxConsecutivePasses: 99, cooldownMs: 0, maxTotalTurns: 6, maxTurnsPerAgent: 20 },
+      },
+      { onTurnEnd: (npcId: string) => spoken.push(npcId) },
+    );
+    await engine.run();
+
+    assert.equal(spoken.length, 6, "6턴이 전부 발언으로 채워진다(전원 매 라운드 SPEAK)");
+    // 공정성이 살아있다면 첫 3턴 안에 a/b/c가 각각 정확히 한 번씩 나온다 — 고착이면 "a"만 반복된다.
+    const firstThree = spoken.slice(0, 3);
+    assert.deepEqual(
+      [...firstThree].sort(),
+      ["a", "b", "c"],
+      `첫 3턴에 세 참가자가 각각 한 번씩 나와야 한다(고착 시 재현: ${JSON.stringify(spoken)})`,
+    );
+    assert.notEqual(spoken.every((id) => id === "a"), true, "공정성이 깨져 있으면 전부 a로 고착된다");
+  });
+
+  test("발언 직후에는 selectNextSpeaker에 넘어가는 lastSpokeAt이 0으로 남아있지 않다(엔진↔정책 경계 실측)", { timeout: 5000 }, async () => {
+    // participantsView가 파생시키는 값을 간접적으로 검증한다: a가 먼저 한 번 발언한 뒤에도
+    // 여전히 a가 손을 들면, "가장 오래 발언하지 않은" b/c보다 뒤로 밀려야 한다.
+    const a = alwaysRaises("a");
+    const b = alwaysRaises("b");
+    const spoken: string[] = [];
+    let now = 1000;
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting", topic: "T", participants: [a, b],
+        quota: { maxConsecutivePasses: 99, cooldownMs: 0, maxTotalTurns: 2, maxTurnsPerAgent: 20 },
+        now: () => now++,
+      },
+      { onTurnEnd: (npcId: string) => spoken.push(npcId) },
+    );
+    await engine.run();
+    assert.deepEqual(spoken, ["a", "b"], "a가 먼저 발언한 뒤에는 아직 발언하지 않은 b가 이어받아야 한다(a로 고착되면 안 된다)");
+  });
+});
+
 describe("ConversationEngine — 사용자 개입", () => {
   test("addUserMessage가 트랜스크립트에 들어가 다음 프롬프트에 실린다", async () => {
     const a = participant("a", ["SPEAK: 예", "답변"]);
