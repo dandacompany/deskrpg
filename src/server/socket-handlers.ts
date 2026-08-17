@@ -903,6 +903,9 @@ async function streamMeetingNpcResponse(
   room.messages.push(npcMessage);
   if (room.messages.length > 100) room.messages.splice(0, room.messages.length - 100);
 
+  // fullText는 onDelta 클로저보다 먼저 선언해야 한다 — 반대 순서는 오늘은 안전하지만
+  // (execute 안에서만 호출된다) 리팩터 한 번이면 TDZ 함정이 된다.
+  let fullText = "";
   const onDelta = (delta: string) => {
     fullText += delta;
     npcMessage.content = fullText;
@@ -916,7 +919,6 @@ async function streamMeetingNpcResponse(
     });
   };
 
-  let fullText = "";
   /** hermes 분기에서만 채워진다 — 답변을 확정 전달한 뒤에 best-effort로 영속화한다(M6). */
   let persistSessionRef: (() => Promise<void>) | null = null;
   try {

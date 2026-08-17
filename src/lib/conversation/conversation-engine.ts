@@ -36,6 +36,8 @@ const DEFAULT_MAX_MS = 600_000;
 export type EngineParticipant = Participant & {
   adapter: NpcAdapter;
   sessionKey: string;
+  /** 발언 프롬프트의 참석자 목록에 `이름(역할)`로 실린다. 생략하면 "Participant". */
+  role?: string | null;
   /** 폴링 프롬프트의 `[발언 지침]` 블록에 실린다(meeting-formatter.js:30-32). 옛 브로커는
    * agent.passPolicy를 그대로 넘겼다(meeting-broker.js:307) — 값이 없으면 블록 자체가 빠진다. */
   passPolicy?: string | null;
@@ -508,11 +510,12 @@ export class ConversationEngine {
     // 프롬프트/히스토리 중복에 대한 판단: formatSpeakMessage는 recentTurns를 그대로
     // 프롬프트 텍스트에 접어넣는다. conversationHistory도 함께 실어 보내면 같은 내용이
     // 프롬프트와 구조화 히스토리 양쪽에 중복된다. D9(동작 보존)가 이번 단계의 성공 기준이므로
-    // 프롬프트는 오늘과 바이트 단위로 동일하게 유지하고(옵션 a), conversationHistory는
-    // 별도 필드로 추가한다 — 토큰 낭비를 감수하는 대신 회귀 위험을 없앤다.
+    // 프롬프트 조립 방식을 그대로 유지하고(옵션 a), conversationHistory는 별도 필드로 추가한다 —
+    // 토큰 낭비를 감수하는 대신 회귀 위험을 없앤다. (초기 구현의 주석은 프롬프트가 "바이트 단위로
+    // 동일"하다고 단언했지만, 그때 passPolicy와 role이 함께 빠져 있어 사실이 아니었다.)
     const participantsForFormat = this.config.participants.map((p) => ({
       displayName: p.displayName,
-      role: "Participant",
+      role: p.role || "Participant",
     }));
     const message = formatSpeakMessage(
       this.config.topic,

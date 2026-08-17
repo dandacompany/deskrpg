@@ -213,6 +213,35 @@ describe("ConversationEngine — 턴 타임아웃", () => {
   });
 });
 
+describe("ConversationEngine — 발언 프롬프트 참석자 목록", () => {
+  test("참가자의 실제 role이 프롬프트에 실린다(전원 \"Participant\"로 덮어쓰지 않는다)", async () => {
+    const a = participant("a", ["SPEAK: 예", "말합니다"], { role: "Facilitator" });
+    const b = participant("b", ["PASS"], { role: "Analyst" });
+    const engine = new ConversationEngine(
+      { mode: "meeting", topic: "T", participants: [a, b],
+        quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 } },
+      {},
+    );
+    await engine.run();
+
+    const calls = (a.adapter as unknown as { calls: AdapterExecuteOptions[] }).calls;
+    const speakPrompt = calls.find((c) => c.prompt.includes("참석자"))!.prompt;
+    assert.match(speakPrompt, /a\(Facilitator\), b\(Analyst\)/);
+  });
+
+  test("role이 없으면 종전대로 Participant로 채운다", async () => {
+    const a = participant("a", ["SPEAK: 예", "말합니다"]);
+    const engine = new ConversationEngine(
+      { mode: "meeting", topic: "T", participants: [a],
+        quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 } },
+      {},
+    );
+    await engine.run();
+    const calls = (a.adapter as unknown as { calls: AdapterExecuteOptions[] }).calls;
+    assert.match(calls.find((c) => c.prompt.includes("참석자"))!.prompt, /a\(Participant\)/);
+  });
+});
+
 describe("ConversationEngine — 착석 게이트", () => {
   test("착석하지 않은 참가자는 폴링도 발언도 하지 않는다", async () => {
     const a = participant("a", ["PASS"]);

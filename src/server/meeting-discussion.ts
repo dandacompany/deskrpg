@@ -173,6 +173,11 @@ type RegisterMeetingDiscussionHandlersArgs = {
   };
 };
 
+/** setMode와 같은 기준으로 검증한다(conversation-engine.ts:setMode). 알 수 없는 값은 "auto". */
+function toRunMode(value: unknown): RunMode {
+  return value === "auto" || value === "manual" || value === "directed" ? value : "auto";
+}
+
 function getMeetingRoomId(channelId: string) {
   return `meeting-${channelId}`;
 }
@@ -303,6 +308,7 @@ export async function defaultCreateMeetingBroker(
     lastSpokeAt: 0,
     adapter,
     sessionKey,
+    role: participant.role,
     passPolicy: participant.passPolicy,
   }));
 
@@ -320,7 +326,10 @@ export async function defaultCreateMeetingBroker(
         maxConsecutivePasses: 2,
         cooldownMs: 1000,
       },
-      initialRunMode: (config.settings?.initialMode as RunMode) || "auto",
+      // 캐스팅이 아니라 검증한다 — 엔진 생성자는 setMode와 달리 값을 검사하지 않아서,
+      // 잘못된 값은 auto처럼 동작하면서 meeting:mode-changed로 그 잘못된 문자열을
+      // 클라이언트에 되돌려주는 상태로 남는다.
+      initialRunMode: toRunMode(config.settings?.initialMode),
       hybridMode: Boolean(config.settings?.hybridMode),
       hybridAutoResumeMs: (config.settings?.hybridAutoResumeMs as number) ?? null,
     },

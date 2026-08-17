@@ -280,3 +280,41 @@ test("resolution layer: npc.passPolicy가 엔진까지 살아남아 폴링 프�
     `폴링 프롬프트에 [발언 지침]이 있어야 한다: ${JSON.stringify(adapter.prompts[0])}`,
   );
 });
+
+test("resolution layer: 잘못된 settings.initialMode는 캐스팅되지 않고 auto로 떨어진다", async () => {
+  const registry = new AdapterRegistry();
+  registry.register(recordingAdapter(["PASS"]) as never);
+
+  const modeChanges: Array<[string, string]> = [];
+  const broker = await defaultCreateMeetingBroker(
+    brokerConfig(
+      [npcConfig({ id: "n-cli", name: "Cli", adapterType: "cli" })],
+      { adapterRegistry: registry, settings: { initialMode: "bogus" } },
+    ),
+    { onModeChanged: (mode: string, by: string) => modeChanges.push([mode, by]) },
+  );
+
+  // auto로 떨어졌으면 대기 없이 전원 PASS로 자연 종료된다(directed/manual이면 여기서 멈춘다).
+  await broker.run();
+  assert.deepEqual(modeChanges, [], "생성자에 넘긴 초기 모드는 mode-changed를 만들지 않는다");
+  assert.equal(broker.isRunning(), false);
+});
+
+test("resolution layer: 참가자의 role이 발언 프롬프트까지 전달된다", async () => {
+  const registry = new AdapterRegistry();
+  const adapter = recordingAdapter(["SPEAK: 예", "말합니다"]);
+  registry.register(adapter as never);
+
+  const broker = await defaultCreateMeetingBroker(
+    brokerConfig(
+      [npcConfig({ id: "n-cli", name: "Cli", adapterType: "cli", role: "Facilitator" })],
+      { adapterRegistry: registry, quota: { maxTotalTurns: 1 } },
+    ),
+    {},
+  );
+  await broker.run();
+
+  const speakPrompt = adapter.prompts.find((p) => p.includes("참석자"));
+  assert.ok(speakPrompt, "발언 프롬프트가 있어야 한다");
+  assert.match(speakPrompt!, /Cli\(Facilitator\)/);
+});
