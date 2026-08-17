@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 
 import { db, hermesProfiles, npcs, channels } from "@/db";
+import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { getUserId } from "@/lib/internal-rpc";
 
 export async function POST(
@@ -36,6 +37,16 @@ export async function POST(
   const [profile] = await db.select().from(hermesProfiles).where(eq(hermesProfiles.id, profileId));
   if (!profile) {
     return NextResponse.json({ errorCode: "profile_not_found", error: "Profile not found" }, { status: 404 });
+  }
+
+  // A profile carries a live credential (a Hermes gateway token). Binding an NPC to it
+  // must not be possible for a caller who merely owns the NPC's channel — they also need
+  // some relationship (owner or share) to the gateway the profile lives on. Using the
+  // profile itself to run agent turns is a legitimate shared-access flow (unlike writing
+  // one, which registerHermesProfile reserves for owners), so an accessible share is enough.
+  const gatewayAccess = await getAccessibleGatewayResource(userId, profile.gatewayId);
+  if (!gatewayAccess) {
+    return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
   }
 
   const [updated] = await db.update(npcs).set({
