@@ -16,7 +16,19 @@ import {
   type Participant,
 } from "./turn-policy";
 
-/** 옛 turnTimeoutMs(180초)와 같은 값 — 아무 신호도 없는 에이전트는 예전과 같은 시점에 실패한다. */
+/**
+ * 신호(assistant delta / tool progress)가 이만큼 끊기면 턴을 끊는다.
+ *
+ * 이건 이식이 아니라 새 동작이다. meeting-broker.js:72의 turnTimeoutMs는 초기화 구문
+ * 외에는 아무 데서도 읽히지 않는 죽은 설정이었고, 옛 브로커는 턴을 타임아웃시킨 적이 없다 —
+ * 멈춘 에이전트는 회의를 영원히 붙잡았다. 값(180초)만 그 죽은 설정에서 가져왔다.
+ *
+ * 대가가 있다: idle 타이머는 onDelta/onToolProgress에서만 리셋되는데
+ * OpenClawAdapter는 onToolProgress를 절대 호출하지 않는다(openclaw-adapter.ts:33,39 —
+ * onDelta만 전달한다). 그래서 도구를 3분 넘게 조용히 돌리는 OpenClaw NPC는 예전이라면
+ * 완주했을 턴이 지금은 중단되고 에러로 보고된다. 스펙의 "tool.progress 수신 시 idle
+ * 타이머를 리셋한다"는 현재 Hermes 경로에만 구현돼 있다.
+ */
 const DEFAULT_IDLE_MS = 180_000;
 /** idle보다 넉넉히 큰 절대 상한. 정상적인 다중 도구 호출 턴을 죽이지 않으면서 폭주를 막는다. */
 const DEFAULT_MAX_MS = 600_000;
@@ -39,7 +51,10 @@ export type EngineCallbacks = {
   onPollResult?: (raises: Array<{ npcId: string; reason: string }>, passes: string[]) => void;
   onTurnStart?: (npcId: string, displayName: string) => void;
   onTurnChunk?: (npcId: string, chunk: string) => void;
-  onTurnEnd?: (npcId: string, fullResponse: string) => void;
+  /** meta는 턴이 중단되어 끝났을 때만 실린다 — 그 경우 fullResponse는 그때까지 스트리밍된
+   * 부분 텍스트(없을 수도 있다)이며 트랜스크립트에는 기록되지 않는다. 중단이든 아니든 항상
+   * 호출되어야 클라이언트의 스트리밍 말풍선이 닫힌다. */
+  onTurnEnd?: (npcId: string, fullResponse: string, meta?: { aborted: true; reason: string }) => void;
   onEnd?: (turns: Turn[]) => void;
   onError?: (err: unknown, npcId: string) => void;
   /** RunMode가 바뀔 때. source: 사용자의 setMode 호출로 바뀌면 "user"(드레인 시점에 일괄 통지 —
@@ -468,9 +483,11 @@ export class ConversationEngine {
       idleMs: this.config.turnTimeout?.idleMs ?? DEFAULT_IDLE_MS,
       maxMs: this.config.turnTimeout?.maxMs ?? DEFAULT_MAX_MS,
     };
+    let timedOutKind: string | null = null;
     try {
       const { response } = await new Promise<{ response: string }>((resolve, reject) => {
         const timeout = createTurnTimeout(timeoutConfig, (kind) => {
+          timedOutKind = kind;
           participant.adapter.abort?.(participant.sessionKey)?.catch(() => {});
           reject(new Error(`turn timeout (${kind})`));
         });
@@ -515,6 +532,14 @@ export class ConversationEngine {
       this.currentSessionKey = null;
       this.currentAdapter = null;
       this.callbacks.onError?.(err, participant.npcId);
+      if (timedOutKind) {
+        // 타임아웃으로 끊은 턴도 반드시 닫아준다 — onError만 보내면 클라이언트의 스트리밍
+        // 말풍선(done:true를 기다린다)이 영영 열린 채로 남는다.
+        this.callbacks.onTurnEnd?.(participant.npcId, emittedText, {
+          aborted: true,
+          reason: `timeout:${timedOutKind}`,
+        });
+      }
     }
   }
 }

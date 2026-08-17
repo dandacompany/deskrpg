@@ -497,6 +497,9 @@ export function registerMeetingDiscussionHandlers({
 
           const liveRoom = meetingRooms.get(channelId);
           if (!liveRoom) return;
+          // 중단된 턴은 부분 텍스트조차 없을 수 있다 — 말풍선은 위에서 닫아주되 빈 메시지를
+          // 회의 기록에 남기지는 않는다.
+          if (!fullResponse) return;
 
           liveRoom.messages.push({
             id: `msg-${Date.now()}-${npcId}`,

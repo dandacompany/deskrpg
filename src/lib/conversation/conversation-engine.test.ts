@@ -107,6 +107,40 @@ describe("ConversationEngine — 폴링 프롬프트 내용", () => {
   });
 });
 
+describe("ConversationEngine — 턴 타임아웃", () => {
+  test("타임아웃으로 끊긴 턴도 onTurnEnd로 닫힌다(중단 사유를 함께 실어서)", { timeout: 5000 }, async () => {
+    // onError만 보내고 끝내면 클라이언트의 스트리밍 말풍선이 done:true를 영영 못 받는다.
+    const hang: NpcAdapter = {
+      type: "mock",
+      // 절대 resolve하지 않고 delta도 보내지 않는다 — idle 타이머가 발화하는 유일한 조건.
+      execute: () => new Promise(() => {}),
+      async abort() {},
+      async testConnection() { return { status: "ok" as const }; },
+    };
+    const a: EngineParticipant = {
+      npcId: "a", displayName: "a", seated: true, turnCount: 0, lastSpokeAt: 0,
+      adapter: hang, sessionKey: "sk-a",
+    };
+    const ends: Array<[string, string, unknown]> = [];
+    const errors: string[] = [];
+    const engine = new ConversationEngine(
+      { mode: "meeting", topic: "T", participants: [a], initialRunMode: "directed",
+        turnTimeout: { idleMs: 10, maxMs: 1000 },
+        quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+      {
+        onTurnEnd: (npcId: string, text: string, meta?: unknown) => ends.push([npcId, text, meta]),
+        onError: (err: unknown) => errors.push(String(err)),
+        onWaitingInput: () => { engine.stop(); },
+      },
+    );
+    engine.directSpeak("a");
+    await engine.run();
+
+    assert.equal(errors.length, 1, "타임아웃은 여전히 onError로도 보고된다");
+    assert.deepEqual(ends, [["a", "", { aborted: true, reason: "timeout:idle" }]]);
+  });
+});
+
 describe("ConversationEngine — 착석 게이트", () => {
   test("착석하지 않은 참가자는 폴링도 발언도 하지 않는다", async () => {
     const a = participant("a", ["PASS"]);
