@@ -569,6 +569,15 @@ export function registerMeetingDiscussionHandlers({
       },
     );
 
+    // 어댑터 해석 결과 참가 가능한 NPC가 하나도 남지 않으면(전부 unbound/미해석) 조용히 빈 회의를
+    // 시작-즉시종료하지 않고, 시작 전 검사와 동일하게 실패로 끝낸다. 제외 사유는
+    // onParticipantsExcluded가 이미 개별 통지했다 — 이건 "그래서 회의 자체가 시작되지 않았다"는
+    // 별도의 최종 신호다.
+    if (brokerInstance.config.participants.length === 0) {
+      socket.emit("meeting:error", { error: "No AI NPCs in this channel" });
+      return;
+    }
+
     activeBrokers.set(channelId, brokerInstance);
     discussionInitiators.set(channelId, user.userId);
 
