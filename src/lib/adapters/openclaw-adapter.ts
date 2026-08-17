@@ -28,8 +28,9 @@ export class OpenClawAdapter implements NpcAdapter {
   async executeWithGateway(
     gateway: Gateway,
     options: AdapterExecuteOptions,
+    agentId: string,
   ): Promise<{ response: string; session: AdapterSessionInfo }> {
-    const { agentId, sessionKey, prompt, onDelta, attachments } = options;
+    const { sessionKey, prompt, onDelta, attachments } = options;
 
     const response = await gateway.chatSend(
       agentId,

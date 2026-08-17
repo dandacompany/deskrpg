@@ -3,6 +3,27 @@ import assert from "node:assert/strict";
 import { AdapterRegistry } from "./types";
 import type { NpcAdapter, AdapterExecuteOptions, AdapterHealthResult } from "./types";
 
+describe("AdapterExecuteOptions", () => {
+  test("carries backend-neutral multi-party and control fields", () => {
+    const options: AdapterExecuteOptions = {
+      sessionKey: "s",
+      prompt: "p",
+      conversationHistory: [{ role: "user", content: "이전 발언" }],
+      onToolProgress: () => {},
+      onRunStarted: () => {},
+    };
+    assert.equal(options.conversationHistory?.[0].role, "user");
+    assert.equal(typeof options.onToolProgress, "function");
+    assert.equal(typeof options.onRunStarted, "function");
+  });
+
+  test("no longer accepts OpenClaw-specific fields", () => {
+    // @ts-expect-error agentId was removed from the neutral options object
+    const bad: AdapterExecuteOptions = { sessionKey: "s", prompt: "p", agentId: "a" };
+    assert.ok(bad);
+  });
+});
+
 function createStubAdapter(type: string): NpcAdapter {
   return {
     type,

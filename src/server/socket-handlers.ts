@@ -396,12 +396,11 @@ async function runProgressNudgeForTask(
       if (!gateway) return;
 
       await taskManager.markTaskNudged(task.id, task.channelId);
-      ({ response } = await openclawAdapter.executeWithGateway(gateway, {
-        agentId: npcConfig.agentId,
-        channelId: task.channelId,
-        sessionKey,
-        prompt,
-      }));
+      ({ response } = await openclawAdapter.executeWithGateway(
+        gateway,
+        { sessionKey, prompt },
+        npcConfig.agentId,
+      ));
     } else if (adapterRegistry.has(npcConfig.adapterType)) {
       const adapter = adapterRegistry.get(npcConfig.adapterType);
 
@@ -653,16 +652,18 @@ async function streamNpcResponse(
 
     const sessionKey = sessionKeyOverride || `${sessionKeyPrefix || npcId}-dm-${userId}`;
     try {
-      const { response } = await openclawAdapter.executeWithGateway(gateway, {
-        agentId,
-        channelId: _channelId,
-        sessionKey,
-        prompt: message,
-        onDelta: (delta: string) => {
-          socket.emit(responseEvent, { npcId, chunk: delta, done: false });
+      const { response } = await openclawAdapter.executeWithGateway(
+        gateway,
+        {
+          sessionKey,
+          prompt: message,
+          onDelta: (delta: string) => {
+            socket.emit(responseEvent, { npcId, chunk: delta, done: false });
+          },
+          attachments,
         },
-        attachments,
-      });
+        agentId,
+      );
       socket.emit(responseEvent, { npcId, chunk: "", done: true });
       return response || "";
     } catch (err) {
@@ -747,24 +748,26 @@ async function streamMeetingNpcResponse(
 
   let fullText = "";
   try {
-    const { response } = await openclawAdapter.executeWithGateway(gateway, {
-      agentId,
-      channelId,
-      sessionKey,
-      prompt,
-      onDelta: (delta: string) => {
-        fullText += delta;
-        npcMessage.content = fullText;
-        emitMeetingNpcStream(io, channelId, {
-          npcId,
-          npcName: _name,
-          messageId: npcMessage.id,
-          sender: _name,
-          chunk: delta,
-          done: false,
-        });
+    const { response } = await openclawAdapter.executeWithGateway(
+      gateway,
+      {
+        sessionKey,
+        prompt,
+        onDelta: (delta: string) => {
+          fullText += delta;
+          npcMessage.content = fullText;
+          emitMeetingNpcStream(io, channelId, {
+            npcId,
+            npcName: _name,
+            messageId: npcMessage.id,
+            sender: _name,
+            chunk: delta,
+            done: false,
+          });
+        },
       },
-    });
+      agentId,
+    );
     fullText = response || fullText;
     npcMessage.content = fullText;
     emitMeetingNpcStream(io, channelId, {

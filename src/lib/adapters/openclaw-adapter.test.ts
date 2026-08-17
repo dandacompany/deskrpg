@@ -30,12 +30,15 @@ describe("OpenClawAdapter", () => {
     };
 
     const chunks: string[] = [];
-    const result = await adapter.executeWithGateway(mockGateway, {
-      sessionKey: "test-dm-user1",
-      prompt: "Hi",
-      agentId: "agent-1",
-      onDelta: (chunk) => chunks.push(chunk),
-    });
+    const result = await adapter.executeWithGateway(
+      mockGateway,
+      {
+        sessionKey: "test-dm-user1",
+        prompt: "Hi",
+        onDelta: (chunk) => chunks.push(chunk),
+      },
+      "agent-1",
+    );
 
     assert.equal(result.response, "Hello world");
     assert.equal(result.session.sessionRef, "test-dm-user1");

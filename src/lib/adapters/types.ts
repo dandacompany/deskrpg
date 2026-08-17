@@ -4,17 +4,18 @@
 export interface AdapterExecuteOptions {
   sessionKey: string;
   prompt: string;
+  /** Multi-party transcript owned by the caller (ConversationEngine). */
+  conversationHistory?: Array<{ role: string; content: string }>;
   onDelta?: (chunk: string) => void;
+  onToolProgress?: (toolName: string, preview: string) => void;
+  /** Fires as soon as the backend assigns a run handle, for abort/steer. */
+  onRunStarted?: (runId: string) => void;
   attachments?: AdapterAttachment[];
   model?: string;
   locale?: string;
   timeoutMs?: number;
   userId?: string;
   projectId?: string;
-  /** OpenClaw-specific: agent ID on the gateway */
-  agentId?: string;
-  /** OpenClaw-specific: channel ID for gateway resolution */
-  channelId?: string;
 }
 
 export interface AdapterAttachment {

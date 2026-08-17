@@ -112,12 +112,15 @@ describe("Phase1: OpenClawAdapter", () => {
       }),
     };
 
-    const result = await adapter.executeWithGateway(mockGateway, {
-      sessionKey: "test-key",
-      prompt: "hello",
-      agentId: "agent-1",
-      onDelta: (chunk) => received.push(chunk),
-    });
+    const result = await adapter.executeWithGateway(
+      mockGateway,
+      {
+        sessionKey: "test-key",
+        prompt: "hello",
+        onDelta: (chunk) => received.push(chunk),
+      },
+      "agent-1",
+    );
 
     assert.equal(result.response, "chunk1-chunk2-chunk3");
     assert.deepEqual(received, deltas);
@@ -130,11 +133,11 @@ describe("Phase1: OpenClawAdapter", () => {
       chatSend: mock.fn(async () => null),
     };
 
-    const result = await adapter.executeWithGateway(mockGateway, {
-      sessionKey: "k",
-      prompt: "p",
-      agentId: "a",
-    });
+    const result = await adapter.executeWithGateway(
+      mockGateway,
+      { sessionKey: "k", prompt: "p" },
+      "a",
+    );
 
     assert.equal(result.response, "");
   });
@@ -151,12 +154,11 @@ describe("Phase1: OpenClawAdapter", () => {
       }),
     };
 
-    await adapter.executeWithGateway(mockGateway, {
-      sessionKey: "k",
-      prompt: "p",
-      agentId: "a",
-      attachments,
-    });
+    await adapter.executeWithGateway(
+      mockGateway,
+      { sessionKey: "k", prompt: "p", attachments },
+      "a",
+    );
 
     const call = mockGateway.chatSend.mock.calls[0];
     assert.equal(call.arguments[4], attachments);
@@ -169,11 +171,7 @@ describe("Phase1: OpenClawAdapter", () => {
     };
 
     await assert.rejects(
-      () => adapter.executeWithGateway(mockGateway, {
-        sessionKey: "k",
-        prompt: "p",
-        agentId: "a",
-      }),
+      () => adapter.executeWithGateway(mockGateway, { sessionKey: "k", prompt: "p" }, "a"),
       /connection lost/,
     );
   });
@@ -395,12 +393,15 @@ describe("Phase1: End-to-end adapter pipeline", () => {
       }),
     };
 
-    const result = await (resolvedAdapter as OpenClawAdapter).executeWithGateway(mockGateway, {
-      sessionKey,
-      prompt: "Hello NPC",
-      agentId: npcConfig.agentId,
-      onDelta: (chunk) => streamedChunks.push(chunk),
-    });
+    const result = await (resolvedAdapter as OpenClawAdapter).executeWithGateway(
+      mockGateway,
+      {
+        sessionKey,
+        prompt: "Hello NPC",
+        onDelta: (chunk) => streamedChunks.push(chunk),
+      },
+      npcConfig.agentId,
+    );
 
     // 4. Verify response
     assert.equal(result.response, "I'm an NPC");
@@ -425,11 +426,11 @@ describe("Phase1: End-to-end adapter pipeline", () => {
       chatSend: mock.fn(async () => '작업 시작합니다.\n```json:task\n{"action":"create","id":"worker-20260409-ab12","title":"테스트","status":"in_progress","summary":"시작"}\n```'),
     };
 
-    const result = await adapter.executeWithGateway(mockGateway, {
-      sessionKey: taskSessionKey,
-      prompt: "태스크 시작",
-      agentId: npcConfig.agentId,
-    });
+    const result = await adapter.executeWithGateway(
+      mockGateway,
+      { sessionKey: taskSessionKey, prompt: "태스크 시작" },
+      npcConfig.agentId,
+    );
 
     assert.ok(result.response.includes("json:task"));
     assert.ok(result.response.includes('"action":"create"'));
