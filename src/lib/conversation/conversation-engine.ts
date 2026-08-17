@@ -398,6 +398,9 @@ export class ConversationEngine {
           const { response } = await engineParticipant.adapter.execute({
             sessionKey: `${engineParticipant.sessionKey}-poll`,
             prompt: pollMsg,
+            // 폴은 히스토리를 싣지 않지만 그래도 다자 대화다 — NPC의 영속 세션에
+            // "SPEAK:/PASS" 문답이 쌓이면 안 된다.
+            multiParty: true,
           });
           return { npcId: c.npcId, text: response };
         }),
@@ -475,6 +478,9 @@ export class ConversationEngine {
           .execute({
             sessionKey: participant.sessionKey,
             prompt: message,
+            // 트랜스크립트는 엔진이 소유한다. 첫 턴은 히스토리가 비지만 그것도 다자 대화의
+            // 한 턴이므로 전송 경로가 2번째 턴부터와 달라지면 안 된다.
+            multiParty: true,
             conversationHistory: this.transcript.toConversationHistory(historyLimit),
             onDelta: (chunk) => {
               timeout.touch();

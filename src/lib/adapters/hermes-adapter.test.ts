@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { HermesAdapter } from "./hermes-adapter";
 import { HermesClient } from "@/lib/hermes/hermes-client";
+import { ConversationEngine } from "@/lib/conversation/conversation-engine";
 
 function sseResponse(frames: string[]): Response {
   const body = new ReadableStream<Uint8Array>({
@@ -52,7 +53,7 @@ describe("HermesAdapter", () => {
     assert.ok(urls[0].includes("/p/sophie/api/sessions/sess-1/chat/stream"), urls[0]);
   });
 
-  test("uses the runs path when conversation history is supplied", async () => {
+  test("uses the runs path when the caller declares a multi-party turn", async () => {
     const urls: string[] = [];
     const client = clientWith((url) => {
       urls.push(url);
@@ -64,12 +65,34 @@ describe("HermesAdapter", () => {
     const result = await adapter.execute({
       sessionKey: "meeting-1",
       prompt: "발언하세요",
+      multiParty: true,
       conversationHistory: [{ role: "user", content: "주제: 배포 전략" }],
     });
 
     assert.equal(result.response, "제 의견은");
     assert.ok(urls[0].endsWith("/p/sophie/v1/runs"), urls[0]);
     assert.ok(urls[1].includes("/v1/runs/r9/events"), urls[1]);
+  });
+
+  test("takes the runs path on a multi-party turn even when the history is empty", async () => {
+    // 폴 호출과 회의의 첫 턴이 정확히 이 모양이다 — 히스토리 길이로 갈래를 정하면
+    // 둘 다 조용히 영속 세션으로 새어 들어간다(H2).
+    const urls: string[] = [];
+    const client = clientWith((url) => {
+      urls.push(url);
+      if (url.endsWith("/v1/runs")) return new Response(JSON.stringify({ run_id: "r7" }), { status: 202 });
+      return sseResponse(['event: assistant.completed\ndata: {"content":"PASS"}\n\n']);
+    });
+
+    const adapter = new HermesAdapter(client);
+    await adapter.execute({ sessionKey: "meeting-1-poll", prompt: "SPEAK 또는 PASS", multiParty: true });
+
+    assert.ok(urls[0].endsWith("/p/sophie/v1/runs"), urls.join("\n"));
+    assert.equal(
+      urls.some((u) => u.includes("/api/sessions")),
+      false,
+      "다자 대화 턴은 영속 세션을 만들지도, 쓰지도 않아야 한다",
+    );
   });
 
   test("reports the run handle so callers can abort", async () => {
@@ -82,6 +105,7 @@ describe("HermesAdapter", () => {
     const seen: string[] = [];
     await adapter.execute({
       sessionKey: "m", prompt: "p",
+      multiParty: true,
       conversationHistory: [{ role: "user", content: "c" }],
       onRunStarted: (id) => seen.push(id),
     });
@@ -113,7 +137,7 @@ describe("HermesAdapter", () => {
     });
 
     const adapter = new HermesAdapter(client);
-    await adapter.execute({ sessionKey: "k", prompt: "p", conversationHistory: [{ role: "user", content: "c" }] });
+    await adapter.execute({ sessionKey: "k", prompt: "p", multiParty: true, conversationHistory: [{ role: "user", content: "c" }] });
     await adapter.abort("k");
     assert.ok(urls.some((u) => u.endsWith("/v1/runs/r2/stop")), urls.join("\n"));
   });
@@ -136,5 +160,44 @@ describe("HermesAdapter", () => {
     const client = clientWith(() => new Response("{}", { status: 401 }));
     const result = await new HermesAdapter(client).testConnection({});
     assert.equal(result.status, "error");
+  });
+});
+
+describe("ConversationEngine × HermesAdapter — 전송 경로", () => {
+  test("첫 폴과 첫 발언 턴이 모두 runs 경로를 탄다(영속 세션은 한 번도 쓰지 않는다)", { timeout: 5000 }, async () => {
+    // 리뷰의 재현(final-review.md:109-116)을 뒤집은 형태다. 예전에는 호출 로그가
+    // createSession → streamSessionChat(poll) → streamSessionChat(첫 발언) → startRun(둘째 발언)
+    // 이었다 — 폴 문답이 NPC의 장기 세션에 쌓이고, 1턴과 2턴의 전송 경로가 달랐다.
+    const log: string[] = [];
+    let runSeq = 0;
+    const replies = ["SPEAK: 하겠습니다", "제 의견은 이렇습니다"];
+    const client = clientWith((url) => {
+      if (url.endsWith("/v1/runs")) {
+        log.push("startRun");
+        return new Response(JSON.stringify({ run_id: `r${++runSeq}` }), { status: 202 });
+      }
+      if (url.includes("/v1/runs/")) {
+        const text = replies[Math.min(runSeq - 1, replies.length - 1)];
+        return sseResponse([`event: assistant.completed\ndata: ${JSON.stringify({ content: text })}\n\n`]);
+      }
+      log.push(`session:${url}`);
+      return sseResponse(['event: assistant.completed\ndata: {"content":"PASS","session_id":"sess-1"}\n\n']);
+    });
+
+    const adapter = new HermesAdapter(client);
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting", topic: "T",
+        participants: [{
+          npcId: "a", displayName: "에이", seated: true, turnCount: 0, lastSpokeAt: 0,
+          adapter, sessionKey: "sk-a",
+        }],
+        quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 },
+      },
+      {},
+    );
+    await engine.run();
+
+    assert.deepEqual(log, ["startRun", "startRun"], `첫 폴과 첫 발언 모두 startRun이어야 한다: ${JSON.stringify(log)}`);
   });
 });

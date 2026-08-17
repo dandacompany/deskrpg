@@ -51,10 +51,13 @@ export class HermesAdapter implements NpcAdapter {
 
     // Runs path: the caller (ConversationEngine) owns and passes the full
     // transcript, so there is no persisted Hermes session to reuse.
-    if (options.conversationHistory?.length) {
+    // Branch on the explicit multiParty flag, never on "is the history array non-empty":
+    // polls carry no history and the first turn of a meeting has an empty transcript, and
+    // both of those must still stay off the NPC's persisted session.
+    if (options.multiParty) {
       const { runId } = await this.client.startRun({
         input: options.prompt,
-        conversationHistory: options.conversationHistory,
+        conversationHistory: options.conversationHistory ?? [],
         sessionKey: options.sessionKey,
       });
       this.lastRunId = runId;

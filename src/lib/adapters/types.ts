@@ -4,6 +4,15 @@
 export interface AdapterExecuteOptions {
   sessionKey: string;
   prompt: string;
+  /**
+   * The caller owns the conversation (ConversationEngine): every turn carries its own
+   * transcript and nothing may be written to a persisted per-NPC session. Backends that
+   * have both a stateless and a persisted-session transport MUST pick the stateless one
+   * when this is true — including when `conversationHistory` is empty, which is the normal
+   * state of a poll call and of the first turn of a meeting.
+   * Absent/false means a 1:1 DM, which keeps its persisted session.
+   */
+  multiParty?: boolean;
   /** Multi-party transcript owned by the caller (ConversationEngine). */
   conversationHistory?: Array<{ role: string; content: string }>;
   onDelta?: (chunk: string) => void;
