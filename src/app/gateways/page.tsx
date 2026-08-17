@@ -6,6 +6,7 @@ import Link from "next/link";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import LogoutButton from "@/components/LogoutButton";
 import OpenClawPairingStatusCard, { type OpenClawPairingStatus } from "@/components/openclaw/OpenClawPairingStatusCard";
+import { shouldShowPairingCard } from "@/components/openclaw/pairing-card-visibility";
 import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
@@ -511,7 +512,7 @@ function GatewayManagementPageInner() {
                 </div>
               </div>
 
-              {selectedGateway && pairingStates[selectedGateway.id]?.status !== "idle" && (
+              {selectedGateway && shouldShowPairingCard(pairingStates[selectedGateway.id]) && (
                 <OpenClawPairingStatusCard
                   className="mt-4"
                   status={pairingStates[selectedGateway.id]?.status ?? "idle"}
