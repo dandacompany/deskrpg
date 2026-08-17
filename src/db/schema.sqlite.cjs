@@ -98,6 +98,24 @@ const gatewayShares = sqliteTable("gateway_shares", {
   uniqueIndex("gateway_shares_gateway_user_idx").on(table.gatewayId, table.userId),
 ]);
 
+const hermesProfiles = sqliteTable("hermes_profiles", {
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  gatewayId: text("gateway_id").notNull().references(() => gatewayResources.id, { onDelete: "cascade" }),
+  profileName: text("profile_name").notNull(),
+  tokenEncrypted: text("token_encrypted").notNull(),
+  displayName: text("display_name"),
+  description: text("description"),
+  provisionedByDeskrpg: integer("provisioned_by_deskrpg", { mode: "boolean" }).notNull().default(false),
+  lastValidatedAt: text("last_validated_at"),
+  lastValidationStatus: text("last_validation_status"),
+  lastValidationError: text("last_validation_error"),
+  createdAt: text("created_at").$defaultFn(isoNow).notNull(),
+  updatedAt: text("updated_at").$defaultFn(isoNow).notNull(),
+}, (table) => [
+  index("idx_hermes_profiles_gateway_id").on(table.gatewayId),
+  uniqueIndex("hermes_profiles_gateway_name_idx").on(table.gatewayId, table.profileName),
+]);
+
 const providerResources = sqliteTable("provider_resources", {
   id: text("id").primaryKey().$defaultFn(() => randomUUID()),
   ownerUserId: text("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -271,6 +289,8 @@ const npcs = sqliteTable("npcs", {
   openclawConfig: text("openclaw_config").notNull(),
   adapterType: text("adapter_type").notNull().default("openclaw"),
   adapterConfig: text("adapter_config"),
+  hermesProfileId: text("hermes_profile_id").references(() => hermesProfiles.id, { onDelete: "set null" }),
+  agentConfig: text("agent_config"),
   createdAt: text("created_at").$defaultFn(isoNow),
   updatedAt: text("updated_at").$defaultFn(isoNow),
 }, (table) => [
@@ -429,6 +449,7 @@ module.exports = {
   channels,
   gatewayResources,
   gatewayShares,
+  hermesProfiles,
   providerResources,
   providerShares,
   channelGatewayBindings,

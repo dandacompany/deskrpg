@@ -31,7 +31,7 @@ const pgCjs = require("./schema.pg.cjs") as Record<string, unknown>;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sqliteCjs = require("./schema.sqlite.cjs") as Record<string, unknown>;
 
-const EXPECTED_TABLE_COUNT = 29;
+const EXPECTED_TABLE_COUNT = 30;
 
 type AnyTable = Record<string, unknown>;
 type GetTableConfig = (table: unknown) => {
