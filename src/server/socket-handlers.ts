@@ -835,10 +835,23 @@ async function streamMeetingNpcResponse(
   room: MeetingRoom,
   userMessage: string,
   senderName: string,
+  userId: string,
 ): Promise<void> {
-  const { id: npcId, agentId, sessionKeyPrefix, _name, adapterType } = npcConfig;
+  const { id: npcId, agentId, sessionKeyPrefix, _name, adapterType, hermesProfileId } = npcConfig;
+  const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
 
-  if (!adapterRegistry.has(adapterType) || adapterType !== openclawAdapter.type) {
+  if (dispatchKind === "unbound") {
+    emitMeetingNpcStream(io, channelId, {
+      npcId,
+      npcName: _name,
+      chunk: "",
+      done: true,
+      messageCode: "npc_unbound",
+    });
+    return;
+  }
+
+  if (dispatchKind === "registry" && !adapterRegistry.has(adapterType)) {
     emitMeetingNpcStream(io, channelId, {
       npcId,
       npcName: _name,
@@ -849,14 +862,33 @@ async function streamMeetingNpcResponse(
     return;
   }
 
-  // Skip openclaw NPCs without an assigned agent in meeting rooms
-  if (!agentId) return;
-
-  const gateway = await getOrConnectGateway(channelId);
-  if (!gateway) return;
+  // Skip openclaw NPCs without an assigned agent in meeting rooms (unchanged: silent no-op).
+  if (dispatchKind === "openclaw" && !agentId) return;
 
   const sessionKey = `${sessionKeyPrefix || _name}-meeting-${channelId}`;
   const prompt = `${senderName}: ${userMessage}`;
+
+  let gateway: unknown = null;
+  let hermesAdapter: Awaited<ReturnType<typeof createHermesAdapterForNpc>> = null;
+  let hermesContextKey = "";
+
+  if (dispatchKind === "openclaw") {
+    gateway = await getOrConnectGateway(channelId);
+    if (!gateway) return; // unchanged: silent no-op
+  } else if (dispatchKind === "hermes") {
+    hermesContextKey = deriveHermesContextKey(sessionKey, sessionKeyPrefix || _name);
+    hermesAdapter = await createHermesAdapterForNpc(npcId, userId, hermesContextKey);
+    if (!hermesAdapter) {
+      emitMeetingNpcStream(io, channelId, {
+        npcId,
+        npcName: _name,
+        chunk: "",
+        done: true,
+        messageCode: "npc_unbound",
+      });
+      return;
+    }
+  }
 
   const npcMessage: MeetingMessage = {
     id: `npc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -870,29 +902,46 @@ async function streamMeetingNpcResponse(
   room.messages.push(npcMessage);
   if (room.messages.length > 100) room.messages.splice(0, room.messages.length - 100);
 
+  const onDelta = (delta: string) => {
+    fullText += delta;
+    npcMessage.content = fullText;
+    emitMeetingNpcStream(io, channelId, {
+      npcId,
+      npcName: _name,
+      messageId: npcMessage.id,
+      sender: _name,
+      chunk: delta,
+      done: false,
+    });
+  };
+
   let fullText = "";
   try {
-    const { response } = await openclawAdapter.executeWithGateway(
-      gateway,
-      {
+    if (dispatchKind === "openclaw") {
+      const { response } = await openclawAdapter.executeWithGateway(gateway, { sessionKey, prompt, onDelta }, agentId!);
+      fullText = response || fullText;
+    } else if (dispatchKind === "hermes") {
+      const { response, session } = await hermesAdapter!.execute({
         sessionKey,
         prompt,
-        onDelta: (delta: string) => {
-          fullText += delta;
-          npcMessage.content = fullText;
-          emitMeetingNpcStream(io, channelId, {
-            npcId,
-            npcName: _name,
-            messageId: npcMessage.id,
-            sender: _name,
-            chunk: delta,
-            done: false,
-          });
-        },
-      },
-      agentId,
-    );
-    fullText = response || fullText;
+        onDelta,
+        onRunStarted: (runId: string) => registerHermesRun(sessionKey, runId),
+      });
+      fullText = response || fullText;
+      await persistHermesSessionRef(npcId, userId, hermesContextKey, session.sessionRef);
+    } else {
+      // dispatchKind === "registry"
+      const adapter = adapterRegistry.get(adapterType);
+      const { response } = await adapter.execute({
+        sessionKey,
+        prompt,
+        model: typeof npcConfig.adapterConfig.model === "string" ? npcConfig.adapterConfig.model : undefined,
+        onDelta,
+        timeoutMs: 180_000,
+      });
+      fullText = response || fullText;
+    }
+
     npcMessage.content = fullText;
     emitMeetingNpcStream(io, channelId, {
       npcId,
@@ -904,8 +953,10 @@ async function streamMeetingNpcResponse(
     });
     io.to(`meeting-${channelId}`).emit("meeting:message", npcMessage);
   } catch (err) {
-    console.error(`[meeting] OpenClaw error for NPC ${_name}:`, err);
+    console.error(`[meeting] ${dispatchKind} error for NPC ${_name}:`, err);
     room.messages.pop();
+  } finally {
+    if (dispatchKind === "hermes") clearHermesRun(sessionKey);
   }
 }
 
@@ -1906,6 +1957,7 @@ export function setupSocketHandlers(io: Server) {
                     room,
                     message,
                     player?.characterName || "Unknown",
+                    user.userId,
                   );
                 } catch (err) {
                   console.error(`[meeting] NPC ${npc._name} failed:`, err);
@@ -1936,6 +1988,7 @@ export function setupSocketHandlers(io: Server) {
         meetingRooms,
         players,
         user,
+        adapterRegistry,
         getOrConnectGateway,
         getNpcConfigsForChannel,
         canControlMeeting,
