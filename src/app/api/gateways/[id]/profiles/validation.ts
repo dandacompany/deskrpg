@@ -1,6 +1,11 @@
 /** Hermes rejects profile-scoped keys under 16 chars (hermes_cli.auth.has_usable_secret). */
 const MIN_TOKEN_LENGTH = 16;
-const PROFILE_NAME_RE = /^[A-Za-z0-9._-]+$/;
+// Requires at least one alphanumeric character so dot/dash/underscore-only names (e.g.
+// "..") can't slip through. HermesClient.url() interpolates the name unescaped-by-dots
+// into a `/p/<name>/` path segment (encodeURIComponent doesn't escape "."), and URL
+// normalization collapses ".." as a traversal segment — silently dropping the profile
+// scope and sending the request to the gateway's default-profile route instead.
+const PROFILE_NAME_RE = /^[A-Za-z0-9._-]*[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export type RegistrationValidation =
   | { ok: true; profileName: string; token: string }

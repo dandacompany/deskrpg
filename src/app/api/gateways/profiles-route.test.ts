@@ -25,4 +25,27 @@ describe("validateProfileRegistration", () => {
     assert.equal(result.ok, false);
     assert.equal(result.errorCode, "invalid_profile_name");
   });
+
+  test("rejects a single dot, which URL-normalizes away the path segment", () => {
+    const result = validateProfileRegistration({ profileName: ".", token: "0123456789abcdef01" });
+    assert.equal(result.ok, false);
+    assert.equal(result.errorCode, "invalid_profile_name");
+  });
+
+  test("rejects a double dot, which URL-normalizes as a traversal segment", () => {
+    const result = validateProfileRegistration({ profileName: "..", token: "0123456789abcdef01" });
+    assert.equal(result.ok, false);
+    assert.equal(result.errorCode, "invalid_profile_name");
+  });
+
+  test("rejects a dash/underscore/dot-only name with no alphanumeric character", () => {
+    const result = validateProfileRegistration({ profileName: "-_.", token: "0123456789abcdef01" });
+    assert.equal(result.ok, false);
+    assert.equal(result.errorCode, "invalid_profile_name");
+  });
+
+  test("accepts a legitimate name containing dots alongside alphanumerics", () => {
+    const result = validateProfileRegistration({ profileName: "my.bot-1", token: "0123456789abcdef01" });
+    assert.equal(result.ok, true);
+  });
 });
