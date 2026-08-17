@@ -228,6 +228,39 @@ function getJoinedSocketsForUserAndChannel(
     .filter((joinedSocket): joinedSocket is Socket => Boolean(joinedSocket));
 }
 
+// ---------------------------------------------------------------------------
+// Cross-process bridge accessors (read-only)
+//
+// server.js runs Socket.io's connection handling entirely inside this
+// module now, so its `players` map is private to this file. The internal
+// HTTP bridges in server.js (loopback endpoints on SOCKET_PORT, used by
+// Next.js API routes running in the same process) still need to answer
+// "who is in this room" and "which socket(s) belong to this user" without
+// server.js owning a second, permanently-empty copy of player state.
+// ---------------------------------------------------------------------------
+
+/** User IDs of players currently joined to a Socket.io room (channel). */
+export function getRoomUserIds(io: Server, channelId: string): string[] {
+  const roomSockets = io.sockets.adapter.rooms.get(channelId);
+  if (!roomSockets) return [];
+
+  const userIds: string[] = [];
+  for (const socketId of roomSockets) {
+    const player = players.get(socketId);
+    if (player?.userId) userIds.push(player.userId);
+  }
+  return userIds;
+}
+
+/** Socket IDs currently associated with a given user (across all channels). */
+export function getSocketIdsForUser(userId: string): string[] {
+  const socketIds: string[] = [];
+  for (const player of players.values()) {
+    if (player.userId === userId) socketIds.push(player.id);
+  }
+  return socketIds;
+}
+
 function appendNpcHistoryMessage(channelId: string, npcId: string, content: string) {
   const sanitizedContent = sanitizeNpcResponseText(content);
   if (!sanitizedContent.trim()) return null;
@@ -1162,6 +1195,13 @@ export function setupSocketHandlers(io: Server) {
           (p) => p.mapId === data.mapId && p.id !== socket.id,
         );
         socket.emit("players:state", { players: mapPlayers });
+
+        // Send channel chat history to the joining player
+        const chatHistory = channelChatHistory.get(data.mapId);
+        if (chatHistory && chatHistory.length > 0) {
+          socket.emit("chat:history", { messages: chatHistory });
+        }
+
         await deliverPendingReportsToSocket(socket, user.userId, data.mapId);
 
         // Broadcast to others in the same map
