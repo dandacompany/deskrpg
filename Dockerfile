@@ -58,6 +58,37 @@ COPY --from=builder /app/src/lib/task-reporting.ts ./src/lib/task-reporting.ts
 COPY --from=builder /app/src/lib/rbac/channel-access.ts ./src/lib/rbac/channel-access.ts
 COPY --from=builder /app/src/server/meeting-socket.ts ./src/server/meeting-socket.ts
 COPY --from=builder /app/src/server/meeting-discussion.ts ./src/server/meeting-discussion.ts
+
+# socket-handlers.ts (server.js entrypoint) and its transitive TS deps
+# (not traced by Next.js standalone, same reason as the files above)
+COPY --from=builder /app/src/server/socket-handlers.ts ./src/server/socket-handlers.ts
+COPY --from=builder /app/src/server/hermes-dispatch.ts ./src/server/hermes-dispatch.ts
+COPY --from=builder /app/src/db/index.ts ./src/db/index.ts
+COPY --from=builder /app/src/db/schema.ts ./src/db/schema.ts
+COPY --from=builder /app/src/db/schema-sqlite.ts ./src/db/schema-sqlite.ts
+COPY --from=builder /app/src/lib/file-extractor.ts ./src/lib/file-extractor.ts
+COPY --from=builder /app/src/lib/db-json.ts ./src/lib/db-json.ts
+COPY --from=builder /app/src/lib/gateway-resources.ts ./src/lib/gateway-resources.ts
+COPY --from=builder /app/src/lib/gateway-runtime-cache.ts ./src/lib/gateway-runtime-cache.ts
+COPY --from=builder /app/src/lib/npc-response-messages.ts ./src/lib/npc-response-messages.ts
+COPY --from=builder /app/src/lib/dev-constants.ts ./src/lib/dev-constants.ts
+COPY --from=builder /app/src/lib/i18n/error-codes.ts ./src/lib/i18n/error-codes.ts
+COPY --from=builder /app/src/lib/adapters/types.ts ./src/lib/adapters/types.ts
+COPY --from=builder /app/src/lib/adapters/openclaw-adapter.ts ./src/lib/adapters/openclaw-adapter.ts
+COPY --from=builder /app/src/lib/adapters/claude-adapter.ts ./src/lib/adapters/claude-adapter.ts
+COPY --from=builder /app/src/lib/adapters/codex-adapter.ts ./src/lib/adapters/codex-adapter.ts
+COPY --from=builder /app/src/lib/adapters/gemini-adapter.ts ./src/lib/adapters/gemini-adapter.ts
+COPY --from=builder /app/src/lib/adapters/opencode-adapter.ts ./src/lib/adapters/opencode-adapter.ts
+COPY --from=builder /app/src/lib/adapters/cli-base-adapter.ts ./src/lib/adapters/cli-base-adapter.ts
+COPY --from=builder /app/src/lib/adapters/dm-hub.ts ./src/lib/adapters/dm-hub.ts
+COPY --from=builder /app/src/lib/adapters/subprocess-pool.ts ./src/lib/adapters/subprocess-pool.ts
+COPY --from=builder /app/src/lib/adapters/workspace-manager.ts ./src/lib/adapters/workspace-manager.ts
+COPY --from=builder /app/src/lib/adapters/hermes-adapter.ts ./src/lib/adapters/hermes-adapter.ts
+COPY --from=builder /app/src/lib/hermes-profiles.ts ./src/lib/hermes-profiles.ts
+COPY --from=builder /app/src/lib/hermes/hermes-client.ts ./src/lib/hermes/hermes-client.ts
+COPY --from=builder /app/src/lib/hermes/types.ts ./src/lib/hermes/types.ts
+COPY --from=builder /app/src/lib/hermes/sse.ts ./src/lib/hermes/sse.ts
+
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
 # Drizzle ORM + PostgreSQL driver (used by server.js, task-manager.js, server-db.js)
