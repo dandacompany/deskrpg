@@ -13,6 +13,7 @@ const {
 
 import type { NpcAdapter } from "@/lib/adapters/types";
 import { Transcript, USER_SPEAKER_ID, type Turn } from "./transcript";
+import { createTurnTimeout, type TurnTimeoutConfig } from "./turn-timeout";
 import {
   eligibleParticipants,
   needsPolling,
@@ -20,6 +21,11 @@ import {
   type ConversationMode,
   type Participant,
 } from "./turn-policy";
+
+/** 옛 turnTimeoutMs(180초)와 같은 값 — 아무 신호도 없는 에이전트는 예전과 같은 시점에 실패한다. */
+const DEFAULT_IDLE_MS = 180_000;
+/** idle보다 넉넉히 큰 절대 상한. 정상적인 다중 도구 호출 턴을 죽이지 않으면서 폭주를 막는다. */
+const DEFAULT_MAX_MS = 600_000;
 
 export type EngineParticipant = Participant & {
   adapter: NpcAdapter;
@@ -73,6 +79,8 @@ export type EngineConfig = {
   /** manual 모드가 유휴 시간 후 auto로 자동 복귀. meeting-broker.js:54-55, 162-167 이식. */
   hybridMode?: boolean;
   hybridAutoResumeMs?: number | null;
+  /** 두 겹 턴 타임아웃(§3.5). 생략 시 idleMs 180초(옛 turnTimeoutMs와 동일)/maxMs 600초. */
+  turnTimeout?: Partial<TurnTimeoutConfig>;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -435,18 +443,45 @@ export class ConversationEngine {
 
     let rawText = "";
     let emittedText = "";
+    // 두 겹 타임아웃(§3.5) — idle은 onDelta/onToolProgress(활동 신호)가 올 때마다 touch()로
+    // 리셋되고, max는 아무것도 리셋하지 않는 절대 상한이다. 어느 쪽이 먼저 발화하든 adapter.abort()로
+    // 이 턴을 끊고 execute()의 대기를 reject해서 회의 루프가 다음 턴으로 넘어가게 한다 —
+    // 회의 전체는 멈추지 않는다(옛 turnTimeoutMs 실패 처리와 동일).
+    const timeoutConfig: TurnTimeoutConfig = {
+      idleMs: this.config.turnTimeout?.idleMs ?? DEFAULT_IDLE_MS,
+      maxMs: this.config.turnTimeout?.maxMs ?? DEFAULT_MAX_MS,
+    };
     try {
-      const { response } = await participant.adapter.execute({
-        sessionKey: participant.sessionKey,
-        prompt: message,
-        conversationHistory: this.transcript.toConversationHistory(historyLimit),
-        onDelta: (chunk) => {
-          rawText += chunk;
-          const sanitizedText = sanitizeStreamingSpokenResponse(rawText);
-          const delta = sanitizedText.slice(emittedText.length);
-          emittedText = sanitizedText;
-          if (delta) this.callbacks.onTurnChunk?.(participant.npcId, delta);
-        },
+      const { response } = await new Promise<{ response: string }>((resolve, reject) => {
+        const timeout = createTurnTimeout(timeoutConfig, (kind) => {
+          participant.adapter.abort?.(participant.sessionKey)?.catch(() => {});
+          reject(new Error(`turn timeout (${kind})`));
+        });
+        participant.adapter
+          .execute({
+            sessionKey: participant.sessionKey,
+            prompt: message,
+            conversationHistory: this.transcript.toConversationHistory(historyLimit),
+            onDelta: (chunk) => {
+              timeout.touch();
+              rawText += chunk;
+              const sanitizedText = sanitizeStreamingSpokenResponse(rawText);
+              const delta = sanitizedText.slice(emittedText.length);
+              emittedText = sanitizedText;
+              if (delta) this.callbacks.onTurnChunk?.(participant.npcId, delta);
+            },
+            onToolProgress: () => {
+              timeout.touch();
+            },
+          })
+          .then((result) => {
+            timeout.clear();
+            resolve(result);
+          })
+          .catch((err) => {
+            timeout.clear();
+            reject(err);
+          });
       });
       this.currentSessionKey = null;
       this.currentAdapter = null;
