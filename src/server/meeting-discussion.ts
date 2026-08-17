@@ -100,7 +100,7 @@ type MeetingSummary = {
   conclusions: string | null;
 };
 
-type MeetingBrokerLike = {
+export type MeetingBrokerLike = {
   config: {
     participants: MeetingBrokerParticipant[];
     sessionKeyPrefix?: string;
@@ -188,7 +188,14 @@ function createOpenClawEngineAdapter(gateway: unknown, agentId: string): NpcAdap
   };
 }
 
-type ResolvedMeetingParticipant = {
+/** createHermesAdapterForNpc와 같은 모양 — 프로필을 못 찾으면 null. */
+type CreateHermesAdapter = (
+  npcId: string,
+  userId: string,
+  contextKey: string,
+) => Promise<NpcAdapter | null>;
+
+export type ResolvedMeetingParticipant = {
   participant: MeetingBrokerParticipant;
   adapter: NpcAdapter;
   sessionKey: string;
@@ -199,13 +206,15 @@ type ResolvedMeetingParticipant = {
  * 그 회의 동안 재사용 — 여러 회의가 공유하는 싱글턴으로 등록하지 않는다)을 지키기 위해, 이 함수는
  * 회의 시작 시점에 참가자별로 정확히 한 번만 호출된다.
  */
-async function resolveMeetingParticipant(
+export async function resolveMeetingParticipant(
   npc: MeetingNpcConfig,
   ctx: {
     meetingId: string;
     userId: string;
     gateway: unknown;
     adapterRegistry: AdapterRegistry;
+    /** 테스트에서 DB·게이트웨이 없이 hermes 갈래를 관찰하기 위한 주입점. 기본값이 실제 배선이다. */
+    createHermesAdapter?: CreateHermesAdapter;
   },
 ): Promise<ResolvedMeetingParticipant | { excluded: ExcludedMeetingNpc }> {
   const adapterType = npc.adapterType || "openclaw";
@@ -228,7 +237,8 @@ async function resolveMeetingParticipant(
 
   if (dispatchKind === "hermes") {
     const contextKey = deriveHermesContextKey(sessionKey, sessionKeyBase);
-    const adapter = await createHermesAdapterForNpc(npc.id, ctx.userId, contextKey);
+    const createAdapter = ctx.createHermesAdapter ?? createHermesAdapterForNpc;
+    const adapter = await createAdapter(npc.id, ctx.userId, contextKey);
     if (!adapter) {
       return { excluded: { npcId: npc.id, displayName: npc.name, reason: "hermes_profile_unavailable" } };
     }
@@ -256,9 +266,10 @@ async function resolveMeetingParticipant(
   return { participant: participantBase, adapter: ctx.adapterRegistry.get(adapterType), sessionKey };
 }
 
-async function defaultCreateMeetingBroker(
+export async function defaultCreateMeetingBroker(
   config: MeetingBrokerConfig,
   callbacks: MeetingBrokerCallbacks,
+  deps: { createHermesAdapter?: CreateHermesAdapter } = {},
 ): Promise<MeetingBrokerLike> {
   const resolved: ResolvedMeetingParticipant[] = [];
   const excluded: ExcludedMeetingNpc[] = [];
@@ -269,6 +280,7 @@ async function defaultCreateMeetingBroker(
       userId: config.userId,
       gateway: config.gateway,
       adapterRegistry: config.adapterRegistry,
+      createHermesAdapter: deps.createHermesAdapter,
     });
     if ("excluded" in result) {
       excluded.push(result.excluded);
