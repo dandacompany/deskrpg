@@ -99,6 +99,7 @@ COPY --from=builder /app/src/lib/hermes-profiles.ts ./src/lib/hermes-profiles.ts
 COPY --from=builder /app/src/lib/hermes/hermes-client.ts ./src/lib/hermes/hermes-client.ts
 COPY --from=builder /app/src/lib/hermes/types.ts ./src/lib/hermes/types.ts
 COPY --from=builder /app/src/lib/hermes/sse.ts ./src/lib/hermes/sse.ts
+COPY --from=builder /app/src/lib/hermes/gateway-probe.ts ./src/lib/hermes/gateway-probe.ts
 
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
