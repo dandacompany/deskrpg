@@ -61,6 +61,8 @@ function ensureSqliteBaseSchema(sqlite) {
       last_validated_at TEXT,
       last_validation_status TEXT,
       last_validation_error TEXT,
+      local_discovery_opted_in_at TEXT,
+      local_discovery_opted_in_by TEXT REFERENCES users(id) ON DELETE SET NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );

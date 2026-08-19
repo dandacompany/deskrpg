@@ -61,6 +61,8 @@ export const gatewayResources = pgTable("gateway_resources", {
   lastValidatedAt: timestamp("last_validated_at", { withTimezone: true }),
   lastValidationStatus: varchar("last_validation_status", { length: 40 }),
   lastValidationError: text("last_validation_error"),
+  localDiscoveryOptedInAt: timestamp("local_discovery_opted_in_at"),
+  localDiscoveryOptedInBy: text("local_discovery_opted_in_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
