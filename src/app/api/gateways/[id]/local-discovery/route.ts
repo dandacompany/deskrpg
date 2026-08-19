@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { db, gatewayResources, isPostgres } from "@/db";
 import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
+import { localDiscoveryAllowed } from "@/lib/hermes/local-discovery-gate";
 import { discoverLocalProfiles } from "@/lib/hermes/local-discovery";
 import {
   listLocalProfiles,
@@ -52,9 +53,26 @@ export async function GET(
     );
   }
 
+  // 스펙 §4 1단계 + 인스턴스 레벨 스위치 (최종 리뷰 C1). 둘 중 하나라도 아니면
+  // 파일시스템 경로를 만들지도, 존재를 확인하지도 않는다. 기능은 에러가 아니라
+  // 부재로 보인다 — 프로필 루트가 없는 컨테이너와 같은 모양이다.
+  if (
+    !localDiscoveryAllowed({
+      env: process.env,
+      baseUrl: accessible.resource.baseUrl,
+    })
+  ) {
+    return NextResponse.json({
+      available: false,
+      optedIn: false,
+      candidates: [],
+    });
+  }
+
   const root = resolveProfilesRoot(process.env, homedir());
   const fs = nodeProfileFs();
-  // 능력 검사: 루트가 실제로 있는가. URL이 127.0.0.1이어도 컨테이너 안이면 없다.
+  // 능력 검사(스펙 §4 2단계): 루트가 실제로 있는가. URL이 127.0.0.1이어도
+  // 컨테이너 안이면 없다.
   const available = fs.existsSync(root);
 
   if (!optedIn(accessible.resource)) {
@@ -97,6 +115,23 @@ export async function POST(
     return NextResponse.json(
       { errorCode: "gateway_not_found", error: "Gateway not found" },
       { status: 404 },
+    );
+  }
+  // 스펙 §4 1단계 + 인스턴스 레벨 스위치 (최종 리뷰 C1). 옵인 기록 자체도 여기서
+  // 막는다 — 루프백이 아닌 게이트웨이에 동의가 남으면, 나중에 스위치가 켜졌을 때
+  // 그 동의가 되살아난다.
+  if (
+    !localDiscoveryAllowed({
+      env: process.env,
+      baseUrl: accessible.resource.baseUrl,
+    })
+  ) {
+    return NextResponse.json(
+      {
+        errorCode: "local_discovery_unavailable",
+        error: "local discovery is not available on this instance",
+      },
+      { status: 403 },
     );
   }
   // 비밀 파일을 읽는 동의는 소유자만 줄 수 있다.
