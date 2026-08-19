@@ -343,18 +343,12 @@ function ensureSqliteCompatibility(sqlite) {
     sqlite.exec("ALTER TABLE gateway_resources ADD COLUMN local_discovery_opted_in_by TEXT REFERENCES users(id) ON DELETE SET NULL");
   }
 
-  if (sqliteTableExists(sqlite, "npcs")) {
-    try { sqlite.exec("ALTER TABLE npcs ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'openclaw'"); } catch {}
-    try { sqlite.exec("ALTER TABLE npcs ADD COLUMN adapter_config TEXT"); } catch {}
-
-    const npcCols = sqlite.prepare("PRAGMA table_info(npcs)").all().map((c) => c.name);
-    if (!npcCols.includes("hermes_profile_id")) {
-      sqlite.exec("ALTER TABLE npcs ADD COLUMN hermes_profile_id TEXT REFERENCES hermes_profiles(id) ON DELETE SET NULL");
-    }
-    if (!npcCols.includes("agent_config")) {
-      sqlite.exec("ALTER TABLE npcs ADD COLUMN agent_config TEXT");
-    }
-  }
+  applySqliteAlterStatements(sqlite, "npcs", [
+    "ALTER TABLE npcs ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'openclaw'",
+    "ALTER TABLE npcs ADD COLUMN adapter_config TEXT",
+    "ALTER TABLE npcs ADD COLUMN hermes_profile_id TEXT REFERENCES hermes_profiles(id) ON DELETE SET NULL",
+    "ALTER TABLE npcs ADD COLUMN agent_config TEXT",
+  ]);
 
   applySqliteAlterStatements(sqlite, "users", [
     "ALTER TABLE users ADD COLUMN system_role TEXT NOT NULL DEFAULT 'user'",
