@@ -58,11 +58,14 @@ describe("POST /api/gateways/[id]/profiles/probe", () => {
     const { POST } = await import("./[id]/profiles/probe/route");
     const { user, gateway } = await seedUserAndGateway();
 
+    // The fake never falls through to the real `fetch` — even if the route regressed
+    // and called it, this would still resolve locally instead of making a real
+    // outbound request to `http://gw.test` (final review, M9).
     const originalFetch = globalThis.fetch;
     let fetchCalled = false;
-    globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+    globalThis.fetch = (async () => {
       fetchCalled = true;
-      return originalFetch(...args);
+      return new Response("unexpected fetch", { status: 599 });
     }) as typeof fetch;
 
     try {
