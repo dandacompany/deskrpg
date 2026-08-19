@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
 
+import { toDiscoveryRows, type DiscoveryRow } from "./discovery-rows";
 import { profileStatusLabel } from "./profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "./profile-status-style";
 
@@ -37,6 +38,12 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
 
+  const [discovery, setDiscovery] = useState<{ available: boolean; optedIn: boolean; rows: DiscoveryRow[] } | null>(
+    null,
+  );
+  const [selected, setSelected] = useState<string[]>([]);
+  const [probeStatus, setProbeStatus] = useState<"idle" | "ok" | "not_found" | "unknown">("idle");
+
   const loadProfiles = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -56,6 +63,20 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
   useEffect(() => {
     void loadProfiles();
   }, [loadProfiles]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/gateways/${gatewayId}/local-discovery`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        setDiscovery({ available: !!d.available, optedIn: !!d.optedIn, rows: toDiscoveryRows(d.candidates ?? []) });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [gatewayId]);
 
   const handleAdd = async () => {
     setAdding(true);
@@ -156,12 +177,81 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
 
       {canRegister ? (
         <div className="space-y-3 border-t border-border pt-4">
+          {discovery?.available && !discovery.optedIn && (
+            <button
+              type="button"
+              onClick={async () => {
+                await fetch(`/api/gateways/${gatewayId}/local-discovery`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "opt-in" }),
+                });
+                const d = await fetch(`/api/gateways/${gatewayId}/local-discovery`).then((r) => r.json());
+                setDiscovery({ available: !!d.available, optedIn: !!d.optedIn, rows: toDiscoveryRows(d.candidates ?? []) });
+              }}
+              className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-semibold hover:bg-surface-raised/80"
+            >
+              {t("hermes.discovery.optIn")}
+            </button>
+          )}
+
+          {discovery?.optedIn && discovery.rows.length > 0 && (
+            <div className="space-y-2 rounded-lg bg-bg p-3">
+              {discovery.rows.map((row) => (
+                <label key={row.name} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    disabled={!row.selectable}
+                    checked={selected.includes(row.name)}
+                    onChange={(e) =>
+                      setSelected((prev) => (e.target.checked ? [...prev, row.name] : prev.filter((n) => n !== row.name)))
+                    }
+                  />
+                  <span>{row.name}</span>
+                  {row.reason !== "ok" && (
+                    <span className="text-xs text-text-muted">{t(`hermes.discovery.reason.${row.reason}`)}</span>
+                  )}
+                </label>
+              ))}
+              <button
+                type="button"
+                disabled={!selected.length}
+                onClick={async () => {
+                  await fetch(`/api/gateways/${gatewayId}/local-discovery`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ profiles: selected }),
+                  });
+                  setSelected([]);
+                  await loadProfiles();
+                }}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
+              >
+                {t("hermes.discovery.registerSelected")}
+              </button>
+            </div>
+          )}
+
           <h3 className="text-sm font-semibold">{t("gateway.profile.addTitle")}</h3>
           <div className="grid gap-2 sm:grid-cols-3">
             <input
               type="text"
               value={profileName}
               onChange={(e) => setProfileName(e.target.value)}
+              onBlur={async () => {
+                if (!profileName.trim()) {
+                  setProbeStatus("idle");
+                  return;
+                }
+                const r = await fetch(`/api/gateways/${gatewayId}/profiles/probe`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ profileName }),
+                })
+                  .then((x) => x.json())
+                  .catch(() => ({ status: "unknown" }));
+                setProbeStatus(r.status);
+              }}
               placeholder={t("gateway.profile.profileNamePlaceholder")}
               className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
             />
@@ -180,6 +270,9 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
               className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
             />
           </div>
+          {probeStatus !== "idle" && (
+            <p className="text-xs text-text-muted">{t(`hermes.probe.${probeStatus}`)}</p>
+          )}
           {addError && <p className="text-sm text-danger">{addError}</p>}
           <button
             type="button"
