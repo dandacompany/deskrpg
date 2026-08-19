@@ -170,6 +170,7 @@ const ja: Record<string, string> = {
   "gateway.profile.status.unknown": "未テスト",
   "hermes.discovery.optIn": "このマシンのHermesプロフィールを読み込む",
   "hermes.discovery.registerSelected": "選択したプロフィールを登録",
+  "hermes.discovery.empty": "見つかったプロフィールはありません",
   "hermes.discovery.reason.already": "登録済み",
   "hermes.discovery.reason.no_token": "トークンなし",
   "hermes.discovery.reason.not_served": "このゲートウェイでは提供されていません",

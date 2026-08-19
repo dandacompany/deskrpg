@@ -170,6 +170,7 @@ const zh: Record<string, string> = {
   "gateway.profile.status.unknown": "尚未测试",
   "hermes.discovery.optIn": "读取此设备上的 Hermes 配置文件",
   "hermes.discovery.registerSelected": "注册所选配置文件",
+  "hermes.discovery.empty": "未找到配置文件",
   "hermes.discovery.reason.already": "已注册",
   "hermes.discovery.reason.no_token": "缺少令牌",
   "hermes.discovery.reason.not_served": "此网关未提供该配置文件",

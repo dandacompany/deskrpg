@@ -20,6 +20,22 @@ export function toDiscoveryRows(candidates: DiscoveryCandidate[]): DiscoveryRow[
   });
 }
 
+export type ProbeStatus = "idle" | "ok" | "not_found" | "unknown";
+
+const PROBE_STATUSES: ProbeStatus[] = ["idle", "ok", "not_found", "unknown"];
+
+/**
+ * `POST .../profiles/probe` 응답의 `status` 필드를 화면의 유니온 타입으로 검증한다.
+ * 서버가 이 셋 중 하나가 아닌 값을 내려보내면(버전 불일치 등) `"unknown"`으로
+ * 접는다 — 검증 없이 그대로 state에 넣으면 i18n 키가 없어 화면이 빈 문자열로
+ * 조용히 깨진다.
+ */
+export function toProbeStatus(value: unknown): ProbeStatus {
+  return typeof value === "string" && (PROBE_STATUSES as string[]).includes(value)
+    ? (value as ProbeStatus)
+    : "unknown";
+}
+
 export type RegistrationResult = { name: string; ok: boolean; errorCode?: string };
 export type RegistrationFailure = { name: string; errorCode: string };
 

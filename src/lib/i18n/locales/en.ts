@@ -170,6 +170,7 @@ const en: Record<string, string> = {
   "gateway.profile.status.unknown": "Not tested",
   "hermes.discovery.optIn": "Read this machine's Hermes profiles",
   "hermes.discovery.registerSelected": "Register selected",
+  "hermes.discovery.empty": "No profiles found",
   "hermes.discovery.reason.already": "Already registered",
   "hermes.discovery.reason.no_token": "No token",
   "hermes.discovery.reason.not_served": "Not served by this gateway",

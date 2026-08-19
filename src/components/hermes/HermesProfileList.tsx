@@ -5,7 +5,13 @@ import { useCallback, useEffect, useState } from "react";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
 
-import { partitionRegistrationResults, toDiscoveryRows, type DiscoveryRow } from "./discovery-rows";
+import {
+  partitionRegistrationResults,
+  toDiscoveryRows,
+  toProbeStatus,
+  type DiscoveryRow,
+  type ProbeStatus,
+} from "./discovery-rows";
 import { profileStatusLabel } from "./profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "./profile-status-style";
 
@@ -42,10 +48,12 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
     null,
   );
   const [selected, setSelected] = useState<string[]>([]);
-  const [probeStatus, setProbeStatus] = useState<"idle" | "ok" | "not_found" | "unknown">("idle");
+  const [probeStatus, setProbeStatus] = useState<ProbeStatus>("idle");
   const [registering, setRegistering] = useState(false);
   const [registerFailures, setRegisterFailures] = useState<{ name: string; errorCode: string }[]>([]);
   const [registerError, setRegisterError] = useState("");
+  const [optInError, setOptInError] = useState("");
+  const [optingIn, setOptingIn] = useState(false);
 
   const loadProfiles = useCallback(async () => {
     setLoading(true);
@@ -181,21 +189,38 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
       {canRegister ? (
         <div className="space-y-3 border-t border-border pt-4">
           {discovery?.available && !discovery.optedIn && (
-            <button
-              type="button"
-              onClick={async () => {
-                await fetch(`/api/gateways/${gatewayId}/local-discovery`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ action: "opt-in" }),
-                });
-                const d = await fetch(`/api/gateways/${gatewayId}/local-discovery`).then((r) => r.json());
-                setDiscovery({ available: !!d.available, optedIn: !!d.optedIn, rows: toDiscoveryRows(d.candidates ?? []) });
-              }}
-              className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-semibold hover:bg-surface-raised/80"
-            >
-              {t("hermes.discovery.optIn")}
-            </button>
+            <div className="space-y-1">
+              <button
+                type="button"
+                disabled={optingIn}
+                onClick={async () => {
+                  setOptingIn(true);
+                  setOptInError("");
+                  try {
+                    const res = await fetch(`/api/gateways/${gatewayId}/local-discovery`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ action: "opt-in" }),
+                    });
+                    if (!res.ok) throw await res.json().catch(() => ({}));
+                    const d = await fetch(`/api/gateways/${gatewayId}/local-discovery`).then((r) => r.json());
+                    setDiscovery({ available: !!d.available, optedIn: !!d.optedIn, rows: toDiscoveryRows(d.candidates ?? []) });
+                  } catch {
+                    setOptInError(t("errors.connectionFailed"));
+                  } finally {
+                    setOptingIn(false);
+                  }
+                }}
+                className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-semibold hover:bg-surface-raised/80 disabled:opacity-60"
+              >
+                {optingIn ? t("common.loading") : t("hermes.discovery.optIn")}
+              </button>
+              {optInError && <p className="text-xs text-danger">{optInError}</p>}
+            </div>
+          )}
+
+          {discovery?.optedIn && discovery.rows.length === 0 && (
+            <p className="text-sm text-text-muted">{t("hermes.discovery.empty")}</p>
           )}
 
           {discovery?.optedIn && discovery.rows.length > 0 && (
@@ -278,7 +303,7 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
                 })
                   .then((x) => x.json())
                   .catch(() => ({ status: "unknown" }));
-                setProbeStatus(r.status);
+                setProbeStatus(toProbeStatus(r.status));
               }}
               placeholder={t("gateway.profile.profileNamePlaceholder")}
               className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"

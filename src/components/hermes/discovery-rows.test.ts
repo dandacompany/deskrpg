@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { partitionRegistrationResults, toDiscoveryRows } from "./discovery-rows";
+import { partitionRegistrationResults, toDiscoveryRows, toProbeStatus } from "./discovery-rows";
 
 test("toDiscoveryRows", async (t) => {
   await t.test("토큰이 있고 서빙 중이며 미등록이면 선택 가능", () => {
@@ -68,5 +68,21 @@ test("partitionRegistrationResults", async (t) => {
     ]);
     assert.deepEqual(nextSelected, ["ada"]);
     assert.deepEqual(failures, [{ name: "ada", errorCode: "register_failed" }]);
+  });
+});
+
+test("toProbeStatus", async (t) => {
+  await t.test("알려진 값은 그대로 통과한다", () => {
+    assert.equal(toProbeStatus("ok"), "ok");
+    assert.equal(toProbeStatus("not_found"), "not_found");
+    assert.equal(toProbeStatus("unknown"), "unknown");
+    assert.equal(toProbeStatus("idle"), "idle");
+  });
+
+  await t.test("모르는 문자열, undefined, null, 객체는 unknown으로 접는다", () => {
+    assert.equal(toProbeStatus("valid"), "unknown");
+    assert.equal(toProbeStatus(undefined), "unknown");
+    assert.equal(toProbeStatus(null), "unknown");
+    assert.equal(toProbeStatus({ status: "ok" }), "unknown");
   });
 });
