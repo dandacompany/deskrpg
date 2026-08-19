@@ -199,21 +199,54 @@ test("readProfileToken", async (t) => {
     },
   );
 
-  await t.test("슬래시를 포함한 이름은 거부한다", () => {
-    const fs = fakeFs(
-      { "/h/profiles/a/b/.env": "API_SERVER_KEY=" + "a".repeat(48) + "\n" },
+  // 최종 리뷰 I1: 아래 세 케이스는 원래 가드가 없어도 통과했다 — fakeFs에 해당
+  // 경로가 아예 없었기 때문에 existsSync가 false를 돌려주고 끝났다. 이제는
+  // **경로 결합이 실제로 만들어내는 자리에 파일을 심고**, readFileSync 스파이로
+  // 파일이 열리지 않았음을 확인한다. 가드를 지우면 이 세 개가 전부 빨개진다.
+  function spyFs(files: Record<string, string>, dirs: string[]) {
+    const base = fakeFs(files, dirs);
+    const opened: string[] = [];
+    const fs: ProfileFs = {
+      ...base,
+      readFileSync: (p, enc) => {
+        opened.push(p);
+        return base.readFileSync(p, enc);
+      },
+    };
+    return { fs, opened };
+  }
+
+  const SECRET = "s".repeat(48);
+
+  await t.test("슬래시를 포함한 이름은 거부한다 (파일이 실재해도)", () => {
+    const { fs, opened } = spyFs(
+      { "/h/profiles/a/b/.env": `API_SERVER_KEY=${SECRET}\n` },
       ["/h/profiles", "/h/profiles/a", "/h/profiles/a/b"],
     );
     assert.equal(readProfileToken("/h/profiles", "a/b", fs), null);
+    assert.deepEqual(opened, [], "readFileSync가 호출되면 안 된다");
   });
 
   await t.test("단일 점(.)은 거부한다 — default 만 특례다", () => {
-    const fs = fakeFs({}, ["/h/profiles"]);
+    // "." 은 `${root}/${name}/.env` 결합에서 /h/profiles/./.env 가 된다. 그 자리에
+    // 실제 파일을 심어 두어야 가드가 유일한 방어선임이 드러난다.
+    const { fs, opened } = spyFs(
+      { "/h/profiles/./.env": `API_SERVER_KEY=${SECRET}\n` },
+      ["/h/profiles"],
+    );
     assert.equal(readProfileToken("/h/profiles", ".", fs), null);
+    assert.deepEqual(opened, [], "readFileSync가 호출되면 안 된다");
   });
 
-  await t.test("이중 점(..)은 거부한다", () => {
-    const fs = fakeFs({}, ["/h/profiles"]);
-    assert.equal(readProfileToken("/h/profiles", "..", fs), null);
-  });
+  await t.test(
+    "이중 점(..)은 거부한다 (프로필 루트 밖의 .env가 실재해도)",
+    () => {
+      const { fs, opened } = spyFs(
+        { "/h/profiles/../.env": `API_SERVER_KEY=${SECRET}\n` },
+        ["/h", "/h/profiles"],
+      );
+      assert.equal(readProfileToken("/h/profiles", "..", fs), null);
+      assert.deepEqual(opened, [], "readFileSync가 호출되면 안 된다");
+    },
+  );
 });
