@@ -1,19 +1,13 @@
+import { isValidProfileName } from "@/lib/hermes/profile-name";
+
 /** Hermes rejects profile-scoped keys under 16 chars (hermes_cli.auth.has_usable_secret). */
 const MIN_TOKEN_LENGTH = 16;
-// Requires at least one alphanumeric character so dot/dash/underscore-only names (e.g.
-// "..") can't slip through. HermesClient.url() interpolates the name unescaped-by-dots
-// into a `/p/<name>/` path segment (encodeURIComponent doesn't escape "."), and URL
-// normalization collapses ".." as a traversal segment — silently dropping the profile
-// scope and sending the request to the gateway's default-profile route instead.
-const PROFILE_NAME_RE = /^[A-Za-z0-9._-]*[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-/** The single source of truth for "is this a syntactically legal profile name" —
- * every other caller that builds a filesystem path or a gateway URL segment out of a
- * profile name (local-discovery route, probe route, readProfileToken) must reuse this,
- * not redefine the pattern. */
-export function isValidProfileName(name: string): boolean {
-  return PROFILE_NAME_RE.test(name);
-}
+/** 프로필 이름 문법의 정본은 `src/lib/hermes/profile-name.ts` 하나다 — 파일시스템
+ * 경로나 게이트웨이 URL 세그먼트를 프로필 이름으로 만드는 곳(local-discovery
+ * 라우트, probe 라우트, readProfileToken)은 전부 그것을 import 한다. 여기서는
+ * 기존 호출자를 위해 다시 export 만 한다. 규칙 자체를 여기에 복사하지 말 것. */
+export { isValidProfileName };
 
 export type RegistrationValidation =
   | { ok: true; profileName: string; token: string }

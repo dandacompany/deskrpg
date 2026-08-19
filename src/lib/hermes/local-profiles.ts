@@ -9,11 +9,10 @@
  * 실행하는 사람마다 결과가 달라진다.
  */
 
+import { PROFILE_NAME_RE } from "./profile-name";
+
 /** Hermes가 프로필 키에 요구하는 최소 길이 (hermes_cli.auth.has_usable_secret). */
 const MIN_TOKEN_LENGTH = 16;
-
-/** src/app/api/gateways/[id]/profiles/validation.ts 와 같은 규칙. */
-const PROFILE_NAME_RE = /^[A-Za-z0-9._-]*[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export type ProfileFs = {
   existsSync(p: string): boolean;
