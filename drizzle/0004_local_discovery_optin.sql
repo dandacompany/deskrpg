@@ -1,4 +1,4 @@
-ALTER TABLE "gateway_resources" ADD COLUMN IF NOT EXISTS "local_discovery_opted_in_at" timestamp;
+ALTER TABLE "gateway_resources" ADD COLUMN IF NOT EXISTS "local_discovery_opted_in_at" timestamp with time zone;
 ALTER TABLE "gateway_resources" ADD COLUMN IF NOT EXISTS "local_discovery_opted_in_by" text;
 DO $$ BEGIN
   ALTER TABLE "gateway_resources"
