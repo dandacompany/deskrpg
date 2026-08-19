@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
-import { listHermesProfiles, registerHermesProfile } from "@/lib/hermes-profiles";
+import {
+  listHermesProfiles,
+  registerHermesProfile,
+} from "@/lib/hermes-profiles";
 import { getUserId } from "@/lib/internal-rpc";
 
 import { validateProfileRegistration } from "./validation";
@@ -12,13 +15,19 @@ export async function GET(
 ) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { errorCode: "unauthorized", error: "unauthorized" },
+      { status: 401 },
+    );
   }
   const { id } = await params;
 
   const accessible = await getAccessibleGatewayResource(userId, id);
   if (!accessible) {
-    return NextResponse.json({ errorCode: "gateway_not_found", error: "Gateway not found" }, { status: 404 });
+    return NextResponse.json(
+      { errorCode: "gateway_not_found", error: "Gateway not found" },
+      { status: 404 },
+    );
   }
 
   const profiles = await listHermesProfiles(userId, id);
@@ -31,22 +40,32 @@ export async function POST(
 ) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { errorCode: "unauthorized", error: "unauthorized" },
+      { status: 401 },
+    );
   }
   const { id } = await params;
 
   const accessible = await getAccessibleGatewayResource(userId, id);
   if (!accessible) {
-    return NextResponse.json({ errorCode: "gateway_not_found", error: "Gateway not found" }, { status: 404 });
+    return NextResponse.json(
+      { errorCode: "gateway_not_found", error: "Gateway not found" },
+      { status: 404 },
+    );
   }
 
   const body = await req.json().catch(() => ({}));
   const validation = validateProfileRegistration(body);
   if (!validation.ok) {
-    return NextResponse.json({ errorCode: validation.errorCode, error: validation.errorCode }, { status: 400 });
+    return NextResponse.json(
+      { errorCode: validation.errorCode, error: validation.errorCode },
+      { status: 400 },
+    );
   }
 
-  const displayName = typeof body.displayName === "string" ? body.displayName : undefined;
+  const displayName =
+    typeof body.displayName === "string" ? body.displayName : undefined;
 
   const result = await registerHermesProfile({
     userId,
@@ -57,7 +76,10 @@ export async function POST(
   });
 
   if ("error" in result) {
-    return NextResponse.json({ errorCode: result.error, error: result.error }, { status: 403 });
+    return NextResponse.json(
+      { errorCode: result.error, error: result.error },
+      { status: 403 },
+    );
   }
 
   // Never serialize tokenEncrypted — it is ciphertext of a credential.
