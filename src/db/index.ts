@@ -22,6 +22,16 @@ export function jsonForDb(value: unknown): unknown {
   return value == null ? null : JSON.stringify(value);
 }
 
+/**
+ * "Now" for a timestamp column — PG driver wants a `Date`, SQLite's TEXT columns want
+ * an ISO string. The single definition; callers that redefined this locally
+ * (hermes-profiles.ts, gateway-resources.ts, provider-resources.ts, dm-hub.ts,
+ * hermes-dispatch.ts) predate this export and are out of scope for this change.
+ */
+export function nowForDb(): Date {
+  return (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date;
+}
+
 // Schema re-export: use the correct schema for the active DB dialect at runtime.
 // PG schema uses uuid().defaultRandom() → gen_random_uuid() (PG-only),
 // SQLite schema uses text().$defaultFn(() => crypto.randomUUID()) (JS-level).

@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 
 import { eq } from "drizzle-orm";
 
-import { db, gatewayResources, isPostgres } from "@/db";
+import { db, gatewayResources, nowForDb } from "@/db";
 import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import { localDiscoveryAllowed } from "@/lib/hermes/local-discovery-gate";
@@ -21,12 +21,6 @@ import {
 import { getUserId } from "@/lib/internal-rpc";
 
 import { isValidProfileName } from "../profiles/validation";
-
-function nowForDb() {
-  return (isPostgres
-    ? new Date()
-    : new Date().toISOString()) as unknown as Date;
-}
 
 /** 옵인 전에는 파일시스템을 건드리지 않는다. */
 function optedIn(resource: { localDiscoveryOptedInAt?: string | Date | null }) {
@@ -204,10 +198,13 @@ export async function POST(
           ? { name, ok: false, errorCode: registered.error }
           : { name, ok: true },
       );
-    } catch {
+    } catch (err) {
       // registerHermesProfile은 unique-violation이 아닌 DB 오류를 그대로 던진다
       // (hermes-profiles.ts). 여기서 흡수하지 않으면 배치 하나가 500으로
-      // 죽으면서 이미 성공한 앞선 프로필들의 결과까지 응답에서 사라진다.
+      // 죽으면서 이미 성공한 앞선 프로필들의 결과까지 응답에서 사라진다. 사용자에게는
+      // "register_failed"가 보이지만, 원인은 이 프로젝트의 다른 라우트들과 같은
+      // 방식(console.error)으로 서버 로그에 남긴다.
+      console.error(`Failed to register Hermes profile "${name}":`, err);
       results.push({ name, ok: false, errorCode: "register_failed" });
     }
   }
