@@ -9,7 +9,10 @@ export async function POST(
 ) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { errorCode: "unauthorized", error: "unauthorized" },
+      { status: 401 },
+    );
   }
   const { profileId } = await params;
 

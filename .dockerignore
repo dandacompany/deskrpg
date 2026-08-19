@@ -34,3 +34,8 @@ db.sqlite
 .env*
 !.env.example
 tests
+# Directory COPY lines in the Dockerfile (src/lib/hermes, src/lib/adapters) copy
+# whatever is on disk in the builder stage — keep test files out so they never ship.
+*.test.ts
+*.test.tsx
+*.test.js

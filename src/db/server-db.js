@@ -236,6 +236,8 @@ function ensureSqliteCompatibility(sqlite) {
       last_validated_at TEXT,
       last_validation_status TEXT,
       last_validation_error TEXT,
+      local_discovery_opted_in_at TEXT,
+      local_discovery_opted_in_by TEXT REFERENCES users(id) ON DELETE SET NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -333,16 +335,20 @@ function ensureSqliteCompatibility(sqlite) {
     CREATE UNIQUE INDEX IF NOT EXISTS npc_sessions_npc_user_context_idx ON npc_sessions(npc_id, user_id, context_key);
   `);
 
-  try { sqlite.exec("ALTER TABLE npcs ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'openclaw'"); } catch {}
-  try { sqlite.exec("ALTER TABLE npcs ADD COLUMN adapter_config TEXT"); } catch {}
+  const gwCols = sqlite.prepare("PRAGMA table_info(gateway_resources)").all().map((c) => c.name);
+  if (!gwCols.includes("local_discovery_opted_in_at")) {
+    sqlite.exec("ALTER TABLE gateway_resources ADD COLUMN local_discovery_opted_in_at TEXT");
+  }
+  if (!gwCols.includes("local_discovery_opted_in_by")) {
+    sqlite.exec("ALTER TABLE gateway_resources ADD COLUMN local_discovery_opted_in_by TEXT REFERENCES users(id) ON DELETE SET NULL");
+  }
 
-  const npcCols = sqlite.prepare("PRAGMA table_info(npcs)").all().map((c) => c.name);
-  if (!npcCols.includes("hermes_profile_id")) {
-    sqlite.exec("ALTER TABLE npcs ADD COLUMN hermes_profile_id TEXT REFERENCES hermes_profiles(id) ON DELETE SET NULL");
-  }
-  if (!npcCols.includes("agent_config")) {
-    sqlite.exec("ALTER TABLE npcs ADD COLUMN agent_config TEXT");
-  }
+  applySqliteAlterStatements(sqlite, "npcs", [
+    "ALTER TABLE npcs ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'openclaw'",
+    "ALTER TABLE npcs ADD COLUMN adapter_config TEXT",
+    "ALTER TABLE npcs ADD COLUMN hermes_profile_id TEXT REFERENCES hermes_profiles(id) ON DELETE SET NULL",
+    "ALTER TABLE npcs ADD COLUMN agent_config TEXT",
+  ]);
 
   applySqliteAlterStatements(sqlite, "users", [
     "ALTER TABLE users ADD COLUMN system_role TEXT NOT NULL DEFAULT 'user'",

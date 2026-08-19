@@ -18,13 +18,19 @@ export async function POST(
 ) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { errorCode: "unauthorized", error: "unauthorized" },
+      { status: 401 },
+    );
   }
   const { id } = await params;
 
   const accessible = await getAccessibleGatewayResource(userId, id);
   if (!accessible) {
-    return NextResponse.json({ errorCode: "gateway_not_found", error: "Gateway not found" }, { status: 404 });
+    return NextResponse.json(
+      { errorCode: "gateway_not_found", error: "Gateway not found" },
+      { status: 404 },
+    );
   }
 
   // Hermes 게이트웨이는 HTTP+SSE라 OpenClaw의 WS 핸드셰이크에 403을 돌려주고,
@@ -45,7 +51,12 @@ export async function POST(
     // 재시도하며 20~40초를 더 매달릴 뿐이라(실측), 여기서 끊는다.
     // 응답은 왔는데 Hermes가 아닌 경우(not-hermes)만 OpenClaw일 수 있다.
     return NextResponse.json(
-      { ok: false, agents: [], errorCode: "failed_to_reach_test_endpoint", error: probe.error },
+      {
+        ok: false,
+        agents: [],
+        errorCode: "failed_to_reach_test_endpoint",
+        error: probe.error,
+      },
       { status: 502 },
     );
   }
@@ -70,20 +81,27 @@ export async function POST(
       fallbackError: "Unknown error",
     });
 
-    const isPairingError = status === 409
-      || (err && typeof err === "object" && "pairingRequired" in err && (err as { pairingRequired: boolean }).pairingRequired);
+    const isPairingError =
+      status === 409 ||
+      (err &&
+        typeof err === "object" &&
+        "pairingRequired" in err &&
+        (err as { pairingRequired: boolean }).pairingRequired);
 
     if (isPairingError) {
       console.info("[gateway] Pairing required for gateway:", id);
-      console.info("[gateway]   errorCode:", (payload as { errorCode?: string }).errorCode);
-      console.info("[gateway]   details:", JSON.stringify((payload as { details?: unknown }).details ?? null));
+      console.info(
+        "[gateway]   errorCode:",
+        (payload as { errorCode?: string }).errorCode,
+      );
+      console.info(
+        "[gateway]   details:",
+        JSON.stringify((payload as { details?: unknown }).details ?? null),
+      );
     } else {
       console.error("Gateway test failed:", err);
     }
 
-    return NextResponse.json(
-      { agents: [], ...payload },
-      { status },
-    );
+    return NextResponse.json({ agents: [], ...payload }, { status });
   }
 }

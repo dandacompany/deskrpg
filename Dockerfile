@@ -84,22 +84,13 @@ COPY --from=builder /app/src/lib/gateway-runtime-cache.ts ./src/lib/gateway-runt
 COPY --from=builder /app/src/lib/npc-response-messages.ts ./src/lib/npc-response-messages.ts
 COPY --from=builder /app/src/lib/dev-constants.ts ./src/lib/dev-constants.ts
 COPY --from=builder /app/src/lib/i18n/error-codes.ts ./src/lib/i18n/error-codes.ts
-COPY --from=builder /app/src/lib/adapters/types.ts ./src/lib/adapters/types.ts
-COPY --from=builder /app/src/lib/adapters/openclaw-adapter.ts ./src/lib/adapters/openclaw-adapter.ts
-COPY --from=builder /app/src/lib/adapters/claude-adapter.ts ./src/lib/adapters/claude-adapter.ts
-COPY --from=builder /app/src/lib/adapters/codex-adapter.ts ./src/lib/adapters/codex-adapter.ts
-COPY --from=builder /app/src/lib/adapters/gemini-adapter.ts ./src/lib/adapters/gemini-adapter.ts
-COPY --from=builder /app/src/lib/adapters/opencode-adapter.ts ./src/lib/adapters/opencode-adapter.ts
-COPY --from=builder /app/src/lib/adapters/cli-base-adapter.ts ./src/lib/adapters/cli-base-adapter.ts
-COPY --from=builder /app/src/lib/adapters/dm-hub.ts ./src/lib/adapters/dm-hub.ts
-COPY --from=builder /app/src/lib/adapters/subprocess-pool.ts ./src/lib/adapters/subprocess-pool.ts
-COPY --from=builder /app/src/lib/adapters/workspace-manager.ts ./src/lib/adapters/workspace-manager.ts
-COPY --from=builder /app/src/lib/adapters/hermes-adapter.ts ./src/lib/adapters/hermes-adapter.ts
+# Whole-directory copies (not per-file): this project has missed individual files in
+# these two directories five times (most recently local-discovery-gate.ts and
+# profile-name.ts, neither of which had its own COPY line before this fix). .dockerignore
+# keeps *.test.ts out of the builder stage, so these directory copies can't ship tests.
+COPY --from=builder /app/src/lib/adapters ./src/lib/adapters
 COPY --from=builder /app/src/lib/hermes-profiles.ts ./src/lib/hermes-profiles.ts
-COPY --from=builder /app/src/lib/hermes/hermes-client.ts ./src/lib/hermes/hermes-client.ts
-COPY --from=builder /app/src/lib/hermes/types.ts ./src/lib/hermes/types.ts
-COPY --from=builder /app/src/lib/hermes/sse.ts ./src/lib/hermes/sse.ts
-COPY --from=builder /app/src/lib/hermes/gateway-probe.ts ./src/lib/hermes/gateway-probe.ts
+COPY --from=builder /app/src/lib/hermes ./src/lib/hermes
 
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 

@@ -15,11 +15,15 @@ const DEFAULT_TIMEOUT_MS = 8000;
 
 export async function probeHermesGateway(
   baseUrl: string,
-  opts: { fetchImpl?: typeof fetch; timeoutMs?: number } = {},
+  opts: { fetchImpl?: typeof fetch; timeoutMs?: number; profile?: string } = {},
 ): Promise<GatewayProbeResult> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const url = `${baseUrl.replace(/\/+$/, "")}/health`;
+  const base = baseUrl.replace(/\/+$/, "");
+  // 프로필 스코프는 /p/<name>/ 프리픽스다. 이름은 인코딩한다 — 검증을 통과하지 않은
+  // 이름이 그대로 들어오는 경로(원격 검증)가 있다.
+  const prefix = opts.profile ? `${base}/p/${encodeURIComponent(opts.profile)}` : base;
+  const url = `${prefix}/health`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

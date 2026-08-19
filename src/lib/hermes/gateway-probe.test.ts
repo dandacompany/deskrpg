@@ -60,4 +60,38 @@ test("probeHermesGateway", async (t) => {
     assert.equal(result.kind, "unreachable");
     assert.ok(Date.now() - started < 5000, "타임아웃이 걸려야 한다");
   });
+
+  await t.test("profile을 주면 /p/<이름>/health 를 찌른다", async () => {
+    let called = "";
+    const result = await probeHermesGateway("http://127.0.0.1:8642", {
+      profile: "sophie",
+      fetchImpl: fakeFetch((url) => {
+        called = url;
+        return new Response("ok", { status: 200 });
+      }),
+    });
+    assert.deepEqual(result, { kind: "hermes", status: 200 });
+    assert.equal(called, "http://127.0.0.1:8642/p/sophie/health");
+  });
+
+  await t.test("없는 프로필은 404 — not-hermes 로 구분된다", async () => {
+    // 실측: /p/nosuch/health → 404, /p/sophie/health → 200.
+    const result = await probeHermesGateway("http://127.0.0.1:8642", {
+      profile: "nosuch",
+      fetchImpl: fakeFetch(() => new Response("no", { status: 404 })),
+    });
+    assert.deepEqual(result, { kind: "not-hermes", status: 404 });
+  });
+
+  await t.test("프로필 이름은 URL 인코딩된다", async () => {
+    let called = "";
+    await probeHermesGateway("http://127.0.0.1:8642", {
+      profile: "a b",
+      fetchImpl: fakeFetch((url) => {
+        called = url;
+        return new Response("ok", { status: 200 });
+      }),
+    });
+    assert.equal(called, "http://127.0.0.1:8642/p/a%20b/health");
+  });
 });

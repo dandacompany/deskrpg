@@ -17,13 +17,19 @@ export async function GET(
 ) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { errorCode: "unauthorized", error: "unauthorized" },
+      { status: 401 },
+    );
   }
   const { id } = await params;
 
   const accessible = await getAccessibleGatewayResource(userId, id);
   if (!accessible) {
-    return NextResponse.json({ errorCode: "gateway_not_found", error: "Gateway not found" }, { status: 404 });
+    return NextResponse.json(
+      { errorCode: "gateway_not_found", error: "Gateway not found" },
+      { status: 404 },
+    );
   }
 
   return NextResponse.json({
@@ -31,7 +37,9 @@ export async function GET(
       id: accessible.resource.id,
       displayName: accessible.resource.displayName,
       baseUrl: accessible.resource.baseUrl,
-      token: accessible.isOwner ? decryptGatewayToken(accessible.resource.tokenEncrypted) : null,
+      token: accessible.isOwner
+        ? decryptGatewayToken(accessible.resource.tokenEncrypted)
+        : null,
       ownerUserId: accessible.resource.ownerUserId,
       canEditCredentials: accessible.isOwner,
       isOwner: accessible.isOwner,
@@ -49,25 +57,40 @@ export async function PATCH(
 ) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { errorCode: "unauthorized", error: "unauthorized" },
+      { status: 401 },
+    );
   }
   const { id } = await params;
 
   const owned = await getOwnedGatewayResource(userId, id);
   if (!owned) {
-    return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
+    return NextResponse.json(
+      { errorCode: "forbidden", error: "forbidden" },
+      { status: 403 },
+    );
   }
 
   const body = await req.json().catch(() => null);
   if (!body) {
-    return NextResponse.json({ errorCode: "invalid_json", error: "invalid JSON" }, { status: 400 });
+    return NextResponse.json(
+      { errorCode: "invalid_json", error: "invalid JSON" },
+      { status: 400 },
+    );
   }
 
-  const nextBaseUrl = typeof body.url === "string" && body.url.trim() ? body.url : owned.baseUrl;
-  const nextToken = typeof body.token === "string" ? body.token : decryptGatewayToken(owned.tokenEncrypted);
-  const nextDisplayName = typeof body.displayName === "string" ? body.displayName : owned.displayName;
+  const nextBaseUrl =
+    typeof body.url === "string" && body.url.trim() ? body.url : owned.baseUrl;
+  const nextToken =
+    typeof body.token === "string"
+      ? body.token
+      : decryptGatewayToken(owned.tokenEncrypted);
+  const nextDisplayName =
+    typeof body.displayName === "string" ? body.displayName : owned.displayName;
   const existingToken = decryptGatewayToken(owned.tokenEncrypted);
-  const isCredentialChanging = nextBaseUrl !== owned.baseUrl || nextToken !== existingToken;
+  const isCredentialChanging =
+    nextBaseUrl !== owned.baseUrl || nextToken !== existingToken;
 
   if (isCredentialChanging) {
     const inUseCount = await countChannelBindingsForGateway(owned.id);
@@ -75,7 +98,8 @@ export async function PATCH(
       return NextResponse.json(
         {
           errorCode: "gateway_in_use_by_channels",
-          error: "This gateway is still bound to channels. Rebind channels before rotating credentials.",
+          error:
+            "This gateway is still bound to channels. Rebind channels before rotating credentials.",
         },
         { status: 409 },
       );
@@ -116,19 +140,28 @@ export async function DELETE(
 ) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { errorCode: "unauthorized", error: "unauthorized" },
+      { status: 401 },
+    );
   }
   const { id } = await params;
 
   const owned = await getOwnedGatewayResource(userId, id);
   if (!owned) {
-    return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
+    return NextResponse.json(
+      { errorCode: "forbidden", error: "forbidden" },
+      { status: 403 },
+    );
   }
 
   const bindingCount = await countChannelBindingsForGateway(id);
   if (bindingCount > 0) {
     return NextResponse.json(
-      { errorCode: "gateway_in_use_by_channels", error: "Gateway is currently bound to one or more channels" },
+      {
+        errorCode: "gateway_in_use_by_channels",
+        error: "Gateway is currently bound to one or more channels",
+      },
       { status: 409 },
     );
   }

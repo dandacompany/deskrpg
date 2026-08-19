@@ -4,14 +4,10 @@
 
 import { and, eq } from "drizzle-orm";
 
-import { db, hermesProfiles, isPostgres, npcs, gatewayResources } from "@/db";
+import { db, hermesProfiles, nowForDb, npcs, gatewayResources } from "@/db";
 import { decryptGatewayToken, encryptGatewayToken, getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { HermesClient, HermesError } from "@/lib/hermes/hermes-client";
 import type { HermesCapabilities } from "@/lib/hermes/types";
-
-function nowForDb() {
-  return (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date;
-}
 
 export type ProfileValidationStatus =
   | "valid" | "unauthorized" | "unknown_profile" | "unreachable" | "error";

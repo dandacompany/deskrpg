@@ -80,6 +80,8 @@ const gatewayResources = sqliteTable("gateway_resources", {
   lastValidatedAt: text("last_validated_at"),
   lastValidationStatus: text("last_validation_status"),
   lastValidationError: text("last_validation_error"),
+  localDiscoveryOptedInAt: text("local_discovery_opted_in_at"),
+  localDiscoveryOptedInBy: text("local_discovery_opted_in_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: text("created_at").$defaultFn(isoNow).notNull(),
   updatedAt: text("updated_at").$defaultFn(isoNow).notNull(),
 }, (table) => [
