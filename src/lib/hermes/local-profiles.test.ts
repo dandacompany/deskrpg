@@ -15,7 +15,9 @@ function fakeFs(files: Record<string, string>, dirs: string[]): ProfileFs {
     existsSync: (p) => p in files || dirSet.has(p),
     readdirSync: (p) =>
       [...dirSet]
-        .filter((d) => d.startsWith(p + "/") && !d.slice(p.length + 1).includes("/"))
+        .filter(
+          (d) => d.startsWith(p + "/") && !d.slice(p.length + 1).includes("/"),
+        )
         .map((d) => d.slice(p.length + 1)),
     readFileSync: (p) => {
       if (!(p in files)) throw new Error("ENOENT " + p);
@@ -27,22 +29,31 @@ function fakeFs(files: Record<string, string>, dirs: string[]): ProfileFs {
 
 test("resolveProfilesRoot", async (t) => {
   await t.test("기본은 ~/.hermes/profiles", () => {
-    assert.equal(resolveProfilesRoot({}, "/Users/dante"), "/Users/dante/.hermes/profiles");
-  });
-
-  await t.test("HERMES_HOME이 ~/.hermes 밖이면 그쪽을 쓴다 (Docker 배포)", () => {
-    // hermes_cli/profiles.py:_get_default_hermes_home 의 규칙을 따른다.
     assert.equal(
-      resolveProfilesRoot({ HERMES_HOME: "/opt/data" }, "/Users/dante"),
-      "/opt/data/profiles",
+      resolveProfilesRoot({}, "/Users/dante"),
+      "/Users/dante/.hermes/profiles",
     );
   });
+
+  await t.test(
+    "HERMES_HOME이 ~/.hermes 밖이면 그쪽을 쓴다 (Docker 배포)",
+    () => {
+      // hermes_cli/profiles.py:_get_default_hermes_home 의 규칙을 따른다.
+      assert.equal(
+        resolveProfilesRoot({ HERMES_HOME: "/opt/data" }, "/Users/dante"),
+        "/opt/data/profiles",
+      );
+    },
+  );
 
   await t.test("HERMES_HOME이 프로필 안을 가리켜도 루트로 되돌린다", () => {
     // HERMES_HOME은 그 자체가 프로필일 수 있다. 그때 profiles/ 를 그 아래에 만들면
     // 중첩된 엉뚱한 경로가 된다.
     assert.equal(
-      resolveProfilesRoot({ HERMES_HOME: "/Users/dante/.hermes/profiles/sophie" }, "/Users/dante"),
+      resolveProfilesRoot(
+        { HERMES_HOME: "/Users/dante/.hermes/profiles/sophie" },
+        "/Users/dante",
+      ),
       "/Users/dante/.hermes/profiles",
     );
   });
@@ -60,7 +71,9 @@ test("listLocalProfiles", async (t) => {
       },
       ["/h/profiles", "/h/profiles/sophie", "/h/profiles/notes"],
     );
-    assert.deepEqual(listLocalProfiles(root, fs), [{ name: "sophie", hasToken: true }]);
+    assert.deepEqual(listLocalProfiles(root, fs), [
+      { name: "sophie", hasToken: true },
+    ]);
   });
 
   await t.test("토큰이 없거나 16자 미만이면 hasToken=false", () => {
@@ -83,7 +96,9 @@ test("listLocalProfiles", async (t) => {
       { "/h/profiles/../config.yaml": "x", "/h/profiles/ok/config.yaml": "x" },
       ["/h/profiles", "/h/profiles/..", "/h/profiles/ok"],
     );
-    assert.deepEqual(listLocalProfiles(root, fs), [{ name: "ok", hasToken: false }]);
+    assert.deepEqual(listLocalProfiles(root, fs), [
+      { name: "ok", hasToken: false },
+    ]);
   });
 
   await t.test("루트가 없으면 빈 배열 — 컨테이너에서 여기로 떨어진다", () => {
@@ -95,7 +110,10 @@ test("listLocalProfiles", async (t) => {
 test("readProfileToken", async (t) => {
   await t.test("named 프로필은 자기 .env 에서 읽는다", () => {
     const fs = fakeFs(
-      { "/h/profiles/sophie/.env": "FOO=1\nAPI_SERVER_KEY=" + "a".repeat(48) + "\n" },
+      {
+        "/h/profiles/sophie/.env":
+          "FOO=1\nAPI_SERVER_KEY=" + "a".repeat(48) + "\n",
+      },
       ["/h/profiles", "/h/profiles/sophie"],
     );
     assert.equal(readProfileToken("/h/profiles", "sophie", fs), "a".repeat(48));
@@ -108,23 +126,38 @@ test("readProfileToken", async (t) => {
       { "/h/.env": "API_SERVER_KEY=" + "b".repeat(48) + "\n" },
       ["/h", "/h/profiles", "/h/profiles/default"],
     );
-    assert.equal(readProfileToken("/h/profiles", "default", fs), "b".repeat(48));
+    assert.equal(
+      readProfileToken("/h/profiles", "default", fs),
+      "b".repeat(48),
+    );
   });
 
-  await t.test("마지막 정의가 이긴다 — 키를 여러 번 append 했을 수 있다", () => {
-    const fs = fakeFs(
-      {
-        "/h/profiles/sophie/.env":
-          "API_SERVER_KEY=" + "a".repeat(48) + "\nAPI_SERVER_KEY=" + "c".repeat(48) + "\n",
-      },
-      ["/h/profiles", "/h/profiles/sophie"],
-    );
-    assert.equal(readProfileToken("/h/profiles", "sophie", fs), "c".repeat(48));
-  });
+  await t.test(
+    "마지막 정의가 이긴다 — 키를 여러 번 append 했을 수 있다",
+    () => {
+      const fs = fakeFs(
+        {
+          "/h/profiles/sophie/.env":
+            "API_SERVER_KEY=" +
+            "a".repeat(48) +
+            "\nAPI_SERVER_KEY=" +
+            "c".repeat(48) +
+            "\n",
+        },
+        ["/h/profiles", "/h/profiles/sophie"],
+      );
+      assert.equal(
+        readProfileToken("/h/profiles", "sophie", fs),
+        "c".repeat(48),
+      );
+    },
+  );
 
   await t.test("값이 따옴표로 감싸여 있으면 벗긴다", () => {
     const fs = fakeFs(
-      { "/h/profiles/sophie/.env": 'API_SERVER_KEY="' + "a".repeat(48) + '"\n' },
+      {
+        "/h/profiles/sophie/.env": 'API_SERVER_KEY="' + "a".repeat(48) + '"\n',
+      },
       ["/h/profiles", "/h/profiles/sophie"],
     );
     assert.equal(readProfileToken("/h/profiles", "sophie", fs), "a".repeat(48));
@@ -133,5 +166,54 @@ test("readProfileToken", async (t) => {
   await t.test("없으면 null", () => {
     const fs = fakeFs({}, ["/h/profiles", "/h/profiles/sophie"]);
     assert.equal(readProfileToken("/h/profiles", "sophie", fs), null);
+  });
+
+  // Task 4 review, Critical 1: a caller (the local-discovery registration route) fed a
+  // request-body name straight into this function's path concatenation with no
+  // validation, so "../../../../srv/otherapp" walked out of the profiles root and read
+  // an arbitrary .env off the box. This function must refuse such names itself —
+  // defence in depth, independent of whatever the caller does or forgets to do.
+  await t.test(
+    "경로 순회 이름은 readFileSync를 호출하지 않고 null을 돌려준다",
+    () => {
+      let readFileSyncCalled = false;
+      const fs: ProfileFs = {
+        ...fakeFs(
+          { "/srv/otherapp/.env": "API_SERVER_KEY=" + "a".repeat(48) + "\n" },
+          ["/h/profiles", "/srv/otherapp"],
+        ),
+        readFileSync: (p) => {
+          readFileSyncCalled = true;
+          throw new Error("should never be reached: " + p);
+        },
+      };
+      assert.equal(
+        readProfileToken("/h/profiles", "../../../../srv/otherapp", fs),
+        null,
+      );
+      assert.equal(
+        readFileSyncCalled,
+        false,
+        "readFileSync must never be called for a traversal name",
+      );
+    },
+  );
+
+  await t.test("슬래시를 포함한 이름은 거부한다", () => {
+    const fs = fakeFs(
+      { "/h/profiles/a/b/.env": "API_SERVER_KEY=" + "a".repeat(48) + "\n" },
+      ["/h/profiles", "/h/profiles/a", "/h/profiles/a/b"],
+    );
+    assert.equal(readProfileToken("/h/profiles", "a/b", fs), null);
+  });
+
+  await t.test("단일 점(.)은 거부한다 — default 만 특례다", () => {
+    const fs = fakeFs({}, ["/h/profiles"]);
+    assert.equal(readProfileToken("/h/profiles", ".", fs), null);
+  });
+
+  await t.test("이중 점(..)은 거부한다", () => {
+    const fs = fakeFs({}, ["/h/profiles"]);
+    assert.equal(readProfileToken("/h/profiles", "..", fs), null);
   });
 });

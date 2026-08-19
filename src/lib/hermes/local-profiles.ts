@@ -35,7 +35,11 @@ export function resolveProfilesRoot(
 ): string {
   const defaultHome = `${homedir}/.hermes`;
   const override = (env.HERMES_HOME || "").trim();
-  if (!override || override === defaultHome || override.startsWith(defaultHome + "/")) {
+  if (
+    !override ||
+    override === defaultHome ||
+    override.startsWith(defaultHome + "/")
+  ) {
     // HERMES_HOME이 없거나 ~/.hermes 안을 가리킨다(그 자체가 프로필일 수 있다).
     // 어느 쪽이든 프로필 루트는 ~/.hermes/profiles 다.
     return `${defaultHome}/profiles`;
@@ -65,8 +69,23 @@ function parseEnvValue(contents: string, key: string): string | null {
  * 프로필의 API_SERVER_KEY. named 프로필은 자기 .env, default는 루트의 부모 .env.
  * 실측: ~/.hermes/profiles/default/ 에는 .env가 없다 — default의 홈은 ~/.hermes 자체다.
  */
-export function readProfileToken(root: string, name: string, fs: ProfileFs): string | null {
-  const envPath = name === "default" ? `${root.replace(/\/profiles$/, "")}/.env` : `${root}/${name}/.env`;
+export function readProfileToken(
+  root: string,
+  name: string,
+  fs: ProfileFs,
+): string | null {
+  // Defence in depth: `name` here is not guaranteed to have passed PROFILE_NAME_RE —
+  // this function's own callers may not validate it (Task 4 review, Critical 1: a
+  // registration batch endpoint fed unvalidated names straight into this path
+  // concatenation, letting "../../../../srv/otherapp" read an arbitrary .env off the
+  // box). "default" is the one legitimate exception the branch below already special-
+  // cases. Do not delete this as "redundant with PROFILE_NAME_RE at the call site" —
+  // a future caller may skip that check the way this one did.
+  if (name !== "default" && !PROFILE_NAME_RE.test(name)) return null;
+  const envPath =
+    name === "default"
+      ? `${root.replace(/\/profiles$/, "")}/.env`
+      : `${root}/${name}/.env`;
   if (!fs.existsSync(envPath)) return null;
   let contents: string;
   try {

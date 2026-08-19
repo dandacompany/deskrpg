@@ -7,6 +7,14 @@ const MIN_TOKEN_LENGTH = 16;
 // scope and sending the request to the gateway's default-profile route instead.
 const PROFILE_NAME_RE = /^[A-Za-z0-9._-]*[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
+/** The single source of truth for "is this a syntactically legal profile name" —
+ * every other caller that builds a filesystem path or a gateway URL segment out of a
+ * profile name (local-discovery route, probe route, readProfileToken) must reuse this,
+ * not redefine the pattern. */
+export function isValidProfileName(name: string): boolean {
+  return PROFILE_NAME_RE.test(name);
+}
+
 export type RegistrationValidation =
   | { ok: true; profileName: string; token: string }
   | { ok: false; errorCode: "invalid_profile_name" | "invalid_token" };
@@ -19,7 +27,7 @@ export function validateProfileRegistration(input: {
     typeof input.profileName === "string" ? input.profileName.trim() : "";
   const token = typeof input.token === "string" ? input.token.trim() : "";
 
-  if (!profileName || !PROFILE_NAME_RE.test(profileName)) {
+  if (!profileName || !isValidProfileName(profileName)) {
     return { ok: false, errorCode: "invalid_profile_name" };
   }
   if (token.length < MIN_TOKEN_LENGTH) {

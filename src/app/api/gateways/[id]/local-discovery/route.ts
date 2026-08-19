@@ -19,6 +19,8 @@ import {
 } from "@/lib/hermes-profiles";
 import { getUserId } from "@/lib/internal-rpc";
 
+import { isValidProfileName } from "../profiles/validation";
+
 function nowForDb() {
   return (isPostgres
     ? new Date()
@@ -57,6 +59,14 @@ export async function GET(
 
   if (!optedIn(accessible.resource)) {
     return NextResponse.json({ available, optedIn: false, candidates: [] });
+  }
+
+  // 옵인은 소유자의 동의다 — share를 받은 사용자에게까지 그 동의 범위를 넓히지
+  // 않는다. 소유자 머신의 프로필 디렉토리 이름(및 토큰 보유 여부)은 파일시스템
+  // 내용의 부분 노출이라, POST가 이미 소유자 전용인 것과 대칭을 맞춘다
+  // (Task 4 리뷰, Important 1).
+  if (!accessible.isOwner) {
+    return NextResponse.json({ available, optedIn: true, candidates: [] });
   }
 
   const registered = await listHermesProfiles(userId, id);
@@ -131,23 +141,40 @@ export async function POST(
   const fs = nodeProfileFs();
   const results: { name: string; ok: boolean; errorCode?: string }[] = [];
   for (const name of names) {
+    // Task 4 리뷰, Critical 1: 이름은 요청 본문에서 온 그대로다. 여기서 거르지
+    // 않으면 "../../../../srv/otherapp" 같은 이름이 readProfileToken의 경로
+    // 결합을 타고 나가 서버 임의 파일의 .env를 읽는다 — 등록 경로가 이미 같은
+    // 검증(validateProfileRegistration)을 쓰므로 같은 함수를 재사용한다.
+    // readProfileToken 자체도 방어선을 하나 더 두지만(local-profiles.ts), 여기서
+    // 먼저 걸러야 readFileSync 자체가 절대 호출되지 않는다는 것을 보장할 수 있다.
+    if (!isValidProfileName(name)) {
+      results.push({ name, ok: false, errorCode: "invalid_profile_name" });
+      continue;
+    }
     const token = readProfileToken(root, name, fs);
     if (!token) {
       results.push({ name, ok: false, errorCode: "no_token" });
       continue;
     }
-    // 반환은 { profile } | { error: "forbidden" } 이다 — ok 불리언이 아니다.
-    const registered = await registerHermesProfile({
-      userId,
-      gatewayId: id,
-      profileName: name,
-      token,
-    });
-    results.push(
-      "error" in registered
-        ? { name, ok: false, errorCode: registered.error }
-        : { name, ok: true },
-    );
+    try {
+      // 반환은 { profile } | { error: "forbidden" } 이다 — ok 불리언이 아니다.
+      const registered = await registerHermesProfile({
+        userId,
+        gatewayId: id,
+        profileName: name,
+        token,
+      });
+      results.push(
+        "error" in registered
+          ? { name, ok: false, errorCode: registered.error }
+          : { name, ok: true },
+      );
+    } catch {
+      // registerHermesProfile은 unique-violation이 아닌 DB 오류를 그대로 던진다
+      // (hermes-profiles.ts). 여기서 흡수하지 않으면 배치 하나가 500으로
+      // 죽으면서 이미 성공한 앞선 프로필들의 결과까지 응답에서 사라진다.
+      results.push({ name, ok: false, errorCode: "register_failed" });
+    }
   }
   return NextResponse.json({ results });
 }
