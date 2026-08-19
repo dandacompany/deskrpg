@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
 
-import { toDiscoveryRows, type DiscoveryRow } from "./discovery-rows";
+import { partitionRegistrationResults, toDiscoveryRows, type DiscoveryRow } from "./discovery-rows";
 import { profileStatusLabel } from "./profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "./profile-status-style";
 
@@ -43,6 +43,9 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
   );
   const [selected, setSelected] = useState<string[]>([]);
   const [probeStatus, setProbeStatus] = useState<"idle" | "ok" | "not_found" | "unknown">("idle");
+  const [registering, setRegistering] = useState(false);
+  const [registerFailures, setRegisterFailures] = useState<{ name: string; errorCode: string }[]>([]);
+  const [registerError, setRegisterError] = useState("");
 
   const loadProfiles = useCallback(async () => {
     setLoading(true);
@@ -213,21 +216,46 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
                   )}
                 </label>
               ))}
+              {registerFailures.length > 0 && (
+                <ul className="space-y-1">
+                  {registerFailures.map((f) => (
+                    <li key={f.name} className="text-xs text-danger">
+                      {f.name}: {t(`hermes.discovery.error.${f.errorCode}`)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {registerError && <p className="text-xs text-danger">{registerError}</p>}
               <button
                 type="button"
-                disabled={!selected.length}
+                disabled={!selected.length || registering}
                 onClick={async () => {
-                  await fetch(`/api/gateways/${gatewayId}/local-discovery`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ profiles: selected }),
-                  });
-                  setSelected([]);
-                  await loadProfiles();
+                  setRegistering(true);
+                  setRegisterError("");
+                  setRegisterFailures([]);
+                  try {
+                    const res = await fetch(`/api/gateways/${gatewayId}/local-discovery`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ profiles: selected }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) throw data;
+                    const { nextSelected, failures } = partitionRegistrationResults(
+                      Array.isArray(data.results) ? data.results : [],
+                    );
+                    setSelected(nextSelected);
+                    setRegisterFailures(failures);
+                    await loadProfiles();
+                  } catch {
+                    setRegisterError(t("errors.connectionFailed"));
+                  } finally {
+                    setRegistering(false);
+                  }
                 }}
                 className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
               >
-                {t("hermes.discovery.registerSelected")}
+                {registering ? t("common.loading") : t("hermes.discovery.registerSelected")}
               </button>
             </div>
           )}

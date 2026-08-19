@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { toDiscoveryRows } from "./discovery-rows";
+import { partitionRegistrationResults, toDiscoveryRows } from "./discovery-rows";
 
 test("toDiscoveryRows", async (t) => {
   await t.test("토큰이 있고 서빙 중이며 미등록이면 선택 가능", () => {
@@ -41,5 +41,32 @@ test("toDiscoveryRows", async (t) => {
     ]);
     assert.equal(row.selectable, false);
     assert.equal(row.reason, "not_served");
+  });
+});
+
+test("partitionRegistrationResults", async (t) => {
+  await t.test("성공한 이름은 selection에서 빠지고 실패 목록에 없다", () => {
+    const { nextSelected, failures } = partitionRegistrationResults([
+      { name: "sophie", ok: true },
+    ]);
+    assert.deepEqual(nextSelected, []);
+    assert.deepEqual(failures, []);
+  });
+
+  await t.test("실패한 이름은 재시도를 위해 selection에 남고 사유가 붙는다", () => {
+    const { nextSelected, failures } = partitionRegistrationResults([
+      { name: "sophie", ok: true },
+      { name: "danvi", ok: false, errorCode: "no_token" },
+    ]);
+    assert.deepEqual(nextSelected, ["danvi"]);
+    assert.deepEqual(failures, [{ name: "danvi", errorCode: "no_token" }]);
+  });
+
+  await t.test("errorCode가 없는 실패는 register_failed로 접는다", () => {
+    const { nextSelected, failures } = partitionRegistrationResults([
+      { name: "ada", ok: false },
+    ]);
+    assert.deepEqual(nextSelected, ["ada"]);
+    assert.deepEqual(failures, [{ name: "ada", errorCode: "register_failed" }]);
   });
 });
