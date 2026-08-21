@@ -607,6 +607,13 @@ export default function MeetingRoom({
           : null,
       },
     });
+    // 지난 회의의 종료 화면을 걷어낸다. 렌더 조건이 `meetingEnded && lastMeetingResult`
+    // 라서, 이걸 비우지 않으면 새 회의가 정상적으로 턴을 돌리는 동안에도 화면에는 이전
+    // 회의의 요약이 그대로 떠 있는다 — 서버는 발언을 보내는데 사용자는 지난 회의만 본다.
+    // 예전에는 「새 시작」(handleResetDiscussion, window.confirm 동반)에서만 정리했다.
+    setMeetingEnded(false);
+    setLastMeetingResult(null);
+
     setMeetingActive(true);
     setIsInitiator(true);
     setMeetingMode(startMode);
