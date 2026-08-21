@@ -398,6 +398,13 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
     "ALTER TABLE npcs ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'openclaw'",
     "ALTER TABLE npcs ADD COLUMN adapter_config TEXT",
   ]);
+  // 이 함수와 server-db.js 의 동명 함수는 **서로 다른 경로**다 — API 라우트는 이쪽,
+  // 소켓 서버는 저쪽을 탄다. 한쪽에만 컬럼을 더하면 그 경로에서만 조용히
+  // "no such column" 이 난다(실제로 그렇게 났다). 새 컬럼은 양쪽에 넣을 것.
+  applySqliteAlterStatements(sqlite, "gateway_resources", [
+    "ALTER TABLE gateway_resources ADD COLUMN local_discovery_opted_in_at TEXT",
+    "ALTER TABLE gateway_resources ADD COLUMN local_discovery_opted_in_by TEXT REFERENCES users(id) ON DELETE SET NULL",
+  ]);
 
   dedupeSqliteGroupJoinRequests(sqlite);
   sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS group_join_requests_group_user_unique ON group_join_requests(group_id, user_id)");
