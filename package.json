@@ -45,7 +45,8 @@
     "db:migrate": "dotenv -e .env.local -- drizzle-kit migrate",
     "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
     "db:setup": "dotenv -e .env.local -- drizzle-kit migrate",
-    "deploy:test": "bash deploy/test-deploy.sh"
+    "deploy:test": "bash deploy/test-deploy.sh",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@imgly/background-removal": "^1.7.0",
@@ -73,6 +74,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",

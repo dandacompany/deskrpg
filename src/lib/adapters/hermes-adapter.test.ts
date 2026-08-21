@@ -201,3 +201,50 @@ describe("ConversationEngine × HermesAdapter — 전송 경로", () => {
     assert.deepEqual(log, ["startRun", "startRun"], `첫 폴과 첫 발언 모두 startRun이어야 한다: ${JSON.stringify(log)}`);
   });
 });
+
+// 실측 회귀 — Hermes v0.20.2 의 `_thinking` 툴은 완성된 답변 전체를 tool.progress 의
+// delta 에 한 번 더 실어 보낸다. 아래 시퀀스는 실제 게이트웨이 응답을 그대로 옮긴 것이다
+// ("사과딸기만 출력해" → delta 4개 + tool.progress 통짜 + completed).
+// 이 두 통로를 합쳐서 화면에 쓰면 사용자에게 답이 정확히 두 번 보인다.
+describe("HermesAdapter — tool.progress 는 답변 본문이 아니다", () => {
+  const THINKING_ECHO = [
+    'event: assistant.delta\ndata: {"delta":"사"}\n\n',
+    'event: assistant.delta\ndata: {"delta":"과"}\n\n',
+    'event: assistant.delta\ndata: {"delta":"딸"}\n\n',
+    'event: assistant.delta\ndata: {"delta":"기"}\n\n',
+    'event: tool.progress\ndata: {"tool_name":"_thinking","delta":"사과딸기"}\n\n',
+    'event: assistant.completed\ndata: {"content":"사과딸기"}\n\n',
+  ];
+
+  test("onDelta 로 흐르는 텍스트는 최종 응답과 같다 — 두 배가 아니다", async () => {
+    const client = clientWith(() => sseResponse(THINKING_ECHO));
+    const adapter = new HermesAdapter(client, { sessionId: "s" });
+
+    let streamed = "";
+    const { response } = await adapter.execute({
+      sessionKey: "k",
+      prompt: "p",
+      onDelta: (chunk) => { streamed += chunk; },
+      onToolProgress: () => {},
+    });
+
+    assert.equal(response, "사과딸기");
+    assert.equal(streamed, "사과딸기", "본문 스트림에 tool.progress 가 섞였다 — 화면에 두 번 보인다");
+  });
+
+  test("_thinking 의 통짜 에코는 onToolProgress 로만 나간다", async () => {
+    const client = clientWith(() => sseResponse(THINKING_ECHO));
+    const adapter = new HermesAdapter(client, { sessionId: "s" });
+
+    const progress: Array<[string, string]> = [];
+    await adapter.execute({
+      sessionKey: "k",
+      prompt: "p",
+      onToolProgress: (name, preview) => progress.push([name, preview]),
+    });
+
+    // preview 라는 이름과 달리 내용은 "미리보기"가 아니라 완성된 답변 전체다.
+    // 소비자가 이걸 본문으로 착각하지 않도록 이 사실 자체를 고정해 둔다.
+    assert.deepEqual(progress, [["_thinking", "사과딸기"]]);
+  });
+});

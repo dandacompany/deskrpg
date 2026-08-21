@@ -67,3 +67,8 @@ tmp/*
 tests/
 deploy/
 deploy/pre-deploy-checklist.md
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/

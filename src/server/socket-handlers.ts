@@ -737,9 +737,15 @@ async function streamNpcResponse(
         onDelta: (delta: string) => {
           socket.emit(responseEvent, { npcId, chunk: delta, done: false });
         },
-        onToolProgress: (_name: string, preview: string) => {
-          if (preview) socket.emit(responseEvent, { npcId, chunk: preview, done: false });
-        },
+        // onToolProgress 는 의도적으로 넘기지 않는다. tool.progress 는 "에이전트가 아직
+        // 살아 있다"는 진행 신호이지 답변 본문이 아니다 — 실측(v0.20.2)에서 Hermes 의
+        // `_thinking` 툴은 완성된 답변 **전체**를 delta 필드에 한 번 더 실어 보낸다:
+        //   assistant.delta "사"/"과"/"딸"/"기"
+        //   tool.progress   tool_name="_thinking"  delta="사과딸기"   ← 통째로 다시
+        //   assistant.completed content="사과딸기"
+        // 이걸 채팅 청크로 흘리던 탓에 1:1 대화에서 답이 정확히 두 번 보였다.
+        // 회의 경로(ConversationEngine)는 처음부터 timeout.touch() 용으로만 썼다 —
+        // 같은 콜백을 두 소비자가 다르게 읽었고, 1:1 쪽만 어긋나 있었다.
         onRunStarted: (runId: string) => {
           registerHermesRun(sessionKey, runId);
         },
