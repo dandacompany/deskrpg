@@ -352,3 +352,52 @@ describe("HermesClient.streamRunEvents — /v1/runs 방언", () => {
     assert.equal(text, "SPEAK: 김치찌개");
   });
 });
+
+describe("drain — 종료 이벤트 뒤 취소가 끝나지 않는 스트림", () => {
+  /**
+   * 실측(v0.20.2): 회의 경로 /v1/runs/<id>/events 는 run.completed 를 보낸 뒤에도 연결을
+   * 열어 둔다. 그 상태에서 reader.cancel() 을 await 하면 resolve 도 reject 도 하지 않고
+   * 영영 멈춘다. 회의는 폴링 응답을 Promise.allSettled 로 모으므로 참가자 하나가 거기
+   * 걸리면 회의 전체가 첫 턴도 못 내고 멈춘다 — 실제로 그렇게 멈춰 있었다.
+   *
+   * cancel() 이 절대 settle 하지 않는 본문을 만들어 그 상황을 고정한다.
+   */
+  function neverCancellingSse(frames: string[]): Response {
+    const enc = new TextEncoder();
+    let i = 0;
+    const body = {
+      getReader() {
+        return {
+          read: async () => (i < frames.length
+            ? { done: false, value: enc.encode(frames[i++]) }
+            : { done: true, value: undefined }),
+          // 영영 settle 하지 않는다 — await 하면 그 자리에서 멈춘다.
+          cancel: () => new Promise<void>(() => {}),
+        };
+      },
+    };
+    return { ok: true, status: 200, body } as unknown as Response;
+  }
+
+  test("취소를 기다리지 않고 누적한 텍스트를 돌려준다", async () => {
+    const client = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "danvi",
+      token: "t",
+      fetchImpl: (async () => neverCancellingSse([
+        'data: {"event":"message.delta","delta":"사"}\n\n',
+        'data: {"event":"message.delta","delta":"과"}\n\n',
+        'data: {"event":"run.completed","output":"사과"}\n\n',
+      ])) as unknown as typeof fetch,
+    });
+
+    const result = await Promise.race([
+      client.streamRunEvents("run_1", () => {}),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("drain 이 취소를 기다리다 멈췄습니다")), 3000),
+      ),
+    ]);
+
+    assert.equal(result.text, "사과");
+  });
+});

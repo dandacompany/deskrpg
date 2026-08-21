@@ -183,7 +183,15 @@ export class HermesClient {
           }
 
           if (isTerminalEvent(event.event)) {
-            await reader.cancel().catch(() => {});
+            // 취소를 **기다리지 않는다**. 여기서 하려는 일은 "더 이상 읽지 않는 것"이지
+            // "취소 정리가 끝나는 것"이 아니다. 실측(v0.20.2): 회의 경로
+            // (/v1/runs/<id>/events)는 run.completed 를 보낸 뒤에도 연결을 열어 두는데,
+            // 그 상태에서 await reader.cancel() 은 resolve 도 reject 도 하지 않고 영영
+            // 멈춘다 — .catch() 는 reject 만 잡으므로 이 교착을 막지 못했다. 회의는
+            // 폴링 응답을 Promise.allSettled 로 모으므로 참가자 하나가 여기 걸리면 회의
+            // 전체가 멈춘다. 1:1 경로(/api/sessions/<id>/chat/stream)는 서버가 스트림을
+            // 곧바로 닫아 주기 때문에 이 함정이 드러나지 않았다.
+            void reader.cancel().catch(() => {});
             break outer;
           }
         }
