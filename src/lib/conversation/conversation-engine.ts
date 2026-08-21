@@ -6,6 +6,7 @@
 const { formatPollMessage, formatSpeakMessage, parseHandRaise, sanitizeSpokenResponse, sanitizeStreamingSpokenResponse } = require("../meeting-formatter.js") as typeof import("../meeting-formatter.js");
 
 import type { NpcAdapter } from "@/lib/adapters/types";
+import { parseMention } from "./mention";
 import { Transcript, USER_SPEAKER_ID, type Turn } from "./transcript";
 import { createTurnTimeout, type TurnTimeoutConfig } from "./turn-timeout";
 import {
@@ -581,9 +582,24 @@ export class ConversationEngine {
       const sanitizedResponse = sanitizeSpokenResponse(response || rawText);
       if (sanitizedResponse) {
         this.consecutiveFailures = 0;
-        this.transcript.add(participant.npcId, participant.displayName, sanitizedResponse, this.now());
+
+        // 지목을 뽑고, 화면·트랜스크립트에는 제어 라인이 빠진 본문만 남긴다.
+        const mention = parseMention(
+          sanitizedResponse,
+          this.config.participants.map((p) => ({ npcId: p.npcId, displayName: p.displayName })),
+          participant.npcId,
+        );
+
+        this.transcript.add(participant.npcId, participant.displayName, mention.text, this.now());
         this.lastSpeakerId = participant.npcId;
-        this.callbacks.onTurnEnd?.(participant.npcId, sanitizedResponse);
+        this.callbacks.onTurnEnd?.(participant.npcId, mention.text);
+
+        // directSpeak() 메서드를 부르지 않는다 — 그쪽은 사용자 지목용이라
+        // abortCurrentTurn() 으로 진행 중인 턴을 끊고 hybridMode 를 manual 로 승격시킨다.
+        // 멘션은 발언이 끝난 뒤의 힌트일 뿐이므로 큐에만 넣는다.
+        if (mention.npcId) {
+          this.commandQueue.push({ type: "directSpeak", npcId: mention.npcId });
+        }
       } else {
         // 정상적으로 resolve했지만 쓸 만한 텍스트가 하나도 없는 턴은, 루프 입장에서는 실패한
         // 턴이다 — 트랜스크립트에 아무것도 안 실리므로 maxTotalTurns·remainingTurns·

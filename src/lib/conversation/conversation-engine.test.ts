@@ -585,3 +585,57 @@ describe("ConversationEngine — 사용자 개입", () => {
     );
   });
 });
+
+describe("멘션이 다음 발언권을 정한다", () => {
+  test("TO: 로 지목된 참가자가 폴링과 무관하게 다음에 말한다", async () => {
+    // a 가 c 를 지목한다. 폴링에서는 b 가 먼저 손을 들지만 지목이 이긴다.
+    // a는 meeting 모드라 폴링에서 SPEAK: 로 먼저 손을 들어야 발언 차례가 온다 — 그 다음
+    // 실제 발언에서 TO: c 로 지목한다(단일 응답으로는 폴링 단계에서 손을 들지 못해 영영
+    // 발언하지 못한다 — 브리프 원안의 단일 응답으로는 a가 폴링을 통과하지 못해 이 테스트가
+    // 검증 불능이었다).
+    const a = participant("a", ["SPEAK: 의견 있어요", "TO: c\n의견 부탁해요"]);
+    const b = participant("b", ["SPEAK: 저요", "저는 반대입니다"]);
+    const c = participant("c", ["SPEAK: 네", "말씀하신 대로입니다"]);
+
+    const spoke: string[] = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "T",
+        participants: [a, b, c],
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 2, cooldownMs: 0 },
+      },
+      { onTurnStart: (npcId) => spoke.push(npcId) },
+    );
+
+    await engine.run();
+
+    assert.equal(spoke[1], "c", `지목된 c 가 아니라 ${spoke[1]} 이 말했습니다`);
+  });
+
+  test("트랜스크립트에는 TO: 라인이 빠진 본문만 실린다", async () => {
+    const a = participant("a", ["TO: b\n김치찌개가 좋겠습니다"]);
+    const b = participant("b", ["알겠습니다"]);
+
+    // 엔진에는 트랜스크립트 getter 가 없다. onEnd 가 turns 배열을 넘겨준다
+    // (conversation-engine.ts:388 — this.callbacks.onEnd?.(this.transcript.all(), ...)).
+    let turns: Array<{ content: string }> = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "peer",
+        topic: "T",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 1, cooldownMs: 0 },
+      },
+      { onEnd: (all: Array<{ content: string }>) => { turns = all; } },
+    );
+
+    await engine.run();
+
+    assert.equal(
+      turns[0].content,
+      "김치찌개가 좋겠습니다",
+      "제어 라인이 사용자에게 보이면 안 됩니다",
+    );
+  });
+});
