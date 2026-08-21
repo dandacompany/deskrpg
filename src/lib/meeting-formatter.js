@@ -70,7 +70,7 @@ ${historyText}
 ---
 ${agent.displayName}님, 의견을 말씀해 주세요.
 ⚠️ 규칙: 동료한테 말하듯이 구어체로 3~5문장. 불릿(-)이나 번호(1. 2. 3.) 목록 절대 금지. 볼드(**) 금지. 헤더(##) 금지. 그냥 말로 해.
-💬 특정 참석자에게 답을 듣고 싶으면 첫 줄에 "TO: 이름"을 쓰거나 본문에서 "@[이름]"으로 부르세요. 그 사람이 다음에 답합니다. 이름은 위 참석자 목록에 있는 그대로 쓰고, 대괄호를 빼먹지 마세요.`;
+💬 특정 참석자에게 답을 듣고 싶으면 첫 줄에 "TO: 이름"을 쓰거나 본문에서 "@[이름]"으로 부르세요. 그 사람이 다음에 답합니다. 이름은 위 참석자 목록의 괄호 앞부분(역할 제외)만 정확히 쓰고, 대괄호를 빼먹지 마세요. 예: 참석자가 "단비(팀장)"이면 "TO: 단비" 또는 "@[단비]"라고 쓰세요.`;
 }
 
 /**
@@ -128,6 +128,12 @@ function parseHandRaise(response) {
 
 /**
  * 회의 발언 응답에서 남아 있는 제어 프리픽스를 제거
+ *
+ * TO: 라인은 여기서 지우지 않는다 — 이 함수의 결과는 conversation-engine.ts 가
+ * parseMention() 에 그대로 넘긴다(mention.ts:46). TO: 를 여기서 걷어내면 지목이
+ * 조용히 사라진다. 화면 표시용 TO: 제거는 스트리밍 쪽(sanitizeStreamingSpokenResponse)과
+ * 클라이언트 쪽(stream-text.ts 의 sanitizeClientFinalSpeech)에서만 한다 — 서버
+ * 트랜스크립트에는 parseMention이 걷어낸 mention.text 가 이미 실린다.
  * @param {string} response
  * @returns {string}
  */
@@ -136,9 +142,17 @@ function sanitizeSpokenResponse(response) {
   return response.replace(/^\s*SPEAK\s*:?\s*/i, "");
 }
 
+// 첫 줄이 `TO: 이름` 이면 그 줄을 통째로 걷어낸다(멘션 파서와 같은 규칙 —
+// src/lib/conversation/mention.ts 의 splitToLine). 줄바꿈이 아직 없으면(이름을
+// 타이핑 중이면) [^\n]* 가 남은 전체를 삼켜 빈 문자열이 되는데, 이는 스트리밍에서
+// "첫 줄이 완성되기 전에는 TO: 접두를 감춘다"는 정책과 그대로 맞아떨어진다.
+// 표시 전용이다 — sanitizeSpokenResponse(위)에는 적용하지 않는다.
+const TO_LINE_PREFIX = /^\s*TO:\s*[^\n]*\n?/i;
+
 /**
- * 스트리밍 중 prefix 후보 조각(S, SP, SPE...)은 보류하고,
- * prefix가 끝나거나 일반 텍스트로 판명되면 그때부터 노출
+ * 스트리밍 중 prefix 후보 조각(S, SP, SPE... / T, TO, TO:...)은 보류하고,
+ * prefix가 끝나거나 일반 텍스트로 판명되면 그때부터 노출한다.
+ * 화면 표시용이므로 TO: 라인도 걷어낸다(서버 트랜스크립트/멘션 파싱과는 무관).
  * @param {string} response
  * @returns {string}
  */
@@ -146,11 +160,14 @@ function sanitizeStreamingSpokenResponse(response) {
   if (typeof response !== "string") return "";
 
   const trimmedStart = response.replace(/^\s+/, "");
-  if (/^S(?:P(?:E(?:A(?:K(?::?)?)?)?)?)?$/i.test(trimmedStart)) {
+  if (
+    /^S(?:P(?:E(?:A(?:K(?::?)?)?)?)?)?$/i.test(trimmedStart) ||
+    /^T(?:O(?::?)?)?$/i.test(trimmedStart)
+  ) {
     return "";
   }
 
-  return sanitizeSpokenResponse(response);
+  return sanitizeSpokenResponse(response).replace(TO_LINE_PREFIX, "");
 }
 
 module.exports = {
