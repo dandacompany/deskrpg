@@ -283,7 +283,7 @@ function GamePageInner() {
   const [showHireModal, setShowHireModal] = useState(false);
   const [placementMode, setPlacementMode] = useState(false);
   const [spawnSetMode, setSpawnSetMode] = useState(false);
-  const [pendingNpc, setPendingNpc] = useState<{ presetId?: string; name: string; persona: string; appearance: unknown; direction: string; agentId?: string; agentAction?: "select" | "create"; identity?: string; soul?: string; locale?: string } | null>(null);
+  const [pendingNpc, setPendingNpc] = useState<{ presetId?: string; name: string; persona: string; appearance: unknown; direction: string; agentId?: string; agentAction?: "select" | "create"; identity?: string; soul?: string; locale?: string; adapterType?: string; hermesProfileId?: string } | null>(null);
   const [editingNpc, setEditingNpc] = useState<{ id: string; name: string; persona: string; appearance: unknown; direction?: string; agentId?: string | null; adapterType?: string | null; hermesProfileId?: string | null } | null>(null);
   // npcMenu removed — Edit/Fire now in ChatPanel gear menu
 
@@ -1397,6 +1397,11 @@ function GamePageInner() {
             agentId: pendingNpc.agentId, agentAction: pendingNpc.agentAction,
             identity: pendingNpc.identity, soul: pendingNpc.soul,
             locale: pendingNpc.locale,
+            // 모달이 이 둘을 골라 넘겨주는데 여기서 본문에 담지 않아, NPC 가 DB 기본값
+            // openclaw + 프로필 없음으로 저장됐다. 고른 엔진과 프로필이 조용히 버려지고
+            // 대화를 걸어야 비로소 드러난다.
+            adapterType: pendingNpc.adapterType,
+            hermesProfileId: pendingNpc.hermesProfileId,
           }),
         });
         if (res.status === 409) return; // tile occupied, stay in placement mode
