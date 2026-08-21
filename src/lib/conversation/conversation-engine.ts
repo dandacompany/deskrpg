@@ -151,7 +151,9 @@ export class ConversationEngine {
   private readonly hybridMode: boolean;
   private readonly hybridAutoResumeMs: number | null;
   private autoResumeTimer: ReturnType<typeof setTimeout> | null = null;
-  private commandQueue: Array<{ type: "setMode"; mode: string } | { type: "directSpeak"; npcId: string }> = [];
+  private commandQueue: Array<
+    { type: "setMode"; mode: string } | { type: "directSpeak"; npcId: string; source: "user" | "mention" }
+  > = [];
   private waitResolve: (() => void) | null = null;
   /** abortCurrentTurn 대상 — speak() 진행 중에만 채워진다. meeting-broker.js:_currentSessionKey/_currentAgentId. */
   private currentSessionKey: string | null = null;
@@ -218,7 +220,7 @@ export class ConversationEngine {
    * (meeting-broker.js의 run()이 agent를 못 찾을 때와 동일한 무음 실패 — 고치지 않는다).
    */
   directSpeak(npcId: string): void {
-    this.commandQueue.push({ type: "directSpeak", npcId });
+    this.commandQueue.push({ type: "directSpeak", npcId, source: "user" });
     this.abortCurrentTurn();
     if (this.hybridMode && this.runMode === "auto") {
       this.runMode = "manual";
@@ -260,9 +262,19 @@ export class ConversationEngine {
     }
   }
 
-  /** meeting-broker.js:259-279 이식. */
+  /**
+   * meeting-broker.js:259-279 이식.
+   *
+   * 큐에 여러 directSpeak가 섞여 있을 수 있다 — 사용자가 UI에서 지목한 것과, NPC가 발언 중
+   * 멘션으로 다음 지목을 남긴 것. 사용자 지목은 abortCurrentTurn()으로 진행 중인 턴을 끊으려
+   * 시도하지만 adapter.abort는 선택적이고 비동기라 못 먹을 수 있다 — 그러면 원래 턴이 정상
+   * 종료하며 멘션을 나중에 push하고, "마지막 것이 이긴다"만으로는 사용자 지목이 무음으로
+   * 덮인다. 그래서 한 번의 드레인에서 사용자 지목이 하나라도 있으면 그것을(마지막 것을) 채택하고,
+   * 없을 때만 멘션(마지막 것을) 채택한다.
+   */
   private drainCommands(): { directNpcId: string | null } {
-    let directNpcId: string | null = null;
+    let lastUserNpcId: string | null = null;
+    let lastMentionNpcId: string | null = null;
     let modeChanged = false;
     while (this.commandQueue.length > 0) {
       const cmd = this.commandQueue.shift()!;
@@ -270,12 +282,16 @@ export class ConversationEngine {
         this.runMode = cmd.mode as RunMode;
         modeChanged = true;
       } else if (cmd.type === "directSpeak") {
-        directNpcId = cmd.npcId;
+        if (cmd.source === "user") {
+          lastUserNpcId = cmd.npcId;
+        } else {
+          lastMentionNpcId = cmd.npcId;
+        }
         this.clearAutoResumeTimer();
       }
     }
     if (modeChanged) this.callbacks.onModeChanged?.(this.runMode, "user");
-    return { directNpcId };
+    return { directNpcId: lastUserNpcId ?? lastMentionNpcId };
   }
 
   async run(): Promise<void> {
@@ -581,8 +597,6 @@ export class ConversationEngine {
       this.currentAdapter = null;
       const sanitizedResponse = sanitizeSpokenResponse(response || rawText);
       if (sanitizedResponse) {
-        this.consecutiveFailures = 0;
-
         // 지목을 뽑고, 화면·트랜스크립트에는 제어 라인이 빠진 본문만 남긴다.
         const mention = parseMention(
           sanitizedResponse,
@@ -590,15 +604,26 @@ export class ConversationEngine {
           participant.npcId,
         );
 
-        this.transcript.add(participant.npcId, participant.displayName, mention.text, this.now());
-        this.lastSpeakerId = participant.npcId;
-        this.callbacks.onTurnEnd?.(participant.npcId, mention.text);
+        if (mention.text) {
+          this.consecutiveFailures = 0;
+          this.transcript.add(participant.npcId, participant.displayName, mention.text, this.now());
+          this.lastSpeakerId = participant.npcId;
+          this.callbacks.onTurnEnd?.(participant.npcId, mention.text);
+        } else {
+          // "TO: 이름"만 있고 본문이 없는 응답 — parseMention이 지목 줄을 걷어내면 남는 텍스트가
+          // 없다. sanitizedResponse 자체는 비어있지 않아 위 gate는 통과하지만, 화면에 보여줄
+          // 말도, 트랜스크립트에 남길 발언도 없다. 아래 catch-all과 동일하게 "쓸 만한 텍스트가
+          // 하나도 없는 턴"으로 취급해 실패 카운터만 올리고 transcript.add/onTurnEnd는 건너뛴다
+          // (빈 턴이 maxTotalTurns를 소비하거나 화면에 빈 말풍선을 남기지 않도록).
+          this.consecutiveFailures++;
+        }
 
         // directSpeak() 메서드를 부르지 않는다 — 그쪽은 사용자 지목용이라
         // abortCurrentTurn() 으로 진행 중인 턴을 끊고 hybridMode 를 manual 로 승격시킨다.
-        // 멘션은 발언이 끝난 뒤의 힌트일 뿐이므로 큐에만 넣는다.
+        // 멘션은 발언이 끝난 뒤의 힌트일 뿐이므로 큐에만 넣는다. 본문이 비어 실패로 처리되는
+        // 경우에도 지목 자체는 유효한 의사표시이므로 큐에는 넣는다(본문은 버리되 지목은 반영).
         if (mention.npcId) {
-          this.commandQueue.push({ type: "directSpeak", npcId: mention.npcId });
+          this.commandQueue.push({ type: "directSpeak", npcId: mention.npcId, source: "mention" });
         }
       } else {
         // 정상적으로 resolve했지만 쓸 만한 텍스트가 하나도 없는 턴은, 루프 입장에서는 실패한
