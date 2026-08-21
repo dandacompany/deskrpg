@@ -86,11 +86,16 @@ COPY --from=builder /app/src/lib/dev-constants.ts ./src/lib/dev-constants.ts
 COPY --from=builder /app/src/lib/i18n/error-codes.ts ./src/lib/i18n/error-codes.ts
 # Whole-directory copies (not per-file): this project has missed individual files in
 # these two directories five times (most recently local-discovery-gate.ts and
-# profile-name.ts, neither of which had its own COPY line before this fix). .dockerignore
-# keeps *.test.ts out of the builder stage, so these directory copies can't ship tests.
+# profile-name.ts, neither of which had its own COPY line before this fix).
 COPY --from=builder /app/src/lib/adapters ./src/lib/adapters
 COPY --from=builder /app/src/lib/hermes-profiles.ts ./src/lib/hermes-profiles.ts
 COPY --from=builder /app/src/lib/hermes ./src/lib/hermes
+
+# .dockerignore does NOT apply to `COPY --from=<stage>` — it filters the build context
+# sent to the daemon, not files already inside a stage. Verified by inspecting a built
+# image: all seven *.test.ts under src/lib/hermes shipped despite the .dockerignore
+# entries. Strip them here, after the directory copies, where it actually takes effect.
+RUN find ./src -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.js' | xargs -r rm -f
 
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
