@@ -32,7 +32,17 @@ export class HermesAdapter implements NpcAdapter {
         this.lastRunId = event.data.run_id;
         options.onRunStarted?.(event.data.run_id);
       }
-      if (event.event === "assistant.delta" && typeof event.data.delta === "string") {
+      // 두 엔드포인트가 델타 이벤트 이름을 달리 쓴다(실측 v0.20.2):
+      //   1:1  /api/sessions/<id>/chat/stream → assistant.delta
+      //   회의 /v1/runs/<id>/events          → message.delta
+      // assistant.* 만 보던 탓에 회의에서는 onDelta 가 한 번도 불리지 않았다. 응답 자체는
+      // execute() 의 반환값으로 왔으므로 NPC 는 멀쩡히 발언했지만, 스트리밍 청크가 없으니
+      // 클라이언트의 스트림 버퍼가 비었고 done:true 를 받아도 확정할 말풍선이 없었다 —
+      // 회의는 완전히 돌아가는데 화면만 비어 있었다.
+      if (
+        (event.event === "assistant.delta" || event.event === "message.delta") &&
+        typeof event.data.delta === "string"
+      ) {
         options.onDelta?.(event.data.delta);
       }
       if (event.event === "tool.progress") {

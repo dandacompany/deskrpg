@@ -248,3 +248,33 @@ describe("HermesAdapter — tool.progress 는 답변 본문이 아니다", () =>
     assert.deepEqual(progress, [["_thinking", "사과딸기"]]);
   });
 });
+
+describe("HermesAdapter — 회의 경로의 델타 이벤트 이름", () => {
+  test("message.delta 도 onDelta 로 흘린다", async () => {
+    // 실측(v0.20.2): /v1/runs/<id>/events 는 assistant.delta 가 아니라 message.delta 를
+    // 쓴다. assistant.* 만 보던 탓에 회의에서는 onDelta 가 한 번도 불리지 않았다 —
+    // 응답은 execute() 반환값으로 왔으므로 NPC 는 발언했지만, 클라이언트의 스트림 버퍼가
+    // 비어 done:true 에 확정할 말풍선이 없었고 화면에는 아무것도 붙지 않았다.
+    const client = clientWith((url) => {
+      if (url.endsWith("/v1/runs")) return new Response(JSON.stringify({ run_id: "r9" }), { status: 202 });
+      return sseResponse([
+        'data: {"event":"message.delta","delta":"김치"}\n\n',
+        'data: {"event":"message.delta","delta":"찌개"}\n\n',
+        'data: {"event":"run.completed","output":"김치찌개"}\n\n',
+      ]);
+    });
+
+    const adapter = new HermesAdapter(client);
+    const streamed: string[] = [];
+    const { response } = await adapter.execute({
+      sessionKey: "m",
+      prompt: "p",
+      multiParty: true,
+      conversationHistory: [],
+      onDelta: (c) => streamed.push(c),
+    });
+
+    assert.deepEqual(streamed, ["김치", "찌개"], "회의 델타가 onDelta 로 흘러야 화면에 붙는다");
+    assert.equal(response, "김치찌개");
+  });
+});
