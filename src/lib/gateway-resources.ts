@@ -35,6 +35,7 @@ function nowForDb() {
   return (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date;
 }
 
+import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import { DEV_JWT_SECRET } from "./dev-constants";
 
 function getGatewayCipherKey() {
@@ -421,6 +422,19 @@ export async function getGatewayRuntimeStateForChannel(
   const cached = options?.forceRefresh ? null : getCachedGatewayRuntimeState(binding.resource.id);
   if (cached) {
     return { ...cached, gateway: binding };
+  }
+
+  // Hermes 게이트웨이는 HTTP+SSE라 OpenClaw 의 WS 핸드셰이크에 403을 돌려주고, 그
+  // 클라이언트는 재시도하며 20초 넘게 매달린다. 이 함수는 NPC 목록 조회 경로에도
+  // 있어서(GET /api/npcs → 실측 25초), 그 사이 화면은 "NPC 0명"으로 그려진다.
+  // /api/gateways/[id]/test 에 넣은 것과 같은 프로브를 여기에도 둔다.
+  const probe = await probeHermesGateway(binding.resource.baseUrl);
+  if (probe.kind === "hermes") {
+    await persistGatewayValidationState(binding.resource.id, { status: "valid" });
+    return {
+      ...setGatewayRuntimeState(binding.resource.id, { status: "valid" }),
+      gateway: binding,
+    };
   }
 
   try {
