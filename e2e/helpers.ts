@@ -110,3 +110,90 @@ export function isDoubled(text: string): boolean {
   const half = t.length / 2;
   return t.slice(0, half) === t.slice(half);
 }
+
+// ---------------------------------------------------------------------------
+// 회의 시나리오 준비물
+// ---------------------------------------------------------------------------
+
+/** 화면에 보이는 채널 id 를 URL 에서 뽑는다. */
+export function channelIdFrom(page: Page): string {
+  const id = new URL(page.url()).searchParams.get("channelId");
+  if (!id) throw new Error(`채널 id 를 URL 에서 찾지 못했습니다: ${page.url()}`);
+  return id;
+}
+
+/**
+ * Hermes 프로필이 묶인 NPC 가 최소 두 명 있게 만든다. 이름 배열을 돌려준다.
+ *
+ * 회의는 발언권이 참가자 사이를 도는 것이 핵심이라 한 명으로는 검증할 수 없다.
+ * 두 번째 NPC 는 API 로 만든다 — 채용 UI 를 밟는 것은 그 자체로 별개의 시나리오이고,
+ * 여기서는 회의를 보려는 것이지 채용을 보려는 것이 아니다. 이미 두 명 이상이면
+ * 아무것도 만들지 않고 기존 NPC 를 그대로 쓴다.
+ */
+export async function ensureTwoHermesNpcs(page: Page): Promise<string[]> {
+  const channelId = channelIdFrom(page);
+
+  const listRes = await page.request.get(`/api/npcs?channelId=${channelId}`);
+  const { npcs = [] } = (await listRes.json()) as {
+    npcs?: { name: string; adapterType: string; hermesProfileId: string | null; positionX: number; positionY: number }[];
+  };
+  const hermesNpcs = npcs.filter((n) => n.adapterType === "hermes" && n.hermesProfileId);
+  if (hermesNpcs.length >= 2) return hermesNpcs.map((n) => n.name);
+  if (hermesNpcs.length === 0) {
+    throw new Error(
+      "Hermes 프로필이 묶인 NPC 가 하나도 없습니다. 회의 시나리오는 최소 한 명을 전제로 "
+        + "두 번째만 만들어 줍니다 — 먼저 UI 에서 NPC 를 한 명 고용하십시오.",
+    );
+  }
+
+  // 아직 아무 NPC 도 쓰지 않는 프로필을 고른다. 프로필은 게이트웨이에 매달려 있으므로
+  // 게이트웨이를 먼저 찾는다.
+  const gwRes = await page.request.get("/api/gateways");
+  if (!gwRes.ok()) {
+    throw new Error(`게이트웨이 목록을 읽지 못했습니다 (${gwRes.status()}).`);
+  }
+  const gwBody = (await gwRes.json()) as { gateways?: { id: string }[] };
+  const gateways = gwBody.gateways ?? [];
+  if (gateways.length === 0) {
+    throw new Error("연결된 게이트웨이가 없습니다 — 먼저 Hermes 게이트웨이를 등록하십시오.");
+  }
+
+  let free: { id: string; profileName: string } | undefined;
+  for (const gw of gateways) {
+    const profRes = await page.request.get(`/api/gateways/${gw.id}/profiles`);
+    if (!profRes.ok()) continue;
+    const { profiles = [] } = (await profRes.json()) as {
+      profiles?: { id: string; profileName: string; inUse?: boolean }[];
+    };
+    free = profiles.find((p) => !p.inUse);
+    if (free) break;
+  }
+  if (!free) {
+    throw new Error(
+      "남는 Hermes 프로필이 없습니다. 회의에는 서로 다른 프로필을 쓰는 NPC 가 둘 필요합니다 "
+        + "— 게이트웨이에서 프로필을 하나 더 연결하십시오.",
+    );
+  }
+
+  const seed = hermesNpcs[0];
+  const created = await page.request.post("/api/npcs", {
+    data: {
+      channelId,
+      name: `E2E-${free.profileName}`,
+      // 같은 타일에 놓으면 409(tile_already_occupied)가 난다.
+      positionX: seed.positionX + 2,
+      positionY: seed.positionY,
+      direction: "down",
+      appearance: (npcs as unknown as { appearance: unknown }[])[0].appearance,
+      identity: "회의에서 짧고 분명하게 의견을 말한다. 답변은 두 문장을 넘기지 않는다.",
+      adapterType: "hermes",
+      hermesProfileId: free.id,
+      locale: "ko",
+    },
+  });
+  if (!created.ok()) {
+    throw new Error(`두 번째 NPC 생성 실패 (${created.status()}): ${(await created.text()).slice(0, 200)}`);
+  }
+  const body = (await created.json()) as { npc: { name: string } };
+  return [seed.name, body.npc.name];
+}

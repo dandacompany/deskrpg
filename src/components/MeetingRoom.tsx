@@ -946,6 +946,10 @@ export default function MeetingRoom({
                   return (
                     <div
                       key={msg.id}
+                      // e2e 훅. 발언권이 실제로 여러 NPC 사이를 도는지 검증하려면 각 발언의
+                      // 화자를 밖에서 읽을 수 있어야 한다 — 색상 유틸리티 클래스로는 못 한다.
+                      data-meeting-message={msg.senderType}
+                      data-sender={msg.sender}
                       className={`flex ${isMe ? "justify-end" : "justify-start"}`}
                     >
                       <div className="max-w-[85%]">
