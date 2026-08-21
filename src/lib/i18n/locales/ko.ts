@@ -170,6 +170,7 @@ const ko: Record<string, string> = {
   "gateway.profile.status.unknown": "테스트 안 함",
   "hermes.discovery.optIn": "이 머신의 Hermes 프로필 읽기",
   "hermes.discovery.registerSelected": "선택한 프로필 등록",
+  "hermes.discovery.listTitle": "이 머신에서 찾은 프로필",
   "hermes.discovery.empty": "찾은 프로필이 없습니다",
   "hermes.discovery.reason.already": "이미 등록됨",
   "hermes.discovery.reason.no_token": "토큰 없음",

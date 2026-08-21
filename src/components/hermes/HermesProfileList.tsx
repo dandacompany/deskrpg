@@ -225,6 +225,11 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
 
           {discovery?.optedIn && discovery.rows.length > 0 && (
             <div className="space-y-2 rounded-lg bg-bg p-3">
+              {/* 제목이 없으면 등록 목록과 "프로필 추가" 폼 사이에 정체불명의
+                  체크박스 뭉치로 보인다 — 이게 이 머신에서 찾아온 것임을 말해 준다. */}
+              <p className="text-sm font-semibold text-text">
+                {t("hermes.discovery.listTitle")}
+              </p>
               {discovery.rows.map((row) => (
                 <label key={row.name} className="flex items-center gap-2 text-sm">
                   <input
