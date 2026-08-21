@@ -203,6 +203,7 @@ const ko: Record<string, string> = {
   "npc.adapterType": "AI 엔진",
   "npc.cliAdapterNote": "이 NPC는 선택한 CLI 도구를 사용합니다. 도구가 설치되어 있고 제공자가 설정되어 있는지 확인하세요.",
   "npc.hermesProfile": "Hermes 프로필",
+  "npc.hermesProfileInUse": "사용 중",
   "npc.hermesProfileSelect": "프로필 선택",
   "npc.hermesProfileEmpty": "등록된 프로필이 없습니다. 게이트웨이 관리 페이지에서 프로필을 추가하세요.",
   "npc.hermesProfileNoGateway": "이 채널에 연결된 게이트웨이가 없습니다.",

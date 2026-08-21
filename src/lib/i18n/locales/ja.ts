@@ -203,6 +203,7 @@ const ja: Record<string, string> = {
   "npc.adapterType": "AIエンジン",
   "npc.cliAdapterNote": "このNPCは選択したCLIツールを使用します。ツールがインストールされ、プロバイダが設定されていることを確認してください。",
   "npc.hermesProfile": "Hermesプロファイル",
+  "npc.hermesProfileInUse": "使用中",
   "npc.hermesProfileSelect": "プロファイルを選択",
   "npc.hermesProfileEmpty": "登録されたプロファイルがありません。ゲートウェイ管理ページで追加してください。",
   "npc.hermesProfileNoGateway": "このチャンネルに接続されたゲートウェイがありません。",

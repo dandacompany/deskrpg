@@ -203,6 +203,7 @@ const zh: Record<string, string> = {
   "npc.adapterType": "AI引擎",
   "npc.cliAdapterNote": "此NPC将使用所选CLI工具。请确保已安装工具并配置了提供商。",
   "npc.hermesProfile": "Hermes 配置文件",
+  "npc.hermesProfileInUse": "使用中",
   "npc.hermesProfileSelect": "选择配置文件",
   "npc.hermesProfileEmpty": "尚未注册任何配置文件。请在网关管理页面添加。",
   "npc.hermesProfileNoGateway": "此频道未连接任何网关。",

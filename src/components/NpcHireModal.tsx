@@ -19,6 +19,8 @@ interface HermesProfileOption {
   id: string;
   profileName: string;
   displayName: string | null;
+  /** 이미 다른 NPC 에 묶여 있는가. 서버가 계산해서 내려준다. */
+  inUse?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,7 +138,7 @@ export default function NpcHireModal({
   } = useCharacterAppearance();
 
   // --- Adapter selection ---
-  const [adapterType, setAdapterType] = useState(channelDefaultAdapter || "openclaw");
+  const [adapterType, setAdapterType] = useState(channelDefaultAdapter || "hermes");
 
   // --- Hermes profile selection ---
   const [hermesProfiles, setHermesProfiles] = useState<HermesProfileOption[]>([]);
@@ -257,7 +259,7 @@ export default function NpcHireModal({
       setAgentProgress({ phase: "idle", status: "" });
       setRebindError("");
       if (editingNpc) {
-        setAdapterType(editingNpc.adapterType || channelDefaultAdapter || "openclaw");
+        setAdapterType(editingNpc.adapterType || channelDefaultAdapter || "hermes");
         setSelectedHermesProfileId(editingNpc.hermesProfileId || null);
         setName(editingNpc.name);
         setIdentity(editingNpc.persona || "");
@@ -282,7 +284,7 @@ export default function NpcHireModal({
           setCreateNewAgent(hasGateway);
         }
       } else {
-        setAdapterType(channelDefaultAdapter || "openclaw");
+        setAdapterType(channelDefaultAdapter || "hermes");
         setSelectedHermesProfileId(null);
         setName("");
         setIdentity("");
@@ -440,7 +442,11 @@ export default function NpcHireModal({
 
   // --- Create agent on gateway ---
   const handleCreateAgent = async () => {
-    if (!hasGateway || !createNewAgent || !newAgentId.trim()) {
+    // Hermes NPC 는 게이트웨이에 만들 에이전트가 없다 — 프로필이 이미 그 자리에 있고
+    // 우리는 바인딩만 한다. `/api/npcs/create-agent` 는 openclaw-gateway.js 의 WS
+    // 클라이언트를 쓰므로, Hermes 로 고용하면서 이 경로를 타면 존재하지 않는 OpenClaw
+    // 게이트웨이에 연결을 시도하다 "1/3 게이트웨이에 연결하는 중"에서 멈춘다(실측).
+    if (adapterType !== "openclaw" || !hasGateway || !createNewAgent || !newAgentId.trim()) {
       handleSubmit();
       return;
     }
@@ -584,7 +590,11 @@ export default function NpcHireModal({
                 onChange={(e) => setAdapterType(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                {(availableAdapters || ["openclaw", "hermes"]).map((type) => (
+                {/* OpenClaw 은 새 NPC 선택지에서 뺐다 — 이 앱은 Hermes 로 옮겨왔고,
+                    OpenClaw 를 고르면 존재하지 않는 게이트웨이에 에이전트를 만들려다
+                    멈춘다. 다만 이미 openclaw 로 만들어진 NPC 를 편집할 때는 목록에
+                    남겨 둔다. 안 그러면 저장 시 어댑터가 조용히 바뀐다. */}
+                {(availableAdapters ?? (adapterType === "openclaw" ? ["hermes", "openclaw"] : ["hermes"])).map((type) => (
                   <option key={type} value={type}>
                     {type === "openclaw" ? "OpenClaw Gateway" :
                      type === "hermes" ? "Hermes Agent" :
@@ -841,11 +851,18 @@ function HermesProfileSection({
           className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
           <option value="">{t("npc.hermesProfileSelect")}</option>
-          {profiles.map((profile) => (
-            <option key={profile.id} value={profile.id}>
-              {profile.displayName || profile.profileName}
-            </option>
-          ))}
+          {profiles.map((profile) => {
+            // 이미 다른 NPC 에 묶인 프로필은 고를 수 없다 — 둘이 같은 프로필을 쓰면
+            // 같은 Hermes 세션과 기억을 공유해 대화가 섞인다. 편집 중인 NPC 자신이
+            // 쓰고 있는 프로필은 예외다(안 그러면 자기 선택이 사라진다).
+            const takenByAnother = profile.inUse && profile.id !== selectedProfileId;
+            return (
+              <option key={profile.id} value={profile.id} disabled={takenByAnother}>
+                {profile.displayName || profile.profileName}
+                {takenByAnother ? ` — ${t("npc.hermesProfileInUse")}` : ""}
+              </option>
+            );
+          })}
         </select>
       )}
     </div>

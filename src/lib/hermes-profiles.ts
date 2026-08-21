@@ -110,11 +110,21 @@ export async function listHermesProfiles(userId: string, gatewayId: string) {
   if (!access) return [];
 
   const rows = await db.select().from(hermesProfiles).where(eq(hermesProfiles.gatewayId, gatewayId));
+
+  // 한 프로필은 NPC 하나에만 붙인다 — 둘이 같은 프로필을 쓰면 같은 Hermes 세션과
+  // 기억을 공유해 서로의 대화가 섞인다. 어느 프로필이 이미 묶였는지는 서버만 알 수
+  // 있으므로 여기서 알려준다(화면이 NPC 목록을 따로 들고 다니지 않아도 되게).
+  const boundRows = await db
+    .select({ profileId: npcs.hermesProfileId })
+    .from(npcs);
+  const bound = new Set(boundRows.map((r) => r.profileId).filter(Boolean));
+
   return rows.map((row) => ({
     id: row.id,
     profileName: row.profileName,
     displayName: row.displayName,
     lastValidationStatus: row.lastValidationStatus,
+    inUse: bound.has(row.id),
   }));
 }
 

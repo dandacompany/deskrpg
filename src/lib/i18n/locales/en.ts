@@ -203,6 +203,7 @@ const en: Record<string, string> = {
   "npc.adapterType": "AI Engine",
   "npc.cliAdapterNote": "This NPC will use the selected CLI tool. Make sure the tool is installed and a provider is configured.",
   "npc.hermesProfile": "Hermes profile",
+  "npc.hermesProfileInUse": "in use",
   "npc.hermesProfileSelect": "Select a profile",
   "npc.hermesProfileEmpty": "No profiles registered yet. Add one on the gateway management page.",
   "npc.hermesProfileNoGateway": "This channel has no gateway connected.",

@@ -397,6 +397,10 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
   applySqliteAlterStatements(sqlite, "npcs", [
     "ALTER TABLE npcs ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'openclaw'",
     "ALTER TABLE npcs ADD COLUMN adapter_config TEXT",
+    // P1 이 server-db.js 쪽에만 더해서 API 경로에는 없었다. 이 컬럼이 없으면 Hermes
+    // 프로필 바인딩이 저장되지 않고, 프로필을 읽는 쿼리는 "no such column" 으로 죽는다.
+    "ALTER TABLE npcs ADD COLUMN hermes_profile_id TEXT REFERENCES hermes_profiles(id) ON DELETE SET NULL",
+    "ALTER TABLE npcs ADD COLUMN agent_config TEXT",
   ]);
   // 이 함수와 server-db.js 의 동명 함수는 **서로 다른 경로**다 — API 라우트는 이쪽,
   // 소켓 서버는 저쪽을 탄다. 한쪽에만 컬럼을 더하면 그 경로에서만 조용히
