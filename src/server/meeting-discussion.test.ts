@@ -81,7 +81,6 @@ test("registerMeetingDiscussionHandlers starts a broker and emits mode change", 
       players,
       user: { userId: "user-1", nickname: "Dante" },
       adapterRegistry: new AdapterRegistry(),
-      getOrConnectGateway: async () => ({ connected: true }),
       getNpcConfigsForChannel: async () => [
         {
           id: "npc-1", name: "Analyst", agentId: "agent-1", sessionKeyPrefix: "sess-1",
@@ -178,7 +177,6 @@ function brokerConfig(npcs: ReturnType<typeof npcConfig>[], over: Record<string,
   return {
     topic: "Roadmap sync",
     npcs,
-    gateway: { connected: true },
     userId: "user-1",
     channelId: "channel-1",
     adapterRegistry: new AdapterRegistry(),
@@ -190,7 +188,7 @@ function brokerConfig(npcs: ReturnType<typeof npcConfig>[], over: Record<string,
   } as unknown as Parameters<typeof defaultCreateMeetingBroker>[0];
 }
 
-test("resolution layer: 제외 사유 다섯 가지를 각각 그 사유로 통지한다", async () => {
+test("resolution layer: 제외 사유를 각각 그 사유로 통지한다", async () => {
   const registry = new AdapterRegistry();
   const excluded: ExcludedNotice[] = [];
 
@@ -199,11 +197,12 @@ test("resolution layer: 제외 사유 다섯 가지를 각각 그 사유로 통�
       [
         npcConfig({ id: "n-unbound", name: "Unbound", adapterType: "unbound" }),
         npcConfig({ id: "n-hermes", name: "Hermes", adapterType: "hermes", hermesProfileId: "p-1" }),
-        npcConfig({ id: "n-noagent", name: "NoAgent", adapterType: "openclaw", agentId: null }),
-        npcConfig({ id: "n-nogw", name: "NoGateway", adapterType: "openclaw", agentId: "agent-9" }),
+        // OpenClaw 제거 후: adapterType 이 openclaw 로 남아 있는 NPC 는 agentId 유무와
+        // 무관하게 unbound 로 제외된다 — 쓸 백엔드가 더는 존재하지 않기 때문이다.
+        npcConfig({ id: "n-oc", name: "LegacyOpenClaw", adapterType: "openclaw", agentId: "agent-9" }),
         npcConfig({ id: "n-registry", name: "Registry", adapterType: "cli" }),
       ],
-      { gateway: null, adapterRegistry: registry },
+      { adapterRegistry: registry },
     ),
     { onParticipantsExcluded: (list: ExcludedNotice[]) => excluded.push(...list) },
     { createHermesAdapter: async () => null }, // 프로필 해석 실패를 흉내낸다
@@ -214,15 +213,14 @@ test("resolution layer: 제외 사유 다섯 가지를 각각 그 사유로 통�
     [
       ["n-unbound", "unbound"],
       ["n-hermes", "hermes_profile_unavailable"],
-      ["n-noagent", "no_agent"],
-      ["n-nogw", "gateway_not_connected"],
+      ["n-oc", "unbound"],
       ["n-registry", "adapter_unavailable"],
     ],
   );
   assert.deepEqual(broker.config.participants, [], "해석에 실패한 NPC는 참가자로 남지 않는다");
 });
 
-test("resolution layer: hermes / openclaw / registry 디스패치가 각각 맞는 백엔드로 간다", async () => {
+test("resolution layer: hermes / registry 디스패치가 각각 맞는 백엔드로 가고, openclaw 는 빠진다", async () => {
   const registry = new AdapterRegistry();
   registry.register(recordingAdapter(["PASS"]) as never);
 
@@ -231,7 +229,7 @@ test("resolution layer: hermes / openclaw / registry 디스패치가 각각 맞�
     brokerConfig(
       [
         npcConfig({ id: "n-hermes", name: "Hermes", adapterType: "hermes", hermesProfileId: "p-1" }),
-        npcConfig({ id: "n-oc", name: "OpenClaw", adapterType: "openclaw", agentId: "agent-9" }),
+        npcConfig({ id: "n-oc", name: "LegacyOpenClaw", adapterType: "openclaw", agentId: "agent-9" }),
         npcConfig({ id: "n-cli", name: "Cli", adapterType: "cli" }),
       ],
       { adapterRegistry: registry },
@@ -247,10 +245,10 @@ test("resolution layer: hermes / openclaw / registry 디스패치가 각각 맞�
 
   // hermes 갈래만 hermes 어댑터 팩토리를 거친다. contextKey는 sessionKey에서 prefix를 뗀 값이다.
   assert.deepEqual(hermesCalls, [["n-hermes", "user-1", "meeting-meet-1"]]);
-  // openclaw 갈래만 openclawAgentId를 채운다(회의 요약이 이 값을 쓴다).
+  // openclaw 는 쓸 백엔드가 없으므로 참가자로 남지 않는다. agentId 가 있어도 마찬가지다.
   assert.deepEqual(
-    broker.config.participants.map((p) => [p.npcId, p.openclawAgentId]),
-    [["n-hermes", null], ["n-oc", "agent-9"], ["n-cli", null]],
+    broker.config.participants.map((p) => p.npcId),
+    ["n-hermes", "n-cli"],
   );
 });
 

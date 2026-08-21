@@ -7,7 +7,7 @@ import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { ChevronRight } from "lucide-react";
 import MapTemplateGrid from "@/components/map-editor/MapTemplateGrid";
-import OpenClawPairingStatusCard, { type OpenClawPairingStatus } from "@/components/openclaw/OpenClawPairingStatusCard";
+import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import { CHANNEL_PASSWORD_MIN_LENGTH } from "@/lib/security-policy";
 import type { GroupMemberRole } from "@/lib/rbac/constants";
 
@@ -36,19 +36,8 @@ interface GatewayResourceOption {
 }
 
 interface GatewayConnectionState {
-  status: OpenClawPairingStatus;
-  requestId?: string | null;
+  status: GatewayStatus;
   error?: string | null;
-}
-
-function isGatewayPairingRequired(payload: unknown): payload is {
-  errorCode?: string;
-  requestId?: string;
-  error?: string;
-} {
-  if (!payload || typeof payload !== "object") return false;
-  const errorCode = (payload as { errorCode?: unknown }).errorCode;
-  return errorCode === "gateway_pairing_required" || errorCode === "PAIRING_REQUIRED";
 }
 
 function formatGatewayLabel(gateway: GatewayResourceOption) {
@@ -91,7 +80,9 @@ function CreateChannelPageInner() {
   // --- AI Gateway ---
   const [gatewayOpen, setGatewayOpen] = useState(false);
   const [gatewayMode, setGatewayMode] = useState<"direct" | "stored">("direct");
-  const [storedGateways, setStoredGateways] = useState<GatewayResourceOption[]>([]);
+  const [storedGateways, setStoredGateways] = useState<GatewayResourceOption[]>(
+    [],
+  );
   const [storedGatewaysLoading, setStoredGatewaysLoading] = useState(false);
   const [storedGatewaysError, setStoredGatewaysError] = useState("");
   const [selectedGatewayId, setSelectedGatewayId] = useState("");
@@ -100,8 +91,8 @@ function CreateChannelPageInner() {
   const [showGatewayToken, setShowGatewayToken] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [gatewayAgents, setGatewayAgents] = useState<GatewayAgentOption[]>([]);
-  const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({ status: "idle" });
-
+  const [gatewayConnectionState, setGatewayConnectionState] =
+    useState<GatewayConnectionState>({ status: "idle" });
 
   // Auto-select template from URL param
   useEffect(() => {
@@ -115,7 +106,9 @@ function CreateChannelPageInner() {
     setStoredGatewaysError("");
 
     fetch("/api/gateways")
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("failed"))))
+      .then((res) =>
+        res.ok ? res.json() : Promise.reject(new Error("failed")),
+      )
       .then((data) => {
         if (cancelled) return;
         setStoredGateways(Array.isArray(data.gateways) ? data.gateways : []);
@@ -144,13 +137,22 @@ function CreateChannelPageInner() {
         const nextGroups = Array.isArray(data.groups) ? data.groups : [];
         setGroups(nextGroups);
         setGroupId((currentGroupId) => {
-          const creatableGroups = nextGroups.filter((group: GroupOption) => group.canCreateChannel);
-          if (currentGroupId && creatableGroups.some((group: GroupOption) => group.id === currentGroupId)) {
+          const creatableGroups = nextGroups.filter(
+            (group: GroupOption) => group.canCreateChannel,
+          );
+          if (
+            currentGroupId &&
+            creatableGroups.some(
+              (group: GroupOption) => group.id === currentGroupId,
+            )
+          ) {
             return currentGroupId;
           }
 
-          const preferredGroup = creatableGroups.find((group: GroupOption) => group.role !== "member")
-            ?? creatableGroups[0];
+          const preferredGroup =
+            creatableGroups.find(
+              (group: GroupOption) => group.role !== "member",
+            ) ?? creatableGroups[0];
           return preferredGroup?.id ?? "";
         });
         setLoadingGroups(false);
@@ -172,12 +174,16 @@ function CreateChannelPageInner() {
       if (selectedGatewayId) setSelectedGatewayId("");
       return;
     }
-    if (!selectedGatewayId || !storedGateways.some((gateway) => gateway.id === selectedGatewayId)) {
+    if (
+      !selectedGatewayId ||
+      !storedGateways.some((gateway) => gateway.id === selectedGatewayId)
+    ) {
       setSelectedGatewayId(storedGateways[0].id);
     }
   }, [gatewayMode, selectedGatewayId, storedGateways]);
 
-  const selectedStoredGateway = storedGateways.find((gateway) => gateway.id === selectedGatewayId) ?? null;
+  const selectedStoredGateway =
+    storedGateways.find((gateway) => gateway.id === selectedGatewayId) ?? null;
   const creatableGroups = groups.filter((group) => group.canCreateChannel);
   const hasAvailableGroups = creatableGroups.length > 0;
 
@@ -192,25 +198,23 @@ function CreateChannelPageInner() {
     setGatewayConnectionState({ status: "idle" });
     setGatewayAgents([]);
     try {
-      const res = gatewayMode === "stored"
-        ? await fetch(`/api/gateways/${selectedGatewayId}/test`, { method: "POST" })
-        : await fetch("/api/channels/test-gateway", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url: gatewayUrl.trim(),
-            token: gatewayToken.trim(),
-          }),
-        });
+      const res =
+        gatewayMode === "stored"
+          ? await fetch(`/api/gateways/${selectedGatewayId}/test`, {
+              method: "POST",
+            })
+          : await fetch("/api/channels/test-gateway", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                url: gatewayUrl.trim(),
+                token: gatewayToken.trim(),
+              }),
+            });
       const data = await res.json();
       if (data.ok) {
         setGatewayAgents(Array.isArray(data.agents) ? data.agents : []);
         setGatewayConnectionState({ status: "connected" });
-      } else if (isGatewayPairingRequired(data)) {
-        setGatewayConnectionState({
-          status: "pairing_required",
-          requestId: typeof data.requestId === "string" ? data.requestId : null,
-        });
       } else {
         setGatewayConnectionState({
           status: "error",
@@ -218,7 +222,10 @@ function CreateChannelPageInner() {
         });
       }
     } catch {
-      setGatewayConnectionState({ status: "error", error: t("errors.failedToReachTestEndpoint") });
+      setGatewayConnectionState({
+        status: "error",
+        error: t("errors.failedToReachTestEndpoint"),
+      });
     } finally {
       setTestingConnection(false);
     }
@@ -289,7 +296,9 @@ function CreateChannelPageInner() {
   return (
     <div className="theme-web min-h-screen bg-bg text-text p-8">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">{t("channels.create.title")}</h1>
+        <h1 className="text-3xl font-bold mb-6">
+          {t("channels.create.title")}
+        </h1>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Name */}
@@ -333,17 +342,19 @@ function CreateChannelPageInner() {
               disabled={loadingGroups || !hasAvailableGroups}
               className="w-full px-3 py-2 bg-surface border border-border rounded text-text focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent disabled:opacity-60"
             >
-              {hasAvailableGroups
-                ? creatableGroups.map((group) => (
+              {hasAvailableGroups ? (
+                creatableGroups.map((group) => (
                   <option key={group.id} value={group.id}>
                     {group.name}
                   </option>
                 ))
-                : (
-                  <option value="">
-                    {loadingGroups ? t("common.loading") : t("channels.create.noAvailableGroups")}
-                  </option>
-                )}
+              ) : (
+                <option value="">
+                  {loadingGroups
+                    ? t("common.loading")
+                    : t("channels.create.noAvailableGroups")}
+                </option>
+              )}
             </select>
             {!loadingGroups && !hasAvailableGroups && (
               <p className="mt-2 text-sm text-text-muted">
@@ -354,7 +365,9 @@ function CreateChannelPageInner() {
 
           {/* Public/Private */}
           <div className="flex items-center gap-3">
-            <label className="text-sm font-semibold">{t("channels.create.visibility")}</label>
+            <label className="text-sm font-semibold">
+              {t("channels.create.visibility")}
+            </label>
             <button
               type="button"
               onClick={() => setIsPublic(true)}
@@ -402,9 +415,12 @@ function CreateChannelPageInner() {
                   {showPassword ? t("common.hide") : t("common.show")}
                 </button>
               </div>
-              {password.length > 0 && password.length < CHANNEL_PASSWORD_MIN_LENGTH && (
-                <p className="text-danger text-xs mt-1">{t("channels.create.passwordMinError")}</p>
-              )}
+              {password.length > 0 &&
+                password.length < CHANNEL_PASSWORD_MIN_LENGTH && (
+                  <p className="text-danger text-xs mt-1">
+                    {t("channels.create.passwordMinError")}
+                  </p>
+                )}
             </div>
           )}
 
@@ -431,7 +447,9 @@ function CreateChannelPageInner() {
               className="w-full flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-raised text-sm font-semibold"
             >
               <span>{t("gateway.title")}</span>
-              <ChevronRight className={`w-4 h-4 text-text-muted transition-transform duration-200 ${gatewayOpen ? "rotate-90" : ""}`} />
+              <ChevronRight
+                className={`w-4 h-4 text-text-muted transition-transform duration-200 ${gatewayOpen ? "rotate-90" : ""}`}
+              />
             </button>
 
             {gatewayOpen && (
@@ -471,7 +489,9 @@ function CreateChannelPageInner() {
                   <div className="space-y-3">
                     <div>
                       <label className="block text-xs font-semibold mb-1 text-text-secondary">
-                        {storedGatewaysLoading ? t("settings.loadingGateway") : t("settings.gatewaySaved")}
+                        {storedGatewaysLoading
+                          ? t("settings.loadingGateway")
+                          : t("settings.gatewaySaved")}
                       </label>
                       <select
                         value={selectedGatewayId}
@@ -479,12 +499,18 @@ function CreateChannelPageInner() {
                           setSelectedGatewayId(e.target.value);
                           resetGatewayTestState();
                         }}
-                        disabled={storedGatewaysLoading || storedGateways.length === 0}
+                        disabled={
+                          storedGatewaysLoading || storedGateways.length === 0
+                        }
                         className="w-full px-3 py-2 bg-surface border border-border rounded text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent disabled:opacity-60"
                       >
                         {storedGateways.length > 0 ? (
                           <>
-                            <option value="">{storedGatewaysLoading ? t("settings.loadingGateway") : t("settings.gatewaySelect")}</option>
+                            <option value="">
+                              {storedGatewaysLoading
+                                ? t("settings.loadingGateway")
+                                : t("settings.gatewaySelect")}
+                            </option>
                             {storedGateways.map((gateway) => (
                               <option key={gateway.id} value={gateway.id}>
                                 {formatGatewayLabel(gateway)}
@@ -493,12 +519,16 @@ function CreateChannelPageInner() {
                           </>
                         ) : (
                           <option value="">
-                            {storedGatewaysLoading ? t("settings.loadingGateway") : t("settings.gatewayNoSaved")}
+                            {storedGatewaysLoading
+                              ? t("settings.loadingGateway")
+                              : t("settings.gatewayNoSaved")}
                           </option>
                         )}
                       </select>
                       {storedGatewaysError && (
-                        <p className="mt-1 text-xs text-danger">{storedGatewaysError}</p>
+                        <p className="mt-1 text-xs text-danger">
+                          {storedGatewaysError}
+                        </p>
                       )}
                       {selectedStoredGateway && (
                         <p className="mt-1 text-xs text-text-muted">
@@ -512,7 +542,9 @@ function CreateChannelPageInner() {
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-semibold mb-1 text-text-secondary">{t("gateway.url")}</label>
+                      <label className="block text-xs font-semibold mb-1 text-text-secondary">
+                        {t("gateway.url")}
+                      </label>
                       <input
                         type="text"
                         value={gatewayUrl}
@@ -523,7 +555,9 @@ function CreateChannelPageInner() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold mb-1 text-text-secondary">{t("gateway.token")}</label>
+                      <label className="block text-xs font-semibold mb-1 text-text-secondary">
+                        {t("gateway.token")}
+                      </label>
                       <div className="relative">
                         <input
                           type={showGatewayToken ? "text" : "password"}
@@ -537,7 +571,9 @@ function CreateChannelPageInner() {
                           onClick={() => setShowGatewayToken(!showGatewayToken)}
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text text-xs px-2 py-1"
                         >
-                          {showGatewayToken ? t("common.hide") : t("common.show")}
+                          {showGatewayToken
+                            ? t("common.hide")
+                            : t("common.show")}
                         </button>
                       </div>
                     </div>
@@ -549,22 +585,27 @@ function CreateChannelPageInner() {
                     type="button"
                     onClick={handleTestConnection}
                     disabled={
-                      testingConnection
-                      || (gatewayMode === "stored" ? !selectedGatewayId : !gatewayUrl.trim())
+                      testingConnection ||
+                      (gatewayMode === "stored"
+                        ? !selectedGatewayId
+                        : !gatewayUrl.trim())
                     }
                     className="px-4 py-2 bg-primary hover:bg-primary-hover rounded text-sm font-semibold disabled:opacity-50"
                   >
-                    {testingConnection ? t("gateway.testing") : t("gateway.testConnection")}
+                    {testingConnection
+                      ? t("gateway.testing")
+                      : t("gateway.testConnection")}
                   </button>
                   {gatewayConnectionState.status !== "idle" && (
-                    <OpenClawPairingStatusCard
+                    <GatewayStatusCard
                       className="mt-3"
                       status={gatewayConnectionState.status}
-                      requestId={gatewayConnectionState.requestId}
                       error={gatewayConnectionState.error}
                       detail={
                         gatewayConnectionState.status === "connected"
-                          ? t("gateway.connected", { count: gatewayAgents.length })
+                          ? t("gateway.connected", {
+                              count: gatewayAgents.length,
+                            })
                           : undefined
                       }
                     />

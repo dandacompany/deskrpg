@@ -5,8 +5,7 @@ import Link from "next/link";
 
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import LogoutButton from "@/components/LogoutButton";
-import OpenClawPairingStatusCard, { type OpenClawPairingStatus } from "@/components/openclaw/OpenClawPairingStatusCard";
-import { shouldShowPairingCard } from "@/components/openclaw/pairing-card-visibility";
+import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import HermesProfileList from "@/components/hermes/HermesProfileList";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
@@ -33,22 +32,14 @@ type GatewayShare = {
   createdAt?: string;
 };
 
-type PairingState = {
-  status: OpenClawPairingStatus;
-  requestId?: string | null;
+/** 게이트웨이 연결 테스트 결과. 예전 이름은 PairingState 였지만 페어링(OpenClaw 디바이스
+ * 승인)은 사라졌고 남은 것은 연결 테스트 상태뿐이다. */
+type GatewayTestState = {
+  status: GatewayStatus;
   error?: string | null;
 };
 
-const EMPTY_PAIRING_STATE: PairingState = { status: "idle" };
-
-function isGatewayPairingRequired(payload: unknown): payload is {
-  errorCode?: string;
-  requestId?: string;
-} {
-  if (!payload || typeof payload !== "object") return false;
-  const errorCode = (payload as { errorCode?: unknown }).errorCode;
-  return errorCode === "gateway_pairing_required" || errorCode === "PAIRING_REQUIRED";
-}
+const EMPTY_TEST_STATE: GatewayTestState = { status: "idle" };
 
 export default function GatewayManagementPage() {
   const t = useT();
@@ -88,7 +79,7 @@ function GatewayManagementPageInner() {
   const [shareSaving, setShareSaving] = useState(false);
   const [shareError, setShareError] = useState("");
 
-  const [pairingStates, setPairingStates] = useState<Record<string, PairingState>>({});
+  const [testStates, setTestStates] = useState<Record<string, GatewayTestState>>({});
 
   const loadGateways = useCallback(async () => {
     setLoading(true);
@@ -237,7 +228,7 @@ function GatewayManagementPageInner() {
       if (!res.ok) {
         throw data;
       }
-      setPairingStates((prev) => {
+      setTestStates((prev) => {
         const next = { ...prev };
         delete next[selectedGateway.id];
         return next;
@@ -256,29 +247,21 @@ function GatewayManagementPageInner() {
 
   const handleTest = async (gatewayId: string) => {
     setTestingGatewayId(gatewayId);
-    setPairingStates((prev) => ({
+    setTestStates((prev) => ({
       ...prev,
-      [gatewayId]: EMPTY_PAIRING_STATE,
+      [gatewayId]: EMPTY_TEST_STATE,
     }));
     try {
       const res = await fetch(`/api/gateways/${gatewayId}/test`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setPairingStates((prev) => ({
+        setTestStates((prev) => ({
           ...prev,
           [gatewayId]: { status: "connected" },
         }));
         await loadGateways();
-      } else if (isGatewayPairingRequired(data)) {
-        setPairingStates((prev) => ({
-          ...prev,
-          [gatewayId]: {
-            status: "pairing_required",
-            requestId: typeof data.requestId === "string" ? data.requestId : null,
-          },
-        }));
       } else {
-        setPairingStates((prev) => ({
+        setTestStates((prev) => ({
           ...prev,
           [gatewayId]: {
             status: "error",
@@ -287,7 +270,7 @@ function GatewayManagementPageInner() {
         }));
       }
     } catch {
-      setPairingStates((prev) => ({
+      setTestStates((prev) => ({
         ...prev,
         [gatewayId]: { status: "error", error: t("errors.connectionFailed") },
       }));
@@ -512,14 +495,13 @@ function GatewayManagementPageInner() {
                 </div>
               </div>
 
-              {selectedGateway && shouldShowPairingCard(pairingStates[selectedGateway.id]) && (
-                <OpenClawPairingStatusCard
+              {selectedGateway && testStates[selectedGateway.id] && (
+                <GatewayStatusCard
                   className="mt-4"
-                  status={pairingStates[selectedGateway.id]?.status ?? "idle"}
-                  requestId={pairingStates[selectedGateway.id]?.requestId}
-                  error={pairingStates[selectedGateway.id]?.error}
+                  status={testStates[selectedGateway.id]?.status ?? "idle"}
+                  error={testStates[selectedGateway.id]?.error}
                   detail={
-                    pairingStates[selectedGateway.id]?.status === "connected"
+                    testStates[selectedGateway.id]?.status === "connected"
                       ? t("gateways.testSuccess")
                       : undefined
                   }

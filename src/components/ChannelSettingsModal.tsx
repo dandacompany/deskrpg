@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
-import OpenClawPairingStatusCard, { type OpenClawPairingStatus } from "@/components/openclaw/OpenClawPairingStatusCard";
+import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 
 type ChannelSettingsTab = "settings" | "members" | "gateway";
 
@@ -42,8 +42,7 @@ interface Member {
 }
 
 interface GatewayConnectionState {
-  status: OpenClawPairingStatus;
-  requestId?: string | null;
+  status: GatewayStatus;
   error?: string | null;
 }
 
@@ -54,16 +53,6 @@ interface AccessibleGatewayOption {
   canEditCredentials: boolean;
   isOwner: boolean;
   shareRole: string | null;
-}
-
-function isGatewayPairingRequired(payload: unknown): payload is {
-  errorCode?: string;
-  requestId?: string;
-  error?: string;
-} {
-  if (!payload || typeof payload !== "object") return false;
-  const errorCode = (payload as { errorCode?: unknown }).errorCode;
-  return errorCode === "gateway_pairing_required" || errorCode === "PAIRING_REQUIRED";
 }
 
 export default function ChannelSettingsModal({
@@ -286,17 +275,10 @@ export default function ChannelSettingsModal({
       if (res.ok) {
         setGatewayConnectionState({ status: "connected" });
       } else {
-        if (isGatewayPairingRequired(data)) {
-          setGatewayConnectionState({
-            status: "pairing_required",
-            requestId: typeof data.requestId === "string" ? data.requestId : null,
-          });
-        } else {
-          setGatewayConnectionState({
-            status: "error",
-            error: getLocalizedErrorMessage(t, data, "errors.connectionFailed"),
-          });
-        }
+        setGatewayConnectionState({
+          status: "error",
+          error: getLocalizedErrorMessage(t, data, "errors.connectionFailed"),
+        });
       }
     } catch {
       setGatewayConnectionState({ status: "error", error: t("errors.connectionFailed") });
@@ -718,9 +700,8 @@ export default function ChannelSettingsModal({
                     </div>
                   </div>
                   {gatewayConnectionState.status !== "idle" && (
-                    <OpenClawPairingStatusCard
+                    <GatewayStatusCard
                       status={gatewayConnectionState.status}
-                      requestId={gatewayConnectionState.requestId}
                       error={gatewayConnectionState.error}
                       detail={gatewayConnectionState.status === "connected" ? t("settings.connected") : undefined}
                     />

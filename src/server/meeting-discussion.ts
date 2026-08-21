@@ -1,5 +1,4 @@
 import { MEETING_NPC_STREAM_EVENT } from "./meeting-socket";
-import { OpenClawAdapter } from "../lib/adapters/openclaw-adapter.js";
 import type { AdapterRegistry, NpcAdapter } from "../lib/adapters/types";
 import { ConversationEngine, type EngineParticipant, type RunMode } from "../lib/conversation/conversation-engine";
 import type { Turn } from "../lib/conversation/transcript";
@@ -12,7 +11,14 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { generateTranscript } = require("../lib/meeting-formatter.js") as typeof import("../lib/meeting-formatter.js");
 
-const openclawAdapter = new OpenClawAdapter();
+// 회의는 소켓 이벤트로만 흐르고 HTTP 로그를 남기지 않는다. 그래서 "화면에는 시작됐다고
+// 뜨는데 아무도 발언하지 않는" 상태가 되면 서버 쪽에 단서가 하나도 없다 — 실제로 그
+// 상태를 진단하는 데 e2e 를 두 번 5분씩 돌려야 했다. DEBUG_CHAT 과 같은 스위치를 쓴다.
+const DEBUG_MEETING = process.env.DEBUG_CHAT === "1" || process.env.DEBUG_MEETING === "1";
+function meetingLog(...args: unknown[]) {
+  if (DEBUG_MEETING) console.log("[meeting]", ...args);
+}
+
 
 type MeetingRoom = {
   participants: Set<string>;
@@ -69,21 +75,17 @@ type MeetingBrokerParticipant = {
   displayName: string;
   role: string;
   passPolicy: string | null;
-  /** OpenClaw 실제 agentId. 회의 요약 생성(gateway.chatSend) 등 openclaw 전용 후속 작업에만 쓴다.
-   * npcId(참가자 식별자)와는 별개다 — 혼동하지 말 것. */
-  openclawAgentId: string | null;
 };
 
 type ExcludedMeetingNpc = {
   npcId: string;
   displayName: string;
-  reason: "unbound" | "hermes_profile_unavailable" | "no_agent" | "gateway_not_connected" | "adapter_unavailable";
+  reason: "unbound" | "hermes_profile_unavailable" | "adapter_unavailable";
 };
 
 type MeetingBrokerConfig = {
   topic: string;
   npcs: MeetingNpcConfig[];
-  gateway: unknown;
   userId: string;
   channelId: string;
   adapterRegistry: AdapterRegistry;
@@ -154,18 +156,18 @@ type RegisterMeetingDiscussionHandlersArgs = {
     players: Map<string, MeetingPlayer>;
     user: MeetingUser;
     adapterRegistry: AdapterRegistry;
-    getOrConnectGateway: (channelId: string) => Promise<unknown | null>;
     getNpcConfigsForChannel: (channelId: string) => Promise<MeetingNpcConfig[]>;
     canControlMeeting: (channelId: string, userId: string) => Promise<boolean> | boolean;
     createMeetingBroker?: (
       config: MeetingBrokerConfig,
       callbacks: MeetingBrokerCallbacks,
     ) => MeetingBrokerLike | Promise<MeetingBrokerLike>;
+    /** 회의 요약. 예전에는 OpenClaw 게이트웨이의 chatSend 에 직접 매여 있어서
+     * `gateway && openclawAgentId` 인 회의에서만 돌았다 — 즉 Hermes 회의는 늘 빈 요약을
+     * 남겼다. 이제 참가자 어댑터를 그대로 받아 백엔드와 무관하게 돈다. */
     generateMeetingSummary: (
-      gateway: unknown,
-      agentId: string,
-      sessionKeyPrefix: string,
-      meetingId: string,
+      adapter: NpcAdapter,
+      sessionKey: string,
       topic: string,
       transcript: string,
     ) => Promise<MeetingSummary>;
@@ -180,17 +182,6 @@ function toRunMode(value: unknown): RunMode {
 
 function getMeetingRoomId(channelId: string) {
   return `meeting-${channelId}`;
-}
-
-/** OpenClaw 게이트웨이를 회의 하나(=참가자 하나) 범위로 닫아 NpcAdapter 모양으로 감싼다.
- * OpenClawAdapter.execute()는 게이트웨이가 없어 못 쓰므로 이 어댑터가 필요하다. */
-function createOpenClawEngineAdapter(gateway: unknown, agentId: string): NpcAdapter {
-  return {
-    type: openclawAdapter.type,
-    execute: (options) => openclawAdapter.executeWithGateway(gateway, options, agentId),
-    abort: (sessionKey) => openclawAdapter.abortWithGateway(gateway, agentId, sessionKey),
-    testConnection: (config) => openclawAdapter.testConnection(config),
-  };
 }
 
 /** createHermesAdapterForNpc와 같은 모양 — 프로필을 못 찾으면 null. */
@@ -216,13 +207,12 @@ export async function resolveMeetingParticipant(
   ctx: {
     meetingId: string;
     userId: string;
-    gateway: unknown;
     adapterRegistry: AdapterRegistry;
     /** 테스트에서 DB·게이트웨이 없이 hermes 갈래를 관찰하기 위한 주입점. 기본값이 실제 배선이다. */
     createHermesAdapter?: CreateHermesAdapter;
   },
 ): Promise<ResolvedMeetingParticipant | { excluded: ExcludedMeetingNpc }> {
-  const adapterType = npc.adapterType || "openclaw";
+  const adapterType = npc.adapterType || "hermes";
   const hermesProfileId = npc.hermesProfileId ?? null;
   const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
   const sessionKeyBase = npc.sessionKeyPrefix || npc.id;
@@ -233,7 +223,6 @@ export async function resolveMeetingParticipant(
     displayName: npc.name,
     role: npc.role || "Participant",
     passPolicy: npc.passPolicy || null,
-    openclawAgentId: null,
   };
 
   if (dispatchKind === "unbound") {
@@ -251,17 +240,9 @@ export async function resolveMeetingParticipant(
   }
 
   if (dispatchKind === "openclaw") {
-    if (!npc.agentId) {
-      return { excluded: { npcId: npc.id, displayName: npc.name, reason: "no_agent" } };
-    }
-    if (!ctx.gateway) {
-      return { excluded: { npcId: npc.id, displayName: npc.name, reason: "gateway_not_connected" } };
-    }
-    return {
-      participant: { ...participantBase, openclawAgentId: npc.agentId },
-      adapter: createOpenClawEngineAdapter(ctx.gateway, npc.agentId),
-      sessionKey,
-    };
+    // OpenClaw 는 제거됐다. 남아 있는 openclaw NPC 는 회의에서 조용히 빠지는 대신
+    // 이유를 달고 제외되어, 사용자가 다시 연결해야 한다는 것을 알 수 있게 한다.
+    return { excluded: { npcId: npc.id, displayName: npc.name, reason: "unbound" } };
   }
 
   // dispatchKind === "registry"
@@ -283,7 +264,6 @@ export async function defaultCreateMeetingBroker(
     const result = await resolveMeetingParticipant(npc, {
       meetingId: config.meetingId,
       userId: config.userId,
-      gateway: config.gateway,
       adapterRegistry: config.adapterRegistry,
       createHermesAdapter: deps.createHermesAdapter,
     });
@@ -336,6 +316,7 @@ export async function defaultCreateMeetingBroker(
     {
       onPollStart: () => callbacks.onPollStart?.(),
       onPollResult: (raises, passes) => {
+        meetingLog("폴링 결과: raises=", raises.map((r) => r.npcId).join(",") || "(없음)", "passes=", passes.join(",") || "(없음)");
         callbacks.onPollResult?.(
           raises
             .map((r) => {
@@ -347,6 +328,7 @@ export async function defaultCreateMeetingBroker(
         );
       },
       onTurnStart: (npcId) => {
+        meetingLog("턴 시작:", npcId);
         const agent = participantByNpcId.get(npcId);
         if (agent) callbacks.onTurnStart?.(agent);
       },
@@ -400,7 +382,6 @@ export function registerMeetingDiscussionHandlers({
     players,
     user,
     adapterRegistry,
-    getOrConnectGateway,
     getNpcConfigsForChannel,
     canControlMeeting,
     createMeetingBroker = defaultCreateMeetingBroker,
@@ -421,15 +402,18 @@ export function registerMeetingDiscussionHandlers({
       selectedNpcIds?: string[];
     };
 
+    meetingLog("start-discussion 수신:", { channelId, topic: topic?.slice(0, 40), selectedNpcIds });
     if (!channelId || !topic) return;
     if (activeBrokers.has(channelId)) {
       socket.emit("meeting:error", { error: "A meeting is already in progress" });
       return;
     }
 
-    // 게이트웨이는 openclaw 참가자를 해석할 때만 필요하다 — hermes/registry 전용 회의는 게이트웨이가
-    // 없어도 시작할 수 있어야 한다(이번 전환의 취지). 없으면 openclaw NPC만 제외 대상이 된다.
-    const gateway = await getOrConnectGateway(channelId);
+    // 예전에는 여기서 getOrConnectGateway(channelId) 를 조건 없이 await 했다. 주석은
+    // "openclaw 참가자를 해석할 때만 필요하다"고 적혀 있었지만 코드는 늘 불렀고, Hermes
+    // 게이트웨이가 OpenClaw WS 핸드셰이크에 403 을 돌려주면 그 자리에서 매달렸다 —
+    // 화면에는 "토론이 시작되었습니다"만 뜬 채 첫 턴이 영영 디스패치되지 않았다.
+    // OpenClaw 가 사라진 지금은 획득할 게이트웨이 자체가 없다.
 
     const npcConfigs = await getNpcConfigsForChannel(channelId);
     let candidateNpcs = npcConfigs;
@@ -439,6 +423,7 @@ export function registerMeetingDiscussionHandlers({
       candidateNpcs = candidateNpcs.filter((npc) => selectedSet.has(npc.id));
     }
 
+    meetingLog("후보 NPC:", candidateNpcs.map((n) => `${n.name}(${n.adapterType})`).join(", ") || "(없음)");
     if (candidateNpcs.length === 0) {
       socket.emit("meeting:error", { error: "No AI NPCs in this channel" });
       return;
@@ -469,11 +454,22 @@ export function registerMeetingDiscussionHandlers({
     const meetingId = `meet-${Date.now()}`;
     const sessionKeyPrefix = candidateNpcs[0].sessionKeyPrefix || channelId.slice(0, 8);
 
+    // 요약용 어댑터는 회의 참가자와 **별도로** 한 번 해석한다. 브로커의 config.participants
+    // 는 어댑터를 담지 않는 조회용 뷰이므로(위 타입 주석 참조) 밖에서는 닿을 수 없고,
+    // 요약 세션은 어차피 회의 세션과 분리되어야 한다 — 요약 프롬프트가 그 NPC 의 회의
+    // 맥락에 섞이면 다음 회의 발언이 오염된다.
+    const summarizerResolution = await resolveMeetingParticipant(candidateNpcs[0], {
+      meetingId: `${meetingId}-summary`,
+      userId: user.userId,
+      adapterRegistry,
+    });
+    const summarizerAdapter =
+      "adapter" in summarizerResolution ? summarizerResolution.adapter : null;
+
     const brokerInstance = await createMeetingBroker(
       {
         topic,
         npcs: candidateNpcs,
-        gateway,
         userId: user.userId,
         channelId,
         adapterRegistry,
@@ -544,6 +540,7 @@ export function registerMeetingDiscussionHandlers({
           io.to(getMeetingRoomId(channelId)).emit("meeting:turn-aborted", { npcId });
         },
         onParticipantsExcluded: (excluded) => {
+          meetingLog("제외:", excluded.map((e) => `${e.displayName}=${e.reason}`).join(", "));
           const names = excluded.map((e) => e.displayName).join(", ");
           io.to(getMeetingRoomId(channelId)).emit("meeting:error", {
             error: `Excluded from the meeting (no usable backend): ${names}`,
@@ -551,17 +548,13 @@ export function registerMeetingDiscussionHandlers({
         },
         onMeetingEnd: async (transcript, durationSeconds) => {
           let summary: MeetingSummary = { keyTopics: [], conclusions: null };
-          const firstAgent = brokerInstance.config.participants[0];
-
-          if (gateway && firstAgent?.openclawAgentId) {
-            summary = await generateMeetingSummary(
-              gateway,
-              firstAgent.openclawAgentId,
-              brokerInstance.config.sessionKeyPrefix || sessionKeyPrefix,
-              brokerInstance.config.meetingId || meetingId,
-              topic,
-              transcript,
-            );
+          // 참가자 중 아무나 한 명에게 요약을 시킨다. 요약 세션 키는 회의 세션과 분리해
+          // 요약 프롬프트가 그 NPC 의 회의 맥락에 섞이지 않게 한다.
+          if (summarizerAdapter) {
+            const summaryKey = `${brokerInstance.config.sessionKeyPrefix || sessionKeyPrefix}-summary-${
+              brokerInstance.config.meetingId || meetingId
+            }`;
+            summary = await generateMeetingSummary(summarizerAdapter, summaryKey, topic, transcript);
           }
 
           const minutesId = await persistMeetingMinutes({
@@ -603,6 +596,10 @@ export function registerMeetingDiscussionHandlers({
       return;
     }
 
+    meetingLog(
+      "브로커 시작:",
+      brokerInstance.config.participants.map((p) => p.displayName).join(", "),
+    );
     activeBrokers.set(channelId, brokerInstance);
     discussionInitiators.set(channelId, user.userId);
 

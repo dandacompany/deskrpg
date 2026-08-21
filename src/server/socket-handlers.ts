@@ -1,4 +1,5 @@
 import { Server, Socket } from "socket.io";
+import type { NpcAdapter } from "../lib/adapters/types";
 import { jwtVerify } from "jose";
 import { eq, and } from "drizzle-orm";
 import {
@@ -978,18 +979,16 @@ async function streamMeetingNpcResponse(
   }
 }
 
+/**
+ * 회의 요약. 참가자 어댑터 하나를 빌려 쓴다 — 백엔드가 무엇이든 상관없다.
+ *
+ * 예전에는 OpenClaw 게이트웨이의 chatSend 에 직접 매여 있었고, 호출부가
+ * `gateway && openclawAgentId` 로 감싸고 있어서 Hermes 회의는 요약을 통째로 건너뛰었다.
+ * 실패가 조용해서(빈 배열 + null) 회의록에 결론이 안 남는 것으로만 보였다.
+ */
 async function generateMeetingSummary(
-  gateway: {
-    chatSend: (
-      agentId: string,
-      sessionKey: string,
-      message: string,
-      onChunk: (delta: string) => void,
-    ) => Promise<string>;
-  },
-  agentId: string,
-  sessionKeyPrefix: string,
-  meetingId: string,
+  adapter: NpcAdapter,
+  sessionKey: string,
   topic: string,
   transcript: string,
 ) {
@@ -1006,10 +1005,16 @@ ${transcript}
 }`;
 
   try {
-    const sessionKey = `${sessionKeyPrefix}-summary-${meetingId}`;
-    const response = await Promise.race([
-      gateway.chatSend(agentId, sessionKey, summaryPrompt, () => {}),
-      new Promise<string>((_, reject) => {
+    // multiParty: true — 요약은 그 NPC 의 영속 대화 세션이 아니라 일회성 실행이어야 한다.
+    // 히스토리는 비운다; 트랜스크립트는 프롬프트에 이미 통째로 들어 있다.
+    const { response } = await Promise.race([
+      adapter.execute({
+        sessionKey,
+        prompt: summaryPrompt,
+        multiParty: true,
+        conversationHistory: [],
+      }),
+      new Promise<{ response: string }>((_, reject) => {
         setTimeout(() => reject(new Error("Summary timeout")), 60_000);
       }),
     ]);
@@ -2007,18 +2012,9 @@ export function setupSocketHandlers(io: Server) {
         players,
         user,
         adapterRegistry,
-        getOrConnectGateway,
         getNpcConfigsForChannel,
         canControlMeeting,
-        generateMeetingSummary: (gateway, agentId, sessionKeyPrefix, meetingId, topic, transcript) =>
-          generateMeetingSummary(
-            gateway as Parameters<typeof generateMeetingSummary>[0],
-            agentId,
-            sessionKeyPrefix,
-            meetingId,
-            topic,
-            transcript,
-          ),
+        generateMeetingSummary,
         persistMeetingMinutes,
       },
     });

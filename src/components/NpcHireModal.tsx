@@ -9,7 +9,7 @@ import { Trash2, Maximize2 } from "lucide-react";
 import { useCharacterAppearance } from "@/hooks/useCharacterAppearance";
 import CharacterPreview from "@/components/CharacterPreview";
 import AppearanceEditor from "@/components/AppearanceEditor";
-import OpenClawPairingStatusCard, { type OpenClawPairingStatus } from "@/components/openclaw/OpenClawPairingStatusCard";
+import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import { getAgentProgressMeter, type AgentProgressPhase } from "@/lib/npc-agent-progress";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { localizeNpcPromptDocument } from "@/lib/npc-agent-defaults";
@@ -49,19 +49,8 @@ interface GatewayAgent {
 }
 
 interface GatewayConnectionState {
-  status: OpenClawPairingStatus;
-  requestId?: string | null;
+  status: GatewayStatus;
   error?: string | null;
-}
-
-function isGatewayPairingRequired(payload: unknown): payload is {
-  errorCode?: string;
-  requestId?: string;
-  error?: string;
-} {
-  if (!payload || typeof payload !== "object") return false;
-  const errorCode = (payload as { errorCode?: unknown }).errorCode;
-  return errorCode === "gateway_pairing_required" || errorCode === "PAIRING_REQUIRED";
 }
 
 // ---------------------------------------------------------------------------
@@ -323,17 +312,10 @@ export default function NpcHireModal({
       }
 
       setGatewayAgents([]);
-      if (isGatewayPairingRequired(data)) {
-        setGatewayConnectionState({
-          status: "pairing_required",
-          requestId: typeof data.requestId === "string" ? data.requestId : null,
-        });
-      } else {
-        setGatewayConnectionState({
-          status: "error",
-          error: getLocalizedErrorMessage(t, data, "errors.failedToListAgents"),
-        });
-      }
+      setGatewayConnectionState({
+        status: "error",
+        error: getLocalizedErrorMessage(t, data, "errors.failedToListAgents"),
+      });
     } catch {
       setGatewayAgents([]);
       setGatewayConnectionState({
@@ -468,15 +450,6 @@ export default function NpcHireModal({
       });
       if (!res.ok) {
         const data = await res.json();
-        if (isGatewayPairingRequired(data)) {
-          setGatewayConnectionState({
-            status: "pairing_required",
-            requestId: typeof data.requestId === "string" ? data.requestId : null,
-          });
-          setStep("configure");
-          setAgentProgress({ phase: "idle", status: "" });
-          return;
-        }
         setAgentProgress({
           phase: "failed",
           status: t("npc.agentCreateFailed"),
@@ -590,14 +563,12 @@ export default function NpcHireModal({
                 onChange={(e) => setAdapterType(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                {/* OpenClaw 은 새 NPC 선택지에서 뺐다 — 이 앱은 Hermes 로 옮겨왔고,
-                    OpenClaw 를 고르면 존재하지 않는 게이트웨이에 에이전트를 만들려다
-                    멈춘다. 다만 이미 openclaw 로 만들어진 NPC 를 편집할 때는 목록에
-                    남겨 둔다. 안 그러면 저장 시 어댑터가 조용히 바뀐다. */}
-                {(availableAdapters ?? (adapterType === "openclaw" ? ["hermes", "openclaw"] : ["hermes"])).map((type) => (
+                {/* OpenClaw 은 제거됐다. 이미 openclaw 로 만들어진 NPC 를 편집하더라도
+                    되돌릴 대상이 없으므로 목록에 남기지 않는다 — 저장하면 hermes 로 옮겨
+                    가고, 프로필을 고르지 않으면 unbound 로 남아 사용자가 그 사실을 안다. */}
+                {(availableAdapters ?? ["hermes"]).map((type) => (
                   <option key={type} value={type}>
-                    {type === "openclaw" ? "OpenClaw Gateway" :
-                     type === "hermes" ? "Hermes Agent" :
+                    {type === "hermes" ? "Hermes Agent" :
                      type === "claude" ? "Claude Code" :
                      type === "codex" ? "Codex CLI" :
                      type === "gemini" ? "Gemini CLI" :
@@ -626,23 +597,6 @@ export default function NpcHireModal({
                 t={t}
               />
             )}
-
-            {/* AI Agent Section (OpenClaw only) */}
-            {adapterType === "openclaw" && <AgentSection
-              hasGateway={hasGateway}
-              isEdit={isEdit}
-              gatewayAgents={gatewayAgents} setGatewayAgents={setGatewayAgents}
-              agentsLoading={agentsLoading}
-              gatewayConnectionState={gatewayConnectionState}
-              onRetryConnection={loadGatewayAgents}
-              selectedAgentId={selectedAgentId} setSelectedAgentId={setSelectedAgentId}
-              createNewAgent={createNewAgent} setCreateNewAgent={setCreateNewAgent}
-              newAgentId={newAgentId} setNewAgentId={setNewAgentId}
-              newAgentIdError={newAgentIdError}
-              validateNewAgentId={validateNewAgentId}
-              channelId={channelId}
-              t={t}
-            />}
 
             {/* Persona Section */}
             <PersonaSection
@@ -916,14 +870,13 @@ function AgentSection({
       ) : (
         <div className="space-y-3">
           {gatewayConnectionState.status !== "idle" && (
-            <OpenClawPairingStatusCard
+            <GatewayStatusCard
               status={gatewayConnectionState.status}
-              requestId={gatewayConnectionState.requestId}
               error={gatewayConnectionState.error}
               detail={gatewayConnectionState.status === "connected" ? t("settings.connected") : undefined}
             />
           )}
-          {(gatewayConnectionState.status === "pairing_required" || gatewayConnectionState.status === "error") && (
+          {gatewayConnectionState.status === "error" && (
             <div className="flex justify-end">
               <button
                 type="button"
@@ -936,7 +889,7 @@ function AgentSection({
           )}
           {agentsLoading ? (
             <p className="text-sm text-gray-500">{t("npc.loadingAgents")}</p>
-          ) : gatewayConnectionState.status === "pairing_required" || gatewayConnectionState.status === "error" ? null : (
+          ) : gatewayConnectionState.status === "error" ? null : (
             <>
               <div className="flex gap-2">
                 <select
