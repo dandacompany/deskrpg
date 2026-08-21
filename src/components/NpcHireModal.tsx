@@ -155,13 +155,7 @@ export default function NpcHireModal({
   }>({ phase: "idle", status: "" });
 
   // Agent selection state
-  const [gatewayAgents, setGatewayAgents] = useState<GatewayAgent[]>([]);
-  const [agentsLoading, setAgentsLoading] = useState(false);
   const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({ status: "idle" });
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
-  const [createNewAgent, setCreateNewAgent] = useState(false);
-  const [newAgentId, setNewAgentId] = useState("");
-  const [newAgentIdError, setNewAgentIdError] = useState<string | null>(null);
 
   // Persona preset state
   const [personaPresetId, setPersonaPresetId] = useState<string>("custom");
@@ -179,13 +173,12 @@ export default function NpcHireModal({
   // --- Derived ---
   const isEdit = !!editingNpc;
   const atLimit = currentNpcCount >= MAX_NPC_COUNT;
-  const isExistingAgentSelected = hasGateway && selectedAgentId && !createNewAgent;
   const personaCompat = identity.trim();
   const canSubmit =
     !saving &&
     hasGateway &&
     name.trim().length > 0 &&
-    (personaCompat.length > 0 || isExistingAgentSelected);
+    personaCompat.length > 0;
 
   // --- Build appearance (with preset support) ---
   const buildAppearance = useCallback((): CharacterAppearance => {
@@ -195,16 +188,6 @@ export default function NpcHireModal({
     }
     return buildAppearanceFromHook();
   }, [appearanceMode, selectedPresetId, presets, buildAppearanceFromHook]);
-
-  // --- Validate new agent ID ---
-  const validateNewAgentId = useCallback((value: string) => {
-    if (!value) { setNewAgentIdError(null); return; }
-    if (!/^[a-zA-Z0-9-]+$/.test(value)) setNewAgentIdError(t("npc.agentIdValidationChars"));
-    else if (value.length < 3) setNewAgentIdError(t("npc.agentIdValidationMin"));
-    else if (value.length > 30) setNewAgentIdError(t("npc.agentIdValidationMax"));
-    else if (gatewayAgents.some((a) => a.id === value)) setNewAgentIdError(t("npc.agentIdExists"));
-    else setNewAgentIdError(null);
-  }, [gatewayAgents, t]);
 
   const findPreset = useCallback((presetId: string | null) => {
     if (!presetId) return null;
@@ -229,16 +212,7 @@ export default function NpcHireModal({
     setSoul(localizeNpcPromptDocument(applyPresetName(preset.soul, resolvedName), locale, "soul"));
     setIdentityCustomized(false);
     setSoulCustomized(false);
-
-    if (hasGateway && (!isEdit || createNewAgent || !selectedAgentId)) {
-      if (!isEdit) {
-        setCreateNewAgent(true);
-        setSelectedAgentId(null);
-      }
-      setNewAgentId(preset.defaultAgentId);
-      validateNewAgentId(preset.defaultAgentId);
-    }
-  }, [createNewAgent, findPreset, hasGateway, isEdit, locale, name, selectedAgentId, t, validateNewAgentId]);
+  }, [findPreset, locale, name, t]);
 
   // --- Initialise / reset on open or editingNpc change ---
   useEffect(() => {
@@ -265,13 +239,6 @@ export default function NpcHireModal({
         setPersonaPresetId("custom");
         setIdentityCustomized(true);
         setSoulCustomized(true);
-        if (editingNpc.agentId) {
-          setSelectedAgentId(editingNpc.agentId);
-          setCreateNewAgent(false);
-        } else {
-          setSelectedAgentId(null);
-          setCreateNewAgent(hasGateway);
-        }
       } else {
         setAdapterType(channelDefaultAdapter || "hermes");
         setSelectedHermesProfileId(null);
@@ -288,50 +255,10 @@ export default function NpcHireModal({
         setPersonaPresetId("custom");
         setIdentityCustomized(false);
         setSoulCustomized(false);
-        setSelectedAgentId(null);
-        setCreateNewAgent(hasGateway);
-        setNewAgentId("");
-        setNewAgentIdError(null);
       }
       setGatewayConnectionState({ status: "idle" });
-      setGatewayAgents([]);
     });
   }, [isOpen, editingNpc, hasGateway, channelDefaultAdapter, setBodyType, setLayers, setActiveCategory]);
-
-  const loadGatewayAgents = useCallback(async () => {
-    if (!hasGateway) return;
-    setAgentsLoading(true);
-    setGatewayConnectionState({ status: "idle" });
-    try {
-      const res = await fetch(`/api/channels/${channelId}/gateway/agents`);
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setGatewayAgents(Array.isArray(data.agents) ? data.agents : []);
-        setGatewayConnectionState({ status: "connected" });
-        return;
-      }
-
-      setGatewayAgents([]);
-      setGatewayConnectionState({
-        status: "error",
-        error: getLocalizedErrorMessage(t, data, "errors.failedToListAgents"),
-      });
-    } catch {
-      setGatewayAgents([]);
-      setGatewayConnectionState({
-        status: "error",
-        error: t("errors.failedToListAgents"),
-      });
-    } finally {
-      setAgentsLoading(false);
-    }
-  }, [channelId, hasGateway, t]);
-
-  // --- Fetch gateway agents ---
-  useEffect(() => {
-    if (!isOpen || !hasGateway) return;
-    void loadGatewayAgents();
-  }, [isOpen, hasGateway, loadGatewayAgents]);
 
   // --- Fetch Hermes profiles for the selected gateway ---
   const loadHermesProfiles = useCallback(async () => {
@@ -343,9 +270,15 @@ export default function NpcHireModal({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw data;
       setHermesProfiles(Array.isArray(data.profiles) ? data.profiles : []);
+      // 프로필을 읽어 왔다는 것은 게이트웨이에 실제로 닿았다는 뜻이다. 예전에는 OpenClaw
+      // 에이전트 목록 조회가 이 상태를 채웠는데, 그 경로가 사라졌으므로 같은 신호를 여기서
+      // 낸다 — 그러지 않으면 연결 카드가 영영 idle 로 남는다.
+      setGatewayConnectionState({ status: "connected" });
     } catch (nextError) {
       setHermesProfiles([]);
-      setHermesProfilesError(getLocalizedErrorMessage(t, nextError, "common.error"));
+      const message = getLocalizedErrorMessage(t, nextError, "common.error");
+      setHermesProfilesError(message);
+      setGatewayConnectionState({ status: "error", error: message });
     } finally {
       setHermesProfilesLoading(false);
     }
@@ -422,53 +355,10 @@ export default function NpcHireModal({
     }
   };
 
-  // --- Create agent on gateway ---
-  const handleCreateAgent = async () => {
-    // Hermes NPC 는 게이트웨이에 만들 에이전트가 없다 — 프로필이 이미 그 자리에 있고
-    // 우리는 바인딩만 한다. `/api/npcs/create-agent` 는 openclaw-gateway.js 의 WS
-    // 클라이언트를 쓰므로, Hermes 로 고용하면서 이 경로를 타면 존재하지 않는 OpenClaw
-    // 게이트웨이에 연결을 시도하다 "1/3 게이트웨이에 연결하는 중"에서 멈춘다(실측).
-    if (adapterType !== "openclaw" || !hasGateway || !createNewAgent || !newAgentId.trim()) {
-      handleSubmit();
-      return;
-    }
-    setStep("creating-agent");
-    setAgentProgress({ phase: "connecting", status: t("npc.agentCreateConnecting") });
-    try {
-      const res = await fetch("/api/npcs/create-agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          channelId,
-          agentId: newAgentId.trim(),
-          presetId: selectedPresetId,
-          npcName: name.trim(),
-          identity: identity.trim(),
-          soul: soul.trim(),
-          locale,
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        setAgentProgress({
-          phase: "failed",
-          status: t("npc.agentCreateFailed"),
-          error: getLocalizedErrorMessage(t, data, "npc.agentCreateFailed"),
-        });
-        return;
-      }
-      setAgentProgress({ phase: "done", status: t("npc.agentCreateDone") });
-      setTimeout(() => setStep("place"), 500);
-    } catch {
-      setAgentProgress({
-        phase: "failed",
-        status: t("npc.agentCreateFailed"),
-        error: t("npc.agentCreateNetworkError"),
-      });
-    }
-  };
+  // 예전에는 여기서 `/api/npcs/create-agent` 로 OpenClaw 게이트웨이에 에이전트를 만들었다.
+  // Hermes 는 프로필이 이미 그 자리에 있고 우리는 바인딩만 하므로 만들 것이 없다.
+  const handleCreateAgent = () => handleSubmit();
 
-  // --- Submit ---
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSaving(true);
@@ -477,13 +367,6 @@ export default function NpcHireModal({
       const activePresetId = appearanceMode === "presets" ? selectedPresetId ?? undefined : undefined;
 
       if (isEdit && onSaveEdit) {
-        let agentId: string | undefined;
-        let agentAction: "select" | "create" | undefined;
-        if (hasGateway) {
-          if (createNewAgent && newAgentId.trim()) { agentId = newAgentId.trim(); agentAction = "create"; }
-          else if (selectedAgentId) { agentId = selectedAgentId; agentAction = selectedAgentId !== editingNpc!.agentId ? "select" : undefined; }
-        }
-
         // A Hermes profile is bound via a dedicated endpoint (it carries a live
         // credential), not through the generic NPC PATCH — so bind it here before
         // handing off the rest of the edit to onSaveEdit.
@@ -506,15 +389,9 @@ export default function NpcHireModal({
           }
         }
 
-        onSaveEdit(editingNpc!.id, { presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, identity: identity.trim(), soul: soul.trim(), agentId, agentAction, locale, adapterType, hermesProfileId: selectedHermesProfileId ?? undefined });
+        onSaveEdit(editingNpc!.id, { presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, identity: identity.trim(), soul: soul.trim(), locale, adapterType, hermesProfileId: selectedHermesProfileId ?? undefined });
       } else {
-        let agentId: string | undefined;
-        let agentAction: "select" | "create" | undefined;
-        if (hasGateway) {
-          if (createNewAgent && newAgentId.trim()) { agentId = newAgentId.trim(); agentAction = "create"; }
-          else if (selectedAgentId) { agentId = selectedAgentId; agentAction = "select"; }
-        }
-        onPlaceOnMap({ presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, agentId, agentAction, identity: identity.trim(), soul: soul.trim(), locale, adapterType, hermesProfileId: selectedHermesProfileId ?? undefined });
+        onPlaceOnMap({ presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, identity: identity.trim(), soul: soul.trim(), locale, adapterType, hermesProfileId: selectedHermesProfileId ?? undefined });
       }
     } finally {
       setSaving(false);
@@ -600,7 +477,7 @@ export default function NpcHireModal({
 
             {/* Persona Section */}
             <PersonaSection
-              isExistingAgentSelected={!!isExistingAgentSelected}
+              isExistingAgentSelected={false}
               personaPresetId={personaPresetId}
               onPersonaPresetChange={handlePersonaPresetChange}
               identity={identity} setIdentity={setIdentity}
@@ -718,13 +595,12 @@ export default function NpcHireModal({
               <button
                 onClick={() => {
                   if (isEdit) void handleSubmit();
-                  else if (hasGateway && createNewAgent && newAgentId.trim()) handleCreateAgent();
                   else void handleSubmit();
                 }}
                 disabled={!canSubmit || (!isEdit && atLimit)}
                 className="px-5 py-2 rounded text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {isEdit ? t("common.save") : (hasGateway && createNewAgent && newAgentId.trim()) ? t("common.next") : t("npc.placeOnMap")}
+                {isEdit ? t("common.save") : t("npc.placeOnMap")}
               </button>
             )}
 
@@ -827,133 +703,6 @@ function HermesProfileSection({
 // Agent Section sub-component
 // ---------------------------------------------------------------------------
 
-function AgentSection({
-  hasGateway,
-  isEdit,
-  gatewayAgents, setGatewayAgents,
-  agentsLoading,
-  gatewayConnectionState,
-  onRetryConnection,
-  selectedAgentId, setSelectedAgentId,
-  createNewAgent, setCreateNewAgent,
-  newAgentId, setNewAgentId,
-  newAgentIdError,
-  validateNewAgentId,
-  channelId,
-  t,
-}: {
-  hasGateway: boolean;
-  isEdit: boolean;
-  gatewayAgents: GatewayAgent[];
-  setGatewayAgents: React.Dispatch<React.SetStateAction<GatewayAgent[]>>;
-  agentsLoading: boolean;
-  gatewayConnectionState: GatewayConnectionState;
-  onRetryConnection: () => void | Promise<void>;
-  selectedAgentId: string | null;
-  setSelectedAgentId: (id: string | null) => void;
-  createNewAgent: boolean;
-  setCreateNewAgent: (v: boolean) => void;
-  newAgentId: string;
-  setNewAgentId: (v: string) => void;
-  newAgentIdError: string | null;
-  validateNewAgentId: (v: string) => void;
-  channelId: string;
-  t: (key: string, params?: Record<string, string | number>) => string;
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-300 mb-2">{t("npc.aiAgent")}</label>
-      {!hasGateway ? (
-        <div className="rounded border border-dashed border-gray-700 bg-gray-800/60 px-3 py-3 text-sm text-gray-400">
-          {t("npc.gatewaySetupHint")}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {gatewayConnectionState.status !== "idle" && (
-            <GatewayStatusCard
-              status={gatewayConnectionState.status}
-              error={gatewayConnectionState.error}
-              detail={gatewayConnectionState.status === "connected" ? t("settings.connected") : undefined}
-            />
-          )}
-          {gatewayConnectionState.status === "error" && (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => void onRetryConnection()}
-                className="px-3 py-1.5 rounded bg-gray-700 text-white text-xs font-semibold hover:bg-gray-600"
-              >
-                {t("gateway.testConnection")}
-              </button>
-            </div>
-          )}
-          {agentsLoading ? (
-            <p className="text-sm text-gray-500">{t("npc.loadingAgents")}</p>
-          ) : gatewayConnectionState.status === "error" ? null : (
-            <>
-              <div className="flex gap-2">
-                <select
-                  value={createNewAgent ? "__create__" : (selectedAgentId || "")}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === "__create__") { setCreateNewAgent(true); setSelectedAgentId(null); }
-                    else { setCreateNewAgent(false); setSelectedAgentId(val || null); setNewAgentId(""); }
-                  }}
-                  className="flex-1 px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="__create__">{t("npc.createNewAgent")}</option>
-                  <option value="">{t("npc.selectAgent")}</option>
-                  {gatewayAgents.map((agent) => (
-                    <option key={agent.id} value={agent.id} disabled={agent.inUse}>
-                      {agent.inUse
-                        ? t("npc.agentInUse", { name: agent.name || agent.id, npcName: agent.usedByNpcName || agent.id })
-                        : t("npc.agentAvailable", { name: agent.name || agent.id })}
-                    </option>
-                  ))}
-                </select>
-                {isEdit && selectedAgentId && !createNewAgent && (() => {
-                  const agent = gatewayAgents.find(a => a.id === selectedAgentId);
-                  return agent && agent.id !== "main" && !agent.inUse ? (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (agent.id === "main") return;
-                        if (!confirm(`${t("npc.deleteAgent")}: ${agent.name || agent.id}?`)) return;
-                        try {
-                          const res = await fetch(`/api/channels/${channelId}/gateway/agents?agentId=${agent.id}`, { method: "DELETE" });
-                          if (res.ok) { setGatewayAgents(prev => prev.filter(a => a.id !== agent.id)); setSelectedAgentId(null); }
-                          else {
-                            const data = await res.json().catch(() => ({}));
-                            alert(getLocalizedErrorMessage(t, data, "npc.deleteFailed"));
-                          }
-                        } catch { alert(t("npc.deleteFailed")); }
-                      }}
-                      className="px-2 py-2 rounded bg-red-800 hover:bg-red-700 text-white text-sm shrink-0"
-                      title={t("npc.deleteAgent")}
-                    ><Trash2 className="w-4 h-4" /></button>
-                  ) : null;
-                })()}
-              </div>
-
-              {createNewAgent && (
-                <div>
-                  <input
-                    type="text" maxLength={30} value={newAgentId}
-                    onChange={(e) => { setNewAgentId(e.target.value); validateNewAgentId(e.target.value); }}
-                    placeholder={t("npc.agentIdPlaceholder")}
-                    className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  {newAgentIdError && <p className="text-xs text-red-400 mt-1">{newAgentIdError}</p>}
-                  <p className="text-xs text-gray-500 mt-1">{t("npc.agentIdHint")}</p>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Persona Section sub-component

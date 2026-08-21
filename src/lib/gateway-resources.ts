@@ -20,11 +20,6 @@ import {
   invalidateGatewayRuntimeState,
   setGatewayRuntimeState,
 } from "@/lib/gateway-runtime-cache";
-import {
-  buildGatewayErrorPayload,
-  getGatewayErrorStatus,
-  testGatewayConnection,
-} from "@/lib/openclaw-gateway.js";
 import { buildGatewayConfig, getTaskAutomationConfig } from "@/lib/task-reporting";
 
 type GatewayShareRow = typeof gatewayShares.$inferSelect;
@@ -437,36 +432,23 @@ export async function getGatewayRuntimeStateForChannel(
     };
   }
 
-  try {
-    const token = decryptGatewayToken(binding.resource.tokenEncrypted);
-    await testGatewayConnection(binding.resource.baseUrl, token);
-    await persistGatewayValidationState(binding.resource.id, { status: "valid" });
-    return {
-      ...setGatewayRuntimeState(binding.resource.id, { status: "valid" }),
-      gateway: binding,
-    };
-  } catch (error) {
-    const payload = buildGatewayErrorPayload(error, {
-      fallbackErrorCode: "failed_to_reach_test_endpoint",
-      fallbackError: "Unknown error",
-    }) as {
-      ok: boolean;
-      errorCode: string;
-      error: string;
-      requestId?: string | null;
-      details?: unknown;
-    };
-    const status = mapGatewayErrorStatus(payload.errorCode, getGatewayErrorStatus(error, 502));
-    await persistGatewayValidationState(binding.resource.id, {
-      status,
-      error: payload.error,
-    });
+  // 프로브가 hermes 로 판정하지 못했다. 예전에는 여기서 OpenClaw 의 WS 핸드셰이크를
+  // 한 번 더 시도했지만, 그 백엔드는 사라졌다 — 프로브 결과를 그대로 실패로 보고한다.
+  {
+    const errorCode =
+      probe.kind === "unreachable" ? "failed_to_reach_test_endpoint" : "not_a_hermes_gateway";
+    const error =
+      probe.kind === "unreachable"
+        ? probe.error
+        : `Not a Hermes API Server (HTTP ${probe.status})`;
+    const status = mapGatewayErrorStatus(errorCode, 502);
+    await persistGatewayValidationState(binding.resource.id, { status, error });
     return {
       ...setGatewayRuntimeState(binding.resource.id, {
         status,
-        requestId: payload.requestId,
-        error: payload.error,
-        details: payload.details,
+        requestId: null,
+        error,
+        details: null,
       }),
       gateway: binding,
     };

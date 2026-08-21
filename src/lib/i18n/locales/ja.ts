@@ -150,7 +150,7 @@ const ja: Record<string, string> = {
   "gateway.tokenPlaceholder": "ゲートウェイトークン",
   "gateway.testConnection": "接続テスト",
   "gateway.testing": "テスト中...",
-  "gateway.connected": "接続成功！エージェント{count}個検出。",
+  "gateway.connected": "ゲートウェイに接続しました。",
   "gateway.failed": "失敗: {error}",
   // Hermes profiles
   "gateway.profile.title": "Hermesプロファイル",

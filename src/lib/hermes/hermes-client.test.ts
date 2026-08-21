@@ -320,3 +320,35 @@ describe("HermesClient.createSession — 제목 충돌", () => {
     await assert.rejects(() => c.createSession("없는제목"), (e: unknown) => e instanceof HermesError);
   });
 });
+
+// 실측 회귀 — 회의 폴링 한 건의 SSE 를 그대로 옮긴 것이다(Hermes v0.20.2).
+// NPC 는 "SPEAK: …" 라고 또박또박 답했는데 우리는 빈 문자열을 받아 전원 PASS 로 집계했다.
+describe("HermesClient.streamRunEvents — /v1/runs 방언", () => {
+  test("message.delta 를 누적한다 — 회의 폴링 응답이 빈 문자열이면 전원 PASS 가 된다", async () => {
+    const frames = [
+      'data: {"event": "message.delta", "run_id": "run_1", "delta": "SPE"}\n\n',
+      'data: {"event": "message.delta", "run_id": "run_1", "delta": "AK: "}\n\n',
+      'data: {"event": "message.delta", "run_id": "run_1", "delta": "김치찌개"}\n\n',
+      'data: {"event": "reasoning.available", "run_id": "run_1"}\n\n',
+      'data: {"event": "run.completed", "run_id": "run_1"}\n\n',
+    ];
+    const client = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "danvi",
+      token: "t",
+      fetchImpl: (async () =>
+        new Response(
+          new ReadableStream({
+            start(c) {
+              for (const f of frames) c.enqueue(new TextEncoder().encode(f));
+              c.close();
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "text/event-stream" } },
+        )) as unknown as typeof fetch,
+    });
+
+    const { text } = await client.streamRunEvents("run_1", () => {});
+    assert.equal(text, "SPEAK: 김치찌개");
+  });
+});

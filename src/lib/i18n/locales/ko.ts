@@ -150,7 +150,7 @@ const ko: Record<string, string> = {
   "gateway.tokenPlaceholder": "게이트웨이 토큰",
   "gateway.testConnection": "연결 테스트",
   "gateway.testing": "테스트 중...",
-  "gateway.connected": "연결됨! 에이전트 {count}개 발견.",
+  "gateway.connected": "게이트웨이에 연결되었습니다.",
   "gateway.failed": "실패: {error}",
   // Hermes profiles
   "gateway.profile.title": "Hermes 프로필",

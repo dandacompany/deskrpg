@@ -47,3 +47,29 @@ describe("createSseParser", () => {
     assert.deepEqual(parser.flush(), []);
   });
 });
+
+// 실측 회귀 — /v1/runs/<id>/events 프레임을 그대로 옮긴 것이다(Hermes v0.20.2).
+// 이 엔드포인트는 SSE `event:` 줄을 쓰지 않고 이름을 data JSON 안에 넣는다.
+describe("SSE — /v1/runs 방언", () => {
+  test("event: 줄이 없으면 payload 의 event 필드를 이름으로 쓴다", () => {
+    const parser = createSseParser();
+    const events = parser.push(
+      'data: {"event": "message.delta", "run_id": "run_1", "delta": "S"}\n\n'
+      + 'data: {"event": "run.completed", "run_id": "run_1"}\n\n',
+    );
+    assert.deepEqual(events.map((e) => e.event), ["message.delta", "run.completed"]);
+    assert.equal(events[0].data.delta, "S");
+  });
+
+  test("event: 줄이 있으면 그쪽이 우선한다 — 1:1 방언은 그대로 동작한다", () => {
+    const parser = createSseParser();
+    const [e] = parser.push('event: assistant.delta\ndata: {"event": "ignored", "delta": "x"}\n\n');
+    assert.equal(e.event, "assistant.delta", "명시적 event: 줄을 payload 필드가 덮으면 안 된다");
+  });
+
+  test("event 필드도 event: 줄도 없으면 기존대로 message 다", () => {
+    const parser = createSseParser();
+    const [e] = parser.push('data: {"delta": "x"}\n\n');
+    assert.equal(e.event, "message");
+  });
+});

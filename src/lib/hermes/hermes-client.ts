@@ -163,9 +163,20 @@ export class HermesClient {
           if (typeof event.data.run_id === "string") runId = event.data.run_id;
           if (typeof event.data.session_id === "string") sessionId = event.data.session_id;
 
-          if (event.event === "assistant.delta" && typeof event.data.delta === "string") {
+          // 두 엔드포인트가 델타 이벤트 이름을 달리 쓴다(실측 v0.20.2):
+          //   1:1  /api/sessions/<id>/chat/stream → assistant.delta / assistant.completed
+          //   회의 /v1/runs/<id>/events          → message.delta   / message.completed
+          // assistant.* 만 보던 탓에 회의 경로에서는 텍스트가 한 글자도 쌓이지 않았고,
+          // 폴링 응답이 빈 문자열이 되어 모든 NPC 가 PASS 로 집계됐다.
+          if (
+            (event.event === "assistant.delta" || event.event === "message.delta") &&
+            typeof event.data.delta === "string"
+          ) {
             accumulated += event.data.delta;
-          } else if (event.event === "assistant.completed" && typeof event.data.content === "string") {
+          } else if (
+            (event.event === "assistant.completed" || event.event === "message.completed") &&
+            typeof event.data.content === "string"
+          ) {
             completed = event.data.content;
           } else if (event.event === "run.failed" || event.event === "error") {
             failure = typeof event.data.message === "string" ? event.data.message : "Hermes run failed";

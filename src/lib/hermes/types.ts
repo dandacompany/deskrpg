@@ -7,9 +7,10 @@ export type HermesCapabilities = {
 
 export type HermesRunEventName =
   | "run.started" | "message.started"
-  | "assistant.delta" | "tool.progress"
+  // 회의 경로(/v1/runs)는 assistant.* 대신 message.* 를 쓴다 — 같은 서버, 다른 방언.
+  | "assistant.delta" | "message.delta" | "tool.progress"
   | "tool.started" | "tool.completed" | "tool.failed"
-  | "assistant.completed"
+  | "assistant.completed" | "message.completed"
   | "run.completed" | "run.cancelled" | "run.failed" | "error" | "done";
 
 /** Every event payload carries these (api_server.py:_event_payload setdefault). */

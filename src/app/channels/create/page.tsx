@@ -18,11 +18,6 @@ interface GroupOption {
   canCreateChannel?: boolean;
 }
 
-interface GatewayAgentOption {
-  id: string;
-  name: string;
-}
-
 interface GatewayResourceOption {
   id: string;
   displayName: string;
@@ -90,7 +85,6 @@ function CreateChannelPageInner() {
   const [gatewayToken, setGatewayToken] = useState("");
   const [showGatewayToken, setShowGatewayToken] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
-  const [gatewayAgents, setGatewayAgents] = useState<GatewayAgentOption[]>([]);
   const [gatewayConnectionState, setGatewayConnectionState] =
     useState<GatewayConnectionState>({ status: "idle" });
 
@@ -190,13 +184,11 @@ function CreateChannelPageInner() {
   const resetGatewayTestState = useCallback(() => {
     setTestingConnection(false);
     setGatewayConnectionState({ status: "idle" });
-    setGatewayAgents([]);
   }, []);
 
   const handleTestConnection = async () => {
     setTestingConnection(true);
     setGatewayConnectionState({ status: "idle" });
-    setGatewayAgents([]);
     try {
       const res =
         gatewayMode === "stored"
@@ -213,7 +205,6 @@ function CreateChannelPageInner() {
             });
       const data = await res.json();
       if (data.ok) {
-        setGatewayAgents(Array.isArray(data.agents) ? data.agents : []);
         setGatewayConnectionState({ status: "connected" });
       } else {
         setGatewayConnectionState({
@@ -603,9 +594,7 @@ function CreateChannelPageInner() {
                       error={gatewayConnectionState.error}
                       detail={
                         gatewayConnectionState.status === "connected"
-                          ? t("gateway.connected", {
-                              count: gatewayAgents.length,
-                            })
+                          ? t("gateway.connected")
                           : undefined
                       }
                     />

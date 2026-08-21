@@ -150,7 +150,7 @@ const en: Record<string, string> = {
   "gateway.tokenPlaceholder": "Gateway token",
   "gateway.testConnection": "Test Connection",
   "gateway.testing": "Testing...",
-  "gateway.connected": "Connected! {count} agent(s) found.",
+  "gateway.connected": "Connected to the gateway.",
   "gateway.failed": "Failed: {error}",
   // Hermes profiles
   "gateway.profile.title": "Hermes profiles",

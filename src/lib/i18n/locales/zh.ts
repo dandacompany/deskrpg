@@ -150,7 +150,7 @@ const zh: Record<string, string> = {
   "gateway.tokenPlaceholder": "网关令牌",
   "gateway.testConnection": "测试连接",
   "gateway.testing": "测试中...",
-  "gateway.connected": "已连接！发现{count}个代理。",
+  "gateway.connected": "已连接到网关。",
   "gateway.failed": "失败: {error}",
   // Hermes profiles
   "gateway.profile.title": "Hermes 配置文件",
