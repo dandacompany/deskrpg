@@ -277,3 +277,46 @@ describe("HermesClient.createSession", () => {
     );
   });
 });
+
+describe("HermesClient.createSession — 제목 충돌", () => {
+  test("제목이 이미 쓰이면 그 세션을 이어 쓴다", async () => {
+    // Hermes 는 제목 유일성을 강제한다. 우리 제목은 NPC×사용자 컨텍스트 키이므로
+    // 충돌은 "그 대화가 이미 있다"는 뜻이다 — 실패가 아니라 재사용해야 한다.
+    const calls: string[] = [];
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "danvi",
+      token: "t",
+      fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        calls.push(`${init?.method ?? "GET"} ${url}`);
+        if (init?.method === "POST") {
+          return new Response(
+            JSON.stringify({ error: { code: "invalid_title", message: "Title already in use by session api_old" } }),
+            { status: 400 },
+          );
+        }
+        return new Response(
+          JSON.stringify({ object: "list", data: [{ id: "api_old", title: "npc-1:user-1" }] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }) as unknown as typeof fetch,
+    });
+    assert.deepEqual(await c.createSession("npc-1:user-1"), { sessionId: "api_old" });
+    assert.equal(calls.length, 2, "POST 로 만들어 보고, 충돌하면 GET 으로 찾는다");
+  });
+
+  test("충돌인데 그 제목이 목록에 없으면 원래 오류를 던진다", async () => {
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "danvi",
+      token: "t",
+      fetchImpl: (async (_i: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === "POST"
+          ? new Response(JSON.stringify({ error: { code: "invalid_title" } }), { status: 400 })
+          : new Response(JSON.stringify({ object: "list", data: [] }), { status: 200 })
+      ) as unknown as typeof fetch,
+    });
+    await assert.rejects(() => c.createSession("없는제목"), (e: unknown) => e instanceof HermesError);
+  });
+});

@@ -82,11 +82,38 @@ export class HermesClient {
     return (await res.json()) as HermesCapabilities;
   }
 
+  /** 제목으로 기존 세션을 찾는다. 없으면 null. */
+  private async findSessionByTitle(title: string): Promise<string | null> {
+    try {
+      const res = await this.request("/api/sessions", { method: "GET" });
+      const json = (await res.json()) as { data?: { id?: string; title?: string | null }[] };
+      const hit = (json.data ?? []).find((s) => s.title === title && s.id);
+      return hit?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async createSession(title: string): Promise<{ sessionId: string }> {
-    const res = await this.request("/api/sessions", {
-      method: "POST",
-      body: JSON.stringify({ title }),
-    });
+    let res: Response;
+    try {
+      res = await this.request("/api/sessions", {
+        method: "POST",
+        body: JSON.stringify({ title }),
+      });
+    } catch (err) {
+      // Hermes 는 제목의 유일성을 강제한다 — 이미 쓰이면 `invalid_title` 로 거절하고
+      // 어느 세션이 갖고 있는지까지 말해 준다. 우리 제목은 NPC×사용자 컨텍스트 키라
+      // 충돌은 곧 "그 대화가 이미 있다"는 뜻이므로, 새로 만들 게 아니라 이어야 한다.
+      // (이전 버전이 응답 파싱에 실패해 Hermes 쪽에만 남긴 고아 세션들이 정확히 이
+      //  경우다 — 재시도할 때마다 같은 제목으로 부딪혔다.)
+      const isTitleTaken =
+        err instanceof HermesError && /invalid_title|Title already in use/i.test(err.message);
+      if (!isTitleTaken) throw err;
+      const existing = await this.findSessionByTitle(title);
+      if (!existing) throw err;
+      return { sessionId: existing };
+    }
     // 실측(v0.20.2): POST /api/sessions 는 id 를 **중첩해서** 돌려준다 —
     //   { "object": "hermes.session", "session": { "id": "api_…", … } }
     // 최상위 session_id/id 만 보던 탓에 1:1 대화가 "Session create returned no id"
