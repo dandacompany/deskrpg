@@ -87,8 +87,17 @@ export class HermesClient {
       method: "POST",
       body: JSON.stringify({ title }),
     });
-    const json = (await res.json()) as { session_id?: string; id?: string };
-    const sessionId = json.session_id ?? json.id;
+    // 실측(v0.20.2): POST /api/sessions 는 id 를 **중첩해서** 돌려준다 —
+    //   { "object": "hermes.session", "session": { "id": "api_…", … } }
+    // 최상위 session_id/id 만 보던 탓에 1:1 대화가 "Session create returned no id"
+    // 로 죽었다. 두 평평한 형태도 계속 받아 준다(구버전/다른 배포 대비).
+    const json = (await res.json()) as {
+      session_id?: string;
+      id?: string;
+      session?: { id?: string; session_id?: string };
+    };
+    const sessionId =
+      json.session?.id ?? json.session?.session_id ?? json.session_id ?? json.id;
     if (!sessionId) throw new HermesError("http_error", "Session create returned no id", 200);
     return { sessionId };
   }

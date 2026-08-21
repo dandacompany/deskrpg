@@ -238,3 +238,42 @@ describe("HermesClient.stopRun / steerRun", () => {
     assert.equal(body.text, "짧게 답하세요");
   });
 });
+
+describe("HermesClient.createSession", () => {
+  function clientReturning(payload: unknown) {
+    return new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "danvi",
+      token: "t",
+      fetchImpl: (async () =>
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })) as unknown as typeof fetch,
+    });
+  }
+
+  test("reads the id out of the nested session object", async () => {
+    // 실측한 v0.20.2 응답 형태. 이걸 못 읽어서 1:1 대화가 통째로 죽었다 —
+    // 화면에는 "AI 게이트웨이 오류" 만 뜨고 원인은 서버 로그에만 남았다.
+    const c = clientReturning({
+      object: "hermes.session",
+      session: { id: "api_1787291339_b79d5388", source: "api_server", message_count: 0 },
+    });
+    assert.deepEqual(await c.createSession("t"), { sessionId: "api_1787291339_b79d5388" });
+  });
+
+  test("still accepts the flat shapes", async () => {
+    assert.deepEqual(await clientReturning({ session_id: "s1" }).createSession("t"), {
+      sessionId: "s1",
+    });
+    assert.deepEqual(await clientReturning({ id: "s2" }).createSession("t"), { sessionId: "s2" });
+  });
+
+  test("throws when no shape carries an id", async () => {
+    await assert.rejects(
+      () => clientReturning({ object: "hermes.session", session: {} }).createSession("t"),
+      (err: unknown) => err instanceof HermesError && err.code === "http_error",
+    );
+  });
+});
