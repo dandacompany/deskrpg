@@ -585,3 +585,191 @@ describe("ConversationEngine — 사용자 개입", () => {
     );
   });
 });
+
+describe("멘션이 다음 발언권을 정한다", () => {
+  test("TO: 로 지목된 참가자가 폴링과 무관하게 다음에 말한다", async () => {
+    // a 가 c 를 지목한다. 폴링에서는 b 가 먼저 손을 들지만 지목이 이긴다.
+    // a는 meeting 모드라 폴링에서 SPEAK: 로 먼저 손을 들어야 발언 차례가 온다 — 그 다음
+    // 실제 발언에서 TO: c 로 지목한다(단일 응답으로는 폴링 단계에서 손을 들지 못해 영영
+    // 발언하지 못한다 — 브리프 원안의 단일 응답으로는 a가 폴링을 통과하지 못해 이 테스트가
+    // 검증 불능이었다).
+    const a = participant("a", ["SPEAK: 의견 있어요", "TO: c\n의견 부탁해요"]);
+    const b = participant("b", ["SPEAK: 저요", "저는 반대입니다"]);
+    const c = participant("c", ["SPEAK: 네", "말씀하신 대로입니다"]);
+
+    const spoke: string[] = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "T",
+        participants: [a, b, c],
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 2, cooldownMs: 0 },
+      },
+      { onTurnStart: (npcId) => spoke.push(npcId) },
+    );
+
+    await engine.run();
+
+    assert.equal(spoke[1], "c", `지목된 c 가 아니라 ${spoke[1]} 이 말했습니다`);
+  });
+
+  test("트랜스크립트에는 TO: 라인이 빠진 본문만 실린다", async () => {
+    const a = participant("a", ["TO: b\n김치찌개가 좋겠습니다"]);
+    const b = participant("b", ["알겠습니다"]);
+
+    // 엔진에는 트랜스크립트 getter 가 없다. onEnd 가 turns 배열을 넘겨준다
+    // (conversation-engine.ts:388 — this.callbacks.onEnd?.(this.transcript.all(), ...)).
+    let turns: Array<{ content: string }> = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "peer",
+        topic: "T",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 1, cooldownMs: 0 },
+      },
+      { onEnd: (all: Array<{ content: string }>) => { turns = all; } },
+    );
+
+    await engine.run();
+
+    assert.equal(
+      turns[0].content,
+      "김치찌개가 좋겠습니다",
+      "제어 라인이 사용자에게 보이면 안 됩니다",
+    );
+  });
+});
+
+describe("drainCommands — 사용자 지목이 멘션을 무음으로 덮어쓰지 않는다", () => {
+  test("사용자 지목과 멘션이 같은 드레인에 함께 있으면 사용자가 이긴다", async () => {
+    // a가 발언을 끝내며 b를 멘션한다. 하지만 그 발언이 끝나는 순간(onTurnEnd) 사용자가
+    // UI에서 c를 지목한다고 가정한다 — speak()는 onTurnEnd를 먼저 부르고 멘션 커맨드는
+    // 그 뒤에 큐에 넣으므로, 콜백에서 동기적으로 directSpeak()를 호출하면 큐에는
+    // [user:c, mention:b] 순서로 쌓인다. "마지막 것이 이긴다"만으로 드레인하면 멘션(b)이
+    // 채택되어 사용자가 고른 c가 무음으로 사라진다 — 그게 이 테스트가 막는 회귀다.
+    const a = participant("a", ["SPEAK: 의견 있어요", "TO: b\n의견 부탁해요"]);
+    const b = participant("b", ["PASS"]);
+    const c = participant("c", ["PASS", "알겠습니다"]);
+
+    const spoken: string[] = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "T",
+        participants: [a, b, c],
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 2, cooldownMs: 0 },
+      },
+      {
+        onTurnEnd: (npcId: string) => {
+          spoken.push(npcId);
+          if (npcId === "a") engine.directSpeak("c");
+        },
+      },
+    );
+
+    await engine.run();
+
+    assert.deepEqual(spoken, ["a", "c"], "멘션(b)이 아니라 사용자가 지목한 c가 다음에 말해야 한다");
+    assert.equal(
+      (b.adapter as unknown as { calls: unknown[] }).calls.length, 1,
+      "b는 폴링 1회만 불리고 멘션으로는 선택되지 않아야 한다",
+    );
+  });
+
+  test("사용자 지목 없이 멘션만 있으면 멘션이 채택된다(기존 동작 유지)", async () => {
+    const a = participant("a", ["SPEAK: 의견 있어요", "TO: b\n의견 부탁해요"]);
+    const b = participant("b", ["PASS", "넵"]);
+
+    const spoken: string[] = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "T",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 2, cooldownMs: 0 },
+      },
+      { onTurnEnd: (npcId: string) => spoken.push(npcId) },
+    );
+
+    await engine.run();
+
+    assert.deepEqual(spoken, ["a", "b"]);
+  });
+
+  test("사용자 지목이 둘이면(멘션 없이) 마지막 것이 이긴다", async () => {
+    const a = participant("a", ["첫 번째"]);
+    const b = participant("b", ["두 번째"]);
+
+    const spoken: string[] = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "T",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 1, cooldownMs: 0 },
+      },
+      { onTurnEnd: (npcId: string) => spoken.push(npcId) },
+    );
+
+    engine.directSpeak("a");
+    engine.directSpeak("b");
+    await engine.run();
+
+    assert.deepEqual(spoken, ["b"], "동종(사용자) 지목끼리는 여전히 마지막 것이 이겨야 한다");
+    assert.equal(
+      (a.adapter as unknown as { calls: unknown[] }).calls.length, 0,
+      "먼저 지목된 a는 한 번도 불리지 않아야 한다",
+    );
+  });
+});
+
+describe("빈 본문 멘션은 실패 턴으로 처리하되 지목은 살린다", () => {
+  test("\"TO: 이름\"만 답하면 트랜스크립트에 빈 항목을 남기지 않는다", async () => {
+    // parseMention이 TO: 라인을 걷어내면 본문이 남지 않는다("TO: b"에는 뒤따르는 줄이 없다).
+    // sanitizedResponse 자체는 비어있지 않아 게이트는 통과하지만, 화면에 보여줄 말도
+    // 트랜스크립트에 남길 발언도 없어야 한다.
+    const a = participant("a", ["SPEAK: 의견 있어요", "TO: b"]);
+    const b = participant("b", ["PASS", "안녕하세요"]);
+
+    const spoken: string[] = [];
+    let turns: Array<{ speakerId: string; content: string }> = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "T",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 1, cooldownMs: 0 },
+      },
+      {
+        onTurnEnd: (npcId: string) => spoken.push(npcId),
+        onEnd: (all: Array<{ speakerId: string; content: string }>) => { turns = all; },
+      },
+    );
+
+    await engine.run();
+
+    assert.deepEqual(spoken, ["b"], "본문 없는 a의 턴은 onTurnEnd를 트리거하지 않아야 한다");
+    assert.equal(turns.length, 1, "트랜스크립트에는 빈 턴이 쌓이면 안 된다");
+    assert.equal(turns[0].speakerId, "b");
+  });
+
+  test("본문이 없어도 지목 자체는 살아 b가 다음에 말한다", async () => {
+    const a = participant("a", ["SPEAK: 의견 있어요", "TO: b"]);
+    const b = participant("b", ["PASS", "안녕하세요"]);
+
+    const spoken: string[] = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "T",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 1, cooldownMs: 0 },
+      },
+      { onTurnEnd: (npcId: string) => spoken.push(npcId) },
+    );
+
+    await engine.run();
+
+    assert.deepEqual(spoken, ["b"], "본문이 비어 실패 처리되어도 멘션은 커맨드 큐에 반영돼야 한다");
+  });
+});
