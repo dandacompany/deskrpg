@@ -577,7 +577,7 @@ async function getNpcConfig(npcId: string): Promise<NpcConfig | null> {
     if (rows.length === 0) return null;
 
     const npc = rows[0];
-    const oc = parseDbObject(npc.openclawConfig) || {};
+    const oc = parseDbObject(npc.agentConfig) || {};
     const adapterConfig = parseDbObject(npc.adapterConfig) || {};
 
     return {
@@ -607,7 +607,7 @@ async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> 
       .where(eq(npcs.channelId, channelId));
 
     return rows.map((npc) => {
-      const oc = parseDbObject(npc.openclawConfig) || {};
+      const oc = parseDbObject(npc.agentConfig) || {};
       const adapterConfig = parseDbObject(npc.adapterConfig) || {};
       return {
         id: npc.id,

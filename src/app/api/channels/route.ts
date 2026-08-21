@@ -468,7 +468,7 @@ export async function POST(req: NextRequest) {
               },
             },
           ),
-          openclawConfig: jsonForDb({
+          agentConfig: jsonForDb({
             agentId,
             sessionKeyPrefix: `ot-${channel.id.slice(0, 8)}-${agentId}`,
             locale: defaultNpcLocale,

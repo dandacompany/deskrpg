@@ -82,7 +82,7 @@ export async function PATCH(
     }
 
     // Handle persona/identity/soul updates
-    const existingConfig = parseDbObject(npc.openclawConfig) || {};
+    const existingConfig = parseDbObject(npc.agentConfig) || {};
     const existingAgentId = existingConfig.agentId as string | null;
     const presetDefaults = hasNpcPresetDefaults(body.presetId)
       ? getNpcPresetDefaults({
@@ -105,8 +105,8 @@ export async function PATCH(
 
     if (body.passPolicy !== undefined) {
       const currentConfig =
-        (updates.openclawConfig as Record<string, unknown>) || existingConfig;
-      updates.openclawConfig = {
+        (updates.agentConfig as Record<string, unknown>) || existingConfig;
+      updates.agentConfig = {
         ...currentConfig,
         passPolicy: body.passPolicy?.trim() || null,
         locale: normalizedLocale,
@@ -150,8 +150,8 @@ export async function PATCH(
       // IDENTITY.md / SOUL.md / AGENTS.md 에도 같은 내용을 써 넣었지만, 그 파일들은
       // OpenClaw 에이전트의 것이었다. Hermes 프로필은 자기 홈을 직접 들고 있다.
 
-      // Update openclawConfig in DB
-      updates.openclawConfig = {
+      // Update agentConfig in DB
+      updates.agentConfig = {
         ...existingConfig,
         persona: newIdentity.slice(0, 500), // backward compat
         personaConfig,
@@ -166,8 +166,8 @@ export async function PATCH(
       };
     }
 
-    if (updates.openclawConfig !== undefined) {
-      updates.openclawConfig = jsonForDb(updates.openclawConfig);
+    if (updates.agentConfig !== undefined) {
+      updates.agentConfig = jsonForDb(updates.agentConfig);
     }
 
     const [updated] = await db
@@ -179,8 +179,8 @@ export async function PATCH(
       npc: {
         ...updated,
         appearance: parseDbJson(updated.appearance) ?? updated.appearance,
-        openclawConfig:
-          parseDbObject(updated.openclawConfig) ?? updated.openclawConfig,
+        agentConfig:
+          parseDbObject(updated.agentConfig) ?? updated.agentConfig,
       },
     });
   } catch (err) {

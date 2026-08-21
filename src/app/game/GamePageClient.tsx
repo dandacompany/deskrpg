@@ -2186,7 +2186,7 @@ function GamePageInner() {
         isOpen={showTaskBoard}
         onClose={() => setShowTaskBoard(false)}
         tasks={allTasks}
-        npcs={channelNpcs.map((npc: any) => ({ id: npc.id, name: npc.name, isActive: Boolean(npc.hasAgent ?? npc.openclawConfig) }))}
+        npcs={channelNpcs.map((npc: any) => ({ id: npc.id, name: npc.name, isActive: Boolean(npc.hasAgent ?? npc.agentConfig) }))}
         onDeleteTask={deleteTask}
         onRequestReportTask={requestTaskReport}
         onResumeTask={resumeTask}

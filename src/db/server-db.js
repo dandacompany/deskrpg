@@ -10,6 +10,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { ensureSqliteBaseSchema } = require("./sqlite-base-schema.js");
+const { retireOpenclawConfig } = require("./sqlite-openclaw-retirement.js");
 
 const DB_TYPE = (process.env.DB_TYPE || "postgresql").toLowerCase();
 const isPostgres = DB_TYPE === "postgresql" || DB_TYPE === "postgres";
@@ -344,11 +345,13 @@ function ensureSqliteCompatibility(sqlite) {
   }
 
   applySqliteAlterStatements(sqlite, "npcs", [
-    "ALTER TABLE npcs ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'openclaw'",
+    "ALTER TABLE npcs ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'hermes'",
     "ALTER TABLE npcs ADD COLUMN adapter_config TEXT",
     "ALTER TABLE npcs ADD COLUMN hermes_profile_id TEXT REFERENCES hermes_profiles(id) ON DELETE SET NULL",
     "ALTER TABLE npcs ADD COLUMN agent_config TEXT",
   ]);
+  // 컬럼이 갖춰진 다음에 은퇴 마이그레이션을 돌린다(이관 대상 열이 둘 다 있어야 한다).
+  retireOpenclawConfig(sqlite);
 
   applySqliteAlterStatements(sqlite, "users", [
     "ALTER TABLE users ADD COLUMN system_role TEXT NOT NULL DEFAULT 'user'",

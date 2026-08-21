@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       rows = await db.select().from(npcs);
     }
     const result = rows.map((npc) => {
-      const openclawConfig = parseDbObject(npc.openclawConfig);
+      const agentConfig = parseDbObject(npc.agentConfig);
       const appearance = parseDbJson<unknown>(npc.appearance) ?? npc.appearance;
 
       return {
@@ -41,8 +41,8 @@ export async function GET(req: NextRequest) {
         positionY: npc.positionY,
         direction: npc.direction,
         appearance,
-        hasAgent: !!openclawConfig?.agentId,
-        agentId: (openclawConfig?.agentId as string) || null,
+        hasAgent: !!agentConfig?.agentId,
+        agentId: (agentConfig?.agentId as string) || null,
         adapterType: npc.adapterType,
         hermesProfileId: npc.hermesProfileId,
       };
@@ -162,8 +162,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Build openclawConfig based on agent action
-    let openclawConfig: Record<string, unknown>;
+    // Build agentConfig based on agent action
+    let agentConfig: Record<string, unknown>;
     const presetDefaults = hasNpcPresetDefaults(presetId)
       ? getNpcPresetDefaults({
           presetId,
@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
             ),
           };
       // Agent was already created via /api/npcs/create-agent
-      openclawConfig = {
+      agentConfig = {
         agentId,
         sessionKeyPrefix: `ot-${channelId.slice(0, 8)}-${agentId}`,
         personaConfig,
@@ -209,13 +209,13 @@ export async function POST(req: NextRequest) {
       };
     } else if (agentAction === "select" && agentId) {
       // Select an existing agent on the gateway
-      openclawConfig = {
+      agentConfig = {
         agentId,
         sessionKeyPrefix: `ot-${channelId.slice(0, 8)}-${agentId}`,
         locale: normalizedLocale,
       };
     } else {
-      // No agent — backward compat: store persona in openclawConfig
+      // No agent — backward compat: store persona in agentConfig
       const identityText = resolvedIdentity;
       const personaConfig =
         identityText || resolvedSoul
@@ -244,7 +244,7 @@ export async function POST(req: NextRequest) {
                 ),
               }
           : null;
-      openclawConfig = {
+      agentConfig = {
         agentId: null,
         sessionKeyPrefix: "",
         persona: identityText.slice(0, 500), // backward compat
@@ -266,7 +266,7 @@ export async function POST(req: NextRequest) {
           ? direction
           : "down",
         appearance: jsonForDb(appearance),
-        openclawConfig: jsonForDb(openclawConfig),
+        agentConfig: jsonForDb(agentConfig),
         // 모달이 고른 엔진과 프로필. 넣지 않으면 컬럼 기본값 'openclaw' + 프로필 없음으로
         // 저장되고, 사용자는 대화를 걸어야 비로소 자기 선택이 버려진 것을 안다.
         adapterType: typeof adapterType === "string" && adapterType ? adapterType : "openclaw",
@@ -279,8 +279,8 @@ export async function POST(req: NextRequest) {
         npc: {
           ...npc,
           appearance: parseDbJson(npc.appearance) ?? npc.appearance,
-          openclawConfig:
-            parseDbObject(npc.openclawConfig) ?? npc.openclawConfig,
+          agentConfig:
+            parseDbObject(npc.agentConfig) ?? npc.agentConfig,
         },
       },
       { status: 201 },

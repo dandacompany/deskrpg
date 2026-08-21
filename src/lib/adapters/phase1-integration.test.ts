@@ -32,8 +32,10 @@ describe("Phase1: DB Schema", () => {
     // Drizzle table objects expose column names
     assert.ok("adapterType" in npcColumns, "adapterType column should exist in npcs schema");
     assert.ok("adapterConfig" in npcColumns, "adapterConfig column should exist in npcs schema");
-    // openclawConfig should still exist (backward compat)
-    assert.ok("openclawConfig" in npcColumns, "openclawConfig column should still exist");
+    // openclaw_config 는 은퇴했다 — 내용(페르소나)은 agent_config 로 옮겨졌고,
+    // 정본이 둘이 되지 않도록 열 자체를 없앴다.
+    assert.ok("agentConfig" in npcColumns, "페르소나는 agent_config 에 산다");
+    assert.ok(!("openclawConfig" in npcColumns), "openclaw_config 는 남아 있으면 안 된다");
   });
 
   test("SQLite base schema includes adapter columns", async () => {
