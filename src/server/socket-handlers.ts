@@ -56,7 +56,6 @@ import {
 } from "./meeting-socket";
 import { registerMeetingDiscussionHandlers } from "./meeting-discussion";
 import { AdapterRegistry } from "../lib/adapters/types.js";
-import { OpenClawAdapter } from "../lib/adapters/openclaw-adapter.js";
 import { ClaudeAdapter } from "../lib/adapters/claude-adapter.js";
 import { CodexAdapter } from "../lib/adapters/codex-adapter.js";
 import { GeminiAdapter } from "../lib/adapters/gemini-adapter.js";
@@ -72,7 +71,6 @@ import {
 } from "./hermes-dispatch";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-const { OpenClawGateway } = require("../lib/openclaw-gateway.js") as { OpenClawGateway: new () => any };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { parseNpcResponse, isValidTaskAction } = require("../lib/task-parser.js") as typeof import("../lib/task-parser.js");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -83,8 +81,6 @@ const { TaskManager } = require("../lib/task-manager.js") as { TaskManager: new 
 const { withTaskReminder, normalizeTaskPromptLocale, buildTaskSessionPrompt } = require("../lib/task-prompt.js") as typeof import("../lib/task-prompt.js");
 
 const adapterRegistry = new AdapterRegistry();
-const openclawAdapter = new OpenClawAdapter();
-adapterRegistry.register(openclawAdapter);
 
 // Register CLI adapters when the corresponding local CLI is installed.
 for (const AdapterClass of [ClaudeAdapter, CodexAdapter, GeminiAdapter, OpenCodeAdapter]) {
@@ -177,7 +173,6 @@ const npcChatHistory = new Map<string, { role: "player" | "npc"; content: string
 
 // OpenClaw gateway connections: gatewayId -> gateway instance
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const channelGateways = new Map<string, any>();
 
 const CHAT_COOLDOWN_MS = 2000;
 const PROGRESS_NUDGE_SCAN_MS = 60_000;
@@ -454,19 +449,7 @@ async function runProgressNudgeForTask(
     const prompt = withTaskReminder(promptOverride ?? buildAutoExecutionPrompt(task));
     let response = "";
 
-    if (npcConfig.adapterType === openclawAdapter.type) {
-      if (!npcConfig.agentId) return;
-
-      const gateway = await getOrConnectGateway(task.channelId);
-      if (!gateway) return;
-
-      await taskManager.markTaskNudged(task.id, task.channelId);
-      ({ response } = await openclawAdapter.executeWithGateway(
-        gateway,
-        { sessionKey, prompt },
-        npcConfig.agentId,
-      ));
-    } else if (adapterRegistry.has(npcConfig.adapterType)) {
+    if (adapterRegistry.has(npcConfig.adapterType)) {
       const adapter = adapterRegistry.get(npcConfig.adapterType);
 
       await taskManager.markTaskNudged(task.id, task.channelId);
@@ -574,55 +557,10 @@ async function scanProgressNudges(io: Server) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// OpenClaw gateway helper
-// ---------------------------------------------------------------------------
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getOrConnectGateway(channelId: string): Promise<any | null> {
-  const gatewayConfig = await getGatewayRuntimeConfigForChannel(channelId);
-  if (!gatewayConfig) {
-    return null;
-  }
-
-  const gatewayKey = gatewayConfig.gatewayId;
-
-  if (channelGateways.has(gatewayKey)) {
-    const gw = channelGateways.get(gatewayKey)!;
-    if (gw.isConnected()) return gw;
-    channelGateways.delete(gatewayKey);
-  }
-
-  try {
-    const gw = new OpenClawGateway();
-    await gw.connect(gatewayConfig.baseUrl, gatewayConfig.token);
-    channelGateways.set(gatewayKey, gw);
-    return gw;
-  } catch (err) {
-    console.error(`[gateway] Connect failed for channel ${channelId}:`, err);
-    return null;
-  }
-}
-
-export async function invalidateGatewayConnectionForChannel(channelId: string) {
-  const gatewayConfig = await getGatewayRuntimeConfigForChannel(channelId);
-  if (!gatewayConfig) {
-    return;
-  }
-
-  const gatewayKey = gatewayConfig.gatewayId;
-  if (!channelGateways.has(gatewayKey)) {
-    return;
-  }
-
-  const gw = channelGateways.get(gatewayKey);
-  try {
-    gw?.disconnect?.();
-  } catch {
-    // Best effort cache invalidation only.
-  }
-  channelGateways.delete(gatewayKey);
-}
+// 예전에는 여기에 OpenClaw 게이트웨이 커넥션 풀(getOrConnectGateway /
+// invalidateGatewayConnectionForChannel)이 있었다. 게이트웨이 런타임 상태의 진짜
+// 무효화는 gateway-resources.ts 가 설정 변경 시점에 invalidateGatewayRuntimeState 로
+// 직접 하므로, 이 풀이 사라져도 무효화가 빠지지 않는다.
 
 // ---------------------------------------------------------------------------
 // NPC config loader
@@ -768,40 +706,6 @@ async function streamNpcResponse(
     }
   }
 
-  if (dispatchKind === "openclaw") {
-    if (!agentId) {
-      emitNpcSystemResponse(socket, npcId, "no_agent");
-      return "";
-    }
-
-    const gateway = await getOrConnectGateway(_channelId);
-    if (!gateway) {
-      emitNpcSystemResponse(socket, npcId, "gateway_not_connected");
-      return "";
-    }
-
-    try {
-      const { response } = await openclawAdapter.executeWithGateway(
-        gateway,
-        {
-          sessionKey,
-          prompt: message,
-          onDelta: (delta: string) => {
-            socket.emit(responseEvent, { npcId, chunk: delta, done: false });
-          },
-          attachments,
-        },
-        agentId,
-      );
-      socket.emit(responseEvent, { npcId, chunk: "", done: true });
-      return response || "";
-    } catch (err) {
-      console.error("[npc] OpenClaw chatSend error:", err);
-      emitNpcSystemResponse(socket, npcId, "gateway_error");
-      return "";
-    }
-  }
-
   // dispatchKind === "registry"
   if (adapterRegistry.has(adapterType)) {
     const adapter = adapterRegistry.get(adapterType);
@@ -876,13 +780,20 @@ async function streamMeetingNpcResponse(
   const sessionKey = `${sessionKeyPrefix || _name}-meeting-${channelId}`;
   const prompt = `${senderName}: ${userMessage}`;
 
-  let gateway: unknown = null;
   let hermesAdapter: Awaited<ReturnType<typeof createHermesAdapterForNpc>> = null;
   let hermesContextKey = "";
 
   if (dispatchKind === "openclaw") {
-    gateway = await getOrConnectGateway(channelId);
-    if (!gateway) return; // unchanged: silent no-op
+    // OpenClaw 는 제거됐다. 이 어댑터로 남아 있는 NPC 는 회의에서 조용히 빠지는 대신
+    // 다시 연결해야 한다는 것을 알린다.
+    emitMeetingNpcStream(io, channelId, {
+      npcId,
+      npcName: _name,
+      chunk: "",
+      done: true,
+      messageCode: "npc_unbound",
+    });
+    return;
   } else if (dispatchKind === "hermes") {
     hermesContextKey = deriveHermesContextKey(sessionKey, sessionKeyPrefix || _name);
     hermesAdapter = await createHermesAdapterForNpc(npcId, userId, hermesContextKey);
@@ -929,10 +840,7 @@ async function streamMeetingNpcResponse(
   /** hermes 분기에서만 채워진다 — 답변을 확정 전달한 뒤에 best-effort로 영속화한다(M6). */
   let persistSessionRef: (() => Promise<void>) | null = null;
   try {
-    if (dispatchKind === "openclaw") {
-      const { response } = await openclawAdapter.executeWithGateway(gateway, { sessionKey, prompt, onDelta }, agentId!);
-      fullText = response || fullText;
-    } else if (dispatchKind === "hermes") {
+    if (dispatchKind === "hermes") {
       const { response, session } = await hermesAdapter!.execute({
         sessionKey,
         prompt,

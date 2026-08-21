@@ -13,7 +13,7 @@ import {
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
-import { internalRpc, getUserId } from "@/lib/internal-rpc";
+import { getUserId } from "@/lib/internal-rpc";
 import { parseDbArray, parseDbJson } from "@/lib/db-json";
 import {
   bindGatewayToChannel,
@@ -22,9 +22,15 @@ import {
 } from "@/lib/gateway-resources";
 import { getDefaultMeetingProtocol } from "@/lib/npc-agent-defaults";
 import { normalizeLocale } from "@/lib/i18n/server";
-import { resolvePermission, type PermissionEffect } from "@/lib/rbac/permissions";
+import {
+  resolvePermission,
+  type PermissionEffect,
+} from "@/lib/rbac/permissions";
 import type { GroupMemberRole, SystemRole } from "@/lib/rbac/constants";
-import { generateChannelInviteCode, isChannelPasswordValid } from "@/lib/security-policy";
+import {
+  generateChannelInviteCode,
+  isChannelPasswordValid,
+} from "@/lib/security-policy";
 import {
   summarizeChannelCreateAccess,
   summarizeChannelDetailAccess,
@@ -45,7 +51,9 @@ async function canCreateChannel(userId: string, groupId: string) {
   const [membership] = await db
     .select({ role: groupMembers.role })
     .from(groupMembers)
-    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
+    .where(
+      and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)),
+    )
     .limit(1);
 
   const groupEffectRows = await db
@@ -87,7 +95,10 @@ async function canCreateChannel(userId: string, groupId: string) {
 export async function GET(req: NextRequest) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { errorCode: "unauthorized", error: "unauthorized" },
+      { status: 401 },
+    );
   }
 
   try {
@@ -112,11 +123,17 @@ export async function GET(req: NextRequest) {
       .leftJoin(groups, eq(channels.groupId, groups.id))
       .leftJoin(
         channelMembers,
-        and(eq(channelMembers.channelId, channels.id), eq(channelMembers.userId, userId)),
+        and(
+          eq(channelMembers.channelId, channels.id),
+          eq(channelMembers.userId, userId),
+        ),
       )
       .leftJoin(
         groupMembers,
-        and(eq(groupMembers.groupId, channels.groupId), eq(groupMembers.userId, userId)),
+        and(
+          eq(groupMembers.groupId, channels.groupId),
+          eq(groupMembers.userId, userId),
+        ),
       )
       .orderBy(channels.createdAt);
 
@@ -125,7 +142,8 @@ export async function GET(req: NextRequest) {
         const isOwner = r.ownerId === userId;
         const isChannelMember = isOwner || !!r.memberRole;
         const hasActiveGroupMembership = !!r.groupMemberRole;
-        const canView = r.isPublic || isChannelMember || hasActiveGroupMembership;
+        const canView =
+          r.isPublic || isChannelMember || hasActiveGroupMembership;
         const detailAccess = summarizeChannelDetailAccess({
           groupId: r.groupId,
           isPublic: r.isPublic ?? true,
@@ -163,13 +181,18 @@ export async function GET(req: NextRequest) {
           playerCount: 0, // TODO: query from socket.io state
         };
       })
-      .filter((channel): channel is NonNullable<typeof channel> => channel !== null);
+      .filter(
+        (channel): channel is NonNullable<typeof channel> => channel !== null,
+      );
 
     return NextResponse.json({ channels: result, currentUserId: userId });
   } catch (err) {
     console.error("Failed to fetch channels:", err);
     return NextResponse.json(
-      { errorCode: "failed_to_fetch_channels", error: "Failed to fetch channels" },
+      {
+        errorCode: "failed_to_fetch_channels",
+        error: "Failed to fetch channels",
+      },
       { status: 500 },
     );
   }
@@ -179,7 +202,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { errorCode: "unauthorized", error: "unauthorized" },
+      { status: 401 },
+    );
   }
 
   try {
@@ -195,16 +221,27 @@ export async function POST(req: NextRequest) {
       groupId,
     } = body;
 
-    if (!name || typeof name !== "string" || name.length < 1 || name.length > 100) {
+    if (
+      !name ||
+      typeof name !== "string" ||
+      name.length < 1 ||
+      name.length > 100
+    ) {
       return NextResponse.json(
-        { errorCode: "channel_name_required", error: "name is required (1-100 chars)" },
+        {
+          errorCode: "channel_name_required",
+          error: "name is required (1-100 chars)",
+        },
         { status: 400 },
       );
     }
 
     if (!mapTemplateId) {
       return NextResponse.json(
-        { errorCode: "map_template_required", error: "mapTemplateId is required" },
+        {
+          errorCode: "map_template_required",
+          error: "mapTemplateId is required",
+        },
         { status: 400 },
       );
     }
@@ -224,7 +261,10 @@ export async function POST(req: NextRequest) {
 
     if (!group) {
       return NextResponse.json(
-        { errorCode: "channel_creation_forbidden", error: "channel creation forbidden" },
+        {
+          errorCode: "channel_creation_forbidden",
+          error: "channel creation forbidden",
+        },
         { status: 403 },
       );
     }
@@ -233,13 +273,19 @@ export async function POST(req: NextRequest) {
     if (!access.allowed) {
       if (access.reason === "group_membership_required") {
         return NextResponse.json(
-          { errorCode: "group_membership_required", error: "group membership required" },
+          {
+            errorCode: "group_membership_required",
+            error: "group membership required",
+          },
           { status: 403 },
         );
       }
 
       return NextResponse.json(
-        { errorCode: "channel_creation_forbidden", error: "channel creation forbidden" },
+        {
+          errorCode: "channel_creation_forbidden",
+          error: "channel creation forbidden",
+        },
         { status: 403 },
       );
     }
@@ -252,7 +298,10 @@ export async function POST(req: NextRequest) {
 
     if (!template) {
       return NextResponse.json(
-        { errorCode: "map_template_not_found", error: "Map template not found" },
+        {
+          errorCode: "map_template_not_found",
+          error: "Map template not found",
+        },
         { status: 404 },
       );
     }
@@ -302,29 +351,58 @@ export async function POST(req: NextRequest) {
         isPublic: channelIsPublic,
         inviteCode,
         maxPlayers: 50,
-        mapData: jsonForDb(templateTiledJson || { layers: templateLayers, objects: templateObjects }),
-        mapConfig: jsonForDb({ cols: template.cols, rows: template.rows, spawnCol: template.spawnCol, spawnRow: template.spawnRow }),
+        mapData: jsonForDb(
+          templateTiledJson || {
+            layers: templateLayers,
+            objects: templateObjects,
+          },
+        ),
+        mapConfig: jsonForDb({
+          cols: template.cols,
+          rows: template.rows,
+          spawnCol: template.spawnCol,
+          spawnRow: template.spawnRow,
+        }),
         password: passwordHash,
-        gatewayConfig: jsonForDb(gatewayConfig ? { taskAutomation: gatewayConfig.taskAutomation || null } : null),
+        gatewayConfig: jsonForDb(
+          gatewayConfig
+            ? { taskAutomation: gatewayConfig.taskAutomation || null }
+            : null,
+        ),
       })
       .returning();
 
     if (gatewayConfig?.gatewayId || gatewayConfig?.url) {
       try {
-        const resource = typeof gatewayConfig.gatewayId === "string" && gatewayConfig.gatewayId
-          ? (await getAccessibleGatewayResource(userId, gatewayConfig.gatewayId))?.resource ?? null
-          : gatewayConfig?.url
-            ? await upsertOwnedGatewayResource({
-              ownerUserId: userId,
-              baseUrl: gatewayConfig.url,
-              token: typeof gatewayConfig.token === "string" ? gatewayConfig.token : "",
-              displayName: typeof gatewayConfig.displayName === "string" ? gatewayConfig.displayName : undefined,
-            })
-            : null;
+        const resource =
+          typeof gatewayConfig.gatewayId === "string" && gatewayConfig.gatewayId
+            ? ((
+                await getAccessibleGatewayResource(
+                  userId,
+                  gatewayConfig.gatewayId,
+                )
+              )?.resource ?? null)
+            : gatewayConfig?.url
+              ? await upsertOwnedGatewayResource({
+                  ownerUserId: userId,
+                  baseUrl: gatewayConfig.url,
+                  token:
+                    typeof gatewayConfig.token === "string"
+                      ? gatewayConfig.token
+                      : "",
+                  displayName:
+                    typeof gatewayConfig.displayName === "string"
+                      ? gatewayConfig.displayName
+                      : undefined,
+                })
+              : null;
 
         if (!resource) {
           return NextResponse.json(
-            { errorCode: "gateway_access_denied", error: "Gateway access denied" },
+            {
+              errorCode: "gateway_access_denied",
+              error: "Gateway access denied",
+            },
             { status: 403 },
           );
         }
@@ -335,7 +413,10 @@ export async function POST(req: NextRequest) {
           boundByUserId: userId,
         });
       } catch (gatewayErr) {
-        console.error("Failed to bind gateway resource during channel creation:", gatewayErr);
+        console.error(
+          "Failed to bind gateway resource during channel creation:",
+          gatewayErr,
+        );
       }
     }
 
@@ -352,45 +433,14 @@ export async function POST(req: NextRequest) {
         const agentId = defaultNpc.agentId || "main";
         const isMainAgent = agentId === "main";
         const defaultNpcLocale = normalizeLocale(defaultNpc.locale);
-        const meetingProtocol = defaultNpc.meetingProtocol || getDefaultMeetingProtocol(defaultNpcLocale);
+        const meetingProtocol =
+          defaultNpc.meetingProtocol ||
+          getDefaultMeetingProtocol(defaultNpcLocale);
 
-        // Setup agent on gateway via RPC (non-blocking on failure)
-        try {
-          if (!isMainAgent) {
-            await internalRpc(channel.id, "agents.create", {
-              name: agentId,
-              workspace: `~/.openclaw/workspace-${agentId}`,
-            });
-          }
-
-          // Write persona files
-          if (defaultNpc.identity) {
-            await internalRpc(channel.id, "agents.files.set", {
-              agentId,
-              name: "IDENTITY.md",
-              content: defaultNpc.identity,
-            });
-          }
-          if (defaultNpc.soul) {
-            await internalRpc(channel.id, "agents.files.set", {
-              agentId,
-              name: "SOUL.md",
-              content: defaultNpc.soul,
-            });
-          }
-          await internalRpc(channel.id, "agents.files.set", {
-            agentId,
-            name: "AGENTS.md",
-            content: meetingProtocol,
-          });
-          await internalRpc(channel.id, "agents.files.set", {
-            agentId,
-            name: "USER.md",
-            content: `# User\n- Name: Channel Owner\n`,
-          });
-        } catch (agentErr) {
-          console.warn("Agent setup failed (NPC will still be created):", agentErr instanceof Error ? agentErr.message : agentErr);
-        }
+        // 예전에는 여기서 OpenClaw 게이트웨이에 에이전트를 만들고
+        // ~/.openclaw/workspace-<id> 에 IDENTITY/SOUL/AGENTS/USER.md 를 써 넣었다.
+        // OpenClaw 가 사라지면서 그 개념이 없어졌다 — 페르소나는 DB 에만 남고,
+        // Hermes 프로필은 자기 홈을 직접 들고 있다.
 
         // Insert NPC into database (always, even if agent setup failed)
         const npcPositionX = template.spawnCol + 2;
@@ -402,17 +452,22 @@ export async function POST(req: NextRequest) {
           positionX: npcPositionX,
           positionY: npcPositionY,
           direction: "down",
-          appearance: jsonForDb(defaultNpc.appearance || {
-            bodyType: "female",
-            layers: {
-              body: { itemKey: "body", variant: "light" },
-              eyes: { itemKey: "eye_color", variant: "blue" },
-              hair: { itemKey: "hair_pixie", variant: "blonde" },
-              torso: { itemKey: "torso_clothes_longsleeve2_buttoned", variant: "white" },
-              legs: { itemKey: "legs_formal", variant: "teal" },
-              feet: { itemKey: "feet_shoes_basic", variant: "brown" },
+          appearance: jsonForDb(
+            defaultNpc.appearance || {
+              bodyType: "female",
+              layers: {
+                body: { itemKey: "body", variant: "light" },
+                eyes: { itemKey: "eye_color", variant: "blue" },
+                hair: { itemKey: "hair_pixie", variant: "blonde" },
+                torso: {
+                  itemKey: "torso_clothes_longsleeve2_buttoned",
+                  variant: "white",
+                },
+                legs: { itemKey: "legs_formal", variant: "teal" },
+                feet: { itemKey: "feet_shoes_basic", variant: "brown" },
+              },
             },
-          }),
+          ),
           openclawConfig: jsonForDb({
             agentId,
             sessionKeyPrefix: `ot-${channel.id.slice(0, 8)}-${agentId}`,
@@ -433,11 +488,17 @@ export async function POST(req: NextRequest) {
     const { password: channelPassword, ...channelWithoutPassword } = channel;
     void channelPassword;
 
-    return NextResponse.json({ channel: channelWithoutPassword }, { status: 201 });
+    return NextResponse.json(
+      { channel: channelWithoutPassword },
+      { status: 201 },
+    );
   } catch (err) {
     console.error("Failed to create channel:", err);
     return NextResponse.json(
-      { errorCode: "failed_to_create_channel", error: "Failed to create channel" },
+      {
+        errorCode: "failed_to_create_channel",
+        error: "Failed to create channel",
+      },
       { status: 500 },
     );
   }

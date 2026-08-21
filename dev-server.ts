@@ -54,33 +54,11 @@ app.prepare().then(async () => {
   if (port !== preferredPort) {
     console.log(`⚠ Port ${preferredPort} in use, using ${port} instead`);
   }
-  const {
-    setupSocketHandlers,
-    getOrConnectGateway,
-    invalidateGatewayConnectionForChannel,
-  } = await import("./src/server/socket-handlers");
+  const { setupSocketHandlers } = await import("./src/server/socket-handlers");
 
-  // Register in-process RPC handler so Next.js API routes can call the gateway
-  // directly without HTTP — no port dependency.
-  registerRpcHandler(async (channelId, method, params) => {
-    const gateway = await getOrConnectGateway(channelId);
-    if (!gateway) throw new Error("Gateway not connected");
-
-    if (method === "agents.create")
-      return gateway.agentsCreate(params.name, params.workspace);
-    if (method === "agents.files.set")
-      return gateway.agentsFileSet(params.agentId, params.name, params.content);
-    if (method === "agents.files.get")
-      return gateway.agentsFileGet(params.agentId, params.name);
-    if (method === "agents.list") return gateway.agentsList();
-    if (method === "agents.delete")
-      return gateway.agentsDelete(params.agentId, params.deleteFiles);
-    throw new Error(`Unknown RPC method: ${method}`);
-  });
-
-  registerGatewayConfigUpdatedHandler(async (channelId) => {
-    await invalidateGatewayConnectionForChannel(channelId);
-  });
+  // 예전에는 여기서 in-process RPC 핸들러를 등록해 API 라우트가 OpenClaw 게이트웨이의
+  // agents.* 를 직접 부를 수 있게 했다(포트 의존 없이). OpenClaw 가 사라지면서 그 메서드
+  // 들도 함께 없어졌다 — server.js 의 /_internal/rpc 브리지와 짝을 맞춰 제거한다.
 
   const httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url!, true);

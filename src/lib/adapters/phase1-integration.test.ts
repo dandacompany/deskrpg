@@ -4,7 +4,6 @@
  * Verifies that the adapter abstraction layer is correctly wired:
  * 1. DB schema: adapter_type and adapter_config columns exist
  * 2. AdapterRegistry: correct routing behavior
- * 3. OpenClawAdapter: streaming, session management, error handling
  * 4. NpcConfig: adapterType field populated from DB
  * 5. MeetingBroker: adapterResolver accepted
  * 6. Unsupported adapter: clean rejection
@@ -12,8 +11,8 @@
 import { describe, test, mock } from "node:test";
 import assert from "node:assert/strict";
 
+import { CodexAdapter } from "./codex-adapter";
 import { AdapterRegistry } from "./types";
-import { OpenClawAdapter } from "./openclaw-adapter";
 import type {
   NpcAdapter,
   AdapterExecuteOptions,
@@ -95,115 +94,7 @@ describe("Phase1: AdapterRegistry routing", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. OpenClawAdapter — streaming and error handling
-// ---------------------------------------------------------------------------
-
-describe("Phase1: OpenClawAdapter", () => {
-  test("executeWithGateway streams deltas correctly", async () => {
-    const adapter = new OpenClawAdapter();
-    const deltas = ["chunk1-", "chunk2-", "chunk3"];
-    const received: string[] = [];
-
-    const mockGateway = {
-      chatSend: mock.fn(async (_aid: string, _sk: string, _msg: string, onDelta: (d: string) => void) => {
-        for (const d of deltas) onDelta(d);
-        return deltas.join("");
-      }),
-    };
-
-    const result = await adapter.executeWithGateway(
-      mockGateway,
-      {
-        sessionKey: "test-key",
-        prompt: "hello",
-        onDelta: (chunk) => received.push(chunk),
-      },
-      "agent-1",
-    );
-
-    assert.equal(result.response, "chunk1-chunk2-chunk3");
-    assert.deepEqual(received, deltas);
-    assert.equal(result.session.sessionRef, "test-key");
-  });
-
-  test("executeWithGateway handles empty response", async () => {
-    const adapter = new OpenClawAdapter();
-    const mockGateway = {
-      chatSend: mock.fn(async () => null),
-    };
-
-    const result = await adapter.executeWithGateway(
-      mockGateway,
-      { sessionKey: "k", prompt: "p" },
-      "a",
-    );
-
-    assert.equal(result.response, "");
-  });
-
-  test("executeWithGateway passes attachments to gateway", async () => {
-    const adapter = new OpenClawAdapter();
-    const attachments = [
-      { type: "image" as const, mimeType: "image/png", fileName: "test.png", content: "base64data" },
-    ];
-
-    const mockGateway = {
-      chatSend: mock.fn(async (_a: string, _s: string, _m: string, _d: (d: string) => void, att: unknown) => {
-        return "ok";
-      }),
-    };
-
-    await adapter.executeWithGateway(
-      mockGateway,
-      { sessionKey: "k", prompt: "p", attachments },
-      "a",
-    );
-
-    const call = mockGateway.chatSend.mock.calls[0];
-    assert.equal(call.arguments[4], attachments);
-  });
-
-  test("executeWithGateway propagates gateway errors", async () => {
-    const adapter = new OpenClawAdapter();
-    const mockGateway = {
-      chatSend: mock.fn(async () => { throw new Error("connection lost"); }),
-    };
-
-    await assert.rejects(
-      () => adapter.executeWithGateway(mockGateway, { sessionKey: "k", prompt: "p" }, "a"),
-      /connection lost/,
-    );
-  });
-
-  test("execute without gateway throws instructive error", async () => {
-    const adapter = new OpenClawAdapter();
-    await assert.rejects(
-      () => adapter.execute({ sessionKey: "k", prompt: "p" }),
-      /executeWithGateway/,
-    );
-  });
-
-  test("abort without gateway throws instructive error", async () => {
-    const adapter = new OpenClawAdapter();
-    await assert.rejects(
-      () => adapter.abort!("k"),
-      /abortWithGateway/,
-    );
-  });
-
-  test("abortWithGateway calls gateway.chatAbort correctly", async () => {
-    const adapter = new OpenClawAdapter();
-    const mockGateway = {
-      chatAbort: mock.fn(async () => {}),
-    };
-
-    await adapter.abortWithGateway(mockGateway, "agent-1", "session-1");
-    assert.equal(mockGateway.chatAbort.mock.callCount(), 1);
-    assert.equal(mockGateway.chatAbort.mock.calls[0].arguments[0], "agent-1");
-    assert.equal(mockGateway.chatAbort.mock.calls[0].arguments[1], "session-1");
-  });
-});
+// (구 3번 섹션 — OpenClawAdapter 스트리밍/에러 처리 — 은 어댑터와 함께 삭제됐다.)
 
 // ---------------------------------------------------------------------------
 // 4. NpcConfig — adapterType populated
@@ -262,51 +153,10 @@ describe("Phase1: NpcConfig shape", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 5. MeetingBroker — adapterResolver wiring
-// ---------------------------------------------------------------------------
+// (구 5번 섹션 — MeetingBroker adapterResolver 배선 — 은 브로커와 함께 삭제됐다.
+//  P2 에서 ConversationEngine 이 그 역할을 이어받았고, 그쪽은
+//  src/lib/conversation/conversation-engine.test.ts 가 검증한다.)
 
-describe("Phase1: MeetingBroker adapterResolver", () => {
-  test("MeetingBroker constructor stores adapterResolver", async () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { MeetingBroker } = require("../meeting-broker.js") as { MeetingBroker: new (config: Record<string, unknown>, callbacks: Record<string, unknown>) => { adapterResolver: unknown; gateway: unknown } };
-
-    const resolverFn = (npcId: string) => new OpenClawAdapter();
-
-    const broker = new MeetingBroker(
-      {
-        topic: "Test",
-        participants: [],
-        gateway: null,
-        sessionKeyPrefix: "test",
-        meetingId: "m-1",
-        adapterResolver: resolverFn,
-      },
-      {},
-    );
-
-    assert.equal(broker.adapterResolver, resolverFn);
-    assert.equal(broker.gateway, null);
-  });
-
-  test("MeetingBroker defaults adapterResolver to null", async () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { MeetingBroker } = require("../meeting-broker.js") as { MeetingBroker: new (config: Record<string, unknown>, callbacks: Record<string, unknown>) => { adapterResolver: unknown } };
-
-    const broker = new MeetingBroker(
-      {
-        topic: "Test",
-        participants: [],
-        gateway: null,
-        sessionKeyPrefix: "test",
-        meetingId: "m-1",
-      },
-      {},
-    );
-
-    assert.equal(broker.adapterResolver, null);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // 6. Unsupported adapter — clean rejection path
@@ -315,11 +165,10 @@ describe("Phase1: MeetingBroker adapterResolver", () => {
 describe("Phase1: Unsupported adapter path", () => {
   test("registry.has returns false for unregistered CLI adapters", () => {
     const registry = new AdapterRegistry();
-    registry.register(new OpenClawAdapter());
+    registry.register(new CodexAdapter());
 
-    assert.equal(registry.has("openclaw"), true);
+    assert.equal(registry.has("codex"), true);
     assert.equal(registry.has("claude"), false);
-    assert.equal(registry.has("codex"), false);
     assert.equal(registry.has("gemini"), false);
     assert.equal(registry.has("opencode"), false);
   });
@@ -337,116 +186,18 @@ describe("Phase1: Unsupported adapter path", () => {
     );
   });
 
-  test("adapter routing guard: non-openclaw type is rejected before gateway call", () => {
-    // Simulate the guard logic from streamNpcResponse
+  test("adapter routing guard: an unregistered type is rejected before dispatch", () => {
+    // streamNpcResponse 의 가드와 같은 판정 — 레지스트리에 없는 어댑터로는 보내지 않는다.
     const registry = new AdapterRegistry();
-    registry.register(new OpenClawAdapter());
+    registry.register(new CodexAdapter());
 
     const npcConfig = { adapterType: "claude" };
 
-    // This is the guard condition from socket-handlers.ts:608
-    const shouldReject = !registry.has(npcConfig.adapterType) || npcConfig.adapterType !== "openclaw";
-    assert.equal(shouldReject, true, "Non-openclaw adapter should be rejected in Phase 1");
-
-    // Openclaw should pass
-    const openclawConfig = { adapterType: "openclaw" };
-    const shouldPass = !registry.has(openclawConfig.adapterType) || openclawConfig.adapterType !== "openclaw";
-    assert.equal(shouldPass, false, "Openclaw adapter should pass the guard");
+    assert.equal(!registry.has(npcConfig.adapterType), true, "등록되지 않은 어댑터는 거부된다");
+    assert.equal(!registry.has("codex"), false, "등록된 어댑터는 통과한다");
   });
 });
 
-// ---------------------------------------------------------------------------
-// 7. End-to-end adapter pipeline simulation
-// ---------------------------------------------------------------------------
-
-describe("Phase1: End-to-end adapter pipeline", () => {
-  test("full DM chat flow through adapter", async () => {
-    const adapter = new OpenClawAdapter();
-    const registry = new AdapterRegistry();
-    registry.register(adapter);
-
-    // Simulate: NPC config loaded from DB
-    const npcConfig = {
-      id: "npc-1",
-      adapterType: "openclaw",
-      agentId: "agent-abc",
-      sessionKeyPrefix: "ot-test",
-      _channelId: "ch-1",
-    };
-
-    // 1. Resolve adapter from registry
-    const resolvedAdapter = registry.get(npcConfig.adapterType);
-    assert.equal(resolvedAdapter.type, "openclaw");
-
-    // 2. Build session key (same logic as socket-handlers.ts:619)
-    const userId = "user-123";
-    const sessionKey = `${npcConfig.sessionKeyPrefix}-dm-${userId}`;
-    assert.equal(sessionKey, "ot-test-dm-user-123");
-
-    // 3. Execute through adapter with mock gateway
-    const streamedChunks: string[] = [];
-    const mockGateway = {
-      chatSend: mock.fn(async (_a: string, _sk: string, _msg: string, onDelta: (d: string) => void) => {
-        onDelta("I'm ");
-        onDelta("an NPC");
-        return "I'm an NPC";
-      }),
-    };
-
-    const result = await (resolvedAdapter as OpenClawAdapter).executeWithGateway(
-      mockGateway,
-      {
-        sessionKey,
-        prompt: "Hello NPC",
-        onDelta: (chunk) => streamedChunks.push(chunk),
-      },
-      npcConfig.agentId,
-    );
-
-    // 4. Verify response
-    assert.equal(result.response, "I'm an NPC");
-    assert.deepEqual(streamedChunks, ["I'm ", "an NPC"]);
-    assert.equal(result.session.sessionRef, sessionKey);
-  });
-
-  test("full task session flow with separate session key", async () => {
-    const adapter = new OpenClawAdapter();
-
-    const npcConfig = {
-      sessionKeyPrefix: "ot-worker",
-      agentId: "agent-xyz",
-    };
-    const taskId = "worker-20260409-ab12";
-
-    // Task session key pattern (socket-handlers.ts:1170)
-    const taskSessionKey = `${npcConfig.sessionKeyPrefix}-task-${taskId}`;
-    assert.equal(taskSessionKey, "ot-worker-task-worker-20260409-ab12");
-
-    const mockGateway = {
-      chatSend: mock.fn(async () => '작업 시작합니다.\n```json:task\n{"action":"create","id":"worker-20260409-ab12","title":"테스트","status":"in_progress","summary":"시작"}\n```'),
-    };
-
-    const result = await adapter.executeWithGateway(
-      mockGateway,
-      { sessionKey: taskSessionKey, prompt: "태스크 시작" },
-      npcConfig.agentId,
-    );
-
-    assert.ok(result.response.includes("json:task"));
-    assert.ok(result.response.includes('"action":"create"'));
-  });
-
-  test("meeting session key pattern", () => {
-    const prefix = "ot-meeting";
-    const channelId = "ch-dev";
-
-    // Meeting session key pattern (socket-handlers.ts:656)
-    const meetingSessionKey = `${prefix}-meeting-${channelId}`;
-    assert.equal(meetingSessionKey, "ot-meeting-meeting-ch-dev");
-
-    // Summary session key pattern
-    const meetingId = "m-001";
-    const summarySessionKey = `${prefix}-summary-${meetingId}`;
-    assert.equal(summarySessionKey, "ot-meeting-summary-m-001");
-  });
-});
+// (구 End-to-end adapter pipeline 섹션은 OpenClawAdapter.executeWithGateway 를 목
+//  게이트웨이에 대고 부르는 것이 본체였다. 어댑터가 사라졌으므로 다른 어댑터로 옮겨
+//  심을 내용이 아니다 — 남는 것은 세션 키 조립 규칙뿐이고 그건 다른 곳에서 본다.)

@@ -63,22 +63,21 @@ test("socket-handlers still registers the events server.js used to own", () => {
   }
 });
 
-test("server.js invalidates the socket-handlers gateway cache on config-updated", () => {
-  // P1b 통합 이후, 게이트웨이 연결 캐시가 두 곳으로 갈라졌다:
-  //   - server.js의 channelGateways (channelId 키, /_internal/rpc 전용)
-  //   - socket-handlers.ts의 channelGateways (gatewayId 키, NPC 대화 전용)
-  // /_internal/emit의 gateway:config-updated 분기는 원래 앞쪽만 지웠다 —
-  // 토큰/URL을 바꿔도 NPC 대화 경로는 죽은 연결을 계속 쓰는 조용한 회귀였다.
-  // socket-handlers.ts가 내보내는 invalidateGatewayConnectionForChannel을
-  // server.js가 호출한다는 사실만 단언한다 — 앞으로 이 호출이 빠지면
-  // 이 테스트가 실패한다.
-  const src = readFileSync(path.join(repoRoot, "server.js"), "utf8");
+test("게이트웨이 설정이 바뀌면 런타임 상태 캐시가 무효화된다", () => {
+  // 원래 이 자리에는 "server.js 가 invalidateGatewayConnectionForChannel 을 부르는가"를
+  // 보는 가드가 있었다. 게이트웨이 연결 캐시가 두 곳(server.js 의 channelId 키,
+  // socket-handlers 의 gatewayId 키)으로 갈라져 한쪽만 지워지던 조용한 회귀를 고정한
+  // 것이었다. OpenClaw 가 사라지면서 그 WS 커넥션 풀도 둘 다 없어졌다.
+  //
+  // 지켜야 할 것은 남아 있다: 설정이 바뀌면 게이트웨이 런타임 상태 캐시가 무효화되어야
+  // 한다. 그 호출은 gateway-resources.ts 가 변경 시점에 직접 한다 — 여기서는 그 사실이
+  // 유지되는지만 본다.
+  const src = readFileSync(path.join(repoRoot, "src/lib/gateway-resources.ts"), "utf8");
   assert.match(
     src,
-    /invalidateGatewayConnectionForChannel/,
-    "server.js가 invalidateGatewayConnectionForChannel을 호출하지 않습니다 — "
-      + "gateway:config-updated 시 socket-handlers.ts의 게이트웨이 캐시(gatewayId 키)가 "
-      + "무효화되지 않아 NPC 대화가 오래된 연결을 계속 씁니다.",
+    /invalidateGatewayRuntimeState\s*\(/,
+    "gateway-resources.ts 가 invalidateGatewayRuntimeState 를 호출하지 않습니다 — "
+      + "게이트웨이 주소나 토큰을 바꿔도 캐시된 상태가 그대로 쓰입니다.",
   );
 });
 

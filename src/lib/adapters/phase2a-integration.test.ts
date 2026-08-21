@@ -16,7 +16,6 @@ import fs from "node:fs/promises";
 import os from "node:os";
 
 import { AdapterRegistry } from "./types";
-import { OpenClawAdapter } from "./openclaw-adapter";
 import { ClaudeAdapter } from "./claude-adapter";
 import { CodexAdapter } from "./codex-adapter";
 import { GeminiAdapter } from "./gemini-adapter";
@@ -242,9 +241,8 @@ describe("Phase2A: SubprocessPool real execution", () => {
 // ---------------------------------------------------------------------------
 
 describe("Phase2A: Full adapter registry", () => {
-  test("registry holds all 5 adapter types", () => {
+  test("registry holds every CLI adapter type", () => {
     const registry = new AdapterRegistry();
-    registry.register(new OpenClawAdapter());
     registry.register(new ClaudeAdapter());
     registry.register(new CodexAdapter());
     registry.register(new GeminiAdapter());
@@ -252,7 +250,6 @@ describe("Phase2A: Full adapter registry", () => {
       registry.register(new OpenCodeAdapterClass());
     }
 
-    assert.ok(registry.has("openclaw"));
     assert.ok(registry.has("claude"));
     assert.ok(registry.has("codex"));
     assert.ok(registry.has("gemini"));
@@ -263,7 +260,6 @@ describe("Phase2A: Full adapter registry", () => {
 
   test("each adapter implements NpcAdapter interface", async () => {
     const adapters = [
-      new OpenClawAdapter(),
       new ClaudeAdapter(),
       new CodexAdapter(),
       new GeminiAdapter(),
