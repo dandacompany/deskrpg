@@ -7,13 +7,8 @@ import { Transcript, USER_SPEAKER_ID, type Turn } from "./transcript";
 import type { TurnTimeoutConfig } from "./turn-timeout";
 import { FloorInbox } from "./inbox";
 import { DEFAULT_IDLE_MS, DEFAULT_MAX_MS, NpcRuntime } from "./npc-runtime";
-import {
-  eligibleParticipants,
-  needsPolling,
-  selectNextSpeaker,
-  type ConversationMode,
-  type Participant,
-} from "./turn-policy";
+import { MeetingFloorController } from "./floor-controller";
+import type { ConversationMode, Participant } from "./turn-policy";
 
 export type EngineParticipant = Participant & {
   adapter: NpcAdapter;
@@ -103,15 +98,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** 청크 단위로 나눠 순차 실행한다. Hermes의 max_concurrent_runs를 넘는 폴링이
- * 한꺼번에 발사되어 429로 조용히 유실되는 것을 막는다(스펙 §3.5). */
-function chunk<T>(items: T[], size: number): T[][] {
-  if (size <= 0) return [items];
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
-
 export class ConversationEngine {
   private readonly config: EngineConfig;
   private readonly callbacks: EngineCallbacks;
@@ -138,6 +124,8 @@ export class ConversationEngine {
   private commandQueue: Array<{ type: "setMode"; mode: string }> = [];
   /** 발언권 부여 대기열. 예전 단일 슬롯을 대체한다 — 지목이 더는 무음으로 사라지지 않는다. */
   private readonly inbox = new FloorInbox();
+  /** "다음 발언자가 누구인가" 정책. 스펙 §6의 정책 교체점 — floor-controller.ts 참고. */
+  private readonly floor: MeetingFloorController;
   private waitResolve: (() => void) | null = null;
   /** abortCurrentTurn 대상 — speak() 진행 중에만 채워진다. meeting-broker.js:_currentSessionKey/_currentAgentId. */
   private current: NpcRuntime | null = null;
@@ -166,6 +154,12 @@ export class ConversationEngine {
         }),
       ]),
     );
+    this.floor = new MeetingFloorController({
+      inbox: this.inbox,
+      mode: config.mode,
+      maxConcurrentPolls: config.maxConcurrentPolls ?? 4,
+      onPollStart: () => this.callbacks.onPollStart?.(),
+    });
   }
 
   isRunning(): boolean {
@@ -287,33 +281,6 @@ export class ConversationEngine {
     if (modeChanged) this.callbacks.onModeChanged?.(this.runMode, "user");
   }
 
-  /**
-   * 다음 발언자를 인박스에서 꺼낸다. 이번 단계에서는 자격 검사를 하지 않는다 —
-   * 쿼터 게이트는 Task 4 에서 켠다.
-   *
-   * 무언가를 실제로 꺼낼 때는 clearAutoResumeTimer()를 함께 부른다. 예전
-   * drainCommands는 directSpeak 커맨드를 소비할 때 이걸 불렀다 — hybrid 모드에서
-   * manual 대기 중 자동 복귀 타이머가 걸려 있어도, 발언권 부여가 실제로 처리되면
-   * 그 타이머는 더 이상 유효하지 않다(사용자가 손을 뗀 게 아니라 이미 개입했으므로).
-   * 여기서 취소하지 않으면 지목 처리 도중에도 타이머가 살아남아 만료 시
-   * setMode("auto")가 사용자 조작과 무관하게 발화한다.
-   */
-  /**
-   * 다음 발언자를 인박스에서 꺼낸다.
-   *
-   * 멘션 부여만 자격 검사를 받는다 — 큐가 생긴 뒤로 지목 사슬이 한 NPC 를 할당량
-   * 너머로 반복 호출할 수 있게 됐기 때문이다. 사용자 부여는 인박스가 검사 없이
-   * 돌려주므로 여기 게이트가 걸리지 않는다.
-   */
-  private takeGrant(): string | null {
-    const npcId = this.inbox.take(
-      (npcId) => !(this.runtimes.get(npcId)?.isBurnedOut() ?? false) && this.remainingTurns(npcId) > 0,
-      (npcId) => this.callbacks.onMentionSkipped?.(npcId, "quota_exhausted"),
-    );
-    if (npcId !== null) this.clearAutoResumeTimer();
-    return npcId;
-  }
-
   async run(): Promise<void> {
     this.running = true;
     this.endReason = null;
@@ -331,12 +298,38 @@ export class ConversationEngine {
         this.consecutivePasses = 0;
       }
 
-      // 3. 지정 발언 — 어느 runMode 에서든 최우선. 인박스가 사용자 지목을 먼저,
-      //    그다음 멘션을 FIFO 로 내놓는다.
+      // 3+5. 다음 발언자 결정 — 지정 발언(어느 runMode 에서든 최우선) 또는 후보 산출 →
+      //    (필요 시) 폴링 → 선발. MeetingFloorController.next()에 위임한다(floor-controller.ts).
       //    보존된 결함: npcId 를 참가자 목록에서 못 찾으면 조용히 아무도 발언하지 않는다.
-      const directNpcId = this.takeGrant();
-      if (directNpcId !== null) {
-        const runtime = this.runtimes.get(directNpcId);
+      //
+      // directed 이고 인박스가 완전히 비어 있으면 floor.next()를 부르지 않고 곧장 대기를
+      // 건다. next()는 async라 그 결과를 await하면 반드시 마이크로태스크 한 틱이 끼는데,
+      // 원본 코드(동기 takeGrant())는 그 틱 없이 같은 이벤트 루프 턴 안에서 armWait()까지
+      // 도달했다 — directSpeak()가 run()과 같은 동기 구간에서 호출되는 테스트가 이 틱에
+      // 의존한다(그 틱이 생기면 push 가 armWait() 이전에 일어나 releaseWait()가 무효화된다).
+      // 인박스가 비어 있지 않을 때는 이 최적화가 필요 없다 — 부여가 이미 쌓여 있으므로
+      // 이번 틱이든 다음 틱이든 next()가 그것을 집어간다.
+      if (this.runMode === "directed" && this.inbox.pendingCount() === 0) {
+        const waiting = this.armWait();
+        this.callbacks.onWaitingInput?.(null);
+        await waiting;
+        continue;
+      }
+
+      const decision = await this.floor.next({
+        participants: this.participantsView(),
+        runtimeFor: (npcId) => this.runtimes.get(npcId),
+        remainingTurns: (npcId) => this.remainingTurns(npcId),
+        lastSpeakerId: this.lastSpeakerId,
+        // directed 는 폴링 없이 지정 발언만 받는다. 부여를 먼저 보는 구조이므로 이 플래그가
+        // 없으면 부여가 없을 때 없던 LLM 폴링 호출이 매 라운드 생긴다.
+        pollingAllowed: this.runMode !== "directed",
+        onSkippedGrant: (npcId) => this.callbacks.onMentionSkipped?.(npcId, "quota_exhausted"),
+      });
+
+      if (decision.kind === "grant") {
+        this.clearAutoResumeTimer();
+        const runtime = this.runtimes.get(decision.npcId);
         if (runtime) {
           await this.speak(runtime);
         }
@@ -359,12 +352,7 @@ export class ConversationEngine {
         continue;
       }
 
-      // 5. auto/manual 공통 — 후보 산출 → (필요 시) 폴링 → 발언. meeting-broker.js:114-157 이식.
-      const candidates = eligibleParticipants(
-        this.participantsView(),
-        (npcId) => (this.runtimes.get(npcId)?.isBurnedOut() ? 0 : this.remainingTurns(npcId)),
-      );
-      if (candidates.length === 0) {
+      if (decision.kind === "no-candidates") {
         // 왜 아무도 없는가를 구분한다. 전원이 실패 예산을 소진한 것과, 다들 할당량을
         // 다 쓴 것은 운영상 전혀 다른 상황이다 — 전자는 백엔드가 죽었다는 뜻이다.
         const seated = this.config.participants.filter((p) => p.seated);
@@ -373,32 +361,24 @@ export class ConversationEngine {
         break;
       }
 
-      let speaker: Participant | null = null;
-
-      if (needsPolling(this.config.mode)) {
-        const { raises, passes } = await this.pollCandidates(candidates);
-        this.callbacks.onPollResult?.(
-          raises.map((r) => ({ npcId: r.npcId, reason: r.reason })),
-          passes,
-        );
-
-        if (raises.length === 0) {
-          this.consecutivePasses++;
-          if (this.consecutivePasses >= this.maxConsecutivePasses()) {
-            this.endReason = "consecutive_passes";
-            break;
-          }
-        } else {
-          this.consecutivePasses = 0;
-          const raisedCandidates = candidates.filter((c) => raises.some((r) => r.npcId === c.npcId));
-          speaker = selectNextSpeaker(this.config.mode, raisedCandidates, this.lastSpeakerId);
+      if (decision.kind === "all-passed") {
+        // pollResult !== null 일 때만, 그리고 그때는 내용과 무관하게 통지한다 — 폴링 참가자
+        // 전원의 어댑터가 실패하면 raises/passes 가 둘 다 빈 배열이 되지만, 그래도 폴링은
+        // 일어났다는 사실 자체를 클라이언트가 알아야 한다.
+        if (decision.pollResult) {
+          this.callbacks.onPollResult?.(decision.pollResult.raises, decision.pollResult.passes);
+        }
+        this.consecutivePasses++;
+        if (this.consecutivePasses >= this.maxConsecutivePasses()) {
+          this.endReason = "consecutive_passes";
+          break;
         }
       } else {
-        speaker = selectNextSpeaker(this.config.mode, candidates, this.lastSpeakerId);
-      }
-
-      if (speaker) {
-        const runtime = this.runtimes.get(speaker.npcId);
+        if (decision.pollResult) {
+          this.callbacks.onPollResult?.(decision.pollResult.raises, decision.pollResult.passes);
+        }
+        this.consecutivePasses = 0;
+        const runtime = this.runtimes.get(decision.npcId);
         if (runtime) {
           await this.speak(runtime);
           // 실패한 턴은 트랜스크립트에 아무것도 남기지 않아 다른 어떤 종료 조건도 전진시키지
@@ -462,47 +442,6 @@ export class ConversationEngine {
       this.transcript.all().length >= this.config.quota.maxTotalTurns ||
       this.consecutivePasses >= this.maxConsecutivePasses()
     );
-  }
-
-  /**
-   * 후보를 maxConcurrentPolls 크기로 나눠 청크마다 병렬 폴링한다(청크 사이는 순차).
-   * 실패한 참가자는 raises/passes 어느 쪽에도 넣지 않는다 — 회의를 중단시키지 않되
-   * 그 라운드에서는 사실상 PASS로 취급된다(현행 meeting-broker.js:322-325 동작 보존, 결함 보존).
-   */
-  private async pollCandidates(
-    candidates: Participant[],
-  ): Promise<{ raises: Array<{ npcId: string; reason: string }>; passes: string[] }> {
-    this.callbacks.onPollStart?.();
-
-    const raises: Array<{ npcId: string; reason: string }> = [];
-    const passes: string[] = [];
-    const maxConcurrentPolls = this.config.maxConcurrentPolls ?? 4;
-
-    for (const group of chunk(candidates, maxConcurrentPolls)) {
-      const results = await Promise.allSettled(
-        group.map(async (c) => {
-          const runtime = this.runtimes.get(c.npcId)!;
-          const remaining = this.remainingTurns(c.npcId);
-          const parsed = await runtime.poll(remaining);
-          return { npcId: c.npcId, parsed };
-        }),
-      );
-
-      for (const result of results) {
-        if (result.status === "rejected") {
-          // 실패한 참가자는 조용히 건너뛴다 — 회의를 중단하지 않는다(보존된 결함 3).
-          continue;
-        }
-        const { npcId, parsed } = result.value;
-        if (parsed.wantsToSpeak) {
-          raises.push({ npcId, reason: parsed.reason });
-        } else {
-          passes.push(npcId);
-        }
-      }
-    }
-
-    return { raises, passes };
   }
 
   /** 발언권을 부여하고 스트리밍 응답을 받아 트랜스크립트에 기록한다. */
