@@ -157,6 +157,21 @@ export class NpcRuntime {
       remaining,
     );
 
+    return this.speakWithPrompt(message, hooks);
+  }
+
+  /**
+   * 주어진 대본으로 한 번 말한다. throw 하지 않는다 — 모든 실패를 SpeakOutcome 으로 돌려준다.
+   *
+   * takeTurn 과 갈라 둔 이유: 대본을 만드는 일은 회의(주제·참석자·턴 수)와 자유채팅(누가 뭘
+   * 물었나)이 서로 다르지만, 대본을 들고 가서 말을 시키고 답을 받아오는 일 — 두 겹 타임아웃,
+   * 스트리밍 정제, 지목 파싱 — 은 완전히 같다. 그 절반만 공유한다.
+   */
+  async speakWithPrompt(
+    prompt: string,
+    hooks: { onChunk: (chunk: string) => void },
+  ): Promise<SpeakOutcome> {
+    const historyLimit = this.deps.historyLimit;
     let rawText = "";
     let emittedText = "";
     // 두 겹 타임아웃(§3.5) — idle은 onDelta/onToolProgress(활동 신호)가 올 때마다 touch()로
@@ -174,7 +189,7 @@ export class NpcRuntime {
         this.participant.adapter
           .execute({
             sessionKey: this.participant.sessionKey,
-            prompt: message,
+            prompt,
             // 트랜스크립트는 엔진이 소유한다. 첫 턴은 히스토리가 비지만 그것도 다자 대화의
             // 한 턴이므로 전송 경로가 2번째 턴부터와 달라지면 안 된다.
             multiParty: true,
