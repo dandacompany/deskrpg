@@ -5,7 +5,7 @@
 // MeetingBroker.run()(meeting-broker.js:78-184)의 루프 구조를 어댑터 위로 이식한 것 —
 // 게이트웨이 호출을 NpcAdapter.execute() 호출로 바꾸고, 정책 판단은 turn-policy.ts에 위임한다.
 
-import type { NpcAdapter } from "@/lib/adapters/types";
+import type { EngineParticipant } from "./types";
 import { Transcript, USER_SPEAKER_ID, type Turn } from "./transcript";
 import type { TurnTimeoutConfig } from "./turn-timeout";
 import { FloorInbox } from "./inbox";
@@ -13,15 +13,10 @@ import { DEFAULT_IDLE_MS, DEFAULT_MAX_MS, NpcRuntime } from "./npc-runtime";
 import { MeetingFloorController, type MentionSkipReason } from "./floor-controller";
 import type { ConversationMode, Participant } from "./turn-policy";
 
-export type EngineParticipant = Participant & {
-  adapter: NpcAdapter;
-  sessionKey: string;
-  /** 발언 프롬프트의 참석자 목록에 `이름(역할)`로 실린다. 생략하면 "Participant". */
-  role?: string | null;
-  /** 폴링 프롬프트의 `[발언 지침]` 블록에 실린다(meeting-formatter.js:30-32). 옛 브로커는
-   * agent.passPolicy를 그대로 넘겼다(meeting-broker.js:307) — 값이 없으면 블록 자체가 빠진다. */
-  passPolicy?: string | null;
-};
+// 정의는 types.ts 에 있다 — npc-runtime 이 이 파일을 도로 가리키지 않게 하려는 것이다.
+// 호출부(meeting-discussion, 테스트, conversation-engine 껍데기)가 계속 여기서 가져오므로
+// 재export 로 남긴다.
+export type { EngineParticipant } from "./types";
 
 /** 회의 런타임 컨트롤 서브모드. meeting-broker.js:53 이식 — EngineConfig.mode(peer/meeting/group,
  * 참가자 구조/정책 축)와는 별개 축이다. auto=자동 진행, manual=매 라운드 뒤 대기, directed=폴링 없이
