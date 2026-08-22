@@ -54,7 +54,9 @@ import {
   emitMeetingNpcStream,
   registerMeetingSocketHandlers,
 } from "./meeting-socket";
-import { registerMeetingDiscussionHandlers } from "./meeting-discussion";
+import { registerMeetingDiscussionHandlers, resolveNpcAdapter } from "./meeting-discussion";
+import { OpenChatRuntime } from "../lib/conversation/open-chat-runtime";
+import type { EngineParticipant } from "../lib/conversation/types";
 import { AdapterRegistry } from "../lib/adapters/types.js";
 import { ClaudeAdapter } from "../lib/adapters/claude-adapter.js";
 import { CodexAdapter } from "../lib/adapters/codex-adapter.js";
@@ -81,6 +83,9 @@ const { TaskManager } = require("../lib/task-manager.js") as { TaskManager: new 
 const { withTaskReminder, normalizeTaskPromptLocale, buildTaskSessionPrompt } = require("../lib/task-prompt.js") as typeof import("../lib/task-prompt.js");
 
 const adapterRegistry = new AdapterRegistry();
+
+/** 채널별 자유채팅 런타임. 회의(activeBrokers)와 달리 시작·종료가 없고 첫 지명에 생겨 계속 산다. */
+const openChats = new Map<string, OpenChatRuntime>();
 
 // Register CLI adapters when the corresponding local CLI is installed.
 for (const AdapterClass of [ClaudeAdapter, CodexAdapter, GeminiAdapter, OpenCodeAdapter]) {
@@ -627,6 +632,90 @@ async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> 
     console.error(`[npc] Failed to load NPC configs for channel ${channelId}:`, err);
     return [];
   }
+}
+
+// ---------------------------------------------------------------------------
+// Open chat (free-form map chat mentions) — runtime store
+// ---------------------------------------------------------------------------
+
+/**
+ * 채널의 자유채팅 런타임을 얻거나 만든다. `getNpcConfigsForChannel` 이 회의와 똑같은 조립
+ * 규칙(agent_config 에서 sessionKeyPrefix·passPolicy 를 꺼내고 role 은 "Participant" 로 고정)
+ * 을 이미 쓰고 있어 그대로 재사용한다 — 별도 toNpcConfig 를 만들면 조립 규칙이 둘로 갈려
+ * 회의 NPC 와 수다 NPC 의 페르소나가 어긋난다.
+ */
+async function getOrCreateOpenChat(io: Server, channelId: string, userId: string): Promise<OpenChatRuntime | null> {
+  const existing = openChats.get(channelId);
+  if (existing) return existing;
+
+  const npcConfigs = await getNpcConfigsForChannel(channelId);
+  const participants: EngineParticipant[] = [];
+  for (const npc of npcConfigs) {
+    const resolved = await resolveNpcAdapter(npc, {
+      sessionScope: `openchat-${channelId}`,
+      userId,
+      adapterRegistry,
+    });
+    if ("excluded" in resolved) continue;
+    participants.push({
+      npcId: resolved.participant.npcId,
+      displayName: resolved.participant.displayName,
+      seated: true,
+      turnCount: 0,
+      lastSpokeAt: 0,
+      adapter: resolved.adapter,
+      sessionKey: resolved.sessionKey,
+      role: resolved.participant.role,
+      passPolicy: resolved.participant.passPolicy,
+    });
+  }
+  if (participants.length === 0) return null;
+
+  const runtime = new OpenChatRuntime(
+    {
+      participants,
+      recent: () => (channelChatHistory.get(channelId) || []).slice(-10)
+        .map((m) => ({ sender: m.sender, content: m.content })),
+      turnTimeout: { idleMs: 180_000, maxMs: 600_000 },
+    },
+    {
+      onTurnStart: (npcId) => {
+        // 걷기와 말하기가 동시에 시작된다 — 도착을 기다리지 않는다.
+        io.to(channelId).emit("npc:come-to-player", { npcId, targetPlayerId: null });
+      },
+      // onTurnChunk 는 넘기지 않는다: 맵 채팅 클라이언트는 chat:message(완성본)만 듣고,
+      // 스트리밍 버블을 그릴 리스너가 아직 없다(회의방 전용 meeting:npc-stream 뿐).
+      // 소비자 없는 이벤트를 새로 만들면 검증할 수 없는 죽은 배선만 늘어난다.
+      onTurnEnd: (npcId, fullResponse, meta) => {
+        if (meta?.aborted || !fullResponse) return;
+        const npc = participants.find((x) => x.npcId === npcId);
+        const chatMessage: ChannelChatMessage = {
+          id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          sender: npc?.displayName || npcId,
+          senderId: npcId,
+          content: fullResponse,
+          timestamp: Date.now(),
+        };
+        const history = channelChatHistory.get(channelId) || [];
+        history.push(chatMessage);
+        channelChatHistory.set(channelId, history);
+        io.to(channelId).emit("chat:message", chatMessage);
+      },
+      onMentionSkipped: (npcId, reason) => {
+        const npc = participants.find((x) => x.npcId === npcId);
+        io.to(channelId).emit("meeting:mention-skipped", {
+          npcId,
+          npcName: npc?.displayName || npcId,
+          reason,
+        });
+      },
+      onError: (err, npcId) => {
+        console.error("[openchat]", npcId, err);
+      },
+    },
+  );
+  openChats.set(channelId, runtime);
+  return runtime;
 }
 
 // ---------------------------------------------------------------------------
@@ -1264,6 +1353,17 @@ export function setupSocketHandlers(io: Server) {
       history.push(chatMessage);
       channelChatHistory.set(player.mapId, history);
       io.to(player.mapId).emit("chat:message", chatMessage);
+
+      // NPC 는 지명받을 때만 깨어난다. 지명이 없으면 여기서 끝 — 맵에 NPC 가 열 명이어도
+      // 조용하고, 비용도 호출한 만큼만 든다. (parseAllMentions 가 런타임 안에서 다시 정확히
+      // 판정한다 — 이 정규식은 DB 조회·어댑터 해석을 건너뛰기 위한 최적화일 뿐이다.)
+      if (/@\[|^TO:/im.test(trimmed)) {
+        void (async () => {
+          const runtime = await getOrCreateOpenChat(io, player.mapId, user.userId);
+          if (!runtime) return;
+          await runtime.handleHumanMessage(chatMessage.sender, trimmed);
+        })().catch((err) => console.error("[openchat] dispatch failed:", err));
+      }
     });
 
     // ----- map:object-add (map editing broadcast, owner only) -----
