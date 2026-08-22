@@ -1789,21 +1789,28 @@ export function setupSocketHandlers(io: Server) {
     });
 
     // NPC management broadcasts (re-broadcast to room)
+    //
+    // 세 갈래 모두 자유채팅 런타임 캐시를 버린다. 런타임은 첫 지명 때의 참가자
+    // 목록을 채널 수명 내내 들고 있어서, 버리지 않으면 **해고된 NPC 가 계속 대답하고
+    // 새로 온 NPC 는 불러도 오지 않는다.** 다음 지명에서 DB 를 다시 읽어 새로 만든다.
     socket.on("npc:broadcast-add", (npcData: unknown) => {
       const player = players.get(socket.id);
       if (!player) return;
+      openChats.delete(player.mapId);
       socket.to(player.mapId).emit("npc:added", npcData);
     });
 
     socket.on("npc:broadcast-update", (data: unknown) => {
       const player = players.get(socket.id);
       if (!player) return;
+      openChats.delete(player.mapId);
       socket.to(player.mapId).emit("npc:updated", data);
     });
 
     socket.on("npc:broadcast-remove", (data: unknown) => {
       const player = players.get(socket.id);
       if (!player) return;
+      openChats.delete(player.mapId);
       socket.to(player.mapId).emit("npc:removed", data);
     });
 

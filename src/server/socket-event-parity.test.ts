@@ -182,3 +182,24 @@ test("the map client still gates A* on being the caller", () => {
       "경로탐색을 돌리지 않고, 늘 참이면 모든 클라이언트가 같은 NPC 를 각자 움직입니다.",
   );
 });
+
+// 자유채팅 런타임은 첫 지명 때의 참가자 목록을 채널 수명 내내 들고 산다(회의 브로커와
+// 달리 종료 시점이 없다). NPC 가 추가·수정·해고될 때 캐시를 버리지 않으면 해고된 NPC 가
+// 계속 대답하고 새 NPC 는 불러도 오지 않는다 — 에러가 아니라 "왜 아직 대답하지" 로만
+// 드러나므로 배선 자체를 붙들어 둔다.
+test("every npc:broadcast-* handler drops the open-chat runtime cache", () => {
+  const src = readFileSync(path.join(repoRoot, "src/server/socket-handlers.ts"), "utf8");
+  for (const event of ["npc:broadcast-add", "npc:broadcast-update", "npc:broadcast-remove"]) {
+    const start = src.indexOf(`socket.on("${event}"`);
+    assert.notEqual(start, -1, `socket-handlers.ts 에 ${event} 핸들러가 없습니다.`);
+    // 창을 **그 핸들러 본문으로** 잘라야 한다. 고정 길이로 자르면 창이 다음
+    // socket.on 까지 넘어가 옆 갈래의 delete 를 보고 통과한다 — 실제로 첫 판이
+    // 그랬고, update 갈래의 무효화를 지워도 빨개지지 않았다.
+    const next = src.indexOf("socket.on(", start + 1);
+    const body = src.slice(start, next === -1 ? undefined : next);
+    assert.ok(
+      /openChats\.delete\(/.test(body),
+      `${event} 가 openChats 캐시를 버리지 않습니다 — 해고된 NPC 가 계속 대답합니다.`,
+    );
+  }
+});
