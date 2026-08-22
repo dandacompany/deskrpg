@@ -1476,6 +1476,8 @@ const zh: Record<string, string> = {
   "meeting.systemSender": "系统",
   "meeting.endedTranscriptPrefix": "[会议结束]",
   "meeting.errorPrefix": "[错误]",
+  "meeting.mentionSkipped.quotaExhausted": "{name}被点名，但发言配额已用完，因此没有发言。",
+  "meeting.mentionSkipped.backendFailing": "{name}被点名，但AI后端没有响应，因此没有发言。",
 
   // Minutes
   "minutes.title": "会议纪要",

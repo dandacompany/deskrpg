@@ -129,6 +129,10 @@ type MeetingBrokerCallbacks = {
   onWaitingInput?: (pollResult: unknown) => void;
   onTurnAborted?: (npcId: string) => void;
   onMeetingEnd?: (transcript: string, durationSeconds?: number) => void | Promise<void>;
+  /** 지목받았으나 건너뛴 NPC. onParticipantsExcluded 와 같은 계열. reason 은 할당량 소진
+   * ("quota_exhausted")과 게이트웨이 연속 실패("backend_failing")를 구분한다 — 합치면
+   * 죽은 게이트웨이가 정상 할당량 소진으로 보인다. */
+  onMentionSkipped?: (npcId: string, reason: "quota_exhausted" | "backend_failing") => void;
   onError?: (error: unknown) => void;
   /** 어댑터를 해석하지 못해 참가자 목록에서 제외된 NPC. 조용히 빼지 않고 알린다(요구사항). */
   onParticipantsExcluded?: (excluded: ExcludedMeetingNpc[]) => void;
@@ -336,6 +340,7 @@ export async function defaultCreateMeetingBroker(
       onTurnEnd: (npcId, fullResponse) => callbacks.onTurnEnd?.(npcId, fullResponse),
       onModeChanged: (mode, source) => callbacks.onModeChanged?.(mode, source),
       onWaitingInput: (pollResult) => callbacks.onWaitingInput?.(pollResult),
+      onMentionSkipped: (npcId, reason) => callbacks.onMentionSkipped?.(npcId, reason),
       onError: (err) => callbacks.onError?.(err),
       onEnd: (finalTurns) => {
         turns = finalTurns;
@@ -544,6 +549,17 @@ export function registerMeetingDiscussionHandlers({
           const names = excluded.map((e) => e.displayName).join(", ");
           io.to(getMeetingRoomId(channelId)).emit("meeting:error", {
             error: `Excluded from the meeting (no usable backend): ${names}`,
+          });
+        },
+        onMentionSkipped: (npcId, reason) => {
+          const agent = brokerInstance.config.participants.find((participant) => participant.npcId === npcId);
+          meetingLog("지목 건너뜀:", `${agent?.displayName || npcId}=${reason}`);
+          // 표시 문구는 여기서 만들지 않는다 — npcId/reason 만 넘기고 클라이언트가
+          // i18n(meeting.mentionSkipped.*)으로 렌더한다.
+          io.to(getMeetingRoomId(channelId)).emit("meeting:mention-skipped", {
+            npcId,
+            npcName: agent?.displayName || npcId,
+            reason,
           });
         },
         onMeetingEnd: async (transcript, durationSeconds) => {

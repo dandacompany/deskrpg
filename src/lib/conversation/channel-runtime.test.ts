@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { ConversationEngine } from "./conversation-engine";
-import type { EngineParticipant } from "./conversation-engine";
+import { ChannelRuntime } from "./channel-runtime";
+import type { EngineParticipant } from "./channel-runtime";
 import type { NpcAdapter, AdapterExecuteOptions } from "@/lib/adapters/types";
 
 /** 대본대로 답하는 목 어댑터. 호출 인자를 기록한다. */
@@ -23,6 +23,45 @@ function mockAdapter(replies: string[]): NpcAdapter & { calls: AdapterExecuteOpt
   };
 }
 
+/** 폴링에는 항상 손을 들고, 실제 발언에서는 항상 터지는 목. 실패 격리 검증용. */
+function alwaysFailsToSpeak(): NpcAdapter {
+  return {
+    type: "mock",
+    async execute(options: AdapterExecuteOptions) {
+      if (options.sessionKey.endsWith("-poll")) {
+        return { response: "SPEAK: 말할래요", session: { sessionRef: options.sessionKey } };
+      }
+      throw new Error("backend down");
+    },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
+  };
+}
+
+/**
+ * 폴링에는 항상 손을 들고, 실제 발언은 대본을 순서대로 내놓는 목. mockAdapter와 달리
+ * 폴링 호출이 대본 큐를 소비하지 않는다 — 다른 참가자가 계속 이기는 회의에서는 매 라운드
+ * 폴링만 여러 번 일어나고 실제 발언은 드물게 일어나므로, 큐를 공유하면(mockAdapter처럼)
+ * 실제로 말하기도 전에 대본이 바닥나 "SPEAK:" 신호를 잃는다. 실패 격리 검증용.
+ */
+function alwaysRaisesAndSpeaks(replies: string[]): NpcAdapter {
+  const queue = [...replies];
+  return {
+    type: "mock",
+    async execute(options: AdapterExecuteOptions) {
+      if (options.sessionKey.endsWith("-poll")) {
+        return { response: "SPEAK: 계속 말할래요", session: { sessionRef: options.sessionKey } };
+      }
+      const text = queue.length > 1 ? queue.shift()! : queue[0];
+      return { response: text, session: { sessionRef: options.sessionKey } };
+    },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
+  };
+}
+
 function participant(npcId: string, replies: string[], over: Partial<EngineParticipant> = {}): EngineParticipant {
   return {
     npcId, displayName: npcId, seated: true, turnCount: 0, lastSpokeAt: 0,
@@ -35,7 +74,7 @@ describe("ConversationEngine — peer 모드", () => {
     const a = participant("a", ["안녕"]);
     const b = participant("b", ["반가워"]);
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "peer", topic: "T", participants: [a, b],
         quota: { maxTotalTurns: 4, maxTurnsPerAgent: 10, cooldownMs: 0 } },
       { onTurnEnd: (npcId: string) => spoken.push(npcId) },
@@ -54,7 +93,7 @@ describe("ConversationEngine — meeting 모드", () => {
     const a = participant("a", ["PASS"]);
     const b = participant("b", ["PASS"]);
     let ended = false;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a, b],
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
       { onEnd: () => { ended = true; } },
@@ -68,7 +107,7 @@ describe("ConversationEngine — meeting 모드", () => {
     const a = participant("a", ["SPEAK: 하겠습니다", "말합니다", "PASS"]);
     const b = participant("b", ["PASS"]);
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a, b],
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 2, maxTurnsPerAgent: 20 } },
       { onTurnEnd: (npcId: string) => spoken.push(npcId) },
@@ -83,7 +122,7 @@ describe("ConversationEngine — 폴링 프롬프트 내용", () => {
   test("participant.passPolicy가 폴링 프롬프트의 [발언 지침] 블록으로 실린다(옛 브로커와 동일)", async () => {
     const a = participant("a", ["PASS"], { passPolicy: "근거 없으면 PASS 하세요" });
     const b = participant("b", ["PASS"]);
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "분기 계획", participants: [a, b],
         quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 7, maxTurnsPerAgent: 20 } },
       {},
@@ -120,15 +159,19 @@ describe("ConversationEngine — 연속 실패 예산", () => {
     };
   }
 
-  test("peer 모드에서 모든 턴이 실패하면 무한 루프 대신 연속 실패 한도에서 끝난다", { timeout: 5000 }, async () => {
+  test("peer 모드에서 모든 턴이 실패하면 무한 루프 대신 전원이 예산을 소진하고 끝난다", { timeout: 5000 }, async () => {
     // 수정 전에는 실패한 턴이 트랜스크립트에 아무것도 남기지 않아 maxTotalTurns가 전진하지
     // 못했고, peer는 폴링이 없어 consecutivePasses도 오르지 않는다 — 루프가 영영 돌았다.
     // 하드 가드: 회귀 시 CI가 매달리는 대신 이 단언에서 빠르게 실패한다.
+    //
+    // 실패 예산이 엔진 전역이던 시절엔 "합쳐서 3회"였다. 지금은 참가자마다 예산 3을 따로
+    // 가지므로, 2명이 각자 소진할 때까지 총 6회(참가자 수 × MAX_CONSECUTIVE_FAILURES) 실패해야
+    // 끝난다 — 실측으로 확인했다(하드 가드 임계값 10은 6보다 넉넉히 남겨 그대로 둔다).
     const errors: string[] = [];
     let endReason: string | null = null;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "peer", topic: "T", participants: [alwaysThrows("a"), alwaysThrows("b")],
-        quota: { cooldownMs: 0, maxTotalTurns: 3, maxTurnsPerAgent: 20 } },
+        quota: { cooldownMs: 0, maxTotalTurns: 99, maxTurnsPerAgent: 20 } },
       {
         onError: (err: unknown) => {
           errors.push(String(err));
@@ -139,13 +182,14 @@ describe("ConversationEngine — 연속 실패 예산", () => {
     );
     await engine.run();
 
-    assert.equal(errors.length, 3, `연속 3회 실패에서 멈춰야 한다(실측: ${errors.length}회)`);
+    assert.equal(errors.length, 6, `참가자 2명 × 예산 3 = 6회 실패 후 멈춰야 한다(실측: ${errors.length}회)`);
     assert.equal(endReason, "consecutive_failures", "종료 사유가 다른 종료와 구분되어야 한다");
   });
 
-  test("빈 응답만 돌려주는 어댑터도(예외를 던지지 않아도) 루프를 끝낸다", { timeout: 5000 }, async () => {
+  test("빈 응답만 돌려주는 어댑터도(예외를 던지지 않아도) 전원 예산 소진으로 루프를 끝낸다", { timeout: 5000 }, async () => {
     // 정상 resolve + 쓸 만한 텍스트 없음 = 트랜스크립트에 아무것도 안 남는다. 예외 경로에만
     // 브레이크를 걸면 이 경로는 그대로 무한 루프였다(리뷰 실측: maxTotalTurns 3에 20회 이상).
+    // 위 테스트와 같은 이유로 기대치는 참가자 2명 × 예산 3 = 6이다(실측으로 확인).
     function silent(npcId: string): EngineParticipant {
       return {
         npcId, displayName: npcId, seated: true, turnCount: 0, lastSpokeAt: 0,
@@ -161,37 +205,38 @@ describe("ConversationEngine — 연속 실패 예산", () => {
     }
     let turnStarts = 0;
     let endReason: string | null = null;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "peer", topic: "T", participants: [silent("a"), silent("b")],
-        quota: { cooldownMs: 0, maxTotalTurns: 3, maxTurnsPerAgent: 20 } },
+        quota: { cooldownMs: 0, maxTotalTurns: 99, maxTurnsPerAgent: 20 } },
       {
         onTurnStart: () => {
           turnStarts++;
-          if (turnStarts > 10) engine.stop(); // 하드 가드 — 회귀 시 매달리지 않고 여기서 깨진다
+          if (turnStarts > 20) engine.stop(); // 하드 가드 — 회귀 시 매달리지 않고 여기서 깨진다
         },
         onEnd: (_turns: unknown, reason: string) => { endReason = reason; },
       },
     );
     await engine.run();
 
-    assert.equal(turnStarts, 3, `빈 응답 3회에서 멈춰야 한다(실측: ${turnStarts}회)`);
+    assert.equal(turnStarts, 6, `참가자 2명 × 예산 3 = 6회에서 멈춰야 한다(실측: ${turnStarts}회)`);
     assert.equal(endReason, "consecutive_failures");
   });
 
   test("run()을 다시 부르면 실패 예산이 초기화된다", { timeout: 5000 }, async () => {
     // 이전 run()의 카운터가 남아 있으면 두 번째 run()은 첫 실패에서 바로 끝난다.
+    // 참가자 2명 × 예산 3 = 6(위 테스트와 동일한 이유로 실측 확인).
     let errors = 0;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "peer", topic: "T", participants: [alwaysThrows("a"), alwaysThrows("b")],
-        quota: { cooldownMs: 0, maxTotalTurns: 3, maxTurnsPerAgent: 20 } },
-      { onError: () => { errors++; if (errors > 10) engine.stop(); } }, // 하드 가드
+        quota: { cooldownMs: 0, maxTotalTurns: 99, maxTurnsPerAgent: 20 } },
+      { onError: () => { errors++; if (errors > 20) engine.stop(); } }, // 하드 가드
     );
     await engine.run();
-    assert.equal(errors, 3);
+    assert.equal(errors, 6);
 
     errors = 0;
     await engine.run();
-    assert.equal(errors, 3, `두 번째 run()도 예산 3으로 시작해야 한다(실측: ${errors}회)`);
+    assert.equal(errors, 6, `두 번째 run()도 예산 3(참가자 2명분 6)으로 시작해야 한다(실측: ${errors}회)`);
   });
 
   test("성공한 턴 하나가 연속 실패 카운터를 되돌린다", { timeout: 5000 }, async () => {
@@ -212,7 +257,7 @@ describe("ConversationEngine — 연속 실패 예산", () => {
     };
     const errors: string[] = [];
     let endReason: string | null = null;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "peer", topic: "T", participants: [flaky],
         quota: { cooldownMs: 0, maxTotalTurns: 99, maxTurnsPerAgent: 20 } },
       {
@@ -246,7 +291,7 @@ describe("ConversationEngine — 턴 타임아웃", () => {
     };
     const ends: Array<[string, string, unknown]> = [];
     const errors: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a], initialRunMode: "directed",
         turnTimeout: { idleMs: 10, maxMs: 1000 },
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
@@ -268,7 +313,7 @@ describe("ConversationEngine — 발언 프롬프트 참석자 목록", () => {
   test("참가자의 실제 role이 프롬프트에 실린다(전원 \"Participant\"로 덮어쓰지 않는다)", async () => {
     const a = participant("a", ["SPEAK: 예", "말합니다"], { role: "Facilitator" });
     const b = participant("b", ["PASS"], { role: "Analyst" });
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a, b],
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 } },
       {},
@@ -282,7 +327,7 @@ describe("ConversationEngine — 발언 프롬프트 참석자 목록", () => {
 
   test("role이 없으면 종전대로 Participant로 채운다", async () => {
     const a = participant("a", ["SPEAK: 예", "말합니다"]);
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a],
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 } },
       {},
@@ -297,7 +342,7 @@ describe("ConversationEngine — 착석 게이트", () => {
   test("착석하지 않은 참가자는 폴링도 발언도 하지 않는다", async () => {
     const a = participant("a", ["PASS"]);
     const b = participant("b", ["SPEAK: 저요"], { seated: false });
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a, b],
         quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
       {},
@@ -317,7 +362,7 @@ describe("ConversationEngine — 폴링 청크", () => {
       pt.adapter.execute = async (o: AdapterExecuteOptions) => { order.push(id); return inner(o); };
       return pt;
     });
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: many,
         quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 },
         maxConcurrentPolls: 2 },
@@ -337,7 +382,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
       const a = participant("a", ["PASS"]);
       let modeChanged = false;
       let waited = false;
-      const engine = new ConversationEngine(
+      const engine = new ChannelRuntime(
         { mode: "meeting", topic: "T", participants: [a],
           quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
         { onModeChanged: () => { modeChanged = true; }, onWaitingInput: () => { waited = true; } },
@@ -355,7 +400,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
     { timeout: 5000 },
     async () => {
       const a = participant("a", ["PASS"]);
-      const engine = new ConversationEngine(
+      const engine = new ChannelRuntime(
         { mode: "meeting", topic: "T", participants: [a], initialRunMode: "directed",
           quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
         { onWaitingInput: () => { engine.stop(); } },
@@ -373,7 +418,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
     const a = participant("a", ["SPEAK: 하나", "SPEAK: 둘", "PASS"]);
     const spoken: string[] = [];
     let waitCount = 0;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a], initialRunMode: "manual",
         // maxConsecutivePasses는 두 번째 라운드(PASS)에서 바로 break되지 않을 만큼 넉넉하게 둔다 —
         // manual은 break되지 않는 한 발언 여부와 무관하게 매 라운드 뒤 대기한다는 것을 보고 싶어서다.
@@ -394,7 +439,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
 
   test("nextTurn은 manual 모드가 아닐 때 아무 효과가 없다", () => {
     const a = participant("a", ["PASS"]);
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a],
         quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
       {},
@@ -406,7 +451,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
     const a = participant("a", ["SPEAK: 예", "PASS"]);
     const b = participant("b", ["PASS"]);
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a, b], initialRunMode: "directed",
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
       {
@@ -426,7 +471,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
   test("hybridMode: auto 중 directSpeak을 받으면 manual로 전환된다(system 발신)", { timeout: 5000 }, async () => {
     const a = participant("a", ["SPEAK: 예", "PASS"]);
     const modeChanges: Array<[string, string]> = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a], initialRunMode: "auto",
         hybridMode: true, hybridAutoResumeMs: 100000,
         quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
@@ -450,7 +495,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
       const a = participant("a", ["PASS"]);
       const modeChanges: Array<[string, string]> = [];
       let waitCount = 0;
-      const engine = new ConversationEngine(
+      const engine = new ChannelRuntime(
         { mode: "meeting", topic: "T", participants: [a], initialRunMode: "manual",
           hybridMode: true, hybridAutoResumeMs: 10,
           quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
@@ -471,9 +516,55 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
     },
   );
 
+  test(
+    "hybridMode: 자동 복귀 타이머가 걸린 도중 directSpeak을 받으면 타이머가 취소된다(회귀)",
+    { timeout: 5000 },
+    async () => {
+      // waitCount1에서 nextTurn()으로 재개-대기 타이머를 건다. 그 타이머가 만료되기 전,
+      // waitCount2에서 directSpeak("b")를 호출한다 — 예전 drainCommands는 이 커맨드를 다음
+      // 드레인에서 소비하며 clearAutoResumeTimer()를 불렀지만, FloorInbox로 갈아끼운 뒤에는
+      // 그 취소 호출이 사라져 타이머가 그대로 살아남았다(이번 라운드에서 고친 회귀).
+      // stop()을 hybridAutoResumeMs보다 한참 뒤에 호출해, 고쳐지지 않았다면 그 사이에
+      // 타이머가 만료돼 onModeChanged("auto", ...)가 뜰 시간을 충분히 준다.
+      const a = participant("a", ["PASS"]);
+      const b = participant("b", ["PASS", "안녕하세요"]);
+      const modeChanges: Array<[string, string]> = [];
+      const spoken: string[] = [];
+      let waitCount = 0;
+      let stopScheduled = false;
+      const engine = new ChannelRuntime(
+        { mode: "meeting", topic: "T", participants: [a, b], initialRunMode: "manual",
+          hybridMode: true, hybridAutoResumeMs: 20,
+          quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+        {
+          onModeChanged: (mode: string, source: string) => modeChanges.push([mode, source]),
+          onTurnEnd: (npcId: string) => spoken.push(npcId),
+          onWaitingInput: () => {
+            waitCount++;
+            if (waitCount === 1) {
+              engine.nextTurn(); // 재개-대기 타이머를 건다
+            } else if (waitCount === 2) {
+              engine.directSpeak("b"); // 타이머 만료 전에 지목 — 타이머가 취소돼야 한다
+            } else if (!stopScheduled) {
+              stopScheduled = true;
+              setTimeout(() => engine.stop(), 60); // hybridAutoResumeMs(20)보다 한참 뒤
+            }
+          },
+        },
+      );
+      await engine.run();
+
+      assert.deepEqual(spoken, ["b"], "지목된 b가 발언해야 한다");
+      assert.ok(
+        !modeChanges.some(([mode]) => mode === "auto"),
+        `directSpeak으로 지목한 뒤에는 자동 복귀 타이머가 취소돼 auto로 전환되면 안 된다. 실제: ${JSON.stringify(modeChanges)}`,
+      );
+    },
+  );
+
   test("발언자가 없을 때 abortCurrentTurn은 아무 일도 하지 않는다", () => {
     const a = participant("a", ["PASS"]);
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a],
         quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
       {},
@@ -497,7 +588,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
       npcId: "a", displayName: "a", seated: true, turnCount: 0, lastSpokeAt: 0,
       adapter, sessionKey: "sk-a",
     };
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a], initialRunMode: "directed",
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
       { onWaitingInput: () => { engine.stop(); } },
@@ -525,7 +616,7 @@ describe("ConversationEngine — 공정성(가장 오래 발언하지 않은 참
     const b = alwaysRaises("b");
     const c = alwaysRaises("c");
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting", topic: "T", participants: [a, b, c],
         // maxConsecutivePasses는 전원이 항상 SPEAK이므로 발동하지 않는다 — maxTotalTurns로 끊는다.
@@ -553,7 +644,7 @@ describe("ConversationEngine — 공정성(가장 오래 발언하지 않은 참
     const b = alwaysRaises("b");
     const spoken: string[] = [];
     let now = 1000;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting", topic: "T", participants: [a, b],
         quota: { maxConsecutivePasses: 99, cooldownMs: 0, maxTotalTurns: 2, maxTurnsPerAgent: 20 },
@@ -569,7 +660,7 @@ describe("ConversationEngine — 공정성(가장 오래 발언하지 않은 참
 describe("ConversationEngine — 사용자 개입", () => {
   test("addUserMessage가 트랜스크립트에 들어가 다음 프롬프트에 실린다", async () => {
     const a = participant("a", ["SPEAK: 예", "답변"]);
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a],
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 } },
       {},
@@ -598,7 +689,7 @@ describe("멘션이 다음 발언권을 정한다", () => {
     const c = participant("c", ["SPEAK: 네", "말씀하신 대로입니다"]);
 
     const spoke: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
@@ -620,7 +711,7 @@ describe("멘션이 다음 발언권을 정한다", () => {
     // 엔진에는 트랜스크립트 getter 가 없다. onEnd 가 turns 배열을 넘겨준다
     // (conversation-engine.ts:388 — this.callbacks.onEnd?.(this.transcript.all(), ...)).
     let turns: Array<{ content: string }> = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "peer",
         topic: "T",
@@ -640,24 +731,24 @@ describe("멘션이 다음 발언권을 정한다", () => {
   });
 });
 
-describe("drainCommands — 사용자 지목이 멘션을 무음으로 덮어쓰지 않는다", () => {
-  test("사용자 지목과 멘션이 같은 드레인에 함께 있으면 사용자가 이긴다", async () => {
+describe("발언권 인박스 — 사용자 지목이 멘션을 밀어내지 않는다", () => {
+  test("사용자 지목이 먼저 말하고, 멘션은 그 뒤에 남아 말한다", async () => {
     // a가 발언을 끝내며 b를 멘션한다. 하지만 그 발언이 끝나는 순간(onTurnEnd) 사용자가
     // UI에서 c를 지목한다고 가정한다 — speak()는 onTurnEnd를 먼저 부르고 멘션 커맨드는
-    // 그 뒤에 큐에 넣으므로, 콜백에서 동기적으로 directSpeak()를 호출하면 큐에는
-    // [user:c, mention:b] 순서로 쌓인다. "마지막 것이 이긴다"만으로 드레인하면 멘션(b)이
-    // 채택되어 사용자가 고른 c가 무음으로 사라진다 — 그게 이 테스트가 막는 회귀다.
+    // 그 뒤에 큐에 넣으므로, 콜백에서 동기적으로 directSpeak()를 호출하면 인박스에는
+    // [user:c, mention:b] 순서로 쌓인다. 사용자 지목이 먼저 나가고, 멘션은 버려지지 않고
+    // 그 뒤에 남아 나간다 — 그게 이 테스트가 지키는 새 동작이다.
     const a = participant("a", ["SPEAK: 의견 있어요", "TO: b\n의견 부탁해요"]);
-    const b = participant("b", ["PASS"]);
+    const b = participant("b", ["PASS", "알겠습니다"]);
     const c = participant("c", ["PASS", "알겠습니다"]);
 
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
         participants: [a, b, c],
-        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 2, cooldownMs: 0 },
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 3, cooldownMs: 0 },
       },
       {
         onTurnEnd: (npcId: string) => {
@@ -669,10 +760,37 @@ describe("drainCommands — 사용자 지목이 멘션을 무음으로 덮어쓰
 
     await engine.run();
 
-    assert.deepEqual(spoken, ["a", "c"], "멘션(b)이 아니라 사용자가 지목한 c가 다음에 말해야 한다");
-    assert.equal(
-      (b.adapter as unknown as { calls: unknown[] }).calls.length, 1,
-      "b는 폴링 1회만 불리고 멘션으로는 선택되지 않아야 한다",
+    assert.deepEqual(
+      spoken,
+      ["a", "c", "b"],
+      "사용자가 지목한 c 가 먼저, 멘션된 b 가 그 뒤에 말해야 한다",
+    );
+  });
+
+  test("멘션 사슬이 순서대로 전부 처리된다 — 하나도 버려지지 않는다", async () => {
+    // a 가 한 번의 발언에서 b 를 지목하고, b 가 발언하며 c 를 지목한다.
+    // 예전 단일 슬롯에서는 이 사슬 중 하나만 살아남았다.
+    const a = participant("a", ["SPEAK: 의견 있어요", "TO: b\n먼저 b 의견 부탁해요"]);
+    const b = participant("b", ["PASS", "TO: c\n저는 이렇게 봅니다"]);
+    const c = participant("c", ["PASS", "저도 동의합니다"]);
+
+    const spoke: string[] = [];
+    const engine = new ChannelRuntime(
+      {
+        mode: "meeting",
+        topic: "T",
+        participants: [a, b, c],
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 3, cooldownMs: 0 },
+      },
+      { onTurnStart: (npcId) => spoke.push(npcId) },
+    );
+
+    await engine.run();
+
+    assert.deepEqual(
+      spoke,
+      ["a", "b", "c"],
+      `지목 사슬이 순서대로 이어져야 합니다. 실제: ${JSON.stringify(spoke)}`,
     );
   });
 
@@ -681,7 +799,7 @@ describe("drainCommands — 사용자 지목이 멘션을 무음으로 덮어쓰
     const b = participant("b", ["PASS", "넵"]);
 
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
@@ -701,7 +819,7 @@ describe("drainCommands — 사용자 지목이 멘션을 무음으로 덮어쓰
     const b = participant("b", ["두 번째"]);
 
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
@@ -733,7 +851,7 @@ describe("빈 본문 멘션은 실패 턴으로 처리하되 지목은 살린다
 
     const spoken: string[] = [];
     let turns: Array<{ speakerId: string; content: string }> = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
@@ -758,7 +876,7 @@ describe("빈 본문 멘션은 실패 턴으로 처리하되 지목은 살린다
     const b = participant("b", ["PASS", "안녕하세요"]);
 
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
@@ -771,5 +889,224 @@ describe("빈 본문 멘션은 실패 턴으로 처리하되 지목은 살린다
     await engine.run();
 
     assert.deepEqual(spoken, ["b"], "본문이 비어 실패 처리되어도 멘션은 커맨드 큐에 반영돼야 한다");
+  });
+});
+
+describe("실패 예산은 NPC 마다 따로다", () => {
+  test("한 NPC 가 계속 실패해도 나머지가 회의를 이어간다", async () => {
+    const a = participant("a", [], { adapter: alwaysFailsToSpeak() });
+    const b = participant("b", [], { adapter: alwaysRaisesAndSpeaks(["저도요", "김치찌개요"]) });
+
+    let turns: Array<{ speakerId: string }> = [];
+    const engine = new ChannelRuntime(
+      {
+        mode: "meeting",
+        topic: "점심",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 20, maxTotalTurns: 3, cooldownMs: 0 },
+        now: () => 0,
+      },
+      { onEnd: (all: Array<{ speakerId: string }>) => { turns = all; } },
+    );
+
+    await engine.run();
+
+    // a 는 예산 3 을 소진하고 후보에서 빠진다. 그 뒤로 b 가 maxTotalTurns 를 채운다.
+    assert.equal(turns.length, 3, `a 의 실패가 회의를 죽이면 안 된다. 턴: ${JSON.stringify(turns)}`);
+    assert.ok(
+      turns.every((t) => t.speakerId === "b"),
+      `발언은 전부 b 여야 한다. 실제: ${JSON.stringify(turns.map((t) => t.speakerId))}`,
+    );
+  });
+
+  test("전원이 실패 예산을 소진하면 consecutive_failures 로 끝난다(운영자에게 no_candidates와 구분해 보인다)", async () => {
+    const a = participant("a", [], { adapter: alwaysFailsToSpeak() });
+    const b = participant("b", [], { adapter: alwaysFailsToSpeak() });
+
+    let reason: string | null = null;
+    const engine = new ChannelRuntime(
+      {
+        mode: "meeting",
+        topic: "점심",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 20, maxTotalTurns: 99, cooldownMs: 0 },
+        now: () => 0,
+      },
+      { onEnd: (_all, endReason: string) => { reason = endReason; } },
+    );
+
+    await engine.run();
+
+    // 후보가 0이 되는 두 경로(전원 소진 vs 전원 할당량 소진)를 같은 no_candidates로 뭉치면
+    // 운영자가 "백엔드가 다 죽었다"를 "정상적으로 회의가 끝났다"로 오독한다.
+    assert.equal(reason, "consecutive_failures");
+  });
+
+  test("전원이 발언 할당량(remainingTurns)을 소진하면 no_candidates 로 끝난다(예산 소진과 구분)", async () => {
+    // maxTurnsPerAgent를 1로 좁혀 둘 다 정상적으로 한 번씩 말하고 할당량을 다 쓰게 만든다 —
+    // 실패는 전혀 없으므로 isBurnedOut은 항상 false다. 후보가 0이 되는 원인이 실패 예산이
+    // 아니라 순수 할당량이면 no_candidates 여야 한다.
+    // alwaysRaisesAndSpeaks를 쓰는 이유: mockAdapter는 폴링과 실제 발언이 대본 큐를 공유해서,
+    // 공정성 동률로 a가 먼저 뽑히는 동안 b가 반복 폴링만 당하면 b의 SPEAK 신호가 발언 전에
+    // 소진된다(위 "한 NPC 가 계속 실패해도..." 테스트에서 발견한 것과 같은 함정).
+    const a = participant("a", [], { adapter: alwaysRaisesAndSpeaks(["제 의견"]) });
+    const b = participant("b", [], { adapter: alwaysRaisesAndSpeaks(["제 의견도"]) });
+
+    let reason: string | null = null;
+    const engine = new ChannelRuntime(
+      {
+        mode: "meeting",
+        topic: "점심",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 1, maxTotalTurns: 99, cooldownMs: 0 },
+        now: () => 0,
+      },
+      { onEnd: (_all, endReason: string) => { reason = endReason; } },
+    );
+
+    await engine.run();
+
+    assert.equal(reason, "no_candidates");
+  });
+});
+
+describe("멘션은 쿼터를 존중하고, 건너뛴 지목을 알린다", () => {
+  test("할당량이 소진된 NPC 의 지목은 건너뛰고 안내한다", async () => {
+    // 브리프 원안은 참가자 2명(a, b)이었다: a 가 b 를 지목하고 b 가 그 할당량(1)을 쓴 뒤,
+    // a 가 "매 발언마다" b 를 다시 지목해 두 번째 지목이 건너뛰어지는 그림이었다. 그런데
+    // maxTurnsPerAgent 는 a 에게도 똑같이 1 이라 a 는 물리적으로 딱 한 번만 말할 수 있고,
+    // 따라서 지목도 딱 한 번만 나갈 수 있다 — b 가 소진되기도 전에 유일한 지목이 이미
+    // 전달돼 버려 "소진 후 건너뜀"을 재현할 방법이 없다(디버그 스크립트로 실측: spoke=[a,b],
+    // notices=[] 고정). task-3-report.md 가 문서화한 것과 같은 종류의 함정 — mockAdapter 조합이
+    // 아니라 이번엔 "지목자의 할당량이 피지목자의 할당량과 같다"는 구조적 제약. 참가자 c 를
+    // 하나 더 두어 c 가 두 번째 지목자 역할을 한다: a 의 지목으로 b 가 할당량을 다 쓴 뒤,
+    // a·b 모두 소진돼 유일하게 남은 후보 c 가 뽑혀 b 를 다시 지목한다 — 이번엔 b 가 이미
+    // 소진돼 있으므로 건너뛰어야 한다. 헬퍼(participant/mockAdapter)와 구현 계약은 브리프와
+    // 동일하게 유지했고, 바뀐 것은 이 새 테스트 안의 참가자 구성뿐이다.
+    //
+    // c 는 mockAdapter가 아니라 alwaysRaisesAndSpeaks를 쓴다 — c는 turn1의 폴링에서 a와
+    // 동시에 손을 들지만 동률 공정성 규칙 때문에 a에게 진다(task-3-report.md와 같은 함정).
+    // mockAdapter라면 그 폴링 한 번으로 c의 "SPEAK:" 신호(대본 큐)가 이미 소진돼, 정작
+    // c 차례가 왔을 때는 대본 마지막 항목("TO: b...")이 SPEAK: 접두 없이 반복 반환되어
+    // PASS로 오인된다 — c가 영영 뽑히지 못해 테스트가 성립하지 않는다.
+    const a = participant("a", ["SPEAK: 의견 있어요", "TO: b\nb 의견 부탁해요"]);
+    const b = participant("b", ["PASS", "김치찌개요"]);
+    const c = participant("c", [], { adapter: alwaysRaisesAndSpeaks(["TO: b\n한 번 더 부탁해요"]) });
+
+    const notices: string[] = [];
+    const spoke: string[] = [];
+    const engine = new ChannelRuntime(
+      {
+        mode: "meeting",
+        topic: "점심",
+        participants: [a, b, c],
+        quota: { maxTurnsPerAgent: 1, maxTotalTurns: 4, cooldownMs: 0 },
+        now: () => 0,
+      },
+      {
+        onTurnStart: (npcId) => spoke.push(npcId),
+        onMentionSkipped: (npcId, reason) => notices.push(`${npcId}:${reason}`),
+      },
+    );
+
+    await engine.run();
+
+    assert.equal(
+      spoke.filter((id) => id === "b").length,
+      1,
+      `b 는 할당량 1 만큼만 말해야 한다. 실제 발언: ${JSON.stringify(spoke)}`,
+    );
+    assert.deepEqual(
+      notices,
+      ["b:quota_exhausted"],
+      `건너뛴 지목은 무음이면 안 된다. 안내: ${JSON.stringify(notices)}`,
+    );
+  });
+
+  test("게이트웨이 연속 실패로 소진된 NPC 의 지목은 backend_failing 으로 건너뛴다(quota_exhausted 와 구분)", async () => {
+    // b 는 폴에는 응하지만 실제 발언은 항상 던진다 — 할당량(remainingTurns)은 그대로 남은
+    // 채 실패 예산만 소진된다. directSpeak 는 인박스의 user 슬롯을 써서 isEligible 검사를
+    // 우회하므로(inbox.ts take()), 자연스러운 멘션 사슬 없이도 b 를 반복 소환해 3연속
+    // 실패(MAX_CONSECUTIVE_FAILURES)를 확정적으로 만들 수 있다. 그 뒤 a 가 b 를 멘션하면
+    // 그 지목은 이번엔 자격 검사를 받아 건너뛰어야 하고, 사유는 quota_exhausted 가 아니라
+    // backend_failing 이어야 한다 — floor-controller.ts 의 술어는 여전히 참지만(할당량은
+    // 남아 있으므로) isBurnedOut() 이 true 라서 원인은 게이트웨이 사망이다.
+    const a = participant("a", ["TO: b\n한 번 더 부탁해요"]);
+    const b = participant("b", [], { adapter: alwaysFailsToSpeak() });
+
+    const notices: string[] = [];
+    const engine = new ChannelRuntime(
+      {
+        mode: "meeting",
+        topic: "점심",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 20, maxTotalTurns: 99, cooldownMs: 0 },
+        initialRunMode: "directed",
+        now: () => 0,
+      },
+      { onMentionSkipped: (npcId, reason) => notices.push(`${npcId}:${reason}`) },
+    );
+
+    const running = engine.run();
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    // b 를 세 번 직접 소환해 연속 실패 3회를 채운다(할당량 20은 그대로 남는다 — 실패한
+    // 턴은 트랜스크립트에 기록되지 않으므로 remainingTurns 를 갉아먹지 않는다).
+    engine.directSpeak("b");
+    await wait(20);
+    engine.directSpeak("b");
+    await wait(20);
+    engine.directSpeak("b");
+    await wait(20);
+
+    // a 를 소환해 b 를 멘션시킨다 — 이번엔 인박스 mentions 큐를 거치므로 isEligible 검사를
+    // 받는다.
+    engine.directSpeak("a");
+    await wait(20);
+
+    // a 의 턴이 끝나면 루프는 다시 armWait() 로 대기에 들어간다(directed 는 그랜트 처리
+    // 뒤 항상 다음 입력을 기다린다) — 그 대기를 풀어야 다음 루프 반복이 인박스에 쌓인 b
+    // 멘션을 floor.next() 로 실제로 소비한다. directSpeak 를 다시 쓰면 user 슬롯을 채워
+    // b 의 멘션(mentions 큐)보다 먼저 소비돼 버리므로, 같은 모드로 setMode 를 다시 걸어
+    // user 슬롯을 건드리지 않고 대기만 해제한다.
+    engine.setMode("directed");
+    await wait(20);
+
+    engine.stop();
+    await running;
+
+    assert.deepEqual(
+      notices,
+      ["b:backend_failing"],
+      `실패 예산 소진(할당량은 남음)은 quota_exhausted 가 아니라 backend_failing 으로 알려야 한다. 실제: ${JSON.stringify(notices)}`,
+    );
+  });
+
+  test("사용자 지목은 할당량이 소진돼도 말한다", async () => {
+    const a = participant("a", ["PASS", "..."]);
+    const b = participant("b", ["PASS", "김치찌개요"]);
+
+    const spoke: string[] = [];
+    const engine = new ChannelRuntime(
+      {
+        mode: "meeting",
+        topic: "점심",
+        // maxTurnsPerAgent 0 이면 누구도 폴링 후보가 아니다 — 발언이 있었다면
+        // 그것은 오직 사용자 지목이 쿼터를 우회했기 때문이다.
+        quota: { maxTurnsPerAgent: 0, maxTotalTurns: 4, cooldownMs: 0 },
+        participants: [a, b],
+        initialRunMode: "directed",
+        now: () => 0,
+      },
+      { onTurnStart: (npcId) => spoke.push(npcId) },
+    );
+
+    const running = engine.run();
+    engine.directSpeak("b");
+    await new Promise((r) => setTimeout(r, 30));
+    engine.stop();
+    await running;
+
+    assert.deepEqual(spoke, ["b"], "사용자 지목은 할당량 0 이어도 발언해야 한다");
   });
 });

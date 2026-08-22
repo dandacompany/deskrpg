@@ -15,10 +15,16 @@
 //
 // 어댑터 단위 테스트로는 이 회귀를 잡을 수 없다(어댑터는 원래부터 두 통로를 나눠 준다).
 // 결함은 소비 지점에 있으므로, 소비 지점을 직접 본다.
+//
+// 두 번째 테스트는 특정 파일이 아니라 src/lib/conversation/ 디렉토리 전체를 훑는다 —
+// 이 가드가 지키는 건 "회의 경로가 tool.progress 를 발언 본문에 섞지 않는다"는 불변식이지,
+// 그 핸들러가 conversation-engine.ts 안에 있어야 한다는 파일 위치가 아니다. NpcRuntime
+// 추출(2026-08)로 핸들러가 npc-runtime.ts 로 옮겨갔고, 향후 리팩터(예: 채널 런타임 분리)에서
+// 또 옮겨갈 수 있다 — 그때마다 이 테스트를 고치지 않아도 되게 한다.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -59,13 +65,40 @@ test("1:1 대화 경로가 tool progress 를 답변 청크로 흘리지 않는�
 });
 
 test("회의 경로는 tool progress 를 진행 신호로만 쓴다", () => {
-  const src = codeOnly(read("src/lib/conversation/conversation-engine.ts"));
-  const m = src.match(/onToolProgress\s*:\s*\(([^)]*)\)\s*=>\s*\{([\s\S]*?)\n\s*\},/);
+  const dir = "src/lib/conversation";
+  const files = readdirSync(path.join(repoRoot, dir))
+    .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+    .sort();
 
-  assert.ok(m, "ConversationEngine 에서 onToolProgress 핸들러를 찾지 못했습니다.");
+  // 파일 하나에 정해두지 않는다 — 회의 경로의 tool.progress 소비 지점이 지금 어느 파일에
+  // 있는지는 리팩터마다 바뀔 수 있다. 디렉토리 전체에서 핸들러를 찾는다.
+  const found: Array<{ file: string; body: string }> = [];
+  for (const file of files) {
+    const src = codeOnly(read(`${dir}/${file}`));
+    for (const m of src.matchAll(/onToolProgress\s*:\s*\(([^)]*)\)\s*=>\s*\{([\s\S]*?)\n\s*\},/g)) {
+      found.push({ file, body: m[2] });
+    }
+  }
+
+  // 0개면 회의 경로에서 tool.progress 처리 자체가 사라진 것 — 이 가드가 지키려던 대상이
+  // 증발했다는 뜻이다. 2개 이상이면 두 곳에서 서로 다르게 처리한다는 뜻으로, 애초에 이
+  // 회귀(1:1 은 새고 회의는 안 새는 불일치)를 낳았던 것과 같은 구조다. 둘 다 실패시킨다.
+  assert.equal(
+    found.length,
+    1,
+    found.length === 0
+      ? `${dir}/ 안 어디에서도 onToolProgress 핸들러를 찾지 못했습니다 — 회의 경로가 `
+        + "tool.progress 를 더 이상 처리하지 않게 됐거나, 핸들러 모양이 이 정규식과 달라졌습니다."
+      : `${dir}/ 안에서 onToolProgress 핸들러를 ${found.length}개 찾았습니다 `
+        + `(${found.map((f) => f.file).join(", ")}) — 회의 경로가 tool.progress 를 두 곳에서 `
+        + "서로 다르게 처리하고 있을 수 있습니다. 정확히 한 곳에서만 처리해야 합니다.",
+  );
+
+  const [{ file, body }] = found;
   assert.doesNotMatch(
-    m![2],
-    /onTurnChunk|rawText\s*\+=/,
-    "회의 경로가 tool progress 를 발언 본문에 섞고 있습니다 — 1:1 에서 고친 것과 같은 결함입니다.",
+    body,
+    /onTurnChunk|rawText\s*\+=|onChunk/,
+    `회의 경로(${dir}/${file})가 tool progress 를 발언 본문에 섞고 있습니다 — 1:1 에서 고친 `
+      + "것과 같은 결함입니다.",
   );
 });

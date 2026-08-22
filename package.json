@@ -35,7 +35,7 @@
     "build": "next build",
     "pack:npm": "mkdir -p .artifacts/npm .artifacts/.npm-cache && npm_config_cache=.artifacts/.npm-cache npm pack --pack-destination .artifacts/npm",
     "start": "node server.js",
-    "test": "tsx --test src/**/*.test.ts src/**/*.test.js",
+    "test": "tsx --test $(git ls-files 'src/**/*.test.ts' 'src/**/*.test.js')",
     "runtime:doctor": "node bin/deskrpg.js doctor",
     "tc": "bash scripts/tc",
     "prepack": "npm run build",

@@ -1476,6 +1476,8 @@ const ja: Record<string, string> = {
   "meeting.systemSender": "システム",
   "meeting.endedTranscriptPrefix": "[会議終了]",
   "meeting.errorPrefix": "[エラー]",
+  "meeting.mentionSkipped.quotaExhausted": "{name}が指名されましたが、発言割り当てを使い切ったため発言しませんでした。",
+  "meeting.mentionSkipped.backendFailing": "{name}が指名されましたが、AIバックエンドが応答しないため発言しませんでした。",
 
   // Minutes
   "minutes.title": "議事録",
