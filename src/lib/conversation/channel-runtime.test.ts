@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { ConversationEngine } from "./conversation-engine";
-import type { EngineParticipant } from "./conversation-engine";
+import { ChannelRuntime } from "./channel-runtime";
+import type { EngineParticipant } from "./channel-runtime";
 import type { NpcAdapter, AdapterExecuteOptions } from "@/lib/adapters/types";
 
 /** 대본대로 답하는 목 어댑터. 호출 인자를 기록한다. */
@@ -74,7 +74,7 @@ describe("ConversationEngine — peer 모드", () => {
     const a = participant("a", ["안녕"]);
     const b = participant("b", ["반가워"]);
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "peer", topic: "T", participants: [a, b],
         quota: { maxTotalTurns: 4, maxTurnsPerAgent: 10, cooldownMs: 0 } },
       { onTurnEnd: (npcId: string) => spoken.push(npcId) },
@@ -93,7 +93,7 @@ describe("ConversationEngine — meeting 모드", () => {
     const a = participant("a", ["PASS"]);
     const b = participant("b", ["PASS"]);
     let ended = false;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a, b],
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
       { onEnd: () => { ended = true; } },
@@ -107,7 +107,7 @@ describe("ConversationEngine — meeting 모드", () => {
     const a = participant("a", ["SPEAK: 하겠습니다", "말합니다", "PASS"]);
     const b = participant("b", ["PASS"]);
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a, b],
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 2, maxTurnsPerAgent: 20 } },
       { onTurnEnd: (npcId: string) => spoken.push(npcId) },
@@ -122,7 +122,7 @@ describe("ConversationEngine — 폴링 프롬프트 내용", () => {
   test("participant.passPolicy가 폴링 프롬프트의 [발언 지침] 블록으로 실린다(옛 브로커와 동일)", async () => {
     const a = participant("a", ["PASS"], { passPolicy: "근거 없으면 PASS 하세요" });
     const b = participant("b", ["PASS"]);
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "분기 계획", participants: [a, b],
         quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 7, maxTurnsPerAgent: 20 } },
       {},
@@ -169,7 +169,7 @@ describe("ConversationEngine — 연속 실패 예산", () => {
     // 끝난다 — 실측으로 확인했다(하드 가드 임계값 10은 6보다 넉넉히 남겨 그대로 둔다).
     const errors: string[] = [];
     let endReason: string | null = null;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "peer", topic: "T", participants: [alwaysThrows("a"), alwaysThrows("b")],
         quota: { cooldownMs: 0, maxTotalTurns: 99, maxTurnsPerAgent: 20 } },
       {
@@ -205,7 +205,7 @@ describe("ConversationEngine — 연속 실패 예산", () => {
     }
     let turnStarts = 0;
     let endReason: string | null = null;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "peer", topic: "T", participants: [silent("a"), silent("b")],
         quota: { cooldownMs: 0, maxTotalTurns: 99, maxTurnsPerAgent: 20 } },
       {
@@ -226,7 +226,7 @@ describe("ConversationEngine — 연속 실패 예산", () => {
     // 이전 run()의 카운터가 남아 있으면 두 번째 run()은 첫 실패에서 바로 끝난다.
     // 참가자 2명 × 예산 3 = 6(위 테스트와 동일한 이유로 실측 확인).
     let errors = 0;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "peer", topic: "T", participants: [alwaysThrows("a"), alwaysThrows("b")],
         quota: { cooldownMs: 0, maxTotalTurns: 99, maxTurnsPerAgent: 20 } },
       { onError: () => { errors++; if (errors > 20) engine.stop(); } }, // 하드 가드
@@ -257,7 +257,7 @@ describe("ConversationEngine — 연속 실패 예산", () => {
     };
     const errors: string[] = [];
     let endReason: string | null = null;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "peer", topic: "T", participants: [flaky],
         quota: { cooldownMs: 0, maxTotalTurns: 99, maxTurnsPerAgent: 20 } },
       {
@@ -291,7 +291,7 @@ describe("ConversationEngine — 턴 타임아웃", () => {
     };
     const ends: Array<[string, string, unknown]> = [];
     const errors: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a], initialRunMode: "directed",
         turnTimeout: { idleMs: 10, maxMs: 1000 },
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
@@ -313,7 +313,7 @@ describe("ConversationEngine — 발언 프롬프트 참석자 목록", () => {
   test("참가자의 실제 role이 프롬프트에 실린다(전원 \"Participant\"로 덮어쓰지 않는다)", async () => {
     const a = participant("a", ["SPEAK: 예", "말합니다"], { role: "Facilitator" });
     const b = participant("b", ["PASS"], { role: "Analyst" });
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a, b],
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 } },
       {},
@@ -327,7 +327,7 @@ describe("ConversationEngine — 발언 프롬프트 참석자 목록", () => {
 
   test("role이 없으면 종전대로 Participant로 채운다", async () => {
     const a = participant("a", ["SPEAK: 예", "말합니다"]);
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a],
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 } },
       {},
@@ -342,7 +342,7 @@ describe("ConversationEngine — 착석 게이트", () => {
   test("착석하지 않은 참가자는 폴링도 발언도 하지 않는다", async () => {
     const a = participant("a", ["PASS"]);
     const b = participant("b", ["SPEAK: 저요"], { seated: false });
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a, b],
         quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
       {},
@@ -362,7 +362,7 @@ describe("ConversationEngine — 폴링 청크", () => {
       pt.adapter.execute = async (o: AdapterExecuteOptions) => { order.push(id); return inner(o); };
       return pt;
     });
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: many,
         quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 },
         maxConcurrentPolls: 2 },
@@ -382,7 +382,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
       const a = participant("a", ["PASS"]);
       let modeChanged = false;
       let waited = false;
-      const engine = new ConversationEngine(
+      const engine = new ChannelRuntime(
         { mode: "meeting", topic: "T", participants: [a],
           quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
         { onModeChanged: () => { modeChanged = true; }, onWaitingInput: () => { waited = true; } },
@@ -400,7 +400,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
     { timeout: 5000 },
     async () => {
       const a = participant("a", ["PASS"]);
-      const engine = new ConversationEngine(
+      const engine = new ChannelRuntime(
         { mode: "meeting", topic: "T", participants: [a], initialRunMode: "directed",
           quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
         { onWaitingInput: () => { engine.stop(); } },
@@ -418,7 +418,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
     const a = participant("a", ["SPEAK: 하나", "SPEAK: 둘", "PASS"]);
     const spoken: string[] = [];
     let waitCount = 0;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a], initialRunMode: "manual",
         // maxConsecutivePasses는 두 번째 라운드(PASS)에서 바로 break되지 않을 만큼 넉넉하게 둔다 —
         // manual은 break되지 않는 한 발언 여부와 무관하게 매 라운드 뒤 대기한다는 것을 보고 싶어서다.
@@ -439,7 +439,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
 
   test("nextTurn은 manual 모드가 아닐 때 아무 효과가 없다", () => {
     const a = participant("a", ["PASS"]);
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a],
         quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
       {},
@@ -451,7 +451,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
     const a = participant("a", ["SPEAK: 예", "PASS"]);
     const b = participant("b", ["PASS"]);
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a, b], initialRunMode: "directed",
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
       {
@@ -471,7 +471,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
   test("hybridMode: auto 중 directSpeak을 받으면 manual로 전환된다(system 발신)", { timeout: 5000 }, async () => {
     const a = participant("a", ["SPEAK: 예", "PASS"]);
     const modeChanges: Array<[string, string]> = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a], initialRunMode: "auto",
         hybridMode: true, hybridAutoResumeMs: 100000,
         quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
@@ -495,7 +495,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
       const a = participant("a", ["PASS"]);
       const modeChanges: Array<[string, string]> = [];
       let waitCount = 0;
-      const engine = new ConversationEngine(
+      const engine = new ChannelRuntime(
         { mode: "meeting", topic: "T", participants: [a], initialRunMode: "manual",
           hybridMode: true, hybridAutoResumeMs: 10,
           quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
@@ -532,7 +532,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
       const spoken: string[] = [];
       let waitCount = 0;
       let stopScheduled = false;
-      const engine = new ConversationEngine(
+      const engine = new ChannelRuntime(
         { mode: "meeting", topic: "T", participants: [a, b], initialRunMode: "manual",
           hybridMode: true, hybridAutoResumeMs: 20,
           quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
@@ -564,7 +564,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
 
   test("발언자가 없을 때 abortCurrentTurn은 아무 일도 하지 않는다", () => {
     const a = participant("a", ["PASS"]);
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a],
         quota: { maxConsecutivePasses: 1, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
       {},
@@ -588,7 +588,7 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
       npcId: "a", displayName: "a", seated: true, turnCount: 0, lastSpokeAt: 0,
       adapter, sessionKey: "sk-a",
     };
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a], initialRunMode: "directed",
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
       { onWaitingInput: () => { engine.stop(); } },
@@ -616,7 +616,7 @@ describe("ConversationEngine — 공정성(가장 오래 발언하지 않은 참
     const b = alwaysRaises("b");
     const c = alwaysRaises("c");
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting", topic: "T", participants: [a, b, c],
         // maxConsecutivePasses는 전원이 항상 SPEAK이므로 발동하지 않는다 — maxTotalTurns로 끊는다.
@@ -644,7 +644,7 @@ describe("ConversationEngine — 공정성(가장 오래 발언하지 않은 참
     const b = alwaysRaises("b");
     const spoken: string[] = [];
     let now = 1000;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting", topic: "T", participants: [a, b],
         quota: { maxConsecutivePasses: 99, cooldownMs: 0, maxTotalTurns: 2, maxTurnsPerAgent: 20 },
@@ -660,7 +660,7 @@ describe("ConversationEngine — 공정성(가장 오래 발언하지 않은 참
 describe("ConversationEngine — 사용자 개입", () => {
   test("addUserMessage가 트랜스크립트에 들어가 다음 프롬프트에 실린다", async () => {
     const a = participant("a", ["SPEAK: 예", "답변"]);
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       { mode: "meeting", topic: "T", participants: [a],
         quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 } },
       {},
@@ -689,7 +689,7 @@ describe("멘션이 다음 발언권을 정한다", () => {
     const c = participant("c", ["SPEAK: 네", "말씀하신 대로입니다"]);
 
     const spoke: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
@@ -711,7 +711,7 @@ describe("멘션이 다음 발언권을 정한다", () => {
     // 엔진에는 트랜스크립트 getter 가 없다. onEnd 가 turns 배열을 넘겨준다
     // (conversation-engine.ts:388 — this.callbacks.onEnd?.(this.transcript.all(), ...)).
     let turns: Array<{ content: string }> = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "peer",
         topic: "T",
@@ -743,7 +743,7 @@ describe("발언권 인박스 — 사용자 지목이 멘션을 밀어내지 않
     const c = participant("c", ["PASS", "알겠습니다"]);
 
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
@@ -775,7 +775,7 @@ describe("발언권 인박스 — 사용자 지목이 멘션을 밀어내지 않
     const c = participant("c", ["PASS", "저도 동의합니다"]);
 
     const spoke: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
@@ -799,7 +799,7 @@ describe("발언권 인박스 — 사용자 지목이 멘션을 밀어내지 않
     const b = participant("b", ["PASS", "넵"]);
 
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
@@ -819,7 +819,7 @@ describe("발언권 인박스 — 사용자 지목이 멘션을 밀어내지 않
     const b = participant("b", ["두 번째"]);
 
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
@@ -851,7 +851,7 @@ describe("빈 본문 멘션은 실패 턴으로 처리하되 지목은 살린다
 
     const spoken: string[] = [];
     let turns: Array<{ speakerId: string; content: string }> = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
@@ -876,7 +876,7 @@ describe("빈 본문 멘션은 실패 턴으로 처리하되 지목은 살린다
     const b = participant("b", ["PASS", "안녕하세요"]);
 
     const spoken: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "T",
@@ -898,7 +898,7 @@ describe("실패 예산은 NPC 마다 따로다", () => {
     const b = participant("b", [], { adapter: alwaysRaisesAndSpeaks(["저도요", "김치찌개요"]) });
 
     let turns: Array<{ speakerId: string }> = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "점심",
@@ -924,7 +924,7 @@ describe("실패 예산은 NPC 마다 따로다", () => {
     const b = participant("b", [], { adapter: alwaysFailsToSpeak() });
 
     let reason: string | null = null;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "점심",
@@ -953,7 +953,7 @@ describe("실패 예산은 NPC 마다 따로다", () => {
     const b = participant("b", [], { adapter: alwaysRaisesAndSpeaks(["제 의견도"]) });
 
     let reason: string | null = null;
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "점심",
@@ -995,7 +995,7 @@ describe("멘션은 쿼터를 존중하고, 건너뛴 지목을 알린다", () =
 
     const notices: string[] = [];
     const spoke: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "점심",
@@ -1028,7 +1028,7 @@ describe("멘션은 쿼터를 존중하고, 건너뛴 지목을 알린다", () =
     const b = participant("b", ["PASS", "김치찌개요"]);
 
     const spoke: string[] = [];
-    const engine = new ConversationEngine(
+    const engine = new ChannelRuntime(
       {
         mode: "meeting",
         topic: "점심",

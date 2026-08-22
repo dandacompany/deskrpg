@@ -8,7 +8,7 @@ const { formatPollMessage, formatSpeakMessage, parseHandRaise, sanitizeSpokenRes
 import { parseMention } from "./mention";
 import { Transcript } from "./transcript";
 import { createTurnTimeout, type TurnTimeoutConfig } from "./turn-timeout";
-import type { EngineParticipant } from "./conversation-engine";
+import type { EngineParticipant } from "./channel-runtime";
 
 /**
  * 신호(assistant delta / tool progress)가 이만큼 끊기면 턴을 끊는다.
