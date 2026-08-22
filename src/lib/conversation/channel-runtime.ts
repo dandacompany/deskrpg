@@ -401,6 +401,15 @@ export class ChannelRuntime {
         await waiting;
 
         if (this.hybridMode && this.hybridAutoResumeMs && this.runMode === "manual") {
+          // 필드에 곧바로 대입하면 이전 타이머의 핸들을 잃는다 — 그 타이머는 살아 있는 채로
+          // 취소 불가능해지고, 나중에 만료되며 this.autoResumeTimer = null 로 **현재** 타이머의
+          // 핸들까지 지운다. 사용자가 nextTurn 을 연달아 누르면 매 라운드 고아가 하나씩 쌓여,
+          // 아직 수동으로 회의를 몰고 있는 동안 옛 타이머가 만료돼 auto 로 튀었다.
+          //
+          // 취소를 nextTurn() 쪽이 아니라 **여기** 두는 이유: 타이머 핸들이 덮이는 자리가
+          // 여기 한 곳뿐이다. 대기를 푸는 경로(nextTurn/setMode/directSpeak/stop)마다 취소를
+          // 심으면 다섯 번째 경로가 생길 때 또 빠뜨린다 — 실제로 이 결함이 그렇게 생겼다.
+          this.clearAutoResumeTimer();
           this.autoResumeTimer = setTimeout(() => {
             this.autoResumeTimer = null;
             this.setMode("auto");

@@ -562,6 +562,51 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
     },
   );
 
+  test(
+    "hybridMode: nextTurn을 연달아 누르면 앞선 자동 복귀 타이머가 고아가 되어 발화한다(회귀)",
+    { timeout: 8000 },
+    async () => {
+      // directSpeak 짝(:520)과 같은 결함이 nextTurn 쪽에 남아 있었다. manual 라운드 끝은
+      // 대기가 풀린 **이유를 가리지 않고** 새 타이머를 필드에 덮어쓰는데, nextTurn()은
+      // clearAutoResumeTimer()를 부르지 않았다. 그래서 두 번째 nextTurn이 필드를 T2로 덮는
+      // 순간 T1은 핸들을 잃고 취소 불가능해지고, 사용자가 아직 수동으로 회의를 몰고 있는
+      // 동안 만료돼 setMode("auto")를 부른다.
+      //
+      // 이 테스트가 고아만 잡도록 시간을 배치한다 — 사용자가 손을 뗀 뒤의 자동 복귀는
+      // 정상 동작이므로 그것까지 실패로 잡으면 안 된다:
+      //
+      //   t=60,120,180  사용자가 nextTurn (매번 타이머 재장전)
+      //   t=210         고아 T1(60에 무장 +150)이 만료 — **버그일 때만** 여기서 auto
+      //   t=260         stop. 정상 타이머 T3(180 무장)는 330 에 만료 예정이라 아직 안 옴
+      //
+      // 즉 auto 가 관측되면 그것은 반드시 고아다. 재현 주의: nextTurn 두 번으로는 안 난다
+      // — 첫 호출 시점에는 아직 타이머가 무장되기 전이라 고아가 생기지 않는다.
+      const a = participant("a", ["PASS"]);
+      const b = participant("b", ["PASS"]);
+      const modeChanges: Array<[string, string]> = [];
+      const engine = new ChannelRuntime(
+        { mode: "meeting", topic: "T", participants: [a, b], initialRunMode: "manual",
+          hybridMode: true, hybridAutoResumeMs: 150,
+          quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+        { onModeChanged: (mode: string, source: string) => modeChanges.push([mode, source]) },
+      );
+
+      const running = engine.run();
+      for (const at of [60, 120, 180]) {
+        await new Promise((r) => setTimeout(r, at === 60 ? 60 : 60));
+        engine.nextTurn();
+      }
+      await new Promise((r) => setTimeout(r, 80)); // t≈260
+      engine.stop();
+      await running;
+
+      assert.ok(
+        !modeChanges.some(([mode]) => mode === "auto"),
+        `사용자가 nextTurn으로 회의를 몰고 있는 동안 고아 타이머가 발화했다. 실제: ${JSON.stringify(modeChanges)}`,
+      );
+    },
+  );
+
   test("발언자가 없을 때 abortCurrentTurn은 아무 일도 하지 않는다", () => {
     const a = participant("a", ["PASS"]);
     const engine = new ChannelRuntime(
