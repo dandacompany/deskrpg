@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { ClaudeAdapter } from "@/lib/adapters/claude-adapter";
 import { CodexAdapter } from "@/lib/adapters/codex-adapter";
 import { GeminiAdapter } from "@/lib/adapters/gemini-adapter";
-import { OpenClawAdapter } from "@/lib/adapters/openclaw-adapter";
 import { OpencodeAdapter } from "@/lib/adapters/opencode-adapter";
 import { type AdapterHealthResult, AdapterRegistry } from "@/lib/adapters/types";
 import { getUserId } from "@/lib/internal-rpc";
@@ -20,7 +19,6 @@ function createHealthRegistry() {
   const registry = new AdapterRegistry();
 
   for (const adapter of [
-    new OpenClawAdapter(),
     new ClaudeAdapter(),
     new CodexAdapter(),
     new GeminiAdapter(),

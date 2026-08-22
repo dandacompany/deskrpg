@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import {
-  decryptGatewayToken,
-  getAccessibleGatewayResource,
-} from "@/lib/gateway-resources";
+import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import { getUserId } from "@/lib/internal-rpc";
-import {
-  buildGatewayErrorPayload,
-  getGatewayErrorStatus,
-  testGatewayConnection,
-} from "@/lib/openclaw-gateway.js";
 
 export async function POST(
   req: NextRequest,
