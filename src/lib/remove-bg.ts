@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { removeBackground } from '@imgly/background-removal';
+import { removeBackground } from "@imgly/background-removal";
 
 /**
  * Remove background from an image (HTMLImageElement or Blob).
@@ -14,13 +14,13 @@ export async function removeBg(
   let blob: Blob;
 
   if (input instanceof HTMLImageElement) {
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = input.naturalWidth || input.width;
     canvas.height = input.naturalHeight || input.height;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext("2d")!;
     ctx.drawImage(input, 0, 0);
     blob = await new Promise<Blob>((resolve) => {
-      canvas.toBlob((b) => resolve(b!), 'image/png');
+      canvas.toBlob((b) => resolve(b!), "image/png");
     });
   } else {
     blob = input;

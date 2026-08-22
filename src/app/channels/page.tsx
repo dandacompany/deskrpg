@@ -125,11 +125,7 @@ function ChannelsPageInner() {
         setJoinError(t("channels.browseOnlyHint"));
       } else if (channel.joinAccessReason) {
         setJoinError(
-          getLocalizedErrorMessage(
-            t,
-            { errorCode: channel.joinAccessReason },
-            "errors.forbidden",
-          ),
+          getLocalizedErrorMessage(t, { errorCode: channel.joinAccessReason }, "errors.forbidden"),
         );
       }
       return;
@@ -228,9 +224,7 @@ function ChannelsPageInner() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">{t("channels.title")}</h1>
-            <p className="text-text-muted mt-1">
-              {t("channels.subtitle")}
-            </p>
+            <p className="text-text-muted mt-1">{t("channels.subtitle")}</p>
           </div>
           <div className="flex items-center gap-3">
             <LogoutButton />
@@ -249,25 +243,23 @@ function ChannelsPageInner() {
                 {t("channels.manageGroups")}
               </Link>
             )}
-            {canCreateChannels
-              ? (
-                <Link
-                  href={`/channels/create?characterId=${characterId}`}
-                  className="px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold"
-                >
-                  {t("channels.createChannel")}
-                </Link>
-              )
-              : (
-                <button
-                  type="button"
-                  disabled
-                  className="px-4 py-2 bg-surface-raised text-text-dim rounded font-semibold opacity-60 cursor-not-allowed"
-                  title={t("channels.create.unavailableHint")}
-                >
-                  {t("channels.createChannel")}
-                </button>
-              )}
+            {canCreateChannels ? (
+              <Link
+                href={`/channels/create?characterId=${characterId}`}
+                className="px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold"
+              >
+                {t("channels.createChannel")}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="px-4 py-2 bg-surface-raised text-text-dim rounded font-semibold opacity-60 cursor-not-allowed"
+                title={t("channels.create.unavailableHint")}
+              >
+                {t("channels.createChannel")}
+              </button>
+            )}
           </div>
         </div>
 
@@ -293,9 +285,7 @@ function ChannelsPageInner() {
           >
             {t("common.join")}
           </button>
-          {joinError && (
-            <span className="text-danger text-sm ml-2">{joinError}</span>
-          )}
+          {joinError && <span className="text-danger text-sm ml-2">{joinError}</span>}
         </div>
 
         <div className="mb-8 rounded-xl border border-border bg-surface p-4">
@@ -319,9 +309,7 @@ function ChannelsPageInner() {
               {t("channels.groupInviteJoin")}
             </button>
           </div>
-          {groupInviteError && (
-            <p className="mt-2 text-sm text-danger">{groupInviteError}</p>
-          )}
+          {groupInviteError && <p className="mt-2 text-sm text-danger">{groupInviteError}</p>}
           {groupInviteSuccess && (
             <p className="mt-2 text-sm text-primary-light">{groupInviteSuccess}</p>
           )}
@@ -358,9 +346,7 @@ function ChannelsPageInner() {
                   )}
                 </div>
                 {channel.description && (
-                  <p className="text-text-muted text-sm mb-3 line-clamp-2">
-                    {channel.description}
-                  </p>
+                  <p className="text-text-muted text-sm mb-3 line-clamp-2">{channel.description}</p>
                 )}
                 <div className="flex flex-wrap gap-2 mb-3">
                   <span className="rounded-full bg-surface-raised px-2 py-1 text-[11px] font-medium text-text-muted">
@@ -378,12 +364,12 @@ function ChannelsPageInner() {
                   )}
                 </div>
                 {channel.canJoin === false && channel.requiresGroupMembership && (
-                  <p className="mb-3 text-xs text-text-muted">
-                    {t("channels.browseOnlyHint")}
-                  </p>
+                  <p className="mb-3 text-xs text-text-muted">{t("channels.browseOnlyHint")}</p>
                 )}
                 <div className="flex items-center justify-between text-xs text-text-dim">
-                  <span>{t("channels.owner", { name: channel.ownerNickname || t("common.unknown") })}</span>
+                  <span>
+                    {t("channels.owner", { name: channel.ownerNickname || t("common.unknown") })}
+                  </span>
                   <span>
                     {t("channels.players", { count: channel.playerCount, max: channel.maxPlayers })}
                   </span>
@@ -395,10 +381,7 @@ function ChannelsPageInner() {
 
         {/* Back link */}
         <div className="mt-8">
-          <Link
-            href="/characters"
-            className="text-text-muted hover:text-text text-sm"
-          >
+          <Link href="/characters" className="text-text-muted hover:text-text text-sm">
             {t("channels.backToCharacters")}
           </Link>
         </div>

@@ -21,10 +21,7 @@ function getUserId(req: NextRequest): string | null {
 export async function POST(req: NextRequest) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
 
   let url: unknown;

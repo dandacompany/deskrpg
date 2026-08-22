@@ -4,7 +4,8 @@
 import { createSseParser, type SseEvent } from "./sse";
 import { isTerminalEvent, type HermesCapabilities } from "./types";
 
-export type HermesErrorCode = "unauthorized" | "unknown_profile" | "unreachable" | "http_error" | "run_failed";
+export type HermesErrorCode =
+  "unauthorized" | "unknown_profile" | "unreachable" | "http_error" | "run_failed";
 
 export class HermesError extends Error {
   readonly code: HermesErrorCode;
@@ -58,7 +59,10 @@ export class HermesClient {
     };
   }
 
-  private async request(path: string, init: RequestInit & { sessionKey?: string } = {}): Promise<Response> {
+  private async request(
+    path: string,
+    init: RequestInit & { sessionKey?: string } = {},
+  ): Promise<Response> {
     const { sessionKey, ...rest } = init;
     let res: Response;
     try {
@@ -67,12 +71,20 @@ export class HermesClient {
         headers: this.headers(sessionKey ? { "X-Hermes-Session-Key": sessionKey } : undefined),
       });
     } catch (err) {
-      throw new HermesError("unreachable", err instanceof Error ? err.message : "Gateway unreachable", 0);
+      throw new HermesError(
+        "unreachable",
+        err instanceof Error ? err.message : "Gateway unreachable",
+        0,
+      );
     }
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new HermesError(errorCodeForStatus(res.status), text || `HTTP ${res.status}`, res.status);
+      throw new HermesError(
+        errorCodeForStatus(res.status),
+        text || `HTTP ${res.status}`,
+        res.status,
+      );
     }
     return res;
   }
@@ -123,8 +135,7 @@ export class HermesClient {
       id?: string;
       session?: { id?: string; session_id?: string };
     };
-    const sessionId =
-      json.session?.id ?? json.session?.session_id ?? json.session_id ?? json.id;
+    const sessionId = json.session?.id ?? json.session?.session_id ?? json.session_id ?? json.id;
     if (!sessionId) throw new HermesError("http_error", "Session create returned no id", 200);
     return { sessionId };
   }
@@ -179,7 +190,8 @@ export class HermesClient {
           ) {
             completed = event.data.content;
           } else if (event.event === "run.failed" || event.event === "error") {
-            failure = typeof event.data.message === "string" ? event.data.message : "Hermes run failed";
+            failure =
+              typeof event.data.message === "string" ? event.data.message : "Hermes run failed";
           }
 
           if (isTerminalEvent(event.event)) {
@@ -212,13 +224,20 @@ export class HermesClient {
     sessionKey?: string;
     onEvent: (event: SseEvent) => void;
   }): Promise<{ text: string; runId: string | null; sessionId: string }> {
-    const res = await this.request(`/api/sessions/${encodeURIComponent(args.sessionId)}/chat/stream`, {
-      method: "POST",
-      body: JSON.stringify({ message: args.message }),
-      sessionKey: args.sessionKey,
-    });
+    const res = await this.request(
+      `/api/sessions/${encodeURIComponent(args.sessionId)}/chat/stream`,
+      {
+        method: "POST",
+        body: JSON.stringify({ message: args.message }),
+        sessionKey: args.sessionKey,
+      },
+    );
     const drained = await this.drain(res, args.onEvent);
-    return { text: drained.text, runId: drained.runId, sessionId: drained.sessionId ?? args.sessionId };
+    return {
+      text: drained.text,
+      runId: drained.runId,
+      sessionId: drained.sessionId ?? args.sessionId,
+    };
   }
 
   async startRun(args: {
@@ -241,14 +260,22 @@ export class HermesClient {
     return { runId: json.run_id };
   }
 
-  async streamRunEvents(runId: string, onEvent: (event: SseEvent) => void): Promise<{ text: string }> {
-    const res = await this.request(`/v1/runs/${encodeURIComponent(runId)}/events`, { method: "GET" });
+  async streamRunEvents(
+    runId: string,
+    onEvent: (event: SseEvent) => void,
+  ): Promise<{ text: string }> {
+    const res = await this.request(`/v1/runs/${encodeURIComponent(runId)}/events`, {
+      method: "GET",
+    });
     const drained = await this.drain(res, onEvent);
     return { text: drained.text };
   }
 
   async stopRun(runId: string): Promise<void> {
-    await this.request(`/v1/runs/${encodeURIComponent(runId)}/stop`, { method: "POST", body: "{}" });
+    await this.request(`/v1/runs/${encodeURIComponent(runId)}/stop`, {
+      method: "POST",
+      body: "{}",
+    });
   }
 
   async steerRun(runId: string, text: string): Promise<void> {

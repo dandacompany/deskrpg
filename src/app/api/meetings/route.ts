@@ -14,7 +14,10 @@ export async function GET(req: NextRequest) {
 
   const channelId = req.nextUrl.searchParams.get("channelId");
   if (!channelId) {
-    return NextResponse.json({ errorCode: "channel_id_required", error: "channelId required" }, { status: 400 });
+    return NextResponse.json(
+      { errorCode: "channel_id_required", error: "channelId required" },
+      { status: 400 },
+    );
   }
 
   const access = await resolveMeetingMinutesAccess({
@@ -22,31 +25,48 @@ export async function GET(req: NextRequest) {
     channelId,
     deps: {
       loadChannelOwner: async (channelIdToLoad) => {
-        const [channel] = await db.select({ ownerId: channels.ownerId }).from(channels).where(eq(channels.id, channelIdToLoad)).limit(1);
+        const [channel] = await db
+          .select({ ownerId: channels.ownerId })
+          .from(channels)
+          .where(eq(channels.id, channelIdToLoad))
+          .limit(1);
         return channel?.ownerId ?? null;
       },
       loadMembership: async (channelIdToLoad, userIdToLoad) => {
-        const [member] = await db.select({ role: channelMembers.role }).from(channelMembers)
-          .where(and(eq(channelMembers.channelId, channelIdToLoad), eq(channelMembers.userId, userIdToLoad))).limit(1);
+        const [member] = await db
+          .select({ role: channelMembers.role })
+          .from(channelMembers)
+          .where(
+            and(
+              eq(channelMembers.channelId, channelIdToLoad),
+              eq(channelMembers.userId, userIdToLoad),
+            ),
+          )
+          .limit(1);
         return Boolean(member);
       },
     },
   });
 
   if (!access.ok) {
-    return NextResponse.json({ errorCode: access.errorCode, error: access.error }, { status: access.status });
+    return NextResponse.json(
+      { errorCode: access.errorCode, error: access.error },
+      { status: access.status },
+    );
   }
 
   try {
-    const rows = await db.select({
-      id: meetingMinutes.id,
-      topic: meetingMinutes.topic,
-      totalTurns: meetingMinutes.totalTurns,
-      durationSeconds: meetingMinutes.durationSeconds,
-      participants: meetingMinutes.participants,
-      keyTopics: meetingMinutes.keyTopics,
-      createdAt: meetingMinutes.createdAt,
-    }).from(meetingMinutes)
+    const rows = await db
+      .select({
+        id: meetingMinutes.id,
+        topic: meetingMinutes.topic,
+        totalTurns: meetingMinutes.totalTurns,
+        durationSeconds: meetingMinutes.durationSeconds,
+        participants: meetingMinutes.participants,
+        keyTopics: meetingMinutes.keyTopics,
+        createdAt: meetingMinutes.createdAt,
+      })
+      .from(meetingMinutes)
       .where(eq(meetingMinutes.channelId, channelId))
       .orderBy(desc(meetingMinutes.createdAt))
       .limit(50);

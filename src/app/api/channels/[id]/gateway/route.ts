@@ -35,7 +35,8 @@ function buildResponseGatewayConfig(input: {
     gatewayId: boundGateway?.id ?? null,
     displayName: boundGateway?.displayName ?? null,
     url: boundGateway?.baseUrl ?? null,
-    token: boundGateway && canEditCredentials ? decryptGatewayToken(boundGateway.tokenEncrypted) : null,
+    token:
+      boundGateway && canEditCredentials ? decryptGatewayToken(boundGateway.tokenEncrypted) : null,
     canEditCredentials,
     taskAutomation,
   };
@@ -76,17 +77,17 @@ async function getChannelWithOwner(channelId: string) {
 }
 
 // GET /api/channels/:id/gateway — owner-only, returns bound gateway resource + task automation
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  if (!userId)
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   const { id } = await params;
 
   const channel = await getChannelWithOwner(id);
-  if (!channel) return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
-  if (channel.ownerId !== userId) return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
+  if (!channel)
+    return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
+  if (channel.ownerId !== userId)
+    return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
 
   const binding = await getChannelGatewayBinding(id);
 
@@ -100,17 +101,17 @@ export async function GET(
 }
 
 // PUT /api/channels/:id/gateway — owner-only, binds a gateway resource or creates an owned one
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  if (!userId)
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   const { id } = await params;
 
   const channel = await getChannelWithOwner(id);
-  if (!channel) return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
-  if (channel.ownerId !== userId) return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
+  if (!channel)
+    return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
+  if (channel.ownerId !== userId)
+    return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
 
   let body: Record<string, unknown>;
   try {
@@ -159,7 +160,8 @@ export async function PUT(
       return NextResponse.json(
         {
           errorCode: "gateway_change_requires_npc_reset",
-          error: "Changing the channel gateway removes existing NPCs and their task or meeting context.",
+          error:
+            "Changing the channel gateway removes existing NPCs and their task or meeting context.",
         },
         { status: 409 },
       );
@@ -200,17 +202,17 @@ export async function PUT(
 }
 
 // DELETE /api/channels/:id/gateway — owner-only, unbinds the channel gateway and removes NPC data
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  if (!userId)
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   const { id } = await params;
 
   const channel = await getChannelWithOwner(id);
-  if (!channel) return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
-  if (channel.ownerId !== userId) return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
+  if (!channel)
+    return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
+  if (channel.ownerId !== userId)
+    return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
 
   const [{ value: npcCount }] = await db
     .select({ value: count() })
@@ -222,7 +224,8 @@ export async function DELETE(
     return NextResponse.json(
       {
         errorCode: "gateway_disconnect_requires_npc_reset",
-        error: "Disconnecting the channel gateway removes existing NPCs and their task or meeting context.",
+        error:
+          "Disconnecting the channel gateway removes existing NPCs and their task or meeting context.",
       },
       { status: 409 },
     );

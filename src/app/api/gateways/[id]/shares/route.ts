@@ -7,25 +7,16 @@ import {
   removeGatewayShare,
 } from "@/lib/gateway-resources";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
 
   const result = await listGatewaySharesForOwner(userId, id);
   if (!result) {
-    return NextResponse.json(
-      { errorCode: "forbidden", error: "forbidden" },
-      { status: 403 },
-    );
+    return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
   }
 
   return NextResponse.json({
@@ -37,22 +28,15 @@ export async function GET(
   });
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
 
   const body = await req.json().catch(() => null);
-  const targetLoginId =
-    typeof body?.loginId === "string" ? body.loginId.trim() : "";
+  const targetLoginId = typeof body?.loginId === "string" ? body.loginId.trim() : "";
   if (!targetLoginId) {
     return NextResponse.json(
       { errorCode: "login_id_required", error: "loginId required" },
@@ -68,10 +52,7 @@ export async function POST(
   });
 
   if (!result.resource) {
-    return NextResponse.json(
-      { errorCode: "forbidden", error: "forbidden" },
-      { status: 403 },
-    );
+    return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
   }
   if (!result.targetUser || !result.share) {
     return NextResponse.json(
@@ -92,16 +73,10 @@ export async function POST(
   });
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
 
@@ -121,10 +96,7 @@ export async function DELETE(
   });
 
   if (!removed) {
-    return NextResponse.json(
-      { errorCode: "forbidden", error: "forbidden" },
-      { status: 403 },
-    );
+    return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
   }
 
   return NextResponse.json({ ok: true });

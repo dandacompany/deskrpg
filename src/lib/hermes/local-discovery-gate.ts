@@ -24,9 +24,7 @@ export const LOCAL_DISCOVERY_ENV_FLAG = "DESKRPG_LOCAL_DISCOVERY_ENABLED";
 
 const TRUTHY = new Set(["1", "true", "yes", "on"]);
 
-export function isLocalDiscoveryEnabled(
-  env: Record<string, string | undefined>,
-): boolean {
+export function isLocalDiscoveryEnabled(env: Record<string, string | undefined>): boolean {
   const raw = (env[LOCAL_DISCOVERY_ENV_FLAG] || "").trim().toLowerCase();
   return TRUTHY.has(raw);
 }

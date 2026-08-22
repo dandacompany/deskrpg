@@ -113,7 +113,11 @@ export function tmxToJson(tmxText: string): Record<string, unknown> {
     if (dataMatch) {
       const encoding = attr(dataMatch[0], "encoding");
       if (encoding === "csv" || !encoding) {
-        data = dataMatch[1].trim().split(/[,\s]+/).filter(Boolean).map(Number);
+        data = dataMatch[1]
+          .trim()
+          .split(/[,\s]+/)
+          .filter(Boolean)
+          .map(Number);
       } else if (encoding === "base64") {
         const compressed = attr(dataMatch[0], "compression");
         if (compressed) {
@@ -123,7 +127,9 @@ export function tmxToJson(tmxText: string): Record<string, unknown> {
         const binary = Buffer.from(b64, "base64");
         data = [];
         for (let i = 0; i < binary.length; i += 4) {
-          data.push(binary[i] | (binary[i + 1] << 8) | (binary[i + 2] << 16) | (binary[i + 3] << 24));
+          data.push(
+            binary[i] | (binary[i + 1] << 8) | (binary[i + 2] << 16) | (binary[i + 3] << 24),
+          );
         }
       }
     }
@@ -134,7 +140,10 @@ export function tmxToJson(tmxText: string): Record<string, unknown> {
       type: "tilelayer",
       width: lWidth,
       height: lHeight,
-      x: 0, y: 0, opacity: 1, visible: true,
+      x: 0,
+      y: 0,
+      opacity: 1,
+      visible: true,
       data,
     });
   }
@@ -188,18 +197,29 @@ export function tmxToJson(tmxText: string): Record<string, unknown> {
       id: nextLayerId++,
       name: groupName,
       type: "objectgroup",
-      x: 0, y: 0, opacity: 1, visible: true,
+      x: 0,
+      y: 0,
+      opacity: 1,
+      visible: true,
       objects,
     });
   }
 
   return {
     compressionlevel: -1,
-    width, height, tilewidth, tileheight,
-    infinite: false, orientation, renderorder,
-    type: "map", version, tiledversion,
+    width,
+    height,
+    tilewidth,
+    tileheight,
+    infinite: false,
+    orientation,
+    renderorder,
+    type: "map",
+    version,
+    tiledversion,
     nextlayerid: nextLayerId,
     nextobjectid: 1,
-    tilesets, layers,
+    tilesets,
+    layers,
   };
 }

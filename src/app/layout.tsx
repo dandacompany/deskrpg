@@ -52,7 +52,9 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} className="h-full antialiased">
-      <body className="min-h-full flex flex-col"><Providers initialLocale={locale}>{children}</Providers></body>
+      <body className="min-h-full flex flex-col">
+        <Providers initialLocale={locale}>{children}</Providers>
+      </body>
     </html>
   );
 }

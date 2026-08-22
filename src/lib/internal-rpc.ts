@@ -42,7 +42,9 @@ export async function internalRpc(
       lastError = err;
       if (isEbusyError(err) && attempt < EBUSY_MAX_RETRIES) {
         const delay = EBUSY_BASE_DELAY_MS * 2 ** attempt;
-        console.warn(`[internalRpc] EBUSY on ${method}, retry ${attempt + 1}/${EBUSY_MAX_RETRIES} after ${delay}ms`);
+        console.warn(
+          `[internalRpc] EBUSY on ${method}, retry ${attempt + 1}/${EBUSY_MAX_RETRIES} after ${delay}ms`,
+        );
         await sleep(delay);
         continue;
       }
@@ -94,6 +96,8 @@ async function _internalRpcOnce(
   return data.result;
 }
 
-export function getUserId(req: { headers: { get: (name: string) => string | null } }): string | null {
+export function getUserId(req: {
+  headers: { get: (name: string) => string | null };
+}): string | null {
   return req.headers.get("x-user-id");
 }

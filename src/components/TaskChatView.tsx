@@ -68,12 +68,13 @@ export default function TaskChatView({
           </div>
         )}
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "player" ? "justify-end" : "justify-start"}`}>
+          <div
+            key={i}
+            className={`flex ${msg.role === "player" ? "justify-end" : "justify-start"}`}
+          >
             <div
               className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
-                msg.role === "player"
-                  ? "bg-indigo-600 text-white"
-                  : "bg-gray-700 text-gray-100"
+                msg.role === "player" ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-100"
               }`}
             >
               {msg.role === "npc" ? <MarkdownContent content={msg.content} /> : msg.content}

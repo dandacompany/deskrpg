@@ -16,7 +16,9 @@ export function formatOpenChatMessage(
 ): string {
   const lines: string[] = [];
 
-  lines.push(`당신은 ${self.displayName} 입니다. 사무실에서 오가는 대화 중 ${calledBy} 님이 당신을 불렀습니다.`);
+  lines.push(
+    `당신은 ${self.displayName} 입니다. 사무실에서 오가는 대화 중 ${calledBy} 님이 당신을 불렀습니다.`,
+  );
   lines.push("");
 
   if (others.length > 0) {

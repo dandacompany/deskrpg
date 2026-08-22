@@ -328,7 +328,4 @@ const MODERATOR_PMO: PersonaPreset = {
 // Export: 20 office role presets + moderator
 // ---------------------------------------------------------------------------
 
-export const PERSONA_PRESETS: PersonaPreset[] = [
-  ...officePersonas,
-  MODERATOR_PMO,
-];
+export const PERSONA_PRESETS: PersonaPreset[] = [...officePersonas, MODERATOR_PMO];

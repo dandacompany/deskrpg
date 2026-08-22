@@ -20,7 +20,13 @@ type SortKey = "name" | "updatedAt" | "createdAt";
 
 interface ProjectBrowserProps {
   onOpenProject: (projectId: string, userId: string) => void;
-  onCreateProject: (name: string, cols: number, rows: number, tileWidth: number, tileHeight: number) => void;
+  onCreateProject: (
+    name: string,
+    cols: number,
+    rows: number,
+    tileWidth: number,
+    tileHeight: number,
+  ) => void;
 }
 
 export default function ProjectBrowser({ onOpenProject, onCreateProject }: ProjectBrowserProps) {
@@ -50,13 +56,16 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
     }
   }, [t]);
 
-  useEffect(() => { fetchProjects(); }, [fetchProjects]);
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
 
   const filtered = projects
     .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
-      if (sortBy === "updatedAt") return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      if (sortBy === "updatedAt")
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
@@ -83,7 +92,13 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
     fetchProjects();
   };
 
-  const handleCreate = (name: string, cols: number, rows: number, tileWidth: number, tileHeight: number) => {
+  const handleCreate = (
+    name: string,
+    cols: number,
+    rows: number,
+    tileWidth: number,
+    tileHeight: number,
+  ) => {
     setShowNewProject(false);
     onCreateProject(name, cols, rows, tileWidth, tileHeight);
   };
@@ -98,8 +113,10 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
         <h1 className="text-xl font-bold">{t("mapEditor.project.browserTitle")}</h1>
-        <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm"
-          onClick={() => setShowNewProject(true)}>
+        <button
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm"
+          onClick={() => setShowNewProject(true)}
+        >
           <Plus size={16} />
           {t("mapEditor.project.newProject")}
         </button>
@@ -109,11 +126,18 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
       <div className="flex items-center gap-3 px-6 py-3 border-b border-gray-800">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500"
-            placeholder={t("mapEditor.project.search")} value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input
+            className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500"
+            placeholder={t("mapEditor.project.search")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-        <select className="px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300"
-          value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)}>
+        <select
+          className="px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as SortKey)}
+        >
           <option value="updatedAt">{t("mapEditor.project.sortRecent")}</option>
           <option value="name">{t("mapEditor.project.sortName")}</option>
           <option value="createdAt">{t("mapEditor.project.sortCreated")}</option>
@@ -123,15 +147,19 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
       {/* Project Grid */}
       <div className="flex-1 overflow-auto p-6">
         {loading ? (
-          <div className="flex items-center justify-center h-40 text-gray-500">{t("common.loading")}</div>
+          <div className="flex items-center justify-center h-40 text-gray-500">
+            {t("common.loading")}
+          </div>
         ) : error ? (
           <div className="flex items-center justify-center h-40 text-red-400">{error}</div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-gray-500">
             <p className="text-lg">{t("mapEditor.project.noProjects")}</p>
             <p className="text-sm mt-1">{t("mapEditor.project.noProjectsHint")}</p>
-            <button className="mt-4 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm"
-              onClick={() => setShowNewProject(true)}>
+            <button
+              className="mt-4 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm"
+              onClick={() => setShowNewProject(true)}
+            >
               <Plus size={16} />
               {t("mapEditor.project.newProject")}
             </button>
@@ -139,11 +167,18 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {filtered.map((project) => (
-              <div key={project.id} className="group relative bg-gray-800 rounded-lg border border-gray-700 hover:border-blue-500 cursor-pointer transition-colors overflow-hidden"
-                onClick={() => onOpenProject(project.id, project.createdBy)}>
+              <div
+                key={project.id}
+                className="group relative bg-gray-800 rounded-lg border border-gray-700 hover:border-blue-500 cursor-pointer transition-colors overflow-hidden"
+                onClick={() => onOpenProject(project.id, project.createdBy)}
+              >
                 <div className="aspect-video bg-gray-900 flex items-center justify-center">
                   {project.thumbnail ? (
-                    <img src={project.thumbnail} alt={project.name} className="w-full h-full object-contain" />
+                    <img
+                      src={project.thumbnail}
+                      alt={project.name}
+                      className="w-full h-full object-contain"
+                    />
                   ) : (
                     <div className="text-gray-600 text-xs">{t("common.noPreview")}</div>
                   )}
@@ -155,12 +190,18 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
                   </div>
                 </div>
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"
-                    onClick={(e) => handleDuplicate(e, project.id)} title={t("mapEditor.project.duplicate")}>
+                  <button
+                    className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"
+                    onClick={(e) => handleDuplicate(e, project.id)}
+                    title={t("mapEditor.project.duplicate")}
+                  >
                     <Copy size={14} />
                   </button>
-                  <button className="p-1.5 bg-gray-700/80 rounded hover:bg-red-600 text-gray-300"
-                    onClick={(e) => handleDelete(e, project.id)} title={t("common.delete")}>
+                  <button
+                    className="p-1.5 bg-gray-700/80 rounded hover:bg-red-600 text-gray-300"
+                    onClick={(e) => handleDelete(e, project.id)}
+                    title={t("common.delete")}
+                  >
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -170,7 +211,11 @@ export default function ProjectBrowser({ onOpenProject, onCreateProject }: Proje
         )}
       </div>
 
-      <NewProjectModal open={showNewProject} onClose={() => setShowNewProject(false)} onSubmit={handleCreate} />
+      <NewProjectModal
+        open={showNewProject}
+        onClose={() => setShowNewProject(false)}
+        onSubmit={handleCreate}
+      />
     </div>
   );
 }

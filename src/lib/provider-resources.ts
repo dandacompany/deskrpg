@@ -1,11 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 
-import {
-  db,
-  isPostgres,
-  providerResources,
-  providerShares,
-} from "@/db";
+import { db, isPostgres, providerResources, providerShares } from "@/db";
 
 type ProviderResourceRow = typeof providerResources.$inferSelect;
 type ProviderShareRow = typeof providerShares.$inferSelect;
@@ -125,7 +120,9 @@ export async function getOwnedProviderResource(ownerUserId: string, providerId: 
   const [resource] = await db
     .select()
     .from(providerResources)
-    .where(and(eq(providerResources.id, providerId), eq(providerResources.ownerUserId, ownerUserId)))
+    .where(
+      and(eq(providerResources.id, providerId), eq(providerResources.ownerUserId, ownerUserId)),
+    )
     .limit(1);
 
   return resource ?? null;
@@ -137,15 +134,16 @@ export async function listAccessibleProviderResources(userId: string) {
     .from(providerResources)
     .where(eq(providerResources.ownerUserId, userId));
 
-  const shares = await db
-    .select()
-    .from(providerShares)
-    .where(eq(providerShares.userId, userId));
+  const shares = await db.select().from(providerShares).where(eq(providerShares.userId, userId));
 
   const sharedProviderIds = shares.map((share) => share.providerId);
-  const sharedResources = sharedProviderIds.length > 0
-    ? await db.select().from(providerResources).where(inArray(providerResources.id, sharedProviderIds))
-    : [];
+  const sharedResources =
+    sharedProviderIds.length > 0
+      ? await db
+          .select()
+          .from(providerResources)
+          .where(inArray(providerResources.id, sharedProviderIds))
+      : [];
 
   return [
     ...owned.map((resource) => toProviderListItem(resource, { isOwner: true, shareRole: null })),

@@ -21,12 +21,18 @@ describe("eligibleParticipants", () => {
   test("착석하지 않은 참가자는 제외된다", () => {
     const all = [p("a"), p("b", { seated: false })];
     const got = eligibleParticipants(all, () => 5);
-    assert.deepEqual(got.map((x) => x.npcId), ["a"]);
+    assert.deepEqual(
+      got.map((x) => x.npcId),
+      ["a"],
+    );
   });
   test("할당량을 소진한 참가자는 제외된다", () => {
     const all = [p("a"), p("b")];
     const got = eligibleParticipants(all, (id) => (id === "a" ? 0 : 3));
-    assert.deepEqual(got.map((x) => x.npcId), ["b"]);
+    assert.deepEqual(
+      got.map((x) => x.npcId),
+      ["b"],
+    );
   });
   test("둘 다 만족하면 남는다", () => {
     const all = [p("a"), p("b")];

@@ -10,10 +10,7 @@ function getUserId(req: NextRequest): string | null {
 }
 
 // GET /api/characters/:id — get single character
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
@@ -49,10 +46,7 @@ export async function GET(
 }
 
 // PATCH /api/characters/:id — update character name and/or appearance
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
@@ -77,7 +71,9 @@ export async function PATCH(
       );
     }
 
-    const updates: Record<string, unknown> = { updatedAt: (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date };
+    const updates: Record<string, unknown> = {
+      updatedAt: (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date,
+    };
 
     if (name !== undefined) {
       if (typeof name !== "string" || name.length < 1 || name.length > 50) {
@@ -122,10 +118,7 @@ export async function PATCH(
 }
 
 // DELETE /api/characters/:id — delete character
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });

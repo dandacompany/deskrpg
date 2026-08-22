@@ -25,11 +25,23 @@ test("isAllowedFileType accepts png", () => {
 });
 
 test("isAllowedFileType accepts xlsx", () => {
-  assert.equal(isAllowedFileType("data.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), true);
+  assert.equal(
+    isAllowedFileType(
+      "data.xlsx",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ),
+    true,
+  );
 });
 
 test("isAllowedFileType accepts docx", () => {
-  assert.equal(isAllowedFileType("report.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"), true);
+  assert.equal(
+    isAllowedFileType(
+      "report.docx",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ),
+    true,
+  );
 });
 
 test("isAllowedFileType accepts csv", () => {
@@ -89,7 +101,8 @@ test("extractFileContent truncates long text", async () => {
 });
 
 test("extractFileContent handles image (1x1 PNG)", async () => {
-  const base64Png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
+  const base64Png =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
   const buf = Buffer.from(base64Png, "base64");
   const result = await extractFileContent(buf, "pixel.png", "image/png");
   assert.equal(result.name, "pixel.png");
@@ -114,7 +127,13 @@ test("buildFilePromptSection returns empty string for no files", () => {
 
 test("buildFilePromptSection formats text file", () => {
   const files: ExtractedFile[] = [
-    { name: "note.txt", mimeType: "text/plain", textContent: "hello", imageBase64: null, truncated: false },
+    {
+      name: "note.txt",
+      mimeType: "text/plain",
+      textContent: "hello",
+      imageBase64: null,
+      truncated: false,
+    },
   ];
   const result = buildFilePromptSection(files);
   assert.ok(result.includes("첨부파일: note.txt"));
@@ -123,7 +142,13 @@ test("buildFilePromptSection formats text file", () => {
 
 test("buildFilePromptSection skips image files", () => {
   const files: ExtractedFile[] = [
-    { name: "pic.png", mimeType: "image/jpeg", textContent: null, imageBase64: "abc123", truncated: false },
+    {
+      name: "pic.png",
+      mimeType: "image/jpeg",
+      textContent: null,
+      imageBase64: "abc123",
+      truncated: false,
+    },
   ];
   const result = buildFilePromptSection(files);
   assert.equal(result, ""); // images go via attachments, not text
@@ -133,14 +158,26 @@ test("buildFilePromptSection skips image files", () => {
 
 test("buildAttachments returns undefined when no images", () => {
   const files: ExtractedFile[] = [
-    { name: "note.txt", mimeType: "text/plain", textContent: "hi", imageBase64: null, truncated: false },
+    {
+      name: "note.txt",
+      mimeType: "text/plain",
+      textContent: "hi",
+      imageBase64: null,
+      truncated: false,
+    },
   ];
   assert.equal(buildAttachments(files), undefined);
 });
 
 test("buildAttachments returns OpenClaw format for images", () => {
   const files: ExtractedFile[] = [
-    { name: "pic.png", mimeType: "image/jpeg", textContent: null, imageBase64: "abc123base64data", truncated: false },
+    {
+      name: "pic.png",
+      mimeType: "image/jpeg",
+      textContent: null,
+      imageBase64: "abc123base64data",
+      truncated: false,
+    },
   ];
   const result = buildAttachments(files);
   assert.ok(Array.isArray(result));

@@ -77,7 +77,20 @@ interface NpcHireModalProps {
   }) => void;
   onSaveEdit?: (
     npcId: string,
-    updates: { presetId?: string; name?: string; persona?: string; appearance?: unknown; direction?: string; identity?: string; soul?: string; agentId?: string; agentAction?: "select" | "create"; locale?: string; adapterType?: string; hermesProfileId?: string },
+    updates: {
+      presetId?: string;
+      name?: string;
+      persona?: string;
+      appearance?: unknown;
+      direction?: string;
+      identity?: string;
+      soul?: string;
+      agentId?: string;
+      agentAction?: "select" | "create";
+      locale?: string;
+      adapterType?: string;
+      hermesProfileId?: string;
+    },
   ) => void;
   editingNpc?: {
     id: string;
@@ -119,11 +132,22 @@ export default function NpcHireModal({
 
   // --- Appearance (shared hook) ---
   const {
-    bodyType, setBodyType, layers, setLayers,
-    activeCategory, setActiveCategory,
-    handleBodyTypeChange, selectItem, clearCategory, setVariant, setSkin,
-    isItemCompatible, getItemBodyTypes, compatibleCount,
-    randomize, buildAppearance: buildAppearanceFromHook,
+    bodyType,
+    setBodyType,
+    layers,
+    setLayers,
+    activeCategory,
+    setActiveCategory,
+    handleBodyTypeChange,
+    selectItem,
+    clearCategory,
+    setVariant,
+    setSkin,
+    isItemCompatible,
+    getItemBodyTypes,
+    compatibleCount,
+    randomize,
+    buildAppearance: buildAppearanceFromHook,
   } = useCharacterAppearance();
 
   // --- Adapter selection ---
@@ -155,7 +179,9 @@ export default function NpcHireModal({
   }>({ phase: "idle", status: "" });
 
   // Agent selection state
-  const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({ status: "idle" });
+  const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({
+    status: "idle",
+  });
 
   // Persona preset state
   const [personaPresetId, setPersonaPresetId] = useState<string>("custom");
@@ -174,11 +200,7 @@ export default function NpcHireModal({
   const isEdit = !!editingNpc;
   const atLimit = currentNpcCount >= MAX_NPC_COUNT;
   const personaCompat = identity.trim();
-  const canSubmit =
-    !saving &&
-    hasGateway &&
-    name.trim().length > 0 &&
-    personaCompat.length > 0;
+  const canSubmit = !saving && hasGateway && name.trim().length > 0 && personaCompat.length > 0;
 
   // --- Build appearance (with preset support) ---
   const buildAppearance = useCallback((): CharacterAppearance => {
@@ -189,30 +211,44 @@ export default function NpcHireModal({
     return buildAppearanceFromHook();
   }, [appearanceMode, selectedPresetId, presets, buildAppearanceFromHook]);
 
-  const findPreset = useCallback((presetId: string | null) => {
-    if (!presetId) return null;
-    return presets.find((preset) => preset.id === presetId) || null;
-  }, [presets]);
+  const findPreset = useCallback(
+    (presetId: string | null) => {
+      if (!presetId) return null;
+      return presets.find((preset) => preset.id === presetId) || null;
+    },
+    [presets],
+  );
 
-  const applyPresetSelection = useCallback((presetId: string) => {
-    const preset = findPreset(presetId);
-    if (!preset) return;
+  const applyPresetSelection = useCallback(
+    (presetId: string) => {
+      const preset = findPreset(presetId);
+      if (!preset) return;
 
-    const resolvedName = name.trim() || preset.displayName || preset.name || t("npc.defaultName");
+      const resolvedName = name.trim() || preset.displayName || preset.name || t("npc.defaultName");
 
-    setSelectedPresetId(preset.id);
-    setAppearanceMode("presets");
-    setPersonaPresetId(preset.id);
+      setSelectedPresetId(preset.id);
+      setAppearanceMode("presets");
+      setPersonaPresetId(preset.id);
 
-    if (!name.trim()) {
-      setName(preset.displayName || preset.name);
-    }
+      if (!name.trim()) {
+        setName(preset.displayName || preset.name);
+      }
 
-    setIdentity(localizeNpcPromptDocument(applyPresetName(preset.identity, resolvedName), locale, "identity"));
-    setSoul(localizeNpcPromptDocument(applyPresetName(preset.soul, resolvedName), locale, "soul"));
-    setIdentityCustomized(false);
-    setSoulCustomized(false);
-  }, [findPreset, locale, name, t]);
+      setIdentity(
+        localizeNpcPromptDocument(
+          applyPresetName(preset.identity, resolvedName),
+          locale,
+          "identity",
+        ),
+      );
+      setSoul(
+        localizeNpcPromptDocument(applyPresetName(preset.soul, resolvedName), locale, "soul"),
+      );
+      setIdentityCustomized(false);
+      setSoulCustomized(false);
+    },
+    [findPreset, locale, name, t],
+  );
 
   // --- Initialise / reset on open or editingNpc change ---
   useEffect(() => {
@@ -247,7 +283,10 @@ export default function NpcHireModal({
         setSoul("");
         setShowAdvanced(false);
         setBodyType("male");
-        setLayers({ body: { itemKey: "body", variant: "light" }, eye_color: { itemKey: "eye_color", variant: "brown" } });
+        setLayers({
+          body: { itemKey: "body", variant: "light" },
+          eye_color: { itemKey: "eye_color", variant: "brown" },
+        });
         setActiveCategory("body");
         setDirection("down");
         setAppearanceMode("presets");
@@ -258,7 +297,15 @@ export default function NpcHireModal({
       }
       setGatewayConnectionState({ status: "idle" });
     });
-  }, [isOpen, editingNpc, hasGateway, channelDefaultAdapter, setBodyType, setLayers, setActiveCategory]);
+  }, [
+    isOpen,
+    editingNpc,
+    hasGateway,
+    channelDefaultAdapter,
+    setBodyType,
+    setLayers,
+    setActiveCategory,
+  ]);
 
   // --- Fetch Hermes profiles for the selected gateway ---
   const loadHermesProfiles = useCallback(async () => {
@@ -308,36 +355,54 @@ export default function NpcHireModal({
         const nextPreset = nextPresets.find((preset: NpcPreset) => preset.id === personaPresetId);
         if (!nextPreset) return;
 
-        const resolvedName = name.trim() || nextPreset.displayName || nextPreset.name || t("npc.defaultName");
-        setIdentity(localizeNpcPromptDocument(applyPresetName(nextPreset.identity, resolvedName), locale, "identity"));
-        setSoul(localizeNpcPromptDocument(applyPresetName(nextPreset.soul, resolvedName), locale, "soul"));
+        const resolvedName =
+          name.trim() || nextPreset.displayName || nextPreset.name || t("npc.defaultName");
+        setIdentity(
+          localizeNpcPromptDocument(
+            applyPresetName(nextPreset.identity, resolvedName),
+            locale,
+            "identity",
+          ),
+        );
+        setSoul(
+          localizeNpcPromptDocument(applyPresetName(nextPreset.soul, resolvedName), locale, "soul"),
+        );
       })
       .catch(() => {})
       .finally(() => setPresetsLoading(false));
   }, [identityCustomized, isOpen, locale, name, personaPresetId, soulCustomized, t]);
 
   // --- Apply persona preset ---
-  const handlePersonaPresetChange = useCallback((presetId: string) => {
-    setPersonaPresetId(presetId);
-    if (presetId === "custom") {
-      setIdentity("");
-      setSoul("");
+  const handlePersonaPresetChange = useCallback(
+    (presetId: string) => {
+      setPersonaPresetId(presetId);
+      if (presetId === "custom") {
+        setIdentity("");
+        setSoul("");
+        setIdentityCustomized(false);
+        setSoulCustomized(false);
+        return;
+      }
+      if (findPreset(presetId)) {
+        applyPresetSelection(presetId);
+        return;
+      }
+      const preset = PERSONA_PRESETS.find((p) => p.id === presetId);
+      if (!preset) return;
+      const currentName = name.trim() || t("npc.defaultName");
+      setIdentity(
+        localizeNpcPromptDocument(
+          applyPresetName(preset.identity, currentName),
+          locale,
+          "identity",
+        ),
+      );
+      setSoul(localizeNpcPromptDocument(applyPresetName(preset.soul, currentName), locale, "soul"));
       setIdentityCustomized(false);
       setSoulCustomized(false);
-      return;
-    }
-    if (findPreset(presetId)) {
-      applyPresetSelection(presetId);
-      return;
-    }
-    const preset = PERSONA_PRESETS.find((p) => p.id === presetId);
-    if (!preset) return;
-    const currentName = name.trim() || t("npc.defaultName");
-    setIdentity(localizeNpcPromptDocument(applyPresetName(preset.identity, currentName), locale, "identity"));
-    setSoul(localizeNpcPromptDocument(applyPresetName(preset.soul, currentName), locale, "soul"));
-    setIdentityCustomized(false);
-    setSoulCustomized(false);
-  }, [applyPresetSelection, findPreset, locale, name, t]);
+    },
+    [applyPresetSelection, findPreset, locale, name, t],
+  );
 
   const handleNameChange = (newName: string) => {
     setName(newName);
@@ -346,7 +411,9 @@ export default function NpcHireModal({
       if (preset) {
         const n = newName.trim() || t("npc.defaultName");
         if (!identityCustomized) {
-          setIdentity(localizeNpcPromptDocument(applyPresetName(preset.identity, n), locale, "identity"));
+          setIdentity(
+            localizeNpcPromptDocument(applyPresetName(preset.identity, n), locale, "identity"),
+          );
         }
         if (!soulCustomized) {
           setSoul(localizeNpcPromptDocument(applyPresetName(preset.soul, n), locale, "soul"));
@@ -364,13 +431,16 @@ export default function NpcHireModal({
     setSaving(true);
     try {
       const appearance = buildAppearance();
-      const activePresetId = appearanceMode === "presets" ? selectedPresetId ?? undefined : undefined;
+      const activePresetId =
+        appearanceMode === "presets" ? (selectedPresetId ?? undefined) : undefined;
 
       if (isEdit && onSaveEdit) {
         // A Hermes profile is bound via a dedicated endpoint (it carries a live
         // credential), not through the generic NPC PATCH — so bind it here before
         // handing off the rest of the edit to onSaveEdit.
-        if (shouldRebindProfile(adapterType, selectedHermesProfileId, editingNpc!.hermesProfileId)) {
+        if (
+          shouldRebindProfile(adapterType, selectedHermesProfileId, editingNpc!.hermesProfileId)
+        ) {
           setRebindError("");
           try {
             const res = await fetch(`/api/npcs/${editingNpc!.id}/rebind`, {
@@ -389,9 +459,31 @@ export default function NpcHireModal({
           }
         }
 
-        onSaveEdit(editingNpc!.id, { presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, identity: identity.trim(), soul: soul.trim(), locale, adapterType, hermesProfileId: selectedHermesProfileId ?? undefined });
+        onSaveEdit(editingNpc!.id, {
+          presetId: activePresetId,
+          name: name.trim(),
+          persona: personaCompat,
+          appearance,
+          direction,
+          identity: identity.trim(),
+          soul: soul.trim(),
+          locale,
+          adapterType,
+          hermesProfileId: selectedHermesProfileId ?? undefined,
+        });
       } else {
-        onPlaceOnMap({ presetId: activePresetId, name: name.trim(), persona: personaCompat, appearance, direction, identity: identity.trim(), soul: soul.trim(), locale, adapterType, hermesProfileId: selectedHermesProfileId ?? undefined });
+        onPlaceOnMap({
+          presetId: activePresetId,
+          name: name.trim(),
+          persona: personaCompat,
+          appearance,
+          direction,
+          identity: identity.trim(),
+          soul: soul.trim(),
+          locale,
+          adapterType,
+          hermesProfileId: selectedHermesProfileId ?? undefined,
+        });
       }
     } finally {
       setSaving(false);
@@ -407,14 +499,23 @@ export default function NpcHireModal({
   const agentProgressMeter = getAgentProgressMeter(agentProgress.phase);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={handleBackdropClick}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={handleBackdropClick}
+    >
       <div className="relative max-w-4xl w-full mx-4 max-h-[90vh] bg-gray-900 rounded-xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
           <h2 className="text-lg font-semibold text-white">
             {isEdit ? t("npc.edit") : t("npc.hire")}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none" aria-label={t("common.close")}>&times;</button>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white text-xl leading-none"
+            aria-label={t("common.close")}
+          >
+            &times;
+          </button>
         </div>
 
         {/* Body */}
@@ -423,9 +524,13 @@ export default function NpcHireModal({
           <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-5">
             {/* Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">{t("npc.name")}</label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                {t("npc.name")}
+              </label>
               <input
-                type="text" maxLength={50} value={name}
+                type="text"
+                maxLength={50}
+                value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
                 placeholder={t("npc.namePlaceholder")}
                 className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -434,7 +539,9 @@ export default function NpcHireModal({
 
             {/* Adapter Type Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">{t("npc.adapterType")}</label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                {t("npc.adapterType")}
+              </label>
               <select
                 value={adapterType}
                 onChange={(e) => setAdapterType(e.target.value)}
@@ -445,11 +552,17 @@ export default function NpcHireModal({
                     가고, 프로필을 고르지 않으면 unbound 로 남아 사용자가 그 사실을 안다. */}
                 {(availableAdapters ?? ["hermes"]).map((type) => (
                   <option key={type} value={type}>
-                    {type === "hermes" ? "Hermes Agent" :
-                     type === "claude" ? "Claude Code" :
-                     type === "codex" ? "Codex CLI" :
-                     type === "gemini" ? "Gemini CLI" :
-                     type === "opencode" ? "OpenCode" : type}
+                    {type === "hermes"
+                      ? "Hermes Agent"
+                      : type === "claude"
+                        ? "Claude Code"
+                        : type === "codex"
+                          ? "Codex CLI"
+                          : type === "gemini"
+                            ? "Gemini CLI"
+                            : type === "opencode"
+                              ? "OpenCode"
+                              : type}
                   </option>
                 ))}
               </select>
@@ -480,30 +593,43 @@ export default function NpcHireModal({
               isExistingAgentSelected={false}
               personaPresetId={personaPresetId}
               onPersonaPresetChange={handlePersonaPresetChange}
-              identity={identity} setIdentity={setIdentity}
-              soul={soul} setSoul={setSoul}
+              identity={identity}
+              setIdentity={setIdentity}
+              soul={soul}
+              setSoul={setSoul}
               setIdentityCustomized={setIdentityCustomized}
               setSoulCustomized={setSoulCustomized}
-              showAdvanced={showAdvanced} setShowAdvanced={setShowAdvanced}
+              showAdvanced={showAdvanced}
+              setShowAdvanced={setShowAdvanced}
               t={t}
             />
 
             {/* Appearance */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">{t("npc.appearance")}</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {t("npc.appearance")}
+              </label>
               <div className="flex gap-1 mb-3">
                 <button
                   onClick={() => setAppearanceMode("presets")}
                   className={`px-4 py-1.5 rounded text-sm font-medium ${
-                    appearanceMode === "presets" ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                    appearanceMode === "presets"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                   }`}
-                >{t("npc.presets")}</button>
+                >
+                  {t("npc.presets")}
+                </button>
                 <button
                   onClick={() => setAppearanceMode("custom")}
                   className={`px-4 py-1.5 rounded text-sm font-medium ${
-                    appearanceMode === "custom" ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                    appearanceMode === "custom"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                   }`}
-                >{t("npc.personaCustom")}</button>
+                >
+                  {t("npc.personaCustom")}
+                </button>
               </div>
 
               {appearanceMode === "presets" && (
@@ -546,7 +672,9 @@ export default function NpcHireModal({
                     <button
                       onClick={randomize}
                       className="w-full px-2 py-1 bg-indigo-900/60 hover:bg-indigo-800 rounded text-xs text-indigo-300 text-center font-semibold mb-1"
-                    >{t("characters.random")}</button>
+                    >
+                      {t("characters.random")}
+                    </button>
                   }
                 />
               )}
@@ -565,12 +693,17 @@ export default function NpcHireModal({
             <div className="flex gap-1">
               {DIRECTION_LABELS.map((d) => (
                 <button
-                  key={d.id} type="button"
+                  key={d.id}
+                  type="button"
                   onClick={() => setDirection(d.id)}
                   className={`w-8 h-8 rounded text-sm font-bold ${
-                    direction === d.id ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-400 hover:bg-gray-600"
+                    direction === d.id
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-700 text-gray-400 hover:bg-gray-600"
                   }`}
-                >{d.label}</button>
+                >
+                  {d.label}
+                </button>
               ))}
             </div>
           </div>
@@ -587,7 +720,10 @@ export default function NpcHireModal({
             {rebindError && <p className="text-xs text-red-400">{rebindError}</p>}
           </div>
           <div className="flex gap-3 items-center">
-            <button onClick={onClose} className="px-4 py-2 rounded text-sm bg-gray-700 text-gray-300 hover:bg-gray-600">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded text-sm bg-gray-700 text-gray-300 hover:bg-gray-600"
+            >
               {t("common.cancel")}
             </button>
 
@@ -617,9 +753,14 @@ export default function NpcHireModal({
                 </p>
                 {agentProgress.error && (
                   <button
-                    onClick={() => { setStep("configure"); setAgentProgress({ phase: "idle", status: "" }); }}
+                    onClick={() => {
+                      setStep("configure");
+                      setAgentProgress({ phase: "idle", status: "" });
+                    }}
                     className="px-3 py-1 rounded text-xs bg-gray-700 text-gray-300 hover:bg-gray-600 self-start"
-                  >{t("common.back")}</button>
+                  >
+                    {t("common.back")}
+                  </button>
                 )}
               </div>
             )}
@@ -629,7 +770,9 @@ export default function NpcHireModal({
                 onClick={() => void handleSubmit()}
                 disabled={!canSubmit || (!isEdit && atLimit)}
                 className="px-5 py-2 rounded text-sm font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
-              >{t("npc.placeOnMap")}</button>
+              >
+                {t("npc.placeOnMap")}
+              </button>
             )}
           </div>
         </div>
@@ -661,7 +804,9 @@ function HermesProfileSection({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-300 mb-1">{t("npc.hermesProfile")}</label>
+      <label className="block text-sm font-medium text-gray-300 mb-1">
+        {t("npc.hermesProfile")}
+      </label>
       {!gatewayId ? (
         <div className="rounded border border-dashed border-gray-700 bg-gray-800/60 px-3 py-3 text-sm text-gray-400">
           {t("npc.hermesProfileNoGateway")}
@@ -703,19 +848,22 @@ function HermesProfileSection({
 // Agent Section sub-component
 // ---------------------------------------------------------------------------
 
-
 // ---------------------------------------------------------------------------
 // Persona Section sub-component
 // ---------------------------------------------------------------------------
 
 function PersonaSection({
   isExistingAgentSelected,
-  personaPresetId, onPersonaPresetChange,
-  identity, setIdentity,
-  soul, setSoul,
+  personaPresetId,
+  onPersonaPresetChange,
+  identity,
+  setIdentity,
+  soul,
+  setSoul,
   setIdentityCustomized,
   setSoulCustomized,
-  showAdvanced, setShowAdvanced,
+  showAdvanced,
+  setShowAdvanced,
   t,
 }: {
   isExistingAgentSelected: boolean;
@@ -765,7 +913,9 @@ function PersonaSection({
           >
             <option value="custom">{t("npc.personaCustom")}</option>
             {PERSONA_PRESETS.map((p) => (
-              <option key={p.id} value={p.id}>{p.name} — {p.role}</option>
+              <option key={p.id} value={p.id}>
+                {p.name} — {p.role}
+              </option>
             ))}
           </select>
         </div>
@@ -780,8 +930,12 @@ function PersonaSection({
         <>
           <div className="relative">
             <textarea
-              maxLength={2000} value={identity}
-              onChange={(e) => { setIdentity(e.target.value); setIdentityCustomized(true); }}
+              maxLength={2000}
+              value={identity}
+              onChange={(e) => {
+                setIdentity(e.target.value);
+                setIdentityCustomized(true);
+              }}
               placeholder={t("npc.identityPlaceholder")}
               style={{ height: identityHeight }}
               className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -800,8 +954,24 @@ function PersonaSection({
               title={t("mapEditor.pixel.resize")}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" className="text-gray-500">
-                <line x1="2" y1="9" x2="9" y2="2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <line x1="5" y1="9" x2="9" y2="5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <line
+                  x1="2"
+                  y1="9"
+                  x2="9"
+                  y2="2"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+                <line
+                  x1="5"
+                  y1="9"
+                  x2="9"
+                  y2="5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
               </svg>
             </div>
           </div>
@@ -812,7 +982,9 @@ function PersonaSection({
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="text-xs text-indigo-400 hover:text-indigo-300 mt-1 flex items-center gap-1"
           >
-            <span className={`transition-transform ${showAdvanced ? "rotate-90" : ""}`}>&#9654;</span>
+            <span className={`transition-transform ${showAdvanced ? "rotate-90" : ""}`}>
+              &#9654;
+            </span>
             {t("npc.advanced")}
           </button>
 
@@ -822,8 +994,13 @@ function PersonaSection({
                 {t("npc.soul")} {t("npc.advancedHint")}
               </label>
               <textarea
-                maxLength={3000} rows={6} value={soul}
-                onChange={(e) => { setSoul(e.target.value); setSoulCustomized(true); }}
+                maxLength={3000}
+                rows={6}
+                value={soul}
+                onChange={(e) => {
+                  setSoul(e.target.value);
+                  setSoulCustomized(true);
+                }}
                 placeholder={t("npc.soulPlaceholder")}
                 className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
@@ -834,17 +1011,32 @@ function PersonaSection({
           {showFullEditor && (
             <div
               className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70"
-              onClick={(e) => { if (e.target === e.currentTarget) setShowFullEditor(false); }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setShowFullEditor(false);
+              }}
             >
-              <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col" style={{ maxHeight: "80vh" }}>
+              <div
+                className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col"
+                style={{ maxHeight: "80vh" }}
+              >
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
                   <h3 className="text-sm font-semibold text-white">{t("npc.persona")}</h3>
-                  <button onClick={() => setShowFullEditor(false)} className="text-gray-400 hover:text-white text-xl leading-none" aria-label={t("common.close")}>&times;</button>
+                  <button
+                    onClick={() => setShowFullEditor(false)}
+                    className="text-gray-400 hover:text-white text-xl leading-none"
+                    aria-label={t("common.close")}
+                  >
+                    &times;
+                  </button>
                 </div>
                 <div className="flex-1 p-4 flex flex-col overflow-hidden min-h-0">
                   <textarea
-                    maxLength={2000} value={identity}
-                    onChange={(e) => { setIdentity(e.target.value); setIdentityCustomized(true); }}
+                    maxLength={2000}
+                    value={identity}
+                    onChange={(e) => {
+                      setIdentity(e.target.value);
+                      setIdentityCustomized(true);
+                    }}
                     placeholder={t("npc.identityPlaceholder")}
                     className="flex-1 w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     style={{ minHeight: "300px" }}
@@ -856,7 +1048,9 @@ function PersonaSection({
                   <button
                     onClick={() => setShowFullEditor(false)}
                     className="px-4 py-2 rounded text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
-                  >{t("common.done")}</button>
+                  >
+                    {t("common.done")}
+                  </button>
                 </div>
               </div>
             </div>
@@ -872,7 +1066,9 @@ function PersonaSection({
 // ---------------------------------------------------------------------------
 
 function PresetCard({
-  preset, isSelected, onSelect,
+  preset,
+  isSelected,
+  onSelect,
 }: {
   preset: NpcPreset;
   isSelected: boolean;
@@ -882,14 +1078,12 @@ function PresetCard({
     <button
       onClick={onSelect}
       className={`flex flex-col items-center gap-1 p-2 rounded border-2 transition-colors ${
-        isSelected ? "border-indigo-500 bg-gray-800" : "border-transparent bg-gray-800 hover:border-gray-600"
+        isSelected
+          ? "border-indigo-500 bg-gray-800"
+          : "border-transparent bg-gray-800 hover:border-gray-600"
       }`}
     >
-      <CharacterPreview
-        appearance={preset.appearance as CharacterAppearance}
-        scale={2}
-        fps={6}
-      />
+      <CharacterPreview appearance={preset.appearance as CharacterAppearance} scale={2} fps={6} />
       <span className="text-xs text-gray-300">{preset.name}</span>
     </button>
   );

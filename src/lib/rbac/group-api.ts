@@ -169,10 +169,7 @@ export function canWriteGroupPermissionEffect(input: {
   permissionKey: PermissionKey;
   effect: PermissionEffect | null;
 }) {
-  return !(
-    input.permissionKey === "manage_group_permissions" &&
-    input.effect === "deny"
-  );
+  return !(input.permissionKey === "manage_group_permissions" && input.effect === "deny");
 }
 
 export function sanitizeGroupPermissionEffects(input: {
@@ -192,10 +189,13 @@ export function buildGroupSlugCandidates(baseSlug: string, attempts: number) {
   );
 }
 
-export function summarizeGroupManagementCapabilities(input: Omit<GroupManagementCapabilities, "canManageGroup">): GroupManagementCapabilities {
+export function summarizeGroupManagementCapabilities(
+  input: Omit<GroupManagementCapabilities, "canManageGroup">,
+): GroupManagementCapabilities {
   return {
     ...input,
-    canManageGroup: input.canManageMembers || input.canManagePermissions || input.canApproveJoinRequests,
+    canManageGroup:
+      input.canManageMembers || input.canManagePermissions || input.canApproveJoinRequests,
   };
 }
 
@@ -270,10 +270,7 @@ export function getAuthenticatedUserId(req: NextRequest): string | null {
 }
 
 export function unauthorizedResponse() {
-  return NextResponse.json(
-    { errorCode: "unauthorized", error: "unauthorized" },
-    { status: 401 },
-  );
+  return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 }
 
 export function systemAdminRequiredResponse() {

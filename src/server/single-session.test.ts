@@ -19,10 +19,11 @@ describe("getSocketIdsToKick", () => {
     // recent socket id per user (a single-value map), so a user with two
     // stale sessions would leak one. getSocketIdsForUser scans all players,
     // so this must kick all of them.
-    assert.deepEqual(
-      getSocketIdsToKick(["old-1", "old-2", "old-3"], "new-1"),
-      ["old-1", "old-2", "old-3"],
-    );
+    assert.deepEqual(getSocketIdsToKick(["old-1", "old-2", "old-3"], "new-1"), [
+      "old-1",
+      "old-2",
+      "old-3",
+    ]);
   });
 
   test("never includes the joining socket itself", () => {

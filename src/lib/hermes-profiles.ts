@@ -5,12 +5,16 @@
 import { and, eq } from "drizzle-orm";
 
 import { db, hermesProfiles, nowForDb, npcs, gatewayResources } from "@/db";
-import { decryptGatewayToken, encryptGatewayToken, getAccessibleGatewayResource } from "@/lib/gateway-resources";
+import {
+  decryptGatewayToken,
+  encryptGatewayToken,
+  getAccessibleGatewayResource,
+} from "@/lib/gateway-resources";
 import { HermesClient, HermesError } from "@/lib/hermes/hermes-client";
 import type { HermesCapabilities } from "@/lib/hermes/types";
 
 export type ProfileValidationStatus =
-  | "valid" | "unauthorized" | "unknown_profile" | "unreachable" | "error";
+  "valid" | "unauthorized" | "unknown_profile" | "unreachable" | "error";
 
 export function mapValidationError(err: unknown): Exclude<ProfileValidationStatus, "valid"> {
   if (err instanceof HermesError) {
@@ -27,7 +31,11 @@ export function mapValidationError(err: unknown): Exclude<ProfileValidationStatu
 function isUniqueViolation(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const code = (err as { code?: unknown }).code;
-  return code === "23505" || code === "SQLITE_CONSTRAINT_UNIQUE" || code === "SQLITE_CONSTRAINT_PRIMARYKEY";
+  return (
+    code === "23505" ||
+    code === "SQLITE_CONSTRAINT_UNIQUE" ||
+    code === "SQLITE_CONSTRAINT_PRIMARYKEY"
+  );
 }
 
 async function updateHermesProfileToken(
@@ -35,11 +43,15 @@ async function updateHermesProfileToken(
   input: { token: string; displayName?: string },
   fallbackDisplayName: string | null,
 ) {
-  const [updated] = await db.update(hermesProfiles).set({
-    tokenEncrypted: encryptGatewayToken(input.token.trim()),
-    displayName: input.displayName?.trim() || fallbackDisplayName,
-    updatedAt: nowForDb(),
-  }).where(eq(hermesProfiles.id, profileId)).returning();
+  const [updated] = await db
+    .update(hermesProfiles)
+    .set({
+      tokenEncrypted: encryptGatewayToken(input.token.trim()),
+      displayName: input.displayName?.trim() || fallbackDisplayName,
+      updatedAt: nowForDb(),
+    })
+    .where(eq(hermesProfiles.id, profileId))
+    .returning();
   return updated;
 }
 
@@ -70,10 +82,16 @@ export async function registerHermesProfile(input: {
   if (!access || !access.isOwner) return { error: "forbidden" as const };
 
   const profileName = input.profileName.trim();
-  const existing = await db.select().from(hermesProfiles).where(and(
-    eq(hermesProfiles.gatewayId, input.gatewayId),
-    eq(hermesProfiles.profileName, profileName),
-  )).limit(1);
+  const existing = await db
+    .select()
+    .from(hermesProfiles)
+    .where(
+      and(
+        eq(hermesProfiles.gatewayId, input.gatewayId),
+        eq(hermesProfiles.profileName, profileName),
+      ),
+    )
+    .limit(1);
 
   if (existing[0]) {
     const updated = await updateHermesProfileToken(existing[0].id, input, existing[0].displayName);
@@ -81,12 +99,15 @@ export async function registerHermesProfile(input: {
   }
 
   try {
-    const [created] = await db.insert(hermesProfiles).values({
-      gatewayId: input.gatewayId,
-      profileName,
-      tokenEncrypted: encryptGatewayToken(input.token.trim()),
-      displayName: input.displayName?.trim() || profileName,
-    }).returning();
+    const [created] = await db
+      .insert(hermesProfiles)
+      .values({
+        gatewayId: input.gatewayId,
+        profileName,
+        tokenEncrypted: encryptGatewayToken(input.token.trim()),
+        displayName: input.displayName?.trim() || profileName,
+      })
+      .returning();
     return { profile: created };
   } catch (err) {
     if (!isUniqueViolation(err)) throw err;
@@ -94,10 +115,16 @@ export async function registerHermesProfile(input: {
     // Lost the race: another registration for this (gatewayId, profileName) landed
     // between our existence check and our insert. Converge to an update rather than
     // surfacing a raw constraint violation.
-    const [raced] = await db.select().from(hermesProfiles).where(and(
-      eq(hermesProfiles.gatewayId, input.gatewayId),
-      eq(hermesProfiles.profileName, profileName),
-    )).limit(1);
+    const [raced] = await db
+      .select()
+      .from(hermesProfiles)
+      .where(
+        and(
+          eq(hermesProfiles.gatewayId, input.gatewayId),
+          eq(hermesProfiles.profileName, profileName),
+        ),
+      )
+      .limit(1);
     if (!raced) throw err;
 
     const updated = await updateHermesProfileToken(raced.id, input, raced.displayName);
@@ -109,14 +136,15 @@ export async function listHermesProfiles(userId: string, gatewayId: string) {
   const access = await getAccessibleGatewayResource(userId, gatewayId);
   if (!access) return [];
 
-  const rows = await db.select().from(hermesProfiles).where(eq(hermesProfiles.gatewayId, gatewayId));
+  const rows = await db
+    .select()
+    .from(hermesProfiles)
+    .where(eq(hermesProfiles.gatewayId, gatewayId));
 
   // 한 프로필은 NPC 하나에만 붙인다 — 둘이 같은 프로필을 쓰면 같은 Hermes 세션과
   // 기억을 공유해 서로의 대화가 섞인다. 어느 프로필이 이미 묶였는지는 서버만 알 수
   // 있으므로 여기서 알려준다(화면이 NPC 목록을 따로 들고 다니지 않아도 되게).
-  const boundRows = await db
-    .select({ profileId: npcs.hermesProfileId })
-    .from(npcs);
+  const boundRows = await db.select({ profileId: npcs.hermesProfileId }).from(npcs);
   const bound = new Set(boundRows.map((r) => r.profileId).filter(Boolean));
 
   return rows.map((row) => ({
@@ -128,12 +156,19 @@ export async function listHermesProfiles(userId: string, gatewayId: string) {
   }));
 }
 
-export async function validateHermesProfile(userId: string, profileId: string): Promise<{
+export async function validateHermesProfile(
+  userId: string,
+  profileId: string,
+): Promise<{
   status: ProfileValidationStatus;
   error?: string;
   capabilities?: HermesCapabilities;
 }> {
-  const [row] = await db.select().from(hermesProfiles).where(eq(hermesProfiles.id, profileId)).limit(1);
+  const [row] = await db
+    .select()
+    .from(hermesProfiles)
+    .where(eq(hermesProfiles.id, profileId))
+    .limit(1);
   if (!row) return { status: "error", error: "profile_not_found" };
 
   const access = await getAccessibleGatewayResource(userId, row.gatewayId);
@@ -146,22 +181,28 @@ export async function validateHermesProfile(userId: string, profileId: string): 
       tokenEncrypted: row.tokenEncrypted,
     });
     const capabilities = await client.getCapabilities();
-    await db.update(hermesProfiles).set({
-      lastValidatedAt: nowForDb(),
-      lastValidationStatus: "valid",
-      lastValidationError: null,
-      updatedAt: nowForDb(),
-    }).where(eq(hermesProfiles.id, profileId));
+    await db
+      .update(hermesProfiles)
+      .set({
+        lastValidatedAt: nowForDb(),
+        lastValidationStatus: "valid",
+        lastValidationError: null,
+        updatedAt: nowForDb(),
+      })
+      .where(eq(hermesProfiles.id, profileId));
     return { status: "valid", capabilities };
   } catch (err) {
     const status = mapValidationError(err);
     const message = err instanceof Error ? err.message : "unknown";
-    await db.update(hermesProfiles).set({
-      lastValidatedAt: nowForDb(),
-      lastValidationStatus: status,
-      lastValidationError: message,
-      updatedAt: nowForDb(),
-    }).where(eq(hermesProfiles.id, profileId));
+    await db
+      .update(hermesProfiles)
+      .set({
+        lastValidatedAt: nowForDb(),
+        lastValidationStatus: status,
+        lastValidationError: message,
+        updatedAt: nowForDb(),
+      })
+      .where(eq(hermesProfiles.id, profileId));
     return { status, error: message };
   }
 }

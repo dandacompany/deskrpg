@@ -28,14 +28,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               ${icon ? "pl-9" : ""}
               ${error ? "border-danger" : ""}
               ${className}
-            `.trim().replace(/\s+/g, " ")}
+            `
+              .trim()
+              .replace(/\s+/g, " ")}
             {...rest}
           />
         </div>
         {error && <p className="text-danger text-caption mt-1">{error}</p>}
       </div>
     );
-  }
+  },
 );
 Input.displayName = "Input";
 
@@ -56,12 +58,14 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
             disabled:opacity-50 disabled:cursor-not-allowed
             ${error ? "border-danger" : ""}
             ${className}
-          `.trim().replace(/\s+/g, " ")}
+          `
+            .trim()
+            .replace(/\s+/g, " ")}
           {...rest}
         />
         {error && <p className="text-danger text-caption mt-1">{error}</p>}
       </div>
     );
-  }
+  },
 );
 Textarea.displayName = "Textarea";

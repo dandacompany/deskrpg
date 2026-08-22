@@ -7,7 +7,13 @@ import Modal from "@/components/ui/Modal";
 interface NewProjectModalProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (name: string, cols: number, rows: number, tileWidth: number, tileHeight: number) => void;
+  onSubmit: (
+    name: string,
+    cols: number,
+    rows: number,
+    tileWidth: number,
+    tileHeight: number,
+  ) => void;
 }
 
 const TEMPLATES = [
@@ -64,7 +70,10 @@ export default function NewProjectModal({ open, onClose, onSubmit }: NewProjectM
                     ? "border-blue-500 bg-blue-500/20 text-blue-300"
                     : "border-gray-600 bg-gray-800 text-gray-400 hover:border-gray-500"
                 }`}
-                onClick={() => { setCols(tmpl.cols); setRows(tmpl.rows); }}
+                onClick={() => {
+                  setCols(tmpl.cols);
+                  setRows(tmpl.rows);
+                }}
               >
                 <div className="font-medium">{tmpl.label}</div>
                 <div className="text-gray-500">{tmpl.desc}</div>
@@ -74,13 +83,25 @@ export default function NewProjectModal({ open, onClose, onSubmit }: NewProjectM
           <div className="flex gap-4 mt-2">
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-400">{t("mapEditor.newMap.width")}:</span>
-              <input type="number" className="w-16 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
-                value={cols} onChange={(e) => setCols(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={200} />
+              <input
+                type="number"
+                className="w-16 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+                value={cols}
+                onChange={(e) => setCols(Math.max(1, parseInt(e.target.value) || 1))}
+                min={1}
+                max={200}
+              />
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-400">{t("mapEditor.newMap.height")}:</span>
-              <input type="number" className="w-16 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
-                value={rows} onChange={(e) => setRows(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={200} />
+              <input
+                type="number"
+                className="w-16 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs"
+                value={rows}
+                onChange={(e) => setRows(Math.max(1, parseInt(e.target.value) || 1))}
+                min={1}
+                max={200}
+              />
             </div>
           </div>
         </div>
@@ -92,9 +113,15 @@ export default function NewProjectModal({ open, onClose, onSubmit }: NewProjectM
           </label>
           <div className="flex gap-2">
             {[16, 32, 48, 64].map((size) => (
-              <button key={size} className={`px-3 py-1 rounded text-xs border ${
-                tileSize === size ? "border-blue-500 bg-blue-500/20 text-blue-300" : "border-gray-600 bg-gray-800 text-gray-400 hover:border-gray-500"
-              }`} onClick={() => setTileSize(size)}>
+              <button
+                key={size}
+                className={`px-3 py-1 rounded text-xs border ${
+                  tileSize === size
+                    ? "border-blue-500 bg-blue-500/20 text-blue-300"
+                    : "border-gray-600 bg-gray-800 text-gray-400 hover:border-gray-500"
+                }`}
+                onClick={() => setTileSize(size)}
+              >
                 {size}×{size}
               </button>
             ))}
@@ -106,8 +133,11 @@ export default function NewProjectModal({ open, onClose, onSubmit }: NewProjectM
           <button className="px-4 py-2 text-sm text-gray-400 hover:text-white" onClick={onClose}>
             {t("common.cancel")}
           </button>
-          <button className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50"
-            onClick={handleCreate} disabled={!name.trim()}>
+          <button
+            className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50"
+            onClick={handleCreate}
+            disabled={!name.trim()}
+          >
             {t("mapEditor.project.createProject")}
           </button>
         </div>

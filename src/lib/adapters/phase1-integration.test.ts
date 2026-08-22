@@ -44,8 +44,14 @@ describe("Phase1: DB Schema", () => {
     const schemaPath = path.resolve("src/db/sqlite-base-schema.js");
     const content = fs.readFileSync(schemaPath, "utf-8");
 
-    assert.ok(content.includes("adapter_type"), "sqlite-base-schema.js should contain adapter_type");
-    assert.ok(content.includes("adapter_config"), "sqlite-base-schema.js should contain adapter_config");
+    assert.ok(
+      content.includes("adapter_type"),
+      "sqlite-base-schema.js should contain adapter_type",
+    );
+    assert.ok(
+      content.includes("adapter_config"),
+      "sqlite-base-schema.js should contain adapter_config",
+    );
   });
 });
 
@@ -57,8 +63,12 @@ describe("Phase1: AdapterRegistry routing", () => {
   function stubAdapter(type: string): NpcAdapter {
     return {
       type,
-      async execute() { return { response: `from-${type}`, session: { sessionRef: "s" } }; },
-      async testConnection() { return { status: "ok" as const }; },
+      async execute() {
+        return { response: `from-${type}`, session: { sessionRef: "s" } };
+      },
+      async testConnection() {
+        return { status: "ok" as const };
+      },
     };
   }
 
@@ -159,7 +169,6 @@ describe("Phase1: NpcConfig shape", () => {
 //  P2 에서 ConversationEngine 이 그 역할을 이어받았고, 그쪽은
 //  src/lib/conversation/conversation-engine.test.ts 가 검증한다.)
 
-
 // ---------------------------------------------------------------------------
 // 6. Unsupported adapter — clean rejection path
 // ---------------------------------------------------------------------------
@@ -176,16 +185,14 @@ describe("Phase1: Unsupported adapter path", () => {
   });
 
   test("unsupported_adapter response message key exists", async () => {
-    const { isNpcResponseMessageCode, getNpcResponseMessageKey } = await import("../npc-response-messages");
+    const { isNpcResponseMessageCode, getNpcResponseMessageKey } =
+      await import("../npc-response-messages");
 
     assert.ok(
       isNpcResponseMessageCode("unsupported_adapter"),
       "unsupported_adapter should be a valid NpcResponseMessageCode",
     );
-    assert.equal(
-      getNpcResponseMessageKey("unsupported_adapter"),
-      "npc.unsupportedAdapter",
-    );
+    assert.equal(getNpcResponseMessageKey("unsupported_adapter"), "npc.unsupportedAdapter");
   });
 
   test("adapter routing guard: an unregistered type is rejected before dispatch", () => {

@@ -55,7 +55,9 @@ const components: Components = {
   h3: ({ children }) => <h3 className="text-sm font-bold mt-2 mb-0.5">{children}</h3>,
   h4: ({ children }) => <h4 className="text-sm font-semibold mt-1.5 mb-0.5">{children}</h4>,
   h5: ({ children }) => <h5 className="text-sm font-medium mt-1 mb-0.5">{children}</h5>,
-  h6: ({ children }) => <h6 className="text-xs font-medium mt-1 mb-0.5 text-text-muted">{children}</h6>,
+  h6: ({ children }) => (
+    <h6 className="text-xs font-medium mt-1 mb-0.5 text-text-muted">{children}</h6>
+  ),
   p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
   strong: ({ children }) => <strong className="font-bold">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
@@ -69,7 +71,12 @@ const components: Components = {
   ol: ({ children }) => <ol className="list-decimal pl-4 mb-1.5 space-y-0.5">{children}</ol>,
   li: ({ children }) => <li className="leading-relaxed">{children}</li>,
   a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:brightness-125">
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-primary underline hover:brightness-125"
+    >
       {children}
     </a>
   ),
@@ -79,9 +86,7 @@ const components: Components = {
       const lang = className?.replace("language-", "") ?? "";
       return <CodeBlock lang={lang}>{children}</CodeBlock>;
     }
-    return (
-      <code className="bg-bg/60 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
-    );
+    return <code className="bg-bg/60 px-1 py-0.5 rounded text-xs font-mono">{children}</code>;
   },
   pre: ({ children }) => <>{children}</>,
   hr: () => <hr className="border-border my-2" />,
@@ -91,7 +96,9 @@ const components: Components = {
     </div>
   ),
   thead: ({ children }) => <thead className="bg-surface">{children}</thead>,
-  th: ({ children }) => <th className="border border-border px-2 py-1 text-left font-semibold">{children}</th>,
+  th: ({ children }) => (
+    <th className="border border-border px-2 py-1 text-left font-semibold">{children}</th>
+  ),
   td: ({ children }) => <td className="border border-border px-2 py-1">{children}</td>,
   img: ({ src, alt }) => (
     <img src={src} alt={alt || ""} className="max-w-full rounded my-1 max-h-60 object-contain" />

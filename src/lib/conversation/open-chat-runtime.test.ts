@@ -12,7 +12,9 @@ function delayed(reply: string, ms: number): NpcAdapter {
       await new Promise((r) => setTimeout(r, ms));
       return { response: reply, session: { sessionRef: o.sessionKey } };
     },
-    async testConnection() { return { status: "ok" as const }; },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
   } as NpcAdapter;
 }
 
@@ -22,22 +24,34 @@ function always(reply: string): NpcAdapter {
     async execute(o: AdapterExecuteOptions) {
       return { response: reply, session: { sessionRef: o.sessionKey } };
     },
-    async testConnection() { return { status: "ok" as const }; },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
   } as NpcAdapter;
 }
 
 function throwing(): NpcAdapter {
   return {
     type: "mock",
-    async execute() { throw new Error("backend down"); },
-    async testConnection() { return { status: "ok" as const }; },
+    async execute() {
+      throw new Error("backend down");
+    },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
   } as NpcAdapter;
 }
 
 function p(npcId: string, displayName: string, adapter: NpcAdapter): EngineParticipant {
   return {
-    npcId, displayName, seated: true, turnCount: 0, lastSpokeAt: 0,
-    sessionKey: `sk-${npcId}`, adapter, role: "동료",
+    npcId,
+    displayName,
+    seated: true,
+    turnCount: 0,
+    lastSpokeAt: 0,
+    sessionKey: `sk-${npcId}`,
+    adapter,
+    role: "동료",
   };
 }
 
@@ -70,7 +84,11 @@ describe("OpenChatRuntime", () => {
 
     await rt.handleHumanMessage("지호", "@[단비] @[하늘] 어때?");
 
-    assert.deepEqual(spoke, ["n2", "n1"], `늦게 부른 하늘이 먼저 끝났으므로 먼저 말해야 한다. 실제: ${JSON.stringify(spoke)}`);
+    assert.deepEqual(
+      spoke,
+      ["n2", "n1"],
+      `늦게 부른 하늘이 먼저 끝났으므로 먼저 말해야 한다. 실제: ${JSON.stringify(spoke)}`,
+    );
   });
 
   test("사람이 지명하면 예산을 쓰지 않는다 — 예산 0 이어도 전원 대답", async () => {
@@ -101,7 +119,10 @@ describe("OpenChatRuntime", () => {
 
     // 사람이 부른 단비 1회(무료) + NPC 발 지명 2회 = 최대 3회
     assert.ok(spoke.length <= 3, `예산이 사슬을 끊어야 한다. 실제: ${spoke.length}회`);
-    assert.ok(spoke.length >= 2, `적어도 사람이 부른 것과 그 다음 하나는 나와야 한다. 실제: ${spoke.length}회`);
+    assert.ok(
+      spoke.length >= 2,
+      `적어도 사람이 부른 것과 그 다음 하나는 나와야 한다. 실제: ${spoke.length}회`,
+    );
   });
 
   test("이미 말하는 중인 NPC 를 또 부르면 무시한다", async () => {
@@ -119,7 +140,11 @@ describe("OpenChatRuntime", () => {
     await rt.handleHumanMessage("지호", "@[단비] 둘");
     await first;
 
-    assert.deepEqual(starts, ["n1"], "이미 말하는 중이므로 두 번째 지명은 새 턴을 만들지 않아야 한다");
+    assert.deepEqual(
+      starts,
+      ["n1"],
+      "이미 말하는 중이므로 두 번째 지명은 새 턴을 만들지 않아야 한다",
+    );
   });
 
   test("어댑터가 터져도 다른 NPC 는 말한다", async () => {
@@ -130,7 +155,9 @@ describe("OpenChatRuntime", () => {
     const rt = new OpenChatRuntime(
       { participants: [a, b], recent: () => [], turnTimeout: TIMEOUT },
       {
-        onTurnEnd: (npcId, _t, meta) => { if (!meta?.aborted) spoke.push(npcId); },
+        onTurnEnd: (npcId, _t, meta) => {
+          if (!meta?.aborted) spoke.push(npcId);
+        },
         onError: (err) => errors.push(String(err)),
       },
     );
@@ -162,7 +189,11 @@ describe("OpenChatRuntime", () => {
 
     await rt.handleHumanMessage("지호", "@[단비] 이번엔?");
 
-    assert.deepEqual(skipped, [["n1", "backend_failing"]], "소진된 NPC 는 사유와 함께 정확히 한 번 알린다");
+    assert.deepEqual(
+      skipped,
+      [["n1", "backend_failing"]],
+      "소진된 NPC 는 사유와 함께 정확히 한 번 알린다",
+    );
     assert.equal(starts.length, 3, "소진된 NPC 는 새 턴을 열지 않는다");
   });
 
@@ -180,7 +211,10 @@ describe("OpenChatRuntime", () => {
 
     assert.deepEqual(
       starts,
-      [["n1", "socket-abc"], ["n2", "socket-abc"]],
+      [
+        ["n1", "socket-abc"],
+        ["n2", "socket-abc"],
+      ],
       "사슬을 시작한 사람이 여전히 걸어갈 대상이므로 NPC 가 부른 턴도 같은 소켓 id 를 쓴다",
     );
   });
@@ -196,7 +230,11 @@ describe("OpenChatRuntime", () => {
     await rt.handleHumanMessage("지호", "@[단비] 하나", "socket-a");
     await rt.handleHumanMessage("소라", "@[단비] 둘", "socket-b");
 
-    assert.deepEqual(starts, ["socket-a", "socket-b"], "런타임은 채널당 하나라 호출자를 박아 두면 안 된다");
+    assert.deepEqual(
+      starts,
+      ["socket-a", "socket-b"],
+      "런타임은 채널당 하나라 호출자를 박아 두면 안 된다",
+    );
   });
 
   test("onTurnStart 가 던져도 그 NPC 가 영구히 잠기지 않는다", async () => {
@@ -208,7 +246,10 @@ describe("OpenChatRuntime", () => {
       { participants: [a], recent: () => [], turnTimeout: TIMEOUT },
       {
         onTurnStart: () => {
-          if (boom) { boom = false; throw new Error("emit failed"); }
+          if (boom) {
+            boom = false;
+            throw new Error("emit failed");
+          }
         },
       },
     );

@@ -9,7 +9,7 @@ describe("SubprocessPool", () => {
     const pool = new SubprocessPool();
     const result = await pool.execute({
       command: "node",
-      args: ['-e', 'process.stdout.write("hello")'],
+      args: ["-e", 'process.stdout.write("hello")'],
     });
 
     assert.equal(result.fullOutput, "hello");
@@ -38,7 +38,7 @@ describe("SubprocessPool", () => {
 
     const result = await pool.execute({
       command: "node",
-      args: ['-e', 'process.stdout.write("alpha");setTimeout(()=>process.stdout.write("beta"),20)'],
+      args: ["-e", 'process.stdout.write("alpha");setTimeout(()=>process.stdout.write("beta"),20)'],
       onStdout: (chunk) => {
         chunks.push(chunk);
       },

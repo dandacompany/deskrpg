@@ -20,7 +20,14 @@ export interface ModalProps {
   children: ReactNode;
 }
 
-function ModalRoot({ open, onClose, title, size = "md", disableEscapeClose, children }: ModalProps) {
+function ModalRoot({
+  open,
+  onClose,
+  title,
+  size = "md",
+  disableEscapeClose,
+  children,
+}: ModalProps) {
   useEffect(() => {
     if (!open || disableEscapeClose) return;
     const handler = (e: KeyboardEvent) => {
@@ -36,14 +43,18 @@ function ModalRoot({ open, onClose, title, size = "md", disableEscapeClose, chil
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       data-modal-overlay
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         className={`
           ${SIZE_CLASSES[size]} w-full mx-4 max-h-[90vh]
           bg-bg rounded-xl shadow-2xl border border-border
           flex flex-col overflow-hidden
-        `.trim().replace(/\s+/g, " ")}
+        `
+          .trim()
+          .replace(/\s+/g, " ")}
       >
         {title && (
           <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
@@ -65,7 +76,9 @@ function ModalBody({ children, className = "" }: { children: ReactNode; classNam
 
 function ModalFooter({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`px-6 py-4 border-t border-border flex items-center justify-end gap-3 flex-shrink-0 ${className}`}>
+    <div
+      className={`px-6 py-4 border-t border-border flex items-center justify-end gap-3 flex-shrink-0 ${className}`}
+    >
       {children}
     </div>
   );

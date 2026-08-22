@@ -29,22 +29,28 @@ async function loadDb() {
 
 async function seedUser(nickname: string) {
   const { db, users } = await loadDb();
-  const [user] = await db.insert(users).values({
-    loginId: `${nickname}-${crypto.randomUUID().slice(0, 8)}`,
-    nickname: `${nickname}-${crypto.randomUUID().slice(0, 8)}`,
-    passwordHash: "hash",
-  }).returning();
+  const [user] = await db
+    .insert(users)
+    .values({
+      loginId: `${nickname}-${crypto.randomUUID().slice(0, 8)}`,
+      nickname: `${nickname}-${crypto.randomUUID().slice(0, 8)}`,
+      passwordHash: "hash",
+    })
+    .returning();
   return user;
 }
 
 async function seedGateway(ownerUserId: string) {
   const { db, gatewayResources } = await loadDb();
-  const [gateway] = await db.insert(gatewayResources).values({
-    ownerUserId,
-    displayName: "Test Gateway",
-    baseUrl: "http://gw.test",
-    tokenEncrypted: encryptGatewayToken("gateway-owner-key-1234567890"),
-  }).returning();
+  const [gateway] = await db
+    .insert(gatewayResources)
+    .values({
+      ownerUserId,
+      displayName: "Test Gateway",
+      baseUrl: "http://gw.test",
+      tokenEncrypted: encryptGatewayToken("gateway-owner-key-1234567890"),
+    })
+    .returning();
   return gateway;
 }
 
@@ -79,7 +85,10 @@ describe("buildProfileClient", () => {
 describe("mapValidationError", () => {
   test("maps HermesError codes to persisted validation statuses", () => {
     assert.equal(mapValidationError(new HermesError("unauthorized", "x", 401)), "unauthorized");
-    assert.equal(mapValidationError(new HermesError("unknown_profile", "x", 404)), "unknown_profile");
+    assert.equal(
+      mapValidationError(new HermesError("unknown_profile", "x", 404)),
+      "unknown_profile",
+    );
     assert.equal(mapValidationError(new HermesError("unreachable", "x", 0)), "unreachable");
     assert.equal(mapValidationError(new HermesError("http_error", "x", 500)), "error");
   });
@@ -143,11 +152,17 @@ describe("registerHermesProfile", () => {
     });
     assert.ok("profile" in second);
     assert.equal(second.profile.id, first.profile.id, "re-registration updates the same row");
-    assert.equal(decryptGatewayToken(second.profile.tokenEncrypted), "rotated-api-server-key-98765");
+    assert.equal(
+      decryptGatewayToken(second.profile.tokenEncrypted),
+      "rotated-api-server-key-98765",
+    );
 
     const { db, hermesProfiles } = await loadDb();
     const { eq } = await import("drizzle-orm");
-    const rows = await db.select().from(hermesProfiles).where(eq(hermesProfiles.gatewayId, gateway.id));
+    const rows = await db
+      .select()
+      .from(hermesProfiles)
+      .where(eq(hermesProfiles.gatewayId, gateway.id));
     assert.equal(rows.length, 1, "no duplicate row was created");
   });
 
@@ -180,7 +195,10 @@ describe("registerHermesProfile", () => {
 
     const { db, hermesProfiles } = await loadDb();
     const { eq } = await import("drizzle-orm");
-    const rows = await db.select().from(hermesProfiles).where(eq(hermesProfiles.gatewayId, gateway.id));
+    const rows = await db
+      .select()
+      .from(hermesProfiles)
+      .where(eq(hermesProfiles.gatewayId, gateway.id));
     assert.equal(rows.length, 1, "the race did not create a duplicate row");
   });
 });

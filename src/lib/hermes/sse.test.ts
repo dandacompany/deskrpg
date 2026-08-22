@@ -14,10 +14,12 @@ describe("createSseParser", () => {
   test("parses two frames in one chunk", () => {
     const parser = createSseParser();
     const events = parser.push(
-      'event: run.started\ndata: {"seq":1}\n\n' +
-      'event: message.started\ndata: {"seq":2}\n\n',
+      'event: run.started\ndata: {"seq":1}\n\n' + 'event: message.started\ndata: {"seq":2}\n\n',
     );
-    assert.deepEqual(events.map((e) => e.event), ["run.started", "message.started"]);
+    assert.deepEqual(
+      events.map((e) => e.event),
+      ["run.started", "message.started"],
+    );
   });
 
   test("buffers a frame split across chunks", () => {
@@ -37,8 +39,11 @@ describe("createSseParser", () => {
 
   test("skips a frame whose data is not valid JSON instead of throwing", () => {
     const parser = createSseParser();
-    const events = parser.push('event: x\ndata: not-json\n\n' + 'event: y\ndata: {"a":1}\n\n');
-    assert.deepEqual(events.map((e) => e.event), ["y"]);
+    const events = parser.push("event: x\ndata: not-json\n\n" + 'event: y\ndata: {"a":1}\n\n');
+    assert.deepEqual(
+      events.map((e) => e.event),
+      ["y"],
+    );
   });
 
   test("flush drops an incomplete trailing frame", () => {
@@ -54,10 +59,13 @@ describe("SSE — /v1/runs 방언", () => {
   test("event: 줄이 없으면 payload 의 event 필드를 이름으로 쓴다", () => {
     const parser = createSseParser();
     const events = parser.push(
-      'data: {"event": "message.delta", "run_id": "run_1", "delta": "S"}\n\n'
-      + 'data: {"event": "run.completed", "run_id": "run_1"}\n\n',
+      'data: {"event": "message.delta", "run_id": "run_1", "delta": "S"}\n\n' +
+        'data: {"event": "run.completed", "run_id": "run_1"}\n\n',
     );
-    assert.deepEqual(events.map((e) => e.event), ["message.delta", "run.completed"]);
+    assert.deepEqual(
+      events.map((e) => e.event),
+      ["message.delta", "run.completed"],
+    );
     assert.equal(events[0].data.delta, "S");
   });
 

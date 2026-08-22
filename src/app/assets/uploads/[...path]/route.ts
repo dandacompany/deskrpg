@@ -13,10 +13,7 @@ const CONTENT_TYPES = new Map([
   [".gif", "image/gif"],
 ]);
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path: pathSegments } = await params;
   const requestPath = `/assets/uploads/${pathSegments.join("/")}`;
   const filePath = resolveRuntimeUploadRequestPath(requestPath);

@@ -34,9 +34,11 @@ const ja: Record<string, string> = {
   "auth.title": "DeskRPG",
   "auth.subtitle": "AI社員と共に働くバーチャルオフィス",
   "metadata.title": "DeskRPG — AI社員と働くバーチャルオフィス",
-  "metadata.description": "バーチャルオフィスを構築し、AI社員を雇い、他のプレイヤーと一緒に2DピクセルアートRPGワークスペースでビジネス目標を達成しましょう。",
+  "metadata.description":
+    "バーチャルオフィスを構築し、AI社員を雇い、他のプレイヤーと一緒に2DピクセルアートRPGワークスペースでビジネス目標を達成しましょう。",
   "metadata.openGraphDescription": "2DピクセルアートRPG — AI社員と働くバーチャルオフィス",
-  "metadata.keywords": "DeskRPG, バーチャルオフィス, AI社員, ピクセルアート, RPG, マルチプレイ, ワークスペース, 2Dゲーム",
+  "metadata.keywords":
+    "DeskRPG, バーチャルオフィス, AI社員, ピクセルアート, RPG, マルチプレイ, ワークスペース, 2Dゲーム",
   "auth.login": "ログイン",
   "auth.register": "新規登録",
   "auth.loginId": "ログインID",
@@ -64,7 +66,8 @@ const ja: Record<string, string> = {
   "channels.invalidInvite": "無効な招待コードです",
   "channels.inviteCodePlaceholder": "招待コードを入力...",
   "channels.groupInviteTitle": "グループに参加",
-  "channels.groupInviteSubtitle": "保護されたチャンネルに参加する前に、グループ招待コードでメンバーシップを取得します。",
+  "channels.groupInviteSubtitle":
+    "保護されたチャンネルに参加する前に、グループ招待コードでメンバーシップを取得します。",
   "channels.groupInvitePlaceholder": "グループ招待コードを入力...",
   "channels.groupInviteJoin": "グループに参加",
   "channels.groupInviteAccepted": "{name} に参加しました。",
@@ -75,7 +78,8 @@ const ja: Record<string, string> = {
   "channels.private": "非公開",
   "channels.group": "グループ",
   "channels.browseOnly": "閲覧のみ",
-  "channels.browseOnlyHint": "この公開チャンネルは一覧から閲覧できますが、参加するには有効なグループメンバーシップが必要です。",
+  "channels.browseOnlyHint":
+    "この公開チャンネルは一覧から閲覧できますが、参加するには有効なグループメンバーシップが必要です。",
   "channels.players": "{count}/{max}人参加中",
   "channels.owner": "{name}",
   "channels.backToCharacters": "← キャラクター選択へ",
@@ -98,11 +102,13 @@ const ja: Record<string, string> = {
   "channels.create.failed": "チャンネルの作成に失敗しました",
   "channels.create.group": "グループ",
   "channels.create.noAvailableGroups": "チャンネルを作成するには利用可能なグループが必要です。",
-  "channels.create.unavailableHint": "チャンネル作成には、少なくとも1つの利用可能なグループが必要です。",
+  "channels.create.unavailableHint":
+    "チャンネル作成には、少なくとも1つの利用可能なグループが必要です。",
   "channels.create.mapTemplate": "マップテンプレート",
   "channels.privateChannel": "非公開チャンネル",
   "admin.groups.title": "グループアクセス管理",
-  "admin.groups.subtitle": "メンバー、招待、参加申請、権限、ユーザー別オーバーライドをまとめて確認します。",
+  "admin.groups.subtitle":
+    "メンバー、招待、参加申請、権限、ユーザー別オーバーライドをまとめて確認します。",
   "admin.groups.empty": "管理できるグループはまだありません。",
   "admin.groups.manage": "グループ一覧",
   "admin.groups.backToChannels": "チャンネルに戻る",
@@ -117,7 +123,8 @@ const ja: Record<string, string> = {
   "admin.groups.targetLoginId": "ユーザーログインID",
   "admin.groups.inviteTargetOptional": "ユーザーログインID（任意）",
   "admin.groups.inviteExpirationOptional": "有効期限（任意）",
-  "admin.groups.inviteFormHint": "ログインIDを空欄にすると再利用可能な共有招待になります。有効期限を空欄にすると無期限です。",
+  "admin.groups.inviteFormHint":
+    "ログインIDを空欄にすると再利用可能な共有招待になります。有効期限を空欄にすると無期限です。",
   "admin.groups.inviteShared": "共有招待",
   "admin.groups.inviteReusable": "再利用可",
   "admin.groups.inviteSingleUse": "1回限り",
@@ -178,7 +185,8 @@ const ja: Record<string, string> = {
   "hermes.discovery.error.invalid_profile_name": "プロフィール名の規則に一致しません",
   "hermes.discovery.error.no_token": "このプロフィールの.envにトークンが見つかりませんでした",
   "hermes.discovery.error.forbidden": "登録できるのはこのゲートウェイの所有者のみです",
-  "hermes.discovery.error.register_failed": "登録に失敗しました。しばらくしてから再試行してください",
+  "hermes.discovery.error.register_failed":
+    "登録に失敗しました。しばらくしてから再試行してください",
   "hermes.probe.ok": "確認済み",
   "hermes.probe.not_found": "このゲートウェイに見つかりません",
   "hermes.probe.unknown": "確認できません",
@@ -187,18 +195,22 @@ const ja: Record<string, string> = {
   "gateway.statusCard.status.connected": "接続済み",
   "gateway.statusCard.status.error": "エラー",
   "gateway.statusCard.description.idle": "まだ接続テストを実行していません。",
-  "gateway.statusCard.description.connected": "ゲートウェイに接続され、リクエストを受け付ける準備ができました。",
-  "gateway.statusCard.description.error": "ゲートウェイに接続できませんでした。URL とトークンを確認してください。",
+  "gateway.statusCard.description.connected":
+    "ゲートウェイに接続され、リクエストを受け付ける準備ができました。",
+  "gateway.statusCard.description.error":
+    "ゲートウェイに接続できませんでした。URL とトークンを確認してください。",
   // Default NPC
   "npc.default": "デフォルトNPC",
   "npc.name": "NPC名",
   "npc.namePlaceholder": "AIアシスタント",
   "npc.adapterType": "AIエンジン",
-  "npc.cliAdapterNote": "このNPCは選択したCLIツールを使用します。ツールがインストールされ、プロバイダが設定されていることを確認してください。",
+  "npc.cliAdapterNote":
+    "このNPCは選択したCLIツールを使用します。ツールがインストールされ、プロバイダが設定されていることを確認してください。",
   "npc.hermesProfile": "Hermesプロファイル",
   "npc.hermesProfileInUse": "使用中",
   "npc.hermesProfileSelect": "プロファイルを選択",
-  "npc.hermesProfileEmpty": "登録されたプロファイルがありません。ゲートウェイ管理ページで追加してください。",
+  "npc.hermesProfileEmpty":
+    "登録されたプロファイルがありません。ゲートウェイ管理ページで追加してください。",
   "npc.hermesProfileNoGateway": "このチャンネルに接続されたゲートウェイがありません。",
   "npc.hermesRebindFailed": "プロファイルの連携に失敗しました",
   "npc.agent": "エージェント",
@@ -1315,10 +1327,13 @@ const ja: Record<string, string> = {
   "game.typePlayer": "プレイヤー",
   "game.channelNotFound": "チャンネルが見つかりません",
   "game.socketDisconnected": "リアルタイム接続が切断されました: {reason}",
-  "game.socketConnectFailed": "リアルタイム接続に失敗しました。再読み込みしてもう一度お試しください。",
+  "game.socketConnectFailed":
+    "リアルタイム接続に失敗しました。再読み込みしてもう一度お試しください。",
   "game.npcGreeting": "{name} が挨拶しました！",
-  "game.npcChatDisconnected": "リアルタイム接続が切れているためNPCにメッセージを送れません。再読み込みしてもう一度お試しください。",
-  "game.channelChatDisconnected": "リアルタイム接続が切れているためチャットを送れません。再読み込みしてもう一度お試しください。",
+  "game.npcChatDisconnected":
+    "リアルタイム接続が切れているためNPCにメッセージを送れません。再読み込みしてもう一度お試しください。",
+  "game.channelChatDisconnected":
+    "リアルタイム接続が切れているためチャットを送れません。再読み込みしてもう一度お試しください。",
   "game.spawnSetSuccess": "スポーン位置を設定しました ({col}, {row})",
 
   // Chat
@@ -1477,8 +1492,10 @@ const ja: Record<string, string> = {
   "meeting.systemSender": "システム",
   "meeting.endedTranscriptPrefix": "[会議終了]",
   "meeting.errorPrefix": "[エラー]",
-  "meeting.mentionSkipped.quotaExhausted": "{name}が指名されましたが、発言割り当てを使い切ったため発言しませんでした。",
-  "meeting.mentionSkipped.backendFailing": "{name}が指名されましたが、AIバックエンドが応答しないため発言しませんでした。",
+  "meeting.mentionSkipped.quotaExhausted":
+    "{name}が指名されましたが、発言割り当てを使い切ったため発言しませんでした。",
+  "meeting.mentionSkipped.backendFailing":
+    "{name}が指名されましたが、AIバックエンドが応答しないため発言しませんでした。",
 
   // Minutes
   "minutes.title": "議事録",
@@ -1530,9 +1547,12 @@ const ja: Record<string, string> = {
   "settings.gatewaySaved": "使用するゲートウェイ",
   "settings.gatewaySelect": "ゲートウェイを選択してください",
   "settings.gatewayNoSaved": "利用可能な保存済みゲートウェイがありません。直接入力で接続できます。",
-  "settings.gatewaySharedReadOnly": "このチャンネルは共有ゲートウェイを使用しています。認証情報を変更できるのは所有者のみです。",
-  "settings.gatewayChangeResetWarning": "ゲートウェイを変更すると、このチャンネルの既存NPCと関連するタスク/会議コンテキストがすべて削除されます。続行しますか？",
-  "settings.gatewayDisconnectResetWarning": "ゲートウェイ接続を削除すると、このチャンネルの既存NPCと関連するタスク/会議コンテキストがすべて削除されます。続行しますか？",
+  "settings.gatewaySharedReadOnly":
+    "このチャンネルは共有ゲートウェイを使用しています。認証情報を変更できるのは所有者のみです。",
+  "settings.gatewayChangeResetWarning":
+    "ゲートウェイを変更すると、このチャンネルの既存NPCと関連するタスク/会議コンテキストがすべて削除されます。続行しますか？",
+  "settings.gatewayDisconnectResetWarning":
+    "ゲートウェイ接続を削除すると、このチャンネルの既存NPCと関連するタスク/会議コンテキストがすべて削除されます。続行しますか？",
   "gateways.nav": "マイゲートウェイ",
   "gateways.title": "マイゲートウェイ",
   "gateways.subtitle": "Hermes ゲートウェイを登録、接続テスト、共有できます。",
@@ -1548,7 +1568,8 @@ const ja: Record<string, string> = {
   "gateways.statusUntested": "未テスト",
   "gateways.createTitle": "ゲートウェイ登録",
   "gateways.editTitle": "ゲートウェイ編集",
-  "gateways.createHelp": "自分の Hermes ゲートウェイを登録します。登録後、使用するプロファイルを追加してください。",
+  "gateways.createHelp":
+    "自分の Hermes ゲートウェイを登録します。登録後、使用するプロファイルを追加してください。",
   "gateways.editHelp": "ゲートウェイ情報を更新し、接続状態を再確認します。",
   "gateways.displayName": "表示名",
   "gateways.rotateToken": "トークン",
@@ -1556,9 +1577,11 @@ const ja: Record<string, string> = {
   "gateways.testSuccess": "ゲートウェイ接続を確認しました。",
   "gateways.saved": "ゲートウェイを保存しました。",
   "gateways.deleted": "ゲートウェイを削除しました。",
-  "gateways.deleteConfirm": "このゲートウェイを削除しますか？ チャンネルに接続されたゲートウェイは削除できません。",
+  "gateways.deleteConfirm":
+    "このゲートウェイを削除しますか？ チャンネルに接続されたゲートウェイは削除できません。",
   "gateways.shareTitle": "共有管理",
-  "gateways.shareHelp": "他のユーザーのログイン ID を入力すると、このゲートウェイの利用権限を共有できます。",
+  "gateways.shareHelp":
+    "他のユーザーのログイン ID を入力すると、このゲートウェイの利用権限を共有できます。",
   "gateways.selectGatewayFirst": "先にゲートウェイを選択してください。",
   "gateways.shareOwnerOnly": "共有管理はゲートウェイ所有者のみ利用できます。",
   "gateways.shareLoginId": "共有するユーザーのログイン ID",
@@ -1589,7 +1612,8 @@ const ja: Record<string, string> = {
   "providers.credentialsMissing": "このプロバイダには API キーが保存されていません。",
   "providers.credentialsVerified": "保存済みの認証情報を確認しました。",
   "providers.apiKeyRequired": "API キーが必要です。",
-  "providers.formHelp": "プロバイダタイプを選択し、認証情報を保存して、設定されたアクセス方法を確認します。",
+  "providers.formHelp":
+    "プロバイダタイプを選択し、認証情報を保存して、設定されたアクセス方法を確認します。",
   "providers.apiKeyHint": "既存のキーを保持するには API キーを空欄のままにしてください。",
   "providers.adapterStatus": "アダプター状態",
   "providers.adapterStatusHelp": "この DeskRPG ホストで利用できる CLI ツールの状態です。",
@@ -1607,11 +1631,11 @@ const ja: Record<string, string> = {
   "task.requestReportQueued": "報告依頼を送信しました。",
   "task.markComplete": "完了にする",
   "task.completeQueued": "タスクを完了にしました。",
-  "task.completeToast": "\"{title}\" を完了にしました。",
+  "task.completeToast": '"{title}" を完了にしました。',
   "task.resume": "再開",
   "task.resumeQueued": "タスクを再開しました。",
-  "task.resumeToast": "\"{title}\" を進行中に戻しました。",
-  "task.stalledToast": "\"{title}\" の自動催促を停止しました。",
+  "task.resumeToast": '"{title}" を進行中に戻しました。',
+  "task.stalledToast": '"{title}" の自動催促を停止しました。',
   "task.autoNudgeCount": "催促 {count}/{max}",
   "task.stalledCount": "停止 {count}/{max}",
   "task.backlog": "バックログ",
@@ -1778,7 +1802,8 @@ const ja: Record<string, string> = {
   "mapEditor.stamps.moveTo": "移動先…",
   "mapEditor.stamps.saveAsStamp": "スタンプとして保存",
   "mapEditor.stamps.saveTitle": "スタンプとして保存",
-  "mapEditor.stamps.saveDescription": "選択した領域のすべてのレイヤーを再利用可能なスタンプとして保存します。",
+  "mapEditor.stamps.saveDescription":
+    "選択した領域のすべてのレイヤーを再利用可能なスタンプとして保存します。",
   "mapEditor.stamps.stampName": "スタンプ名",
   "mapEditor.stamps.stampNamePlaceholder": "例: 椅子（正面）、デスクセット...",
   "mapEditor.stamps.saving": "保存中...",
@@ -1843,7 +1868,8 @@ const ja: Record<string, string> = {
   "mapEditor.pixel.saveAsNew": "新しいタイルセットとして保存",
   "mapEditor.pixel.overwrite": "元のタイルセットを上書き",
   "mapEditor.pixel.applyToMap": "マップに適用",
-  "mapEditor.pixel.overwriteDisabled": "上書きできません：グリッドサイズが変更されました。「新しいタイルセットとして保存」を使用してください。",
+  "mapEditor.pixel.overwriteDisabled":
+    "上書きできません：グリッドサイズが変更されました。「新しいタイルセットとして保存」を使用してください。",
   "mapEditor.pixel.keyboardShortcuts": "キーボードショートカット",
   "mapEditor.pixel.shortcutPen": "ペンツール",
   "mapEditor.pixel.shortcutEraser": "消しゴムツール",
@@ -1915,14 +1941,16 @@ const ja: Record<string, string> = {
   "chat.options": "チャットオプション",
   "npc.aiAgent": "AIエージェント",
   "npc.connectGatewayAgent": "ゲートウェイエージェントに接続",
-  "npc.gatewaySetupHint": "チャンネル設定の AI 接続タブで、先に Hermes ゲートウェイを保存してください。",
+  "npc.gatewaySetupHint":
+    "チャンネル設定の AI 接続タブで、先に Hermes ゲートウェイを保存してください。",
   "npc.noAiStatic": "AIなし (静的NPC)",
   "npc.loadingAgents": "エージェントを読み込み中...",
   "npc.createNewAgent": "+ 新しいエージェントを作成",
   "npc.selectAgent": "-- エージェントを選択 --",
   "npc.agentInUse": "{name} (使用中: {npcName})",
   "npc.agentAvailable": "{name} (利用可能)",
-  "npc.limitReached": "NPCの上限に達しました ({count}/{max})。新しいNPCを雇うには既存のNPCを削除してください。",
+  "npc.limitReached":
+    "NPCの上限に達しました ({count}/{max})。新しいNPCを雇うには既存のNPCを削除してください。",
   "meeting.npcLabel": "NPC:",
   "game.spawnSetMode": "スポーン位置を設定するタイルをクリックしてください",
   "game.fireNpcConfirm": "このNPCを解雇しますか?",
@@ -1930,9 +1958,11 @@ const ja: Record<string, string> = {
   "mapEditor.layers.layerNamePrompt": "レイヤー名:",
   "mapEditor.layers.cannotDeleteCoreLayer": "コアレイヤー「{name}」は削除できません。",
   "mapEditor.layers.deleteLayerConfirm": "レイヤー「{name}」を削除しますか?",
-  "mapEditor.tilesets.deleteInUseConfirm": "タイルセット「{name}」はマップ上で使用中です。それでも削除しますか?",
+  "mapEditor.tilesets.deleteInUseConfirm":
+    "タイルセット「{name}」はマップ上で使用中です。それでも削除しますか?",
   "mapEditor.tilesets.deleteConfirm": "タイルセット「{name}」を削除しますか?",
-  "mapEditor.tilesets.removeUnusedConfirm": "未使用のタイルセット {count} 個を削除しますか?\n{names}",
+  "mapEditor.tilesets.removeUnusedConfirm":
+    "未使用のタイルセット {count} 個を削除しますか?\n{names}",
   "mapEditor.pixel.tolerance": "許容値",
   "mapEditor.pixel.magicEraser": "マジック消しゴム",
   "mapEditor.pixel.smooth": "スムーズ",
@@ -1955,7 +1985,8 @@ const ja: Record<string, string> = {
   "errors.nicknameTaken": "その表示名は既に使われています",
   "errors.gatewayUrlRequired": "ゲートウェイURLが必要です",
   "errors.invalidGatewayUrl": "ゲートウェイURLの形式が正しくありません",
-  "errors.gatewayConfigValidated": "ゲートウェイ設定を確認しました。チャンネル作成時に接続されます。",
+  "errors.gatewayConfigValidated":
+    "ゲートウェイ設定を確認しました。チャンネル作成時に接続されます。",
   "errors.channelNameRequired": "チャンネル名が必要です (1-100文字)",
   "errors.mapTemplateRequired": "マップテンプレートが必要です",
   "errors.mapTemplateNotFound": "マップテンプレートが見つかりません",
@@ -2066,7 +2097,8 @@ const ja: Record<string, string> = {
   "errors.cannotDeleteMainAgent": "メインエージェントは削除できません",
   "errors.agentInUseByNpc": "このエージェントは現在NPCが使用中です",
   "errors.failedToRemoveAgentFromGateway": "ゲートウェイからエージェントを削除できませんでした",
-  "errors.registrationDisabled": "現在、会員登録は無効になっています。管理者にお問い合わせください。",
+  "errors.registrationDisabled":
+    "現在、会員登録は無効になっています。管理者にお問い合わせください。",
   "errors.invalidProfileName": "プロファイル名が無効です",
   "errors.invalidToken": "トークンは16文字以上である必要があります",
   "errors.invalidProfileId": "プロファイルIDが必要です",

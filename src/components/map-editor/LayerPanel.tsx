@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState, useRef, useCallback, useMemo } from 'react';
-import { Button } from '@/components/ui';
-import { Eye, EyeOff, GripVertical, User } from 'lucide-react';
+import { useState, useRef, useCallback, useMemo } from "react";
+import { Button } from "@/components/ui";
+import { Eye, EyeOff, GripVertical, User } from "lucide-react";
 import {
   isCoreLayer,
   getDeskRPGRole,
@@ -10,10 +10,10 @@ import {
   getLayerDepth,
   getDepthLabel,
   CHARACTER_DEPTH_THRESHOLD,
-} from './hooks/useMapEditor';
-import Tooltip from './Tooltip';
-import { useT } from '@/lib/i18n';
-import type { TiledLayer } from './hooks/useMapEditor';
+} from "./hooks/useMapEditor";
+import Tooltip from "./Tooltip";
+import { useT } from "@/lib/i18n";
+import type { TiledLayer } from "./hooks/useMapEditor";
 
 export interface LayerPanelProps {
   layers: TiledLayer[];
@@ -95,15 +95,17 @@ function LayerItem({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') commitRename();
-      if (e.key === 'Escape') setEditing(false);
+      if (e.key === "Enter") commitRename();
+      if (e.key === "Escape") setEditing(false);
     },
     [commitRename],
   );
 
   const tooltipLabel = role
-    ? `${layer.type === 'tilelayer' ? t('mapEditor.layers.tileLayerType') : t('mapEditor.layers.objectLayerType')} · ${t(role.descKey)}`
-    : layer.type === 'tilelayer' ? t('mapEditor.layers.tileLayerType') : t('mapEditor.layers.objectLayerType');
+    ? `${layer.type === "tilelayer" ? t("mapEditor.layers.tileLayerType") : t("mapEditor.layers.objectLayerType")} · ${t(role.descKey)}`
+    : layer.type === "tilelayer"
+      ? t("mapEditor.layers.tileLayerType")
+      : t("mapEditor.layers.objectLayerType");
 
   return (
     <div
@@ -114,8 +116,10 @@ function LayerItem({
       onDrop={onDrop}
       className={`
         group flex items-center gap-1 px-1 py-1.5 rounded-md cursor-pointer transition-colors
-        ${isActive ? 'border border-primary-light/30' : 'hover:bg-surface-raised border border-transparent'}
-      `.trim().replace(/\s+/g, ' ')}
+        ${isActive ? "border border-primary-light/30" : "hover:bg-surface-raised border border-transparent"}
+      `
+        .trim()
+        .replace(/\s+/g, " ")}
       style={{ backgroundColor: isActive ? layerColor.overlay : undefined }}
       onClick={onSelect}
     >
@@ -164,14 +168,19 @@ function LayerItem({
       </div>
 
       {/* Color chip */}
-      <Tooltip label={showOverlay ? t('mapEditor.layers.hideOverlay') : t('mapEditor.layers.showOverlay')}>
+      <Tooltip
+        label={showOverlay ? t("mapEditor.layers.hideOverlay") : t("mapEditor.layers.showOverlay")}
+      >
         <button
           className="w-2.5 h-2.5 rounded-sm flex-shrink-0 transition-opacity"
           style={{
             backgroundColor: layerColor.solid,
             opacity: showOverlay ? 1 : 0.25,
           }}
-          onClick={(e) => { e.stopPropagation(); onToggleOverlay?.(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleOverlay?.();
+          }}
         />
       </Tooltip>
 
@@ -183,7 +192,7 @@ function LayerItem({
             onDelete();
           }}
           className="text-text-dim hover:text-danger text-body opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
-          title={t('mapEditor.layers.deleteLayer')}
+          title={t("mapEditor.layers.deleteLayer")}
         >
           &times;
         </button>
@@ -193,7 +202,11 @@ function LayerItem({
 }
 
 /** Character divider line */
-function CharacterDivider({ isDragOver, onDragOver, onDrop }: {
+function CharacterDivider({
+  isDragOver,
+  onDragOver,
+  onDrop,
+}: {
   isDragOver: boolean;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
@@ -204,8 +217,10 @@ function CharacterDivider({ isDragOver, onDragOver, onDrop }: {
     <div
       className={`
         flex items-center gap-2 px-2 py-1 my-0.5 transition-colors
-        ${isDragOver ? 'bg-primary-light/10' : ''}
-      `.trim().replace(/\s+/g, ' ')}
+        ${isDragOver ? "bg-primary-light/10" : ""}
+      `
+        .trim()
+        .replace(/\s+/g, " ")}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
@@ -258,8 +273,8 @@ export default function LayerPanel({
   const handleDragStart = useCallback(
     (visualIndex: number) => (e: React.DragEvent) => {
       dragVisualIndexRef.current = visualIndex;
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', String(visualIndex));
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(visualIndex));
     },
     [],
   );
@@ -267,7 +282,7 @@ export default function LayerPanel({
   const handleDragOver = useCallback(
     (visualIndex: number) => (e: React.DragEvent) => {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
+      e.dataTransfer.dropEffect = "move";
       setDragOverIndex(visualIndex);
       setDragOverDivider(false);
     },
@@ -276,7 +291,7 @@ export default function LayerPanel({
 
   const handleDragOverDivider = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = "move";
     setDragOverDivider(true);
     setDragOverIndex(null);
   }, []);
@@ -355,9 +370,14 @@ export default function LayerPanel({
       {/* Header */}
       {!hideHeader && (
         <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
-          <span className="text-title text-text">{t('mapEditor.layers.title')}</span>
-          <Button variant="ghost" size="sm" onClick={onAddLayer} title={t('mapEditor.layers.addLayerTooltip')}>
-            {t('mapEditor.layers.addLayer')}
+          <span className="text-title text-text">{t("mapEditor.layers.title")}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onAddLayer}
+            title={t("mapEditor.layers.addLayerTooltip")}
+          >
+            {t("mapEditor.layers.addLayer")}
           </Button>
         </div>
       )}

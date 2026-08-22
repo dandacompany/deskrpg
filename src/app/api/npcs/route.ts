@@ -86,13 +86,7 @@ export async function POST(req: NextRequest) {
     } = body;
     const normalizedLocale = normalizeLocale(locale);
 
-    if (
-      !channelId ||
-      !name?.trim() ||
-      !appearance ||
-      positionX == null ||
-      positionY == null
-    ) {
+    if (!channelId || !name?.trim() || !appearance || positionX == null || positionY == null) {
       return NextResponse.json(
         {
           errorCode: "missing_required_fields",
@@ -113,12 +107,7 @@ export async function POST(req: NextRequest) {
     }
 
     // At least persona or identity must be provided (unless selecting existing agent)
-    if (
-      !persona?.trim() &&
-      !identity?.trim() &&
-      !presetId &&
-      agentAction !== "select"
-    ) {
+    if (!persona?.trim() && !identity?.trim() && !presetId && agentAction !== "select") {
       return NextResponse.json(
         {
           errorCode: "missing_persona_or_identity",
@@ -129,10 +118,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify channel ownership
-    const [channel] = await db
-      .select()
-      .from(channels)
-      .where(eq(channels.id, channelId));
+    const [channel] = await db.select().from(channels).where(eq(channels.id, channelId));
     if (!channel)
       return NextResponse.json(
         { errorCode: "channel_not_found", error: "Channel not found" },
@@ -171,8 +157,7 @@ export async function POST(req: NextRequest) {
           locale: normalizedLocale,
         })
       : null;
-    const resolvedIdentity =
-      identity?.trim() || persona?.trim() || presetDefaults?.identity || "";
+    const resolvedIdentity = identity?.trim() || persona?.trim() || presetDefaults?.identity || "";
     const resolvedSoul = soul?.trim() || presetDefaults?.soul || "";
 
     if (agentAction === "create" && agentId) {
@@ -187,18 +172,10 @@ export async function POST(req: NextRequest) {
           })
         : {
             identity: injectTaskPrompt(
-              localizeNpcPromptDocument(
-                resolvedIdentity,
-                normalizedLocale,
-                "identity",
-              ),
+              localizeNpcPromptDocument(resolvedIdentity, normalizedLocale, "identity"),
               normalizedLocale,
             ),
-            soul: localizeNpcPromptDocument(
-              resolvedSoul,
-              normalizedLocale,
-              "soul",
-            ),
+            soul: localizeNpcPromptDocument(resolvedSoul, normalizedLocale, "soul"),
           };
       // Agent was already created via /api/npcs/create-agent
       agentConfig = {
@@ -230,18 +207,10 @@ export async function POST(req: NextRequest) {
               })
             : {
                 identity: injectTaskPrompt(
-                  localizeNpcPromptDocument(
-                    identityText,
-                    normalizedLocale,
-                    "identity",
-                  ),
+                  localizeNpcPromptDocument(identityText, normalizedLocale, "identity"),
                   normalizedLocale,
                 ),
-                soul: localizeNpcPromptDocument(
-                  resolvedSoul,
-                  normalizedLocale,
-                  "soul",
-                ),
+                soul: localizeNpcPromptDocument(resolvedSoul, normalizedLocale, "soul"),
               }
           : null;
       agentConfig = {
@@ -262,15 +231,14 @@ export async function POST(req: NextRequest) {
         name: name.trim().slice(0, 100),
         positionX,
         positionY,
-        direction: ["up", "down", "left", "right"].includes(direction)
-          ? direction
-          : "down",
+        direction: ["up", "down", "left", "right"].includes(direction) ? direction : "down",
         appearance: jsonForDb(appearance),
         agentConfig: jsonForDb(agentConfig),
         // 모달이 고른 엔진과 프로필. 넣지 않으면 컬럼 기본값 'openclaw' + 프로필 없음으로
         // 저장되고, 사용자는 대화를 걸어야 비로소 자기 선택이 버려진 것을 안다.
         adapterType: typeof adapterType === "string" && adapterType ? adapterType : "openclaw",
-        hermesProfileId: typeof hermesProfileId === "string" && hermesProfileId ? hermesProfileId : null,
+        hermesProfileId:
+          typeof hermesProfileId === "string" && hermesProfileId ? hermesProfileId : null,
       })
       .returning();
 
@@ -279,8 +247,7 @@ export async function POST(req: NextRequest) {
         npc: {
           ...npc,
           appearance: parseDbJson(npc.appearance) ?? npc.appearance,
-          agentConfig:
-            parseDbObject(npc.agentConfig) ?? npc.agentConfig,
+          agentConfig: parseDbObject(npc.agentConfig) ?? npc.agentConfig,
         },
       },
       { status: 201 },

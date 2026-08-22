@@ -11,16 +11,10 @@ import {
   upsertOwnedGatewayResource,
 } from "@/lib/gateway-resources";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
 
@@ -37,9 +31,7 @@ export async function GET(
       id: accessible.resource.id,
       displayName: accessible.resource.displayName,
       baseUrl: accessible.resource.baseUrl,
-      token: accessible.isOwner
-        ? decryptGatewayToken(accessible.resource.tokenEncrypted)
-        : null,
+      token: accessible.isOwner ? decryptGatewayToken(accessible.resource.tokenEncrypted) : null,
       ownerUserId: accessible.resource.ownerUserId,
       canEditCredentials: accessible.isOwner,
       isOwner: accessible.isOwner,
@@ -51,46 +43,30 @@ export async function GET(
   });
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
 
   const owned = await getOwnedGatewayResource(userId, id);
   if (!owned) {
-    return NextResponse.json(
-      { errorCode: "forbidden", error: "forbidden" },
-      { status: 403 },
-    );
+    return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
   }
 
   const body = await req.json().catch(() => null);
   if (!body) {
-    return NextResponse.json(
-      { errorCode: "invalid_json", error: "invalid JSON" },
-      { status: 400 },
-    );
+    return NextResponse.json({ errorCode: "invalid_json", error: "invalid JSON" }, { status: 400 });
   }
 
-  const nextBaseUrl =
-    typeof body.url === "string" && body.url.trim() ? body.url : owned.baseUrl;
+  const nextBaseUrl = typeof body.url === "string" && body.url.trim() ? body.url : owned.baseUrl;
   const nextToken =
-    typeof body.token === "string"
-      ? body.token
-      : decryptGatewayToken(owned.tokenEncrypted);
+    typeof body.token === "string" ? body.token : decryptGatewayToken(owned.tokenEncrypted);
   const nextDisplayName =
     typeof body.displayName === "string" ? body.displayName : owned.displayName;
   const existingToken = decryptGatewayToken(owned.tokenEncrypted);
-  const isCredentialChanging =
-    nextBaseUrl !== owned.baseUrl || nextToken !== existingToken;
+  const isCredentialChanging = nextBaseUrl !== owned.baseUrl || nextToken !== existingToken;
 
   if (isCredentialChanging) {
     const inUseCount = await countChannelBindingsForGateway(owned.id);
@@ -134,25 +110,16 @@ export async function PATCH(
   });
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
 
   const owned = await getOwnedGatewayResource(userId, id);
   if (!owned) {
-    return NextResponse.json(
-      { errorCode: "forbidden", error: "forbidden" },
-      { status: 403 },
-    );
+    return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
   }
 
   const bindingCount = await countChannelBindingsForGateway(id);

@@ -28,8 +28,7 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = (_e) =>
-      reject(new Error(`Failed to load image: ${src}`));
+    img.onerror = (_e) => reject(new Error(`Failed to load image: ${src}`));
     img.src = src;
   });
 }
@@ -64,9 +63,7 @@ export function getLayerPaths(
 
       // Resolve template variables in LPC paths
       // ${head} → "adult" (age group), ${expression} → "default" (eye expression)
-      basePath = basePath
-        .replace(/\$\{head\}/g, "adult")
-        .replace(/\$\{expression\}/g, "default");
+      basePath = basePath.replace(/\$\{head\}/g, "adult").replace(/\$\{expression\}/g, "default");
 
       // eye_color special case: the actual downloaded files are at eyes/default/walk/
       // but the registry says eyes/human/adult/default

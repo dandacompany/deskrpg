@@ -21,7 +21,10 @@ import {
 /** 폴링이 실제로 일어났으면 그 결과, 아니면 null. null과 빈 결과는 다르다 — 폴링 참가자
  * 전원의 어댑터가 실패하면 raises/passes 가 둘 다 빈 배열이 되지만, 그래도 폴링은 일어난
  * 것이므로 pollResult는 null이 아니다. */
-export type PollReport = { raises: Array<{ npcId: string; reason: string }>; passes: string[] } | null;
+export type PollReport = {
+  raises: Array<{ npcId: string; reason: string }>;
+  passes: string[];
+} | null;
 
 export type FloorDecision =
   | { kind: "grant"; npcId: string }
@@ -79,7 +82,9 @@ export class MeetingFloorController {
       (npcId) => {
         // isBurnedOut() 이 참이면 게이트웨이가 죽은 것이지 할당량 문제가 아니다 — 두 조건이
         // 둘 다 걸려 있어도 이쪽이 더 시급한 사실이므로 우선한다.
-        const reason: MentionSkipReason = ctx.runtimeFor(npcId)?.isBurnedOut() ? "backend_failing" : "quota_exhausted";
+        const reason: MentionSkipReason = ctx.runtimeFor(npcId)?.isBurnedOut()
+          ? "backend_failing"
+          : "quota_exhausted";
         ctx.onSkippedGrant(npcId, reason);
       },
     );
@@ -116,7 +121,11 @@ export class MeetingFloorController {
       return { kind: "speaker", npcId: speaker.npcId, pollResult: null };
     }
 
-    const { raises, passes } = await this.pollCandidates(candidates, ctx.runtimeFor, ctx.remainingTurns);
+    const { raises, passes } = await this.pollCandidates(
+      candidates,
+      ctx.runtimeFor,
+      ctx.remainingTurns,
+    );
     const pollResult: PollReport = {
       raises: raises.map((r) => ({ npcId: r.npcId, reason: r.reason })),
       passes,

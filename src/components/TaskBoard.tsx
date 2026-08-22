@@ -8,7 +8,16 @@ import NpcAssignModal from "./NpcAssignModal";
 import DroppableColumn from "./DroppableColumn";
 import DraggableTaskCard from "./DraggableTaskCard";
 import { useT } from "@/lib/i18n";
-import { ClipboardList, X, Clock, Loader, CheckCircle, PauseCircle, Inbox, FileText } from "lucide-react";
+import {
+  ClipboardList,
+  X,
+  Clock,
+  Loader,
+  CheckCircle,
+  PauseCircle,
+  Inbox,
+  FileText,
+} from "lucide-react";
 import type { Socket } from "socket.io-client";
 
 interface NpcInfo {
@@ -31,11 +40,41 @@ interface TaskBoardProps {
 }
 
 const COLUMNS = [
-  { status: "backlog", labelKey: "task.backlog", colorClass: "text-text-muted", bgClass: "bg-text-muted/20", Icon: Inbox },
-  { status: "pending", labelKey: "task.pending", colorClass: "text-npc", bgClass: "bg-npc/20", Icon: Clock },
-  { status: "in_progress", labelKey: "task.inProgress", colorClass: "text-danger", bgClass: "bg-danger/20", Icon: Loader },
-  { status: "stalled", labelKey: "task.stalled", colorClass: "text-warning", bgClass: "bg-warning/20", Icon: PauseCircle },
-  { status: "done", labelKey: "task.done", colorClass: "text-success", bgClass: "bg-success/20", Icon: CheckCircle },
+  {
+    status: "backlog",
+    labelKey: "task.backlog",
+    colorClass: "text-text-muted",
+    bgClass: "bg-text-muted/20",
+    Icon: Inbox,
+  },
+  {
+    status: "pending",
+    labelKey: "task.pending",
+    colorClass: "text-npc",
+    bgClass: "bg-npc/20",
+    Icon: Clock,
+  },
+  {
+    status: "in_progress",
+    labelKey: "task.inProgress",
+    colorClass: "text-danger",
+    bgClass: "bg-danger/20",
+    Icon: Loader,
+  },
+  {
+    status: "stalled",
+    labelKey: "task.stalled",
+    colorClass: "text-warning",
+    bgClass: "bg-warning/20",
+    Icon: PauseCircle,
+  },
+  {
+    status: "done",
+    labelKey: "task.done",
+    colorClass: "text-success",
+    bgClass: "bg-success/20",
+    Icon: CheckCircle,
+  },
 ] as const;
 
 export default function TaskBoard({
@@ -76,13 +115,16 @@ export default function TaskBoard({
 
   const filtered = filterNpc ? tasks.filter((t) => t.npcId === filterNpc) : tasks;
 
-  const groupedTasks = useMemo(() => ({
-    backlog: filtered.filter((t) => t.status === "backlog"),
-    pending: filtered.filter((t) => t.status === "pending"),
-    in_progress: filtered.filter((t) => t.status === "in_progress"),
-    stalled: filtered.filter((t) => t.status === "stalled"),
-    done: filtered.filter((t) => t.status === "complete" || t.status === "cancelled"),
-  }), [filtered]);
+  const groupedTasks = useMemo(
+    () => ({
+      backlog: filtered.filter((t) => t.status === "backlog"),
+      pending: filtered.filter((t) => t.status === "pending"),
+      in_progress: filtered.filter((t) => t.status === "in_progress"),
+      stalled: filtered.filter((t) => t.status === "stalled"),
+      done: filtered.filter((t) => t.status === "complete" || t.status === "cancelled"),
+    }),
+    [filtered],
+  );
 
   const npcOptions = useMemo(() => {
     return npcs.map((npc) => ({
@@ -94,50 +136,70 @@ export default function TaskBoard({
     }));
   }, [npcs, tasks]);
 
-  const handleCreateTask = useCallback((title: string, summary: string) => {
-    if (!socket) return;
-    socket.emit("task:create", { channelId, title, summary: summary || undefined });
-    setShowCreateForm(false);
-  }, [socket, channelId]);
+  const handleCreateTask = useCallback(
+    (title: string, summary: string) => {
+      if (!socket) return;
+      socket.emit("task:create", { channelId, title, summary: summary || undefined });
+      setShowCreateForm(false);
+    },
+    [socket, channelId],
+  );
 
-  const handleDrop = useCallback((taskId: string, fromStatus: string, toStatus: string) => {
-    if (!socket) return;
+  const handleDrop = useCallback(
+    (taskId: string, fromStatus: string, toStatus: string) => {
+      if (!socket) return;
 
-    const actualToStatus = toStatus === "done" ? "complete" : toStatus;
-    const actualFromStatus = fromStatus === "done" ? "complete" : fromStatus;
-    if (actualFromStatus === actualToStatus) return;
+      const actualToStatus = toStatus === "done" ? "complete" : toStatus;
+      const actualFromStatus = fromStatus === "done" ? "complete" : fromStatus;
+      if (actualFromStatus === actualToStatus) return;
 
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
 
-    const needsNpc = !task.npcId && actualToStatus !== "backlog" && actualToStatus !== "cancelled";
-    if (needsNpc) {
-      setAssignModal({ taskId, taskTitle: task.title, toStatus: actualToStatus });
-      return;
-    }
+      const needsNpc =
+        !task.npcId && actualToStatus !== "backlog" && actualToStatus !== "cancelled";
+      if (needsNpc) {
+        setAssignModal({ taskId, taskTitle: task.title, toStatus: actualToStatus });
+        return;
+      }
 
-    socket.emit("task:move", { taskId, toStatus: actualToStatus });
-  }, [socket, tasks]);
+      socket.emit("task:move", { taskId, toStatus: actualToStatus });
+    },
+    [socket, tasks],
+  );
 
-  const handleAssignFromModal = useCallback((npcId: string) => {
-    if (!socket || !assignModal) return;
-    socket.emit("task:move", { taskId: assignModal.taskId, toStatus: assignModal.toStatus, npcId });
-    setAssignModal(null);
-  }, [socket, assignModal]);
+  const handleAssignFromModal = useCallback(
+    (npcId: string) => {
+      if (!socket || !assignModal) return;
+      socket.emit("task:move", {
+        taskId: assignModal.taskId,
+        toStatus: assignModal.toStatus,
+        npcId,
+      });
+      setAssignModal(null);
+    },
+    [socket, assignModal],
+  );
 
-  const handleAssignClick = useCallback((taskId: string) => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-    setAssignModal({ taskId, taskTitle: task.title, toStatus: "in_progress" });
-  }, [tasks]);
+  const handleAssignClick = useCallback(
+    (taskId: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      setAssignModal({ taskId, taskTitle: task.title, toStatus: "in_progress" });
+    },
+    [tasks],
+  );
 
-  const handleTaskClick = useCallback((taskId: string) => {
-    if (!socket) return;
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-    setReportModal({ task, message: null, loading: true });
-    socket.emit("task:get-report", { taskId });
-  }, [socket, tasks]);
+  const handleTaskClick = useCallback(
+    (taskId: string) => {
+      if (!socket) return;
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      setReportModal({ task, message: null, loading: true });
+      socket.emit("task:get-report", { taskId });
+    },
+    [socket, tasks],
+  );
 
   useEffect(() => {
     if (!socket) return;
@@ -148,19 +210,28 @@ export default function TaskBoard({
       });
     };
     socket.on("task:report", handler);
-    return () => { socket.off("task:report", handler); };
+    return () => {
+      socket.off("task:report", handler);
+    };
   }, [socket]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="theme-game fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-surface-raised rounded-xl border border-border w-[95vw] max-w-[1100px] h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="theme-game fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onClose}
+    >
+      <div
+        className="bg-surface-raised rounded-xl border border-border w-[95vw] max-w-[1100px] h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="px-4 py-3 border-b border-border flex justify-between items-center">
           <div className="flex items-center gap-3">
             <span className="text-title text-text flex items-center gap-1.5">
-              <ClipboardList className="w-4 h-4" />{t("task.board")}
+              <ClipboardList className="w-4 h-4" />
+              {t("task.board")}
             </span>
             <div className="flex gap-1">
               <button
@@ -184,7 +255,9 @@ export default function TaskBoard({
               ))}
             </div>
           </div>
-          <button onClick={onClose} className="text-text-muted hover:text-white"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-text-muted hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Kanban Columns */}
@@ -197,16 +270,19 @@ export default function TaskBoard({
                 status={col.status}
                 onDrop={handleDrop}
                 header={
-                  <div className={`text-[13px] ${col.colorClass} font-bold mb-2 flex justify-between`}>
+                  <div
+                    className={`text-[13px] ${col.colorClass} font-bold mb-2 flex justify-between`}
+                  >
                     <span className="flex items-center gap-1">
-                      <col.Icon className="w-3.5 h-3.5" />{t(col.labelKey)}
+                      <col.Icon className="w-3.5 h-3.5" />
+                      {t(col.labelKey)}
                     </span>
                     <span className={`${col.bgClass} px-1.5 rounded`}>{colTasks.length}</span>
                   </div>
                 }
               >
-                {col.status === "backlog" && (
-                  showCreateForm ? (
+                {col.status === "backlog" &&
+                  (showCreateForm ? (
                     <TaskCreateForm
                       onSubmit={handleCreateTask}
                       onCancel={() => setShowCreateForm(false)}
@@ -218,8 +294,7 @@ export default function TaskBoard({
                     >
                       + {t("task.createNew")}
                     </button>
-                  )
-                )}
+                  ))}
                 {colTasks.map((task) => (
                   <DraggableTaskCard key={task.id} taskId={task.id} status={col.status}>
                     <TaskCard
@@ -258,13 +333,25 @@ export default function TaskBoard({
 
       {/* Task Report Modal */}
       {reportModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={() => setReportModal(null)}>
-          <div className="bg-surface-raised rounded-xl border border-border w-[90vw] max-w-[500px] max-h-[60vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
+          onClick={() => setReportModal(null)}
+        >
+          <div
+            className="bg-surface-raised rounded-xl border border-border w-[90vw] max-w-[500px] max-h-[60vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-4 py-3 border-b border-border flex justify-between items-center">
               <span className="text-text font-bold text-[13px] flex items-center gap-1.5">
-                <FileText className="w-4 h-4" />{t("task.reportDetail")}
+                <FileText className="w-4 h-4" />
+                {t("task.reportDetail")}
               </span>
-              <button onClick={() => setReportModal(null)} className="text-text-muted hover:text-white"><X className="w-4 h-4" /></button>
+              <button
+                onClick={() => setReportModal(null)}
+                className="text-text-muted hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
             <div className="px-4 py-3 border-b border-border">
               <div className="text-text font-bold text-[13px] mb-1">{reportModal.task.title}</div>
@@ -277,11 +364,17 @@ export default function TaskBoard({
             </div>
             <div className="flex-1 overflow-y-auto px-4 py-3">
               {reportModal.loading ? (
-                <div className="text-text-muted text-[12px] text-center py-4">{t("task.reportLoading")}</div>
+                <div className="text-text-muted text-[12px] text-center py-4">
+                  {t("task.reportLoading")}
+                </div>
               ) : reportModal.message ? (
-                <div className="text-text text-[12px] whitespace-pre-wrap leading-relaxed">{reportModal.message}</div>
+                <div className="text-text text-[12px] whitespace-pre-wrap leading-relaxed">
+                  {reportModal.message}
+                </div>
               ) : (
-                <div className="text-text-dim text-[12px] text-center py-4">{t("task.noReport")}</div>
+                <div className="text-text-dim text-[12px] text-center py-4">
+                  {t("task.noReport")}
+                </div>
               )}
             </div>
           </div>

@@ -84,7 +84,12 @@ test("registerMeetingSocketHandlers joins the room and emits meeting state", asy
         access: { allowed: true },
       }),
       emitChannelAccessDenied: (_socket, input) => {
-        calls.push({ type: "emit", target: "self", event: "channel:access-denied", payload: input });
+        calls.push({
+          type: "emit",
+          target: "self",
+          event: "channel:access-denied",
+          payload: input,
+        });
       },
     },
   });
@@ -123,7 +128,12 @@ test("registerMeetingSocketHandlers rejects meeting chat from sockets outside th
         access: { allowed: true },
       }),
       emitChannelAccessDenied: (_socket, input) => {
-        calls.push({ type: "emit", target: "self", event: "channel:access-denied", payload: input });
+        calls.push({
+          type: "emit",
+          target: "self",
+          event: "channel:access-denied",
+          payload: input,
+        });
       },
     },
   });
@@ -154,7 +164,9 @@ test("deliverMeetingNpcAnswer가 세션 참조 영속화 실패에도 답변과 
       order.push("persist");
       throw new Error("db down");
     },
-    onPersistError: (err) => { loggedError = err; },
+    onPersistError: (err) => {
+      loggedError = err;
+    },
   });
 
   assert.deepEqual(order, ["done", "message", "persist"], "영속화는 확정 전달 이후에만 시도한다");

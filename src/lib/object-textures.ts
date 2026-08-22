@@ -4,7 +4,10 @@ import { OBJECT_TYPES } from "./object-types";
 const TILE = 32;
 
 // Draw functions for each object type — each draws into a Graphics at (0,0)
-const OBJECT_DRAWERS: Record<string, (g: Phaser.GameObjects.Graphics, w: number, h: number) => void> = {
+const OBJECT_DRAWERS: Record<
+  string,
+  (g: Phaser.GameObjects.Graphics, w: number, h: number) => void
+> = {
   desk: (g, w, h) => {
     // Desk top
     g.fillStyle(0x6b4226);
@@ -179,15 +182,18 @@ function generateFlippedTexture(
   scene: Phaser.Scene,
   sourceKey: string,
   targetKey: string,
-  w: number, h: number,
-  flipX: boolean, flipY: boolean,
+  w: number,
+  h: number,
+  flipX: boolean,
+  flipY: boolean,
 ): void {
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
 
-  const sourceImage = scene.textures.get(sourceKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+  const sourceImage = scene.textures.get(sourceKey).getSourceImage() as
+    HTMLImageElement | HTMLCanvasElement;
 
   ctx.save();
   if (flipX) {
@@ -208,7 +214,8 @@ function generateTintedTexture(
   scene: Phaser.Scene,
   sourceKey: string,
   targetKey: string,
-  w: number, h: number,
+  w: number,
+  h: number,
   brightness: number, // 0-1, where 1 = no change, 0.75 = slightly darker
 ): void {
   const canvas = document.createElement("canvas");
@@ -216,7 +223,8 @@ function generateTintedTexture(
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
 
-  const sourceImage = scene.textures.get(sourceKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+  const sourceImage = scene.textures.get(sourceKey).getSourceImage() as
+    HTMLImageElement | HTMLCanvasElement;
   ctx.drawImage(sourceImage, 0, 0);
 
   // Darken overlay

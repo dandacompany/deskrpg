@@ -21,15 +21,29 @@ function capturing(): { adapter: NpcAdapter; prompts: string[] } {
         prompts.push(o.prompt);
         return { response: "네", session: { sessionRef: o.sessionKey } };
       },
-      async testConnection() { return { status: "ok" as const }; },
+      async testConnection() {
+        return { status: "ok" as const };
+      },
     } as NpcAdapter,
   };
 }
 
-function participant(npcId: string, adapter: NpcAdapter, over: Partial<EngineParticipant> = {}): EngineParticipant {
+function participant(
+  npcId: string,
+  adapter: NpcAdapter,
+  over: Partial<EngineParticipant> = {},
+): EngineParticipant {
   return {
-    npcId, displayName: npcId, seated: true, turnCount: 0, lastSpokeAt: 0,
-    sessionKey: `sk-${npcId}`, adapter, role: "팀장", passPolicy: "확신 없으면 넘기세요", ...over,
+    npcId,
+    displayName: npcId,
+    seated: true,
+    turnCount: 0,
+    lastSpokeAt: 0,
+    sessionKey: `sk-${npcId}`,
+    adapter,
+    role: "팀장",
+    passPolicy: "확신 없으면 넘기세요",
+    ...over,
   };
 }
 

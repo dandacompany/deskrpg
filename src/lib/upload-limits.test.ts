@@ -18,7 +18,10 @@ test("main upload size rejects oversized payloads", () => {
 
 test("auxiliary upload size rejects oversized image payloads", () => {
   assert.equal(validateAuxiliaryUploadSize(MAX_AUXILIARY_UPLOAD_BYTES), null);
-  assert.equal(validateAuxiliaryUploadSize(MAX_AUXILIARY_UPLOAD_BYTES + 1), "upload_file_too_large");
+  assert.equal(
+    validateAuxiliaryUploadSize(MAX_AUXILIARY_UPLOAD_BYTES + 1),
+    "upload_file_too_large",
+  );
 });
 
 test("archive budget rejects too many entries", () => {
@@ -37,10 +40,7 @@ test("archive budget rejects too many entries", () => {
 });
 
 test("archive budget rejects total extracted bytes above limit", () => {
-  const result = consumeArchiveEntry(
-    { entries: 1, totalBytes: MAX_ARCHIVE_TOTAL_BYTES - 64 },
-    128,
-  );
+  const result = consumeArchiveEntry({ entries: 1, totalBytes: MAX_ARCHIVE_TOTAL_BYTES - 64 }, 128);
   assert.equal(result.ok, false);
   if (result.ok) throw new Error("expected total bytes overflow");
   assert.equal(result.errorCode, "upload_archive_too_large");

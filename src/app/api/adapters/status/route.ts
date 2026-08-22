@@ -48,10 +48,13 @@ export async function GET(req: NextRequest) {
 
   const registry = createHealthRegistry();
   const adapterEntries = await Promise.all(
-    registry.listInstalled().sort().map(async (type) => {
-      const result = await registry.get(type).testConnection({});
-      return [type, toStatusPayload(result)] as const;
-    }),
+    registry
+      .listInstalled()
+      .sort()
+      .map(async (type) => {
+        const result = await registry.get(type).testConnection({});
+        return [type, toStatusPayload(result)] as const;
+      }),
   );
 
   return NextResponse.json({

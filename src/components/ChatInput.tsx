@@ -40,7 +40,9 @@ export default function ChatInput({
     el.style.height = Math.min(el.scrollHeight, 120) + "px"; // max ~5 lines
   }, []);
 
-  useEffect(() => { adjustHeight(); }, [input, adjustHeight]);
+  useEffect(() => {
+    adjustHeight();
+  }, [input, adjustHeight]);
 
   // Auto-focus when enabled
   useEffect(() => {
@@ -69,15 +71,18 @@ export default function ChatInput({
     }
   }, [input, files, cooldown, disabled, onSend]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Prevent Phaser from capturing keys while focused
-    e.stopPropagation();
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Prevent Phaser from capturing keys while focused
+      e.stopPropagation();
 
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      handleSend();
-    }
-  }, [handleSend]);
+      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+        e.preventDefault();
+        handleSend();
+      }
+    },
+    [handleSend],
+  );
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files;
@@ -105,7 +110,10 @@ export default function ChatInput({
       {files.length > 0 && (
         <div className="flex gap-2 mb-2 flex-wrap">
           {files.map((f, i) => (
-            <div key={i} className="flex items-center gap-1 bg-gray-800 rounded px-2 py-1 text-xs text-gray-300">
+            <div
+              key={i}
+              className="flex items-center gap-1 bg-gray-800 rounded px-2 py-1 text-xs text-gray-300"
+            >
               <span className="truncate max-w-[120px]">{f.name}</span>
               <span className="text-gray-500">({(f.size / 1024).toFixed(0)}KB)</span>
               <button
@@ -132,7 +140,17 @@ export default function ChatInput({
               title={t("chat.attachFile")}
               aria-label={t("chat.attachFile")}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
               </svg>
             </button>
@@ -151,13 +169,23 @@ export default function ChatInput({
         <textarea
           ref={textareaRef}
           value={input}
-          onChange={(e) => { if (!disabled) setInput(e.target.value.slice(0, maxLength)); }}
+          onChange={(e) => {
+            if (!disabled) setInput(e.target.value.slice(0, maxLength));
+          }}
           onKeyDown={handleKeyDown}
-          placeholder={cooldown ? t("chat.cooldown") : (disabled ? resolvedDisabledPlaceholder : resolvedPlaceholder)}
+          placeholder={
+            cooldown
+              ? t("chat.cooldown")
+              : disabled
+                ? resolvedDisabledPlaceholder
+                : resolvedPlaceholder
+          }
           rows={1}
           readOnly={disabled}
           className={`flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border focus:outline-none text-sm min-w-0 resize-none overflow-hidden leading-5 ${
-            disabled ? "border-gray-700 text-gray-500" : `border-gray-600 focus:border-${accentColor}-500`
+            disabled
+              ? "border-gray-700 text-gray-500"
+              : `border-gray-600 focus:border-${accentColor}-500`
           }`}
           style={{ maxHeight: "120px" }}
         />
@@ -175,7 +203,9 @@ export default function ChatInput({
       {/* Character count */}
       {input.length > maxLength * 0.8 && (
         <div className="text-right mt-1">
-          <span className={`text-[10px] ${input.length >= maxLength ? "text-red-400" : "text-gray-500"}`}>
+          <span
+            className={`text-[10px] ${input.length >= maxLength ? "text-red-400" : "text-gray-500"}`}
+          >
             {input.length}/{maxLength}
           </span>
         </div>

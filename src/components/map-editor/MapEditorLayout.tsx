@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   useMapEditor,
   createDefaultMap,
@@ -9,37 +9,36 @@ import {
   getBuiltinTilesetInfo,
   BUILTIN_TILESET_NAME,
   isCoreLayer,
-} from './hooks/useMapEditor';
+} from "./hooks/useMapEditor";
 import type {
   TiledMap,
   TiledTileset,
   TilesetImageInfo,
   TileRegion,
   TiledLayer,
-} from './hooks/useMapEditor';
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { Plus, Stamp } from 'lucide-react';
-import { useT } from '@/lib/i18n';
-import { getLocalizedErrorMessage } from '@/lib/i18n/error-codes';
-import Tooltip from './Tooltip';
-import Toolbar from './Toolbar';
-import LayerPanel from './LayerPanel';
-import TilePalette from './TilePalette';
-import Minimap from './Minimap';
-import { MapCanvas } from './MapCanvas';
-import HelpModal from './HelpModal';
-import ImportTilesetModal from './ImportTilesetModal';
-import PixelEditorModal from './PixelEditorModal';
-import type { ImportTilesetResult } from './ImportTilesetModal';
-import { exportTmx } from '@/lib/tmx-exporter';
-import ProjectBrowser from './ProjectBrowser';
-import { useProjectManager } from './hooks/useProjectManager';
-import StampPanel from './StampPanel';
-import SaveStampModal from './SaveStampModal';
-import StampEditorModal from './StampEditorModal';
-import type { StampListItem, StampData } from '@/lib/stamp-utils';
-import { buildGidRemapTable, findLayerByName } from '@/lib/stamp-utils';
-
+} from "./hooks/useMapEditor";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { Plus, Stamp } from "lucide-react";
+import { useT } from "@/lib/i18n";
+import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
+import Tooltip from "./Tooltip";
+import Toolbar from "./Toolbar";
+import LayerPanel from "./LayerPanel";
+import TilePalette from "./TilePalette";
+import Minimap from "./Minimap";
+import { MapCanvas } from "./MapCanvas";
+import HelpModal from "./HelpModal";
+import ImportTilesetModal from "./ImportTilesetModal";
+import PixelEditorModal from "./PixelEditorModal";
+import type { ImportTilesetResult } from "./ImportTilesetModal";
+import { exportTmx } from "@/lib/tmx-exporter";
+import ProjectBrowser from "./ProjectBrowser";
+import { useProjectManager } from "./hooks/useProjectManager";
+import StampPanel from "./StampPanel";
+import SaveStampModal from "./SaveStampModal";
+import StampEditorModal from "./StampEditorModal";
+import type { StampListItem, StampData } from "@/lib/stamp-utils";
+import { buildGidRemapTable, findLayerByName } from "@/lib/stamp-utils";
 
 // === Props ===
 
@@ -55,14 +54,14 @@ interface MapEditorLayoutProps {
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-function downloadString(content: string, filename: string, mime = 'application/json') {
+function downloadString(content: string, filename: string, mime = "application/json") {
   const blob = new Blob([content], { type: mime });
   downloadBlob(blob, filename);
 }
@@ -79,16 +78,17 @@ export default function MapEditorLayout({
   const router = useRouter();
   const t = useT();
   const { state, dispatch, findTileset } = useMapEditor();
-  const displayProjectName = state.projectName || t('mapEditor.newMap.defaultName');
+  const displayProjectName = state.projectName || t("mapEditor.newMap.defaultName");
 
   // useProjectManager needs addBuiltinTileset which is defined below;
   // use a ref to avoid stale closure issues.
   const addBuiltinTilesetRef = useRef<(mapData: TiledMap) => void>(() => {});
-  const { loadProject, saveProject, createProject, linkTileset, linkStamp, unlinkStamp } = useProjectManager({
-    dispatch,
-    addBuiltinTileset: (mapData) => addBuiltinTilesetRef.current(mapData),
-    t,
-  });
+  const { loadProject, saveProject, createProject, linkTileset, linkStamp, unlinkStamp } =
+    useProjectManager({
+      dispatch,
+      addBuiltinTileset: (mapData) => addBuiltinTilesetRef.current(mapData),
+      t,
+    });
 
   const [projectLoaded, setProjectLoaded] = useState(false);
 
@@ -112,7 +112,9 @@ export default function MapEditorLayout({
   const [savingStamp, setSavingStamp] = useState(false);
   const [editingStamp, setEditingStamp] = useState<StampData | null>(null);
   const [showStampEditor, setShowStampEditor] = useState(false);
-  const pixelEditorStampCallbackRef = useRef<((dataUrl: string, newCols: number, newRows: number) => void) | null>(null);
+  const pixelEditorStampCallbackRef = useRef<
+    ((dataUrl: string, newCols: number, newRows: number) => void) | null
+  >(null);
 
   // Pan (space-held) state
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -122,53 +124,75 @@ export default function MapEditorLayout({
   const [panelWidth, setPanelWidth] = useState(300);
 
   // Left panel section order & collapsed state
-  const DEFAULT_SECTION_ORDER = ['layers', 'tilesets', 'stamps', 'minimap'];
+  const DEFAULT_SECTION_ORDER = ["layers", "tilesets", "stamps", "minimap"];
   const [sectionOrder, setSectionOrder] = useState<string[]>(DEFAULT_SECTION_ORDER);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   // Hydration-safe: load from localStorage after mount
   useEffect(() => {
     try {
-      const v = localStorage.getItem('mapEditor.sectionOrder');
+      const v = localStorage.getItem("mapEditor.sectionOrder");
       if (v) {
         const parsed = JSON.parse(v) as string[];
-        if (!parsed.includes('stamps')) {
-          const idx = parsed.indexOf('tilesets');
-          parsed.splice(idx >= 0 ? idx + 1 : parsed.length, 0, 'stamps');
+        if (!parsed.includes("stamps")) {
+          const idx = parsed.indexOf("tilesets");
+          parsed.splice(idx >= 0 ? idx + 1 : parsed.length, 0, "stamps");
         }
         setSectionOrder(parsed);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     try {
-      const v = localStorage.getItem('mapEditor.collapsedSections');
+      const v = localStorage.getItem("mapEditor.collapsedSections");
       if (v) setCollapsedSections(JSON.parse(v));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     try {
-      const v = localStorage.getItem('mapEditor.sectionVisibility');
+      const v = localStorage.getItem("mapEditor.sectionVisibility");
       if (v) {
         const parsed = JSON.parse(v) as Record<string, boolean>;
         if (parsed.stamps === undefined) parsed.stamps = true;
         setSectionVisibility(parsed);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const [sectionVisibility, setSectionVisibility] = useState<Record<string, boolean>>({ layers: true, tilesets: true, stamps: true, minimap: true });
+  const [sectionVisibility, setSectionVisibility] = useState<Record<string, boolean>>({
+    layers: true,
+    tilesets: true,
+    stamps: true,
+    minimap: true,
+  });
   // Persist view settings to localStorage
-  useEffect(() => { localStorage.setItem('mapEditor.sectionOrder', JSON.stringify(sectionOrder)); }, [sectionOrder]);
-  useEffect(() => { localStorage.setItem('mapEditor.collapsedSections', JSON.stringify(collapsedSections)); }, [collapsedSections]);
-  useEffect(() => { localStorage.setItem('mapEditor.sectionVisibility', JSON.stringify(sectionVisibility)); }, [sectionVisibility]);
+  useEffect(() => {
+    localStorage.setItem("mapEditor.sectionOrder", JSON.stringify(sectionOrder));
+  }, [sectionOrder]);
+  useEffect(() => {
+    localStorage.setItem("mapEditor.collapsedSections", JSON.stringify(collapsedSections));
+  }, [collapsedSections]);
+  useEffect(() => {
+    localStorage.setItem("mapEditor.sectionVisibility", JSON.stringify(sectionVisibility));
+  }, [sectionVisibility]);
 
   // --- Keyboard shortcuts ---
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
-      if (e.key === 'Escape' && activeStamp) {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      )
+        return;
+      if (e.key === "Escape" && activeStamp) {
         e.preventDefault();
         setActiveStamp(null);
       }
     };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
   }, [activeStamp]);
 
   const dragSectionRef = useRef<string | null>(null);
@@ -187,8 +211,6 @@ export default function MapEditorLayout({
     gid: number;
   } | null>(null);
 
-
-
   // File input refs
   const tilesetFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -205,16 +227,18 @@ export default function MapEditorLayout({
       loadProject(initialProjectId)
         .then((data) => {
           if (data) {
-            setStamps(data.stamps.map(s => ({
-              id: s.id,
-              name: s.name,
-              cols: s.cols,
-              rows: s.rows,
-              thumbnail: s.thumbnail ?? null,
-              layerNames: s.layerNames,
-            })));
+            setStamps(
+              data.stamps.map((s) => ({
+                id: s.id,
+                name: s.name,
+                cols: s.cols,
+                rows: s.rows,
+                thumbnail: s.thumbnail ?? null,
+                layerNames: s.layerNames,
+              })),
+            );
             // Add built-in color palette if not already present
-            const hasBuiltin = data.tilesets?.some(ts => ts.name === BUILTIN_TILESET_NAME);
+            const hasBuiltin = data.tilesets?.some((ts) => ts.name === BUILTIN_TILESET_NAME);
             if (!hasBuiltin) {
               addBuiltinTilesetRef.current(data.project.tiledJson);
             }
@@ -222,9 +246,9 @@ export default function MapEditorLayout({
           }
         })
         .catch((err) => {
-          console.error('Failed to load project:', err);
-          alert(err instanceof Error ? err.message : t('errors.failedToFetchProject'));
-          router.push('/map-editor');
+          console.error("Failed to load project:", err);
+          alert(err instanceof Error ? err.message : t("errors.failedToFetchProject"));
+          router.push("/map-editor");
         });
     }
   }, [initialProjectId, loadProject, router, t]);
@@ -250,39 +274,47 @@ export default function MapEditorLayout({
         e.preventDefault();
       }
     };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
   }, [state.dirty]);
 
   // === Document title ===
 
   useEffect(() => {
-    document.title = `${t('mapEditor.toolbar.title')} - ${displayProjectName}`;
+    document.title = `${t("mapEditor.toolbar.title")} - ${displayProjectName}`;
     return () => {
-      document.title = 'DeskRPG';
+      document.title = "DeskRPG";
     };
   }, [displayProjectName, t]);
 
   // === Rename project ===
 
-  const handleProjectNameChange = useCallback(async (newName: string) => {
-    if (!state.projectId) return;
-    try {
-      await fetch(`/api/projects/${state.projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName }),
-      });
-      dispatch({ type: 'SET_MAP', mapData: state.mapData!, projectName: newName, projectId: state.projectId });
-    } catch (err) {
-      console.error('Rename failed:', err);
-    }
-  }, [state.projectId, state.mapData, dispatch]);
+  const handleProjectNameChange = useCallback(
+    async (newName: string) => {
+      if (!state.projectId) return;
+      try {
+        await fetch(`/api/projects/${state.projectId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: newName }),
+        });
+        dispatch({
+          type: "SET_MAP",
+          mapData: state.mapData!,
+          projectName: newName,
+          projectId: state.projectId,
+        });
+      } catch (err) {
+        console.error("Rename failed:", err);
+      }
+    },
+    [state.projectId, state.mapData, dispatch],
+  );
 
   // === Confirm if dirty before destructive action ===
 
   const confirmIfDirty = useCallback(
-    (message = t('common.unsavedChangesContinue')) => {
+    (message = t("common.unsavedChangesContinue")) => {
       if (!state.dirty) return true;
       return window.confirm(message);
     },
@@ -337,7 +369,7 @@ export default function MapEditorLayout({
         name: BUILTIN_TILESET_NAME,
       };
 
-      dispatch({ type: 'ADD_TILESET', tileset, imageInfo });
+      dispatch({ type: "ADD_TILESET", tileset, imageInfo });
     },
     [dispatch],
   );
@@ -355,20 +387,20 @@ export default function MapEditorLayout({
 
         // Get image as base64
         let imageDataUrl = ts.image;
-        if (!imageDataUrl.startsWith('data:') && imgInfo.img) {
-          const canvas = document.createElement('canvas');
+        if (!imageDataUrl.startsWith("data:") && imgInfo.img) {
+          const canvas = document.createElement("canvas");
           canvas.width = imgInfo.img.naturalWidth || imgInfo.img.width;
           canvas.height = imgInfo.img.naturalHeight || imgInfo.img.height;
-          const ctx = canvas.getContext('2d')!;
+          const ctx = canvas.getContext("2d")!;
           ctx.drawImage(imgInfo.img, 0, 0);
-          imageDataUrl = canvas.toDataURL('image/png');
+          imageDataUrl = canvas.toDataURL("image/png");
         }
 
         // Upsert tileset to DB
         try {
-          const saveRes = await fetch('/api/tilesets', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+          const saveRes = await fetch("/api/tilesets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               name: ts.name,
               tilewidth: ts.tilewidth,
@@ -383,8 +415,8 @@ export default function MapEditorLayout({
             const tilesetDbId = saved.id ?? saved.id;
             // Link to project (ignore duplicate errors)
             await fetch(`/api/projects/${state.projectId}/tilesets`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ tilesetId: tilesetDbId, firstgid: ts.firstgid }),
             }).catch(() => {});
           }
@@ -398,14 +430,14 @@ export default function MapEditorLayout({
         const tw = mapData.tilewidth;
         const th = mapData.tileheight;
         const THUMB_SCALE = 0.25;
-        const thumbCanvas = document.createElement('canvas');
+        const thumbCanvas = document.createElement("canvas");
         thumbCanvas.width = Math.round(mapData.width * tw * THUMB_SCALE);
         thumbCanvas.height = Math.round(mapData.height * th * THUMB_SCALE);
-        const ctx = thumbCanvas.getContext('2d')!;
+        const ctx = thumbCanvas.getContext("2d")!;
         ctx.imageSmoothingEnabled = false;
         for (const layer of mapData.layers) {
-          if (layer.type !== 'tilelayer' || !layer.data || !layer.visible) continue;
-          if (layer.name.toLowerCase() === 'collision') continue;
+          if (layer.type !== "tilelayer" || !layer.data || !layer.visible) continue;
+          if (layer.name.toLowerCase() === "collision") continue;
           for (let y = 0; y < mapData.height; y++) {
             for (let x = 0; x < mapData.width; x++) {
               const gid = layer.data[y * mapData.width + x];
@@ -416,27 +448,35 @@ export default function MapEditorLayout({
               const sx = (localId % tsInfo.columns) * tsInfo.tilewidth;
               const sy = Math.floor(localId / tsInfo.columns) * tsInfo.tileheight;
               ctx.drawImage(
-                tsInfo.img, sx, sy, tsInfo.tilewidth, tsInfo.tileheight,
-                Math.round(x * tw * THUMB_SCALE), Math.round(y * th * THUMB_SCALE),
-                Math.round(tw * THUMB_SCALE), Math.round(th * THUMB_SCALE),
+                tsInfo.img,
+                sx,
+                sy,
+                tsInfo.tilewidth,
+                tsInfo.tileheight,
+                Math.round(x * tw * THUMB_SCALE),
+                Math.round(y * th * THUMB_SCALE),
+                Math.round(tw * THUMB_SCALE),
+                Math.round(th * THUMB_SCALE),
               );
             }
           }
         }
-        thumbnail = thumbCanvas.toDataURL('image/jpeg', 0.8);
-      } catch { /* skip */ }
+        thumbnail = thumbCanvas.toDataURL("image/jpeg", 0.8);
+      } catch {
+        /* skip */
+      }
       // Strip base64 images from tiledJson to reduce body size — images are stored separately in DB
       const cleanMapData = {
         ...state.mapData,
-        tilesets: state.mapData.tilesets.map(ts => ({
+        tilesets: state.mapData.tilesets.map((ts) => ({
           ...ts,
-          image: ts.image?.startsWith('data:') ? '' : ts.image,
+          image: ts.image?.startsWith("data:") ? "" : ts.image,
         })),
       };
       await saveProject(state.projectId, cleanMapData, thumbnail);
     } catch (err) {
-      console.error('Save failed:', err);
-      alert(t('settings.failedToSave'));
+      console.error("Save failed:", err);
+      alert(t("settings.failedToSave"));
     }
   }, [state.mapData, state.projectId, state.tilesetImages, saveProject, t]);
 
@@ -449,7 +489,7 @@ export default function MapEditorLayout({
   const handleExportTMX = useCallback(() => {
     if (!state.mapData) return;
     const xml = exportTmx(state.mapData);
-    downloadString(xml, `${displayProjectName}.tmx`, 'application/xml');
+    downloadString(xml, `${displayProjectName}.tmx`, "application/xml");
   }, [state.mapData, displayProjectName]);
 
   const handleExportPNG = useCallback(() => {
@@ -457,15 +497,15 @@ export default function MapEditorLayout({
     const mapData = state.mapData;
     const tw = mapData.tilewidth;
     const th = mapData.tileheight;
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = mapData.width * tw;
     canvas.height = mapData.height * th;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
 
     for (const layer of mapData.layers) {
-      if (layer.type !== 'tilelayer' || !layer.data || !layer.visible) continue;
-      if (layer.name.toLowerCase() === 'collision') continue;
+      if (layer.type !== "tilelayer" || !layer.data || !layer.visible) continue;
+      if (layer.name.toLowerCase() === "collision") continue;
       for (let y = 0; y < mapData.height; y++) {
         for (let x = 0; x < mapData.width; x++) {
           const gid = layer.data[y * mapData.width + x];
@@ -475,7 +515,17 @@ export default function MapEditorLayout({
           const localId = gid - tsInfo.firstgid;
           const sx = (localId % tsInfo.columns) * tsInfo.tilewidth;
           const sy = Math.floor(localId / tsInfo.columns) * tsInfo.tileheight;
-          ctx.drawImage(tsInfo.img, sx, sy, tsInfo.tilewidth, tsInfo.tileheight, x * tw, y * th, tw, th);
+          ctx.drawImage(
+            tsInfo.img,
+            sx,
+            sy,
+            tsInfo.tilewidth,
+            tsInfo.tileheight,
+            x * tw,
+            y * th,
+            tw,
+            th,
+          );
         }
       }
     }
@@ -483,48 +533,53 @@ export default function MapEditorLayout({
     canvas.toBlob((blob) => {
       if (!blob) return;
       downloadBlob(blob, `${displayProjectName}.png`);
-    }, 'image/png');
+    }, "image/png");
   }, [state.mapData, displayProjectName, findTileset]);
 
   // === Save as Template ===
 
   const handleSaveAsTemplate = useCallback(async () => {
     if (!state.mapData) return;
-    const name = window.prompt(t('mapEditor.project.templateNamePrompt'));
+    const name = window.prompt(t("mapEditor.project.templateNamePrompt"));
     if (!name?.trim()) return;
-    const description = window.prompt(t('mapEditor.project.templateDescriptionPrompt')) || '';
+    const description = window.prompt(t("mapEditor.project.templateDescriptionPrompt")) || "";
 
     // Step 1: Ensure all tileset images are saved to DB (reuse project save logic)
     for (const ts of state.mapData.tilesets) {
       const imgInfo = state.tilesetImages[ts.firstgid];
       if (!imgInfo) continue;
       let imageDataUrl = ts.image;
-      if (!imageDataUrl?.startsWith('data:')) {
-        const canvas = document.createElement('canvas');
+      if (!imageDataUrl?.startsWith("data:")) {
+        const canvas = document.createElement("canvas");
         canvas.width = imgInfo.img.naturalWidth || imgInfo.img.width;
         canvas.height = imgInfo.img.naturalHeight || imgInfo.img.height;
-        canvas.getContext('2d')!.drawImage(imgInfo.img, 0, 0);
-        imageDataUrl = canvas.toDataURL('image/png');
+        canvas.getContext("2d")!.drawImage(imgInfo.img, 0, 0);
+        imageDataUrl = canvas.toDataURL("image/png");
       }
       try {
-        await fetch('/api/tileset-images', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        await fetch("/api/tileset-images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: ts.name, image: imageDataUrl,
-            tilewidth: ts.tilewidth, tileheight: ts.tileheight,
-            columns: ts.columns, tilecount: ts.tilecount,
+            name: ts.name,
+            image: imageDataUrl,
+            tilewidth: ts.tilewidth,
+            tileheight: ts.tileheight,
+            columns: ts.columns,
+            tilecount: ts.tilecount,
           }),
         });
-      } catch { /* ignore duplicates */ }
+      } catch {
+        /* ignore duplicates */
+      }
     }
 
     // Step 2: Build tiledJson WITHOUT base64 images (keep tileset metadata only)
     const tiledJson = {
       ...state.mapData,
-      tilesets: state.mapData.tilesets.map(ts => ({
+      tilesets: state.mapData.tilesets.map((ts) => ({
         ...ts,
-        image: ts.image?.startsWith('data:') ? '' : ts.image,
+        image: ts.image?.startsWith("data:") ? "" : ts.image,
       })),
     };
 
@@ -532,8 +587,8 @@ export default function MapEditorLayout({
     let spawnCol = Math.floor(state.mapData.width / 2);
     let spawnRow = Math.floor(state.mapData.height / 2);
     for (const layer of state.mapData.layers) {
-      if (layer.type === 'objectgroup' && layer.objects) {
-        const spawn = layer.objects.find((o: { type?: string }) => o.type === 'spawn');
+      if (layer.type === "objectgroup" && layer.objects) {
+        const spawn = layer.objects.find((o: { type?: string }) => o.type === "spawn");
         if (spawn) {
           spawnCol = Math.floor(spawn.x / state.mapData.tilewidth);
           spawnRow = Math.floor(spawn.y / state.mapData.tileheight);
@@ -549,15 +604,15 @@ export default function MapEditorLayout({
       const tw = mapData.tilewidth;
       const th = mapData.tileheight;
       const THUMB_SCALE = 0.25; // render at 25% of full size
-      const thumbCanvas = document.createElement('canvas');
+      const thumbCanvas = document.createElement("canvas");
       thumbCanvas.width = Math.round(mapData.width * tw * THUMB_SCALE);
       thumbCanvas.height = Math.round(mapData.height * th * THUMB_SCALE);
-      const ctx = thumbCanvas.getContext('2d')!;
+      const ctx = thumbCanvas.getContext("2d")!;
       ctx.imageSmoothingEnabled = false;
 
       for (const layer of mapData.layers) {
-        if (layer.type !== 'tilelayer' || !layer.data || !layer.visible) continue;
-        if (layer.name.toLowerCase() === 'collision') continue;
+        if (layer.type !== "tilelayer" || !layer.data || !layer.visible) continue;
+        if (layer.name.toLowerCase() === "collision") continue;
         for (let y = 0; y < mapData.height; y++) {
           for (let x = 0; x < mapData.width; x++) {
             const gid = layer.data[y * mapData.width + x];
@@ -568,20 +623,28 @@ export default function MapEditorLayout({
             const sx = (localId % tsInfo.columns) * tsInfo.tilewidth;
             const sy = Math.floor(localId / tsInfo.columns) * tsInfo.tileheight;
             ctx.drawImage(
-              tsInfo.img, sx, sy, tsInfo.tilewidth, tsInfo.tileheight,
-              Math.round(x * tw * THUMB_SCALE), Math.round(y * th * THUMB_SCALE),
-              Math.round(tw * THUMB_SCALE), Math.round(th * THUMB_SCALE),
+              tsInfo.img,
+              sx,
+              sy,
+              tsInfo.tilewidth,
+              tsInfo.tileheight,
+              Math.round(x * tw * THUMB_SCALE),
+              Math.round(y * th * THUMB_SCALE),
+              Math.round(tw * THUMB_SCALE),
+              Math.round(th * THUMB_SCALE),
             );
           }
         }
       }
-      thumbnail = thumbCanvas.toDataURL('image/jpeg', 0.8);
-    } catch { /* skip */ }
+      thumbnail = thumbCanvas.toDataURL("image/jpeg", 0.8);
+    } catch {
+      /* skip */
+    }
 
     try {
-      const res = await fetch('/api/map-templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/map-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || undefined,
@@ -594,14 +657,14 @@ export default function MapEditorLayout({
         }),
       });
       if (res.ok) {
-        alert(t('mapEditor.project.templateSaved'));
+        alert(t("mapEditor.project.templateSaved"));
       } else {
         const err = await res.json();
-        alert(getLocalizedErrorMessage(t, err, 'mapEditor.project.templateSaveFailed'));
+        alert(getLocalizedErrorMessage(t, err, "mapEditor.project.templateSaveFailed"));
       }
     } catch (err) {
-      console.error('Failed to save as template:', err);
-      alert(t('mapEditor.project.templateSaveFailed'));
+      console.error("Failed to save as template:", err);
+      alert(t("mapEditor.project.templateSaveFailed"));
     }
   }, [state.mapData, state.tilesetImages, findTileset, t]);
 
@@ -609,13 +672,13 @@ export default function MapEditorLayout({
 
   const handleAddLayer = useCallback(() => {
     if (!state.mapData) return;
-    const name = window.prompt(t('mapEditor.layers.layerNamePrompt'));
+    const name = window.prompt(t("mapEditor.layers.layerNamePrompt"));
     if (!name?.trim()) return;
 
     const layer: TiledLayer = {
       id: state.mapData.nextlayerid,
       name: name.trim(),
-      type: 'tilelayer',
+      type: "tilelayer",
       width: state.mapData.width,
       height: state.mapData.height,
       x: 0,
@@ -625,7 +688,7 @@ export default function MapEditorLayout({
       data: new Array(state.mapData.width * state.mapData.height).fill(0),
     };
     // ADD_LAYER appends to the end; REORDER_LAYERS (or next reorder) will assign depth automatically
-    dispatch({ type: 'ADD_LAYER', layer });
+    dispatch({ type: "ADD_LAYER", layer });
   }, [state.mapData, dispatch, t]);
 
   const handleDeleteLayer = useCallback(
@@ -636,19 +699,19 @@ export default function MapEditorLayout({
       if (!layer) return;
 
       if (isCoreLayer(layer)) {
-        alert(t('mapEditor.layers.cannotDeleteCoreLayer', { name: layer.name }));
+        alert(t("mapEditor.layers.cannotDeleteCoreLayer", { name: layer.name }));
         return;
       }
 
-      if (!window.confirm(t('mapEditor.layers.deleteLayerConfirm', { name: layer.name }))) return;
-      dispatch({ type: 'DELETE_LAYER', index: idx });
+      if (!window.confirm(t("mapEditor.layers.deleteLayerConfirm", { name: layer.name }))) return;
+      dispatch({ type: "DELETE_LAYER", index: idx });
     },
     [state.mapData, state.activeLayerIndex, dispatch, t],
   );
 
   const handleToggleLayerVisibility = useCallback(
     (index: number) => {
-      dispatch({ type: 'TOGGLE_LAYER_VISIBILITY', index });
+      dispatch({ type: "TOGGLE_LAYER_VISIBILITY", index });
     },
     [dispatch],
   );
@@ -658,7 +721,7 @@ export default function MapEditorLayout({
   const handleImportTileset = useCallback(
     (result: ImportTilesetResult) => {
       dispatch({
-        type: 'ADD_TILESET',
+        type: "ADD_TILESET",
         tileset: result.tileset,
         imageInfo: result.imageInfo,
       });
@@ -674,7 +737,7 @@ export default function MapEditorLayout({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file || !state.mapData) return;
-      e.target.value = '';
+      e.target.value = "";
 
       const reader = new FileReader();
       reader.onload = () => {
@@ -686,7 +749,7 @@ export default function MapEditorLayout({
           const columns = Math.max(1, Math.floor(img.naturalWidth / tw));
           const rows = Math.max(1, Math.floor(img.naturalHeight / th));
           const tilecount = columns * rows;
-          const name = file.name.replace(/\.[^.]+$/, '');
+          const name = file.name.replace(/\.[^.]+$/, "");
 
           let firstgid = 1;
           for (const ts of state.mapData!.tilesets) {
@@ -716,7 +779,7 @@ export default function MapEditorLayout({
             name,
           };
 
-          dispatch({ type: 'ADD_TILESET', tileset, imageInfo });
+          dispatch({ type: "ADD_TILESET", tileset, imageInfo });
         };
         img.src = dataUrl;
       };
@@ -736,7 +799,7 @@ export default function MapEditorLayout({
 
       let inUse = false;
       for (const layer of state.mapData.layers) {
-        if (layer.type === 'tilelayer' && layer.data) {
+        if (layer.type === "tilelayer" && layer.data) {
           if (layer.data.some((gid) => gid >= firstgid && gid <= maxGid)) {
             inUse = true;
             break;
@@ -745,10 +808,10 @@ export default function MapEditorLayout({
       }
 
       const msg = inUse
-        ? t('mapEditor.tilesets.deleteInUseConfirm', { name: ts.name })
-        : t('mapEditor.tilesets.deleteConfirm', { name: ts.name });
+        ? t("mapEditor.tilesets.deleteInUseConfirm", { name: ts.name })
+        : t("mapEditor.tilesets.deleteConfirm", { name: ts.name });
       if (!window.confirm(msg)) return;
-      dispatch({ type: 'DELETE_TILESET', firstgid });
+      dispatch({ type: "DELETE_TILESET", firstgid });
     },
     [state.mapData, dispatch, t],
   );
@@ -775,7 +838,14 @@ export default function MapEditorLayout({
   );
 
   const handlePixelSaveAsNew = useCallback(
-    async (dataUrl: string, name: string, columns: number, tileWidth: number, tileHeight: number, tileCount: number) => {
+    async (
+      dataUrl: string,
+      name: string,
+      columns: number,
+      tileWidth: number,
+      tileHeight: number,
+      tileCount: number,
+    ) => {
       if (!state.mapData) return;
 
       let newFirstgid = 1;
@@ -807,13 +877,20 @@ export default function MapEditorLayout({
         name,
       };
 
-      dispatch({ type: 'ADD_TILESET', tileset: newTileset, imageInfo: newImageInfo });
+      dispatch({ type: "ADD_TILESET", tileset: newTileset, imageInfo: newImageInfo });
     },
     [state.mapData, dispatch],
   );
 
   const handlePixelOverwrite = useCallback(
-    async (firstgid: number, dataUrl: string, newCols: number, newRows: number, origCols: number, origRows: number) => {
+    async (
+      firstgid: number,
+      dataUrl: string,
+      newCols: number,
+      newRows: number,
+      origCols: number,
+      origRows: number,
+    ) => {
       if (!state.mapData) return;
 
       if (firstgid === 0) {
@@ -837,10 +914,10 @@ export default function MapEditorLayout({
         const tilesetName = `edited-selection-${Date.now()}`;
 
         // Check each tile for content and build GID changes
-        const tmpCanvas = document.createElement('canvas');
+        const tmpCanvas = document.createElement("canvas");
         tmpCanvas.width = editedImg.width;
         tmpCanvas.height = editedImg.height;
-        const tmpCtx = tmpCanvas.getContext('2d')!;
+        const tmpCtx = tmpCanvas.getContext("2d")!;
         tmpCtx.drawImage(editedImg, 0, 0);
 
         const activeLayer = state.mapData.layers[state.activeLayerIndex];
@@ -866,7 +943,10 @@ export default function MapEditorLayout({
             const tileData = tmpCtx.getImageData(c * tw, r * th, tw, th).data;
             let hasContent = false;
             for (let i = 3; i < tileData.length; i += 4) {
-              if (tileData[i] > 0) { hasContent = true; break; }
+              if (tileData[i] > 0) {
+                hasContent = true;
+                break;
+              }
             }
 
             const newGid = hasContent ? newFirstgid + r * newCols + c : 0;
@@ -879,21 +959,29 @@ export default function MapEditorLayout({
 
         // Add the edited image as a new tileset
         const newTileset: TiledTileset = {
-          firstgid: newFirstgid, name: tilesetName,
-          tilewidth: tw, tileheight: th,
-          tilecount: tileCount, columns: newCols,
+          firstgid: newFirstgid,
+          name: tilesetName,
+          tilewidth: tw,
+          tileheight: th,
+          tilecount: tileCount,
+          columns: newCols,
           image: dataUrl,
-          imagewidth: newCols * tw, imageheight: newRows * th,
+          imagewidth: newCols * tw,
+          imageheight: newRows * th,
         };
         const imageInfo: TilesetImageInfo = {
-          img: editedImg, firstgid: newFirstgid,
-          columns: newCols, tilewidth: tw, tileheight: th,
-          tilecount: tileCount, name: tilesetName,
+          img: editedImg,
+          firstgid: newFirstgid,
+          columns: newCols,
+          tilewidth: tw,
+          tileheight: th,
+          tilecount: tileCount,
+          name: tilesetName,
         };
-        dispatch({ type: 'ADD_TILESET', tileset: newTileset, imageInfo });
+        dispatch({ type: "ADD_TILESET", tileset: newTileset, imageInfo });
 
         if (changes.length > 0) {
-          dispatch({ type: 'PAINT_TILE', layerIndex: state.activeLayerIndex, changes });
+          dispatch({ type: "PAINT_TILE", layerIndex: state.activeLayerIndex, changes });
         }
         return;
       }
@@ -905,10 +993,10 @@ export default function MapEditorLayout({
       const region = state.selectedRegion;
       if (!region) return;
 
-      const fullCanvas = document.createElement('canvas');
+      const fullCanvas = document.createElement("canvas");
       fullCanvas.width = tsInfo.img.naturalWidth;
       fullCanvas.height = tsInfo.img.naturalHeight;
-      const ctx = fullCanvas.getContext('2d')!;
+      const ctx = fullCanvas.getContext("2d")!;
       ctx.drawImage(tsInfo.img, 0, 0);
 
       const editedImg = await loadImage(dataUrl);
@@ -918,30 +1006,33 @@ export default function MapEditorLayout({
         origCols * tsInfo.tilewidth,
         origRows * tsInfo.tileheight,
       );
-      ctx.drawImage(
-        editedImg,
-        region.col * tsInfo.tilewidth,
-        region.row * tsInfo.tileheight,
-      );
+      ctx.drawImage(editedImg, region.col * tsInfo.tilewidth, region.row * tsInfo.tileheight);
 
-      const fullDataUrl = fullCanvas.toDataURL('image/png');
+      const fullDataUrl = fullCanvas.toDataURL("image/png");
       const newImg = await loadImage(fullDataUrl);
 
       dispatch({
-        type: 'UPDATE_TILESET_IMAGE',
+        type: "UPDATE_TILESET_IMAGE",
         firstgid,
         imageInfo: { ...tsInfo, img: newImg },
         imageDataUrl: fullDataUrl,
       });
     },
-    [state.tilesetImages, state.selectedRegion, state.selection, state.mapData, state.activeLayerIndex, dispatch],
+    [
+      state.tilesetImages,
+      state.selectedRegion,
+      state.selection,
+      state.mapData,
+      state.activeLayerIndex,
+      dispatch,
+    ],
   );
 
   // === Reorder Tilesets ===
 
   const handleReorderTileset = useCallback(
     (fromFirstgid: number, toFirstgid: number) => {
-      dispatch({ type: 'REORDER_TILESETS', fromFirstgid, toFirstgid });
+      dispatch({ type: "REORDER_TILESETS", fromFirstgid, toFirstgid });
     },
     [dispatch],
   );
@@ -952,7 +1043,7 @@ export default function MapEditorLayout({
     const gids = new Set<number>();
     if (!state.mapData) return gids;
     for (const layer of state.mapData.layers) {
-      if (layer.type === 'tilelayer' && layer.data) {
+      if (layer.type === "tilelayer" && layer.data) {
         for (const gid of layer.data) {
           if (gid > 0) gids.add(gid);
         }
@@ -980,28 +1071,40 @@ export default function MapEditorLayout({
     }
     if (unusedFirstgids.length === 0) return;
     const names = unusedFirstgids
-      .map((fgid) => state.mapData!.tilesets.find((t) => t.firstgid === fgid)?.name ?? `firstgid=${fgid}`)
-      .join(', ');
-    if (!window.confirm(t('mapEditor.tilesets.removeUnusedConfirm', { count: unusedFirstgids.length, names }))) return;
-    dispatch({ type: 'REMOVE_UNUSED_TILESETS', firstgids: unusedFirstgids });
+      .map(
+        (fgid) =>
+          state.mapData!.tilesets.find((t) => t.firstgid === fgid)?.name ?? `firstgid=${fgid}`,
+      )
+      .join(", ");
+    if (
+      !window.confirm(
+        t("mapEditor.tilesets.removeUnusedConfirm", { count: unusedFirstgids.length, names }),
+      )
+    )
+      return;
+    dispatch({ type: "REMOVE_UNUSED_TILESETS", firstgids: unusedFirstgids });
   }, [state.mapData, usedGids, dispatch, t]);
 
   // === Sorted tileset list for palette ===
 
-  const isCollisionLayer = state.mapData?.layers[state.activeLayerIndex]?.name?.toLowerCase() === 'collision';
+  const isCollisionLayer =
+    state.mapData?.layers[state.activeLayerIndex]?.name?.toLowerCase() === "collision";
 
   const sortedTilesets = useMemo(() => {
     if (!state.mapData) {
       return Object.values(state.tilesetImages)
-        .filter((info) => !info.name.startsWith('stamp-'))
+        .filter((info) => !info.name.startsWith("stamp-"))
         .sort((a, b) => a.firstgid - b.firstgid);
     }
     // Color palette first, then user tilesets (hide stamp-generated)
     const builtIn = state.mapData.tilesets.filter((ts) => ts.name === BUILTIN_TILESET_NAME);
-    const userTs = state.mapData.tilesets.filter((ts) => ts.name !== BUILTIN_TILESET_NAME && !ts.name.startsWith('stamp-') && !ts.name.startsWith('edited-selection-'));
-    return [...builtIn, ...userTs]
-      .map((ts) => state.tilesetImages[ts.firstgid])
-      .filter(Boolean);
+    const userTs = state.mapData.tilesets.filter(
+      (ts) =>
+        ts.name !== BUILTIN_TILESET_NAME &&
+        !ts.name.startsWith("stamp-") &&
+        !ts.name.startsWith("edited-selection-"),
+    );
+    return [...builtIn, ...userTs].map((ts) => state.tilesetImages[ts.firstgid]).filter(Boolean);
   }, [state.tilesetImages, state.mapData, isCollisionLayer]);
 
   // === Selection Operations ===
@@ -1009,7 +1112,7 @@ export default function MapEditorLayout({
   const handleCopy = useCallback(() => {
     if (!state.mapData || !state.selection) return;
     const layer = state.mapData.layers[state.activeLayerIndex];
-    if (!layer || layer.type !== 'tilelayer' || !layer.data) return;
+    if (!layer || layer.type !== "tilelayer" || !layer.data) return;
     const sel = state.selection;
     const mapW = state.mapData.width;
     const gids: number[][] = [];
@@ -1027,7 +1130,7 @@ export default function MapEditorLayout({
       gids.push(row);
     }
     dispatch({
-      type: 'SET_CLIPBOARD',
+      type: "SET_CLIPBOARD",
       clipboard: { width: sel.width, height: sel.height, gids, layerIndex: state.activeLayerIndex },
     });
   }, [state.mapData, state.selection, state.activeLayerIndex, dispatch]);
@@ -1035,21 +1138,21 @@ export default function MapEditorLayout({
   const handlePaste = useCallback(() => {
     if (!state.clipboard) return;
     // Switch to select tool; the next click on canvas will place the clipboard
-    dispatch({ type: 'SET_TOOL', tool: 'select' });
+    dispatch({ type: "SET_TOOL", tool: "select" });
   }, [state.clipboard, dispatch]);
 
   const handleCut = useCallback(() => {
     handleCopy();
-    dispatch({ type: 'DELETE_SELECTION' });
+    dispatch({ type: "DELETE_SELECTION" });
   }, [handleCopy, dispatch]);
 
   const handleDeleteSelection = useCallback(() => {
     if (!state.selection) return;
-    dispatch({ type: 'DELETE_SELECTION' });
+    dispatch({ type: "DELETE_SELECTION" });
   }, [state.selection, dispatch]);
 
   const handleClearSelection = useCallback(() => {
-    dispatch({ type: 'CLEAR_SELECTION' });
+    dispatch({ type: "CLEAR_SELECTION" });
   }, [dispatch]);
 
   const fetchStamps = useCallback(async () => {
@@ -1058,16 +1161,20 @@ export default function MapEditorLayout({
       const res = await fetch(`/api/projects/${state.projectId}`);
       if (res.ok) {
         const data = await res.json();
-        setStamps((data.stamps ?? []).map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          cols: s.cols,
-          rows: s.rows,
-          thumbnail: s.thumbnail ?? null,
-          layerNames: s.layerNames ?? [],
-        })));
+        setStamps(
+          (data.stamps ?? []).map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            cols: s.cols,
+            rows: s.rows,
+            thumbnail: s.thumbnail ?? null,
+            layerNames: s.layerNames ?? [],
+          })),
+        );
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [state.projectId]);
 
   // Create stamp from tileset palette selection
@@ -1083,10 +1190,10 @@ export default function MapEditorLayout({
     const rows = region.height;
 
     // Render the selected tiles to a canvas for thumbnail
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = cols * tw;
     canvas.height = rows * th;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
 
     // Build GID data and draw tiles
@@ -1103,25 +1210,34 @@ export default function MapEditorLayout({
       }
     }
 
-    const thumbnail = canvas.toDataURL('image/png');
+    const thumbnail = canvas.toDataURL("image/png");
 
     // Build tileset image for stamp
-    const tsCanvas = document.createElement('canvas');
+    const tsCanvas = document.createElement("canvas");
     tsCanvas.width = tsInfo.img.naturalWidth || tsInfo.img.width;
     tsCanvas.height = tsInfo.img.naturalHeight || tsInfo.img.height;
-    tsCanvas.getContext('2d')!.drawImage(tsInfo.img, 0, 0);
-    const tsImage = tsCanvas.toDataURL('image/png');
+    tsCanvas.getContext("2d")!.drawImage(tsInfo.img, 0, 0);
+    const tsImage = tsCanvas.toDataURL("image/png");
 
-    const stampLayer = { name: 'Floor', type: 'tilelayer', depth: 0, data };
+    const stampLayer = { name: "Floor", type: "tilelayer", depth: 0, data };
     const stampTileset = {
-      name: tsInfo.name, firstgid: region.firstgid,
-      tilewidth: tw, tileheight: th,
-      columns: tsInfo.columns, tilecount: tsInfo.tilecount, image: tsImage,
+      name: tsInfo.name,
+      firstgid: region.firstgid,
+      tilewidth: tw,
+      tileheight: th,
+      columns: tsInfo.columns,
+      tilecount: tsInfo.tilecount,
+      image: tsImage,
     };
 
     pendingStampDataRef.current = {
-      cols, rows, tileWidth: tw, tileHeight: th,
-      layers: [stampLayer], tilesets: [stampTileset], thumbnail,
+      cols,
+      rows,
+      tileWidth: tw,
+      tileHeight: th,
+      layers: [stampLayer],
+      tilesets: [stampTileset],
+      thumbnail,
     };
     setShowSaveStamp(true);
   }, [state.selectedRegion, state.tilesetImages, state.mapData]);
@@ -1129,26 +1245,150 @@ export default function MapEditorLayout({
   // === Stamp Functions ===
 
   const stampThumbnailRef = useRef<string | null>(null);
-  const stampSelectionRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const stampSelectionRef = useRef<{ x: number; y: number; width: number; height: number } | null>(
+    null,
+  );
   const pendingStampDataRef = useRef<{
-    cols: number; rows: number; tileWidth: number; tileHeight: number;
-    layers: any[]; tilesets: any[]; thumbnail: string | null;
+    cols: number;
+    rows: number;
+    tileWidth: number;
+    tileHeight: number;
+    layers: any[];
+    tilesets: any[];
+    thumbnail: string | null;
   } | null>(null);
 
-  const handleSaveStamp = useCallback(async (name: string) => {
-    setSavingStamp(true);
-    try {
-      // If pending stamp data exists (from tileset palette or pixel editor), use it directly
-      if (pendingStampDataRef.current) {
-        const pending = pendingStampDataRef.current;
-        const res = await fetch('/api/stamps', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, ...pending }),
+  const handleSaveStamp = useCallback(
+    async (name: string) => {
+      setSavingStamp(true);
+      try {
+        // If pending stamp data exists (from tileset palette or pixel editor), use it directly
+        if (pendingStampDataRef.current) {
+          const pending = pendingStampDataRef.current;
+          const res = await fetch("/api/stamps", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, ...pending }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            alert(getLocalizedErrorMessage(t, data, "errors.failedToCreateStamp"));
+            return;
+          }
+          const created = await res.json();
+          if (state.projectId && created.id) {
+            await linkStamp(state.projectId, created.id);
+          }
+          await fetchStamps();
+          return;
+        }
+
+        // Otherwise, build stamp from map selection
+        const sel = stampSelectionRef.current ?? state.selection;
+        if (!state.mapData || !sel) return;
+
+        const tw = state.mapData.tilewidth;
+        const th = state.mapData.tileheight;
+        const mapW = state.mapData.width;
+
+        const stampLayers: Array<{ name: string; type: string; depth: number; data: number[] }> =
+          [];
+        const usedGids = new Set<number>();
+
+        for (const layer of state.mapData.layers) {
+          if (layer.type !== "tilelayer" || !layer.data) continue;
+          if (layer.name.toLowerCase() === "collision") continue;
+
+          const data: number[] = [];
+          const depthProp = layer.properties?.find((p: any) => p.name === "depth");
+          const depthVal = depthProp ? Number(depthProp.value) || 0 : 0;
+
+          for (let row = 0; row < sel.height; row++) {
+            for (let col = 0; col < sel.width; col++) {
+              const mapCol = sel.x + col;
+              const mapRow = sel.y + row;
+              const gid =
+                mapCol >= 0 && mapCol < mapW && mapRow >= 0 && mapRow < state.mapData!.height
+                  ? layer.data[mapRow * mapW + mapCol]
+                  : 0;
+              data.push(gid);
+              if (gid !== 0) usedGids.add(gid);
+            }
+          }
+
+          if (data.some((g) => g !== 0)) {
+            stampLayers.push({ name: layer.name, type: layer.type, depth: depthVal, data });
+          }
+        }
+
+        if (stampLayers.length === 0) {
+          setSavingStamp(false);
+          setShowSaveStamp(false);
+          return;
+        }
+
+        const stampTilesets: Array<{
+          name: string;
+          firstgid: number;
+          tilewidth: number;
+          tileheight: number;
+          columns: number;
+          tilecount: number;
+          image: string;
+        }> = [];
+        for (const ts of state.mapData.tilesets) {
+          const maxGid = ts.firstgid + ts.tilecount - 1;
+          let used = false;
+          for (const gid of usedGids) {
+            if (gid >= ts.firstgid && gid <= maxGid) {
+              used = true;
+              break;
+            }
+          }
+          if (!used) continue;
+
+          const imgInfo = state.tilesetImages[ts.firstgid];
+          if (!imgInfo) continue;
+
+          const canvas = document.createElement("canvas");
+          canvas.width = imgInfo.img.naturalWidth || imgInfo.img.width;
+          canvas.height = imgInfo.img.naturalHeight || imgInfo.img.height;
+          const ctx = canvas.getContext("2d")!;
+          ctx.drawImage(imgInfo.img, 0, 0);
+          const dataUrl = canvas.toDataURL("image/png");
+
+          stampTilesets.push({
+            name: ts.name,
+            firstgid: ts.firstgid,
+            tilewidth: ts.tilewidth,
+            tileheight: ts.tileheight,
+            columns: ts.columns,
+            tilecount: ts.tilecount,
+            image: dataUrl,
+          });
+        }
+
+        const thumbnail = stampThumbnailRef.current;
+
+        const body = {
+          name,
+          cols: sel.width,
+          rows: sel.height,
+          tileWidth: tw,
+          tileHeight: th,
+          layers: stampLayers,
+          tilesets: stampTilesets,
+          thumbnail,
+        };
+
+        const res = await fetch("/api/stamps", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => null);
-          alert(getLocalizedErrorMessage(t, data, 'errors.failedToCreateStamp'));
+          alert(getLocalizedErrorMessage(t, data, "errors.failedToCreateStamp"));
           return;
         }
         const created = await res.json();
@@ -1156,289 +1396,258 @@ export default function MapEditorLayout({
           await linkStamp(state.projectId, created.id);
         }
         await fetchStamps();
+      } catch {
+        alert(t("errors.failedToCreateStamp"));
+      } finally {
+        setSavingStamp(false);
+        setShowSaveStamp(false);
+        stampThumbnailRef.current = null;
+        stampSelectionRef.current = null;
+        pendingStampDataRef.current = null;
+      }
+    },
+    [
+      state.mapData,
+      state.selection,
+      state.tilesetImages,
+      state.projectId,
+      fetchStamps,
+      linkStamp,
+      t,
+    ],
+  );
+
+  const handleSelectStamp = useCallback(
+    async (id: string) => {
+      if (activeStamp?.id === id) {
+        setActiveStamp(null);
         return;
       }
+      try {
+        const res = await fetch(`/api/stamps/${id}`);
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          alert(getLocalizedErrorMessage(t, data, "errors.failedToFetchStamp"));
+          return;
+        }
+        const data = await res.json();
+        // Ensure layers/tilesets are parsed (SQLite returns JSON as string)
+        if (typeof data.layers === "string") data.layers = JSON.parse(data.layers);
+        if (typeof data.tilesets === "string") data.tilesets = JSON.parse(data.tilesets);
+        setActiveStamp(data);
+        dispatch({ type: "SET_TOOL", tool: "select" });
+      } catch {
+        alert(t("errors.failedToFetchStamp"));
+      }
+    },
+    [activeStamp, dispatch, t],
+  );
 
-      // Otherwise, build stamp from map selection
-      const sel = stampSelectionRef.current ?? state.selection;
-      if (!state.mapData || !sel) return;
+  const handleDeleteStamp = useCallback(
+    async (id: string) => {
+      const res = await fetch(`/api/stamps/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        alert(getLocalizedErrorMessage(t, data, "errors.failedToDeleteStamp"));
+        return;
+      }
+      if (activeStamp?.id === id) setActiveStamp(null);
+      fetchStamps();
+    },
+    [activeStamp, fetchStamps, t],
+  );
 
-      const tw = state.mapData.tilewidth;
-      const th = state.mapData.tileheight;
+  const handleEditStamp = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(`/api/stamps/${id}`);
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          alert(getLocalizedErrorMessage(t, data, "errors.failedToFetchStamp"));
+          return;
+        }
+        const data = await res.json();
+        setEditingStamp(data);
+        setShowStampEditor(true);
+      } catch {
+        alert(t("errors.failedToFetchStamp"));
+      }
+    },
+    [t],
+  );
+
+  const handleSaveStampEdit = useCallback(
+    async (updated: {
+      name?: string;
+      cols?: number;
+      rows?: number;
+      layers: any[];
+      tilesets: any[];
+      thumbnail: string | null;
+    }) => {
+      if (!editingStamp) return;
+      try {
+        const res = await fetch(`/api/stamps/${editingStamp.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updated),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          alert(getLocalizedErrorMessage(t, data, "errors.failedToUpdateStamp"));
+          return;
+        }
+        await fetchStamps();
+        setShowStampEditor(false);
+        setEditingStamp(null);
+      } catch {
+        alert(t("errors.failedToUpdateStamp"));
+      }
+    },
+    [editingStamp, fetchStamps, t],
+  );
+
+  const handlePlaceStamp = useCallback(
+    async (targetX: number, targetY: number) => {
+      if (!activeStamp || !state.mapData) return;
+
+      const stampLayers =
+        typeof activeStamp.layers === "string"
+          ? JSON.parse(activeStamp.layers)
+          : activeStamp.layers;
+      const stampTilesets =
+        typeof activeStamp.tilesets === "string"
+          ? JSON.parse(activeStamp.tilesets)
+          : activeStamp.tilesets;
+
+      // Step 1: Try name-based GID remapping (for stamps from existing tilesets)
+      const mapTilesetFirstgids: Record<string, number> = {};
+      for (const ts of state.mapData.tilesets) {
+        mapTilesetFirstgids[ts.name] = ts.firstgid;
+      }
+      const remap = buildGidRemapTable(stampTilesets, mapTilesetFirstgids);
+
+      // Step 2: For any unmatched tilesets, add them to the map
+      let maxGid = 0;
+      for (const ts of state.mapData.tilesets) {
+        const end = ts.firstgid + ts.tilecount;
+        if (end > maxGid) maxGid = end;
+      }
+
+      for (const st of stampTilesets) {
+        // Skip if already remapped by name matching
+        if (mapTilesetFirstgids[st.name] !== undefined) continue;
+
+        // Check if this stamp tileset was already added to the map
+        const existingTs = state.mapData.tilesets.find(
+          (ts) => ts.name === `stamp-${activeStamp.id}-${st.name}`,
+        );
+        if (existingTs) {
+          const offset = existingTs.firstgid - st.firstgid;
+          for (let i = 0; i < st.tilecount; i++) {
+            remap.set(st.firstgid + i, st.firstgid + i + offset);
+          }
+          continue;
+        }
+
+        const newFirstgid = maxGid;
+
+        for (let i = 0; i < st.tilecount; i++) {
+          remap.set(st.firstgid + i, newFirstgid + i);
+        }
+
+        // Load stamp tileset image
+        const img = new Image();
+        await new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          img.src = st.image;
+        });
+        const imgW = img.naturalWidth || img.width || st.columns * st.tilewidth;
+        const imgH =
+          img.naturalHeight || img.height || Math.ceil(st.tilecount / st.columns) * st.tileheight;
+
+        // Add tileset to map
+        dispatch({
+          type: "ADD_TILESET",
+          tileset: {
+            firstgid: newFirstgid,
+            name: `stamp-${activeStamp.id}-${st.name}`,
+            tilewidth: st.tilewidth,
+            tileheight: st.tileheight,
+            tilecount: st.tilecount,
+            columns: st.columns,
+            image: st.image,
+            imagewidth: imgW,
+            imageheight: imgH,
+          },
+          imageInfo: {
+            img,
+            firstgid: newFirstgid,
+            columns: st.columns,
+            tilewidth: st.tilewidth,
+            tileheight: st.tileheight,
+            tilecount: st.tilecount,
+            name: `stamp-${activeStamp.id}-${st.name}`,
+          },
+        });
+
+        maxGid = newFirstgid + st.tilecount;
+      }
+
       const mapW = state.mapData.width;
+      const mapH = state.mapData.height;
+      const stampLayerChanges: Array<{
+        layerIndex: number;
+        changes: Array<{ index: number; oldGid: number; newGid: number }>;
+      }> = [];
 
-      const stampLayers: Array<{ name: string; type: string; depth: number; data: number[] }> = [];
-      const usedGids = new Set<number>();
+      for (const sl of stampLayers) {
+        // Try exact layer name match, fallback to active layer
+        let layerIdx = findLayerByName(state.mapData.layers, sl.name);
+        if (layerIdx === -1) layerIdx = state.activeLayerIndex;
 
-      for (const layer of state.mapData.layers) {
-        if (layer.type !== 'tilelayer' || !layer.data) continue;
-        if (layer.name.toLowerCase() === 'collision') continue;
+        const layer = state.mapData.layers[layerIdx];
+        if (!layer || !layer.data) continue;
 
-        const data: number[] = [];
-        const depthProp = layer.properties?.find((p: any) => p.name === 'depth');
-        const depthVal = depthProp ? Number(depthProp.value) || 0 : 0;
-
-        for (let row = 0; row < sel.height; row++) {
-          for (let col = 0; col < sel.width; col++) {
-            const mapCol = sel.x + col;
-            const mapRow = sel.y + row;
-            const gid = (mapCol >= 0 && mapCol < mapW && mapRow >= 0 && mapRow < state.mapData!.height)
-              ? layer.data[mapRow * mapW + mapCol]
-              : 0;
-            data.push(gid);
-            if (gid !== 0) usedGids.add(gid);
+        const changes: Array<{ index: number; oldGid: number; newGid: number }> = [];
+        for (let row = 0; row < activeStamp.rows; row++) {
+          for (let col = 0; col < activeStamp.cols; col++) {
+            const stampGid = sl.data[row * activeStamp.cols + col];
+            if (stampGid === 0) continue;
+            const mapGid = remap.get(stampGid);
+            if (mapGid === undefined) continue;
+            const mapCol = targetX + col;
+            const mapRow = targetY + row;
+            if (mapCol < 0 || mapCol >= mapW || mapRow < 0 || mapRow >= mapH) continue;
+            const mapIdx = mapRow * mapW + mapCol;
+            const oldGid = layer.data[mapIdx];
+            if (oldGid !== mapGid) changes.push({ index: mapIdx, oldGid, newGid: mapGid });
           }
         }
-
-        if (data.some((g) => g !== 0)) {
-          stampLayers.push({ name: layer.name, type: layer.type, depth: depthVal, data });
-        }
+        if (changes.length > 0) stampLayerChanges.push({ layerIndex: layerIdx, changes });
       }
 
-      if (stampLayers.length === 0) { setSavingStamp(false); setShowSaveStamp(false); return; }
-
-      const stampTilesets: Array<{ name: string; firstgid: number; tilewidth: number; tileheight: number; columns: number; tilecount: number; image: string }> = [];
-      for (const ts of state.mapData.tilesets) {
-        const maxGid = ts.firstgid + ts.tilecount - 1;
-        let used = false;
-        for (const gid of usedGids) {
-          if (gid >= ts.firstgid && gid <= maxGid) { used = true; break; }
-        }
-        if (!used) continue;
-
-        const imgInfo = state.tilesetImages[ts.firstgid];
-        if (!imgInfo) continue;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = imgInfo.img.naturalWidth || imgInfo.img.width;
-        canvas.height = imgInfo.img.naturalHeight || imgInfo.img.height;
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(imgInfo.img, 0, 0);
-        const dataUrl = canvas.toDataURL('image/png');
-
-        stampTilesets.push({
-          name: ts.name, firstgid: ts.firstgid, tilewidth: ts.tilewidth,
-          tileheight: ts.tileheight, columns: ts.columns, tilecount: ts.tilecount, image: dataUrl,
-        });
+      if (stampLayerChanges.length > 0) {
+        dispatch({ type: "PLACE_STAMP", stampLayers: stampLayerChanges });
       }
-
-      const thumbnail = stampThumbnailRef.current;
-
-      const body = {
-        name, cols: sel.width, rows: sel.height,
-        tileWidth: tw, tileHeight: th,
-        layers: stampLayers, tilesets: stampTilesets, thumbnail,
-      };
-
-      const res = await fetch('/api/stamps', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        alert(getLocalizedErrorMessage(t, data, 'errors.failedToCreateStamp'));
-        return;
-      }
-      const created = await res.json();
-      if (state.projectId && created.id) {
-        await linkStamp(state.projectId, created.id);
-      }
-      await fetchStamps();
-    } catch {
-      alert(t('errors.failedToCreateStamp'));
-    } finally {
-      setSavingStamp(false);
-      setShowSaveStamp(false);
-      stampThumbnailRef.current = null;
-      stampSelectionRef.current = null;
-      pendingStampDataRef.current = null;
-    }
-  }, [state.mapData, state.selection, state.tilesetImages, state.projectId, fetchStamps, linkStamp, t]);
-
-  const handleSelectStamp = useCallback(async (id: string) => {
-    if (activeStamp?.id === id) { setActiveStamp(null); return; }
-    try {
-      const res = await fetch(`/api/stamps/${id}`);
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        alert(getLocalizedErrorMessage(t, data, 'errors.failedToFetchStamp'));
-        return;
-      }
-      const data = await res.json();
-      // Ensure layers/tilesets are parsed (SQLite returns JSON as string)
-      if (typeof data.layers === 'string') data.layers = JSON.parse(data.layers);
-      if (typeof data.tilesets === 'string') data.tilesets = JSON.parse(data.tilesets);
-      setActiveStamp(data);
-      dispatch({ type: 'SET_TOOL', tool: 'select' });
-    } catch {
-      alert(t('errors.failedToFetchStamp'));
-    }
-  }, [activeStamp, dispatch, t]);
-
-  const handleDeleteStamp = useCallback(async (id: string) => {
-    const res = await fetch(`/api/stamps/${id}`, { method: 'DELETE' });
-    if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      alert(getLocalizedErrorMessage(t, data, 'errors.failedToDeleteStamp'));
-      return;
-    }
-    if (activeStamp?.id === id) setActiveStamp(null);
-    fetchStamps();
-  }, [activeStamp, fetchStamps, t]);
-
-  const handleEditStamp = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(`/api/stamps/${id}`);
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        alert(getLocalizedErrorMessage(t, data, 'errors.failedToFetchStamp'));
-        return;
-      }
-      const data = await res.json();
-      setEditingStamp(data);
-      setShowStampEditor(true);
-    } catch {
-      alert(t('errors.failedToFetchStamp'));
-    }
-  }, [t]);
-
-  const handleSaveStampEdit = useCallback(async (updated: { name?: string; cols?: number; rows?: number; layers: any[]; tilesets: any[]; thumbnail: string | null }) => {
-    if (!editingStamp) return;
-    try {
-      const res = await fetch(`/api/stamps/${editingStamp.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        alert(getLocalizedErrorMessage(t, data, 'errors.failedToUpdateStamp'));
-        return;
-      }
-      await fetchStamps();
-      setShowStampEditor(false);
-      setEditingStamp(null);
-    } catch {
-      alert(t('errors.failedToUpdateStamp'));
-    }
-  }, [editingStamp, fetchStamps, t]);
-
-  const handlePlaceStamp = useCallback(async (targetX: number, targetY: number) => {
-    if (!activeStamp || !state.mapData) return;
-
-    const stampLayers = typeof activeStamp.layers === 'string' ? JSON.parse(activeStamp.layers) : activeStamp.layers;
-    const stampTilesets = typeof activeStamp.tilesets === 'string' ? JSON.parse(activeStamp.tilesets) : activeStamp.tilesets;
-
-    // Step 1: Try name-based GID remapping (for stamps from existing tilesets)
-    const mapTilesetFirstgids: Record<string, number> = {};
-    for (const ts of state.mapData.tilesets) {
-      mapTilesetFirstgids[ts.name] = ts.firstgid;
-    }
-    const remap = buildGidRemapTable(stampTilesets, mapTilesetFirstgids);
-
-    // Step 2: For any unmatched tilesets, add them to the map
-    let maxGid = 0;
-    for (const ts of state.mapData.tilesets) {
-      const end = ts.firstgid + ts.tilecount;
-      if (end > maxGid) maxGid = end;
-    }
-
-    for (const st of stampTilesets) {
-      // Skip if already remapped by name matching
-      if (mapTilesetFirstgids[st.name] !== undefined) continue;
-
-      // Check if this stamp tileset was already added to the map
-      const existingTs = state.mapData.tilesets.find(ts => ts.name === `stamp-${activeStamp.id}-${st.name}`);
-      if (existingTs) {
-        const offset = existingTs.firstgid - st.firstgid;
-        for (let i = 0; i < st.tilecount; i++) {
-          remap.set(st.firstgid + i, st.firstgid + i + offset);
-        }
-        continue;
-      }
-
-      const newFirstgid = maxGid;
-
-      for (let i = 0; i < st.tilecount; i++) {
-        remap.set(st.firstgid + i, newFirstgid + i);
-      }
-
-      // Load stamp tileset image
-      const img = new Image();
-      await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); img.src = st.image; });
-      const imgW = img.naturalWidth || img.width || st.columns * st.tilewidth;
-      const imgH = img.naturalHeight || img.height || Math.ceil(st.tilecount / st.columns) * st.tileheight;
-
-      // Add tileset to map
-      dispatch({
-        type: 'ADD_TILESET',
-        tileset: {
-          firstgid: newFirstgid,
-          name: `stamp-${activeStamp.id}-${st.name}`,
-          tilewidth: st.tilewidth, tileheight: st.tileheight,
-          tilecount: st.tilecount, columns: st.columns,
-          image: st.image, imagewidth: imgW, imageheight: imgH,
-        },
-        imageInfo: {
-          img, firstgid: newFirstgid,
-          columns: st.columns, tilewidth: st.tilewidth,
-          tileheight: st.tileheight, tilecount: st.tilecount,
-          name: `stamp-${activeStamp.id}-${st.name}`,
-        },
-      });
-
-      maxGid = newFirstgid + st.tilecount;
-    }
-
-    const mapW = state.mapData.width;
-    const mapH = state.mapData.height;
-    const stampLayerChanges: Array<{ layerIndex: number; changes: Array<{ index: number; oldGid: number; newGid: number }> }> = [];
-
-    for (const sl of stampLayers) {
-      // Try exact layer name match, fallback to active layer
-      let layerIdx = findLayerByName(state.mapData.layers, sl.name);
-      if (layerIdx === -1) layerIdx = state.activeLayerIndex;
-
-      const layer = state.mapData.layers[layerIdx];
-      if (!layer || !layer.data) continue;
-
-      const changes: Array<{ index: number; oldGid: number; newGid: number }> = [];
-      for (let row = 0; row < activeStamp.rows; row++) {
-        for (let col = 0; col < activeStamp.cols; col++) {
-          const stampGid = sl.data[row * activeStamp.cols + col];
-          if (stampGid === 0) continue;
-          const mapGid = remap.get(stampGid);
-          if (mapGid === undefined) continue;
-          const mapCol = targetX + col;
-          const mapRow = targetY + row;
-          if (mapCol < 0 || mapCol >= mapW || mapRow < 0 || mapRow >= mapH) continue;
-          const mapIdx = mapRow * mapW + mapCol;
-          const oldGid = layer.data[mapIdx];
-          if (oldGid !== mapGid) changes.push({ index: mapIdx, oldGid, newGid: mapGid });
-        }
-      }
-      if (changes.length > 0) stampLayerChanges.push({ layerIndex: layerIdx, changes });
-    }
-
-    if (stampLayerChanges.length > 0) {
-      dispatch({ type: 'PLACE_STAMP', stampLayers: stampLayerChanges });
-    }
-  }, [activeStamp, state.mapData, state.tilesetImages, state.activeLayerIndex, dispatch]);
+    },
+    [activeStamp, state.mapData, state.tilesetImages, state.activeLayerIndex, dispatch],
+  );
 
   // === Space-held pan mode ===
 
   const handleSpaceDown = useCallback(() => {
     if (!spaceHeld) {
       previousToolRef.current = state.tool;
-      dispatch({ type: 'SET_TOOL', tool: 'pan' });
+      dispatch({ type: "SET_TOOL", tool: "pan" });
       setSpaceHeld(true);
     }
   }, [spaceHeld, state.tool, dispatch]);
 
   const handleSpaceUp = useCallback(() => {
     if (spaceHeld) {
-      dispatch({ type: 'SET_TOOL', tool: previousToolRef.current });
+      dispatch({ type: "SET_TOOL", tool: previousToolRef.current });
       setSpaceHeld(false);
     }
   }, [spaceHeld, dispatch]);
@@ -1446,21 +1655,21 @@ export default function MapEditorLayout({
   // === Keyboard Shortcuts ===
 
   useKeyboardShortcuts({
-    onToolPaint: () => dispatch({ type: 'SET_TOOL', tool: 'paint' }),
-    onToolErase: () => dispatch({ type: 'SET_TOOL', tool: 'erase' }),
-    onToolSelect: () => dispatch({ type: 'SET_TOOL', tool: 'select' }),
-    onToolPan: () => dispatch({ type: 'SET_TOOL', tool: 'pan' }),
-    onToggleGrid: () => dispatch({ type: 'TOGGLE_GRID' }),
-    onZoomIn: () => dispatch({ type: 'SET_ZOOM', zoom: Math.round((state.zoom + 0.1) * 10) / 10 }),
-    onZoomOut: () => dispatch({ type: 'SET_ZOOM', zoom: Math.round((state.zoom - 0.1) * 10) / 10 }),
-    onUndo: () => dispatch({ type: 'UNDO' }),
-    onRedo: () => dispatch({ type: 'REDO' }),
+    onToolPaint: () => dispatch({ type: "SET_TOOL", tool: "paint" }),
+    onToolErase: () => dispatch({ type: "SET_TOOL", tool: "erase" }),
+    onToolSelect: () => dispatch({ type: "SET_TOOL", tool: "select" }),
+    onToolPan: () => dispatch({ type: "SET_TOOL", tool: "pan" }),
+    onToggleGrid: () => dispatch({ type: "TOGGLE_GRID" }),
+    onZoomIn: () => dispatch({ type: "SET_ZOOM", zoom: Math.round((state.zoom + 0.1) * 10) / 10 }),
+    onZoomOut: () => dispatch({ type: "SET_ZOOM", zoom: Math.round((state.zoom - 0.1) * 10) / 10 }),
+    onUndo: () => dispatch({ type: "UNDO" }),
+    onRedo: () => dispatch({ type: "REDO" }),
     onNewMap: () => {
-      if (confirmIfDirty()) router.push('/map-editor');
+      if (confirmIfDirty()) router.push("/map-editor");
     },
     onSave: handleSave,
     onLoad: () => {
-      if (confirmIfDirty()) router.push('/map-editor');
+      if (confirmIfDirty()) router.push("/map-editor");
     },
     onImportTileset: () => handleQuickImportTileset(),
     onHelp: () => setShowHelp((prev) => !prev),
@@ -1476,28 +1685,31 @@ export default function MapEditorLayout({
 
   // === Resize Handle ===
 
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizing.current = true;
-    const startX = e.clientX;
-    const startWidth = panelWidth;
+  const handleResizeMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isResizing.current = true;
+      const startX = e.clientX;
+      const startWidth = panelWidth;
 
-    const handleMouseMove = (ev: MouseEvent) => {
-      if (!isResizing.current) return;
-      const delta = ev.clientX - startX;
-      const maxWidth = Math.floor(window.innerWidth / 2);
-      setPanelWidth(Math.max(200, Math.min(maxWidth, startWidth + delta)));
-    };
+      const handleMouseMove = (ev: MouseEvent) => {
+        if (!isResizing.current) return;
+        const delta = ev.clientX - startX;
+        const maxWidth = Math.floor(window.innerWidth / 2);
+        setPanelWidth(Math.max(200, Math.min(maxWidth, startWidth + delta)));
+      };
 
-    const handleMouseUp = () => {
-      isResizing.current = false;
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
+      const handleMouseUp = () => {
+        isResizing.current = false;
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [panelWidth]);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [panelWidth],
+  );
 
   // === Viewport size tracking for minimap ===
   useEffect(() => {
@@ -1512,7 +1724,7 @@ export default function MapEditorLayout({
 
   const handlePanTo = useCallback(
     (panX: number, panY: number) => {
-      dispatch({ type: 'SET_PAN', panX, panY });
+      dispatch({ type: "SET_PAN", panX, panY });
     },
     [dispatch],
   );
@@ -1522,34 +1734,35 @@ export default function MapEditorLayout({
   const handleSelectRegion = useCallback(
     (region: TileRegion) => {
       const gid = region.gids[0][0];
-      dispatch({ type: 'SET_SELECTED_TILE', gid, region });
+      dispatch({ type: "SET_SELECTED_TILE", gid, region });
     },
     [dispatch],
   );
 
   // === Status bar info ===
 
-  const activeLayerName = state.mapData?.layers[state.activeLayerIndex]?.name ?? '-';
-  const toolName = state.tool === 'paint'
-    ? t('mapEditor.toolbar.paint')
-    : state.tool === 'erase'
-      ? t('mapEditor.toolbar.erase')
-      : state.tool === 'select'
-        ? t('mapEditor.toolbar.select')
-        : t('mapEditor.toolbar.pan');
+  const activeLayerName = state.mapData?.layers[state.activeLayerIndex]?.name ?? "-";
+  const toolName =
+    state.tool === "paint"
+      ? t("mapEditor.toolbar.paint")
+      : state.tool === "erase"
+        ? t("mapEditor.toolbar.erase")
+        : state.tool === "select"
+          ? t("mapEditor.toolbar.select")
+          : t("mapEditor.toolbar.pan");
 
   // === Save As ===
 
   const handleSaveAs = useCallback(async () => {
     if (!state.mapData || !state.projectId) return;
-    const newName = prompt(t('mapEditor.project.projectName'), displayProjectName);
+    const newName = prompt(t("mapEditor.project.projectName"), displayProjectName);
     if (!newName?.trim()) return;
 
     try {
       // Create new project as copy
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newName.trim(),
           tiledJson: state.mapData,
@@ -1560,10 +1773,15 @@ export default function MapEditorLayout({
       const created = await res.json();
 
       // Update local state to point to new project
-      dispatch({ type: 'SET_MAP', mapData: state.mapData, projectName: newName.trim(), projectId: created.id });
-      dispatch({ type: 'MARK_CLEAN' });
+      dispatch({
+        type: "SET_MAP",
+        mapData: state.mapData,
+        projectName: newName.trim(),
+        projectId: created.id,
+      });
+      dispatch({ type: "MARK_CLEAN" });
     } catch (err) {
-      console.error('Save As failed:', err);
+      console.error("Save As failed:", err);
     }
   }, [state.mapData, state.projectId, displayProjectName, dispatch, t]);
 
@@ -1586,15 +1804,13 @@ export default function MapEditorLayout({
   if (!projectLoaded) {
     return (
       <div className="h-screen bg-gray-900 flex items-center justify-center text-gray-500">
-        {t('common.loading')}
+        {t("common.loading")}
       </div>
     );
   }
 
   return (
-    <div
-      className="h-screen w-screen flex flex-col bg-surface-base text-text overflow-hidden"
-    >
+    <div className="h-screen w-screen flex flex-col bg-surface-base text-text overflow-hidden">
       {/* Toolbar */}
       <Toolbar
         activeTool={state.tool}
@@ -1606,26 +1822,30 @@ export default function MapEditorLayout({
         dirty={state.dirty}
         projectName={displayProjectName}
         onProjectNameChange={state.projectId ? handleProjectNameChange : undefined}
-        onToolChange={(tool) => dispatch({ type: 'SET_TOOL', tool })}
+        onToolChange={(tool) => dispatch({ type: "SET_TOOL", tool })}
         onNewMap={() => {
-          if (confirmIfDirty()) router.push('/map-editor');
+          if (confirmIfDirty()) router.push("/map-editor");
         }}
         onLoad={() => {
-          if (confirmIfDirty()) router.push('/map-editor');
+          if (confirmIfDirty()) router.push("/map-editor");
         }}
         onSaveToDeskRPG={handleSave}
         onExportTMJ={handleExportTMJ}
         onExportTMX={handleExportTMX}
         onExportPNG={handleExportPNG}
         onSaveAsTemplate={handleSaveAsTemplate}
-        onZoomIn={() => dispatch({ type: 'SET_ZOOM', zoom: Math.round((state.zoom + 0.1) * 10) / 10 })}
-        onZoomOut={() => dispatch({ type: 'SET_ZOOM', zoom: Math.round((state.zoom - 0.1) * 10) / 10 })}
-        onToggleGrid={() => dispatch({ type: 'TOGGLE_GRID' })}
-        onToggleCollision={() => dispatch({ type: 'TOGGLE_COLLISION' })}
-        onUndo={() => dispatch({ type: 'UNDO' })}
-        onRedo={() => dispatch({ type: 'REDO' })}
+        onZoomIn={() =>
+          dispatch({ type: "SET_ZOOM", zoom: Math.round((state.zoom + 0.1) * 10) / 10 })
+        }
+        onZoomOut={() =>
+          dispatch({ type: "SET_ZOOM", zoom: Math.round((state.zoom - 0.1) * 10) / 10 })
+        }
+        onToggleGrid={() => dispatch({ type: "TOGGLE_GRID" })}
+        onToggleCollision={() => dispatch({ type: "TOGGLE_COLLISION" })}
+        onUndo={() => dispatch({ type: "UNDO" })}
+        onRedo={() => dispatch({ type: "REDO" })}
         onHelp={() => setShowHelp(true)}
-        onGoBack={() => router.push('/map-editor')}
+        onGoBack={() => router.push("/map-editor")}
         sectionVisibility={sectionVisibility}
         onToggleSection={(id) => setSectionVisibility((prev) => ({ ...prev, [id]: !prev[id] }))}
         onSaveAs={handleSaveAs}
@@ -1635,12 +1855,12 @@ export default function MapEditorLayout({
       <div className="flex-1 flex min-h-0">
         {/* Left Panel */}
         <div
-          className={`bg-surface border-r border-border flex-shrink-0 overflow-y-auto relative ${isDroppingTileset ? 'ring-2 ring-primary-light ring-inset' : ''}`}
+          className={`bg-surface border-r border-border flex-shrink-0 overflow-y-auto relative ${isDroppingTileset ? "ring-2 ring-primary-light ring-inset" : ""}`}
           style={{ width: panelWidth }}
           onDragOver={(e) => {
-            if (e.dataTransfer.types.includes('Files')) {
+            if (e.dataTransfer.types.includes("Files")) {
               e.preventDefault();
-              e.dataTransfer.dropEffect = 'copy';
+              e.dataTransfer.dropEffect = "copy";
               setIsDroppingTileset(true);
             }
           }}
@@ -1652,214 +1872,251 @@ export default function MapEditorLayout({
             e.preventDefault();
             setIsDroppingTileset(false);
             const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) {
+            if (file && file.type.startsWith("image/")) {
               setDroppedTilesetFile(file);
               setShowImportTileset(true);
             }
           }}
         >
-          {sectionOrder.filter((id) => sectionVisibility[id] !== false).map((sectionId) => {
-            const isCollapsed = !!collapsedSections[sectionId];
-            const isDragOver = dragOverSection === sectionId;
-            const sectionLabel = sectionId === 'layers' ? t('mapEditor.layers.title') : sectionId === 'minimap' ? t('mapEditor.minimap.title') : sectionId === 'stamps' ? t('mapEditor.stamps.title') : t('mapEditor.tilesets.title');
+          {sectionOrder
+            .filter((id) => sectionVisibility[id] !== false)
+            .map((sectionId) => {
+              const isCollapsed = !!collapsedSections[sectionId];
+              const isDragOver = dragOverSection === sectionId;
+              const sectionLabel =
+                sectionId === "layers"
+                  ? t("mapEditor.layers.title")
+                  : sectionId === "minimap"
+                    ? t("mapEditor.minimap.title")
+                    : sectionId === "stamps"
+                      ? t("mapEditor.stamps.title")
+                      : t("mapEditor.tilesets.title");
 
-            // Section header (shared for all sections)
-            const header = (
-              <div
-                key={sectionId}
-                draggable={true}
-                onDragStart={() => { dragSectionRef.current = sectionId; }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  if (dragSectionRef.current && dragSectionRef.current !== sectionId) {
-                    setDragOverSection(sectionId);
-                  }
-                }}
-                onDrop={() => {
-                  if (dragSectionRef.current && dragSectionRef.current !== sectionId) {
-                    setSectionOrder((prev) => {
-                      const arr = [...prev];
-                      const fromIdx = arr.indexOf(dragSectionRef.current!);
-                      const toIdx = arr.indexOf(sectionId);
-                      arr.splice(fromIdx, 1);
-                      arr.splice(toIdx, 0, dragSectionRef.current!);
-                      return arr;
-                    });
-                  }
-                  dragSectionRef.current = null;
-                  setDragOverSection(null);
-                }}
-                onDragEnd={() => { dragSectionRef.current = null; setDragOverSection(null); }}
-                className={`flex items-center justify-between px-3 py-1.5 border-b border-border cursor-grab select-none flex-shrink-0 ${
-                  isDragOver ? 'border-t-2 border-t-primary-light' : ''
-                }`}
-              >
-                <button
-                  className="flex items-center gap-1 text-caption font-semibold text-text-secondary hover:text-text"
-                  onClick={() => setCollapsedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }))}
+              // Section header (shared for all sections)
+              const header = (
+                <div
+                  key={sectionId}
+                  draggable={true}
+                  onDragStart={() => {
+                    dragSectionRef.current = sectionId;
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (dragSectionRef.current && dragSectionRef.current !== sectionId) {
+                      setDragOverSection(sectionId);
+                    }
+                  }}
+                  onDrop={() => {
+                    if (dragSectionRef.current && dragSectionRef.current !== sectionId) {
+                      setSectionOrder((prev) => {
+                        const arr = [...prev];
+                        const fromIdx = arr.indexOf(dragSectionRef.current!);
+                        const toIdx = arr.indexOf(sectionId);
+                        arr.splice(fromIdx, 1);
+                        arr.splice(toIdx, 0, dragSectionRef.current!);
+                        return arr;
+                      });
+                    }
+                    dragSectionRef.current = null;
+                    setDragOverSection(null);
+                  }}
+                  onDragEnd={() => {
+                    dragSectionRef.current = null;
+                    setDragOverSection(null);
+                  }}
+                  className={`flex items-center justify-between px-3 py-1.5 border-b border-border cursor-grab select-none flex-shrink-0 ${
+                    isDragOver ? "border-t-2 border-t-primary-light" : ""
+                  }`}
                 >
-                  <span className="text-micro" style={{ display: 'inline-block', width: '12px', textAlign: 'center' }}>
-                    {isCollapsed ? '▸' : '▾'}
-                  </span>
-                  {sectionLabel}
-                </button>
-                {/* Section-specific header actions */}
-                {sectionId === 'layers' && !isCollapsed && (
-                  <Tooltip label={t('mapEditor.layers.addLayerTooltip')}>
-                    <button
-                      className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
-                      onClick={handleAddLayer}
+                  <button
+                    className="flex items-center gap-1 text-caption font-semibold text-text-secondary hover:text-text"
+                    onClick={() =>
+                      setCollapsedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }))
+                    }
+                  >
+                    <span
+                      className="text-micro"
+                      style={{ display: "inline-block", width: "12px", textAlign: "center" }}
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </Tooltip>
-                )}
-                {sectionId === 'tilesets' && !isCollapsed && (
-                  <div className="flex items-center gap-0.5">
-                    {state.selectedRegion && (
-                      <Tooltip label={t('mapEditor.tilesets.createStampFromSelection')}>
-                        <button
-                          className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
-                          onClick={handleCreateStampFromTileset}
-                        >
-                          <Stamp className="w-3.5 h-3.5" />
-                        </button>
-                      </Tooltip>
-                    )}
-                    <Tooltip label={t('mapEditor.tilesets.importTilesetTooltip')} shortcut="I">
+                      {isCollapsed ? "▸" : "▾"}
+                    </span>
+                    {sectionLabel}
+                  </button>
+                  {/* Section-specific header actions */}
+                  {sectionId === "layers" && !isCollapsed && (
+                    <Tooltip label={t("mapEditor.layers.addLayerTooltip")}>
                       <button
                         className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
-                        onClick={() => handleQuickImportTileset()}
+                        onClick={handleAddLayer}
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
                     </Tooltip>
-                  </div>
-                )}
-              </div>
-            );
-
-            if (isCollapsed) return header;
-
-            // Section content
-            if (sectionId === 'layers') {
-              return (
-                <div key={sectionId}>
-                  {header}
-                  <div>
-                    {state.mapData && (
-                      <LayerPanel
-                        layers={state.mapData.layers}
-                        activeLayerIndex={state.activeLayerIndex}
-                        onSelectLayer={(index) => dispatch({ type: 'SET_ACTIVE_LAYER', index })}
-                        onRenameLayer={(index, name) => dispatch({ type: 'RENAME_LAYER', index, name })}
-                        onDeleteLayer={(index) => handleDeleteLayer(index)}
-                        onReorderLayers={(from, to) =>
-                          dispatch({ type: 'REORDER_LAYERS', fromIndex: from, toIndex: to })
-                        }
-                        onSetLayerDepth={(index, depth) =>
-                          dispatch({ type: 'SET_LAYER_DEPTH', index, depth })
-                        }
-                        onAddLayer={handleAddLayer}
-                        onToggleVisibility={handleToggleLayerVisibility}
-                        layerOverlayMap={layerOverlayMap}
-                        onToggleLayerOverlay={(idx) => setLayerOverlayMap((prev) => ({ ...prev, [idx]: !(prev[idx] ?? true) }))}
-                        hideHeader
-                      />
-                    )}
-                  </div>
-                </div>
-              );
-            }
-
-            if (sectionId === 'stamps') {
-              return (
-                <div key={sectionId}>
-                  {header}
-                  {!isCollapsed && (
-                    <StampPanel
-                      stamps={stamps}
-                      activeStampId={activeStamp?.id ?? null}
-                      onSelectStamp={handleSelectStamp}
-                      onDeleteStamp={handleDeleteStamp}
-                      onEditStamp={handleEditStamp}
-                      onUnlinkStamp={state.projectId ? async (stampId) => {
-                        try {
-                          await unlinkStamp(state.projectId!, stampId);
-                          if (activeStamp?.id === stampId) setActiveStamp(null);
-                          fetchStamps();
-                        } catch (err) {
-                          alert(err instanceof Error ? err.message : t('errors.failedToUnlinkStamp'));
-                        }
-                      } : undefined}
-                      hideHeader
-                      projectId={state.projectId}
-                      onAddToProject={async (stampId) => {
-                        if (state.projectId) {
-                          try {
-                            await linkStamp(state.projectId, stampId);
-                            const res = await fetch(`/api/projects/${state.projectId}`);
-                            if (res.ok) {
-                              const data = await res.json();
-                              setStamps(data.stamps.map((s: any) => ({
-                                id: s.id,
-                                name: s.name,
-                                cols: s.cols,
-                                rows: s.rows,
-                                thumbnail: s.thumbnail ?? undefined,
-                                layerNames: s.layerNames ?? [],
-                              })));
-                            }
-                          } catch (err) {
-                            alert(err instanceof Error ? err.message : t('errors.failedToLinkStamp'));
-                          }
-                        }
-                      }}
-                    />
+                  )}
+                  {sectionId === "tilesets" && !isCollapsed && (
+                    <div className="flex items-center gap-0.5">
+                      {state.selectedRegion && (
+                        <Tooltip label={t("mapEditor.tilesets.createStampFromSelection")}>
+                          <button
+                            className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
+                            onClick={handleCreateStampFromTileset}
+                          >
+                            <Stamp className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
+                      )}
+                      <Tooltip label={t("mapEditor.tilesets.importTilesetTooltip")} shortcut="I">
+                        <button
+                          className="text-text-secondary hover:text-text p-0.5 rounded hover:bg-surface-raised transition-colors"
+                          onClick={() => handleQuickImportTileset()}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
+                    </div>
                   )}
                 </div>
               );
-            }
 
-            if (sectionId === 'minimap') {
-              return (
-                <div key={sectionId}>
-                  {header}
-                  <Minimap
-                    state={state}
-                    findTileset={findTileset}
-                    viewportWidth={viewportSize.width}
-                    viewportHeight={viewportSize.height}
-                    onPanTo={handlePanTo}
-                    hideHeader
-                  />
-                </div>
-              );
-            }
+              if (isCollapsed) return header;
 
-            if (sectionId === 'tilesets') {
-              return (
-                <div key={sectionId}>
-                  {header}
-                  <div>
-                    <TilePalette
-                      tilesets={sortedTilesets}
-                      selectedRegion={state.selectedRegion}
-                      onSelectRegion={handleSelectRegion}
-                      onImportTileset={() => handleQuickImportTileset()}
-                      onDeleteTileset={handleDeleteTileset}
-                      onRenameTileset={(firstgid, name) => dispatch({ type: 'RENAME_TILESET', firstgid, name })}
-                      onEditPixels={handleEditPixels}
-                      onReorderTileset={handleReorderTileset}
+              // Section content
+              if (sectionId === "layers") {
+                return (
+                  <div key={sectionId}>
+                    {header}
+                    <div>
+                      {state.mapData && (
+                        <LayerPanel
+                          layers={state.mapData.layers}
+                          activeLayerIndex={state.activeLayerIndex}
+                          onSelectLayer={(index) => dispatch({ type: "SET_ACTIVE_LAYER", index })}
+                          onRenameLayer={(index, name) =>
+                            dispatch({ type: "RENAME_LAYER", index, name })
+                          }
+                          onDeleteLayer={(index) => handleDeleteLayer(index)}
+                          onReorderLayers={(from, to) =>
+                            dispatch({ type: "REORDER_LAYERS", fromIndex: from, toIndex: to })
+                          }
+                          onSetLayerDepth={(index, depth) =>
+                            dispatch({ type: "SET_LAYER_DEPTH", index, depth })
+                          }
+                          onAddLayer={handleAddLayer}
+                          onToggleVisibility={handleToggleLayerVisibility}
+                          layerOverlayMap={layerOverlayMap}
+                          onToggleLayerOverlay={(idx) =>
+                            setLayerOverlayMap((prev) => ({ ...prev, [idx]: !(prev[idx] ?? true) }))
+                          }
+                          hideHeader
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (sectionId === "stamps") {
+                return (
+                  <div key={sectionId}>
+                    {header}
+                    {!isCollapsed && (
+                      <StampPanel
+                        stamps={stamps}
+                        activeStampId={activeStamp?.id ?? null}
+                        onSelectStamp={handleSelectStamp}
+                        onDeleteStamp={handleDeleteStamp}
+                        onEditStamp={handleEditStamp}
+                        onUnlinkStamp={
+                          state.projectId
+                            ? async (stampId) => {
+                                try {
+                                  await unlinkStamp(state.projectId!, stampId);
+                                  if (activeStamp?.id === stampId) setActiveStamp(null);
+                                  fetchStamps();
+                                } catch (err) {
+                                  alert(
+                                    err instanceof Error
+                                      ? err.message
+                                      : t("errors.failedToUnlinkStamp"),
+                                  );
+                                }
+                              }
+                            : undefined
+                        }
+                        hideHeader
+                        projectId={state.projectId}
+                        onAddToProject={async (stampId) => {
+                          if (state.projectId) {
+                            try {
+                              await linkStamp(state.projectId, stampId);
+                              const res = await fetch(`/api/projects/${state.projectId}`);
+                              if (res.ok) {
+                                const data = await res.json();
+                                setStamps(
+                                  data.stamps.map((s: any) => ({
+                                    id: s.id,
+                                    name: s.name,
+                                    cols: s.cols,
+                                    rows: s.rows,
+                                    thumbnail: s.thumbnail ?? undefined,
+                                    layerNames: s.layerNames ?? [],
+                                  })),
+                                );
+                              }
+                            } catch (err) {
+                              alert(
+                                err instanceof Error ? err.message : t("errors.failedToLinkStamp"),
+                              );
+                            }
+                          }
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              }
+
+              if (sectionId === "minimap") {
+                return (
+                  <div key={sectionId}>
+                    {header}
+                    <Minimap
+                      state={state}
+                      findTileset={findTileset}
+                      viewportWidth={viewportSize.width}
+                      viewportHeight={viewportSize.height}
+                      onPanTo={handlePanTo}
                       hideHeader
                     />
                   </div>
-                </div>
-              );
-            }
+                );
+              }
 
-            return null;
-          })}
+              if (sectionId === "tilesets") {
+                return (
+                  <div key={sectionId}>
+                    {header}
+                    <div>
+                      <TilePalette
+                        tilesets={sortedTilesets}
+                        selectedRegion={state.selectedRegion}
+                        onSelectRegion={handleSelectRegion}
+                        onImportTileset={() => handleQuickImportTileset()}
+                        onDeleteTileset={handleDeleteTileset}
+                        onRenameTileset={(firstgid, name) =>
+                          dispatch({ type: "RENAME_TILESET", firstgid, name })
+                        }
+                        onEditPixels={handleEditPixels}
+                        onReorderTileset={handleReorderTileset}
+                        hideHeader
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              return null;
+            })}
         </div>
 
         {/* Resize Handle */}
@@ -1889,7 +2146,7 @@ export default function MapEditorLayout({
             />
           ) : (
             <div className="flex items-center justify-center h-full text-text-dim text-body">
-              {t('mapEditor.emptyState')}
+              {t("mapEditor.emptyState")}
             </div>
           )}
         </div>
@@ -1899,16 +2156,20 @@ export default function MapEditorLayout({
       <div className="h-6 flex items-center gap-4 px-3 bg-surface border-t border-border text-micro text-text-dim select-none flex-shrink-0">
         {statusInfo && (
           <span>
-            {t('mapEditor.statusBar.tile')} ({statusInfo.tileX}, {statusInfo.tileY})
+            {t("mapEditor.statusBar.tile")} ({statusInfo.tileX}, {statusInfo.tileY})
           </span>
         )}
-        <span>{t('mapEditor.statusBar.layer')} {activeLayerName}</span>
-        <span>{t('mapEditor.statusBar.tool')} {toolName}</span>
+        <span>
+          {t("mapEditor.statusBar.layer")} {activeLayerName}
+        </span>
+        <span>
+          {t("mapEditor.statusBar.tool")} {toolName}
+        </span>
         {statusInfo && statusInfo.gid > 0 && <span>GID: {statusInfo.gid}</span>}
         <span className="ml-auto">
           {state.mapData
             ? `${state.mapData.width}x${state.mapData.height} (${state.mapData.tilewidth}px)`
-            : t('mapEditor.statusBar.noMap')}
+            : t("mapEditor.statusBar.noMap")}
         </span>
       </div>
 
@@ -1924,7 +2185,10 @@ export default function MapEditorLayout({
       {/* Modals */}
       <ImportTilesetModal
         open={showImportTileset}
-        onClose={() => { setShowImportTileset(false); setDroppedTilesetFile(null); }}
+        onClose={() => {
+          setShowImportTileset(false);
+          setDroppedTilesetFile(null);
+        }}
         existingTilesets={state.mapData?.tilesets ?? []}
         onImport={handleImportTileset}
         initialFile={droppedTilesetFile}
@@ -1935,10 +2199,7 @@ export default function MapEditorLayout({
         }}
       />
 
-      <HelpModal
-        open={showHelp}
-        onClose={() => setShowHelp(false)}
-      />
+      <HelpModal open={showHelp} onClose={() => setShowHelp(false)} />
 
       <SaveStampModal
         open={showSaveStamp}
@@ -1951,10 +2212,15 @@ export default function MapEditorLayout({
         <StampEditorModal
           key={editingStamp.id}
           open={showStampEditor}
-          onClose={() => { setShowStampEditor(false); setEditingStamp(null); }}
+          onClose={() => {
+            setShowStampEditor(false);
+            setEditingStamp(null);
+          }}
           stamp={editingStamp}
           onSave={handleSaveStampEdit}
-          mapLayerNames={state.mapData?.layers.filter(l => l.type === 'tilelayer').map(l => l.name)}
+          mapLayerNames={state.mapData?.layers
+            .filter((l) => l.type === "tilelayer")
+            .map((l) => l.name)}
           onDelete={async (stampId) => {
             await handleDeleteStamp(stampId);
             setShowStampEditor(false);
@@ -1968,50 +2234,75 @@ export default function MapEditorLayout({
         />
       )}
 
-      {showPixelEditor && (selectionPixelData || (state.selectedRegion && state.tilesetImages[state.selectedRegion.firstgid])) && (
-        <PixelEditorModal
-          open={showPixelEditor}
-          onClose={() => { setShowPixelEditor(false); setSelectionPixelData(null); }}
-          region={selectionPixelData ? null : state.selectedRegion}
-          tilesetInfo={selectionPixelData ? null : (state.selectedRegion ? state.tilesetImages[state.selectedRegion.firstgid] : null)}
-          onSaveAsNew={handlePixelSaveAsNew}
-          onOverwrite={handlePixelOverwrite}
-          initialImageDataUrl={selectionPixelData?.dataUrl}
-          initialTileWidth={selectionPixelData?.tileWidth}
-          initialTileHeight={selectionPixelData?.tileHeight}
-          initialCols={selectionPixelData?.cols}
-          initialRows={selectionPixelData?.rows}
-          onApply={pixelEditorStampCallbackRef.current ? (dataUrl: string, newCols: number, newRows: number) => {
-            pixelEditorStampCallbackRef.current?.(dataUrl, newCols, newRows);
-            pixelEditorStampCallbackRef.current = null;
-            setShowPixelEditor(false);
-            setSelectionPixelData(null);
-          } : undefined}
-          onSaveAsStamp={async (editedImageDataUrl, cols, rows, tileWidth, tileHeight) => {
-            // Build stamp directly from the edited pixel image
-            // Each tile in the grid gets a sequential GID (1-based)
-            const tileCount = cols * rows;
-            const data: number[] = [];
-            for (let i = 0; i < tileCount; i++) {
-              data.push(i + 1); // GIDs start at 1
+      {showPixelEditor &&
+        (selectionPixelData ||
+          (state.selectedRegion && state.tilesetImages[state.selectedRegion.firstgid])) && (
+          <PixelEditorModal
+            open={showPixelEditor}
+            onClose={() => {
+              setShowPixelEditor(false);
+              setSelectionPixelData(null);
+            }}
+            region={selectionPixelData ? null : state.selectedRegion}
+            tilesetInfo={
+              selectionPixelData
+                ? null
+                : state.selectedRegion
+                  ? state.tilesetImages[state.selectedRegion.firstgid]
+                  : null
             }
+            onSaveAsNew={handlePixelSaveAsNew}
+            onOverwrite={handlePixelOverwrite}
+            initialImageDataUrl={selectionPixelData?.dataUrl}
+            initialTileWidth={selectionPixelData?.tileWidth}
+            initialTileHeight={selectionPixelData?.tileHeight}
+            initialCols={selectionPixelData?.cols}
+            initialRows={selectionPixelData?.rows}
+            onApply={
+              pixelEditorStampCallbackRef.current
+                ? (dataUrl: string, newCols: number, newRows: number) => {
+                    pixelEditorStampCallbackRef.current?.(dataUrl, newCols, newRows);
+                    pixelEditorStampCallbackRef.current = null;
+                    setShowPixelEditor(false);
+                    setSelectionPixelData(null);
+                  }
+                : undefined
+            }
+            onSaveAsStamp={async (editedImageDataUrl, cols, rows, tileWidth, tileHeight) => {
+              // Build stamp directly from the edited pixel image
+              // Each tile in the grid gets a sequential GID (1-based)
+              const tileCount = cols * rows;
+              const data: number[] = [];
+              for (let i = 0; i < tileCount; i++) {
+                data.push(i + 1); // GIDs start at 1
+              }
 
-            const stampLayers = [{ name: 'Floor', type: 'tilelayer', depth: 0, data }];
-            const stampTilesets = [{
-              name: 'edited', firstgid: 1,
-              tilewidth: tileWidth, tileheight: tileHeight,
-              columns: cols, tilecount: tileCount,
-              image: editedImageDataUrl,
-            }];
+              const stampLayers = [{ name: "Floor", type: "tilelayer", depth: 0, data }];
+              const stampTilesets = [
+                {
+                  name: "edited",
+                  firstgid: 1,
+                  tilewidth: tileWidth,
+                  tileheight: tileHeight,
+                  columns: cols,
+                  tilecount: tileCount,
+                  image: editedImageDataUrl,
+                },
+              ];
 
-            pendingStampDataRef.current = {
-              cols, rows, tileWidth, tileHeight,
-              layers: stampLayers, tilesets: stampTilesets, thumbnail: editedImageDataUrl,
-            };
-            setShowSaveStamp(true);
-          }}
-        />
-      )}
+              pendingStampDataRef.current = {
+                cols,
+                rows,
+                tileWidth,
+                tileHeight,
+                layers: stampLayers,
+                tilesets: stampTilesets,
+                thumbnail: editedImageDataUrl,
+              };
+              setShowSaveStamp(true);
+            }}
+          />
+        )}
     </div>
   );
 }

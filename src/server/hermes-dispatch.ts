@@ -51,12 +51,14 @@ export async function getStoredHermesSessionRef(
   const rows = await db
     .select({ sessionRef: npcSessions.sessionRef })
     .from(npcSessions)
-    .where(and(
-      eq(npcSessions.npcId, npcId),
-      eq(npcSessions.userId, userId),
-      eq(npcSessions.contextKey, contextKey),
-      eq(npcSessions.adapterType, "hermes"),
-    ))
+    .where(
+      and(
+        eq(npcSessions.npcId, npcId),
+        eq(npcSessions.userId, userId),
+        eq(npcSessions.contextKey, contextKey),
+        eq(npcSessions.adapterType, "hermes"),
+      ),
+    )
     .limit(1);
 
   return rows[0]?.sessionRef ?? null;
@@ -71,15 +73,18 @@ export async function persistHermesSessionRef(
   const existing = await db
     .select({ id: npcSessions.id })
     .from(npcSessions)
-    .where(and(
-      eq(npcSessions.npcId, npcId),
-      eq(npcSessions.userId, userId),
-      eq(npcSessions.contextKey, contextKey),
-    ))
+    .where(
+      and(
+        eq(npcSessions.npcId, npcId),
+        eq(npcSessions.userId, userId),
+        eq(npcSessions.contextKey, contextKey),
+      ),
+    )
     .limit(1);
 
   if (existing[0]) {
-    await db.update(npcSessions)
+    await db
+      .update(npcSessions)
       .set({ sessionRef, adapterType: "hermes", updatedAt: nowForDb() })
       .where(eq(npcSessions.id, existing[0].id));
     return;
@@ -89,7 +94,11 @@ export async function persistHermesSessionRef(
     npcId,
     userId,
     adapterType: "hermes",
-    sessionType: contextKey.startsWith("task-") ? "task" : contextKey.startsWith("meeting-") ? "meeting" : "dm",
+    sessionType: contextKey.startsWith("task-")
+      ? "task"
+      : contextKey.startsWith("meeting-")
+        ? "meeting"
+        : "dm",
     sessionRef,
     contextKey,
     createdAt: nowForDb(),

@@ -12,7 +12,10 @@ export async function GET(req: NextRequest) {
   const npcId = req.nextUrl.searchParams.get("npcId");
 
   if (!channelId) {
-    return NextResponse.json({ errorCode: "channel_id_required", error: "channelId required" }, { status: 400 });
+    return NextResponse.json(
+      { errorCode: "channel_id_required", error: "channelId required" },
+      { status: 400 },
+    );
   }
 
   try {
@@ -48,7 +51,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     console.error("[Tasks API] Error:", err);
-    return NextResponse.json({ errorCode: "internal_server_error", error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "internal_server_error", error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 
@@ -62,7 +68,10 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ errorCode: "invalid_json", error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json(
+      { errorCode: "invalid_json", error: "Invalid JSON body" },
+      { status: 400 },
+    );
   }
 
   const { channelId, title, summary } = body as {
@@ -72,12 +81,18 @@ export async function POST(req: NextRequest) {
   };
 
   if (!channelId || !title) {
-    return NextResponse.json({ errorCode: "missing_required_field", error: "channelId and title are required" }, { status: 400 });
+    return NextResponse.json(
+      { errorCode: "missing_required_field", error: "channelId and title are required" },
+      { status: 400 },
+    );
   }
 
   const trimmedTitle = title.trim();
   if (!trimmedTitle) {
-    return NextResponse.json({ errorCode: "invalid_title", error: "title must not be empty" }, { status: 400 });
+    return NextResponse.json(
+      { errorCode: "invalid_title", error: "title must not be empty" },
+      { status: 400 },
+    );
   }
 
   const normalizedTitle = trimmedTitle.slice(0, 200);
@@ -95,7 +110,10 @@ export async function POST(req: NextRequest) {
     const character = characterRows[0];
 
     if (!character) {
-      return NextResponse.json({ errorCode: "character_not_found", error: "Character not found" }, { status: 404 });
+      return NextResponse.json(
+        { errorCode: "character_not_found", error: "Character not found" },
+        { status: 404 },
+      );
     }
 
     const npcTaskId = `backlog-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6).padEnd(4, "0")}`;
@@ -116,6 +134,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(createdTask[0], { status: 201 });
   } catch (err) {
     console.error("[Tasks API] Error:", err);
-    return NextResponse.json({ errorCode: "internal_server_error", error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "internal_server_error", error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

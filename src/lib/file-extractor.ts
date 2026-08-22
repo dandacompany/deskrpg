@@ -14,11 +14,20 @@ export const FILE_LIMITS = {
 } as const;
 
 const ALLOWED_EXTENSIONS = new Set([
-  ".txt", ".md", ".json", ".csv",
+  ".txt",
+  ".md",
+  ".json",
+  ".csv",
   ".pdf",
-  ".xlsx", ".xls",
-  ".docx", ".doc",
-  ".png", ".jpg", ".jpeg", ".gif", ".webp",
+  ".xlsx",
+  ".xls",
+  ".docx",
+  ".doc",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
 ]);
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -118,7 +127,13 @@ export async function extractFileContent(
     // Images → resize and base64 encode for OpenClaw multimodal vision
     if (mimeType.startsWith("image/")) {
       const base64 = await extractImage(buffer);
-      return { name, mimeType: "image/jpeg", textContent: null, imageBase64: base64, truncated: false };
+      return {
+        name,
+        mimeType: "image/jpeg",
+        textContent: null,
+        imageBase64: base64,
+        truncated: false,
+      };
     }
 
     // Text-based files

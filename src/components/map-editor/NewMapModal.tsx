@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState, useRef, useCallback } from 'react';
-import { Button, Modal, Input } from '@/components/ui';
-import { useT } from '@/lib/i18n';
-import { createDefaultMap } from './hooks/useMapEditor';
-import type { TiledMap } from './hooks/useMapEditor';
+import { useState, useRef, useCallback } from "react";
+import { Button, Modal, Input } from "@/components/ui";
+import { useT } from "@/lib/i18n";
+import { createDefaultMap } from "./hooks/useMapEditor";
+import type { TiledMap } from "./hooks/useMapEditor";
 
 export interface NewMapModalProps {
   open: boolean;
@@ -17,9 +17,9 @@ const MAX_COLS = 40;
 const MAX_ROWS = 30;
 
 const TEMPLATES = [
-  { labelKey: 'mapEditor.newMap.templateSmall', width: 20, height: 15, desc: '640×480 px' },
-  { labelKey: 'mapEditor.newMap.templateMedium', width: 30, height: 22, desc: '960×704 px' },
-  { labelKey: 'mapEditor.newMap.templateLarge', width: 40, height: 30, desc: '1280×960 px' },
+  { labelKey: "mapEditor.newMap.templateSmall", width: 20, height: 15, desc: "640×480 px" },
+  { labelKey: "mapEditor.newMap.templateMedium", width: 30, height: 22, desc: "960×704 px" },
+  { labelKey: "mapEditor.newMap.templateLarge", width: 40, height: 30, desc: "1280×960 px" },
 ] as const;
 
 // Grid cell size for the visual picker
@@ -29,7 +29,7 @@ const GRID_ROWS = MAX_ROWS;
 
 export default function NewMapModal({ open, onClose, onSubmit }: NewMapModalProps) {
   const t = useT();
-  const defaultName = t('mapEditor.newMap.defaultName');
+  const defaultName = t("mapEditor.newMap.defaultName");
   const [name, setName] = useState(defaultName);
   const [width, setWidth] = useState(20);
   const [height, setHeight] = useState(15);
@@ -60,7 +60,7 @@ export default function NewMapModal({ open, onClose, onSubmit }: NewMapModalProp
     handleClose();
   };
 
-  const selectTemplate = (t: typeof TEMPLATES[number]) => {
+  const selectTemplate = (t: (typeof TEMPLATES)[number]) => {
     setWidth(t.width);
     setHeight(t.height);
   };
@@ -75,24 +75,30 @@ export default function NewMapModal({ open, onClose, onSubmit }: NewMapModalProp
     return { col, row };
   }, []);
 
-  const handleGridMouseDown = useCallback((e: React.MouseEvent) => {
-    const coord = getGridCoord(e);
-    if (!coord) return;
-    setIsDragging(true);
-    setWidth(coord.col);
-    setHeight(coord.row);
-  }, [getGridCoord]);
-
-  const handleGridMouseMove = useCallback((e: React.MouseEvent) => {
-    const coord = getGridCoord(e);
-    if (!coord) return;
-    setHoverW(coord.col);
-    setHoverH(coord.row);
-    if (isDragging) {
+  const handleGridMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      const coord = getGridCoord(e);
+      if (!coord) return;
+      setIsDragging(true);
       setWidth(coord.col);
       setHeight(coord.row);
-    }
-  }, [getGridCoord, isDragging]);
+    },
+    [getGridCoord],
+  );
+
+  const handleGridMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      const coord = getGridCoord(e);
+      if (!coord) return;
+      setHoverW(coord.col);
+      setHoverH(coord.row);
+      if (isDragging) {
+        setWidth(coord.col);
+        setHeight(coord.row);
+      }
+    },
+    [getGridCoord, isDragging],
+  );
 
   const handleGridMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -104,8 +110,8 @@ export default function NewMapModal({ open, onClose, onSubmit }: NewMapModalProp
     setIsDragging(false);
   }, []);
 
-  const displayW = isDragging ? width : (hoverW || width);
-  const displayH = isDragging ? height : (hoverH || height);
+  const displayW = isDragging ? width : hoverW || width;
+  const displayH = isDragging ? height : hoverH || height;
 
   return (
     <Modal open={open} onClose={handleClose} title={t("mapEditor.newMap.title")} size="md">
@@ -113,13 +119,21 @@ export default function NewMapModal({ open, onClose, onSubmit }: NewMapModalProp
         <div className="space-y-4">
           {/* Project Name */}
           <div>
-            <label className="text-caption text-text-secondary block mb-1">{t("mapEditor.newMap.projectName")}</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("mapEditor.newMap.namePlaceholder")} />
+            <label className="text-caption text-text-secondary block mb-1">
+              {t("mapEditor.newMap.projectName")}
+            </label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t("mapEditor.newMap.namePlaceholder")}
+            />
           </div>
 
           {/* Templates */}
           <div>
-            <label className="text-caption text-text-secondary block mb-2">{t("mapEditor.newMap.template")}</label>
+            <label className="text-caption text-text-secondary block mb-2">
+              {t("mapEditor.newMap.template")}
+            </label>
             <div className="flex gap-2">
               {TEMPLATES.map((tpl) => (
                 <button
@@ -127,12 +141,14 @@ export default function NewMapModal({ open, onClose, onSubmit }: NewMapModalProp
                   onClick={() => selectTemplate(tpl)}
                   className={`flex-1 px-3 py-2 rounded-lg border text-center transition-colors ${
                     width === tpl.width && height === tpl.height
-                      ? 'border-primary-light bg-primary-muted text-text'
-                      : 'border-border bg-surface-raised text-text-secondary hover:border-text-dim'
+                      ? "border-primary-light bg-primary-muted text-text"
+                      : "border-border bg-surface-raised text-text-secondary hover:border-text-dim"
                   }`}
                 >
                   <div className="text-caption font-semibold">{t(tpl.labelKey)}</div>
-                  <div className="text-micro text-text-dim">{tpl.width}×{tpl.height}</div>
+                  <div className="text-micro text-text-dim">
+                    {tpl.width}×{tpl.height}
+                  </div>
                   <div className="text-micro text-text-dim">{tpl.desc}</div>
                 </button>
               ))}
@@ -142,8 +158,13 @@ export default function NewMapModal({ open, onClose, onSubmit }: NewMapModalProp
           {/* Custom size: Grid picker + number inputs */}
           <div>
             <label className="text-caption text-text-secondary block mb-2">
-              {t("mapEditor.newMap.customSize")} — <span className="text-text">{displayW} × {displayH}</span>
-              <span className="text-text-dim ml-2">({displayW * TILE_SIZE}×{displayH * TILE_SIZE} px)</span>
+              {t("mapEditor.newMap.customSize")} —{" "}
+              <span className="text-text">
+                {displayW} × {displayH}
+              </span>
+              <span className="text-text-dim ml-2">
+                ({displayW * TILE_SIZE}×{displayH * TILE_SIZE} px)
+              </span>
             </label>
 
             {/* Grid visual picker */}
@@ -197,21 +218,29 @@ export default function NewMapModal({ open, onClose, onSubmit }: NewMapModalProp
             {/* Number inputs */}
             <div className="flex gap-3 mt-2">
               <div className="flex-1">
-                <label className="text-micro text-text-dim block mb-0.5">{t("mapEditor.newMap.width")}</label>
+                <label className="text-micro text-text-dim block mb-0.5">
+                  {t("mapEditor.newMap.width")}
+                </label>
                 <Input
                   type="number"
                   value={width}
-                  onChange={(e) => setWidth(Math.max(1, Math.min(MAX_COLS, Number(e.target.value))))}
+                  onChange={(e) =>
+                    setWidth(Math.max(1, Math.min(MAX_COLS, Number(e.target.value))))
+                  }
                   min={1}
                   max={MAX_COLS}
                 />
               </div>
               <div className="flex-1">
-                <label className="text-micro text-text-dim block mb-0.5">{t("mapEditor.newMap.height")}</label>
+                <label className="text-micro text-text-dim block mb-0.5">
+                  {t("mapEditor.newMap.height")}
+                </label>
                 <Input
                   type="number"
                   value={height}
-                  onChange={(e) => setHeight(Math.max(1, Math.min(MAX_ROWS, Number(e.target.value))))}
+                  onChange={(e) =>
+                    setHeight(Math.max(1, Math.min(MAX_ROWS, Number(e.target.value))))
+                  }
                   min={1}
                   max={MAX_ROWS}
                 />

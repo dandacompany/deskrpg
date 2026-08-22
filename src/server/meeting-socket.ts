@@ -66,7 +66,10 @@ type RegisterMeetingSocketHandlersArgs = {
     lastChatTime: Map<string, number>;
     chatCooldownMs: number;
     user: { userId: string; nickname?: string | null };
-    getParticipationAccess?: (channelId: string, userId: string) => Promise<ChannelAccessResult | null>;
+    getParticipationAccess?: (
+      channelId: string,
+      userId: string,
+    ) => Promise<ChannelAccessResult | null>;
     emitChannelAccessDenied?: (
       socket: MeetingSocket,
       input: { channelId: string; action: string; reason?: string },
@@ -104,11 +107,7 @@ function getMeetingRoomId(channelId: string) {
   return `meeting-${channelId}`;
 }
 
-export function emitMeetingNpcStream(
-  io: MeetingIo,
-  channelId: string,
-  payload: unknown,
-) {
+export function emitMeetingNpcStream(io: MeetingIo, channelId: string, payload: unknown) {
   io.to(getMeetingRoomId(channelId)).emit(MEETING_NPC_STREAM_EVENT, payload);
 }
 
@@ -133,7 +132,10 @@ export async function deliverMeetingNpcAnswer(steps: {
   try {
     await steps.persistSessionRef();
   } catch (err) {
-    (steps.onPersistError ?? ((e: unknown) => console.error("[meeting] session ref persist failed:", e)))(err);
+    (
+      steps.onPersistError ??
+      ((e: unknown) => console.error("[meeting] session ref persist failed:", e))
+    )(err);
   }
 }
 
@@ -170,14 +172,16 @@ export function registerMeetingSocketHandlers({
         return;
       }
 
-        if (!accessResult.access.allowed) {
-          if (emitChannelAccessDenied) {
-            emitChannelAccessDenied(socket, {
-              channelId,
-              action: "meeting:join",
-              reason: accessResult.access.reason as Parameters<NonNullable<typeof emitChannelAccessDenied>>[1]["reason"],
-            });
-          } else {
+      if (!accessResult.access.allowed) {
+        if (emitChannelAccessDenied) {
+          emitChannelAccessDenied(socket, {
+            channelId,
+            action: "meeting:join",
+            reason: accessResult.access.reason as Parameters<
+              NonNullable<typeof emitChannelAccessDenied>
+            >[1]["reason"],
+          });
+        } else {
           emitForbidden(socket, channelId, "meeting:join");
         }
         return;
@@ -263,7 +267,9 @@ export function registerMeetingSocketHandlers({
           emitChannelAccessDenied(socket, {
             channelId,
             action: "meeting:chat",
-            reason: accessResult.access.reason as Parameters<NonNullable<typeof emitChannelAccessDenied>>[1]["reason"],
+            reason: accessResult.access.reason as Parameters<
+              NonNullable<typeof emitChannelAccessDenied>
+            >[1]["reason"],
           });
         } else {
           emitForbidden(socket, channelId, "meeting:chat");

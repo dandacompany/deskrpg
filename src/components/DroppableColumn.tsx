@@ -10,7 +10,13 @@ interface DroppableColumnProps {
   className?: string;
 }
 
-export default function DroppableColumn({ status, onDrop, children, header, className = "" }: DroppableColumnProps) {
+export default function DroppableColumn({
+  status,
+  onDrop,
+  children,
+  header,
+  className = "",
+}: DroppableColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -44,9 +50,7 @@ export default function DroppableColumn({ status, onDrop, children, header, clas
       onDrop={handleDrop}
     >
       {header}
-      <div className="flex-1 overflow-y-auto space-y-2">
-        {children}
-      </div>
+      <div className="flex-1 overflow-y-auto space-y-2">{children}</div>
     </div>
   );
 }

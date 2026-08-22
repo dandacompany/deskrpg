@@ -18,10 +18,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
@@ -30,7 +27,10 @@ export async function GET(
 
   const accessible = await getAccessibleProviderResource(userId, id);
   if (!accessible) {
-    return NextResponse.json({ errorCode: "provider_not_found", error: "Provider not found" }, { status: 404 });
+    return NextResponse.json(
+      { errorCode: "provider_not_found", error: "Provider not found" },
+      { status: 404 },
+    );
   }
 
   return NextResponse.json({
@@ -39,17 +39,15 @@ export async function GET(
         isOwner: accessible.isOwner,
         shareRole: accessible.share?.role ?? null,
       }),
-      credentials: accessible.isOwner && accessible.resource.credentialsEncrypted
-        ? parseProviderCredentials(decryptGatewayToken(accessible.resource.credentialsEncrypted))
-        : null,
+      credentials:
+        accessible.isOwner && accessible.resource.credentialsEncrypted
+          ? parseProviderCredentials(decryptGatewayToken(accessible.resource.credentialsEncrypted))
+          : null,
     },
   });
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
@@ -83,7 +81,10 @@ export async function PATCH(
   if (body.authMethod !== undefined) {
     if (typeof body.authMethod !== "string" || !body.authMethod.trim()) {
       return NextResponse.json(
-        { errorCode: "provider_auth_method_required", error: "Auth method must be a non-empty string" },
+        {
+          errorCode: "provider_auth_method_required",
+          error: "Auth method must be a non-empty string",
+        },
         { status: 400 },
       );
     }
@@ -100,7 +101,10 @@ export async function PATCH(
     }
   } catch {
     return NextResponse.json(
-      { errorCode: "invalid_provider_payload", error: "displayName/baseUrl must be a string or null" },
+      {
+        errorCode: "invalid_provider_payload",
+        error: "displayName/baseUrl must be a string or null",
+      },
       { status: 400 },
     );
   }
@@ -110,10 +114,15 @@ export async function PATCH(
       updates.credentialsEncrypted = null;
     } else {
       try {
-        updates.credentialsEncrypted = encryptGatewayToken(serializeProviderCredentials(body.credentials));
+        updates.credentialsEncrypted = encryptGatewayToken(
+          serializeProviderCredentials(body.credentials),
+        );
       } catch {
         return NextResponse.json(
-          { errorCode: "invalid_provider_credentials", error: "Provider credentials must be serializable" },
+          {
+            errorCode: "invalid_provider_credentials",
+            error: "Provider credentials must be serializable",
+          },
           { status: 400 },
         );
       }
@@ -136,10 +145,7 @@ export async function PATCH(
   });
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });

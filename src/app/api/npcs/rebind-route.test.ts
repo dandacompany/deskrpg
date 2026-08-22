@@ -15,10 +15,7 @@ import { NextRequest } from "next/server";
 // initialized module singleton and node:test runs each test *file* in its own process, so
 // setting SQLITE_PATH once at module scope (before any test body touches `db`) pins every
 // test in this file to one throwaway DB.
-const sqlitePath = path.join(
-  os.tmpdir(),
-  `rebind-route-test-${crypto.randomUUID()}.db`,
-);
+const sqlitePath = path.join(os.tmpdir(), `rebind-route-test-${crypto.randomUUID()}.db`);
 process.env.DESKRPG_HOME = os.tmpdir();
 process.env.SQLITE_PATH = sqlitePath;
 for (const ext of ["", "-wal", "-shm"]) {
@@ -123,16 +120,8 @@ describe("POST /api/npcs/[id]/rebind", () => {
 
     const { db, npcs } = await loadDb();
     const [reloaded] = await db.select().from(npcs).where(eq(npcs.id, npc.id));
-    assert.equal(
-      reloaded.hermesProfileId,
-      null,
-      "the NPC must not be bound to the profile",
-    );
-    assert.equal(
-      reloaded.adapterType,
-      "unbound",
-      "the NPC's adapter type must be left unchanged",
-    );
+    assert.equal(reloaded.hermesProfileId, null, "the NPC must not be bound to the profile");
+    assert.equal(reloaded.adapterType, "unbound", "the NPC's adapter type must be left unchanged");
   });
 
   test("allows binding when the caller has share access (not just ownership) to the profile's gateway", async () => {

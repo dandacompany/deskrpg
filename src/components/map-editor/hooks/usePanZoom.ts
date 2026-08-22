@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useRef, useCallback } from 'react';
-import type { EditorState, EditorAction } from './useMapEditor';
+import { useRef, useCallback } from "react";
+import type { EditorState, EditorAction } from "./useMapEditor";
 
 interface PanState {
   isPanning: boolean;
@@ -24,7 +24,6 @@ export function usePanZoom(state: EditorState, dispatch: Dispatch) {
 
   const handleWheel = useCallback(
     (e: React.WheelEvent | WheelEvent, canvasRect: DOMRect) => {
-
       if (e.ctrlKey || e.metaKey) {
         // Cmd/Ctrl + scroll = zoom (cursor-anchored)
         const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
@@ -34,15 +33,15 @@ export function usePanZoom(state: EditorState, dispatch: Dispatch) {
         const scale = newZoom / state.zoom;
         const newPanX = mouseX - scale * (mouseX - state.panX);
         const newPanY = mouseY - scale * (mouseY - state.panY);
-        dispatch({ type: 'SET_ZOOM', zoom: newZoom });
-        dispatch({ type: 'SET_PAN', panX: newPanX, panY: newPanY });
+        dispatch({ type: "SET_ZOOM", zoom: newZoom });
+        dispatch({ type: "SET_PAN", panX: newPanX, panY: newPanY });
       } else if (e.shiftKey) {
         // Shift + scroll = pan horizontal
         const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
-        dispatch({ type: 'SET_PAN', panX: state.panX - delta, panY: state.panY });
+        dispatch({ type: "SET_PAN", panX: state.panX - delta, panY: state.panY });
       } else {
         // Scroll = pan vertical
-        dispatch({ type: 'SET_PAN', panX: state.panX, panY: state.panY - e.deltaY });
+        dispatch({ type: "SET_PAN", panX: state.panX, panY: state.panY - e.deltaY });
       }
     },
     [state.zoom, state.panX, state.panY, dispatch],
@@ -52,7 +51,7 @@ export function usePanZoom(state: EditorState, dispatch: Dispatch) {
     (e: React.MouseEvent | MouseEvent, _canvasRect: DOMRect): boolean => {
       // Middle-click (button 1) or pan tool with left-click
       const isMiddleClick = e.button === 1;
-      const isPanTool = state.tool === 'pan' && e.button === 0;
+      const isPanTool = state.tool === "pan" && e.button === 0;
 
       if (!isMiddleClick && !isPanTool) return false;
 
@@ -75,7 +74,7 @@ export function usePanZoom(state: EditorState, dispatch: Dispatch) {
       if (!ps.isPanning) return false;
 
       dispatch({
-        type: 'SET_PAN',
+        type: "SET_PAN",
         panX: ps.startPanX + (e.clientX - ps.startX),
         panY: ps.startPanY + (e.clientY - ps.startY),
       });

@@ -33,10 +33,7 @@ async function requireInviteManager(groupId: string, userId: string) {
   return { context };
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 
@@ -78,10 +75,7 @@ export async function GET(
   });
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 
@@ -136,10 +130,7 @@ export async function POST(
   return NextResponse.json({ invite }, { status: 201 });
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 

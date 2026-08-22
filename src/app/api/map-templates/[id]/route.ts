@@ -11,14 +11,13 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
   try {
-    const [template] = await db
-      .select()
-      .from(mapTemplates)
-      .where(eq(mapTemplates.id, id))
-      .limit(1);
+    const [template] = await db.select().from(mapTemplates).where(eq(mapTemplates.id, id)).limit(1);
 
     if (!template) {
-      return NextResponse.json({ errorCode: "template_not_found", error: "Template not found" }, { status: 404 });
+      return NextResponse.json(
+        { errorCode: "template_not_found", error: "Template not found" },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json({
@@ -31,7 +30,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
     });
   } catch (err) {
     console.error("Failed to get map template:", err);
-    return NextResponse.json({ errorCode: "failed_to_get_template", error: "Failed to get template" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_get_template", error: "Failed to get template" },
+      { status: 500 },
+    );
   }
 }
 
@@ -39,13 +41,34 @@ export async function GET(_req: NextRequest, { params }: Params) {
 export async function PUT(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  if (!userId)
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   try {
     const body = await req.json();
-    const { name, icon, description, cols, rows, layers, objects, spawnCol, spawnRow, tags, tiledJson } = body;
+    const {
+      name,
+      icon,
+      description,
+      cols,
+      rows,
+      layers,
+      objects,
+      spawnCol,
+      spawnRow,
+      tags,
+      tiledJson,
+    } = body;
 
-    const validationError = validateMapTemplate({ name, cols, rows, layers, spawnCol, spawnRow, tiledJson });
+    const validationError = validateMapTemplate({
+      name,
+      cols,
+      rows,
+      layers,
+      spawnCol,
+      spawnRow,
+      tiledJson,
+    });
     if (validationError) {
       return NextResponse.json(
         { errorCode: "map_template_invalid", error: validationError },
@@ -73,7 +96,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
       .returning();
 
     if (!updated) {
-      return NextResponse.json({ errorCode: "template_not_found", error: "Template not found" }, { status: 404 });
+      return NextResponse.json(
+        { errorCode: "template_not_found", error: "Template not found" },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json({
@@ -86,7 +112,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
     });
   } catch (err) {
     console.error("Failed to update map template:", err);
-    return NextResponse.json({ errorCode: "failed_to_update_template", error: "Failed to update template" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_update_template", error: "Failed to update template" },
+      { status: 500 },
+    );
   }
 }
 
@@ -94,21 +123,25 @@ export async function PUT(req: NextRequest, { params }: Params) {
 export async function DELETE(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  if (!userId)
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   try {
-    const deleted = await db
-      .delete(mapTemplates)
-      .where(eq(mapTemplates.id, id))
-      .returning();
+    const deleted = await db.delete(mapTemplates).where(eq(mapTemplates.id, id)).returning();
 
     if (deleted.length === 0) {
-      return NextResponse.json({ errorCode: "template_not_found", error: "Template not found" }, { status: 404 });
+      return NextResponse.json(
+        { errorCode: "template_not_found", error: "Template not found" },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Failed to delete map template:", err);
-    return NextResponse.json({ errorCode: "failed_to_delete_template", error: "Failed to delete template" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_delete_template", error: "Failed to delete template" },
+      { status: 500 },
+    );
   }
 }

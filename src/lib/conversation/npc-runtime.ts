@@ -3,7 +3,13 @@
 // 트랜스크립트 기록과 콜백 방출은 채널(엔진)의 일이라 여기 없다 — SpeakOutcome이 그 경계다.
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { formatPollMessage, formatSpeakMessage, parseHandRaise, sanitizeSpokenResponse, sanitizeStreamingSpokenResponse } = require("../meeting-formatter.js") as typeof import("../meeting-formatter.js");
+const {
+  formatPollMessage,
+  formatSpeakMessage,
+  parseHandRaise,
+  sanitizeSpokenResponse,
+  sanitizeStreamingSpokenResponse,
+} = require("../meeting-formatter.js") as typeof import("../meeting-formatter.js");
 
 import { parseMention } from "./mention";
 import { Transcript } from "./transcript";
@@ -131,7 +137,10 @@ export class NpcRuntime {
    * SpeakOutcome 으로 돌려준다. 그래야 콜백 호출 조건(트랜스크립트 기록·onTurnEnd 등)이
    * 엔진 한 곳에 모인다.
    */
-  async takeTurn(remaining: number, hooks: { onChunk: (chunk: string) => void }): Promise<SpeakOutcome> {
+  async takeTurn(
+    remaining: number,
+    hooks: { onChunk: (chunk: string) => void },
+  ): Promise<SpeakOutcome> {
     const currentTurn = this.deps.transcript.all().length;
     const maxTurns = this.deps.maxTotalTurns;
     const historyLimit = this.deps.historyLimit;

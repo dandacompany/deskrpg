@@ -4,17 +4,19 @@ import test from "node:test";
 import { resolveOwnedProjectAccess } from "./project-access";
 
 test("project access requires an authenticated user", () => {
-  assert.deepEqual(
-    resolveOwnedProjectAccess({ requestUserId: null, ownerUserId: "owner-1" }),
-    { ok: false, status: 401, errorCode: "unauthorized" },
-  );
+  assert.deepEqual(resolveOwnedProjectAccess({ requestUserId: null, ownerUserId: "owner-1" }), {
+    ok: false,
+    status: 401,
+    errorCode: "unauthorized",
+  });
 });
 
 test("project access rejects a non-owner", () => {
-  assert.deepEqual(
-    resolveOwnedProjectAccess({ requestUserId: "user-2", ownerUserId: "owner-1" }),
-    { ok: false, status: 404, errorCode: "not_found" },
-  );
+  assert.deepEqual(resolveOwnedProjectAccess({ requestUserId: "user-2", ownerUserId: "owner-1" }), {
+    ok: false,
+    status: 404,
+    errorCode: "not_found",
+  });
 });
 
 test("project access succeeds for the owner", () => {

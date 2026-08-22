@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { enterFirstChannel, openNpcDialog, sendAndAwaitReply, isDoubled, waitForGameLoop } from "./helpers";
+import {
+  enterFirstChannel,
+  openNpcDialog,
+  sendAndAwaitReply,
+  isDoubled,
+  waitForGameLoop,
+} from "./helpers";
 
 // 실행 전제: `npm run dev` 가 떠 있고, 로컬 Hermes 게이트웨이가 살아 있으며,
 // 개발 DB 에 Hermes 프로필이 묶인 NPC 가 최소 하나 있어야 한다.

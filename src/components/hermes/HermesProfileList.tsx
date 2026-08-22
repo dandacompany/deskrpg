@@ -44,13 +44,17 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
 
-  const [discovery, setDiscovery] = useState<{ available: boolean; optedIn: boolean; rows: DiscoveryRow[] } | null>(
-    null,
-  );
+  const [discovery, setDiscovery] = useState<{
+    available: boolean;
+    optedIn: boolean;
+    rows: DiscoveryRow[];
+  } | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [probeStatus, setProbeStatus] = useState<ProbeStatus>("idle");
   const [registering, setRegistering] = useState(false);
-  const [registerFailures, setRegisterFailures] = useState<{ name: string; errorCode: string }[]>([]);
+  const [registerFailures, setRegisterFailures] = useState<{ name: string; errorCode: string }[]>(
+    [],
+  );
   const [registerError, setRegisterError] = useState("");
   const [optInError, setOptInError] = useState("");
   const [optingIn, setOptingIn] = useState(false);
@@ -81,7 +85,11 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
-        setDiscovery({ available: !!d.available, optedIn: !!d.optedIn, rows: toDiscoveryRows(d.candidates ?? []) });
+        setDiscovery({
+          available: !!d.available,
+          optedIn: !!d.optedIn,
+          rows: toDiscoveryRows(d.candidates ?? []),
+        });
       })
       .catch(() => undefined);
     return () => {
@@ -123,11 +131,15 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
       return next;
     });
     try {
-      const res = await fetch(`/api/gateways/${gatewayId}/profiles/${profileId}/test`, { method: "POST" });
+      const res = await fetch(`/api/gateways/${gatewayId}/profiles/${profileId}/test`, {
+        method: "POST",
+      });
       const data = await res.json().catch(() => ({}));
       setProfiles((prev) =>
         prev.map((profile) =>
-          profile.id === profileId ? { ...profile, lastValidationStatus: data.status ?? null } : profile,
+          profile.id === profileId
+            ? { ...profile, lastValidationStatus: data.status ?? null }
+            : profile,
         ),
       );
       if (data.status && data.status !== "valid" && data.error) {
@@ -160,11 +172,15 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
               <div key={profile.id} className="rounded-lg bg-bg px-3 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-medium text-white">{profile.displayName || profile.profileName}</p>
+                    <p className="font-medium text-white">
+                      {profile.displayName || profile.profileName}
+                    </p>
                     <p className="text-xs text-text-muted">{profile.profileName}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${PROFILE_STATUS_BADGE_CLASS[tone]}`}>
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${PROFILE_STATUS_BADGE_CLASS[tone]}`}
+                    >
                       {t(key)}
                     </span>
                     <button
@@ -203,8 +219,14 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
                       body: JSON.stringify({ action: "opt-in" }),
                     });
                     if (!res.ok) throw await res.json().catch(() => ({}));
-                    const d = await fetch(`/api/gateways/${gatewayId}/local-discovery`).then((r) => r.json());
-                    setDiscovery({ available: !!d.available, optedIn: !!d.optedIn, rows: toDiscoveryRows(d.candidates ?? []) });
+                    const d = await fetch(`/api/gateways/${gatewayId}/local-discovery`).then((r) =>
+                      r.json(),
+                    );
+                    setDiscovery({
+                      available: !!d.available,
+                      optedIn: !!d.optedIn,
+                      rows: toDiscoveryRows(d.candidates ?? []),
+                    });
                   } catch {
                     setOptInError(t("errors.connectionFailed"));
                   } finally {
@@ -227,9 +249,7 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
             <div className="space-y-2 rounded-lg bg-bg p-3">
               {/* 제목이 없으면 등록 목록과 "프로필 추가" 폼 사이에 정체불명의
                   체크박스 뭉치로 보인다 — 이게 이 머신에서 찾아온 것임을 말해 준다. */}
-              <p className="text-sm font-semibold text-text">
-                {t("hermes.discovery.listTitle")}
-              </p>
+              <p className="text-sm font-semibold text-text">{t("hermes.discovery.listTitle")}</p>
               {discovery.rows.map((row) => (
                 <label key={row.name} className="flex items-center gap-2 text-sm">
                   <input
@@ -237,12 +257,16 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
                     disabled={!row.selectable}
                     checked={selected.includes(row.name)}
                     onChange={(e) =>
-                      setSelected((prev) => (e.target.checked ? [...prev, row.name] : prev.filter((n) => n !== row.name)))
+                      setSelected((prev) =>
+                        e.target.checked ? [...prev, row.name] : prev.filter((n) => n !== row.name),
+                      )
                     }
                   />
                   <span>{row.name}</span>
                   {row.reason !== "ok" && (
-                    <span className="text-xs text-text-muted">{t(`hermes.discovery.reason.${row.reason}`)}</span>
+                    <span className="text-xs text-text-muted">
+                      {t(`hermes.discovery.reason.${row.reason}`)}
+                    </span>
                   )}
                 </label>
               ))}
@@ -342,7 +366,9 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
           </button>
         </div>
       ) : (
-        <p className="border-t border-border pt-4 text-sm text-text-muted">{t("gateway.profile.ownerOnly")}</p>
+        <p className="border-t border-border pt-4 text-sm text-text-muted">
+          {t("gateway.profile.ownerOnly")}
+        </p>
       )}
     </section>
   );

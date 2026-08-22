@@ -14,10 +14,7 @@ import {
   readProfileToken,
   resolveProfilesRoot,
 } from "@/lib/hermes/local-profiles";
-import {
-  listHermesProfiles,
-  registerHermesProfile,
-} from "@/lib/hermes-profiles";
+import { listHermesProfiles, registerHermesProfile } from "@/lib/hermes-profiles";
 import { getUserId } from "@/lib/internal-rpc";
 
 import { isValidProfileName } from "../profiles/validation";
@@ -27,16 +24,10 @@ function optedIn(resource: { localDiscoveryOptedInAt?: string | Date | null }) {
   return !!resource.localDiscoveryOptedInAt;
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
   const accessible = await getAccessibleGatewayResource(userId, id);
@@ -86,22 +77,15 @@ export async function GET(
     baseUrl: accessible.resource.baseUrl,
     localProfiles: listLocalProfiles(root, fs),
     registeredNames: registered.map((r) => r.profileName),
-    probe: async (baseUrl, profile) =>
-      (await probeHermesGateway(baseUrl, { profile })).kind,
+    probe: async (baseUrl, profile) => (await probeHermesGateway(baseUrl, { profile })).kind,
   });
   return NextResponse.json({ available, optedIn: true, candidates });
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
   const accessible = await getAccessibleGatewayResource(userId, id);
@@ -130,10 +114,7 @@ export async function POST(
   }
   // 비밀 파일을 읽는 동의는 소유자만 줄 수 있다.
   if (!accessible.isOwner) {
-    return NextResponse.json(
-      { errorCode: "forbidden", error: "owner only" },
-      { status: 403 },
-    );
+    return NextResponse.json({ errorCode: "forbidden", error: "owner only" }, { status: 403 });
   }
 
   const body = await req.json().catch(() => ({}));

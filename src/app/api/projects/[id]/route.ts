@@ -1,4 +1,13 @@
-import { db, projects, projectTilesets, projectStamps, tilesetImages, stamps, jsonForDb, isPostgres } from "@/db";
+import {
+  db,
+  projects,
+  projectTilesets,
+  projectStamps,
+  tilesetImages,
+  stamps,
+  jsonForDb,
+  isPostgres,
+} from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { parseDbArray, parseDbJson } from "@/lib/db-json";
@@ -12,52 +21,59 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if ("error" in result && !("project" in result)) return result.error;
     const { project } = result as { project: typeof projects.$inferSelect };
 
-  // Load linked tilesets
-  const tilesetRows = await db
-    .select({
-      id: tilesetImages.id,
-      name: tilesetImages.name,
-      tilewidth: tilesetImages.tilewidth,
-      tileheight: tilesetImages.tileheight,
-      columns: tilesetImages.columns,
-      tilecount: tilesetImages.tilecount,
-      image: tilesetImages.image,
-      firstgid: projectTilesets.firstgid,
-    })
-    .from(projectTilesets)
-    .innerJoin(tilesetImages, eq(projectTilesets.tilesetId, tilesetImages.id))
-    .where(eq(projectTilesets.projectId, id));
+    // Load linked tilesets
+    const tilesetRows = await db
+      .select({
+        id: tilesetImages.id,
+        name: tilesetImages.name,
+        tilewidth: tilesetImages.tilewidth,
+        tileheight: tilesetImages.tileheight,
+        columns: tilesetImages.columns,
+        tilecount: tilesetImages.tilecount,
+        image: tilesetImages.image,
+        firstgid: projectTilesets.firstgid,
+      })
+      .from(projectTilesets)
+      .innerJoin(tilesetImages, eq(projectTilesets.tilesetId, tilesetImages.id))
+      .where(eq(projectTilesets.projectId, id));
 
-  // Load linked stamps
-  const stampRows = await db
-    .select({
-      id: stamps.id,
-      name: stamps.name,
-      cols: stamps.cols,
-      rows: stamps.rows,
-      thumbnail: stamps.thumbnail,
-      layers: stamps.layers,
-    })
-    .from(projectStamps)
-    .innerJoin(stamps, eq(projectStamps.stampId, stamps.id))
-    .where(eq(projectStamps.projectId, id));
+    // Load linked stamps
+    const stampRows = await db
+      .select({
+        id: stamps.id,
+        name: stamps.name,
+        cols: stamps.cols,
+        rows: stamps.rows,
+        thumbnail: stamps.thumbnail,
+        layers: stamps.layers,
+      })
+      .from(projectStamps)
+      .innerJoin(stamps, eq(projectStamps.stampId, stamps.id))
+      .where(eq(projectStamps.projectId, id));
 
-  const parsedProject = {
-    ...project,
-    tiledJson: parseDbJson(project.tiledJson) ?? project.tiledJson,
-    settings: parseDbJson(project.settings) ?? project.settings,
-  };
+    const parsedProject = {
+      ...project,
+      tiledJson: parseDbJson(project.tiledJson) ?? project.tiledJson,
+      settings: parseDbJson(project.settings) ?? project.settings,
+    };
 
-  const parsedStamps = stampRows.map((s) => ({
-    ...s,
-    layers: parseDbJson(s.layers) ?? s.layers,
-    layerNames: parseDbArray<{ name: string }>(s.layers).map((l) => l.name) ?? [],
-  }));
+    const parsedStamps = stampRows.map((s) => ({
+      ...s,
+      layers: parseDbJson(s.layers) ?? s.layers,
+      layerNames: parseDbArray<{ name: string }>(s.layers).map((l) => l.name) ?? [],
+    }));
 
-    return NextResponse.json({ project: parsedProject, tilesets: tilesetRows, stamps: parsedStamps });
+    return NextResponse.json({
+      project: parsedProject,
+      tilesets: tilesetRows,
+      stamps: parsedStamps,
+    });
   } catch (err) {
     console.error("Failed to fetch project:", err);
-    return NextResponse.json({ errorCode: "failed_to_fetch_project", error: "Failed to fetch project" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_fetch_project", error: "Failed to fetch project" },
+      { status: 500 },
+    );
   }
 }
 
@@ -78,12 +94,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       // Restore tileset images from DB if stripped (empty string)
       if (tiledJson.tilesets) {
         for (const ts of tiledJson.tilesets) {
-          if (ts.image === '' || !ts.image) {
+          if (ts.image === "" || !ts.image) {
             try {
-              const [dbTs] = await db.select({ image: tilesetImages.image })
-                .from(tilesetImages).where(eq(tilesetImages.name, ts.name)).limit(1);
+              const [dbTs] = await db
+                .select({ image: tilesetImages.image })
+                .from(tilesetImages)
+                .where(eq(tilesetImages.name, ts.name))
+                .limit(1);
               if (dbTs) ts.image = dbTs.image;
-            } catch { /* ignore */ }
+            } catch {
+              /* ignore */
+            }
           }
         }
       }
@@ -97,7 +118,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("Failed to save project:", err);
-    return NextResponse.json({ errorCode: "failed_to_save_project", error: "Failed to save project" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_save_project", error: "Failed to save project" },
+      { status: 500 },
+    );
   }
 }
 
@@ -112,6 +136,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("Failed to delete project:", err);
-    return NextResponse.json({ errorCode: "failed_to_delete_project", error: "Failed to delete project" }, { status: 500 });
+    return NextResponse.json(
+      { errorCode: "failed_to_delete_project", error: "Failed to delete project" },
+      { status: 500 },
+    );
   }
 }

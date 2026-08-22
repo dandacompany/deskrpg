@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  sanitizeClientFinalSpeech,
-  sanitizeClientStreamingSpeech,
-} from "./stream-text";
+import { sanitizeClientFinalSpeech, sanitizeClientStreamingSpeech } from "./stream-text";
 
 test("sanitizeClientStreamingSpeech hides partial SPEAK prefix chunks", () => {
   assert.equal(sanitizeClientStreamingSpeech("SPE"), "");

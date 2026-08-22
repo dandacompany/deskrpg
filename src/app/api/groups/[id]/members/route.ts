@@ -1,4 +1,11 @@
-import { db, groupJoinRequests, groupMembers, isPostgres, userPermissionOverrides, users } from "@/db";
+import {
+  db,
+  groupJoinRequests,
+  groupMembers,
+  isPostgres,
+  userPermissionOverrides,
+  users,
+} from "@/db";
 import { GROUP_MEMBER_ROLES } from "@/lib/rbac/constants";
 import type { GroupMemberRole } from "@/lib/rbac/constants";
 import {
@@ -36,10 +43,7 @@ async function requireMembersManager(groupId: string, userId: string) {
   return { context };
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 
@@ -72,10 +76,7 @@ export async function GET(
   return NextResponse.json({ members: rows });
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 
@@ -115,18 +116,14 @@ export async function POST(
   const [existingMembership] = await db
     .select({ role: groupMembers.role })
     .from(groupMembers)
-    .where(
-      and(
-        eq(groupMembers.groupId, groupId),
-        eq(groupMembers.userId, targetUser.id),
-      ),
-    )
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, targetUser.id)))
     .limit(1);
 
   const adminUserIds = await listGroupAdminUserIds(groupId);
   const roleChange = canChangeGroupAdminStatus({
     targetUserId: targetUser.id,
-    targetCurrentRole: (existingMembership?.role as "group_admin" | "member" | null | undefined) ?? null,
+    targetCurrentRole:
+      (existingMembership?.role as "group_admin" | "member" | null | undefined) ?? null,
     nextRole: memberRole,
     adminUserIds,
   });
@@ -161,10 +158,7 @@ export async function POST(
   await db
     .delete(groupJoinRequests)
     .where(
-      and(
-        eq(groupJoinRequests.groupId, groupId),
-        eq(groupJoinRequests.userId, targetUser.id),
-      ),
+      and(eq(groupJoinRequests.groupId, groupId), eq(groupJoinRequests.userId, targetUser.id)),
     );
 
   return NextResponse.json(
@@ -179,10 +173,7 @@ export async function POST(
   );
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 

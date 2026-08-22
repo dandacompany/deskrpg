@@ -25,7 +25,10 @@ const CATEGORY_GROUPS: CategoryGroup[] = [
   { labelKey: "characters.group.hairFace", ids: ["hair", "beard"] },
   { labelKey: "characters.group.tops", ids: ["clothes", "jacket", "vest", "dress", "overalls"] },
   { labelKey: "characters.group.bottomsShoes", ids: ["legs", "shoes", "socks"] },
-  { labelKey: "characters.group.accessories", ids: ["hat", "belt", "neck", "earrings", "accessory", "gloves"] },
+  {
+    labelKey: "characters.group.accessories",
+    ids: ["hat", "belt", "neck", "earrings", "accessory", "gloves"],
+  },
   { labelKey: "characters.group.outerwear", ids: ["cape", "shoulders"] },
   { labelKey: "characters.group.fantasy", ids: ["arms", "shield", "weapon", "wings"] },
 ];
@@ -100,11 +103,26 @@ export default function AppearanceEditor({
   const currentSelection = layers[activeCategory];
 
   if (variant === "compact") {
-    return <CompactEditor {...{
-      bodyType, layers, activeCategory, activeCat, currentSelection,
-      onBodyTypeChange, onSkinChange, onSelectItem, onClearCategory, onSetVariant, onSetActiveCategory,
-      isItemCompatible, compatibleCount, presetsSlot,
-    }} />;
+    return (
+      <CompactEditor
+        {...{
+          bodyType,
+          layers,
+          activeCategory,
+          activeCat,
+          currentSelection,
+          onBodyTypeChange,
+          onSkinChange,
+          onSelectItem,
+          onClearCategory,
+          onSetVariant,
+          onSetActiveCategory,
+          isItemCompatible,
+          compatibleCount,
+          presetsSlot,
+        }}
+      />
+    );
   }
 
   // --- Full variant (player creation page) ---
@@ -353,7 +371,8 @@ function CompactEditor({
                           onSelectItem(
                             activeCategory,
                             item.key,
-                            currentSelection?.variant && item.variants.includes(currentSelection.variant)
+                            currentSelection?.variant &&
+                              item.variants.includes(currentSelection.variant)
                               ? currentSelection.variant
                               : item.variants[0],
                           )

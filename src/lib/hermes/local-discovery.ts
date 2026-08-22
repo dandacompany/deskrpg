@@ -12,10 +12,7 @@ export type DiscoverDeps = {
   localProfiles: LocalProfile[];
   registeredNames: string[];
   /** "hermes" = 그 게이트웨이가 이 프로필을 서빙한다. */
-  probe: (
-    baseUrl: string,
-    profile: string,
-  ) => Promise<"hermes" | "not-hermes" | "unreachable">;
+  probe: (baseUrl: string, profile: string) => Promise<"hermes" | "not-hermes" | "unreachable">;
 };
 
 /**
@@ -32,9 +29,7 @@ export type DiscoverDeps = {
 // 전부 끝나면서도 게이트웨이에 순간적으로 몰리는 요청 수를 좁혀 둔다.
 const MAX_CONCURRENT_PROBES = 4;
 
-export async function discoverLocalProfiles(
-  deps: DiscoverDeps,
-): Promise<DiscoveryCandidate[]> {
+export async function discoverLocalProfiles(deps: DiscoverDeps): Promise<DiscoveryCandidate[]> {
   const registered = new Set(deps.registeredNames);
   const kinds: ("hermes" | "not-hermes" | "unreachable")[] = new Array(deps.localProfiles.length);
   let nextIndex = 0;

@@ -57,7 +57,10 @@ test("openclaw NPC 는 백업 테이블로 옮긴 뒤 지운다", () => {
 
   assert.equal(result.removed, 1);
   assert.deepEqual(
-    db.prepare("SELECT id FROM npcs ORDER BY id").all().map((r) => r.id),
+    db
+      .prepare("SELECT id FROM npcs ORDER BY id")
+      .all()
+      .map((r) => r.id),
     ["n2"],
     "hermes NPC 는 남아야 합니다",
   );
@@ -72,14 +75,23 @@ test("openclaw_config 열을 없앤다", () => {
 
   retireOpenclawConfig(db);
 
-  const cols = db.prepare("PRAGMA table_info(npcs)").all().map((c) => c.name);
+  const cols = db
+    .prepare("PRAGMA table_info(npcs)")
+    .all()
+    .map((c) => c.name);
   assert.ok(!cols.includes("openclaw_config"), "정본이 둘이면 어느 쪽인지 알 수 없어집니다");
   cleanup(db);
 });
 
 test("이미 채워진 agent_config 는 덮어쓰지 않는다", () => {
   const db = legacyDb();
-  db.prepare("INSERT INTO npcs VALUES (?,?,?,?,?)").run("n1", "단비", '{"old":true}', "hermes", '{"new":true}');
+  db.prepare("INSERT INTO npcs VALUES (?,?,?,?,?)").run(
+    "n1",
+    "단비",
+    '{"old":true}',
+    "hermes",
+    '{"new":true}',
+  );
 
   retireOpenclawConfig(db);
 
@@ -99,7 +111,10 @@ test("여러 번 돌려도 안전하다 — 서버가 뜰 때마다 불린다", 
   assert.equal(first.migrated, 1);
   assert.equal(second, null, "두 번째 호출은 할 일이 없어야 합니다");
   assert.equal(third, null);
-  assert.equal(db.prepare("SELECT agent_config FROM npcs WHERE id='n1'").get().agent_config, '{"a":1}');
+  assert.equal(
+    db.prepare("SELECT agent_config FROM npcs WHERE id='n1'").get().agent_config,
+    '{"a":1}',
+  );
   cleanup(db);
 });
 

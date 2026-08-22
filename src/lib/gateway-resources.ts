@@ -36,8 +36,10 @@ import { DEV_JWT_SECRET } from "./dev-constants";
 function getGatewayCipherKey() {
   // Priority: INTERNAL_RPC_SECRET > JWT_SECRET > dev fallback
   // In production, gateway cipher and JWT auth may use different secrets (separate concerns).
-  const source = process.env.INTERNAL_RPC_SECRET || process.env.JWT_SECRET
-    || (process.env.NODE_ENV !== "production" ? DEV_JWT_SECRET : "");
+  const source =
+    process.env.INTERNAL_RPC_SECRET ||
+    process.env.JWT_SECRET ||
+    (process.env.NODE_ENV !== "production" ? DEV_JWT_SECRET : "");
   if (!source) {
     throw new Error("Missing JWT_SECRET or INTERNAL_RPC_SECRET for gateway token encryption");
   }
@@ -87,15 +89,19 @@ async function findMatchingOwnedGateway(ownerUserId: string, baseUrl: string, to
   const rows = await db
     .select()
     .from(gatewayResources)
-    .where(and(eq(gatewayResources.ownerUserId, ownerUserId), eq(gatewayResources.baseUrl, baseUrl)));
+    .where(
+      and(eq(gatewayResources.ownerUserId, ownerUserId), eq(gatewayResources.baseUrl, baseUrl)),
+    );
 
-  return rows.find((row) => {
-    try {
-      return decryptGatewayToken(row.tokenEncrypted) === token;
-    } catch {
-      return false;
-    }
-  }) ?? null;
+  return (
+    rows.find((row) => {
+      try {
+        return decryptGatewayToken(row.tokenEncrypted) === token;
+      } catch {
+        return false;
+      }
+    }) ?? null
+  );
 }
 
 export async function upsertOwnedGatewayResource(input: {
@@ -172,15 +178,13 @@ export async function listAccessibleGatewayResources(userId: string) {
     .from(gatewayResources)
     .where(eq(gatewayResources.ownerUserId, userId));
 
-  const shares = await db
-    .select()
-    .from(gatewayShares)
-    .where(eq(gatewayShares.userId, userId));
+  const shares = await db.select().from(gatewayShares).where(eq(gatewayShares.userId, userId));
 
   const sharedIds = shares.map((share) => share.gatewayId);
-  const sharedResources = sharedIds.length > 0
-    ? await db.select().from(gatewayResources).where(inArray(gatewayResources.id, sharedIds))
-    : [];
+  const sharedResources =
+    sharedIds.length > 0
+      ? await db.select().from(gatewayResources).where(inArray(gatewayResources.id, sharedIds))
+      : [];
 
   return [
     ...owned.map((resource) => ({
@@ -255,7 +259,9 @@ export async function createGatewayShare(input: {
   const existing = await db
     .select()
     .from(gatewayShares)
-    .where(and(eq(gatewayShares.gatewayId, input.gatewayId), eq(gatewayShares.userId, targetUser.id)))
+    .where(
+      and(eq(gatewayShares.gatewayId, input.gatewayId), eq(gatewayShares.userId, targetUser.id)),
+    )
     .limit(1);
 
   const role = input.role?.trim() || "use";
@@ -290,7 +296,12 @@ export async function removeGatewayShare(input: {
 
   await db
     .delete(gatewayShares)
-    .where(and(eq(gatewayShares.gatewayId, input.gatewayId), eq(gatewayShares.userId, input.targetUserId)));
+    .where(
+      and(
+        eq(gatewayShares.gatewayId, input.gatewayId),
+        eq(gatewayShares.userId, input.targetUserId),
+      ),
+    );
 
   return true;
 }
@@ -438,9 +449,7 @@ export async function getGatewayRuntimeStateForChannel(
     const errorCode =
       probe.kind === "unreachable" ? "failed_to_reach_test_endpoint" : "not_a_hermes_gateway";
     const error =
-      probe.kind === "unreachable"
-        ? probe.error
-        : `Not a Hermes API Server (HTTP ${probe.status})`;
+      probe.kind === "unreachable" ? probe.error : `Not a Hermes API Server (HTTP ${probe.status})`;
     const status = mapGatewayErrorStatus(errorCode, 502);
     await persistGatewayValidationState(binding.resource.id, { status, error });
     return {
@@ -468,7 +477,9 @@ export async function getGatewayRuntimeConfigForChannel(channelId: string) {
   };
 }
 
-export async function getChannelTaskAutomationSettings(channelId: string): Promise<TaskAutomationConfig> {
+export async function getChannelTaskAutomationSettings(
+  channelId: string,
+): Promise<TaskAutomationConfig> {
   const [row] = await db
     .select({ gatewayConfig: channels.gatewayConfig })
     .from(channels)

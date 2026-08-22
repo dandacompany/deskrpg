@@ -16,7 +16,13 @@ const STATUS_STYLES: Record<string, { border: string; text: string; icon: string
   cancelled: { border: "border-l-text-dim", text: "text-text-dim", icon: "\u274C" },
 };
 
-export default function TaskInlineCard({ taskId, npcTaskId, title, status, onClick }: TaskInlineCardProps) {
+export default function TaskInlineCard({
+  taskId,
+  npcTaskId,
+  title,
+  status,
+  onClick,
+}: TaskInlineCardProps) {
   const style = STATUS_STYLES[status] || STATUS_STYLES.pending;
 
   return (
@@ -27,9 +33,7 @@ export default function TaskInlineCard({ taskId, npcTaskId, title, status, onCli
       <div className={`text-xs font-semibold ${style.text}`}>
         {style.icon} {title}
       </div>
-      <div className="text-[10px] text-text-dim mt-0.5">
-        {status} · 클릭하여 태스크 대화 →
-      </div>
+      <div className="text-[10px] text-text-dim mt-0.5">{status} · 클릭하여 태스크 대화 →</div>
     </button>
   );
 }

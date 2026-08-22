@@ -4,7 +4,10 @@ export const MEETING_SCENE_MIN_WIDTH = 660;
 export const MEETING_SCENE_MIN_SCALE = 0.58;
 
 export function clampMeetingSidebarWidth(requestedWidth: number, viewportWidth: number): number {
-  const boundedViewport = Math.max(viewportWidth, MEETING_SIDEBAR_MIN_WIDTH + MEETING_SCENE_MIN_WIDTH);
+  const boundedViewport = Math.max(
+    viewportWidth,
+    MEETING_SIDEBAR_MIN_WIDTH + MEETING_SCENE_MIN_WIDTH,
+  );
   const dynamicMaxWidth = Math.max(
     MEETING_SIDEBAR_MIN_WIDTH,
     boundedViewport - MEETING_SCENE_MIN_WIDTH,

@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  buildGamePageMetadataTitle,
-  canExposeChannelNameForMetadata,
-} from "./metadata";
+import { buildGamePageMetadataTitle, canExposeChannelNameForMetadata } from "./metadata";
 
 test("buildGamePageMetadataTitle returns DeskRPG fallback without a channel name", () => {
   assert.equal(buildGamePageMetadataTitle(null), "DeskRPG");

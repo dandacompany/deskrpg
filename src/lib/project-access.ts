@@ -9,9 +9,7 @@ export function resolveOwnedProjectAccess({
 }: {
   requestUserId: string | null;
   ownerUserId: string | null;
-}):
-  | { ok: true }
-  | { ok: false; status: 401 | 404; errorCode: "unauthorized" | "not_found" } {
+}): { ok: true } | { ok: false; status: 401 | 404; errorCode: "unauthorized" | "not_found" } {
   if (!requestUserId) {
     return { ok: false, status: 401, errorCode: "unauthorized" };
   }
@@ -25,13 +23,17 @@ export async function requireOwnedProject(req: NextRequest, projectId: string) {
   const userId = getUserId(req);
   if (!userId) {
     return {
-      error: NextResponse.json({ errorCode: "unauthorized", error: "Unauthorized" }, { status: 401 }),
+      error: NextResponse.json(
+        { errorCode: "unauthorized", error: "Unauthorized" },
+        { status: 401 },
+      ),
     };
   }
 
-  const [project] = await db.select().from(projects).where(
-    and(eq(projects.id, projectId), eq(projects.createdBy, userId)),
-  );
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.id, projectId), eq(projects.createdBy, userId)));
 
   if (!project) {
     return {

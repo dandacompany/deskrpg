@@ -141,14 +141,22 @@ function ProvidersPageInner() {
     router.push("/auth");
   }, [router]);
 
-  const getProviderLabel = useCallback((type: string) => {
-    const option = getProviderOption(type);
-    return option ? t(option.labelKey) : type;
-  }, [t]);
+  const getProviderLabel = useCallback(
+    (type: string) => {
+      const option = getProviderOption(type);
+      return option ? t(option.labelKey) : type;
+    },
+    [t],
+  );
 
-  const getAuthMethodLabel = useCallback((value: string | null | undefined) => {
-    return normalizeAuthMethod(value) === "cli_login" ? t("providers.cliLogin") : t("providers.apiKey");
-  }, [t]);
+  const getAuthMethodLabel = useCallback(
+    (value: string | null | undefined) => {
+      return normalizeAuthMethod(value) === "cli_login"
+        ? t("providers.cliLogin")
+        : t("providers.apiKey");
+    },
+    [t],
+  );
 
   const loadAdapterStatuses = useCallback(async () => {
     setAdapterLoading(true);
@@ -164,7 +172,9 @@ function ProvidersPageInner() {
         throw data;
       }
 
-      const nextStatuses = isRecord(data.adapters) ? (data.adapters as Record<string, AdapterStatus>) : {};
+      const nextStatuses = isRecord(data.adapters)
+        ? (data.adapters as Record<string, AdapterStatus>)
+        : {};
       setAdapterStatuses(nextStatuses);
       return nextStatuses;
     } catch (nextError) {
@@ -486,7 +496,9 @@ function ProvidersPageInner() {
         return;
       }
 
-      const savedApiKey = getStoredApiKey((providerData.provider as ProviderDetail | undefined)?.credentials);
+      const savedApiKey = getStoredApiKey(
+        (providerData.provider as ProviderDetail | undefined)?.credentials,
+      );
       if (!savedApiKey) {
         const message = t("providers.credentialsMissing");
         setTestStates((prev) => ({
@@ -527,9 +539,9 @@ function ProvidersPageInner() {
   const selectedProviderCliStatus = selectedProvider ? cliLoginStates[selectedProvider.id] : "";
   const selectedProviderMessage = selectedProviderStatus?.message || selectedProviderCliStatus;
   const selectedProviderSupportsCliLogin = supportsCliLogin(selectedProvider?.providerType);
-  const apiKeyRequiredForCurrentForm = authMethod === "api_key" && (
-    formMode === "create" || normalizeAuthMethod(selectedProvider?.authMethod) !== "api_key"
-  );
+  const apiKeyRequiredForCurrentForm =
+    authMethod === "api_key" &&
+    (formMode === "create" || normalizeAuthMethod(selectedProvider?.authMethod) !== "api_key");
 
   if (loading) {
     return (
@@ -573,7 +585,9 @@ function ProvidersPageInner() {
         <section className="rounded-xl border border-amber-500/40 bg-gray-900 p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-amber-400">{t("providers.adapterStatus")}</h2>
+              <h2 className="text-lg font-semibold text-amber-400">
+                {t("providers.adapterStatus")}
+              </h2>
               <p className="mt-1 text-sm text-gray-300">{t("providers.adapterStatusHelp")}</p>
             </div>
             <button
@@ -595,7 +609,9 @@ function ProvidersPageInner() {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {PROVIDER_OPTIONS.map((option) => {
               const status = option.adapterKey ? adapterStatuses[option.adapterKey] : undefined;
-              const installedLabel = status?.installed ? t("providers.installed") : t("providers.notInstalled");
+              const installedLabel = status?.installed
+                ? t("providers.installed")
+                : t("providers.notInstalled");
               return (
                 <div
                   key={option.value}
@@ -603,7 +619,9 @@ function ProvidersPageInner() {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-medium text-white">{t(option.labelKey)}</p>
-                    <span className={`text-xs ${status?.installed ? "text-emerald-300" : "text-amber-300"}`}>
+                    <span
+                      className={`text-xs ${status?.installed ? "text-emerald-300" : "text-amber-300"}`}
+                    >
                       {installedLabel}
                     </span>
                   </div>
@@ -618,7 +636,8 @@ function ProvidersPageInner() {
                     </p>
                   )}
                   <p className="mt-2 text-xs text-gray-400">
-                    {status?.message || (status?.status === "ok" ? t("providers.ready") : t("common.unknown"))}
+                    {status?.message ||
+                      (status?.status === "ok" ? t("providers.ready") : t("common.unknown"))}
                   </p>
                 </div>
               );
@@ -666,12 +685,13 @@ function ProvidersPageInner() {
                         </span>
                       </div>
                       <p className="mt-1 text-xs text-gray-400">
-                        {getProviderLabel(provider.providerType)} · {getAuthMethodLabel(provider.authMethod)}
+                        {getProviderLabel(provider.providerType)} ·{" "}
+                        {getAuthMethodLabel(provider.authMethod)}
                       </p>
                       <p className="mt-1 text-xs text-gray-400">
-                        {testState?.message
-                          || cliLoginStates[provider.id]
-                          || (provider.lastValidationStatus === "valid"
+                        {testState?.message ||
+                          cliLoginStates[provider.id] ||
+                          (provider.lastValidationStatus === "valid"
                             ? t("gateways.statusValid")
                             : provider.lastValidationStatus
                               ? t("gateways.statusUnknown")
@@ -703,15 +723,23 @@ function ProvidersPageInner() {
                       disabled={testingProviderId === selectedProvider.id}
                       className="rounded-lg border border-amber-500/40 bg-gray-950 px-4 py-2 text-sm font-medium text-amber-200 hover:border-amber-400 hover:text-amber-100 disabled:opacity-60"
                     >
-                      {testingProviderId === selectedProvider.id ? t("gateway.testing") : t("providers.test")}
+                      {testingProviderId === selectedProvider.id
+                        ? t("gateway.testing")
+                        : t("providers.test")}
                     </button>
                     <button
                       type="button"
                       onClick={() => void handleCliLogin(selectedProvider.id)}
-                      disabled={cliLoginProviderId === selectedProvider.id || !selectedProvider.isOwner || !selectedProviderSupportsCliLogin}
+                      disabled={
+                        cliLoginProviderId === selectedProvider.id ||
+                        !selectedProvider.isOwner ||
+                        !selectedProviderSupportsCliLogin
+                      }
                       className="rounded-lg border border-amber-500/40 bg-gray-950 px-4 py-2 text-sm font-medium text-amber-200 hover:border-amber-400 hover:text-amber-100 disabled:opacity-60"
                     >
-                      {cliLoginProviderId === selectedProvider.id ? t("common.loading") : t("providers.cliLogin")}
+                      {cliLoginProviderId === selectedProvider.id
+                        ? t("common.loading")
+                        : t("providers.cliLogin")}
                     </button>
                   </div>
                 )}
@@ -719,7 +747,9 @@ function ProvidersPageInner() {
 
               <div className="grid gap-4">
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-300">{t("providers.displayName")}</label>
+                  <label className="mb-1 block text-sm font-semibold text-gray-300">
+                    {t("providers.displayName")}
+                  </label>
                   <input
                     type="text"
                     value={displayName}
@@ -730,7 +760,9 @@ function ProvidersPageInner() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-300">{t("providers.type")}</label>
+                  <label className="mb-1 block text-sm font-semibold text-gray-300">
+                    {t("providers.type")}
+                  </label>
                   <select
                     value={providerType}
                     onChange={(e) => setProviderType(e.target.value)}
@@ -746,7 +778,9 @@ function ProvidersPageInner() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-300">{t("providers.authMethod")}</label>
+                  <label className="mb-1 block text-sm font-semibold text-gray-300">
+                    {t("providers.authMethod")}
+                  </label>
                   <select
                     value={authMethod}
                     onChange={(e) => setAuthMethod(normalizeAuthMethod(e.target.value))}
@@ -760,7 +794,9 @@ function ProvidersPageInner() {
 
                 {authMethod === "api_key" && (
                   <div>
-                    <label className="mb-1 block text-sm font-semibold text-gray-300">{t("providers.apiKey")}</label>
+                    <label className="mb-1 block text-sm font-semibold text-gray-300">
+                      {t("providers.apiKey")}
+                    </label>
                     <div className="flex gap-2">
                       <input
                         type={showApiKey ? "text" : "password"}
@@ -789,11 +825,12 @@ function ProvidersPageInner() {
               </div>
 
               {selectedProviderMessage && selectedProvider && (
-                <div className={`mt-4 rounded-lg border px-4 py-3 text-sm ${
-                  selectedProviderStatus?.status === "error"
-                    ? "border-danger/40 bg-gray-950 text-danger"
-                    : "border-emerald-400/30 bg-gray-950 text-emerald-300"
-                }`}
+                <div
+                  className={`mt-4 rounded-lg border px-4 py-3 text-sm ${
+                    selectedProviderStatus?.status === "error"
+                      ? "border-danger/40 bg-gray-950 text-danger"
+                      : "border-emerald-400/30 bg-gray-950 text-emerald-300"
+                  }`}
                 >
                   {selectedProviderMessage}
                 </div>
@@ -804,7 +841,11 @@ function ProvidersPageInner() {
                   <button
                     type="button"
                     onClick={() => void handleCreate()}
-                    disabled={saving || !displayName.trim() || (apiKeyRequiredForCurrentForm && !apiKey.trim())}
+                    disabled={
+                      saving ||
+                      !displayName.trim() ||
+                      (apiKeyRequiredForCurrentForm && !apiKey.trim())
+                    }
                     className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-gray-950 hover:bg-amber-400 disabled:opacity-60"
                   >
                     {saving ? t("common.loading") : t("common.create")}
@@ -814,7 +855,12 @@ function ProvidersPageInner() {
                     <button
                       type="button"
                       onClick={() => void handleUpdate()}
-                      disabled={saving || !selectedProvider?.isOwner || !displayName.trim() || (apiKeyRequiredForCurrentForm && !apiKey.trim())}
+                      disabled={
+                        saving ||
+                        !selectedProvider?.isOwner ||
+                        !displayName.trim() ||
+                        (apiKeyRequiredForCurrentForm && !apiKey.trim())
+                      }
                       className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-gray-950 hover:bg-amber-400 disabled:opacity-60"
                     >
                       {saving ? t("common.loading") : t("common.save")}

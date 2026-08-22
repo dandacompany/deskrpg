@@ -1,15 +1,9 @@
 "use client";
 
-import type {
-  CharacterAppearance,
-  LegacyCharacterAppearance,
-} from "@/lib/lpc-registry";
+import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 
 import type { MeetingSeatLayout, MeetingTableLayout } from "./layout";
-import {
-  computeMeetingSceneFrameWidth,
-  computeMeetingSceneScale,
-} from "./responsive";
+import { computeMeetingSceneFrameWidth, computeMeetingSceneScale } from "./responsive";
 import MeetingAvatar from "./MeetingAvatar";
 import MeetingSpeechBubble from "./MeetingSpeechBubble";
 
@@ -112,8 +106,22 @@ export default function MeetingTableScene({
             strokeWidth="2"
           />
           <g opacity="0.85">
-            <rect x="94" y="184" width={scene.tableWidth - 188} height="6" rx="3" fill="rgba(255,255,255,0.08)" />
-            <rect x="94" y="228" width={scene.tableWidth - 188} height="6" rx="3" fill="rgba(15,23,42,0.18)" />
+            <rect
+              x="94"
+              y="184"
+              width={scene.tableWidth - 188}
+              height="6"
+              rx="3"
+              fill="rgba(255,255,255,0.08)"
+            />
+            <rect
+              x="94"
+              y="228"
+              width={scene.tableWidth - 188}
+              height="6"
+              rx="3"
+              fill="rgba(15,23,42,0.18)"
+            />
           </g>
         </svg>
 
@@ -146,20 +154,21 @@ export default function MeetingTableScene({
                   appearance={seat.appearance}
                   facing={seat.facing}
                   size={seat.side === "left" || seat.side === "right" ? 72 : 80}
-                  className={seat.isSpeaking ? "ring-2 ring-npc" : seat.isChair ? "ring-2 ring-primary" : ""}
+                  className={
+                    seat.isSpeaking ? "ring-2 ring-npc" : seat.isChair ? "ring-2 ring-primary" : ""
+                  }
                 />
                 {seat.isChair && (
                   <div className="absolute -right-1 -top-1 rounded-full border border-primary/40 bg-primary px-1.5 py-0.5 text-[9px] font-black tracking-wide text-white">
                     C
                   </div>
                 )}
-                <MeetingSpeechBubble
-                  preview={seat.speechPreview}
-                  visible={seat.isSpeaking}
-                />
+                <MeetingSpeechBubble preview={seat.speechPreview} visible={seat.isSpeaking} />
               </div>
 
-              <div className={`max-w-[124px] rounded-full border px-3 py-1 text-center text-[11px] font-semibold shadow-sm backdrop-blur ${getNameplateClassName(seat)}`}>
+              <div
+                className={`max-w-[124px] rounded-full border px-3 py-1 text-center text-[11px] font-semibold shadow-sm backdrop-blur ${getNameplateClassName(seat)}`}
+              >
                 <span className="block truncate">{seat.name}</span>
               </div>
             </div>

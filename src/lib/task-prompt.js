@@ -12,9 +12,7 @@ function normalizeTaskPromptLocale(locale) {
 
 function translateTaskPrompt(locale, key, params) {
   const normalizedLocale = normalizeTaskPromptLocale(locale);
-  let text = taskPromptMessages[normalizedLocale]?.[key]
-    ?? taskPromptMessages.en[key]
-    ?? key;
+  let text = taskPromptMessages[normalizedLocale]?.[key] ?? taskPromptMessages.en[key] ?? key;
 
   if (params) {
     for (const [paramKey, value] of Object.entries(params)) {
@@ -49,7 +47,7 @@ You have task management capabilities. Follow this protocol when interacting wit
 ### Responding with Task Metadata
 When creating, updating, or completing a task, append a task metadata block at the END of your natural response:
 
-${'```'}json:task
+${"```"}json:task
 {
   "action": "create",
   "id": "peter-20260324-a7f3",
@@ -57,7 +55,7 @@ ${'```'}json:task
   "status": "in_progress",
   "summary": "1-2 sentence description of current state"
 }
-${'```'}
+${"```"}
 
 ### Actions
 - **create**: Player approved task registration. Set status to "in_progress".
@@ -108,9 +106,9 @@ function buildTaskReminder(locale) {
 ${header}
 ${confirmStep}
 ${createStep}
-${'```'}json:task
+${"```"}json:task
 {"action":"create","id":"{name}-{YYYYMMDD}-{4hex}","title":"제목","status":"in_progress","summary":"요약"}
-${'```'}
+${"```"}
 ${requiredFields}
 ${allowedFields}
 ${ignoreCasual}`;

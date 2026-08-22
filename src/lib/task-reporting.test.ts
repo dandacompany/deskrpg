@@ -45,10 +45,10 @@ function evaluateSql(sqlNode: { queryChunks: unknown[] }, row: Row): unknown {
   const chunks = sqlNode.queryChunks;
 
   if (
-    chunks.length === 5
-    && typeof chunks[1] === "object"
-    && chunks[1] !== null
-    && "name" in (chunks[1] as Record<string, unknown>)
+    chunks.length === 5 &&
+    typeof chunks[1] === "object" &&
+    chunks[1] !== null &&
+    "name" in (chunks[1] as Record<string, unknown>)
   ) {
     const fieldName = String((chunks[1] as { name: string }).name);
     const operator = getChunkText(chunks[2]).trim();
@@ -60,10 +60,10 @@ function evaluateSql(sqlNode: { queryChunks: unknown[] }, row: Row): unknown {
   }
 
   if (
-    chunks.length === 3
-    && typeof chunks[1] === "object"
-    && chunks[1] !== null
-    && "name" in (chunks[1] as Record<string, unknown>)
+    chunks.length === 3 &&
+    typeof chunks[1] === "object" &&
+    chunks[1] !== null &&
+    "name" in (chunks[1] as Record<string, unknown>)
   ) {
     const fieldName = String((chunks[1] as { name: string }).name);
     const operator = getChunkText(chunks[2]).trim();
@@ -92,11 +92,12 @@ function evaluateSql(sqlNode: { queryChunks: unknown[] }, row: Row): unknown {
     }
     if (chunk && typeof chunk === "object" && "queryChunks" in (chunk as Record<string, unknown>)) {
       const chunkResult = Boolean(evaluateSql(chunk as { queryChunks: unknown[] }, row));
-      result = result == null
-        ? chunkResult
-        : pendingOperator === "and"
-          ? result && chunkResult
-          : result || chunkResult;
+      result =
+        result == null
+          ? chunkResult
+          : pendingOperator === "and"
+            ? result && chunkResult
+            : result || chunkResult;
     }
   }
 
@@ -176,9 +177,9 @@ function createReportDb(initialRows: Row[] = []) {
           from() {
             return {
               where(condition: unknown) {
-                const filteredRows = rows.filter((row) => Boolean(
-                  evaluateSql(condition as { queryChunks: unknown[] }, row),
-                ));
+                const filteredRows = rows.filter((row) =>
+                  Boolean(evaluateSql(condition as { queryChunks: unknown[] }, row)),
+                );
 
                 return {
                   async orderBy(order: unknown) {
@@ -233,9 +234,9 @@ function createTaskSelectDb(rows: Row[]) {
         from() {
           return {
             where(condition: unknown) {
-              const filteredRows = rows.filter((row) => Boolean(
-                evaluateSql(condition as { queryChunks: unknown[] }, row),
-              ));
+              const filteredRows = rows.filter((row) =>
+                Boolean(evaluateSql(condition as { queryChunks: unknown[] }, row)),
+              );
 
               return {
                 async orderBy(order: unknown) {
@@ -507,7 +508,10 @@ test("getPendingReportsForUserAndChannel returns unconsumed rows and orders by c
     userId: "user",
   });
 
-  assert.deepEqual(reports.map((report) => report.id), ["report-1", "report-2", "report-3"]);
+  assert.deepEqual(
+    reports.map((report) => report.id),
+    ["report-1", "report-2", "report-3"],
+  );
   assert.equal(reports[0]?.createdAt, "2026-03-31T00:01:00.000Z");
   assert.equal(reports[1]?.createdAt, "2026-03-31T00:02:00.000Z");
   assert.equal(reports[2]?.createdAt, "2026-03-31T00:03:00.000Z");
@@ -592,7 +596,10 @@ test("TaskManager.getStaleInProgressTasks filters by channel and cutoff and norm
 
   const tasks = await taskManager.getStaleInProgressTasks("ch", "2026-03-31T00:05:00.000Z");
 
-  assert.deepEqual(tasks.map((task: { id: string }) => task.id), ["task-2", "task-1"]);
+  assert.deepEqual(
+    tasks.map((task: { id: string }) => task.id),
+    ["task-2", "task-1"],
+  );
   assert.equal(tasks[0]?.updatedAt, "2026-03-31T00:03:00.000Z");
   assert.equal(tasks[1]?.updatedAt, "2026-03-31T00:01:00.000Z");
   assert.equal(tasks[1]?.createdAt, "2026-03-31T00:00:00.000Z");

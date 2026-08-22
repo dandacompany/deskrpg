@@ -12,7 +12,9 @@ test("detects Korean task confirm prompt", () => {
 
 test("detects Korean confirm in longer message", () => {
   assert.equal(
-    isTaskConfirmPrompt("네, 이해했습니다. 이 작업을 태스크로 등록할까요? 승인해주시면 바로 시작할게요."),
+    isTaskConfirmPrompt(
+      "네, 이해했습니다. 이 작업을 태스크로 등록할까요? 승인해주시면 바로 시작할게요.",
+    ),
     true,
   );
 });

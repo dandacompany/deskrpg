@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { Suspense } from 'react';
-import { useParams } from 'next/navigation';
-import MapEditorLayout from '@/components/map-editor/MapEditorLayout';
+import { Suspense } from "react";
+import { useParams } from "next/navigation";
+import MapEditorLayout from "@/components/map-editor/MapEditorLayout";
 
 function EditorContent() {
   const params = useParams();

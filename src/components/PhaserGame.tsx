@@ -3,10 +3,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import { compositeCharacter } from "@/lib/sprite-compositor";
-import type {
-  CharacterAppearance,
-  LegacyCharacterAppearance,
-} from "@/lib/lpc-registry";
+import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import type { Socket } from "socket.io-client";
 
 interface PhaserGameProps {
@@ -54,10 +51,18 @@ export default function PhaserGame({
       Object.defineProperty(window, "localStorage", {
         value: {
           getItem: (k: string) => memStore[k] ?? null,
-          setItem: (k: string, v: string) => { memStore[k] = v; },
-          removeItem: (k: string) => { delete memStore[k]; },
-          clear: () => { Object.keys(memStore).forEach(k => delete memStore[k]); },
-          get length() { return Object.keys(memStore).length; },
+          setItem: (k: string, v: string) => {
+            memStore[k] = v;
+          },
+          removeItem: (k: string) => {
+            delete memStore[k];
+          },
+          clear: () => {
+            Object.keys(memStore).forEach((k) => delete memStore[k]);
+          },
+          get length() {
+            return Object.keys(memStore).length;
+          },
           key: (i: number) => Object.keys(memStore)[i] ?? null,
         },
         writable: true,
@@ -69,7 +74,13 @@ export default function PhaserGame({
     // (they are set inside the async import callback below)
     let onSceneReady: (() => void) | null = null;
     let emitSocketIfReady: (() => void) | null = null;
-    let onCompositeRemote: ((data: { id: string; appearance: CharacterAppearance | LegacyCharacterAppearance; textureKey?: string }) => Promise<void>) | null = null;
+    let onCompositeRemote:
+      | ((data: {
+          id: string;
+          appearance: CharacterAppearance | LegacyCharacterAppearance;
+          textureKey?: string;
+        }) => Promise<void>)
+      | null = null;
 
     // Dynamically import to avoid SSR issues with Phaser
     import("@/game/main").then(({ createGame }) => {
@@ -162,11 +173,5 @@ export default function PhaserGame({
     });
   }, [socket]);
 
-  return (
-    <div
-      id="game-container"
-      ref={containerRef}
-      className="fixed inset-0 z-0"
-    />
-  );
+  return <div id="game-container" ref={containerRef} className="fixed inset-0 z-0" />;
 }

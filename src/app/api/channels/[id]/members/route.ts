@@ -14,12 +14,10 @@ function getUserId(req: NextRequest): string | null {
 }
 
 // GET /api/channels/:id/members — list members (owner only)
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  if (!userId)
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
 
@@ -30,8 +28,16 @@ export async function GET(
       .where(eq(channels.id, id))
       .limit(1);
 
-    if (!channel) return NextResponse.json({ errorCode: "channel_not_found", error: "Channel not found" }, { status: 404 });
-    if (channel.ownerId !== userId) return NextResponse.json({ errorCode: "forbidden", error: "Not authorized" }, { status: 403 });
+    if (!channel)
+      return NextResponse.json(
+        { errorCode: "channel_not_found", error: "Channel not found" },
+        { status: 404 },
+      );
+    if (channel.ownerId !== userId)
+      return NextResponse.json(
+        { errorCode: "forbidden", error: "Not authorized" },
+        { status: 403 },
+      );
 
     const members = await db
       .select({
@@ -47,9 +53,12 @@ export async function GET(
 
     let onlineUserIds: string[] = [];
     try {
-      const res = await fetch(`${getInternalSocketBaseUrl()}/_internal/room-members?channelId=${encodeURIComponent(id)}`, {
-        headers: buildInternalAuthHeaders(),
-      });
+      const res = await fetch(
+        `${getInternalSocketBaseUrl()}/_internal/room-members?channelId=${encodeURIComponent(id)}`,
+        {
+          headers: buildInternalAuthHeaders(),
+        },
+      );
       if (res.ok) {
         const data = await res.json();
         onlineUserIds = data.userIds || [];

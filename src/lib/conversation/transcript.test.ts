@@ -32,7 +32,10 @@ describe("Transcript", () => {
   test("recent는 뒤에서 n개만 준다", () => {
     const t = new Transcript();
     for (let i = 1; i <= 5; i++) t.add("a", "에이", String(i), i);
-    assert.deepEqual(t.recent(2).map((x) => x.content), ["4", "5"]);
+    assert.deepEqual(
+      t.recent(2).map((x) => x.content),
+      ["4", "5"],
+    );
   });
 
   test("conversation_history는 role/content 배열로 나온다", () => {

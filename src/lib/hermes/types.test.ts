@@ -18,7 +18,10 @@ describe("isTerminalEvent", () => {
 
 describe("readCapability", () => {
   test("reads a true feature flag", () => {
-    assert.equal(readCapability({ features: { run_steer: true }, endpoints: {} }, "run_steer"), true);
+    assert.equal(
+      readCapability({ features: { run_steer: true }, endpoints: {} }, "run_steer"),
+      true,
+    );
   });
 
   test("returns false for a missing flag", () => {

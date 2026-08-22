@@ -21,7 +21,9 @@ export function canExposeChannelNameForMetadata(args: {
   return summarizeChannelDetailAccess(args).allowed;
 }
 
-export async function resolveGamePageMetadataTitle(channelId: string | null | undefined): Promise<string> {
+export async function resolveGamePageMetadataTitle(
+  channelId: string | null | undefined,
+): Promise<string> {
   if (!channelId) {
     return GAME_PAGE_FALLBACK_TITLE;
   }

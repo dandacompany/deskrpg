@@ -11,7 +11,11 @@
 function parseJson(value) {
   if (value == null) return null;
   if (typeof value === "string") {
-    try { return JSON.parse(value); } catch { return value; }
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
   }
   return value;
 }

@@ -128,7 +128,8 @@ export default function GroupAccessPanel({
   const [inviteLoginId, setInviteLoginId] = useState("");
   const [inviteExpiresAt, setInviteExpiresAt] = useState("");
   const [overrideTargetUserId, setOverrideTargetUserId] = useState("");
-  const [overridePermissionKey, setOverridePermissionKey] = useState<PermissionKey>("create_channel");
+  const [overridePermissionKey, setOverridePermissionKey] =
+    useState<PermissionKey>("create_channel");
   const [overrideEffect, setOverrideEffect] = useState<"allow" | "deny" | "inherit">("allow");
   const [permissionDraft, setPermissionDraft] = useState(buildInitialPermissionDraft);
   const [submitting, setSubmitting] = useState<string | null>(null);
@@ -136,24 +137,27 @@ export default function GroupAccessPanel({
 
   const needsMemberDirectory = canManageMembers || canManagePermissions;
 
-  const showError = useCallback((payload: unknown, fallbackKey = "common.error") => {
-    setFlashMessage(getLocalizedErrorMessage(t, payload, fallbackKey));
-  }, [t]);
+  const showError = useCallback(
+    (payload: unknown, fallbackKey = "common.error") => {
+      setFlashMessage(getLocalizedErrorMessage(t, payload, fallbackKey));
+    },
+    [t],
+  );
 
-  const loadSection = useCallback(async <T,>(
-    url: string,
-    key: string,
-  ): Promise<{ items: T[]; error: string }> => {
-    try {
-      const data = await readJsonOrThrow(await fetch(url));
-      return { items: (data[key] as T[]) || [], error: "" };
-    } catch (error) {
-      return {
-        items: [],
-        error: getLocalizedErrorMessage(t, error, "common.error"),
-      };
-    }
-  }, [t]);
+  const loadSection = useCallback(
+    async <T,>(url: string, key: string): Promise<{ items: T[]; error: string }> => {
+      try {
+        const data = await readJsonOrThrow(await fetch(url));
+        return { items: (data[key] as T[]) || [], error: "" };
+      } catch (error) {
+        return {
+          items: [],
+          error: getLocalizedErrorMessage(t, error, "common.error"),
+        };
+      }
+    },
+    [t],
+  );
 
   const refreshAll = useCallback(async () => {
     setMembers((current) => ({
@@ -187,29 +191,24 @@ export default function GroupAccessPanel({
       items: canManagePermissions ? current.items : [],
     }));
 
-    const [
-      nextMembers,
-      nextInvites,
-      nextJoinRequests,
-      nextPermissions,
-      nextOverrides,
-    ] = await Promise.all([
-      needsMemberDirectory
-        ? loadSection<MemberRow>(`/api/groups/${groupId}/members`, "members")
-        : Promise.resolve({ items: [], error: "" }),
-      canManageMembers
-        ? loadSection<InviteRow>(`/api/groups/${groupId}/invites`, "invites")
-        : Promise.resolve({ items: [], error: "" }),
-      canApproveJoinRequests
-        ? loadSection<JoinRequestRow>(`/api/groups/${groupId}/join-requests`, "joinRequests")
-        : Promise.resolve({ items: [], error: "" }),
-      canManagePermissions
-        ? loadSection<PermissionRow>(`/api/groups/${groupId}/permissions`, "permissions")
-        : Promise.resolve({ items: [], error: "" }),
-      canManagePermissions
-        ? loadSection<OverrideRow>(`/api/groups/${groupId}/user-overrides`, "overrides")
-        : Promise.resolve({ items: [], error: "" }),
-    ]);
+    const [nextMembers, nextInvites, nextJoinRequests, nextPermissions, nextOverrides] =
+      await Promise.all([
+        needsMemberDirectory
+          ? loadSection<MemberRow>(`/api/groups/${groupId}/members`, "members")
+          : Promise.resolve({ items: [], error: "" }),
+        canManageMembers
+          ? loadSection<InviteRow>(`/api/groups/${groupId}/invites`, "invites")
+          : Promise.resolve({ items: [], error: "" }),
+        canApproveJoinRequests
+          ? loadSection<JoinRequestRow>(`/api/groups/${groupId}/join-requests`, "joinRequests")
+          : Promise.resolve({ items: [], error: "" }),
+        canManagePermissions
+          ? loadSection<PermissionRow>(`/api/groups/${groupId}/permissions`, "permissions")
+          : Promise.resolve({ items: [], error: "" }),
+        canManagePermissions
+          ? loadSection<OverrideRow>(`/api/groups/${groupId}/user-overrides`, "overrides")
+          : Promise.resolve({ items: [], error: "" }),
+      ]);
 
     setMembers({ ...nextMembers, loading: false });
     setInvites({ ...nextInvites, loading: false });
@@ -239,7 +238,9 @@ export default function GroupAccessPanel({
         nextDraft[permission.permissionKey] = permission.effect;
       }
 
-      const changed = PERMISSION_KEYS.some((permissionKey) => current[permissionKey] !== nextDraft[permissionKey]);
+      const changed = PERMISSION_KEYS.some(
+        (permissionKey) => current[permissionKey] !== nextDraft[permissionKey],
+      );
       return changed ? nextDraft : current;
     });
   }, [permissions.items]);
@@ -262,21 +263,21 @@ export default function GroupAccessPanel({
     [members.items],
   );
 
-  const submitAction = useCallback(async (
-    actionKey: string,
-    work: () => Promise<void>,
-  ) => {
-    setSubmitting(actionKey);
-    setFlashMessage("");
-    try {
-      await work();
-      await refreshAll();
-    } catch (error) {
-      showError(error);
-    } finally {
-      setSubmitting(null);
-    }
-  }, [refreshAll, showError]);
+  const submitAction = useCallback(
+    async (actionKey: string, work: () => Promise<void>) => {
+      setSubmitting(actionKey);
+      setFlashMessage("");
+      try {
+        await work();
+        await refreshAll();
+      } catch (error) {
+        showError(error);
+      } finally {
+        setSubmitting(null);
+      }
+    },
+    [refreshAll, showError],
+  );
 
   const sectionCard = (title: string, content: ReactNode) => (
     <section className="rounded-xl border border-border bg-surface p-4">
@@ -304,9 +305,7 @@ export default function GroupAccessPanel({
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold">{groupName}</h2>
-            <p className="mt-1 text-sm text-text-muted">
-              {t("admin.groups.subtitle")}
-            </p>
+            <p className="mt-1 text-sm text-text-muted">{t("admin.groups.subtitle")}</p>
           </div>
           <button
             type="button"
@@ -316,83 +315,95 @@ export default function GroupAccessPanel({
             {t("admin.groups.refresh")}
           </button>
         </div>
-        {flashMessage && (
-          <p className="mt-3 text-sm text-danger">{flashMessage}</p>
-        )}
+        {flashMessage && <p className="mt-3 text-sm text-danger">{flashMessage}</p>}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {canManageMembers && sectionCard(
-          t("admin.groups.members"),
-          <div className="space-y-4">
-            <form
-              className="flex flex-col gap-2 sm:flex-row"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!memberLoginId.trim()) return;
-                void submitAction("member-add", async () => {
-                  await readJsonOrThrow(await fetch(`/api/groups/${groupId}/members`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      targetLoginId: memberLoginId.trim(),
-                      role: memberRole,
-                    }),
-                  }));
-                  setMemberLoginId("");
-                });
-              }}
-            >
-              <input
-                value={memberLoginId}
-                onChange={(event) => setMemberLoginId(event.target.value)}
-                placeholder={t("admin.groups.targetLoginId")}
-                className="flex-1 rounded-lg border border-border bg-bg px-3 py-2"
-              />
-              <select
-                value={memberRole}
-                onChange={(event) => setMemberRole(event.target.value as GroupMemberRole)}
-                className="rounded-lg border border-border bg-bg px-3 py-2"
+        {canManageMembers &&
+          sectionCard(
+            t("admin.groups.members"),
+            <div className="space-y-4">
+              <form
+                className="flex flex-col gap-2 sm:flex-row"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!memberLoginId.trim()) return;
+                  void submitAction("member-add", async () => {
+                    await readJsonOrThrow(
+                      await fetch(`/api/groups/${groupId}/members`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          targetLoginId: memberLoginId.trim(),
+                          role: memberRole,
+                        }),
+                      }),
+                    );
+                    setMemberLoginId("");
+                  });
+                }}
               >
-                <option value="member">member</option>
-                <option value="group_admin">group_admin</option>
-              </select>
-              <button
-                type="submit"
-                disabled={submitting === "member-add"}
-                className="rounded-lg bg-primary px-3 py-2 font-medium text-white disabled:opacity-60"
-              >
-                {t("admin.groups.addMember")}
-              </button>
-            </form>
-            {members.loading
-              ? <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
-              : members.error
-              ? <p className="text-sm text-danger">{members.error}</p>
-              : members.items.length === 0
-              ? <p className="text-sm text-text-muted">{t("admin.groups.noData")}</p>
-              : (
+                <input
+                  value={memberLoginId}
+                  onChange={(event) => setMemberLoginId(event.target.value)}
+                  placeholder={t("admin.groups.targetLoginId")}
+                  className="flex-1 rounded-lg border border-border bg-bg px-3 py-2"
+                />
+                <select
+                  value={memberRole}
+                  onChange={(event) => setMemberRole(event.target.value as GroupMemberRole)}
+                  className="rounded-lg border border-border bg-bg px-3 py-2"
+                >
+                  <option value="member">member</option>
+                  <option value="group_admin">group_admin</option>
+                </select>
+                <button
+                  type="submit"
+                  disabled={submitting === "member-add"}
+                  className="rounded-lg bg-primary px-3 py-2 font-medium text-white disabled:opacity-60"
+                >
+                  {t("admin.groups.addMember")}
+                </button>
+              </form>
+              {members.loading ? (
+                <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+              ) : members.error ? (
+                <p className="text-sm text-danger">{members.error}</p>
+              ) : members.items.length === 0 ? (
+                <p className="text-sm text-text-muted">{t("admin.groups.noData")}</p>
+              ) : (
                 <div className="space-y-2">
                   {members.items.map((member) => (
-                    <div key={member.userId} className="flex items-center justify-between rounded-lg bg-bg px-3 py-2">
+                    <div
+                      key={member.userId}
+                      className="flex items-center justify-between rounded-lg bg-bg px-3 py-2"
+                    >
                       <div>
                         <p className="font-medium">{member.nickname || member.loginId}</p>
-                        <p className="text-xs text-text-muted">{member.loginId} · {member.role}</p>
+                        <p className="text-xs text-text-muted">
+                          {member.loginId} · {member.role}
+                        </p>
                       </div>
                       <button
                         type="button"
                         disabled={member.role === "group_admin" && groupAdminCount === 1}
-                        onClick={() => void submitAction(`member-remove-${member.userId}`, async () => {
-                          await readJsonOrThrow(await fetch(`/api/groups/${groupId}/members`, {
-                            method: "DELETE",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ targetUserId: member.userId }),
-                          }));
-                        })}
+                        onClick={() =>
+                          void submitAction(`member-remove-${member.userId}`, async () => {
+                            await readJsonOrThrow(
+                              await fetch(`/api/groups/${groupId}/members`, {
+                                method: "DELETE",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ targetUserId: member.userId }),
+                              }),
+                            );
+                          })
+                        }
                         className="text-sm text-danger disabled:cursor-not-allowed disabled:text-text-dim"
-                        title={member.role === "group_admin" && groupAdminCount === 1
-                          ? t("errors.lastGroupAdminRequired")
-                          : undefined}
+                        title={
+                          member.role === "group_admin" && groupAdminCount === 1
+                            ? t("errors.lastGroupAdminRequired")
+                            : undefined
+                        }
                       >
                         {t("admin.groups.remove")}
                       </button>
@@ -400,61 +411,64 @@ export default function GroupAccessPanel({
                   ))}
                 </div>
               )}
-          </div>,
-        )}
+            </div>,
+          )}
 
-        {canManageMembers && sectionCard(
-          t("admin.groups.invites"),
-          <div className="space-y-4">
-            <form
-              className="grid gap-2 sm:grid-cols-[1fr_220px_auto]"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void submitAction("invite-create", async () => {
-                  await readJsonOrThrow(await fetch(`/api/groups/${groupId}/invites`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      targetLoginId: inviteLoginId.trim() || null,
-                      expiresAt: inviteExpiresAt ? new Date(inviteExpiresAt).toISOString() : null,
-                    }),
-                  }));
-                  setInviteLoginId("");
-                  setInviteExpiresAt("");
-                });
-              }}
-            >
-              <input
-                value={inviteLoginId}
-                onChange={(event) => setInviteLoginId(event.target.value)}
-                placeholder={t("admin.groups.inviteTargetOptional")}
-                className="rounded-lg border border-border bg-bg px-3 py-2"
-              />
-              <input
-                type="datetime-local"
-                value={inviteExpiresAt}
-                onChange={(event) => setInviteExpiresAt(event.target.value)}
-                placeholder={t("admin.groups.inviteExpirationOptional")}
-                className="rounded-lg border border-border bg-bg px-3 py-2"
-              />
-              <button
-                type="submit"
-                disabled={submitting === "invite-create"}
-                className="rounded-lg bg-primary px-3 py-2 font-medium text-white disabled:opacity-60"
+        {canManageMembers &&
+          sectionCard(
+            t("admin.groups.invites"),
+            <div className="space-y-4">
+              <form
+                className="grid gap-2 sm:grid-cols-[1fr_220px_auto]"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void submitAction("invite-create", async () => {
+                    await readJsonOrThrow(
+                      await fetch(`/api/groups/${groupId}/invites`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          targetLoginId: inviteLoginId.trim() || null,
+                          expiresAt: inviteExpiresAt
+                            ? new Date(inviteExpiresAt).toISOString()
+                            : null,
+                        }),
+                      }),
+                    );
+                    setInviteLoginId("");
+                    setInviteExpiresAt("");
+                  });
+                }}
               >
-                {t("admin.groups.createInvite")}
-              </button>
-            </form>
-            <p className="text-xs text-text-muted">
-              {t("admin.groups.inviteFormHint")}
-            </p>
-            {invites.loading
-              ? <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
-              : invites.error
-              ? <p className="text-sm text-danger">{invites.error}</p>
-              : invites.items.length === 0
-              ? <p className="text-sm text-text-muted">{t("admin.groups.noData")}</p>
-              : (
+                <input
+                  value={inviteLoginId}
+                  onChange={(event) => setInviteLoginId(event.target.value)}
+                  placeholder={t("admin.groups.inviteTargetOptional")}
+                  className="rounded-lg border border-border bg-bg px-3 py-2"
+                />
+                <input
+                  type="datetime-local"
+                  value={inviteExpiresAt}
+                  onChange={(event) => setInviteExpiresAt(event.target.value)}
+                  placeholder={t("admin.groups.inviteExpirationOptional")}
+                  className="rounded-lg border border-border bg-bg px-3 py-2"
+                />
+                <button
+                  type="submit"
+                  disabled={submitting === "invite-create"}
+                  className="rounded-lg bg-primary px-3 py-2 font-medium text-white disabled:opacity-60"
+                >
+                  {t("admin.groups.createInvite")}
+                </button>
+              </form>
+              <p className="text-xs text-text-muted">{t("admin.groups.inviteFormHint")}</p>
+              {invites.loading ? (
+                <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+              ) : invites.error ? (
+                <p className="text-sm text-danger">{invites.error}</p>
+              ) : invites.items.length === 0 ? (
+                <p className="text-sm text-text-muted">{t("admin.groups.noData")}</p>
+              ) : (
                 <div className="space-y-2">
                   {invites.items.map((invite) => (
                     <div key={invite.id} className="rounded-lg bg-bg px-3 py-3">
@@ -462,7 +476,9 @@ export default function GroupAccessPanel({
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="font-medium">
-                              {invite.targetNickname || invite.targetLoginId || t("admin.groups.inviteShared")}
+                              {invite.targetNickname ||
+                                invite.targetLoginId ||
+                                t("admin.groups.inviteShared")}
                             </p>
                             <span className="rounded-full bg-surface-raised px-2 py-0.5 text-xs text-text-muted">
                               {invite.isReusable
@@ -497,13 +513,17 @@ export default function GroupAccessPanel({
                         {!invite.revokedAt && (
                           <button
                             type="button"
-                            onClick={() => void submitAction(`invite-revoke-${invite.id}`, async () => {
-                              await readJsonOrThrow(await fetch(`/api/groups/${groupId}/invites`, {
-                                method: "DELETE",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ inviteId: invite.id }),
-                              }));
-                            })}
+                            onClick={() =>
+                              void submitAction(`invite-revoke-${invite.id}`, async () => {
+                                await readJsonOrThrow(
+                                  await fetch(`/api/groups/${groupId}/invites`, {
+                                    method: "DELETE",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ inviteId: invite.id }),
+                                  }),
+                                );
+                              })
+                            }
                             className="text-sm text-danger"
                           >
                             {t("admin.groups.deleteInvite")}
@@ -514,176 +534,215 @@ export default function GroupAccessPanel({
                   ))}
                 </div>
               )}
-          </div>,
-        )}
+            </div>,
+          )}
 
-        {canApproveJoinRequests && sectionCard(
-          t("admin.groups.joinRequests"),
-          <div className="space-y-2">
-            {joinRequests.loading
-              ? <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
-              : joinRequests.error
-              ? <p className="text-sm text-danger">{joinRequests.error}</p>
-              : joinRequests.items.length === 0
-              ? <p className="text-sm text-text-muted">{t("admin.groups.noData")}</p>
-              : joinRequests.items.map((request) => (
-                <div key={request.id} className="rounded-lg bg-bg px-3 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium">{request.nickname || request.loginId}</p>
-                      <p className="text-xs text-text-muted">{request.loginId}</p>
-                    </div>
-                    {request.status === "pending" && (
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void submitAction(`request-approve-${request.id}`, async () => {
-                            await readJsonOrThrow(await fetch(`/api/groups/${groupId}/join-requests`, {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ requestId: request.id, action: "approve" }),
-                            }));
-                          })}
-                          className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white"
-                        >
-                          {t("admin.groups.approve")}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void submitAction(`request-reject-${request.id}`, async () => {
-                            await readJsonOrThrow(await fetch(`/api/groups/${groupId}/join-requests`, {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ requestId: request.id, action: "reject" }),
-                            }));
-                          })}
-                          className="rounded-lg bg-surface-raised px-3 py-1.5 text-sm font-medium"
-                        >
-                          {t("admin.groups.reject")}
-                        </button>
+        {canApproveJoinRequests &&
+          sectionCard(
+            t("admin.groups.joinRequests"),
+            <div className="space-y-2">
+              {joinRequests.loading ? (
+                <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+              ) : joinRequests.error ? (
+                <p className="text-sm text-danger">{joinRequests.error}</p>
+              ) : joinRequests.items.length === 0 ? (
+                <p className="text-sm text-text-muted">{t("admin.groups.noData")}</p>
+              ) : (
+                joinRequests.items.map((request) => (
+                  <div key={request.id} className="rounded-lg bg-bg px-3 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{request.nickname || request.loginId}</p>
+                        <p className="text-xs text-text-muted">{request.loginId}</p>
                       </div>
+                      {request.status === "pending" && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void submitAction(`request-approve-${request.id}`, async () => {
+                                await readJsonOrThrow(
+                                  await fetch(`/api/groups/${groupId}/join-requests`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      requestId: request.id,
+                                      action: "approve",
+                                    }),
+                                  }),
+                                );
+                              })
+                            }
+                            className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white"
+                          >
+                            {t("admin.groups.approve")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void submitAction(`request-reject-${request.id}`, async () => {
+                                await readJsonOrThrow(
+                                  await fetch(`/api/groups/${groupId}/join-requests`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      requestId: request.id,
+                                      action: "reject",
+                                    }),
+                                  }),
+                                );
+                              })
+                            }
+                            className="rounded-lg bg-surface-raised px-3 py-1.5 text-sm font-medium"
+                          >
+                            {t("admin.groups.reject")}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {request.message && (
+                      <p className="mt-2 text-sm text-text-muted">{request.message}</p>
                     )}
                   </div>
-                  {request.message && (
-                    <p className="mt-2 text-sm text-text-muted">{request.message}</p>
-                  )}
-                </div>
-              ))}
-          </div>,
-        )}
+                ))
+              )}
+            </div>,
+          )}
 
-        {canManagePermissions && sectionCard(
-          t("admin.groups.permissions"),
-          <div className="space-y-3">
-            {permissions.loading
-              ? <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
-              : permissions.error
-              ? <p className="text-sm text-danger">{permissions.error}</p>
-              : PERMISSION_KEYS.map((permissionKey) => (
-                <div key={permissionKey} className="flex flex-col gap-2 rounded-lg bg-bg px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-sm font-medium">{permissionKey}</span>
-                  <div className="flex gap-2">
-                    <select
-                      value={permissionDraft[permissionKey]}
-                      onChange={(event) => setPermissionDraft((current) => ({
-                        ...current,
-                        [permissionKey]: event.target.value as "inherit" | "allow" | "deny",
-                      }))}
-                      className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-                    >
-                      <option value="inherit">inherit</option>
-                      <option value="allow">allow</option>
-                      <option value="deny">deny</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => void submitAction(`permission-${permissionKey}`, async () => {
-                        await readJsonOrThrow(await fetch(`/api/groups/${groupId}/permissions`, {
-                          method: "PUT",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            permissionKey,
-                            effect: permissionDraft[permissionKey] === "inherit" ? null : permissionDraft[permissionKey],
-                          }),
-                        }));
-                      })}
-                      className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white"
-                    >
-                      {t("admin.groups.savePermission")}
-                    </button>
+        {canManagePermissions &&
+          sectionCard(
+            t("admin.groups.permissions"),
+            <div className="space-y-3">
+              {permissions.loading ? (
+                <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+              ) : permissions.error ? (
+                <p className="text-sm text-danger">{permissions.error}</p>
+              ) : (
+                PERMISSION_KEYS.map((permissionKey) => (
+                  <div
+                    key={permissionKey}
+                    className="flex flex-col gap-2 rounded-lg bg-bg px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <span className="text-sm font-medium">{permissionKey}</span>
+                    <div className="flex gap-2">
+                      <select
+                        value={permissionDraft[permissionKey]}
+                        onChange={(event) =>
+                          setPermissionDraft((current) => ({
+                            ...current,
+                            [permissionKey]: event.target.value as "inherit" | "allow" | "deny",
+                          }))
+                        }
+                        className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                      >
+                        <option value="inherit">inherit</option>
+                        <option value="allow">allow</option>
+                        <option value="deny">deny</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void submitAction(`permission-${permissionKey}`, async () => {
+                            await readJsonOrThrow(
+                              await fetch(`/api/groups/${groupId}/permissions`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  permissionKey,
+                                  effect:
+                                    permissionDraft[permissionKey] === "inherit"
+                                      ? null
+                                      : permissionDraft[permissionKey],
+                                }),
+                              }),
+                            );
+                          })
+                        }
+                        className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white"
+                      >
+                        {t("admin.groups.savePermission")}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-          </div>,
-        )}
+                ))
+              )}
+            </div>,
+          )}
 
-        {canManagePermissions && sectionCard(
-          t("admin.groups.userOverrides"),
-          <div className="space-y-4">
-            <form
-              className="grid gap-2 md:grid-cols-[1fr_1fr_140px_auto]"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!overrideTargetUserId) return;
-                void submitAction("override-save", async () => {
-                  await readJsonOrThrow(await fetch(`/api/groups/${groupId}/user-overrides`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      targetUserId: overrideTargetUserId,
-                      permissionKey: overridePermissionKey,
-                      effect: overrideEffect === "inherit" ? null : overrideEffect,
-                    }),
-                  }));
-                });
-              }}
-            >
-              <select
-                value={overrideTargetUserId}
-                onChange={(event) => setOverrideTargetUserId(event.target.value)}
-                className="rounded-lg border border-border bg-bg px-3 py-2"
+        {canManagePermissions &&
+          sectionCard(
+            t("admin.groups.userOverrides"),
+            <div className="space-y-4">
+              <form
+                className="grid gap-2 md:grid-cols-[1fr_1fr_140px_auto]"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!overrideTargetUserId) return;
+                  void submitAction("override-save", async () => {
+                    await readJsonOrThrow(
+                      await fetch(`/api/groups/${groupId}/user-overrides`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          targetUserId: overrideTargetUserId,
+                          permissionKey: overridePermissionKey,
+                          effect: overrideEffect === "inherit" ? null : overrideEffect,
+                        }),
+                      }),
+                    );
+                  });
+                }}
               >
-                {members.items.map((member) => (
-                  <option key={member.userId} value={member.userId}>
-                    {member.nickname || member.loginId}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={overridePermissionKey}
-                onChange={(event) => setOverridePermissionKey(event.target.value as PermissionKey)}
-                className="rounded-lg border border-border bg-bg px-3 py-2"
-              >
-                {PERMISSION_KEYS.map((permissionKey) => (
-                  <option key={permissionKey} value={permissionKey}>
-                    {permissionKey}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={overrideEffect}
-                onChange={(event) => setOverrideEffect(event.target.value as "allow" | "deny" | "inherit")}
-                className="rounded-lg border border-border bg-bg px-3 py-2"
-              >
-                <option value="inherit">inherit</option>
-                <option value="allow">allow</option>
-                <option value="deny">deny</option>
-              </select>
-              <button
-                type="submit"
-                disabled={!overrideTargetUserId || submitting === "override-save"}
-                className="rounded-lg bg-primary px-3 py-2 font-medium text-white disabled:opacity-60"
-              >
-                {t("admin.groups.saveOverride")}
-              </button>
-            </form>
-            {overrides.loading
-              ? <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
-              : overrides.error
-              ? <p className="text-sm text-danger">{overrides.error}</p>
-              : Object.keys(groupedOverrides).length === 0
-              ? <p className="text-sm text-text-muted">{t("admin.groups.noData")}</p>
-              : (
+                <select
+                  value={overrideTargetUserId}
+                  onChange={(event) => setOverrideTargetUserId(event.target.value)}
+                  className="rounded-lg border border-border bg-bg px-3 py-2"
+                >
+                  {members.items.map((member) => (
+                    <option key={member.userId} value={member.userId}>
+                      {member.nickname || member.loginId}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={overridePermissionKey}
+                  onChange={(event) =>
+                    setOverridePermissionKey(event.target.value as PermissionKey)
+                  }
+                  className="rounded-lg border border-border bg-bg px-3 py-2"
+                >
+                  {PERMISSION_KEYS.map((permissionKey) => (
+                    <option key={permissionKey} value={permissionKey}>
+                      {permissionKey}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={overrideEffect}
+                  onChange={(event) =>
+                    setOverrideEffect(event.target.value as "allow" | "deny" | "inherit")
+                  }
+                  className="rounded-lg border border-border bg-bg px-3 py-2"
+                >
+                  <option value="inherit">inherit</option>
+                  <option value="allow">allow</option>
+                  <option value="deny">deny</option>
+                </select>
+                <button
+                  type="submit"
+                  disabled={!overrideTargetUserId || submitting === "override-save"}
+                  className="rounded-lg bg-primary px-3 py-2 font-medium text-white disabled:opacity-60"
+                >
+                  {t("admin.groups.saveOverride")}
+                </button>
+              </form>
+              {overrides.loading ? (
+                <p className="text-sm text-text-muted">{t("admin.groups.loading")}</p>
+              ) : overrides.error ? (
+                <p className="text-sm text-danger">{overrides.error}</p>
+              ) : Object.keys(groupedOverrides).length === 0 ? (
+                <p className="text-sm text-text-muted">{t("admin.groups.noData")}</p>
+              ) : (
                 <div className="space-y-3">
                   {Object.entries(groupedOverrides).map(([userId, userOverrides]) => (
                     <div key={userId} className="rounded-lg bg-bg px-3 py-3">
@@ -692,21 +751,30 @@ export default function GroupAccessPanel({
                       </p>
                       <div className="space-y-2">
                         {userOverrides.map((override) => (
-                          <div key={override.id} className="flex items-center justify-between text-sm">
-                            <span>{override.permissionKey}: {override.effect}</span>
+                          <div
+                            key={override.id}
+                            className="flex items-center justify-between text-sm"
+                          >
+                            <span>
+                              {override.permissionKey}: {override.effect}
+                            </span>
                             <button
                               type="button"
-                              onClick={() => void submitAction(`override-remove-${override.id}`, async () => {
-                                await readJsonOrThrow(await fetch(`/api/groups/${groupId}/user-overrides`, {
-                                  method: "PUT",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    targetUserId: override.userId,
-                                    permissionKey: override.permissionKey,
-                                    effect: null,
-                                  }),
-                                }));
-                              })}
+                              onClick={() =>
+                                void submitAction(`override-remove-${override.id}`, async () => {
+                                  await readJsonOrThrow(
+                                    await fetch(`/api/groups/${groupId}/user-overrides`, {
+                                      method: "PUT",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        targetUserId: override.userId,
+                                        permissionKey: override.permissionKey,
+                                        effect: null,
+                                      }),
+                                    }),
+                                  );
+                                })
+                              }
                               className="text-danger"
                             >
                               {t("admin.groups.remove")}
@@ -718,8 +786,8 @@ export default function GroupAccessPanel({
                   ))}
                 </div>
               )}
-          </div>,
-        )}
+            </div>,
+          )}
       </div>
     </div>
   );

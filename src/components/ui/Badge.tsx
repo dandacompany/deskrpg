@@ -22,7 +22,12 @@ const SIZE_CLASSES: Record<string, string> = {
   md: "text-caption px-2 py-0.5",
 };
 
-export default function Badge({ variant = "default", size = "sm", children, className = "" }: BadgeProps) {
+export default function Badge({
+  variant = "default",
+  size = "sm",
+  children,
+  className = "",
+}: BadgeProps) {
   return (
     <span
       className={`
@@ -30,7 +35,9 @@ export default function Badge({ variant = "default", size = "sm", children, clas
         ${VARIANT_CLASSES[variant]}
         ${SIZE_CLASSES[size]}
         ${className}
-      `.trim().replace(/\s+/g, " ")}
+      `
+        .trim()
+        .replace(/\s+/g, " ")}
     >
       {children}
     </span>

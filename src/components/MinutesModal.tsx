@@ -1,7 +1,18 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useT } from "@/lib/i18n";
-import { BookOpen, X, Pin, CheckCircle, MessageSquare, FileDown, FileText, ClipboardCopy, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  BookOpen,
+  X,
+  Pin,
+  CheckCircle,
+  MessageSquare,
+  FileDown,
+  FileText,
+  ClipboardCopy,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { normalizeMeetingMinutesRecord } from "@/lib/meeting-minutes";
 
 interface MeetingMinutesItem {
@@ -56,31 +67,36 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
     fetch(`/api/meetings/${id}`)
       .then((r) => r.json())
       .then((data) => {
-        setDetail(data.minutes ? normalizeMeetingMinutesRecord(data.minutes as MeetingMinutesDetail) : null);
+        setDetail(
+          data.minutes ? normalizeMeetingMinutesRecord(data.minutes as MeetingMinutesDetail) : null,
+        );
         setDetailLoading(false);
       })
       .catch(() => setDetailLoading(false));
   }, []);
 
-  const handleExport = useCallback(async (format: string) => {
-    if (!selectedId) return;
-    setExportMenu(false);
-    const params = new URLSearchParams({ format, locale });
-    const res = await fetch(`/api/meetings/${selectedId}/export?${params.toString()}`);
-    if (format === "clipboard") {
-      const data = await res.json();
-      await navigator.clipboard.writeText(data.text);
-      return;
-    }
-    // Download MD via blob
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `meeting-${selectedId.slice(0, 8)}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [locale, selectedId]);
+  const handleExport = useCallback(
+    async (format: string) => {
+      if (!selectedId) return;
+      setExportMenu(false);
+      const params = new URLSearchParams({ format, locale });
+      const res = await fetch(`/api/meetings/${selectedId}/export?${params.toString()}`);
+      if (format === "clipboard") {
+        const data = await res.json();
+        await navigator.clipboard.writeText(data.text);
+        return;
+      }
+      // Download MD via blob
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `meeting-${selectedId.slice(0, 8)}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    [locale, selectedId],
+  );
 
   const handleDelete = useCallback(async () => {
     if (!selectedId || !detail || deleting) return;
@@ -117,15 +133,23 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onClose}
+    >
       <div
         className="bg-bg border border-border rounded-xl shadow-2xl w-[90vw] max-w-[800px] h-[70vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border flex-shrink-0">
-          <h2 className="text-sm font-bold flex items-center gap-1.5"><BookOpen className="w-4 h-4" />{t("minutes.title")}</h2>
-          <button onClick={onClose} className="text-text-muted hover:text-white"><X className="w-5 h-5" /></button>
+          <h2 className="text-sm font-bold flex items-center gap-1.5">
+            <BookOpen className="w-4 h-4" />
+            {t("minutes.title")}
+          </h2>
+          <button onClick={onClose} className="text-text-muted hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Body: 2-pane */}
@@ -149,7 +173,10 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
                 >
                   <div className="font-bold truncate">{item.topic}</div>
                   <div className="text-text-dim mt-1">
-                    {new Date(item.createdAt).toLocaleDateString(locale)} · {item.participants.length}{t("minutes.participantsSuffix")} · {t("minutes.turnCount", { count: item.totalTurns })}
+                    {new Date(item.createdAt).toLocaleDateString(locale)} ·{" "}
+                    {item.participants.length}
+                    {t("minutes.participantsSuffix")} ·{" "}
+                    {t("minutes.turnCount", { count: item.totalTurns })}
                   </div>
                 </div>
               ))
@@ -163,37 +190,53 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
                 {t("minutes.selectMinutes")}
               </div>
             ) : detailLoading ? (
-              <div className="flex items-center justify-center h-full text-xs text-text-dim">{t("common.loading")}</div>
+              <div className="flex items-center justify-center h-full text-xs text-text-dim">
+                {t("common.loading")}
+              </div>
             ) : detail ? (
               <div className="text-xs">
                 <div className="font-bold text-base mb-1">{detail.topic}</div>
                 <div className="text-text-dim mb-3">
-                  {new Date(detail.createdAt).toLocaleString(locale)} · {formatDuration(detail.durationSeconds)}
+                  {new Date(detail.createdAt).toLocaleString(locale)} ·{" "}
+                  {formatDuration(detail.durationSeconds)}
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   <div className="bg-surface rounded-lg p-2 text-center">
                     <div className="text-[10px] text-text-dim">{t("meeting.participantCount")}</div>
-                    <div className="text-lg font-bold text-info">{detail.participants.length}{t("minutes.participantsSuffix")}</div>
+                    <div className="text-lg font-bold text-info">
+                      {detail.participants.length}
+                      {t("minutes.participantsSuffix")}
+                    </div>
                   </div>
                   <div className="bg-surface rounded-lg p-2 text-center">
                     <div className="text-[10px] text-text-dim">{t("meeting.totalTurns")}</div>
-                    <div className="text-lg font-bold text-info">{t("minutes.turnCount", { count: detail.totalTurns })}</div>
+                    <div className="text-lg font-bold text-info">
+                      {t("minutes.turnCount", { count: detail.totalTurns })}
+                    </div>
                   </div>
                 </div>
 
                 {detail.keyTopics.length > 0 && (
                   <div className="mb-3">
-                    <div className="font-bold text-info mb-1 flex items-center gap-1"><Pin className="w-3.5 h-3.5" />{t("meeting.keyTopics")}</div>
+                    <div className="font-bold text-info mb-1 flex items-center gap-1">
+                      <Pin className="w-3.5 h-3.5" />
+                      {t("meeting.keyTopics")}
+                    </div>
                     <ul className="list-disc list-inside text-text-secondary space-y-0.5">
-                      {detail.keyTopics.map((topic, i) => <li key={i}>{topic}</li>)}
+                      {detail.keyTopics.map((topic, i) => (
+                        <li key={i}>{topic}</li>
+                      ))}
                     </ul>
                   </div>
                 )}
 
                 {detail.conclusions && (
                   <div className="mb-3">
-                    <div className="font-bold text-success mb-1 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" />{t("meeting.conclusions")}</div>
+                    <div className="font-bold text-success mb-1 flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      {t("meeting.conclusions")}
+                    </div>
                     <div className="text-text-secondary leading-relaxed">{detail.conclusions}</div>
                   </div>
                 )}
@@ -203,7 +246,13 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
                     onClick={() => setShowTranscript(!showTranscript)}
                     className="font-bold text-text-muted hover:text-text mb-1"
                   >
-                    <MessageSquare className="w-3.5 h-3.5 inline mr-1" />{t("minutes.fullTranscript")} {showTranscript ? <ChevronUp className="w-3.5 h-3.5 inline ml-1" /> : <ChevronDown className="w-3.5 h-3.5 inline ml-1" />}
+                    <MessageSquare className="w-3.5 h-3.5 inline mr-1" />
+                    {t("minutes.fullTranscript")}{" "}
+                    {showTranscript ? (
+                      <ChevronUp className="w-3.5 h-3.5 inline ml-1" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 inline ml-1" />
+                    )}
                   </button>
                   {showTranscript && (
                     <pre className="bg-surface rounded-lg p-3 text-text-secondary whitespace-pre-wrap text-[11px] max-h-[300px] overflow-y-auto">
@@ -229,12 +278,25 @@ export default function MinutesModal({ channelId, onClose }: MinutesModalProps) 
                       onClick={() => setExportMenu(!exportMenu)}
                       className="px-3 py-1.5 bg-surface-raised hover:brightness-125 rounded-lg text-text-secondary"
                     >
-                      <FileDown className="w-3.5 h-3.5 inline mr-1" />{t("meeting.export")} <ChevronDown className="w-3 h-3 inline ml-0.5" />
+                      <FileDown className="w-3.5 h-3.5 inline mr-1" />
+                      {t("meeting.export")} <ChevronDown className="w-3 h-3 inline ml-0.5" />
                     </button>
                     {exportMenu && (
                       <div className="absolute bottom-full right-0 mb-1 bg-surface border border-border rounded-lg shadow-xl py-1 min-w-[160px]">
-                        <button onClick={() => handleExport("md")} className="w-full text-left px-3 py-1.5 hover:bg-surface-raised flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" />{t("meeting.exportMd")}</button>
-                        <button onClick={() => handleExport("clipboard")} className="w-full text-left px-3 py-1.5 hover:bg-surface-raised flex items-center gap-1.5"><ClipboardCopy className="w-3.5 h-3.5" />{t("meeting.exportClipboard")}</button>
+                        <button
+                          onClick={() => handleExport("md")}
+                          className="w-full text-left px-3 py-1.5 hover:bg-surface-raised flex items-center gap-1.5"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          {t("meeting.exportMd")}
+                        </button>
+                        <button
+                          onClick={() => handleExport("clipboard")}
+                          className="w-full text-left px-3 py-1.5 hover:bg-surface-raised flex items-center gap-1.5"
+                        >
+                          <ClipboardCopy className="w-3.5 h-3.5" />
+                          {t("meeting.exportClipboard")}
+                        </button>
                       </div>
                     )}
                   </div>

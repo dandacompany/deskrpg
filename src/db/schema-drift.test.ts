@@ -125,10 +125,16 @@ function snapshotUniqueConstraints(
 
 /** Stable snapshot of foreign keys, keyed by local column set. */
 function snapshotForeignKeys(getTableConfig: GetTableConfig, foreignKeys: ForeignKeyLike[]) {
-  const out: Record<string, { foreignTable: string; foreignColumns: string[]; onDelete: string; onUpdate: string }> = {};
+  const out: Record<
+    string,
+    { foreignTable: string; foreignColumns: string[]; onDelete: string; onUpdate: string }
+  > = {};
   for (const fk of foreignKeys) {
     const ref = fk.reference();
-    const key = ref.columns.map((c) => c.name).sort().join(",");
+    const key = ref.columns
+      .map((c) => c.name)
+      .sort()
+      .join(",");
     out[key] = {
       foreignTable: getTableConfig(ref.foreignTable).name,
       foreignColumns: ref.foreignColumns.map((c) => c.name),
@@ -271,13 +277,20 @@ test("PostgreSQL tasks table has all task-manager columns (2026-04 regression gu
     "stalledReason",
     "completedAt",
   ]) {
-    assert.ok(cols.has(required), `tasks.${required} missing from runtime PG schema (this is what broke task creation in 2026-04)`);
+    assert.ok(
+      cols.has(required),
+      `tasks.${required} missing from runtime PG schema (this is what broke task creation in 2026-04)`,
+    );
   }
 });
 
 test("each dialect exports exactly the expected 29 tables", () => {
   assert.equal(Object.keys(pgCjs).length, EXPECTED_TABLE_COUNT, "schema.pg.cjs table count");
-  assert.equal(Object.keys(sqliteCjs).length, EXPECTED_TABLE_COUNT, "schema.sqlite.cjs table count");
+  assert.equal(
+    Object.keys(sqliteCjs).length,
+    EXPECTED_TABLE_COUNT,
+    "schema.sqlite.cjs table count",
+  );
   assert.equal(Object.keys(pgTs).length, EXPECTED_TABLE_COUNT, "schema.ts table count");
   assert.equal(Object.keys(sqliteTs).length, EXPECTED_TABLE_COUNT, "schema-sqlite.ts table count");
 });

@@ -24,7 +24,7 @@ export class DmHub {
     const { tasks, npcs } = await import("@/db");
     const taskManager = new TaskManager(db, { tasks, npcs });
 
-    const activeTasks = await taskManager.getTasksByNpc(npcId) as Array<{
+    const activeTasks = (await taskManager.getTasksByNpc(npcId)) as Array<{
       npcTaskId: string;
       title: string;
       status: string;
@@ -43,12 +43,14 @@ export class DmHub {
 
     if (taskLines.length === 0) return "";
 
-    return "[ACTIVE TASKS DASHBOARD]\n"
-      + `${taskLines.join("\n")}\n\n`
-      + "위 태스크들의 진행 상황을 파악하고 있습니다.\n"
-      + "사용자가 태스크에 대해 질문하면 요약 기반으로 답변하세요.\n"
-      + "상세 내용이 필요하면 응답에 [NEED_TASK_DETAIL:taskId] 마커를 포함하세요.\n"
-      + "기존 태스크의 연속 작업이라면 [CONTINUE_TASK:taskId] 마커를 사용하세요.";
+    return (
+      "[ACTIVE TASKS DASHBOARD]\n" +
+      `${taskLines.join("\n")}\n\n` +
+      "위 태스크들의 진행 상황을 파악하고 있습니다.\n" +
+      "사용자가 태스크에 대해 질문하면 요약 기반으로 답변하세요.\n" +
+      "상세 내용이 필요하면 응답에 [NEED_TASK_DETAIL:taskId] 마커를 포함하세요.\n" +
+      "기존 태스크의 연속 작업이라면 [CONTINUE_TASK:taskId] 마커를 사용하세요."
+    );
   }
 
   async updateSessionSummary(
@@ -62,17 +64,21 @@ export class DmHub {
     const fallbackKey = `${npcId}:${userId}:${contextKey}`;
 
     try {
-      const existing = await db.select()
+      const existing = await db
+        .select()
         .from(npcSessions)
-        .where(and(
-          eq(npcSessions.npcId, npcId),
-          eq(npcSessions.userId, userId),
-          eq(npcSessions.contextKey, contextKey),
-        ))
+        .where(
+          and(
+            eq(npcSessions.npcId, npcId),
+            eq(npcSessions.userId, userId),
+            eq(npcSessions.contextKey, contextKey),
+          ),
+        )
         .limit(1);
 
       if (existing.length > 0) {
-        await db.update(npcSessions)
+        await db
+          .update(npcSessions)
           .set({
             lastSummary: summary,
             updatedAt: nowForDb(),

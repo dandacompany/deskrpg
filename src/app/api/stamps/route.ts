@@ -53,7 +53,16 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, cols, rows: stampRows, tileWidth, tileHeight, layers, tilesets, thumbnail } = body;
+    const {
+      name,
+      cols,
+      rows: stampRows,
+      tileWidth,
+      tileHeight,
+      layers,
+      tilesets,
+      thumbnail,
+    } = body;
 
     if (!name || !cols || !stampRows || !layers || !tilesets) {
       return NextResponse.json(
@@ -79,11 +88,14 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
-    return NextResponse.json({
-      ...created,
-      layers: parseDbJson(created.layers) ?? created.layers,
-      tilesets: parseDbJson(created.tilesets) ?? created.tilesets,
-    }, { status: 201 });
+    return NextResponse.json(
+      {
+        ...created,
+        layers: parseDbJson(created.layers) ?? created.layers,
+        tilesets: parseDbJson(created.tilesets) ?? created.tilesets,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Failed to create stamp:", error);
     return NextResponse.json(

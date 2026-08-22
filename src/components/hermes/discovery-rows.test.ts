@@ -46,9 +46,7 @@ test("toDiscoveryRows", async (t) => {
 
 test("partitionRegistrationResults", async (t) => {
   await t.test("성공한 이름은 selection에서 빠지고 실패 목록에 없다", () => {
-    const { nextSelected, failures } = partitionRegistrationResults([
-      { name: "sophie", ok: true },
-    ]);
+    const { nextSelected, failures } = partitionRegistrationResults([{ name: "sophie", ok: true }]);
     assert.deepEqual(nextSelected, []);
     assert.deepEqual(failures, []);
   });
@@ -63,9 +61,7 @@ test("partitionRegistrationResults", async (t) => {
   });
 
   await t.test("errorCode가 없는 실패는 register_failed로 접는다", () => {
-    const { nextSelected, failures } = partitionRegistrationResults([
-      { name: "ada", ok: false },
-    ]);
+    const { nextSelected, failures } = partitionRegistrationResults([{ name: "ada", ok: false }]);
     assert.deepEqual(nextSelected, ["ada"]);
     assert.deepEqual(failures, [{ name: "ada", errorCode: "register_failed" }]);
   });

@@ -16,17 +16,12 @@ import { parseDbJson, parseDbObject } from "@/lib/db-json";
 
 async function verifyNpcOwnership(req: NextRequest, npcId: string) {
   const userId = getUserId(req);
-  if (!userId)
-    return { errorCode: "unauthorized", error: "Unauthorized", status: 401 };
+  if (!userId) return { errorCode: "unauthorized", error: "Unauthorized", status: 401 };
 
   const [npc] = await db.select().from(npcs).where(eq(npcs.id, npcId));
-  if (!npc)
-    return { errorCode: "npc_not_found", error: "NPC not found", status: 404 };
+  if (!npc) return { errorCode: "npc_not_found", error: "NPC not found", status: 404 };
 
-  const [channel] = await db
-    .select()
-    .from(channels)
-    .where(eq(channels.id, npc.channelId));
+  const [channel] = await db.select().from(channels).where(eq(channels.id, npc.channelId));
   if (!channel || channel.ownerId !== userId) {
     return {
       errorCode: "only_channel_owner_can_modify_npcs",
@@ -38,10 +33,7 @@ async function verifyNpcOwnership(req: NextRequest, npcId: string) {
   return { npc, channel, userId };
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const result = await verifyNpcOwnership(req, id);
@@ -55,9 +47,7 @@ export async function PATCH(
     const { npc } = result;
     const body = await req.json();
     const updates: Record<string, unknown> = {
-      updatedAt: (isPostgres
-        ? new Date()
-        : new Date().toISOString()) as unknown as Date,
+      updatedAt: (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date,
     };
     const nextName = body.name?.trim() || npc.name;
     const normalizedLocale = normalizeLocale(body.locale);
@@ -65,9 +55,7 @@ export async function PATCH(
     if (body.name?.trim()) updates.name = body.name.trim().slice(0, 100);
     if (body.appearance) updates.appearance = jsonForDb(body.appearance);
     if (typeof body.direction === "string") {
-      updates.direction = ["up", "down", "left", "right"].includes(
-        body.direction,
-      )
+      updates.direction = ["up", "down", "left", "right"].includes(body.direction)
         ? body.direction
         : "down";
     }
@@ -92,10 +80,7 @@ export async function PATCH(
         })
       : null;
     const resolvedIdentity =
-      body.identity?.trim() ??
-      body.persona?.trim() ??
-      presetDefaults?.identity ??
-      "";
+      body.identity?.trim() ?? body.persona?.trim() ?? presetDefaults?.identity ?? "";
     const resolvedSoul = body.soul?.trim() ?? presetDefaults?.soul ?? "";
 
     // 예전에는 여기서 body.agentAction(select/create)을 받아 OpenClaw 게이트웨이에
@@ -104,8 +89,7 @@ export async function PATCH(
     // 자리에 있고 우리는 바인딩만 한다. 고용 모달도 agentAction 을 더는 보내지 않는다.
 
     if (body.passPolicy !== undefined) {
-      const currentConfig =
-        (updates.agentConfig as Record<string, unknown>) || existingConfig;
+      const currentConfig = (updates.agentConfig as Record<string, unknown>) || existingConfig;
       updates.agentConfig = {
         ...currentConfig,
         passPolicy: body.passPolicy?.trim() || null,
@@ -136,11 +120,7 @@ export async function PATCH(
           })
         : {
             identity: injectTaskPrompt(
-              localizeNpcPromptDocument(
-                newIdentity,
-                normalizedLocale,
-                "identity",
-              ),
+              localizeNpcPromptDocument(newIdentity, normalizedLocale, "identity"),
               normalizedLocale,
             ),
             soul: localizeNpcPromptDocument(newSoul, normalizedLocale, "soul"),
@@ -170,17 +150,12 @@ export async function PATCH(
       updates.agentConfig = jsonForDb(updates.agentConfig);
     }
 
-    const [updated] = await db
-      .update(npcs)
-      .set(updates)
-      .where(eq(npcs.id, id))
-      .returning();
+    const [updated] = await db.update(npcs).set(updates).where(eq(npcs.id, id)).returning();
     return NextResponse.json({
       npc: {
         ...updated,
         appearance: parseDbJson(updated.appearance) ?? updated.appearance,
-        agentConfig:
-          parseDbObject(updated.agentConfig) ?? updated.agentConfig,
+        agentConfig: parseDbObject(updated.agentConfig) ?? updated.agentConfig,
       },
     });
   } catch (err) {
@@ -192,10 +167,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const result = await verifyNpcOwnership(req, id);

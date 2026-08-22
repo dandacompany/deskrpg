@@ -24,10 +24,12 @@ export async function GET(req: NextRequest) {
       .where(eq(characters.userId, userId))
       .orderBy(characters.createdAt);
 
-    const parsed = isPostgres ? result : result.map((c) => ({
-      ...c,
-      appearance: parseDbJson(c.appearance) ?? c.appearance,
-    }));
+    const parsed = isPostgres
+      ? result
+      : result.map((c) => ({
+          ...c,
+          appearance: parseDbJson(c.appearance) ?? c.appearance,
+        }));
     return NextResponse.json({ characters: parsed });
   } catch (error) {
     console.error("Failed to load characters:", error);
@@ -62,14 +64,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const existing = await db
-      .select()
-      .from(characters)
-      .where(eq(characters.userId, userId));
+    const existing = await db.select().from(characters).where(eq(characters.userId, userId));
 
     if (existing.length >= MAX_CHARACTERS) {
       return NextResponse.json(
-        { errorCode: "max_characters_reached", error: `maximum ${MAX_CHARACTERS} characters allowed` },
+        {
+          errorCode: "max_characters_reached",
+          error: `maximum ${MAX_CHARACTERS} characters allowed`,
+        },
         { status: 400 },
       );
     }
@@ -87,12 +89,15 @@ export async function POST(req: NextRequest) {
       .values({ userId, name, appearance: jsonForDb(appearance) })
       .returning();
 
-    return NextResponse.json({
-      character: {
-        ...character,
-        appearance: parseDbJson(character.appearance) ?? character.appearance,
+    return NextResponse.json(
+      {
+        character: {
+          ...character,
+          appearance: parseDbJson(character.appearance) ?? character.appearance,
+        },
       },
-    }, { status: 201 });
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Failed to create character:", error);
     return NextResponse.json(

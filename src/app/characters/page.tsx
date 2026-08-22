@@ -8,11 +8,7 @@ import { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-regist
 import { useT } from "@/lib/i18n";
 import LogoutButton from "@/components/LogoutButton";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
-import {
-  FRAME_WIDTH,
-  FRAME_HEIGHT,
-  compositeCharacter,
-} from "@/lib/sprite-compositor";
+import { FRAME_WIDTH, FRAME_HEIGHT, compositeCharacter } from "@/lib/sprite-compositor";
 
 const PREVIEW_SCALE = 2;
 const DIRECTION = 2; // facing down
@@ -87,13 +83,19 @@ function CharacterCard({
       </div>
       <div className="mt-2 flex gap-2">
         <button
-          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
           className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300"
         >
           {t("common.edit")}
         </button>
         <button
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
           className="px-3 py-1 bg-red-900/50 hover:bg-red-800 rounded text-xs text-red-300"
         >
           {t("common.delete")}
@@ -106,7 +108,13 @@ function CharacterCard({
 export default function CharactersPage() {
   const t = useT();
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">{t("common.loading")}</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+          {t("common.loading")}
+        </div>
+      }
+    >
       <CharactersPageInner />
     </Suspense>
   );

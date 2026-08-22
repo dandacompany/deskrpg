@@ -45,35 +45,29 @@ export function useCharacterAppearance(
   );
   const [activeCategory, setActiveCategory] = useState("");
 
-  const handleBodyTypeChange = useCallback(
-    (newBodyType: string, resetToDefault = false) => {
-      setBodyType(newBodyType);
-      if (resetToDefault) {
-        setLayers(getDefaultLayers(newBodyType));
-      } else {
-        // Clear incompatible items only
-        setLayers((prev) => {
-          const cleaned = { ...prev };
-          for (const [catId, sel] of Object.entries(cleaned)) {
-            if (!sel) continue;
-            const item = findItem(sel.itemKey);
-            if (!item) continue;
-            const compatible = Object.values(item.layers).some((l) => l.paths[newBodyType]);
-            if (!compatible) cleaned[catId] = null;
-          }
-          return cleaned;
-        });
-      }
-    },
-    [],
-  );
+  const handleBodyTypeChange = useCallback((newBodyType: string, resetToDefault = false) => {
+    setBodyType(newBodyType);
+    if (resetToDefault) {
+      setLayers(getDefaultLayers(newBodyType));
+    } else {
+      // Clear incompatible items only
+      setLayers((prev) => {
+        const cleaned = { ...prev };
+        for (const [catId, sel] of Object.entries(cleaned)) {
+          if (!sel) continue;
+          const item = findItem(sel.itemKey);
+          if (!item) continue;
+          const compatible = Object.values(item.layers).some((l) => l.paths[newBodyType]);
+          if (!compatible) cleaned[catId] = null;
+        }
+        return cleaned;
+      });
+    }
+  }, []);
 
-  const selectItem = useCallback(
-    (categoryId: string, itemKey: string, variant: string) => {
-      setLayers((prev) => ({ ...prev, [categoryId]: { itemKey, variant } }));
-    },
-    [],
-  );
+  const selectItem = useCallback((categoryId: string, itemKey: string, variant: string) => {
+    setLayers((prev) => ({ ...prev, [categoryId]: { itemKey, variant } }));
+  }, []);
 
   const clearCategory = useCallback((categoryId: string) => {
     setLayers((prev) => ({ ...prev, [categoryId]: null }));
@@ -132,14 +126,18 @@ export function useCharacterAppearance(
 
     const newLayers: Record<string, AppearanceSelection | null> = {
       body: { itemKey: "body", variant: SKINS[Math.floor(Math.random() * SKINS.length)] },
-      eye_color: pick(CATEGORIES.find((c) => c.id === "eye_color")!) || { itemKey: "eye_color", variant: "blue" },
+      eye_color: pick(CATEGORIES.find((c) => c.id === "eye_color")!) || {
+        itemKey: "eye_color",
+        variant: "blue",
+      },
       hair: pick(CATEGORIES.find((c) => c.id === "hair")!),
       clothes: pick(CATEGORIES.find((c) => c.id === "clothes")!),
       legs: pick(CATEGORIES.find((c) => c.id === "legs")!),
       shoes: pick(CATEGORIES.find((c) => c.id === "shoes")!),
     };
     if (Math.random() < 0.3) newLayers.hat = pick(CATEGORIES.find((c) => c.id === "hat")!);
-    if (Math.random() < 0.2) newLayers.beard = bt === "male" ? pick(CATEGORIES.find((c) => c.id === "beard")!) : null;
+    if (Math.random() < 0.2)
+      newLayers.beard = bt === "male" ? pick(CATEGORIES.find((c) => c.id === "beard")!) : null;
     if (Math.random() < 0.15) newLayers.cape = pick(CATEGORIES.find((c) => c.id === "cape")!);
     setLayers(newLayers);
   }, [bodyType]);

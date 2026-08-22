@@ -34,9 +34,11 @@ const en: Record<string, string> = {
   "auth.title": "DeskRPG",
   "auth.subtitle": "Virtual Office with AI Employees",
   "metadata.title": "DeskRPG — Virtual Office with AI Employees",
-  "metadata.description": "Build your virtual office, hire AI employees, and achieve business goals with other players in a 2D pixel art RPG workspace.",
+  "metadata.description":
+    "Build your virtual office, hire AI employees, and achieve business goals with other players in a 2D pixel art RPG workspace.",
   "metadata.openGraphDescription": "2D Pixel Art RPG — Build your virtual office with AI employees",
-  "metadata.keywords": "DeskRPG, virtual office, AI employees, pixel art, RPG, multiplayer, workspace, 2D game",
+  "metadata.keywords":
+    "DeskRPG, virtual office, AI employees, pixel art, RPG, multiplayer, workspace, 2D game",
   "auth.login": "Login",
   "auth.register": "Register",
   "auth.loginId": "Login ID",
@@ -64,7 +66,8 @@ const en: Record<string, string> = {
   "channels.invalidInvite": "Invalid invite code",
   "channels.inviteCodePlaceholder": "Enter invite code...",
   "channels.groupInviteTitle": "Join a Group",
-  "channels.groupInviteSubtitle": "Use a group invite code to gain membership before joining protected channels.",
+  "channels.groupInviteSubtitle":
+    "Use a group invite code to gain membership before joining protected channels.",
   "channels.groupInvitePlaceholder": "Enter group invite code...",
   "channels.groupInviteJoin": "Join Group",
   "channels.groupInviteAccepted": "You joined {name}.",
@@ -75,7 +78,8 @@ const en: Record<string, string> = {
   "channels.private": "Private",
   "channels.group": "Group",
   "channels.browseOnly": "Browse only",
-  "channels.browseOnlyHint": "You can browse this public channel from the list, but you need active group membership to participate.",
+  "channels.browseOnlyHint":
+    "You can browse this public channel from the list, but you need active group membership to participate.",
   "channels.players": "{count}/{max} players",
   "channels.owner": "by {name}",
   "channels.backToCharacters": "← Back to Characters",
@@ -98,11 +102,13 @@ const en: Record<string, string> = {
   "channels.create.failed": "Failed to create channel",
   "channels.create.group": "Group",
   "channels.create.noAvailableGroups": "You need an available group before creating a channel.",
-  "channels.create.unavailableHint": "Channel creation is unavailable until you have at least one eligible group.",
+  "channels.create.unavailableHint":
+    "Channel creation is unavailable until you have at least one eligible group.",
   "channels.create.mapTemplate": "Map Template",
   "channels.privateChannel": "Private Channel",
   "admin.groups.title": "Group Access",
-  "admin.groups.subtitle": "Review members, invites, requests, permissions, and overrides for your groups.",
+  "admin.groups.subtitle":
+    "Review members, invites, requests, permissions, and overrides for your groups.",
   "admin.groups.empty": "No groups are available for administration yet.",
   "admin.groups.manage": "Your Groups",
   "admin.groups.backToChannels": "Back to Channels",
@@ -117,7 +123,8 @@ const en: Record<string, string> = {
   "admin.groups.targetLoginId": "User login ID",
   "admin.groups.inviteTargetOptional": "User login ID (optional)",
   "admin.groups.inviteExpirationOptional": "Expiration date (optional)",
-  "admin.groups.inviteFormHint": "Leave the login ID blank for a reusable shared invite. Leave expiration blank for no expiration.",
+  "admin.groups.inviteFormHint":
+    "Leave the login ID blank for a reusable shared invite. Leave expiration blank for no expiration.",
   "admin.groups.inviteShared": "Shared invite",
   "admin.groups.inviteReusable": "Reusable",
   "admin.groups.inviteSingleUse": "Single use",
@@ -187,14 +194,16 @@ const en: Record<string, string> = {
   "gateway.statusCard.status.connected": "Connected",
   "gateway.statusCard.status.error": "Error",
   "gateway.statusCard.description.idle": "No connection test has been run yet.",
-  "gateway.statusCard.description.connected": "Connected to the gateway and ready to take requests.",
+  "gateway.statusCard.description.connected":
+    "Connected to the gateway and ready to take requests.",
   "gateway.statusCard.description.error": "Could not reach the gateway. Check the URL and token.",
   // Default NPC
   "npc.default": "Default NPC",
   "npc.name": "NPC Name",
   "npc.namePlaceholder": "AI Assistant",
   "npc.adapterType": "AI Engine",
-  "npc.cliAdapterNote": "This NPC will use the selected CLI tool. Make sure the tool is installed and a provider is configured.",
+  "npc.cliAdapterNote":
+    "This NPC will use the selected CLI tool. Make sure the tool is installed and a provider is configured.",
   "npc.hermesProfile": "Hermes profile",
   "npc.hermesProfileInUse": "in use",
   "npc.hermesProfileSelect": "Select a profile",
@@ -241,7 +250,7 @@ const en: Record<string, string> = {
   "characters.maxReached": "Maximum 5 characters reached",
   "characters.name": "Character Name",
   "characters.namePlaceholder": "Enter character name",
-  "characters.deleteConfirm": "Delete \"{name}\"?\nOwned channels will also be deleted.",
+  "characters.deleteConfirm": 'Delete "{name}"?\nOwned channels will also be deleted.',
   "characters.bodyType": "Body Type",
   "characters.skin": "Skin",
   "characters.presets": "Presets",
@@ -988,7 +997,8 @@ const en: Record<string, string> = {
   "characters.item.shield_heater_revised_pattern_per_bend": "revised_per_bend",
   "characters.item.shield_heater_revised_pattern_per_bend_sinister": "revised_per_bend_sinister",
   "characters.item.shield_heater_revised_pattern_per_chevron": "revised_per_chevron",
-  "characters.item.shield_heater_revised_pattern_per_chevron_inverted": "revised_per_chevron_inverted",
+  "characters.item.shield_heater_revised_pattern_per_chevron_inverted":
+    "revised_per_chevron_inverted",
   "characters.item.shield_heater_revised_pattern_per_fess": "revised_per_fess",
   "characters.item.shield_heater_revised_pattern_per_pale": "revised_per_pale",
   "characters.item.shield_heater_revised_pattern_per_saltire": "revised_per_saltire",
@@ -1317,8 +1327,10 @@ const en: Record<string, string> = {
   "game.socketDisconnected": "Real-time connection lost: {reason}",
   "game.socketConnectFailed": "Failed to connect in real time. Refresh and try again.",
   "game.npcGreeting": "{name} says hello!",
-  "game.npcChatDisconnected": "Cannot send NPC messages because the real-time connection is lost. Refresh and try again.",
-  "game.channelChatDisconnected": "Cannot send chat because the real-time connection is lost. Refresh and try again.",
+  "game.npcChatDisconnected":
+    "Cannot send NPC messages because the real-time connection is lost. Refresh and try again.",
+  "game.channelChatDisconnected":
+    "Cannot send chat because the real-time connection is lost. Refresh and try again.",
   "game.spawnSetSuccess": "Spawn position set ({col}, {row})",
 
   // Chat
@@ -1380,7 +1392,8 @@ const en: Record<string, string> = {
   "npc.agentIdPlaceholder": "Agent ID (e.g. backend-dev)",
   "npc.agentIdHint": "Alphanumeric and hyphens, 3-30 characters",
   "npc.personaManagedOnGateway": "Persona is managed on the gateway for this agent.",
-  "npc.personaManagedHint": "Edit the profile's SOUL.md on the Hermes host to change this agent's behavior.",
+  "npc.personaManagedHint":
+    "Edit the profile's SOUL.md on the Hermes host to change this agent's behavior.",
   "npc.advancedHint": "— KPIs, conflict rules, voice",
 
   // Context menu
@@ -1477,8 +1490,10 @@ const en: Record<string, string> = {
   "meeting.systemSender": "System",
   "meeting.endedTranscriptPrefix": "[Meeting ended]",
   "meeting.errorPrefix": "[Error]",
-  "meeting.mentionSkipped.quotaExhausted": "{name} was mentioned but has used up their turn quota, so they didn't speak.",
-  "meeting.mentionSkipped.backendFailing": "{name} was mentioned but their AI backend isn't responding, so they didn't speak.",
+  "meeting.mentionSkipped.quotaExhausted":
+    "{name} was mentioned but has used up their turn quota, so they didn't speak.",
+  "meeting.mentionSkipped.backendFailing":
+    "{name} was mentioned but their AI backend isn't responding, so they didn't speak.",
 
   // Minutes
   "minutes.title": "Meeting Minutes",
@@ -1489,7 +1504,7 @@ const en: Record<string, string> = {
   "minutes.participantsSuffix": " participants",
   "minutes.notAvailable": "N/A",
   "minutes.exportTitle": "Meeting Minutes: {topic}",
-  "minutes.deleteConfirm": "Delete the meeting minutes \"{topic}\"?",
+  "minutes.deleteConfirm": 'Delete the meeting minutes "{topic}"?',
   "minutes.deleteFailed": "Failed to delete meeting minutes",
 
   // Channel settings
@@ -1529,10 +1544,14 @@ const en: Record<string, string> = {
   "settings.gatewayUseCustom": "Direct credentials",
   "settings.gatewaySaved": "Gateway",
   "settings.gatewaySelect": "Select a gateway",
-  "settings.gatewayNoSaved": "No accessible saved gateways yet. You can still connect with direct credentials.",
-  "settings.gatewaySharedReadOnly": "This channel is using a shared gateway. Only the owner can change its credentials.",
-  "settings.gatewayChangeResetWarning": "Changing the gateway removes this channel's existing NPCs and their related task or meeting context. Continue?",
-  "settings.gatewayDisconnectResetWarning": "Disconnecting the gateway removes this channel's existing NPCs and their related task or meeting context. Continue?",
+  "settings.gatewayNoSaved":
+    "No accessible saved gateways yet. You can still connect with direct credentials.",
+  "settings.gatewaySharedReadOnly":
+    "This channel is using a shared gateway. Only the owner can change its credentials.",
+  "settings.gatewayChangeResetWarning":
+    "Changing the gateway removes this channel's existing NPCs and their related task or meeting context. Continue?",
+  "settings.gatewayDisconnectResetWarning":
+    "Disconnecting the gateway removes this channel's existing NPCs and their related task or meeting context. Continue?",
   "gateways.nav": "My Gateways",
   "gateways.title": "My Gateways",
   "gateways.subtitle": "Register, test, and share your Hermes gateways with other users.",
@@ -1548,7 +1567,8 @@ const en: Record<string, string> = {
   "gateways.statusUntested": "Not tested yet",
   "gateways.createTitle": "Register gateway",
   "gateways.editTitle": "Edit gateway",
-  "gateways.createHelp": "Register a Hermes gateway that you own, then add the profiles you want to use.",
+  "gateways.createHelp":
+    "Register a Hermes gateway that you own, then add the profiles you want to use.",
   "gateways.editHelp": "Update this gateway or verify that the connection still works.",
   "gateways.displayName": "Display name",
   "gateways.rotateToken": "Token",
@@ -1556,7 +1576,8 @@ const en: Record<string, string> = {
   "gateways.testSuccess": "Gateway connection succeeded.",
   "gateways.saved": "Gateway saved.",
   "gateways.deleted": "Gateway deleted.",
-  "gateways.deleteConfirm": "Delete this gateway? A gateway still bound to channels cannot be deleted.",
+  "gateways.deleteConfirm":
+    "Delete this gateway? A gateway still bound to channels cannot be deleted.",
   "gateways.shareTitle": "Share Access",
   "gateways.shareHelp": "Enter another user's login ID to let them use this gateway.",
   "gateways.selectGatewayFirst": "Select a gateway first.",
@@ -1565,7 +1586,8 @@ const en: Record<string, string> = {
   "gateways.shareAdd": "Add share",
   "gateways.shareEmpty": "No shared users yet.",
   "providers.title": "AI Providers",
-  "providers.subtitle": "Register and manage provider credentials for Anthropic, OpenAI, Google, and OpenClaw.",
+  "providers.subtitle":
+    "Register and manage provider credentials for Anthropic, OpenAI, Google, and OpenClaw.",
   "providers.addNew": "Add Provider",
   "providers.type": "Provider Type",
   "providers.authMethod": "Auth Method",
@@ -1589,7 +1611,8 @@ const en: Record<string, string> = {
   "providers.credentialsMissing": "No API key is stored for this provider.",
   "providers.credentialsVerified": "Stored credentials found.",
   "providers.apiKeyRequired": "API Key is required.",
-  "providers.formHelp": "Choose a provider type, save credentials, and verify the configured access method.",
+  "providers.formHelp":
+    "Choose a provider type, save credentials, and verify the configured access method.",
   "providers.apiKeyHint": "Leave the API key blank to keep the existing key.",
   "providers.adapterStatus": "Adapter Status",
   "providers.adapterStatusHelp": "Installed CLI tools available on this DeskRPG host.",
@@ -1598,7 +1621,8 @@ const en: Record<string, string> = {
   "providers.ready": "Ready",
   "settings.disconnectGateway": "Disconnect",
   "settings.taskAutomation": "Task Automation",
-  "settings.autoProgressNudgeHelp": "Ask NPCs for progress updates automatically while tasks remain in progress.",
+  "settings.autoProgressNudgeHelp":
+    "Ask NPCs for progress updates automatically while tasks remain in progress.",
   "settings.progressNudgeMinutes": "Progress nudge (min)",
   "settings.autoProgressNudgeMax": "Max auto nudges",
   "settings.reportWaitSeconds": "Report wait (sec)",
@@ -1607,11 +1631,11 @@ const en: Record<string, string> = {
   "task.requestReportQueued": "Report request sent.",
   "task.markComplete": "Mark Complete",
   "task.completeQueued": "Task marked complete.",
-  "task.completeToast": "\"{title}\" was marked complete.",
+  "task.completeToast": '"{title}" was marked complete.',
   "task.resume": "Resume",
   "task.resumeQueued": "Task resumed.",
-  "task.resumeToast": "\"{title}\" was moved back to in progress.",
-  "task.stalledToast": "Auto-nudging for \"{title}\" has been stopped.",
+  "task.resumeToast": '"{title}" was moved back to in progress.',
+  "task.stalledToast": 'Auto-nudging for "{title}" has been stopped.',
   "task.autoNudgeCount": "Nudges {count}/{max}",
   "task.stalledCount": "Stalled {count}/{max}",
   "task.backlog": "Backlog",
@@ -1619,9 +1643,9 @@ const en: Record<string, string> = {
   "task.assign": "Assign",
   "task.assignToNpc": "Assign to NPC",
   "task.selectNpc": "Select NPC",
-  "task.selectNpcDescription": "Select an NPC to execute \"{title}\"",
+  "task.selectNpcDescription": 'Select an NPC to execute "{title}"',
   "task.unassigned": "Unassigned",
-  "task.autoStarted": "{npcName} started working on \"{title}\"",
+  "task.autoStarted": '{npcName} started working on "{title}"',
   "task.addToNpc": "Add Task to This NPC",
   "task.npcWorkload": "{inProgress} in progress · {pending} pending",
   "task.npcActive": "Active",
@@ -1779,7 +1803,8 @@ const en: Record<string, string> = {
   "mapEditor.stamps.moveTo": "Move to…",
   "mapEditor.stamps.saveAsStamp": "Save as Stamp",
   "mapEditor.stamps.saveTitle": "Save as Stamp",
-  "mapEditor.stamps.saveDescription": "Save the selected region across all layers as a reusable Stamp.",
+  "mapEditor.stamps.saveDescription":
+    "Save the selected region across all layers as a reusable Stamp.",
   "mapEditor.stamps.stampName": "Stamp Name",
   "mapEditor.stamps.stampNamePlaceholder": "e.g. Chair (front), Desk set...",
   "mapEditor.stamps.saving": "Saving...",
@@ -1844,7 +1869,8 @@ const en: Record<string, string> = {
   "mapEditor.pixel.saveAsNew": "Save as New Tileset",
   "mapEditor.pixel.overwrite": "Overwrite Original",
   "mapEditor.pixel.applyToMap": "Apply to Map",
-  "mapEditor.pixel.overwriteDisabled": "Cannot overwrite: grid dimensions changed. Use \"Save as New Tileset\" instead.",
+  "mapEditor.pixel.overwriteDisabled":
+    'Cannot overwrite: grid dimensions changed. Use "Save as New Tileset" instead.',
   "mapEditor.pixel.keyboardShortcuts": "Keyboard Shortcuts",
   "mapEditor.pixel.shortcutPen": "Pen tool",
   "mapEditor.pixel.shortcutEraser": "Eraser tool",
@@ -1923,16 +1949,18 @@ const en: Record<string, string> = {
   "npc.selectAgent": "-- Select agent --",
   "npc.agentInUse": "{name} (in use: {npcName})",
   "npc.agentAvailable": "{name} (available)",
-  "npc.limitReached": "NPC limit reached ({count}/{max}). Remove an existing NPC to hire a new one.",
+  "npc.limitReached":
+    "NPC limit reached ({count}/{max}). Remove an existing NPC to hire a new one.",
   "meeting.npcLabel": "NPC:",
   "game.spawnSetMode": "Click the tile where you want to set the spawn position",
   "game.fireNpcConfirm": "Are you sure you want to fire this NPC?",
   "mapEditor.layers.characterNpcDivider": "Character / NPC",
   "mapEditor.layers.layerNamePrompt": "Layer name:",
-  "mapEditor.layers.cannotDeleteCoreLayer": "Cannot delete core layer \"{name}\".",
-  "mapEditor.layers.deleteLayerConfirm": "Delete layer \"{name}\"?",
-  "mapEditor.tilesets.deleteInUseConfirm": "Tileset \"{name}\" has tiles in use on the map. Delete anyway?",
-  "mapEditor.tilesets.deleteConfirm": "Delete tileset \"{name}\"?",
+  "mapEditor.layers.cannotDeleteCoreLayer": 'Cannot delete core layer "{name}".',
+  "mapEditor.layers.deleteLayerConfirm": 'Delete layer "{name}"?',
+  "mapEditor.tilesets.deleteInUseConfirm":
+    'Tileset "{name}" has tiles in use on the map. Delete anyway?',
+  "mapEditor.tilesets.deleteConfirm": 'Delete tileset "{name}"?',
   "mapEditor.tilesets.removeUnusedConfirm": "Remove {count} unused tileset(s)?\n{names}",
   "mapEditor.pixel.tolerance": "Tolerance",
   "mapEditor.pixel.magicEraser": "Magic Eraser",
@@ -1941,7 +1969,7 @@ const en: Record<string, string> = {
   "mapEditor.project.templateDescriptionPrompt": "Description (optional):",
   "mapEditor.project.templateSaved": "Saved as a template.",
   "mapEditor.project.templateSaveFailed": "Failed to save template.",
-  "mapEditor.template.deleteConfirm": "Delete \"{name}\"? This cannot be undone.",
+  "mapEditor.template.deleteConfirm": 'Delete "{name}"? This cannot be undone.',
   "mapEditor.template.openInEditor": "Open in map editor",
   "mapEditor.template.addMap": "Add map",
   "mapEditor.template.downloadTmj": "Download .tmj",
@@ -1956,7 +1984,8 @@ const en: Record<string, string> = {
   "errors.nicknameTaken": "That display name is already taken",
   "errors.gatewayUrlRequired": "Gateway URL is required",
   "errors.invalidGatewayUrl": "Invalid gateway URL format",
-  "errors.gatewayConfigValidated": "Gateway config validated. Connection will be established when the channel is created.",
+  "errors.gatewayConfigValidated":
+    "Gateway config validated. Connection will be established when the channel is created.",
   "errors.channelNameRequired": "Channel name is required (1-100 chars)",
   "errors.mapTemplateRequired": "Map template is required",
   "errors.mapTemplateNotFound": "Map template not found",
@@ -2067,13 +2096,14 @@ const en: Record<string, string> = {
   "errors.cannotDeleteMainAgent": "The main agent cannot be deleted",
   "errors.agentInUseByNpc": "This agent is currently used by an NPC",
   "errors.failedToRemoveAgentFromGateway": "Failed to remove agent from gateway",
-  "errors.registrationDisabled": "Registration is currently disabled. Please contact the administrator.",
+  "errors.registrationDisabled":
+    "Registration is currently disabled. Please contact the administrator.",
   "errors.invalidProfileName": "Invalid profile name",
   "errors.invalidToken": "Token must be at least 16 characters",
   "errors.invalidProfileId": "Profile ID is required",
   "errors.profileNotFound": "Profile not found",
   "errors.gatewayNotFound": "Gateway not found",
-  "errors.templateDeleteConfirm": "Delete \"{name}\"? This cannot be undone.",
+  "errors.templateDeleteConfirm": 'Delete "{name}"? This cannot be undone.',
   "task.chatPlaceholder": "Send additional instructions about this task.",
   "task.register": "Register",
   "task.registered": "Registered",

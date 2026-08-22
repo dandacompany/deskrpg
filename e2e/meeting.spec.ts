@@ -20,11 +20,7 @@ import {
  * 셀렉터 주의: 상단 버튼 레이블에는 배지 숫자가 붙는다("회의실 0", "뒤로 0"). 이름을
  * 정확 일치로 잡으면 숫자가 바뀌는 순간 조용히 멈춘다 — 정규식으로 받는다.
  */
-async function startMeeting(
-  page: Page,
-  npcNames: string[],
-  topic: string,
-): Promise<void> {
+async function startMeeting(page: Page, npcNames: string[], topic: string): Promise<void> {
   await page.getByRole("button", { name: /회의실/ }).click();
 
   // 참가자는 기본으로 전원 선택돼 있다("· 2/2 NPC"). 그래도 명시적으로 확인한다 —
@@ -32,10 +28,7 @@ async function startMeeting(
   await page.getByRole("button", { name: /진행 설정/ }).click();
   await page.getByText("참여 NPC").waitFor();
   for (const name of npcNames) {
-    const box = page
-      .locator("label")
-      .filter({ hasText: name })
-      .locator('input[type="checkbox"]');
+    const box = page.locator("label").filter({ hasText: name }).locator('input[type="checkbox"]');
     if (!(await box.isChecked())) await box.check();
   }
 
@@ -80,7 +73,10 @@ async function collectNpcTurns(page: Page, targetCount: number): Promise<Array<[
     // 같은 채널에서 시나리오를 연달아 돌리면 앞 회의의 결과가 그대로 남아 있고, 그걸
     // 종료로 읽으면 새 회의가 첫 턴을 내기도 전에 8초 만에 포기한다(실측).
     if (best.length > 0) {
-      const ended = await page.getByText("회의가 종료되었습니다").isVisible().catch(() => false);
+      const ended = await page
+        .getByText("회의가 종료되었습니다")
+        .isVisible()
+        .catch(() => false);
       if (ended) break;
     }
     await page.waitForTimeout(1000);
@@ -88,8 +84,8 @@ async function collectNpcTurns(page: Page, targetCount: number): Promise<Array<[
 
   expect(
     best.length,
-    `NPC 발언을 ${targetCount}건 모으지 못했습니다(모은 것: ${best.length}건). `
-      + "회의가 턴을 돌리지 못했거나, 발언이 화면에 붙지 않았습니다.",
+    `NPC 발언을 ${targetCount}건 모으지 못했습니다(모은 것: ${best.length}건). ` +
+      "회의가 턴을 돌리지 못했거나, 발언이 화면에 붙지 않았습니다.",
   ).toBeGreaterThanOrEqual(targetCount);
   return best;
 }
@@ -120,15 +116,10 @@ test.describe("회의", () => {
   // 두 NPC 가 각자 한 턴씩 도는 데 에이전트 기동까지 포함하면 1:1 보다 훨씬 오래 걸린다.
   test.setTimeout(600_000);
 
-  test("두 NPC 가 번갈아 발언한다 — 한 명이 독점하지 않는다", async ({
-    page,
-  }) => {
+  test("두 NPC 가 번갈아 발언한다 — 한 명이 독점하지 않는다", async ({ page }) => {
     await enterFirstChannel(page);
     const npcNames = await ensureTwoHermesNpcs(page);
-    expect(
-      npcNames.length,
-      "회의에는 Hermes NPC 가 둘 필요합니다",
-    ).toBeGreaterThanOrEqual(2);
+    expect(npcNames.length, "회의에는 Hermes NPC 가 둘 필요합니다").toBeGreaterThanOrEqual(2);
 
     await startMeeting(
       page,
@@ -146,10 +137,7 @@ test.describe("회의", () => {
 
     for (const [who, text] of turns) {
       expect(text.length, `${who} 의 발언이 비어 있습니다`).toBeGreaterThan(0);
-      expect(
-        isDoubled(text),
-        `${who} 의 발언이 두 번 반복됩니다:\n${text}`,
-      ).toBe(false);
+      expect(isDoubled(text), `${who} 의 발언이 두 번 반복됩니다:\n${text}`).toBe(false);
     }
   });
 
@@ -183,10 +171,7 @@ test.describe("회의", () => {
     // 새로고침하면 사무실 모드로 돌아온다.
     await page.goto(page.url());
     await openNpcDialog(page, first);
-    const dm = await sendAndAwaitReply(
-      page,
-      "지금 이 대화는 1:1 입니다. '확인'이라고만 답하세요.",
-    );
+    const dm = await sendAndAwaitReply(page, "지금 이 대화는 1:1 입니다. '확인'이라고만 답하세요.");
 
     for (const [, meetingText] of turns) {
       const fingerprint = meetingText.replace(/\s+/g, "").slice(0, 12);

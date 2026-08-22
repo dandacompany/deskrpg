@@ -50,13 +50,9 @@ export default function MeetingSidebar({
       <div className="px-4 py-2 border-b border-border bg-surface/80 flex items-center justify-between flex-shrink-0">
         <div>
           <span className="text-title text-text-secondary">{title}</span>
-          <span className="text-caption text-text-dim ml-2">
-            {participantCount}
-          </span>
+          <span className="text-caption text-text-dim ml-2">{participantCount}</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          {actions}
-        </div>
+        <div className="flex items-center gap-1.5">{actions}</div>
       </div>
 
       {statusBar ? (
@@ -65,15 +61,9 @@ export default function MeetingSidebar({
         </div>
       ) : null}
 
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-        {children}
-      </div>
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">{children}</div>
 
-      {footer ? (
-        <div className="flex-shrink-0">
-          {footer}
-        </div>
-      ) : null}
+      {footer ? <div className="flex-shrink-0">{footer}</div> : null}
     </div>
   );
 }

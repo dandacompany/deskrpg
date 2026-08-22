@@ -68,7 +68,11 @@ describe("FloorInbox", () => {
     inbox.push("b", "mention");
     inbox.push("c", "mention");
     const skipped: string[] = [];
-    const order = drainAll(inbox, (npcId) => npcId !== "b", (npcId) => skipped.push(npcId));
+    const order = drainAll(
+      inbox,
+      (npcId) => npcId !== "b",
+      (npcId) => skipped.push(npcId),
+    );
     assert.deepEqual(order, ["c"]);
     assert.deepEqual(skipped, ["b"], "건너뛴 지목은 무음으로 사라지면 안 된다");
   });
@@ -77,7 +81,11 @@ describe("FloorInbox", () => {
     const inbox = new FloorInbox();
     inbox.push("b", "user");
     const skipped: string[] = [];
-    const order = drainAll(inbox, () => false, (npcId) => skipped.push(npcId));
+    const order = drainAll(
+      inbox,
+      () => false,
+      (npcId) => skipped.push(npcId),
+    );
     assert.deepEqual(order, ["b"]);
     assert.deepEqual(skipped, []);
   });

@@ -9,7 +9,14 @@ export async function GET(req: NextRequest) {
   if (!name) {
     // List tileset names (without image data), optionally filtered by builtIn
     let query = db
-      .select({ id: tilesetImages.id, name: tilesetImages.name, tilewidth: tilesetImages.tilewidth, tileheight: tilesetImages.tileheight, columns: tilesetImages.columns, tilecount: tilesetImages.tilecount })
+      .select({
+        id: tilesetImages.id,
+        name: tilesetImages.name,
+        tilewidth: tilesetImages.tilewidth,
+        tileheight: tilesetImages.tileheight,
+        columns: tilesetImages.columns,
+        tilecount: tilesetImages.tilecount,
+      })
       .from(tilesetImages)
       .$dynamic();
     if (builtInParam === "true") {
@@ -22,7 +29,8 @@ export async function GET(req: NextRequest) {
   }
 
   const [row] = await db.select().from(tilesetImages).where(eq(tilesetImages.name, name));
-  if (!row) return NextResponse.json({ errorCode: "not_found", error: "Not found" }, { status: 404 });
+  if (!row)
+    return NextResponse.json({ errorCode: "not_found", error: "Not found" }, { status: 404 });
   return NextResponse.json(row);
 }
 
@@ -32,25 +40,37 @@ export async function POST(req: NextRequest) {
   const { name, tilewidth, tileheight, columns, tilecount, image } = body;
 
   if (!name || !image || !columns || !tilecount) {
-    return NextResponse.json({ errorCode: "missing_required_fields", error: "Missing required fields" }, { status: 400 });
+    return NextResponse.json(
+      { errorCode: "missing_required_fields", error: "Missing required fields" },
+      { status: 400 },
+    );
   }
 
   // Upsert: if name exists, update; otherwise insert
-  const [existing] = await db.select({ id: tilesetImages.id }).from(tilesetImages).where(eq(tilesetImages.name, name));
+  const [existing] = await db
+    .select({ id: tilesetImages.id })
+    .from(tilesetImages)
+    .where(eq(tilesetImages.name, name));
 
   if (existing) {
-    await db.update(tilesetImages).set({ image, tilewidth: tilewidth ?? 32, tileheight: tileheight ?? 32, columns, tilecount }).where(eq(tilesetImages.id, existing.id));
+    await db
+      .update(tilesetImages)
+      .set({ image, tilewidth: tilewidth ?? 32, tileheight: tileheight ?? 32, columns, tilecount })
+      .where(eq(tilesetImages.id, existing.id));
     return NextResponse.json({ id: existing.id, updated: true });
   }
 
-  const [created] = await db.insert(tilesetImages).values({
-    name,
-    tilewidth: tilewidth ?? 32,
-    tileheight: tileheight ?? 32,
-    columns,
-    tilecount,
-    image,
-  }).returning();
+  const [created] = await db
+    .insert(tilesetImages)
+    .values({
+      name,
+      tilewidth: tilewidth ?? 32,
+      tileheight: tileheight ?? 32,
+      columns,
+      tilecount,
+      image,
+    })
+    .returning();
 
   return NextResponse.json(created, { status: 201 });
 }

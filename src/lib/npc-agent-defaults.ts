@@ -43,12 +43,7 @@ function getOfficePresetOrThrow(presetId: string) {
 
 type PromptDocumentKind = "identity" | "soul" | "agents";
 
-const LANGUAGE_POLICY_SECTION_TITLES = [
-  "Language Policy",
-  "언어 정책",
-  "言語ポリシー",
-  "语言策略",
-];
+const LANGUAGE_POLICY_SECTION_TITLES = ["Language Policy", "언어 정책", "言語ポリシー", "语言策略"];
 
 const RESPONSE_LANGUAGE_SECTION_TITLES = [
   "Response Language Contract",
@@ -57,15 +52,18 @@ const RESPONSE_LANGUAGE_SECTION_TITLES = [
   "回复语言约束",
 ];
 
-const LOCALE_POLICY_CONTENT: Record<ServerLocale, {
-  languageName: string;
-  identityTitle: string;
-  identityLines: string[];
-  soulTitle: string;
-  soulLines: string[];
-  agentsTitle: string;
-  agentsLines: string[];
-}> = {
+const LOCALE_POLICY_CONTENT: Record<
+  ServerLocale,
+  {
+    languageName: string;
+    identityTitle: string;
+    identityLines: string[];
+    soulTitle: string;
+    soulLines: string[];
+    agentsTitle: string;
+    agentsLines: string[];
+  }
+> = {
   en: {
     languageName: "English",
     identityTitle: "Language Policy",
@@ -154,10 +152,9 @@ function buildSection(title: string, lines: string[]): string {
 
 function stripManagedSection(text: string, titles: string[]): string {
   const titlePattern = titles.map(escapeRegExp).join("|");
-  return text.replace(
-    new RegExp(`\\n## (?:${titlePattern})[\\s\\S]*?(?=\\n## |\\n# |$)`, "g"),
-    "",
-  ).trim();
+  return text
+    .replace(new RegExp(`\\n## (?:${titlePattern})[\\s\\S]*?(?=\\n## |\\n# |$)`, "g"), "")
+    .trim();
 }
 
 function insertSectionAfterHeading(text: string, section: string): string {
@@ -179,12 +176,14 @@ export function localizeNpcPromptDocument(
 ): string {
   const normalizedLocale = normalizeLocale(locale);
   const policy = LOCALE_POLICY_CONTENT[normalizedLocale];
-  const section = document === "agents"
-    ? buildSection(policy.agentsTitle, policy.agentsLines)
-    : document === "soul"
-      ? buildSection(policy.soulTitle, policy.soulLines)
-      : buildSection(policy.identityTitle, policy.identityLines);
-  const titles = document === "agents" ? RESPONSE_LANGUAGE_SECTION_TITLES : LANGUAGE_POLICY_SECTION_TITLES;
+  const section =
+    document === "agents"
+      ? buildSection(policy.agentsTitle, policy.agentsLines)
+      : document === "soul"
+        ? buildSection(policy.soulTitle, policy.soulLines)
+        : buildSection(policy.identityTitle, policy.identityLines);
+  const titles =
+    document === "agents" ? RESPONSE_LANGUAGE_SECTION_TITLES : LANGUAGE_POLICY_SECTION_TITLES;
   const withoutManagedSection = stripManagedSection(text, titles);
 
   return insertSectionAfterHeading(withoutManagedSection, section);
@@ -217,9 +216,10 @@ export function getNpcPresetDefaults(
   presetIdOrOptions: string | BuildNpcPresetDefaultsOptions,
   npcNameArg?: string,
 ): NpcPresetDefaults {
-  const { presetId, npcName, locale } = typeof presetIdOrOptions === "string"
-    ? { presetId: presetIdOrOptions, npcName: npcNameArg || "", locale: undefined }
-    : presetIdOrOptions;
+  const { presetId, npcName, locale } =
+    typeof presetIdOrOptions === "string"
+      ? { presetId: presetIdOrOptions, npcName: npcNameArg || "", locale: undefined }
+      : presetIdOrOptions;
   const preset = getOfficePresetOrThrow(presetId);
   const resolvedName = npcName.trim() || preset.nameKo;
 
@@ -235,7 +235,11 @@ export function getNpcPresetDefaults(
           .map(([key, value]) => [key, { itemKey: value!.itemKey, variant: value!.variant }]),
       ),
     },
-    identity: localizeNpcPromptDocument(applyPresetName(preset.identity, resolvedName), locale, "identity"),
+    identity: localizeNpcPromptDocument(
+      applyPresetName(preset.identity, resolvedName),
+      locale,
+      "identity",
+    ),
     soul: localizeNpcPromptDocument(applyPresetName(preset.soul, resolvedName), locale, "soul"),
     meetingProtocol: getMeetingProtocol(presetId, locale),
   };
@@ -254,7 +258,10 @@ export function buildPersonaConfig({
   const soulSource = soulOverride?.trim() || defaults.soul;
 
   return {
-    identity: injectTaskPrompt(localizeNpcPromptDocument(identitySource, locale, "identity"), locale),
+    identity: injectTaskPrompt(
+      localizeNpcPromptDocument(identitySource, locale, "identity"),
+      locale,
+    ),
     soul: localizeNpcPromptDocument(soulSource, locale, "soul"),
   };
 }

@@ -4,16 +4,10 @@ import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import { getUserId } from "@/lib/internal-rpc";
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
 

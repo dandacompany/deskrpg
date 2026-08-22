@@ -17,7 +17,13 @@ export class Transcript {
   private readonly lastSpoke = new Map<string, number>();
 
   add(speakerId: string, displayName: string, content: string, now: number): Turn {
-    const turn: Turn = { seq: this.turns.length + 1, speakerId, displayName, content, timestamp: now };
+    const turn: Turn = {
+      seq: this.turns.length + 1,
+      speakerId,
+      displayName,
+      content,
+      timestamp: now,
+    };
     this.turns.push(turn);
     this.counts.set(speakerId, (this.counts.get(speakerId) ?? 0) + 1);
     this.lastSpoke.set(speakerId, now);

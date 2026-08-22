@@ -74,10 +74,7 @@ export function generateMapThumbnail(
  * Generate a thumbnail from Tiled JSON data.
  * Handles any tileset (not just DeskRPG default) by using generic colors.
  */
-export function generateTiledThumbnail(
-  tiledJson: Record<string, unknown>,
-  scale = 4,
-): string {
+export function generateTiledThumbnail(tiledJson: Record<string, unknown>, scale = 4): string {
   const width = (tiledJson.width as number) || 15;
   const height = (tiledJson.height as number) || 11;
   const layers = (tiledJson.layers as Array<Record<string, unknown>>) || [];

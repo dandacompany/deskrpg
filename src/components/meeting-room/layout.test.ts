@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  computeMeetingTableLayout,
-  getSeatFacing,
-} from "./layout";
+import { computeMeetingTableLayout, getSeatFacing } from "./layout";
 
 test("layout uses top and bottom rows first, then side seats", () => {
   const layout = computeMeetingTableLayout({

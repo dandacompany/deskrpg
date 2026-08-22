@@ -22,12 +22,12 @@ npm run test:e2e
 
 환경변수로 바꿀 수 있다:
 
-| 변수 | 기본값 |
-|---|---|
+| 변수                   | 기본값                  |
+| ---------------------- | ----------------------- |
 | `DESKRPG_E2E_BASE_URL` | `http://localhost:3000` |
-| `DESKRPG_E2E_LOGIN_ID` | `devadmin` |
-| `DESKRPG_E2E_PASSWORD` | `deskrpg-e2e-2026` |
-| `DESKRPG_E2E_NPC` | `단비` |
+| `DESKRPG_E2E_LOGIN_ID` | `devadmin`              |
+| `DESKRPG_E2E_PASSWORD` | `deskrpg-e2e-2026`      |
+| `DESKRPG_E2E_NPC`      | `단비`                  |
 
 ## CI 에 넣지 않은 이유
 

@@ -70,7 +70,9 @@ export default function GatewayStatusCard({
 
   return (
     <Card
-      className={["p-4", "border", "bg-surface/90", presentation.borderClassName, className].join(" ")}
+      className={["p-4", "border", "bg-surface/90", presentation.borderClassName, className].join(
+        " ",
+      )}
     >
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">

@@ -60,9 +60,8 @@ export default function MapTemplateGrid({
         }
 
         try {
-          const { generateMapThumbnail, generateTiledThumbnail } = await import(
-            "@/lib/map-thumbnail"
-          );
+          const { generateMapThumbnail, generateTiledThumbnail } =
+            await import("@/lib/map-thumbnail");
           for (const t of needsGeneration) {
             try {
               const res = await fetch(`/api/map-templates/${t.id}`);
@@ -73,14 +72,24 @@ export default function MapTemplateGrid({
               if (tmpl.tiledJson) {
                 thumb = generateTiledThumbnail(tmpl.tiledJson, 6);
               } else if (tmpl.layers) {
-                thumb = generateMapThumbnail(tmpl.layers, tmpl.objects || [], tmpl.cols, tmpl.rows, 6);
+                thumb = generateMapThumbnail(
+                  tmpl.layers,
+                  tmpl.objects || [],
+                  tmpl.cols,
+                  tmpl.rows,
+                  6,
+                );
               }
               if (thumb) {
                 setThumbnails((prev) => ({ ...prev, [t.id]: thumb! }));
               }
-            } catch { /* skip */ }
+            } catch {
+              /* skip */
+            }
           }
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -136,7 +145,9 @@ export default function MapTemplateGrid({
             {/* Info */}
             <div className="px-2 py-2">
               <div className="font-semibold text-sm text-white truncate">{tpl.name}</div>
-              <div className="text-xs text-text-muted mt-0.5">{tpl.cols}×{tpl.rows}</div>
+              <div className="text-xs text-text-muted mt-0.5">
+                {tpl.cols}×{tpl.rows}
+              </div>
             </div>
 
             {/* Action buttons (hover) */}

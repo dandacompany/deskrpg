@@ -35,13 +35,46 @@ interface TaskCardProps {
   onClick?: (taskId: string) => void;
 }
 
-const STATUS_CONFIG: Record<string, { color: string; border: string; icon: React.ReactNode; labelKey: string }> = {
-  backlog: { labelKey: "task.backlog", color: "text-text-muted", border: "border-l-text-dim", icon: <Inbox className="w-3 h-3 inline" /> },
-  pending: { labelKey: "task.pending", color: "text-npc", border: "border-l-npc", icon: <Clock className="w-3 h-3 inline" /> },
-  in_progress: { labelKey: "task.inProgress", color: "text-danger", border: "border-l-danger", icon: <Circle className="w-3 h-3 inline" /> },
-  stalled: { labelKey: "task.stalled", color: "text-warning", border: "border-l-warning", icon: <PauseCircle className="w-3 h-3 inline" /> },
-  complete: { labelKey: "task.complete", color: "text-success", border: "border-l-success", icon: <Check className="w-3 h-3 inline" /> },
-  cancelled: { labelKey: "task.cancelled", color: "text-text-muted", border: "border-l-text-muted", icon: <XIcon className="w-3 h-3 inline" /> },
+const STATUS_CONFIG: Record<
+  string,
+  { color: string; border: string; icon: React.ReactNode; labelKey: string }
+> = {
+  backlog: {
+    labelKey: "task.backlog",
+    color: "text-text-muted",
+    border: "border-l-text-dim",
+    icon: <Inbox className="w-3 h-3 inline" />,
+  },
+  pending: {
+    labelKey: "task.pending",
+    color: "text-npc",
+    border: "border-l-npc",
+    icon: <Clock className="w-3 h-3 inline" />,
+  },
+  in_progress: {
+    labelKey: "task.inProgress",
+    color: "text-danger",
+    border: "border-l-danger",
+    icon: <Circle className="w-3 h-3 inline" />,
+  },
+  stalled: {
+    labelKey: "task.stalled",
+    color: "text-warning",
+    border: "border-l-warning",
+    icon: <PauseCircle className="w-3 h-3 inline" />,
+  },
+  complete: {
+    labelKey: "task.complete",
+    color: "text-success",
+    border: "border-l-success",
+    icon: <Check className="w-3 h-3 inline" />,
+  },
+  cancelled: {
+    labelKey: "task.cancelled",
+    color: "text-text-muted",
+    border: "border-l-text-muted",
+    icon: <XIcon className="w-3 h-3 inline" />,
+  },
 };
 
 export default function TaskCard({
@@ -63,11 +96,12 @@ export default function TaskCard({
   const isFinished = task.status === "complete" || task.status === "cancelled";
   const nudgeCount = task.autoNudgeCount ?? 0;
   const nudgeMax = task.autoNudgeMax ?? 5;
-  const nudgeLabel = task.status === "stalled"
-    ? t("task.stalledCount", { count: nudgeCount, max: nudgeMax })
-    : (task.status === "pending" || task.status === "in_progress")
-      ? t("task.autoNudgeCount", { count: nudgeCount, max: nudgeMax })
-      : "";
+  const nudgeLabel =
+    task.status === "stalled"
+      ? t("task.stalledCount", { count: nudgeCount, max: nudgeMax })
+      : task.status === "pending" || task.status === "in_progress"
+        ? t("task.autoNudgeCount", { count: nudgeCount, max: nudgeMax })
+        : "";
 
   function formatTimestamp(dateStr: string): string {
     if (!dateStr) return "";
@@ -96,7 +130,10 @@ export default function TaskCard({
           <span className="text-[11px] text-text-dim">{npcTaskId}</span>
           {onDelete && (
             <button
-              onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(task.id);
+              }}
               className="text-text-dim hover:text-danger text-[12px] ml-1"
               title={t("common.delete")}
             >
@@ -109,23 +146,33 @@ export default function TaskCard({
       {!compact && task.summary && (
         <div className="text-text-muted text-[12px] mb-1.5 line-clamp-2">{task.summary}</div>
       )}
-      {nudgeLabel ? (
-        <div className="mb-1.5 text-[11px] text-text-dim">{nudgeLabel}</div>
-      ) : null}
+      {nudgeLabel ? <div className="mb-1.5 text-[11px] text-text-dim">{nudgeLabel}</div> : null}
       <div className="mb-2 flex flex-wrap gap-1.5">
-        {(task.status === "pending" || task.status === "in_progress" || task.status === "stalled") && onComplete ? (
+        {(task.status === "pending" ||
+          task.status === "in_progress" ||
+          task.status === "stalled") &&
+        onComplete ? (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onComplete(task.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onComplete(task.id);
+            }}
             className="rounded bg-success/20 px-2 py-1 text-[12px] text-success hover:bg-success/30"
           >
             {t("task.markComplete")}
           </button>
         ) : null}
-        {(task.status === "pending" || task.status === "in_progress" || task.status === "stalled") && onRequestReport ? (
+        {(task.status === "pending" ||
+          task.status === "in_progress" ||
+          task.status === "stalled") &&
+        onRequestReport ? (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onRequestReport(task.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestReport(task.id);
+            }}
             className="rounded bg-primary/20 px-2 py-1 text-[12px] text-primary hover:bg-primary/30"
           >
             {t("task.requestReport")}
@@ -134,7 +181,10 @@ export default function TaskCard({
         {task.status === "stalled" && onResume ? (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onResume(task.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onResume(task.id);
+            }}
             className="rounded bg-warning/20 px-2 py-1 text-[12px] text-warning hover:bg-warning/30"
           >
             {t("task.resume")}
@@ -143,7 +193,10 @@ export default function TaskCard({
         {task.status === "backlog" && onAssign ? (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onAssign(task.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAssign(task.id);
+            }}
             className="rounded bg-primary/20 px-2 py-1 text-[12px] text-primary hover:bg-primary/30"
           >
             {t("task.assign")}
@@ -151,15 +204,15 @@ export default function TaskCard({
         ) : null}
       </div>
       <div className="flex justify-between items-center text-[11px] text-text-dim">
-        {showNpcName && (
-          npcName ? (
+        {showNpcName &&
+          (npcName ? (
             <Badge variant="npc" size="sm">
-              <Bot className="w-3 h-3" />{npcName}
+              <Bot className="w-3 h-3" />
+              {npcName}
             </Badge>
           ) : (
             <span className="text-[11px] text-text-dim">{t("task.unassigned")}</span>
-          )
-        )}
+          ))}
         <span>{formatTimestamp(updatedAt)}</span>
       </div>
     </div>

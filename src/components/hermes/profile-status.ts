@@ -13,7 +13,10 @@ const TONES: Record<string, ProfileStatusTone> = {
   error: "error",
 };
 
-export function profileStatusLabel(status: string | null): { tone: ProfileStatusTone; key: string } {
+export function profileStatusLabel(status: string | null): {
+  tone: ProfileStatusTone;
+  key: string;
+} {
   if (!status) return { tone: "unknown", key: "gateway.profile.status.unknown" };
   return { tone: TONES[status] ?? "unknown", key: `gateway.profile.status.${status}` };
 }

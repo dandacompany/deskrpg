@@ -10,11 +10,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if ("error" in access && !("project" in access)) return access.error;
   const { tilesetId, firstgid } = await req.json();
   if (!tilesetId || firstgid == null) {
-    return NextResponse.json({ errorCode: "missing_required_fields", error: "tilesetId and firstgid required" }, { status: 400 });
+    return NextResponse.json(
+      { errorCode: "missing_required_fields", error: "tilesetId and firstgid required" },
+      { status: 400 },
+    );
   }
 
   // Check if already linked
-  const [existing] = await db.select({ id: projectTilesets.id })
+  const [existing] = await db
+    .select({ id: projectTilesets.id })
     .from(projectTilesets)
     .where(and(eq(projectTilesets.projectId, projectId), eq(projectTilesets.tilesetId, tilesetId)));
 
@@ -22,6 +26,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ id: existing.id, alreadyLinked: true });
   }
 
-  const [created] = await db.insert(projectTilesets).values({ projectId, tilesetId, firstgid }).returning();
+  const [created] = await db
+    .insert(projectTilesets)
+    .values({ projectId, tilesetId, firstgid })
+    .returning();
   return NextResponse.json(created, { status: 201 });
 }

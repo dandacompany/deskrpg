@@ -214,9 +214,10 @@ export function buildManualTaskReportPrompt(task: {
   status?: string | null;
 }) {
   const summaryLine = task.summary ? `현재 메모: ${task.summary}\n` : "";
-  const statusLine = task.status === "pending"
-    ? "아직 시작 전이라면 지금 바로 착수하고, 첫 진행 상황을 짧게 보고하세요."
-    : "사용자가 이 태스크의 최신 진행 상황 보고를 직접 요청했습니다.";
+  const statusLine =
+    task.status === "pending"
+      ? "아직 시작 전이라면 지금 바로 착수하고, 첫 진행 상황을 짧게 보고하세요."
+      : "사용자가 이 태스크의 최신 진행 상황 보고를 직접 요청했습니다.";
 
   return [
     "시스템 알림입니다.",
@@ -320,7 +321,9 @@ export async function getPendingReportsForUserAndChannel(
     )
     .orderBy(asc(reports.createdAt));
 
-  return (rows as ReportRow[]).map((row: ReportRow) => normalizeReportRow(row)).filter((row): row is QueuedReportRow => row !== null);
+  return (rows as ReportRow[])
+    .map((row: ReportRow) => normalizeReportRow(row))
+    .filter((row): row is QueuedReportRow => row !== null);
 }
 
 export async function getReportsByTaskId(
@@ -337,7 +340,9 @@ export async function getReportsByTaskId(
     .where(eq((reports as unknown as { taskId: SQLWrapper }).taskId, taskId))
     .orderBy(asc(reports.createdAt));
 
-  return (rows as ReportRow[]).map((row: ReportRow) => normalizeReportRow(row)).filter((row): row is QueuedReportRow => row !== null);
+  return (rows as ReportRow[])
+    .map((row: ReportRow) => normalizeReportRow(row))
+    .filter((row): row is QueuedReportRow => row !== null);
 }
 
 export function toReportReadyPayload(
@@ -353,11 +358,7 @@ export function toReportReadyPayload(
   };
 }
 
-export async function markReportDelivered(
-  db: unknown,
-  schema: unknown,
-  reportId: string,
-) {
+export async function markReportDelivered(db: unknown, schema: unknown, reportId: string) {
   const reportDb = asReportDb(db);
   const reportSchema = asReportSchema(schema);
   const reports = reportSchema.npcReports;
@@ -370,11 +371,7 @@ export async function markReportDelivered(
     .where(eq(reports.id, reportId));
 }
 
-export async function markReportConsumed(
-  db: unknown,
-  schema: unknown,
-  reportId: string,
-) {
+export async function markReportConsumed(db: unknown, schema: unknown, reportId: string) {
   const reportDb = asReportDb(db);
   const reportSchema = asReportSchema(schema);
   const reports = reportSchema.npcReports;
@@ -407,18 +404,18 @@ export function mergeGatewayConfig(existingConfig: unknown, patch: unknown) {
 
   return {
     url: hasUrl
-      ? (update?.url === null
+      ? update?.url === null
         ? null
         : typeof update?.url === "string"
           ? update.url.trim() || null
-          : existing.url)
+          : existing.url
       : existing.url,
     token: hasToken
-      ? (update?.token === null
+      ? update?.token === null
         ? null
         : typeof update?.token === "string"
           ? update.token.trim() || null
-          : existing.token)
+          : existing.token
       : existing.token,
     taskAutomation: {
       autoProgressNudgeEnabled:

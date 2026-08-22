@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useReducer, useCallback } from 'react';
+import { useReducer, useCallback } from "react";
 
 // === Types ===
 
@@ -24,7 +24,7 @@ export interface TiledTileset {
 export interface TiledLayer {
   id: number;
   name: string;
-  type: 'tilelayer' | 'objectgroup';
+  type: "tilelayer" | "objectgroup";
   width?: number;
   height?: number;
   data?: number[];
@@ -91,13 +91,16 @@ export interface UndoAction {
 }
 
 export interface PlaceStampUndoAction {
-  type: 'PLACE_STAMP';
-  stampLayers: Array<{ layerIndex: number; changes: Array<{ index: number; oldGid: number; newGid: number }> }>;
+  type: "PLACE_STAMP";
+  stampLayers: Array<{
+    layerIndex: number;
+    changes: Array<{ index: number; oldGid: number; newGid: number }>;
+  }>;
 }
 
 export type AnyUndoAction = UndoAction | PlaceStampUndoAction;
 
-export type Tool = 'paint' | 'erase' | 'pan' | 'select';
+export type Tool = "paint" | "erase" | "pan" | "select";
 
 export interface EditorState {
   projectName: string;
@@ -123,34 +126,55 @@ export interface EditorState {
 }
 
 // === Core DeskRPG Layer Names ===
-export const CORE_LAYERS = ['floor', 'walls', 'foreground', 'collision', 'objects'];
+export const CORE_LAYERS = ["floor", "walls", "foreground", "collision", "objects"];
 
 export function isCoreLayer(layer: TiledLayer): boolean {
-  return CORE_LAYERS.includes((layer.name || '').toLowerCase());
+  return CORE_LAYERS.includes((layer.name || "").toLowerCase());
 }
 
 export function getDeskRPGRole(layer: TiledLayer, idx: number, layers: TiledLayer[]) {
-  const n = (layer.name || '').toLowerCase();
-  if (n === 'collision') return { label: 'COL', descKey: 'mapEditor.layers.roleCollision', color: 'bg-danger/20 text-danger' };
-  if (n === 'floor') return { label: 'D:0', descKey: 'mapEditor.layers.roleFloor', color: 'bg-success/20 text-success' };
-  if (n === 'walls') return { label: 'D:1', descKey: 'mapEditor.layers.roleWalls', color: 'bg-info/20 text-info' };
-  if (n === 'foreground' || n === 'above' || n === 'overlay') return { label: 'D:10K', descKey: 'mapEditor.layers.roleForeground', color: 'bg-npc/20 text-npc' };
-  if (layer.type === 'objectgroup') return { label: 'OBJ', descKey: 'mapEditor.layers.roleObjects', color: 'bg-meeting/20 text-meeting' };
+  const n = (layer.name || "").toLowerCase();
+  if (n === "collision")
+    return {
+      label: "COL",
+      descKey: "mapEditor.layers.roleCollision",
+      color: "bg-danger/20 text-danger",
+    };
+  if (n === "floor")
+    return {
+      label: "D:0",
+      descKey: "mapEditor.layers.roleFloor",
+      color: "bg-success/20 text-success",
+    };
+  if (n === "walls")
+    return { label: "D:1", descKey: "mapEditor.layers.roleWalls", color: "bg-info/20 text-info" };
+  if (n === "foreground" || n === "above" || n === "overlay")
+    return {
+      label: "D:10K",
+      descKey: "mapEditor.layers.roleForeground",
+      color: "bg-npc/20 text-npc",
+    };
+  if (layer.type === "objectgroup")
+    return {
+      label: "OBJ",
+      descKey: "mapEditor.layers.roleObjects",
+      color: "bg-meeting/20 text-meeting",
+    };
   return null;
 }
 
 // === Layer Colors ===
 export const LAYER_COLORS: Record<string, { solid: string; overlay: string }> = {
-  floor:      { solid: '#22c55e', overlay: 'rgba(34, 197, 94, 0.12)' },
-  walls:      { solid: '#3b82f6', overlay: 'rgba(59, 130, 246, 0.12)' },
-  foreground: { solid: '#eab308', overlay: 'rgba(234, 179, 8, 0.12)' },
-  collision:  { solid: '#ef4444', overlay: 'rgba(239, 68, 68, 0.55)' },
-  objects:    { solid: '#8b5cf6', overlay: 'rgba(139, 92, 246, 0.12)' },
+  floor: { solid: "#22c55e", overlay: "rgba(34, 197, 94, 0.12)" },
+  walls: { solid: "#3b82f6", overlay: "rgba(59, 130, 246, 0.12)" },
+  foreground: { solid: "#eab308", overlay: "rgba(234, 179, 8, 0.12)" },
+  collision: { solid: "#ef4444", overlay: "rgba(239, 68, 68, 0.55)" },
+  objects: { solid: "#8b5cf6", overlay: "rgba(139, 92, 246, 0.12)" },
 };
 
 export function getLayerColor(layer: TiledLayer) {
-  const n = (layer.name || '').toLowerCase();
-  return LAYER_COLORS[n] ?? { solid: '#6b7280', overlay: 'rgba(107, 114, 128, 0.12)' };
+  const n = (layer.name || "").toLowerCase();
+  return LAYER_COLORS[n] ?? { solid: "#6b7280", overlay: "rgba(107, 114, 128, 0.12)" };
 }
 
 /** Character depth threshold — layers with depth >= this render above characters */
@@ -158,17 +182,17 @@ export const CHARACTER_DEPTH_THRESHOLD = 10000;
 
 /** Extract numeric depth from a layer's properties array */
 export function getLayerDepth(layer: TiledLayer): number {
-  const depthProp = layer.properties?.find((p) => p.name === 'depth');
+  const depthProp = layer.properties?.find((p) => p.name === "depth");
   if (!depthProp) return 0;
-  if (depthProp.value === 'y-sort') return 5000;
+  if (depthProp.value === "y-sort") return 5000;
   return Number(depthProp.value) || 0;
 }
 
 /** Get a short display label for a layer's depth */
 export function getDepthLabel(layer: TiledLayer): string {
-  const depthProp = layer.properties?.find((p) => p.name === 'depth');
-  if (!depthProp) return 'D:0';
-  if (depthProp.value === 'y-sort') return 'y-sort';
+  const depthProp = layer.properties?.find((p) => p.name === "depth");
+  if (!depthProp) return "D:0";
+  if (depthProp.value === "y-sort") return "y-sort";
   const v = Number(depthProp.value) || 0;
   if (v >= 10000) return `D:${(v / 1000).toFixed(0)}K`;
   if (v < 0) return `D:${v}`;
@@ -176,27 +200,39 @@ export function getDepthLabel(layer: TiledLayer): string {
 }
 
 // === Collision Tileset Generator ===
-export const BUILTIN_TILESET_NAME = 'color-palette';
+export const BUILTIN_TILESET_NAME = "color-palette";
 
 const PALETTE_COLORS = [
-  '#ef4444', '#f97316', '#eab308', '#22c55e',
-  '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899',
-  '#ffffff', '#d1d5db', '#9ca3af', '#6b7280',
-  '#374151', '#1f2937', '#000000', '#00000000',
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#06b6d4",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+  "#ffffff",
+  "#d1d5db",
+  "#9ca3af",
+  "#6b7280",
+  "#374151",
+  "#1f2937",
+  "#000000",
+  "#00000000",
 ];
 
 export function generateBuiltinTilesetDataUrl(tileSize: number = 32): string {
   const cols = PALETTE_COLORS.length;
   const rows = 1;
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = tileSize * cols;
   canvas.height = tileSize * rows;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext("2d")!;
 
   PALETTE_COLORS.forEach((color, i) => {
     const x = (i % cols) * tileSize;
     const y = Math.floor(i / cols) * tileSize;
-    if (color === '#00000000') {
+    if (color === "#00000000") {
       // Transparent tile — leave empty
       return;
     }
@@ -204,85 +240,204 @@ export function generateBuiltinTilesetDataUrl(tileSize: number = 32): string {
     ctx.fillRect(x, y, tileSize, tileSize);
   });
 
-  return canvas.toDataURL('image/png');
+  return canvas.toDataURL("image/png");
 }
 
 export function getBuiltinTilesetInfo(tileSize: number = 32) {
   const cols = PALETTE_COLORS.length;
   const count = PALETTE_COLORS.length;
   const rows = 1;
-  return { columns: cols, tilecount: count, rows, imagewidth: cols * tileSize, imageheight: rows * tileSize };
+  return {
+    columns: cols,
+    tilecount: count,
+    rows,
+    imagewidth: cols * tileSize,
+    imageheight: rows * tileSize,
+  };
 }
 
 // === Default Map (DeskRPG Policy) ===
-export function createDefaultMap(name: string, width: number, height: number, tileSize: number): TiledMap {
+export function createDefaultMap(
+  name: string,
+  width: number,
+  height: number,
+  tileSize: number,
+): TiledMap {
   const empty = new Array(width * height).fill(0);
   return {
     compressionlevel: -1,
-    width, height,
+    width,
+    height,
     tilewidth: tileSize,
     tileheight: tileSize,
-    orientation: 'orthogonal',
-    renderorder: 'right-down',
+    orientation: "orthogonal",
+    renderorder: "right-down",
     infinite: false,
-    type: 'map',
-    version: '1.10',
-    tiledversion: '1.11.2',
+    type: "map",
+    version: "1.10",
+    tiledversion: "1.11.2",
     nextlayerid: 7,
     nextobjectid: 2,
     tilesets: [],
     layers: [
-      { id: 1, name: 'Floor', type: 'tilelayer', width, height, x: 0, y: 0, opacity: 1, visible: true, data: [...empty], properties: [{ name: 'depth', type: 'int', value: 0 }] },
-      { id: 2, name: 'Walls', type: 'tilelayer', width, height, x: 0, y: 0, opacity: 1, visible: true, data: [...empty], properties: [{ name: 'depth', type: 'int', value: 1 }] },
-      { id: 3, name: 'Foreground', type: 'tilelayer', width, height, x: 0, y: 0, opacity: 1, visible: true, data: [...empty], properties: [{ name: 'depth', type: 'int', value: 10000 }] },
-      { id: 4, name: 'Collision', type: 'tilelayer', width, height, x: 0, y: 0, opacity: 0.7, visible: true, data: [...empty], properties: [{ name: 'depth', type: 'int', value: -1 }] },
-      { id: 5, name: 'Objects', type: 'objectgroup', x: 0, y: 0, opacity: 1, visible: true, draworder: 'topdown', objects: [{ id: 1, name: 'spawn', type: 'spawn', x: Math.floor(width / 2) * tileSize, y: Math.floor(height / 2) * tileSize, width: tileSize, height: tileSize, visible: true }], properties: [{ name: 'depth', type: 'string', value: 'y-sort' }] },
+      {
+        id: 1,
+        name: "Floor",
+        type: "tilelayer",
+        width,
+        height,
+        x: 0,
+        y: 0,
+        opacity: 1,
+        visible: true,
+        data: [...empty],
+        properties: [{ name: "depth", type: "int", value: 0 }],
+      },
+      {
+        id: 2,
+        name: "Walls",
+        type: "tilelayer",
+        width,
+        height,
+        x: 0,
+        y: 0,
+        opacity: 1,
+        visible: true,
+        data: [...empty],
+        properties: [{ name: "depth", type: "int", value: 1 }],
+      },
+      {
+        id: 3,
+        name: "Foreground",
+        type: "tilelayer",
+        width,
+        height,
+        x: 0,
+        y: 0,
+        opacity: 1,
+        visible: true,
+        data: [...empty],
+        properties: [{ name: "depth", type: "int", value: 10000 }],
+      },
+      {
+        id: 4,
+        name: "Collision",
+        type: "tilelayer",
+        width,
+        height,
+        x: 0,
+        y: 0,
+        opacity: 0.7,
+        visible: true,
+        data: [...empty],
+        properties: [{ name: "depth", type: "int", value: -1 }],
+      },
+      {
+        id: 5,
+        name: "Objects",
+        type: "objectgroup",
+        x: 0,
+        y: 0,
+        opacity: 1,
+        visible: true,
+        draworder: "topdown",
+        objects: [
+          {
+            id: 1,
+            name: "spawn",
+            type: "spawn",
+            x: Math.floor(width / 2) * tileSize,
+            y: Math.floor(height / 2) * tileSize,
+            width: tileSize,
+            height: tileSize,
+            visible: true,
+          },
+        ],
+        properties: [{ name: "depth", type: "string", value: "y-sort" }],
+      },
     ],
   };
 }
 
 // === Reducer Actions ===
 type EditorAction =
-  | { type: 'SET_MAP'; mapData: TiledMap; projectName?: string; templateId?: string | null; projectId?: string | null }
-  | { type: 'SET_TOOL'; tool: Tool }
-  | { type: 'SET_ACTIVE_LAYER'; index: number }
-  | { type: 'SET_SELECTED_TILE'; gid: number; region?: TileRegion | null }
-  | { type: 'SET_ZOOM'; zoom: number }
-  | { type: 'SET_PAN'; panX: number; panY: number }
-  | { type: 'TOGGLE_GRID' }
-  | { type: 'TOGGLE_COLLISION' }
-  | { type: 'PAINT_TILE'; layerIndex: number; changes: Array<{ index: number; oldGid: number; newGid: number }> }
-  | { type: 'UNDO' }
-  | { type: 'REDO' }
-  | { type: 'ADD_LAYER'; layer: TiledLayer }
-  | { type: 'DELETE_LAYER'; index: number }
-  | { type: 'RENAME_LAYER'; index: number; name: string }
-  | { type: 'TOGGLE_LAYER_VISIBILITY'; index: number }
-  | { type: 'REORDER_LAYERS'; fromIndex: number; toIndex: number }
-  | { type: 'ADD_TILESET'; tileset: TiledTileset; imageInfo: TilesetImageInfo }
-  | { type: 'DELETE_TILESET'; firstgid: number }
-  | { type: 'UPDATE_TILESET_IMAGE'; firstgid: number; imageInfo: TilesetImageInfo; imageDataUrl: string }
-  | { type: 'MARK_CLEAN' }
-  | { type: 'SET_PROJECT_NAME'; name: string }
-  | { type: 'SET_SELECTION'; selection: { x: number; y: number; width: number; height: number } | null }
-  | { type: 'CLEAR_SELECTION' }
-  | { type: 'SET_CLIPBOARD'; clipboard: { width: number; height: number; gids: number[][]; layerIndex: number } }
-  | { type: 'DELETE_SELECTION' }
-  | { type: 'PASTE_CLIPBOARD'; x: number; y: number }
-  | { type: 'MOVE_TILES'; fromX: number; fromY: number; toX: number; toY: number; width: number; height: number }
-  | { type: 'RENAME_TILESET'; firstgid: number; name: string }
-  | { type: 'REORDER_TILESETS'; fromFirstgid: number; toFirstgid: number }
-  | { type: 'REMOVE_UNUSED_TILESETS'; firstgids: number[] }
-  | { type: 'PLACE_STAMP'; stampLayers: Array<{ layerIndex: number; changes: Array<{ index: number; oldGid: number; newGid: number }> }> }
-  | { type: 'SET_LAYER_DEPTH'; index: number; depth: number | string }
-  | { type: 'MOVE_SELECTION_TO_LAYER'; targetLayerIndex: number };
+  | {
+      type: "SET_MAP";
+      mapData: TiledMap;
+      projectName?: string;
+      templateId?: string | null;
+      projectId?: string | null;
+    }
+  | { type: "SET_TOOL"; tool: Tool }
+  | { type: "SET_ACTIVE_LAYER"; index: number }
+  | { type: "SET_SELECTED_TILE"; gid: number; region?: TileRegion | null }
+  | { type: "SET_ZOOM"; zoom: number }
+  | { type: "SET_PAN"; panX: number; panY: number }
+  | { type: "TOGGLE_GRID" }
+  | { type: "TOGGLE_COLLISION" }
+  | {
+      type: "PAINT_TILE";
+      layerIndex: number;
+      changes: Array<{ index: number; oldGid: number; newGid: number }>;
+    }
+  | { type: "UNDO" }
+  | { type: "REDO" }
+  | { type: "ADD_LAYER"; layer: TiledLayer }
+  | { type: "DELETE_LAYER"; index: number }
+  | { type: "RENAME_LAYER"; index: number; name: string }
+  | { type: "TOGGLE_LAYER_VISIBILITY"; index: number }
+  | { type: "REORDER_LAYERS"; fromIndex: number; toIndex: number }
+  | { type: "ADD_TILESET"; tileset: TiledTileset; imageInfo: TilesetImageInfo }
+  | { type: "DELETE_TILESET"; firstgid: number }
+  | {
+      type: "UPDATE_TILESET_IMAGE";
+      firstgid: number;
+      imageInfo: TilesetImageInfo;
+      imageDataUrl: string;
+    }
+  | { type: "MARK_CLEAN" }
+  | { type: "SET_PROJECT_NAME"; name: string }
+  | {
+      type: "SET_SELECTION";
+      selection: { x: number; y: number; width: number; height: number } | null;
+    }
+  | { type: "CLEAR_SELECTION" }
+  | {
+      type: "SET_CLIPBOARD";
+      clipboard: { width: number; height: number; gids: number[][]; layerIndex: number };
+    }
+  | { type: "DELETE_SELECTION" }
+  | { type: "PASTE_CLIPBOARD"; x: number; y: number }
+  | {
+      type: "MOVE_TILES";
+      fromX: number;
+      fromY: number;
+      toX: number;
+      toY: number;
+      width: number;
+      height: number;
+    }
+  | { type: "RENAME_TILESET"; firstgid: number; name: string }
+  | { type: "REORDER_TILESETS"; fromFirstgid: number; toFirstgid: number }
+  | { type: "REMOVE_UNUSED_TILESETS"; firstgids: number[] }
+  | {
+      type: "PLACE_STAMP";
+      stampLayers: Array<{
+        layerIndex: number;
+        changes: Array<{ index: number; oldGid: number; newGid: number }>;
+      }>;
+    }
+  | { type: "SET_LAYER_DEPTH"; index: number; depth: number | string }
+  | { type: "MOVE_SELECTION_TO_LAYER"; targetLayerIndex: number };
 
 export type { EditorAction };
 
 function editorReducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
-    case 'SET_MAP': {
-      const sortedGids = Object.keys(state.tilesetImages).map(Number).sort((a, b) => b - a);
+    case "SET_MAP": {
+      const sortedGids = Object.keys(state.tilesetImages)
+        .map(Number)
+        .sort((a, b) => b - a);
       return {
         ...state,
         mapData: action.mapData,
@@ -296,33 +451,38 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         sortedGids,
       };
     }
-    case 'SET_TOOL':
-      if (action.tool !== 'select' && state.selection) {
+    case "SET_TOOL":
+      if (action.tool !== "select" && state.selection) {
         return { ...state, tool: action.tool, selection: null };
       }
       return { ...state, tool: action.tool };
-    case 'SET_ACTIVE_LAYER':
+    case "SET_ACTIVE_LAYER":
       return { ...state, activeLayerIndex: action.index };
-    case 'SET_SELECTED_TILE':
+    case "SET_SELECTED_TILE":
       return { ...state, selectedTileGid: action.gid, selectedRegion: action.region ?? null };
-    case 'SET_ZOOM':
+    case "SET_ZOOM":
       return { ...state, zoom: Math.max(0.5, Math.min(8, action.zoom)) };
-    case 'SET_PAN':
+    case "SET_PAN":
       return { ...state, panX: action.panX, panY: action.panY };
-    case 'TOGGLE_GRID':
+    case "TOGGLE_GRID":
       return { ...state, showGrid: !state.showGrid };
-    case 'TOGGLE_COLLISION':
+    case "TOGGLE_COLLISION":
       return { ...state, showCollision: !state.showCollision };
-    case 'PAINT_TILE': {
+    case "PAINT_TILE": {
       if (!state.mapData) return state;
       const newLayers = [...state.mapData.layers];
       const layer = { ...newLayers[action.layerIndex] };
-      if (layer.type !== 'tilelayer' || !layer.data) return state;
+      if (layer.type !== "tilelayer" || !layer.data) return state;
       const newData = [...layer.data];
-      action.changes.forEach(c => { newData[c.index] = c.newGid; });
+      action.changes.forEach((c) => {
+        newData[c.index] = c.newGid;
+      });
       layer.data = newData;
       newLayers[action.layerIndex] = layer;
-      const undoStack = [...state.undoStack, { layerIndex: action.layerIndex, changes: action.changes }];
+      const undoStack = [
+        ...state.undoStack,
+        { layerIndex: action.layerIndex, changes: action.changes },
+      ];
       if (undoStack.length > 100) undoStack.shift();
       return {
         ...state,
@@ -332,13 +492,13 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         dirty: true,
       };
     }
-    case 'UNDO': {
+    case "UNDO": {
       if (state.undoStack.length === 0 || !state.mapData) return state;
       const lastAction = state.undoStack[state.undoStack.length - 1];
       const newUndoStack = state.undoStack.slice(0, -1);
 
       // Multi-layer undo (PLACE_STAMP)
-      if ('stampLayers' in lastAction) {
+      if ("stampLayers" in lastAction) {
         const newLayers = state.mapData.layers.map((l) => ({
           ...l,
           data: l.data ? [...l.data] : l.data,
@@ -365,10 +525,12 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         data: l.data ? [...l.data] : l.data,
       }));
       const layer = newLayers[undoAction.layerIndex];
-      if (layer.type !== 'tilelayer' || !layer.data) return state;
-      undoAction.changes.forEach(c => { layer.data![c.index] = c.oldGid; });
+      if (layer.type !== "tilelayer" || !layer.data) return state;
+      undoAction.changes.forEach((c) => {
+        layer.data![c.index] = c.oldGid;
+      });
       // Handle extra layers (e.g., MOVE_SELECTION_TO_LAYER)
-      if ('extraLayers' in undoAction) {
+      if ("extraLayers" in undoAction) {
         for (const el of (undoAction as any).extraLayers) {
           const extraLayer = newLayers[el.layerIndex];
           if (!extraLayer || !extraLayer.data) continue;
@@ -385,13 +547,13 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         dirty: true,
       };
     }
-    case 'REDO': {
+    case "REDO": {
       if (state.redoStack.length === 0 || !state.mapData) return state;
       const lastAction = state.redoStack[state.redoStack.length - 1];
       const newRedoStack = state.redoStack.slice(0, -1);
 
       // Multi-layer redo (PLACE_STAMP)
-      if ('stampLayers' in lastAction) {
+      if ("stampLayers" in lastAction) {
         const newLayers = state.mapData.layers.map((l) => ({
           ...l,
           data: l.data ? [...l.data] : l.data,
@@ -418,10 +580,12 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         data: l.data ? [...l.data] : l.data,
       }));
       const layer = newLayers[redoAction.layerIndex];
-      if (layer.type !== 'tilelayer' || !layer.data) return state;
-      redoAction.changes.forEach(c => { layer.data![c.index] = c.newGid; });
+      if (layer.type !== "tilelayer" || !layer.data) return state;
+      redoAction.changes.forEach((c) => {
+        layer.data![c.index] = c.newGid;
+      });
       // Handle extra layers (e.g., MOVE_SELECTION_TO_LAYER)
-      if ('extraLayers' in redoAction) {
+      if ("extraLayers" in redoAction) {
         for (const el of (redoAction as any).extraLayers) {
           const extraLayer = newLayers[el.layerIndex];
           if (!extraLayer || !extraLayer.data) continue;
@@ -438,27 +602,37 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         dirty: true,
       };
     }
-    case 'ADD_LAYER': {
+    case "ADD_LAYER": {
       if (!state.mapData) return state;
       const newLayers = [...state.mapData.layers, action.layer];
       // New layer added at end → assign depth below character (lowest rank among below-layers)
-      const belowCount = newLayers.filter(l => l.type === 'tilelayer' && (() => {
-        const dp = l.properties?.find((p: { name: string }) => p.name === 'depth');
-        return !dp || Number(dp.value) < CHARACTER_DEPTH_THRESHOLD;
-      })()).length;
+      const belowCount = newLayers.filter(
+        (l) =>
+          l.type === "tilelayer" &&
+          (() => {
+            const dp = l.properties?.find((p: { name: string }) => p.name === "depth");
+            return !dp || Number(dp.value) < CHARACTER_DEPTH_THRESHOLD;
+          })(),
+      ).length;
       const addedIdx = newLayers.length - 1;
       const addedLayer = newLayers[addedIdx];
-      const props = (addedLayer.properties ?? []).filter((p: { name: string }) => p.name !== 'depth');
-      props.push({ name: 'depth', type: 'int', value: belowCount - 1 });
+      const props = (addedLayer.properties ?? []).filter(
+        (p: { name: string }) => p.name !== "depth",
+      );
+      props.push({ name: "depth", type: "int", value: belowCount - 1 });
       newLayers[addedIdx] = { ...addedLayer, properties: props };
       return {
         ...state,
-        mapData: { ...state.mapData, layers: newLayers, nextlayerid: state.mapData.nextlayerid + 1 },
+        mapData: {
+          ...state.mapData,
+          layers: newLayers,
+          nextlayerid: state.mapData.nextlayerid + 1,
+        },
         activeLayerIndex: newLayers.length - 1,
         dirty: true,
       };
     }
-    case 'DELETE_LAYER': {
+    case "DELETE_LAYER": {
       if (!state.mapData || state.mapData.layers.length <= 1) return state;
       const newLayers = state.mapData.layers.filter((_, i) => i !== action.index);
       let newActive = state.activeLayerIndex;
@@ -471,31 +645,34 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         dirty: true,
       };
     }
-    case 'SET_LAYER_DEPTH': {
+    case "SET_LAYER_DEPTH": {
       if (!state.mapData) return state;
       const newLayers = [...state.mapData.layers];
       const layer = { ...newLayers[action.index] };
       const depthValue = action.depth;
-      const depthType = typeof depthValue === 'string' ? 'string' : 'int';
-      const props = (layer.properties || []).filter((p) => p.name !== 'depth');
-      props.push({ name: 'depth', type: depthType, value: depthValue });
+      const depthType = typeof depthValue === "string" ? "string" : "int";
+      const props = (layer.properties || []).filter((p) => p.name !== "depth");
+      props.push({ name: "depth", type: depthType, value: depthValue });
       layer.properties = props;
       newLayers[action.index] = layer;
       return { ...state, mapData: { ...state.mapData, layers: newLayers }, dirty: true };
     }
-    case 'RENAME_LAYER': {
+    case "RENAME_LAYER": {
       if (!state.mapData) return state;
       const newLayers = [...state.mapData.layers];
       newLayers[action.index] = { ...newLayers[action.index], name: action.name };
       return { ...state, mapData: { ...state.mapData, layers: newLayers }, dirty: true };
     }
-    case 'TOGGLE_LAYER_VISIBILITY': {
+    case "TOGGLE_LAYER_VISIBILITY": {
       if (!state.mapData) return state;
       const newLayers = [...state.mapData.layers];
-      newLayers[action.index] = { ...newLayers[action.index], visible: !newLayers[action.index].visible };
+      newLayers[action.index] = {
+        ...newLayers[action.index],
+        visible: !newLayers[action.index].visible,
+      };
       return { ...state, mapData: { ...state.mapData, layers: newLayers } };
     }
-    case 'REORDER_LAYERS': {
+    case "REORDER_LAYERS": {
       if (!state.mapData) return state;
       const layers = [...state.mapData.layers];
       const [moved] = layers.splice(action.fromIndex, 1);
@@ -505,40 +682,55 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       if (state.activeLayerIndex === action.fromIndex) newActive = insertAt;
 
       // Reassign depth preserving above/below character divider
-      const tileLayers = layers.map((l, i) => {
-        const dp = l.properties?.find((p: { name: string }) => p.name === 'depth');
-        const currentDepth = dp ? Number(dp.value) || 0 : 0;
-        return { l, i, above: currentDepth >= CHARACTER_DEPTH_THRESHOLD };
-      }).filter(({ l }) => l.type === 'tilelayer');
+      const tileLayers = layers
+        .map((l, i) => {
+          const dp = l.properties?.find((p: { name: string }) => p.name === "depth");
+          const currentDepth = dp ? Number(dp.value) || 0 : 0;
+          return { l, i, above: currentDepth >= CHARACTER_DEPTH_THRESHOLD };
+        })
+        .filter(({ l }) => l.type === "tilelayer");
 
       // Separate into above/below groups, assign depth within each group
-      const aboveLayers = tileLayers.filter(e => e.above);
-      const belowLayers = tileLayers.filter(e => !e.above);
+      const aboveLayers = tileLayers.filter((e) => e.above);
+      const belowLayers = tileLayers.filter((e) => !e.above);
 
       for (let rank = 0; rank < belowLayers.length; rank++) {
         const { l, i } = belowLayers[rank];
-        const newProps = (l.properties ?? []).filter((p: { name: string }) => p.name !== 'depth');
-        newProps.push({ name: 'depth', type: 'int', value: rank });
+        const newProps = (l.properties ?? []).filter((p: { name: string }) => p.name !== "depth");
+        newProps.push({ name: "depth", type: "int", value: rank });
         layers[i] = { ...l, properties: newProps };
       }
       for (let rank = 0; rank < aboveLayers.length; rank++) {
         const { l, i } = aboveLayers[rank];
-        const newProps = (l.properties ?? []).filter((p: { name: string }) => p.name !== 'depth');
-        newProps.push({ name: 'depth', type: 'int', value: CHARACTER_DEPTH_THRESHOLD + rank });
+        const newProps = (l.properties ?? []).filter((p: { name: string }) => p.name !== "depth");
+        newProps.push({ name: "depth", type: "int", value: CHARACTER_DEPTH_THRESHOLD + rank });
         layers[i] = { ...l, properties: newProps };
       }
 
-      return { ...state, mapData: { ...state.mapData, layers }, activeLayerIndex: newActive, dirty: true };
+      return {
+        ...state,
+        mapData: { ...state.mapData, layers },
+        activeLayerIndex: newActive,
+        dirty: true,
+      };
     }
-    case 'ADD_TILESET': {
+    case "ADD_TILESET": {
       if (!state.mapData) return state;
-      const newTilesetImages = { ...state.tilesetImages, [action.tileset.firstgid]: action.imageInfo };
-      const sortedGids = Object.keys(newTilesetImages).map(Number).sort((a, b) => b - a);
+      const newTilesetImages = {
+        ...state.tilesetImages,
+        [action.tileset.firstgid]: action.imageInfo,
+      };
+      const sortedGids = Object.keys(newTilesetImages)
+        .map(Number)
+        .sort((a, b) => b - a);
       // Prevent duplicate tilesets with same firstgid
-      const existingIdx = state.mapData.tilesets.findIndex(ts => ts.firstgid === action.tileset.firstgid);
-      const newTilesets = existingIdx >= 0
-        ? state.mapData.tilesets.map((ts, i) => i === existingIdx ? action.tileset : ts)
-        : [...state.mapData.tilesets, action.tileset];
+      const existingIdx = state.mapData.tilesets.findIndex(
+        (ts) => ts.firstgid === action.tileset.firstgid,
+      );
+      const newTilesets =
+        existingIdx >= 0
+          ? state.mapData.tilesets.map((ts, i) => (i === existingIdx ? action.tileset : ts))
+          : [...state.mapData.tilesets, action.tileset];
       return {
         ...state,
         mapData: { ...state.mapData, tilesets: newTilesets },
@@ -547,12 +739,14 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         dirty: true,
       };
     }
-    case 'DELETE_TILESET': {
+    case "DELETE_TILESET": {
       if (!state.mapData) return state;
-      const newTilesets = state.mapData.tilesets.filter(ts => ts.firstgid !== action.firstgid);
+      const newTilesets = state.mapData.tilesets.filter((ts) => ts.firstgid !== action.firstgid);
       const newImages = { ...state.tilesetImages };
       delete newImages[action.firstgid];
-      const sortedGids = Object.keys(newImages).map(Number).sort((a, b) => b - a);
+      const sortedGids = Object.keys(newImages)
+        .map(Number)
+        .sort((a, b) => b - a);
       return {
         ...state,
         mapData: { ...state.mapData, tilesets: newTilesets },
@@ -561,7 +755,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         dirty: true,
       };
     }
-    case 'UPDATE_TILESET_IMAGE': {
+    case "UPDATE_TILESET_IMAGE": {
       if (!state.mapData) return state;
       const newTilesetImages = { ...state.tilesetImages, [action.firstgid]: action.imageInfo };
       const newTilesets = state.mapData.tilesets.map((ts) =>
@@ -574,20 +768,20 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         dirty: true,
       };
     }
-    case 'MARK_CLEAN':
+    case "MARK_CLEAN":
       return { ...state, dirty: false };
-    case 'SET_PROJECT_NAME':
+    case "SET_PROJECT_NAME":
       return { ...state, projectName: action.name, dirty: true };
-    case 'SET_SELECTION':
+    case "SET_SELECTION":
       return { ...state, selection: action.selection };
-    case 'CLEAR_SELECTION':
+    case "CLEAR_SELECTION":
       return { ...state, selection: null };
-    case 'SET_CLIPBOARD':
+    case "SET_CLIPBOARD":
       return { ...state, clipboard: action.clipboard };
-    case 'DELETE_SELECTION': {
+    case "DELETE_SELECTION": {
       if (!state.mapData || !state.selection) return state;
       const layer = state.mapData.layers[state.activeLayerIndex];
-      if (!layer || layer.type !== 'tilelayer' || !layer.data) return state;
+      if (!layer || layer.type !== "tilelayer" || !layer.data) return state;
       const sel = state.selection;
       const mapW = state.mapData.width;
       const mapH = state.mapData.height;
@@ -608,7 +802,9 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       const newLayers = [...state.mapData.layers];
       const newLayer = { ...newLayers[state.activeLayerIndex] };
       const newData = [...newLayer.data!];
-      changes.forEach(c => { newData[c.index] = c.newGid; });
+      changes.forEach((c) => {
+        newData[c.index] = c.newGid;
+      });
       newLayer.data = newData;
       newLayers[state.activeLayerIndex] = newLayer;
       const undoStack = [...state.undoStack, { layerIndex: state.activeLayerIndex, changes }];
@@ -622,12 +818,12 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         selection: null,
       };
     }
-    case 'MOVE_SELECTION_TO_LAYER': {
+    case "MOVE_SELECTION_TO_LAYER": {
       if (!state.mapData || !state.selection) return state;
       const srcLayer = state.mapData.layers[state.activeLayerIndex];
       const dstLayer = state.mapData.layers[action.targetLayerIndex];
-      if (!srcLayer || srcLayer.type !== 'tilelayer' || !srcLayer.data) return state;
-      if (!dstLayer || dstLayer.type !== 'tilelayer' || !dstLayer.data) return state;
+      if (!srcLayer || srcLayer.type !== "tilelayer" || !srcLayer.data) return state;
+      if (!dstLayer || dstLayer.type !== "tilelayer" || !dstLayer.data) return state;
       if (state.activeLayerIndex === action.targetLayerIndex) return state;
       const sel = state.selection;
       const mapW = state.mapData.width;
@@ -651,11 +847,19 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       const newLayers = [...state.mapData.layers];
       const newSrcLayer = { ...newLayers[state.activeLayerIndex], data: [...srcLayer.data] };
       const newDstLayer = { ...newLayers[action.targetLayerIndex], data: [...dstLayer.data!] };
-      srcChanges.forEach(c => { newSrcLayer.data![c.index] = c.newGid; });
-      dstChanges.forEach(c => { newDstLayer.data![c.index] = c.newGid; });
+      srcChanges.forEach((c) => {
+        newSrcLayer.data![c.index] = c.newGid;
+      });
+      dstChanges.forEach((c) => {
+        newDstLayer.data![c.index] = c.newGid;
+      });
       newLayers[state.activeLayerIndex] = newSrcLayer;
       newLayers[action.targetLayerIndex] = newDstLayer;
-      const undoEntry = { layerIndex: state.activeLayerIndex, changes: srcChanges, extraLayers: [{ layerIndex: action.targetLayerIndex, changes: dstChanges }] };
+      const undoEntry = {
+        layerIndex: state.activeLayerIndex,
+        changes: srcChanges,
+        extraLayers: [{ layerIndex: action.targetLayerIndex, changes: dstChanges }],
+      };
       const undoStack = [...state.undoStack, undoEntry];
       if (undoStack.length > 100) undoStack.shift();
       return {
@@ -667,10 +871,10 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         selection: null,
       };
     }
-    case 'PASTE_CLIPBOARD': {
+    case "PASTE_CLIPBOARD": {
       if (!state.mapData || !state.clipboard) return state;
       const layer = state.mapData.layers[state.activeLayerIndex];
-      if (!layer || layer.type !== 'tilelayer' || !layer.data) return state;
+      if (!layer || layer.type !== "tilelayer" || !layer.data) return state;
       const cb = state.clipboard;
       const mapW = state.mapData.width;
       const mapH = state.mapData.height;
@@ -692,7 +896,9 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       const newLayers = [...state.mapData.layers];
       const newLayer = { ...newLayers[state.activeLayerIndex] };
       const newData = [...newLayer.data!];
-      changes.forEach(c => { newData[c.index] = c.newGid; });
+      changes.forEach((c) => {
+        newData[c.index] = c.newGid;
+      });
       newLayer.data = newData;
       newLayers[state.activeLayerIndex] = newLayer;
       const undoStack = [...state.undoStack, { layerIndex: state.activeLayerIndex, changes }];
@@ -705,10 +911,10 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         dirty: true,
       };
     }
-    case 'MOVE_TILES': {
+    case "MOVE_TILES": {
       if (!state.mapData) return state;
       const layer = state.mapData.layers[state.activeLayerIndex];
-      if (!layer || layer.type !== 'tilelayer' || !layer.data) return state;
+      if (!layer || layer.type !== "tilelayer" || !layer.data) return state;
       const { fromX, fromY, toX, toY, width, height } = action;
       if (fromX === toX && fromY === toY) return state;
       const mapW = state.mapData.width;
@@ -720,7 +926,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       for (let dy = 0; dy < height; dy++) {
         const row: number[] = [];
         for (let dx = 0; dx < width; dx++) {
-          const tx = fromX + dx, ty = fromY + dy;
+          const tx = fromX + dx,
+            ty = fromY + dy;
           if (tx >= 0 && tx < mapW && ty >= 0 && ty < mapH) {
             row.push(layer.data[ty * mapW + tx]);
           } else {
@@ -733,7 +940,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       // 2. Clear source (set to 0)
       for (let dy = 0; dy < height; dy++) {
         for (let dx = 0; dx < width; dx++) {
-          const tx = fromX + dx, ty = fromY + dy;
+          const tx = fromX + dx,
+            ty = fromY + dy;
           if (tx >= 0 && tx < mapW && ty >= 0 && ty < mapH) {
             const idx = ty * mapW + tx;
             if (layer.data[idx] !== 0) {
@@ -746,12 +954,13 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       // 3. Place at destination
       for (let dy = 0; dy < height; dy++) {
         for (let dx = 0; dx < width; dx++) {
-          const tx = toX + dx, ty = toY + dy;
+          const tx = toX + dx,
+            ty = toY + dy;
           if (tx >= 0 && tx < mapW && ty >= 0 && ty < mapH) {
             const idx = ty * mapW + tx;
             const newGid = srcGids[dy][dx];
             // Find existing change for this index or use current data
-            const existing = changes.find(c => c.index === idx);
+            const existing = changes.find((c) => c.index === idx);
             if (existing) {
               existing.newGid = newGid;
             } else if (layer.data[idx] !== newGid) {
@@ -765,7 +974,9 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       const newLayers = [...state.mapData.layers];
       const newLayer = { ...newLayers[state.activeLayerIndex] };
       const newData = [...newLayer.data!];
-      changes.forEach(c => { newData[c.index] = c.newGid; });
+      changes.forEach((c) => {
+        newData[c.index] = c.newGid;
+      });
       newLayer.data = newData;
       newLayers[state.activeLayerIndex] = newLayer;
       const undoStack = [...state.undoStack, { layerIndex: state.activeLayerIndex, changes }];
@@ -779,22 +990,27 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         selection: { x: toX, y: toY, width, height },
       };
     }
-    case 'RENAME_TILESET': {
+    case "RENAME_TILESET": {
       if (!state.mapData) return state;
-      const newTilesets = state.mapData.tilesets.map(ts =>
+      const newTilesets = state.mapData.tilesets.map((ts) =>
         ts.firstgid === action.firstgid ? { ...ts, name: action.name } : ts,
       );
       const newImages = { ...state.tilesetImages };
       if (newImages[action.firstgid]) {
         newImages[action.firstgid] = { ...newImages[action.firstgid], name: action.name };
       }
-      return { ...state, mapData: { ...state.mapData, tilesets: newTilesets }, tilesetImages: newImages, dirty: true };
+      return {
+        ...state,
+        mapData: { ...state.mapData, tilesets: newTilesets },
+        tilesetImages: newImages,
+        dirty: true,
+      };
     }
-    case 'REORDER_TILESETS': {
+    case "REORDER_TILESETS": {
       if (!state.mapData) return state;
       const tilesets = [...state.mapData.tilesets];
-      const fromIndex = tilesets.findIndex(ts => ts.firstgid === action.fromFirstgid);
-      const toIndex = tilesets.findIndex(ts => ts.firstgid === action.toFirstgid);
+      const fromIndex = tilesets.findIndex((ts) => ts.firstgid === action.fromFirstgid);
+      const toIndex = tilesets.findIndex((ts) => ts.firstgid === action.toFirstgid);
       if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return state;
       const [moved] = tilesets.splice(fromIndex, 1);
       tilesets.splice(toIndex, 0, moved);
@@ -804,15 +1020,17 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         dirty: true,
       };
     }
-    case 'REMOVE_UNUSED_TILESETS': {
+    case "REMOVE_UNUSED_TILESETS": {
       if (!state.mapData || action.firstgids.length === 0) return state;
       const removeSet = new Set(action.firstgids);
-      const newTilesets = state.mapData.tilesets.filter(ts => !removeSet.has(ts.firstgid));
+      const newTilesets = state.mapData.tilesets.filter((ts) => !removeSet.has(ts.firstgid));
       const newImages = { ...state.tilesetImages };
       for (const fgid of action.firstgids) {
         delete newImages[fgid];
       }
-      const sortedGids = Object.keys(newImages).map(Number).sort((a, b) => b - a);
+      const sortedGids = Object.keys(newImages)
+        .map(Number)
+        .sort((a, b) => b - a);
       return {
         ...state,
         mapData: { ...state.mapData, tilesets: newTilesets },
@@ -821,7 +1039,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         dirty: true,
       };
     }
-    case 'PLACE_STAMP': {
+    case "PLACE_STAMP": {
       if (!state.mapData) return state;
       const newLayers = state.mapData.layers.map((l) => ({
         ...l,
@@ -837,7 +1055,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       }
 
       const undoEntry = {
-        type: 'PLACE_STAMP' as const,
+        type: "PLACE_STAMP" as const,
         stampLayers: action.stampLayers,
       };
       const undoStack = [...state.undoStack, undoEntry];
@@ -857,14 +1075,14 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 }
 
 const initialState: EditorState = {
-  projectName: '',
+  projectName: "",
   dirty: false,
   templateId: null,
   projectId: null,
   mapData: null,
   tilesetImages: {},
   activeLayerIndex: 0,
-  tool: 'paint',
+  tool: "paint",
   selectedTileGid: 0,
   selectedRegion: null,
   zoom: 2,
@@ -882,12 +1100,15 @@ const initialState: EditorState = {
 export function useMapEditor() {
   const [state, dispatch] = useReducer(editorReducer, initialState);
 
-  const findTileset = useCallback((gid: number): TilesetImageInfo | null => {
-    for (const fgid of state.sortedGids) {
-      if (gid >= fgid) return state.tilesetImages[fgid] ?? null;
-    }
-    return null;
-  }, [state.sortedGids, state.tilesetImages]);
+  const findTileset = useCallback(
+    (gid: number): TilesetImageInfo | null => {
+      for (const fgid of state.sortedGids) {
+        if (gid >= fgid) return state.tilesetImages[fgid] ?? null;
+      }
+      return null;
+    },
+    [state.sortedGids, state.tilesetImages],
+  );
 
   return { state, dispatch, findTileset };
 }

@@ -16,8 +16,7 @@ test("discoverLocalProfiles", async (t) => {
         { name: "acestep_output", hasToken: true },
       ],
       registeredNames: [],
-      probe: async (_base, profile) =>
-        profile === "sophie" ? "hermes" : "not-hermes",
+      probe: async (_base, profile) => (profile === "sophie" ? "hermes" : "not-hermes"),
     });
     assert.deepEqual(result, [
       {
@@ -45,25 +44,22 @@ test("discoverLocalProfiles", async (t) => {
     assert.equal(result[0].alreadyRegistered, true);
   });
 
-  await t.test(
-    "탐침이 실패해도 목록은 돌려준다 — servedByGateway=false",
-    async () => {
-      const result = await discoverLocalProfiles({
-        baseUrl: BASE,
-        localProfiles: [{ name: "sophie", hasToken: true }],
-        registeredNames: [],
-        probe: async () => "unreachable",
-      });
-      assert.deepEqual(result, [
-        {
-          name: "sophie",
-          hasToken: true,
-          servedByGateway: false,
-          alreadyRegistered: false,
-        },
-      ]);
-    },
-  );
+  await t.test("탐침이 실패해도 목록은 돌려준다 — servedByGateway=false", async () => {
+    const result = await discoverLocalProfiles({
+      baseUrl: BASE,
+      localProfiles: [{ name: "sophie", hasToken: true }],
+      registeredNames: [],
+      probe: async () => "unreachable",
+    });
+    assert.deepEqual(result, [
+      {
+        name: "sophie",
+        hasToken: true,
+        servedByGateway: false,
+        alreadyRegistered: false,
+      },
+    ]);
+  });
 
   await t.test("반환값에 토큰이 절대 실리지 않는다", async () => {
     const result = await discoverLocalProfiles({

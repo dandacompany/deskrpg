@@ -17,8 +17,7 @@ export function validateProfileRegistration(input: {
   profileName?: unknown;
   token?: unknown;
 }): RegistrationValidation {
-  const profileName =
-    typeof input.profileName === "string" ? input.profileName.trim() : "";
+  const profileName = typeof input.profileName === "string" ? input.profileName.trim() : "";
   const token = typeof input.token === "string" ? input.token.trim() : "";
 
   if (!profileName || !isValidProfileName(profileName)) {

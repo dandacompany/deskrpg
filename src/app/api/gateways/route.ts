@@ -9,10 +9,7 @@ import {
 export async function GET(req: NextRequest) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
 
   const gateways = await listAccessibleGatewayResources(userId);
@@ -22,10 +19,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
 
   const body = await req.json().catch(() => null);
@@ -40,8 +34,7 @@ export async function POST(req: NextRequest) {
     ownerUserId: userId,
     baseUrl: body.url,
     token: typeof body.token === "string" ? body.token : "",
-    displayName:
-      typeof body.displayName === "string" ? body.displayName : undefined,
+    displayName: typeof body.displayName === "string" ? body.displayName : undefined,
   });
 
   return NextResponse.json({

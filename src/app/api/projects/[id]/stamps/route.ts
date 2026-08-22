@@ -10,11 +10,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if ("error" in access && !("project" in access)) return access.error;
   const { stampId } = await req.json();
   if (!stampId) {
-    return NextResponse.json({ errorCode: "missing_required_fields", error: "stampId required" }, { status: 400 });
+    return NextResponse.json(
+      { errorCode: "missing_required_fields", error: "stampId required" },
+      { status: 400 },
+    );
   }
 
   // Check if already linked
-  const [existing] = await db.select({ id: projectStamps.id })
+  const [existing] = await db
+    .select({ id: projectStamps.id })
     .from(projectStamps)
     .where(and(eq(projectStamps.projectId, projectId), eq(projectStamps.stampId, stampId)));
 

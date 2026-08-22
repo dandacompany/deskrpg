@@ -2,12 +2,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import type { CharacterAppearance } from "@/lib/lpc-registry";
-import {
-  FRAME_WIDTH,
-  FRAME_HEIGHT,
-  WALK_COLS,
-  compositeCharacter,
-} from "@/lib/sprite-compositor";
+import { FRAME_WIDTH, FRAME_HEIGHT, WALK_COLS, compositeCharacter } from "@/lib/sprite-compositor";
 
 const DIRECTION_MAP: Record<string, number> = { up: 0, left: 1, down: 2, right: 3 };
 

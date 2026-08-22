@@ -46,9 +46,10 @@ export type RegistrationFailure = { name: string; errorCode: string };
  * 수 있어야 한다. errorCode가 없는 실패(응답 모양이 예상과 다른 경우)는
  * "register_failed"로 접어, 화면에 원인 불명 실패가 조용히 사라지지 않게 한다.
  */
-export function partitionRegistrationResults(
-  results: RegistrationResult[],
-): { nextSelected: string[]; failures: RegistrationFailure[] } {
+export function partitionRegistrationResults(results: RegistrationResult[]): {
+  nextSelected: string[];
+  failures: RegistrationFailure[];
+} {
   const nextSelected: string[] = [];
   const failures: RegistrationFailure[] = [];
   for (const r of results) {

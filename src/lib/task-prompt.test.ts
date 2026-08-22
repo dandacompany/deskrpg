@@ -21,7 +21,13 @@ test("withTaskReminder localizes the reminder step and falls back to English", (
 
 test("buildTaskSessionPrompt includes task context", () => {
   const { buildTaskSessionPrompt } = require("./task-prompt.js");
-  const task = { title: "PDF 보고서", npcTaskId: "dev-20260408-a1b2", status: "in_progress", summary: "1분기 분석 중", createdAt: "2026-04-08T10:00:00Z" };
+  const task = {
+    title: "PDF 보고서",
+    npcTaskId: "dev-20260408-a1b2",
+    status: "in_progress",
+    summary: "1분기 분석 중",
+    createdAt: "2026-04-08T10:00:00Z",
+  };
   const result = buildTaskSessionPrompt(task, "ko");
   assert.ok(result.includes("PDF 보고서"));
   assert.ok(result.includes("dev-20260408-a1b2"));
@@ -32,7 +38,13 @@ test("buildTaskSessionPrompt includes task context", () => {
 
 test("buildTaskSessionPrompt works with null summary", () => {
   const { buildTaskSessionPrompt } = require("./task-prompt.js");
-  const task = { title: "테스트", npcTaskId: "t-1", status: "pending", summary: null, createdAt: "2026-04-08T10:00:00Z" };
+  const task = {
+    title: "테스트",
+    npcTaskId: "t-1",
+    status: "pending",
+    summary: null,
+    createdAt: "2026-04-08T10:00:00Z",
+  };
   const result = buildTaskSessionPrompt(task, "en");
   assert.ok(result.includes("테스트"));
   assert.ok(!result.includes("null"));
@@ -40,7 +52,13 @@ test("buildTaskSessionPrompt works with null summary", () => {
 
 test("buildTaskSessionPrompt includes buildTaskCorePrompt content", () => {
   const { buildTaskSessionPrompt, buildTaskCorePrompt } = require("./task-prompt.js");
-  const task = { title: "Test", npcTaskId: "t-1", status: "in_progress", summary: null, createdAt: "2026-04-08T00:00:00Z" };
+  const task = {
+    title: "Test",
+    npcTaskId: "t-1",
+    status: "in_progress",
+    summary: null,
+    createdAt: "2026-04-08T00:00:00Z",
+  };
   const result = buildTaskSessionPrompt(task, "ko");
   // Should contain both task context AND core prompt
   assert.ok(result.includes("[TASK CONTEXT]"));
@@ -49,7 +67,13 @@ test("buildTaskSessionPrompt includes buildTaskCorePrompt content", () => {
 
 test("buildTaskSessionPrompt locale fallback to en", () => {
   const { buildTaskSessionPrompt } = require("./task-prompt.js");
-  const task = { title: "Test", npcTaskId: "t-1", status: "pending", summary: "doing stuff", createdAt: "2026-04-08T00:00:00Z" };
+  const task = {
+    title: "Test",
+    npcTaskId: "t-1",
+    status: "pending",
+    summary: "doing stuff",
+    createdAt: "2026-04-08T00:00:00Z",
+  };
   const resultKo = buildTaskSessionPrompt(task, "ko");
   const resultEn = buildTaskSessionPrompt(task, "en");
   // Both should contain task context

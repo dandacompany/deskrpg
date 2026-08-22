@@ -34,9 +34,11 @@ const ko: Record<string, string> = {
   "auth.title": "DeskRPG",
   "auth.subtitle": "AI 직원과 함께하는 가상 오피스",
   "metadata.title": "DeskRPG — AI 직원과 함께하는 가상 오피스",
-  "metadata.description": "가상 오피스를 만들고, AI 직원을 고용하고, 다른 플레이어와 함께 2D 픽셀 아트 RPG 워크스페이스에서 비즈니스 목표를 달성하세요.",
+  "metadata.description":
+    "가상 오피스를 만들고, AI 직원을 고용하고, 다른 플레이어와 함께 2D 픽셀 아트 RPG 워크스페이스에서 비즈니스 목표를 달성하세요.",
   "metadata.openGraphDescription": "2D 픽셀 아트 RPG — AI 직원과 함께하는 가상 오피스",
-  "metadata.keywords": "DeskRPG, 가상 오피스, AI 직원, 픽셀 아트, RPG, 멀티플레이어, 워크스페이스, 2D 게임",
+  "metadata.keywords":
+    "DeskRPG, 가상 오피스, AI 직원, 픽셀 아트, RPG, 멀티플레이어, 워크스페이스, 2D 게임",
   "auth.login": "로그인",
   "auth.register": "회원가입",
   "auth.loginId": "로그인 ID",
@@ -64,7 +66,8 @@ const ko: Record<string, string> = {
   "channels.invalidInvite": "유효하지 않은 초대 코드입니다",
   "channels.inviteCodePlaceholder": "초대 코드를 입력하세요...",
   "channels.groupInviteTitle": "그룹 참여",
-  "channels.groupInviteSubtitle": "보호된 채널에 참여하기 전에 그룹 초대코드로 멤버십을 획득하세요.",
+  "channels.groupInviteSubtitle":
+    "보호된 채널에 참여하기 전에 그룹 초대코드로 멤버십을 획득하세요.",
   "channels.groupInvitePlaceholder": "그룹 초대코드를 입력하세요...",
   "channels.groupInviteJoin": "그룹 참여",
   "channels.groupInviteAccepted": "{name} 그룹에 참여했습니다.",
@@ -75,7 +78,8 @@ const ko: Record<string, string> = {
   "channels.private": "비공개",
   "channels.group": "그룹",
   "channels.browseOnly": "둘러보기 전용",
-  "channels.browseOnlyHint": "이 공개 채널은 목록에서 둘러볼 수 있지만, 실제 참여하려면 활성 그룹 멤버십이 필요합니다.",
+  "channels.browseOnlyHint":
+    "이 공개 채널은 목록에서 둘러볼 수 있지만, 실제 참여하려면 활성 그룹 멤버십이 필요합니다.",
   "channels.players": "{count}/{max}명 접속중",
   "channels.owner": "{name}",
   "channels.backToCharacters": "← 캐릭터 선택으로",
@@ -117,7 +121,8 @@ const ko: Record<string, string> = {
   "admin.groups.targetLoginId": "사용자 로그인 ID",
   "admin.groups.inviteTargetOptional": "사용자 로그인 ID (선택)",
   "admin.groups.inviteExpirationOptional": "만료일 (선택)",
-  "admin.groups.inviteFormHint": "로그인 ID를 비우면 재사용 가능한 공유 초대코드가 생성됩니다. 만료일을 비우면 만료되지 않습니다.",
+  "admin.groups.inviteFormHint":
+    "로그인 ID를 비우면 재사용 가능한 공유 초대코드가 생성됩니다. 만료일을 비우면 만료되지 않습니다.",
   "admin.groups.inviteShared": "공유 초대",
   "admin.groups.inviteReusable": "재사용 가능",
   "admin.groups.inviteSingleUse": "1회용",
@@ -187,18 +192,22 @@ const ko: Record<string, string> = {
   "gateway.statusCard.status.connected": "연결됨",
   "gateway.statusCard.status.error": "오류",
   "gateway.statusCard.description.idle": "아직 연결 테스트를 실행하지 않았습니다.",
-  "gateway.statusCard.description.connected": "게이트웨이에 연결되어 요청을 받을 준비가 되었습니다.",
-  "gateway.statusCard.description.error": "게이트웨이 연결에 실패했습니다. 주소와 토큰을 확인하세요.",
+  "gateway.statusCard.description.connected":
+    "게이트웨이에 연결되어 요청을 받을 준비가 되었습니다.",
+  "gateway.statusCard.description.error":
+    "게이트웨이 연결에 실패했습니다. 주소와 토큰을 확인하세요.",
   // Default NPC
   "npc.default": "기본 NPC",
   "npc.name": "NPC 이름",
   "npc.namePlaceholder": "AI 어시스턴트",
   "npc.adapterType": "AI 엔진",
-  "npc.cliAdapterNote": "이 NPC는 선택한 CLI 도구를 사용합니다. 도구가 설치되어 있고 제공자가 설정되어 있는지 확인하세요.",
+  "npc.cliAdapterNote":
+    "이 NPC는 선택한 CLI 도구를 사용합니다. 도구가 설치되어 있고 제공자가 설정되어 있는지 확인하세요.",
   "npc.hermesProfile": "Hermes 프로필",
   "npc.hermesProfileInUse": "사용 중",
   "npc.hermesProfileSelect": "프로필 선택",
-  "npc.hermesProfileEmpty": "등록된 프로필이 없습니다. 게이트웨이 관리 페이지에서 프로필을 추가하세요.",
+  "npc.hermesProfileEmpty":
+    "등록된 프로필이 없습니다. 게이트웨이 관리 페이지에서 프로필을 추가하세요.",
   "npc.hermesProfileNoGateway": "이 채널에 연결된 게이트웨이가 없습니다.",
   "npc.hermesRebindFailed": "프로필 연결에 실패했습니다",
   "npc.agent": "에이전트",
@@ -241,7 +250,7 @@ const ko: Record<string, string> = {
   "characters.maxReached": "최대 5개 캐릭터까지 생성 가능합니다",
   "characters.name": "캐릭터 이름",
   "characters.namePlaceholder": "캐릭터 이름을 입력하세요",
-  "characters.deleteConfirm": "\"{name}\" 캐릭터를 삭제하시겠습니까?\n소유한 채널도 함께 삭제됩니다.",
+  "characters.deleteConfirm": '"{name}" 캐릭터를 삭제하시겠습니까?\n소유한 채널도 함께 삭제됩니다.',
   "characters.skin": "피부색",
   "characters.presets": "프리셋",
   "characters.random": "랜덤",
@@ -989,7 +998,8 @@ const ko: Record<string, string> = {
   "characters.item.shield_heater_revised_pattern_per_bend": "개량 히터 문양: 대각 분할",
   "characters.item.shield_heater_revised_pattern_per_bend_sinister": "개량 히터 문양: 역대각 분할",
   "characters.item.shield_heater_revised_pattern_per_chevron": "개량 히터 문양: 셰브론 분할",
-  "characters.item.shield_heater_revised_pattern_per_chevron_inverted": "개량 히터 문양: 역셰브론 분할",
+  "characters.item.shield_heater_revised_pattern_per_chevron_inverted":
+    "개량 히터 문양: 역셰브론 분할",
   "characters.item.shield_heater_revised_pattern_per_fess": "개량 히터 문양: 수평 분할",
   "characters.item.shield_heater_revised_pattern_per_pale": "개량 히터 문양: 수직 분할",
   "characters.item.shield_heater_revised_pattern_per_saltire": "개량 히터 문양: 십자 분할",
@@ -1318,8 +1328,10 @@ const ko: Record<string, string> = {
   "game.socketDisconnected": "실시간 연결이 끊겼습니다: {reason}",
   "game.socketConnectFailed": "실시간 연결에 실패했습니다. 새로고침 후 다시 시도하세요.",
   "game.npcGreeting": "{name} 님이 인사했습니다!",
-  "game.npcChatDisconnected": "실시간 연결이 끊겨 NPC 메시지를 보낼 수 없습니다. 새로고침 후 다시 시도하세요.",
-  "game.channelChatDisconnected": "실시간 연결이 끊겨 채팅을 보낼 수 없습니다. 새로고침 후 다시 시도하세요.",
+  "game.npcChatDisconnected":
+    "실시간 연결이 끊겨 NPC 메시지를 보낼 수 없습니다. 새로고침 후 다시 시도하세요.",
+  "game.channelChatDisconnected":
+    "실시간 연결이 끊겨 채팅을 보낼 수 없습니다. 새로고침 후 다시 시도하세요.",
   "game.spawnSetSuccess": "스폰 위치가 설정되었습니다 ({col}, {row})",
 
   // Chat
@@ -1478,8 +1490,10 @@ const ko: Record<string, string> = {
   "meeting.systemSender": "시스템",
   "meeting.endedTranscriptPrefix": "[회의 종료]",
   "meeting.errorPrefix": "[오류]",
-  "meeting.mentionSkipped.quotaExhausted": "{name}님이 지목받았지만 발언 할당량을 다 써서 말하지 않았습니다.",
-  "meeting.mentionSkipped.backendFailing": "{name}님이 지목받았지만 AI 백엔드가 응답하지 않아 말하지 않았습니다.",
+  "meeting.mentionSkipped.quotaExhausted":
+    "{name}님이 지목받았지만 발언 할당량을 다 써서 말하지 않았습니다.",
+  "meeting.mentionSkipped.backendFailing":
+    "{name}님이 지목받았지만 AI 백엔드가 응답하지 않아 말하지 않았습니다.",
 
   // Minutes
   "minutes.title": "회의록 보관함",
@@ -1490,7 +1504,7 @@ const ko: Record<string, string> = {
   "minutes.participantsSuffix": "명",
   "minutes.notAvailable": "없음",
   "minutes.exportTitle": "회의록: {topic}",
-  "minutes.deleteConfirm": "\"{topic}\" 회의록을 삭제하시겠습니까?",
+  "minutes.deleteConfirm": '"{topic}" 회의록을 삭제하시겠습니까?',
   "minutes.deleteFailed": "회의록 삭제에 실패했습니다",
 
   // Channel settings
@@ -1530,13 +1544,18 @@ const ko: Record<string, string> = {
   "settings.gatewayUseCustom": "직접 입력",
   "settings.gatewaySaved": "사용할 게이트웨이",
   "settings.gatewaySelect": "게이트웨이를 선택하세요",
-  "settings.gatewayNoSaved": "접근 가능한 저장된 게이트웨이가 없습니다. 직접 입력으로 연결할 수 있습니다.",
-  "settings.gatewaySharedReadOnly": "이 채널은 공유된 게이트웨이를 사용 중입니다. 자격증명은 소유자만 수정할 수 있습니다.",
-  "settings.gatewayChangeResetWarning": "게이트웨이를 변경하면 이 채널의 기존 NPC와 관련 태스크/회의 문맥이 모두 제거됩니다. 계속하시겠습니까?",
-  "settings.gatewayDisconnectResetWarning": "게이트웨이 연결을 삭제하면 이 채널의 기존 NPC와 관련 태스크/회의 문맥이 모두 제거됩니다. 계속하시겠습니까?",
+  "settings.gatewayNoSaved":
+    "접근 가능한 저장된 게이트웨이가 없습니다. 직접 입력으로 연결할 수 있습니다.",
+  "settings.gatewaySharedReadOnly":
+    "이 채널은 공유된 게이트웨이를 사용 중입니다. 자격증명은 소유자만 수정할 수 있습니다.",
+  "settings.gatewayChangeResetWarning":
+    "게이트웨이를 변경하면 이 채널의 기존 NPC와 관련 태스크/회의 문맥이 모두 제거됩니다. 계속하시겠습니까?",
+  "settings.gatewayDisconnectResetWarning":
+    "게이트웨이 연결을 삭제하면 이 채널의 기존 NPC와 관련 태스크/회의 문맥이 모두 제거됩니다. 계속하시겠습니까?",
   "gateways.nav": "내 게이트웨이",
   "gateways.title": "내 게이트웨이",
-  "gateways.subtitle": "Hermes 게이트웨이를 등록하고, 테스트하고, 다른 사용자에게 공유할 수 있습니다.",
+  "gateways.subtitle":
+    "Hermes 게이트웨이를 등록하고, 테스트하고, 다른 사용자에게 공유할 수 있습니다.",
   "gateways.backToChannels": "채널 목록으로",
   "gateways.listTitle": "게이트웨이 목록",
   "gateways.new": "새 게이트웨이",
@@ -1549,7 +1568,8 @@ const ko: Record<string, string> = {
   "gateways.statusUntested": "아직 테스트하지 않음",
   "gateways.createTitle": "게이트웨이 등록",
   "gateways.editTitle": "게이트웨이 수정",
-  "gateways.createHelp": "나만의 Hermes 게이트웨이를 등록합니다. 등록한 뒤 사용할 프로필을 추가하세요.",
+  "gateways.createHelp":
+    "나만의 Hermes 게이트웨이를 등록합니다. 등록한 뒤 사용할 프로필을 추가하세요.",
   "gateways.editHelp": "게이트웨이 정보를 수정하거나 연결 상태를 다시 확인합니다.",
   "gateways.displayName": "표시 이름",
   "gateways.rotateToken": "토큰",
@@ -1557,7 +1577,8 @@ const ko: Record<string, string> = {
   "gateways.testSuccess": "게이트웨이 연결이 확인되었습니다.",
   "gateways.saved": "게이트웨이를 저장했습니다.",
   "gateways.deleted": "게이트웨이를 삭제했습니다.",
-  "gateways.deleteConfirm": "이 게이트웨이를 삭제하시겠습니까? 채널에 연결된 게이트웨이는 삭제할 수 없습니다.",
+  "gateways.deleteConfirm":
+    "이 게이트웨이를 삭제하시겠습니까? 채널에 연결된 게이트웨이는 삭제할 수 없습니다.",
   "gateways.shareTitle": "공유 관리",
   "gateways.shareHelp": "다른 사용자의 로그인 ID를 입력해 이 게이트웨이 사용 권한을 공유합니다.",
   "gateways.selectGatewayFirst": "먼저 게이트웨이를 선택하세요.",
@@ -1566,7 +1587,8 @@ const ko: Record<string, string> = {
   "gateways.shareAdd": "공유 추가",
   "gateways.shareEmpty": "공유된 사용자가 없습니다.",
   "providers.title": "AI 제공자",
-  "providers.subtitle": "Anthropic, OpenAI, Google, OpenClaw용 제공자 자격 증명을 등록하고 관리합니다.",
+  "providers.subtitle":
+    "Anthropic, OpenAI, Google, OpenClaw용 제공자 자격 증명을 등록하고 관리합니다.",
   "providers.addNew": "제공자 추가",
   "providers.type": "제공자 유형",
   "providers.authMethod": "인증 방식",
@@ -1590,7 +1612,8 @@ const ko: Record<string, string> = {
   "providers.credentialsMissing": "이 제공자에 저장된 API 키가 없습니다.",
   "providers.credentialsVerified": "저장된 자격 증명을 확인했습니다.",
   "providers.apiKeyRequired": "API 키가 필요합니다.",
-  "providers.formHelp": "제공자 유형을 선택하고 자격 증명을 저장한 뒤 구성된 접근 방식을 확인하세요.",
+  "providers.formHelp":
+    "제공자 유형을 선택하고 자격 증명을 저장한 뒤 구성된 접근 방식을 확인하세요.",
   "providers.apiKeyHint": "기존 키를 유지하려면 API 키를 비워 두세요.",
   "providers.adapterStatus": "어댑터 상태",
   "providers.adapterStatusHelp": "이 DeskRPG 호스트에서 사용 가능한 CLI 도구 상태입니다.",
@@ -1599,7 +1622,8 @@ const ko: Record<string, string> = {
   "providers.ready": "준비됨",
   "settings.disconnectGateway": "연결 삭제",
   "settings.taskAutomation": "태스크 자동화",
-  "settings.autoProgressNudgeHelp": "태스크가 진행 중일 때 일정 시간이 지나면 NPC에게 진행 상황 보고를 재촉합니다.",
+  "settings.autoProgressNudgeHelp":
+    "태스크가 진행 중일 때 일정 시간이 지나면 NPC에게 진행 상황 보고를 재촉합니다.",
   "settings.progressNudgeMinutes": "진행 보고 간격 (분)",
   "settings.autoProgressNudgeMax": "최대 자동 재촉 횟수",
   "settings.reportWaitSeconds": "보고 대기 시간 (초)",
@@ -1608,11 +1632,11 @@ const ko: Record<string, string> = {
   "task.requestReportQueued": "보고 요청을 보냈습니다.",
   "task.markComplete": "완료 처리",
   "task.completeQueued": "태스크를 완료 처리했습니다.",
-  "task.completeToast": "\"{title}\" 태스크를 완료 처리했습니다.",
+  "task.completeToast": '"{title}" 태스크를 완료 처리했습니다.',
   "task.resume": "재개하기",
   "task.resumeQueued": "태스크를 재개했습니다.",
-  "task.resumeToast": "\"{title}\" 태스크를 다시 진행중으로 전환했습니다.",
-  "task.stalledToast": "\"{title}\" 태스크 자동 재촉이 중단되었습니다.",
+  "task.resumeToast": '"{title}" 태스크를 다시 진행중으로 전환했습니다.',
+  "task.stalledToast": '"{title}" 태스크 자동 재촉이 중단되었습니다.',
   "task.autoNudgeCount": "재촉 {count}/{max}",
   "task.stalledCount": "중단 {count}/{max}",
   "task.backlog": "백로그",
@@ -1620,9 +1644,9 @@ const ko: Record<string, string> = {
   "task.assign": "할당",
   "task.assignToNpc": "NPC에 할당",
   "task.selectNpc": "NPC 선택",
-  "task.selectNpcDescription": "\"{title}\" 태스크를 실행할 NPC를 선택하세요",
+  "task.selectNpcDescription": '"{title}" 태스크를 실행할 NPC를 선택하세요',
   "task.unassigned": "미할당",
-  "task.autoStarted": "{npcName}이(가) \"{title}\" 태스크를 시작했습니다",
+  "task.autoStarted": '{npcName}이(가) "{title}" 태스크를 시작했습니다',
   "task.addToNpc": "이 NPC에 태스크 추가",
   "task.npcWorkload": "진행 중 {inProgress} · 대기 {pending}",
   "task.npcActive": "활성",
@@ -1780,7 +1804,8 @@ const ko: Record<string, string> = {
   "mapEditor.stamps.moveTo": "이동…",
   "mapEditor.stamps.saveAsStamp": "스탬프로 저장",
   "mapEditor.stamps.saveTitle": "스탬프로 저장",
-  "mapEditor.stamps.saveDescription": "선택한 영역의 모든 레이어를 재사용 가능한 스탬프로 저장합니다.",
+  "mapEditor.stamps.saveDescription":
+    "선택한 영역의 모든 레이어를 재사용 가능한 스탬프로 저장합니다.",
   "mapEditor.stamps.stampName": "스탬프 이름",
   "mapEditor.stamps.stampNamePlaceholder": "예: 의자 (정면), 책상 세트...",
   "mapEditor.stamps.saving": "저장 중...",
@@ -1845,7 +1870,8 @@ const ko: Record<string, string> = {
   "mapEditor.pixel.saveAsNew": "새 타일셋으로 저장",
   "mapEditor.pixel.overwrite": "원본 덮어쓰기",
   "mapEditor.pixel.applyToMap": "맵 적용",
-  "mapEditor.pixel.overwriteDisabled": "덮어쓸 수 없음: 그리드 크기가 변경되었습니다. \"새 타일셋으로 저장\"을 사용하세요.",
+  "mapEditor.pixel.overwriteDisabled":
+    '덮어쓸 수 없음: 그리드 크기가 변경되었습니다. "새 타일셋으로 저장"을 사용하세요.',
   "mapEditor.pixel.keyboardShortcuts": "키보드 단축키",
   "mapEditor.pixel.shortcutPen": "펜 도구",
   "mapEditor.pixel.shortcutEraser": "지우개 도구",
@@ -1924,16 +1950,18 @@ const ko: Record<string, string> = {
   "npc.selectAgent": "-- 에이전트 선택 --",
   "npc.agentInUse": "{name} (사용 중: {npcName})",
   "npc.agentAvailable": "{name} (사용 가능)",
-  "npc.limitReached": "NPC 한도에 도달했습니다 ({count}/{max}). 새 NPC를 고용하려면 기존 NPC를 제거하세요.",
+  "npc.limitReached":
+    "NPC 한도에 도달했습니다 ({count}/{max}). 새 NPC를 고용하려면 기존 NPC를 제거하세요.",
   "meeting.npcLabel": "NPC:",
   "game.spawnSetMode": "스폰 위치를 설정할 타일을 클릭하세요",
   "game.fireNpcConfirm": "이 NPC를 해고할까요?",
   "mapEditor.layers.characterNpcDivider": "캐릭터 / NPC",
   "mapEditor.layers.layerNamePrompt": "레이어 이름:",
-  "mapEditor.layers.cannotDeleteCoreLayer": "\"{name}\" 코어 레이어는 삭제할 수 없습니다.",
-  "mapEditor.layers.deleteLayerConfirm": "\"{name}\" 레이어를 삭제할까요?",
-  "mapEditor.tilesets.deleteInUseConfirm": "\"{name}\" 타일셋이 맵에서 사용 중입니다. 그래도 삭제할까요?",
-  "mapEditor.tilesets.deleteConfirm": "\"{name}\" 타일셋을 삭제할까요?",
+  "mapEditor.layers.cannotDeleteCoreLayer": '"{name}" 코어 레이어는 삭제할 수 없습니다.',
+  "mapEditor.layers.deleteLayerConfirm": '"{name}" 레이어를 삭제할까요?',
+  "mapEditor.tilesets.deleteInUseConfirm":
+    '"{name}" 타일셋이 맵에서 사용 중입니다. 그래도 삭제할까요?',
+  "mapEditor.tilesets.deleteConfirm": '"{name}" 타일셋을 삭제할까요?',
   "mapEditor.tilesets.removeUnusedConfirm": "사용하지 않는 타일셋 {count}개를 제거할까요?\n{names}",
   "mapEditor.pixel.tolerance": "허용 오차",
   "mapEditor.pixel.magicEraser": "매직 지우개",
@@ -1942,7 +1970,7 @@ const ko: Record<string, string> = {
   "mapEditor.project.templateDescriptionPrompt": "설명 (선택사항):",
   "mapEditor.project.templateSaved": "템플릿으로 저장되었습니다.",
   "mapEditor.project.templateSaveFailed": "템플릿 저장에 실패했습니다.",
-  "mapEditor.template.deleteConfirm": "\"{name}\" 템플릿을 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
+  "mapEditor.template.deleteConfirm": '"{name}" 템플릿을 삭제할까요? 이 작업은 되돌릴 수 없습니다.',
   "mapEditor.template.openInEditor": "맵 에디터에서 보기",
   "mapEditor.template.addMap": "맵 추가",
   "mapEditor.template.downloadTmj": ".tmj 다운로드",
@@ -1957,7 +1985,8 @@ const ko: Record<string, string> = {
   "errors.nicknameTaken": "이미 사용 중인 표시 이름입니다",
   "errors.gatewayUrlRequired": "게이트웨이 URL이 필요합니다",
   "errors.invalidGatewayUrl": "게이트웨이 URL 형식이 올바르지 않습니다",
-  "errors.gatewayConfigValidated": "게이트웨이 설정이 확인되었습니다. 채널 생성 시 연결이 설정됩니다.",
+  "errors.gatewayConfigValidated":
+    "게이트웨이 설정이 확인되었습니다. 채널 생성 시 연결이 설정됩니다.",
   "errors.channelNameRequired": "채널 이름이 필요합니다 (1-100자)",
   "errors.mapTemplateRequired": "맵 템플릿이 필요합니다",
   "errors.mapTemplateNotFound": "맵 템플릿을 찾을 수 없습니다",
@@ -2074,7 +2103,7 @@ const ko: Record<string, string> = {
   "errors.invalidProfileId": "프로필 ID가 필요합니다",
   "errors.profileNotFound": "프로필을 찾을 수 없습니다",
   "errors.gatewayNotFound": "게이트웨이를 찾을 수 없습니다",
-  "errors.templateDeleteConfirm": "\"{name}\"을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
+  "errors.templateDeleteConfirm": '"{name}"을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.',
   "task.chatPlaceholder": "태스크에 대해 추가 지시를 보내보세요.",
   "task.register": "등록",
   "task.registered": "등록됨",

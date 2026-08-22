@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { useCallback } from 'react';
-import { getLocalizedErrorMessage } from '@/lib/i18n/error-codes';
-import type { TiledMap, TiledTileset } from './useMapEditor';
-import type { TilesetImageInfo } from './useMapEditor';
-import { createDefaultMap } from './useMapEditor';
-import { getProjectMapDataForLoad } from '../project-load';
+import { useCallback } from "react";
+import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
+import type { TiledMap, TiledTileset } from "./useMapEditor";
+import type { TilesetImageInfo } from "./useMapEditor";
+import { createDefaultMap } from "./useMapEditor";
+import { getProjectMapDataForLoad } from "../project-load";
 
 // === Types ===
 
@@ -52,7 +52,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
       const data = await res.json().catch(() => null);
       return getLocalizedErrorMessage(t, data, fallbackKey);
     },
-    [t]
+    [t],
   );
 
   /**
@@ -63,7 +63,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
     async (projectId: string): Promise<ProjectData> => {
       const res = await fetch(`/api/projects/${projectId}`);
       if (!res.ok) {
-        throw new Error(await getResponseErrorMessage(res, 'errors.failedToFetchProject'));
+        throw new Error(await getResponseErrorMessage(res, "errors.failedToFetchProject"));
       }
       const data: ProjectData = await res.json();
 
@@ -73,7 +73,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
       const mapData = getProjectMapDataForLoad(project.tiledJson, tilesets) as TiledMap;
 
       dispatch({
-        type: 'SET_MAP',
+        type: "SET_MAP",
         mapData,
         projectName: project.name,
         projectId: project.id,
@@ -86,7 +86,7 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
         img.src = ts.image;
         await new Promise<void>((resolve, reject) => {
           img.onload = () => resolve();
-          img.onerror = () => reject(new Error(t('errors.failedToFetchProject')));
+          img.onerror = () => reject(new Error(t("errors.failedToFetchProject")));
         });
 
         const tileset: TiledTileset = {
@@ -111,12 +111,12 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
           name: ts.name,
         };
 
-        dispatch({ type: 'ADD_TILESET', tileset, imageInfo });
+        dispatch({ type: "ADD_TILESET", tileset, imageInfo });
       }
 
       return data;
     },
-    [dispatch, getResponseErrorMessage, t]
+    [dispatch, getResponseErrorMessage, t],
   );
 
   /**
@@ -128,25 +128,25 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
       mapData: TiledMap,
       thumbnail: string | null,
       settings?: Record<string, unknown>,
-      name?: string
+      name?: string,
     ): Promise<void> => {
       const body: Record<string, unknown> = { tiledJson: mapData, thumbnail };
       if (settings !== undefined) body.settings = settings;
       if (name !== undefined) body.name = name;
 
       const res = await fetch(`/api/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
       if (!res.ok) {
-        throw new Error(await getResponseErrorMessage(res, 'errors.failedToSaveProject'));
+        throw new Error(await getResponseErrorMessage(res, "errors.failedToSaveProject"));
       }
 
-      dispatch({ type: 'MARK_CLEAN' });
+      dispatch({ type: "MARK_CLEAN" });
     },
-    [dispatch, getResponseErrorMessage]
+    [dispatch, getResponseErrorMessage],
   );
 
   /**
@@ -158,25 +158,25 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
       cols: number,
       rows: number,
       tileWidth: number,
-      tileHeight: number
+      tileHeight: number,
     ): Promise<{ id: string; createdBy: string | null }> => {
       void tileHeight;
       const mapData = createDefaultMap(name, cols, rows, tileWidth);
 
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, tiledJson: mapData, settings: {} }),
       });
 
       if (!res.ok) {
-        throw new Error(await getResponseErrorMessage(res, 'errors.failedToCreateProject'));
+        throw new Error(await getResponseErrorMessage(res, "errors.failedToCreateProject"));
       }
 
       const created = await res.json();
 
       dispatch({
-        type: 'SET_MAP',
+        type: "SET_MAP",
         mapData,
         projectName: created.name,
         projectId: created.id,
@@ -185,9 +185,12 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
 
       addBuiltinTileset(mapData);
 
-      return { id: created.id as string, createdBy: (created.createdBy ?? created.created_by ?? null) as string | null };
+      return {
+        id: created.id as string,
+        createdBy: (created.createdBy ?? created.created_by ?? null) as string | null,
+      };
     },
-    [dispatch, addBuiltinTileset, getResponseErrorMessage]
+    [dispatch, addBuiltinTileset, getResponseErrorMessage],
   );
 
   /**
@@ -196,16 +199,16 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
   const linkTileset = useCallback(
     async (projectId: string, tilesetId: string, firstgid: number): Promise<void> => {
       const res = await fetch(`/api/projects/${projectId}/tilesets`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tilesetId, firstgid }),
       });
 
       if (!res.ok) {
-        throw new Error(await getResponseErrorMessage(res, 'errors.failedToLinkTileset'));
+        throw new Error(await getResponseErrorMessage(res, "errors.failedToLinkTileset"));
       }
     },
-    [getResponseErrorMessage]
+    [getResponseErrorMessage],
   );
 
   /**
@@ -214,14 +217,14 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
   const unlinkTileset = useCallback(
     async (projectId: string, tilesetId: string): Promise<void> => {
       const res = await fetch(`/api/projects/${projectId}/tilesets/${tilesetId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
       if (!res.ok) {
-        throw new Error(await getResponseErrorMessage(res, 'errors.failedToUnlinkTileset'));
+        throw new Error(await getResponseErrorMessage(res, "errors.failedToUnlinkTileset"));
       }
     },
-    [getResponseErrorMessage]
+    [getResponseErrorMessage],
   );
 
   /**
@@ -230,16 +233,16 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
   const linkStamp = useCallback(
     async (projectId: string, stampId: string): Promise<void> => {
       const res = await fetch(`/api/projects/${projectId}/stamps`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stampId }),
       });
 
       if (!res.ok) {
-        throw new Error(await getResponseErrorMessage(res, 'errors.failedToLinkStamp'));
+        throw new Error(await getResponseErrorMessage(res, "errors.failedToLinkStamp"));
       }
     },
-    [getResponseErrorMessage]
+    [getResponseErrorMessage],
   );
 
   /**
@@ -248,14 +251,14 @@ export function useProjectManager({ dispatch, addBuiltinTileset, t }: UseProject
   const unlinkStamp = useCallback(
     async (projectId: string, stampId: string): Promise<void> => {
       const res = await fetch(`/api/projects/${projectId}/stamps/${stampId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
       if (!res.ok) {
-        throw new Error(await getResponseErrorMessage(res, 'errors.failedToUnlinkStamp'));
+        throw new Error(await getResponseErrorMessage(res, "errors.failedToUnlinkStamp"));
       }
     },
-    [getResponseErrorMessage]
+    [getResponseErrorMessage],
   );
 
   return {

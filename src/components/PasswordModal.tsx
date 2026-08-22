@@ -19,7 +19,9 @@ export default function PasswordModal({ channelName, onSubmit, onClose }: Passwo
   const [isComposing, setIsComposing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   const handleSubmit = async () => {
     if (!password.trim() || submitting) return;
@@ -54,7 +56,9 @@ export default function PasswordModal({ channelName, onSubmit, onClose }: Passwo
         />
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onClose}>{t("common.cancel")}</Button>
+        <Button variant="secondary" onClick={onClose}>
+          {t("common.cancel")}
+        </Button>
         <Button
           variant="primary"
           onClick={handleSubmit}

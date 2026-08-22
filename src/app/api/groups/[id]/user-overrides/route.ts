@@ -27,10 +27,7 @@ async function requirePermissionManager(groupId: string, userId: string) {
   return { context };
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 
@@ -57,10 +54,7 @@ export async function GET(
   return NextResponse.json({ overrides: rows });
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 
@@ -77,7 +71,10 @@ export async function PUT(
     !PERMISSION_KEYS.includes(permissionKey as (typeof PERMISSION_KEYS)[number])
   ) {
     return NextResponse.json(
-      { errorCode: "missing_required_fields", error: "targetUserId and valid permissionKey are required" },
+      {
+        errorCode: "missing_required_fields",
+        error: "targetUserId and valid permissionKey are required",
+      },
       { status: 400 },
     );
   }
@@ -106,12 +103,7 @@ export async function PUT(
     })
     .from(groupMembers)
     .innerJoin(users, eq(groupMembers.userId, users.id))
-    .where(
-      and(
-        eq(groupMembers.groupId, groupId),
-        eq(groupMembers.userId, targetUserId),
-      ),
-    )
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, targetUserId)))
     .limit(1);
 
   if (!member) {

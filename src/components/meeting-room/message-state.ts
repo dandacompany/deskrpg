@@ -7,10 +7,7 @@ export type MeetingMessageLike = {
   timestamp: number;
 };
 
-function ensureUniqueMessageId(
-  existingMessages: MeetingMessageLike[],
-  candidateId: string,
-) {
+function ensureUniqueMessageId(existingMessages: MeetingMessageLike[], candidateId: string) {
   const existingIds = new Set(existingMessages.map((message) => message.id));
   if (!existingIds.has(candidateId)) {
     return candidateId;

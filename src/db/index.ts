@@ -6,13 +6,17 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { getDeskRpgSqlitePath } from "../lib/runtime-paths";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { retireOpenclawConfig } = require("./sqlite-openclaw-retirement.js") as {
-  retireOpenclawConfig: (sqlite: BetterSqlite3.Database) => { migrated: number; removed: number } | null;
+  retireOpenclawConfig: (
+    sqlite: BetterSqlite3.Database,
+  ) => { migrated: number; removed: number } | null;
 };
 const { ensureSqliteBaseSchema } = require("./sqlite-base-schema.js") as {
   ensureSqliteBaseSchema: (sqlite: BetterSqlite3.Database) => void;
 };
 
-const DB_TYPE = (process.env.DB_TYPE || (process.env.DATABASE_URL ? "postgresql" : "sqlite")).toLowerCase();
+const DB_TYPE = (
+  process.env.DB_TYPE || (process.env.DATABASE_URL ? "postgresql" : "sqlite")
+).toLowerCase();
 export const isPostgres = DB_TYPE === "postgresql" || DB_TYPE === "postgres";
 
 export function getDefaultSqlitePath() {
@@ -86,14 +90,24 @@ function sqliteTableExists(sqlite: BetterSqlite3.Database, tableName: string): b
   return Boolean(row);
 }
 
-function sqliteColumnExists(sqlite: BetterSqlite3.Database, tableName: string, columnName: string): boolean {
+function sqliteColumnExists(
+  sqlite: BetterSqlite3.Database,
+  tableName: string,
+  columnName: string,
+): boolean {
   if (!sqliteTableExists(sqlite, tableName)) return false;
 
-  const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+    name: string;
+  }>;
   return columns.some((column) => column.name === columnName);
 }
 
-function applySqliteAlterStatements(sqlite: BetterSqlite3.Database, tableName: string, statements: string[]) {
+function applySqliteAlterStatements(
+  sqlite: BetterSqlite3.Database,
+  tableName: string,
+  statements: string[],
+) {
   if (!sqliteTableExists(sqlite, tableName)) return;
 
   for (const statement of statements) {
@@ -117,24 +131,28 @@ function ensureSqliteBootstrapUser(sqlite: BetterSqlite3.Database): string | nul
   }
 
   const orderBy = getSqliteUserOrderBy(sqlite);
-  const existingAdmin = sqlite.prepare(
-    `SELECT id FROM users WHERE system_role = 'system_admin' ORDER BY ${orderBy} LIMIT 1`,
-  ).get() as { id: string } | undefined;
+  const existingAdmin = sqlite
+    .prepare(`SELECT id FROM users WHERE system_role = 'system_admin' ORDER BY ${orderBy} LIMIT 1`)
+    .get() as { id: string } | undefined;
   if (existingAdmin) return existingAdmin.id;
 
-  const earliestUser = sqlite.prepare(`SELECT id FROM users ORDER BY ${orderBy} LIMIT 1`).get() as { id: string } | undefined;
+  const earliestUser = sqlite.prepare(`SELECT id FROM users ORDER BY ${orderBy} LIMIT 1`).get() as
+    { id: string } | undefined;
   if (!earliestUser) return null;
 
   sqlite.prepare("UPDATE users SET system_role = 'system_admin' WHERE id = ?").run(earliestUser.id);
   return earliestUser.id;
 }
 
-function ensureSqliteDefaultGroup(sqlite: BetterSqlite3.Database, createdBy: string | null): string | null {
+function ensureSqliteDefaultGroup(
+  sqlite: BetterSqlite3.Database,
+  createdBy: string | null,
+): string | null {
   if (!sqliteTableExists(sqlite, "groups") || !sqliteTableExists(sqlite, "users")) return null;
 
-  const existingGroup = sqlite.prepare(
-    "SELECT id FROM groups WHERE slug = 'default' ORDER BY rowid ASC LIMIT 1",
-  ).get() as { id: string } | undefined;
+  const existingGroup = sqlite
+    .prepare("SELECT id FROM groups WHERE slug = 'default' ORDER BY rowid ASC LIMIT 1")
+    .get() as { id: string } | undefined;
   if (existingGroup) {
     sqlite.prepare("UPDATE groups SET is_default = 1 WHERE id = ?").run(existingGroup.id);
     return existingGroup.id;
@@ -142,14 +160,18 @@ function ensureSqliteDefaultGroup(sqlite: BetterSqlite3.Database, createdBy: str
 
   const now = new Date().toISOString();
   const groupId = randomUUID();
-  sqlite.prepare(`
+  sqlite
+    .prepare(
+      `
     INSERT OR IGNORE INTO groups (id, name, slug, description, is_default, created_by, created_at, updated_at)
     VALUES (?, 'Default', 'default', 'Default workspace', 1, ?, ?, ?)
-  `).run(groupId, createdBy, now, now);
+  `,
+    )
+    .run(groupId, createdBy, now, now);
 
-  const defaultGroup = sqlite.prepare(
-    "SELECT id FROM groups WHERE slug = 'default' ORDER BY rowid ASC LIMIT 1",
-  ).get() as { id: string } | undefined;
+  const defaultGroup = sqlite
+    .prepare("SELECT id FROM groups WHERE slug = 'default' ORDER BY rowid ASC LIMIT 1")
+    .get() as { id: string } | undefined;
   return defaultGroup?.id ?? null;
 }
 
@@ -161,21 +183,36 @@ function ensureSqliteBootstrapGroupAdminMembership(
   if (!groupId || !userId || !sqliteTableExists(sqlite, "group_members")) return;
 
   const now = new Date().toISOString();
-  sqlite.prepare(`
+  sqlite
+    .prepare(
+      `
     INSERT OR IGNORE INTO group_members (id, group_id, user_id, role, approved_by, approved_at, joined_at)
     VALUES (?, ?, ?, 'group_admin', ?, ?, ?)
-  `).run(randomUUID(), groupId, userId, userId, now, now);
-  sqlite.prepare(`
+  `,
+    )
+    .run(randomUUID(), groupId, userId, userId, now, now);
+  sqlite
+    .prepare(
+      `
     UPDATE group_members
     SET role = 'group_admin',
         approved_by = COALESCE(approved_by, ?),
         approved_at = COALESCE(approved_at, ?)
     WHERE group_id = ? AND user_id = ?
-  `).run(userId, now, groupId, userId);
+  `,
+    )
+    .run(userId, now, groupId, userId);
 }
 
-function assignLegacyChannelsToDefaultGroup(sqlite: BetterSqlite3.Database, groupId: string | null) {
-  if (!groupId || !sqliteTableExists(sqlite, "channels") || !sqliteColumnExists(sqlite, "channels", "group_id")) {
+function assignLegacyChannelsToDefaultGroup(
+  sqlite: BetterSqlite3.Database,
+  groupId: string | null,
+) {
+  if (
+    !groupId ||
+    !sqliteTableExists(sqlite, "channels") ||
+    !sqliteColumnExists(sqlite, "channels", "group_id")
+  ) {
     return;
   }
 
@@ -191,7 +228,9 @@ function dedupeSqliteGroupJoinRequests(sqlite: BetterSqlite3.Database) {
     return;
   }
 
-  const rows = sqlite.prepare(`
+  const rows = sqlite
+    .prepare(
+      `
     SELECT rowid, group_id, user_id, status, created_at
     FROM group_join_requests
     ORDER BY
@@ -204,7 +243,9 @@ function dedupeSqliteGroupJoinRequests(sqlite: BetterSqlite3.Database) {
       END ASC,
       created_at DESC,
       rowid DESC
-  `).all() as Array<{ rowid: number; group_id: string; user_id: string }>;
+  `,
+    )
+    .all() as Array<{ rowid: number; group_id: string; user_id: string }>;
 
   const seen = new Set<string>();
   const deleteStmt = sqlite.prepare("DELETE FROM group_join_requests WHERE rowid = ?");
@@ -416,7 +457,9 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
   ]);
 
   dedupeSqliteGroupJoinRequests(sqlite);
-  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS group_join_requests_group_user_unique ON group_join_requests(group_id, user_id)");
+  sqlite.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS group_join_requests_group_user_unique ON group_join_requests(group_id, user_id)",
+  );
 
   sqlite.transaction(() => {
     const bootstrapUserId = ensureSqliteBootstrapUser(sqlite);
@@ -433,7 +476,8 @@ export function getDb(): DbInstance {
   if (!_db) {
     if (isPostgres) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { drizzle } = require("drizzle-orm/node-postgres") as typeof import("drizzle-orm/node-postgres");
+      const { drizzle } =
+        require("drizzle-orm/node-postgres") as typeof import("drizzle-orm/node-postgres");
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { Pool } = require("pg") as typeof import("pg");
       const databaseUrl = process.env.DATABASE_URL;
@@ -442,7 +486,8 @@ export function getDb(): DbInstance {
       _db = drizzle(pool, { schema: pgSchema });
     } else {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { drizzle } = require("drizzle-orm/better-sqlite3") as typeof import("drizzle-orm/better-sqlite3");
+      const { drizzle } =
+        require("drizzle-orm/better-sqlite3") as typeof import("drizzle-orm/better-sqlite3");
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const Database = require("better-sqlite3") as typeof import("better-sqlite3");
       // eslint-disable-next-line @typescript-eslint/no-require-imports

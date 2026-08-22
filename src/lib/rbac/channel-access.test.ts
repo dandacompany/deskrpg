@@ -200,10 +200,7 @@ test("socket denial reasons map to stable localized error codes", () => {
     getChannelAccessDeniedErrorCode("group_membership_required"),
     "group_membership_required",
   );
-  assert.equal(
-    getChannelAccessDeniedErrorCode("password_required"),
-    "password_required",
-  );
+  assert.equal(getChannelAccessDeniedErrorCode("password_required"), "password_required");
   assert.equal(
     getChannelAccessDeniedErrorCode("legacy_private_password_required"),
     "password_required",

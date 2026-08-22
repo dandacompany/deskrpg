@@ -1,11 +1,24 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { Button } from '@/components/ui';
-import { Undo2, Redo2, HelpCircle, ChevronDown, Paintbrush, Eraser, MousePointer2, Move, Home, Globe, Save, ArrowLeft } from 'lucide-react';
-import Tooltip from './Tooltip';
-import type { Tool } from './hooks/useMapEditor';
-import { useT, useLocale, LOCALES } from '@/lib/i18n';
+import { useState, useRef, useEffect } from "react";
+import { Button } from "@/components/ui";
+import {
+  Undo2,
+  Redo2,
+  HelpCircle,
+  ChevronDown,
+  Paintbrush,
+  Eraser,
+  MousePointer2,
+  Move,
+  Home,
+  Globe,
+  Save,
+  ArrowLeft,
+} from "lucide-react";
+import Tooltip from "./Tooltip";
+import type { Tool } from "./hooks/useMapEditor";
+import { useT, useLocale, LOCALES } from "@/lib/i18n";
 
 export interface ToolbarProps {
   activeTool: Tool;
@@ -46,13 +59,7 @@ function ToolGroup({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Dropdown({
-  label,
-  children,
-}: {
-  label: React.ReactNode;
-  children: React.ReactNode;
-}) {
+function Dropdown({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -62,11 +69,11 @@ function Dropdown({
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     const handleKey = () => setOpen(false);
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
     return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
     };
   }, [open]);
 
@@ -119,12 +126,15 @@ function DropdownToggle({
 }) {
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); onChange(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange();
+      }}
       className="w-full flex items-center justify-between px-3 py-1.5 text-caption text-text-secondary hover:bg-surface-raised hover:text-text transition-colors"
     >
       <span>{children}</span>
-      <span className={`text-micro ${checked ? 'text-primary-light' : 'text-text-dim'}`}>
-        {checked ? '✓' : ''}
+      <span className={`text-micro ${checked ? "text-primary-light" : "text-text-dim"}`}>
+        {checked ? "✓" : ""}
       </span>
     </button>
   );
@@ -134,13 +144,7 @@ function DropdownSeparator() {
   return <div className="my-1 border-t border-border" />;
 }
 
-function DropdownSubmenu({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function DropdownSubmenu({ label, children }: { label: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <div
@@ -172,11 +176,11 @@ function LocaleDropdown() {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     const handleKey = () => setOpen(false);
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
     return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
     };
   }, [open]);
 
@@ -184,7 +188,7 @@ function LocaleDropdown() {
 
   return (
     <div ref={ref} className="relative">
-      <Tooltip label={current?.label ?? 'Language'}>
+      <Tooltip label={current?.label ?? "Language"}>
         <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)}>
           <Globe className="w-4 h-4" />
         </Button>
@@ -194,11 +198,14 @@ function LocaleDropdown() {
           {LOCALES.map((l) => (
             <button
               key={l.code}
-              onClick={() => { setLocale(l.code); setOpen(false); }}
+              onClick={() => {
+                setLocale(l.code);
+                setOpen(false);
+              }}
               className={`w-full flex items-center px-3 py-1.5 text-caption transition-colors ${
                 l.code === locale
-                  ? 'text-primary-light bg-surface-raised'
-                  : 'text-text-secondary hover:bg-surface-raised hover:text-text'
+                  ? "text-primary-light bg-surface-raised"
+                  : "text-text-secondary hover:bg-surface-raised hover:text-text"
               }`}
             >
               {l.label}
@@ -242,7 +249,7 @@ export default function Toolbar({
 }: ToolbarProps) {
   const t = useT();
   const [editingName, setEditingName] = useState(false);
-  const [editNameValue, setEditNameValue] = useState('');
+  const [editNameValue, setEditNameValue] = useState("");
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const startEditName = () => {
@@ -268,27 +275,55 @@ export default function Toolbar({
   }, [editingName]);
 
   const tools: Array<{ tool: Tool; icon: React.ReactNode; label: string; shortcut: string }> = [
-    { tool: 'paint', icon: <Paintbrush className="w-4 h-4" />, label: t('mapEditor.toolbar.paint'), shortcut: 'B' },
-    { tool: 'erase', icon: <Eraser className="w-4 h-4" />, label: t('mapEditor.toolbar.erase'), shortcut: 'E' },
-    { tool: 'select', icon: <MousePointer2 className="w-4 h-4" />, label: t('mapEditor.toolbar.select'), shortcut: 'S' },
-    { tool: 'pan', icon: <Move className="w-4 h-4" />, label: t('mapEditor.toolbar.pan'), shortcut: 'P' },
+    {
+      tool: "paint",
+      icon: <Paintbrush className="w-4 h-4" />,
+      label: t("mapEditor.toolbar.paint"),
+      shortcut: "B",
+    },
+    {
+      tool: "erase",
+      icon: <Eraser className="w-4 h-4" />,
+      label: t("mapEditor.toolbar.erase"),
+      shortcut: "E",
+    },
+    {
+      tool: "select",
+      icon: <MousePointer2 className="w-4 h-4" />,
+      label: t("mapEditor.toolbar.select"),
+      shortcut: "S",
+    },
+    {
+      tool: "pan",
+      icon: <Move className="w-4 h-4" />,
+      label: t("mapEditor.toolbar.pan"),
+      shortcut: "P",
+    },
   ];
 
   return (
     <div className="flex items-center h-10 bg-surface border-b border-border px-1 select-none flex-shrink-0">
       {/* Title */}
       <div className="px-3 flex items-center gap-2">
-        <span className="text-body font-bold text-primary-light tracking-wide select-none">{t('mapEditor.toolbar.title')}</span>
-        {projectName && (
-          editingName ? (
+        <span className="text-body font-bold text-primary-light tracking-wide select-none">
+          {t("mapEditor.toolbar.title")}
+        </span>
+        {projectName &&
+          (editingName ? (
             <input
               ref={nameInputRef}
               value={editNameValue}
               onChange={(e) => setEditNameValue(e.target.value)}
               onBlur={commitEditName}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); commitEditName(); }
-                if (e.key === 'Escape') { e.preventDefault(); cancelEditName(); }
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitEditName();
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelEditName();
+                }
               }}
               className="text-sm font-medium text-white bg-surface border border-primary-light/50 rounded px-1.5 py-0 h-6 outline-none focus:border-primary-light min-w-0 w-40"
               style={{ maxWidth: 240 }}
@@ -301,45 +336,83 @@ export default function Toolbar({
                 onDoubleClick={startEditName}
                 title={t("common.renameOnDoubleClick")}
               >
-                {projectName}{dirty ? ' *' : ''}
+                {projectName}
+                {dirty ? " *" : ""}
               </span>
             </>
-          )
-        )}
+          ))}
       </div>
 
       {/* File Menu */}
       <ToolGroup>
-        <Dropdown label={t('mapEditor.toolbar.file')}>
-          <DropdownItem onClick={onNewMap} shortcut="⌘N">{t('mapEditor.project.newProject')}</DropdownItem>
-          <DropdownItem onClick={onLoad} shortcut="⌘O">{t('mapEditor.project.openProject')}</DropdownItem>
-          <DropdownItem onClick={onSaveToDeskRPG} shortcut="⌘S">{t('common.save')}</DropdownItem>
-          <DropdownItem onClick={() => { onSaveAs?.(); }}>{t('mapEditor.project.saveAs')}</DropdownItem>
+        <Dropdown label={t("mapEditor.toolbar.file")}>
+          <DropdownItem onClick={onNewMap} shortcut="⌘N">
+            {t("mapEditor.project.newProject")}
+          </DropdownItem>
+          <DropdownItem onClick={onLoad} shortcut="⌘O">
+            {t("mapEditor.project.openProject")}
+          </DropdownItem>
+          <DropdownItem onClick={onSaveToDeskRPG} shortcut="⌘S">
+            {t("common.save")}
+          </DropdownItem>
+          <DropdownItem
+            onClick={() => {
+              onSaveAs?.();
+            }}
+          >
+            {t("mapEditor.project.saveAs")}
+          </DropdownItem>
           <DropdownSeparator />
-          <DropdownSubmenu label={t('mapEditor.toolbar.export')}>
-            <DropdownItem onClick={onExportTMJ}>{t('mapEditor.toolbar.exportTmj')}</DropdownItem>
-            <DropdownItem onClick={onExportTMX}>{t('mapEditor.toolbar.exportTmx')}</DropdownItem>
-            <DropdownItem onClick={onExportPNG}>{t('mapEditor.toolbar.exportPng')}</DropdownItem>
+          <DropdownSubmenu label={t("mapEditor.toolbar.export")}>
+            <DropdownItem onClick={onExportTMJ}>{t("mapEditor.toolbar.exportTmj")}</DropdownItem>
+            <DropdownItem onClick={onExportTMX}>{t("mapEditor.toolbar.exportTmx")}</DropdownItem>
+            <DropdownItem onClick={onExportPNG}>{t("mapEditor.toolbar.exportPng")}</DropdownItem>
           </DropdownSubmenu>
           {onSaveAsTemplate && (
             <>
               <DropdownSeparator />
-              <DropdownItem onClick={onSaveAsTemplate}>{t('mapEditor.toolbar.saveAsTemplate')}</DropdownItem>
+              <DropdownItem onClick={onSaveAsTemplate}>
+                {t("mapEditor.toolbar.saveAsTemplate")}
+              </DropdownItem>
             </>
           )}
           <DropdownSeparator />
-          <DropdownItem onClick={onGoBack}>{t('mapEditor.toolbar.backToDeskRPG')}</DropdownItem>
+          <DropdownItem onClick={onGoBack}>{t("mapEditor.toolbar.backToDeskRPG")}</DropdownItem>
         </Dropdown>
 
         {/* View Menu */}
-        <Dropdown label={t('mapEditor.toolbar.view')}>
-          <DropdownToggle checked={showGrid} onChange={onToggleGrid}>{t('mapEditor.toolbar.grid')}</DropdownToggle>
-          <DropdownToggle checked={showCollision} onChange={onToggleCollision}>{t('mapEditor.toolbar.collision')}</DropdownToggle>
+        <Dropdown label={t("mapEditor.toolbar.view")}>
+          <DropdownToggle checked={showGrid} onChange={onToggleGrid}>
+            {t("mapEditor.toolbar.grid")}
+          </DropdownToggle>
+          <DropdownToggle checked={showCollision} onChange={onToggleCollision}>
+            {t("mapEditor.toolbar.collision")}
+          </DropdownToggle>
           <DropdownSeparator />
-          <DropdownToggle checked={sectionVisibility['layers'] !== false} onChange={() => onToggleSection('layers')}>{t('mapEditor.toolbar.layersPanel')}</DropdownToggle>
-          <DropdownToggle checked={sectionVisibility['tilesets'] !== false} onChange={() => onToggleSection('tilesets')}>{t('mapEditor.toolbar.tilesetsPanel')}</DropdownToggle>
-          <DropdownToggle checked={sectionVisibility['stamps'] !== false} onChange={() => onToggleSection('stamps')}>{t('mapEditor.toolbar.stampsPanel')}</DropdownToggle>
-          <DropdownToggle checked={sectionVisibility['minimap'] !== false} onChange={() => onToggleSection('minimap')}>{t('mapEditor.toolbar.minimapPanel')}</DropdownToggle>
+          <DropdownToggle
+            checked={sectionVisibility["layers"] !== false}
+            onChange={() => onToggleSection("layers")}
+          >
+            {t("mapEditor.toolbar.layersPanel")}
+          </DropdownToggle>
+          <DropdownToggle
+            checked={sectionVisibility["tilesets"] !== false}
+            onChange={() => onToggleSection("tilesets")}
+          >
+            {t("mapEditor.toolbar.tilesetsPanel")}
+          </DropdownToggle>
+          <DropdownToggle
+            checked={sectionVisibility["stamps"] !== false}
+            onChange={() => onToggleSection("stamps")}
+          >
+            {t("mapEditor.toolbar.stampsPanel")}
+          </DropdownToggle>
+          <DropdownToggle
+            checked={sectionVisibility["minimap"] !== false}
+            onChange={() => onToggleSection("minimap")}
+          >
+            {t("mapEditor.toolbar.minimapPanel")}
+          </DropdownToggle>
         </Dropdown>
       </ToolGroup>
 
@@ -348,7 +421,7 @@ export default function Toolbar({
         {tools.map(({ tool, icon, label, shortcut }) => (
           <Tooltip key={tool} label={label} shortcut={shortcut}>
             <Button
-              variant={activeTool === tool ? 'primary' : 'ghost'}
+              variant={activeTool === tool ? "primary" : "ghost"}
               size="sm"
               onClick={() => onToolChange(tool)}
             >
@@ -360,25 +433,29 @@ export default function Toolbar({
 
       {/* Zoom Controls */}
       <ToolGroup>
-        <Tooltip label={t('mapEditor.toolbar.zoomOut')} shortcut="−">
-          <Button variant="ghost" size="sm" onClick={onZoomOut}>−</Button>
+        <Tooltip label={t("mapEditor.toolbar.zoomOut")} shortcut="−">
+          <Button variant="ghost" size="sm" onClick={onZoomOut}>
+            −
+          </Button>
         </Tooltip>
         <span className="text-caption text-text-secondary w-12 text-center tabular-nums">
           {Math.round(zoom * 100)}%
         </span>
-        <Tooltip label={t('mapEditor.toolbar.zoomIn')} shortcut="+">
-          <Button variant="ghost" size="sm" onClick={onZoomIn}>+</Button>
+        <Tooltip label={t("mapEditor.toolbar.zoomIn")} shortcut="+">
+          <Button variant="ghost" size="sm" onClick={onZoomIn}>
+            +
+          </Button>
         </Tooltip>
       </ToolGroup>
 
       {/* Undo / Redo */}
       <ToolGroup>
-        <Tooltip label={t('mapEditor.toolbar.undo')} shortcut="⌘Z">
+        <Tooltip label={t("mapEditor.toolbar.undo")} shortcut="⌘Z">
           <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo}>
             <Undo2 className="w-4 h-4" />
           </Button>
         </Tooltip>
-        <Tooltip label={t('mapEditor.toolbar.redo')} shortcut="⌘⇧Z">
+        <Tooltip label={t("mapEditor.toolbar.redo")} shortcut="⌘⇧Z">
           <Button variant="ghost" size="sm" onClick={onRedo} disabled={!canRedo}>
             <Redo2 className="w-4 h-4" />
           </Button>
@@ -390,7 +467,7 @@ export default function Toolbar({
 
       {/* Save, Help, Language & Back */}
       <div className="px-2 flex items-center gap-1">
-        <Tooltip label={`${t('common.save')} (⌘S)`}>
+        <Tooltip label={`${t("common.save")} (⌘S)`}>
           <div className="relative">
             <Button variant="ghost" size="sm" onClick={onSaveToDeskRPG}>
               <Save className="w-4 h-4" />
@@ -400,13 +477,13 @@ export default function Toolbar({
             )}
           </div>
         </Tooltip>
-        <Tooltip label={t('mapEditor.toolbar.keyboardShortcuts')} shortcut="?">
+        <Tooltip label={t("mapEditor.toolbar.keyboardShortcuts")} shortcut="?">
           <Button variant="ghost" size="sm" onClick={onHelp}>
             <HelpCircle className="w-4 h-4" />
           </Button>
         </Tooltip>
         <LocaleDropdown />
-        <Tooltip label={t('mapEditor.toolbar.backToDeskRPG')}>
+        <Tooltip label={t("mapEditor.toolbar.backToDeskRPG")}>
           <Button variant="ghost" size="sm" onClick={onGoBack}>
             <ArrowLeft className="w-4 h-4" />
           </Button>

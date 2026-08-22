@@ -57,11 +57,21 @@ test("ensureSqliteCompatibility does not pre-create bootstrap RBAC rows for an e
 
   ensureSqliteCompatibility(sqlite);
 
-  const groupsCount = sqlite.prepare("SELECT COUNT(*) AS count FROM groups").get() as { count: number };
-  const groupMembersCount = sqlite.prepare("SELECT COUNT(*) AS count FROM group_members").get() as { count: number };
-  const gatewayResourcesCount = sqlite.prepare("SELECT COUNT(*) AS count FROM gateway_resources").get() as { count: number };
-  const gatewaySharesCount = sqlite.prepare("SELECT COUNT(*) AS count FROM gateway_shares").get() as { count: number };
-  const channelGatewayBindingsCount = sqlite.prepare("SELECT COUNT(*) AS count FROM channel_gateway_bindings").get() as { count: number };
+  const groupsCount = sqlite.prepare("SELECT COUNT(*) AS count FROM groups").get() as {
+    count: number;
+  };
+  const groupMembersCount = sqlite.prepare("SELECT COUNT(*) AS count FROM group_members").get() as {
+    count: number;
+  };
+  const gatewayResourcesCount = sqlite
+    .prepare("SELECT COUNT(*) AS count FROM gateway_resources")
+    .get() as { count: number };
+  const gatewaySharesCount = sqlite
+    .prepare("SELECT COUNT(*) AS count FROM gateway_shares")
+    .get() as { count: number };
+  const channelGatewayBindingsCount = sqlite
+    .prepare("SELECT COUNT(*) AS count FROM channel_gateway_bindings")
+    .get() as { count: number };
 
   assert.equal(groupsCount.count, 0);
   assert.equal(groupMembersCount.count, 0);
@@ -96,21 +106,29 @@ test("ensureSqliteCompatibility creates RBAC tables and backfills a legacy sqlit
     );
   `);
 
-  sqlite.prepare(
-    "INSERT INTO users (id, login_id, nickname, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
-  ).run("user-2", "later-user", "Later", "hash", "2026-03-31T12:00:00.000Z");
-  sqlite.prepare(
-    "INSERT INTO users (id, login_id, nickname, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
-  ).run("user-1", "earliest-user", "Earliest", "hash", "2026-03-30T12:00:00.000Z");
-  sqlite.prepare(
-    "INSERT INTO channels (id, name, owner_id, created_at) VALUES (?, ?, ?, ?)",
-  ).run("channel-1", "General", "user-2", "2026-03-31T13:00:00.000Z");
+  sqlite
+    .prepare(
+      "INSERT INTO users (id, login_id, nickname, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
+    )
+    .run("user-2", "later-user", "Later", "hash", "2026-03-31T12:00:00.000Z");
+  sqlite
+    .prepare(
+      "INSERT INTO users (id, login_id, nickname, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
+    )
+    .run("user-1", "earliest-user", "Earliest", "hash", "2026-03-30T12:00:00.000Z");
+  sqlite
+    .prepare("INSERT INTO channels (id, name, owner_id, created_at) VALUES (?, ?, ?, ?)")
+    .run("channel-1", "General", "user-2", "2026-03-31T13:00:00.000Z");
 
   ensureSqliteCompatibility(sqlite);
 
-  const tableNames = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>;
+  const tableNames = sqlite
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+    .all() as Array<{ name: string }>;
   const userColumns = sqlite.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
-  const channelColumns = sqlite.prepare("PRAGMA table_info(channels)").all() as Array<{ name: string }>;
+  const channelColumns = sqlite.prepare("PRAGMA table_info(channels)").all() as Array<{
+    name: string;
+  }>;
 
   assert.ok(tableNames.some((table) => table.name === "groups"));
   assert.ok(tableNames.some((table) => table.name === "group_members"));
@@ -124,21 +142,21 @@ test("ensureSqliteCompatibility creates RBAC tables and backfills a legacy sqlit
   assert.ok(userColumns.some((column) => column.name === "system_role"));
   assert.ok(channelColumns.some((column) => column.name === "group_id"));
 
-  const defaultGroup = sqlite.prepare(
-    "SELECT id, slug, is_default FROM groups WHERE slug = 'default'",
-  ).get() as { id: string; slug: string; is_default: number };
-  const bootstrapUser = sqlite.prepare(
-    "SELECT system_role FROM users WHERE id = ?",
-  ).get("user-1") as { system_role: string };
-  const laterUser = sqlite.prepare(
-    "SELECT system_role FROM users WHERE id = ?",
-  ).get("user-2") as { system_role: string };
-  const membership = sqlite.prepare(
-    "SELECT role FROM group_members WHERE group_id = ? AND user_id = ?",
-  ).get(defaultGroup.id, "user-1") as { role: string };
-  const channelRow = sqlite.prepare(
-    "SELECT group_id FROM channels WHERE id = ?",
-  ).get("channel-1") as { group_id: string | null };
+  const defaultGroup = sqlite
+    .prepare("SELECT id, slug, is_default FROM groups WHERE slug = 'default'")
+    .get() as { id: string; slug: string; is_default: number };
+  const bootstrapUser = sqlite
+    .prepare("SELECT system_role FROM users WHERE id = ?")
+    .get("user-1") as { system_role: string };
+  const laterUser = sqlite.prepare("SELECT system_role FROM users WHERE id = ?").get("user-2") as {
+    system_role: string;
+  };
+  const membership = sqlite
+    .prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?")
+    .get(defaultGroup.id, "user-1") as { role: string };
+  const channelRow = sqlite
+    .prepare("SELECT group_id FROM channels WHERE id = ?")
+    .get("channel-1") as { group_id: string | null };
 
   assert.equal(defaultGroup.slug, "default");
   assert.equal(defaultGroup.is_default, 1);
@@ -149,15 +167,15 @@ test("ensureSqliteCompatibility creates RBAC tables and backfills a legacy sqlit
 
   ensureSqliteCompatibility(sqlite);
 
-  const defaultGroupCount = sqlite.prepare(
-    "SELECT COUNT(*) AS count FROM groups WHERE slug = 'default'",
-  ).get() as { count: number };
-  const membershipCount = sqlite.prepare(
-    "SELECT COUNT(*) AS count FROM group_members WHERE group_id = ? AND user_id = ?",
-  ).get(defaultGroup.id, "user-1") as { count: number };
-  const systemAdminCount = sqlite.prepare(
-    "SELECT COUNT(*) AS count FROM users WHERE system_role = 'system_admin'",
-  ).get() as { count: number };
+  const defaultGroupCount = sqlite
+    .prepare("SELECT COUNT(*) AS count FROM groups WHERE slug = 'default'")
+    .get() as { count: number };
+  const membershipCount = sqlite
+    .prepare("SELECT COUNT(*) AS count FROM group_members WHERE group_id = ? AND user_id = ?")
+    .get(defaultGroup.id, "user-1") as { count: number };
+  const systemAdminCount = sqlite
+    .prepare("SELECT COUNT(*) AS count FROM users WHERE system_role = 'system_admin'")
+    .get() as { count: number };
 
   assert.equal(defaultGroupCount.count, 1);
   assert.equal(membershipCount.count, 1);
@@ -210,27 +228,48 @@ test("ensureSqliteCompatibility dedupes legacy group join requests before adding
     );
   `);
 
-  sqlite.prepare(
-    "INSERT INTO users (id, login_id, nickname, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
-  ).run("user-1", "user1", "User 1", "hash", "2026-03-30T12:00:00.000Z");
-  sqlite.prepare(
-    "INSERT INTO groups (id, name, slug, description, is_default, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-  ).run("group-1", "Group 1", "group-1", null, 0, "user-1", "2026-03-30T12:00:00.000Z", "2026-03-30T12:00:00.000Z");
-  sqlite.prepare(
-    "INSERT INTO group_join_requests (id, group_id, user_id, status, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-  ).run("req-old", "group-1", "user-1", "rejected", "old", "2026-03-30T12:00:00.000Z");
-  sqlite.prepare(
-    "INSERT INTO group_join_requests (id, group_id, user_id, status, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-  ).run("req-new", "group-1", "user-1", "pending", "new", "2026-03-31T12:00:00.000Z");
+  sqlite
+    .prepare(
+      "INSERT INTO users (id, login_id, nickname, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
+    )
+    .run("user-1", "user1", "User 1", "hash", "2026-03-30T12:00:00.000Z");
+  sqlite
+    .prepare(
+      "INSERT INTO groups (id, name, slug, description, is_default, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .run(
+      "group-1",
+      "Group 1",
+      "group-1",
+      null,
+      0,
+      "user-1",
+      "2026-03-30T12:00:00.000Z",
+      "2026-03-30T12:00:00.000Z",
+    );
+  sqlite
+    .prepare(
+      "INSERT INTO group_join_requests (id, group_id, user_id, status, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .run("req-old", "group-1", "user-1", "rejected", "old", "2026-03-30T12:00:00.000Z");
+  sqlite
+    .prepare(
+      "INSERT INTO group_join_requests (id, group_id, user_id, status, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .run("req-new", "group-1", "user-1", "pending", "new", "2026-03-31T12:00:00.000Z");
 
   ensureSqliteCompatibility(sqlite);
 
-  const rows = sqlite.prepare(
-    "SELECT id, status FROM group_join_requests WHERE group_id = ? AND user_id = ? ORDER BY created_at DESC",
-  ).all("group-1", "user-1") as Array<{ id: string; status: string }>;
-  const uniqueIndex = sqlite.prepare(
-    "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'group_join_requests_group_user_unique'",
-  ).get() as { name?: string } | undefined;
+  const rows = sqlite
+    .prepare(
+      "SELECT id, status FROM group_join_requests WHERE group_id = ? AND user_id = ? ORDER BY created_at DESC",
+    )
+    .all("group-1", "user-1") as Array<{ id: string; status: string }>;
+  const uniqueIndex = sqlite
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'group_join_requests_group_user_unique'",
+    )
+    .get() as { name?: string } | undefined;
 
   assert.equal(rows.length, 1);
   assert.equal(rows[0].id, "req-new");

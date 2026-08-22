@@ -129,13 +129,19 @@ export default function NpcDialog({
           {/* Tab Bar */}
           <div className="flex border-b border-gray-700">
             <button
-              onClick={() => { setTab("chat"); onSetActiveTaskId?.(null); }}
+              onClick={() => {
+                setTab("chat");
+                onSetActiveTaskId?.(null);
+              }}
               className={`flex-1 py-2 text-xs font-semibold text-center ${tab === "chat" ? "text-amber-400 border-b-2 border-amber-400" : "text-gray-500 hover:text-gray-300"}`}
             >
               💬 {t("chat.tab")}
             </button>
             <button
-              onClick={() => { setTab("task"); onSetActiveTaskId?.(null); }}
+              onClick={() => {
+                setTab("task");
+                onSetActiveTaskId?.(null);
+              }}
               className={`flex-1 py-2 text-xs font-semibold text-center relative ${tab === "task" ? "text-amber-400 border-b-2 border-amber-400" : "text-gray-500 hover:text-gray-300"}`}
             >
               📋 {t("task.tab")}
@@ -172,7 +178,9 @@ export default function NpcDialog({
                       />
                     )}
                     {msg.content && (
-                      <div className={`flex ${msg.role === "player" ? "justify-end" : "justify-start"}`}>
+                      <div
+                        className={`flex ${msg.role === "player" ? "justify-end" : "justify-start"}`}
+                      >
                         <div
                           className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
                             msg.role === "player"
@@ -180,16 +188,23 @@ export default function NpcDialog({
                               : "bg-gray-700 text-gray-100"
                           }`}
                         >
-                          {msg.role === "npc" ? <MarkdownContent content={msg.content} /> : msg.content}
+                          {msg.role === "npc" ? (
+                            <MarkdownContent content={msg.content} />
+                          ) : (
+                            msg.content
+                          )}
                           {msg.role === "npc" && isStreaming && i === messages.length - 1 && (
                             <span className="inline-block w-1.5 h-4 bg-amber-400 ml-0.5 animate-pulse" />
                           )}
-                          {msg.role === "npc" && !isStreaming && i === messages.length - 1 && isTaskConfirmPrompt(msg.content) && (
-                            <TaskConfirmButtons
-                              onConfirm={() => onSend("등록해")}
-                              onCancel={() => onSend("취소")}
-                            />
-                          )}
+                          {msg.role === "npc" &&
+                            !isStreaming &&
+                            i === messages.length - 1 &&
+                            isTaskConfirmPrompt(msg.content) && (
+                              <TaskConfirmButtons
+                                onConfirm={() => onSend("등록해")}
+                                onCancel={() => onSend("취소")}
+                              />
+                            )}
                         </div>
                       </div>
                     )}
@@ -222,8 +237,12 @@ export default function NpcDialog({
                 </button>
                 {adapterInfo && (
                   <span className="text-gray-500">
-                    {adapterInfo.type === "openclaw" ? "OpenClaw" : adapterInfo.type.charAt(0).toUpperCase() + adapterInfo.type.slice(1)}
-                    {adapterInfo.model && <span className="ml-1 text-gray-600">· {adapterInfo.model}</span>}
+                    {adapterInfo.type === "openclaw"
+                      ? "OpenClaw"
+                      : adapterInfo.type.charAt(0).toUpperCase() + adapterInfo.type.slice(1)}
+                    {adapterInfo.model && (
+                      <span className="ml-1 text-gray-600">· {adapterInfo.model}</span>
+                    )}
                   </span>
                 )}
               </div>
@@ -232,8 +251,12 @@ export default function NpcDialog({
             /* Task conversation view */
             <TaskChatView
               taskId={activeTaskId}
-              taskTitle={loadedTasks.find((tk) => tk.npcTaskId === activeTaskId)?.title || activeTaskId}
-              taskStatus={loadedTasks.find((tk) => tk.npcTaskId === activeTaskId)?.status || "pending"}
+              taskTitle={
+                loadedTasks.find((tk) => tk.npcTaskId === activeTaskId)?.title || activeTaskId
+              }
+              taskStatus={
+                loadedTasks.find((tk) => tk.npcTaskId === activeTaskId)?.status || "pending"
+              }
               messages={taskMessages.get(activeTaskId) || []}
               isStreaming={isTaskStreaming}
               onSend={(msg, files) => onTaskSend?.(activeTaskId, msg, files)}

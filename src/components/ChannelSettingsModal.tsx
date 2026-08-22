@@ -56,8 +56,14 @@ interface AccessibleGatewayOption {
 }
 
 export default function ChannelSettingsModal({
-  channelId, channelName, channelDescription, isPublic, inviteCode,
-  initialTab = "settings", onClose, onUpdated,
+  channelId,
+  channelName,
+  channelDescription,
+  isPublic,
+  inviteCode,
+  initialTab = "settings",
+  onClose,
+  onUpdated,
 }: ChannelSettingsModalProps) {
   const t = useT();
   const [tab, setTab] = useState<ChannelSettingsTab>(initialTab);
@@ -87,8 +93,12 @@ export default function ChannelSettingsModal({
   const [gatewayLoading, setGatewayLoading] = useState(false);
   const [gatewaySaving, setGatewaySaving] = useState(false);
   const [gatewayTesting, setGatewayTesting] = useState(false);
-  const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({ status: "idle" });
-  const [gatewayNotice, setGatewayNotice] = useState<{ success: boolean; message: string } | null>(null);
+  const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({
+    status: "idle",
+  });
+  const [gatewayNotice, setGatewayNotice] = useState<{ success: boolean; message: string } | null>(
+    null,
+  );
   const [gatewayError, setGatewayError] = useState("");
   const [autoProgressNudgeEnabled, setAutoProgressNudgeEnabled] = useState(false);
   const [autoProgressNudgeMinutes, setAutoProgressNudgeMinutes] = useState(5);
@@ -192,7 +202,8 @@ export default function ChannelSettingsModal({
 
     const updates: Record<string, unknown> = {};
     if (name.trim() !== channelName) updates.name = name.trim();
-    if (description.trim() !== (channelDescription || "")) updates.description = description.trim() || null;
+    if (description.trim() !== (channelDescription || ""))
+      updates.description = description.trim() || null;
     if (visibility !== isPublic) updates.isPublic = visibility;
     if (!visibility && password) updates.password = password;
 
@@ -232,7 +243,9 @@ export default function ChannelSettingsModal({
     setKickingUserId(member.userId);
     setMembersError("");
     try {
-      const res = await fetch(`/api/channels/${channelId}/members/${member.userId}`, { method: "DELETE" });
+      const res = await fetch(`/api/channels/${channelId}/members/${member.userId}`, {
+        method: "DELETE",
+      });
       if (res.ok) {
         setMembers((prev) => prev.filter((m) => m.userId !== member.userId));
       } else {
@@ -264,13 +277,13 @@ export default function ChannelSettingsModal({
       const res = shouldUseResource
         ? await fetch(`/api/gateways/${selectedGatewayId}/test`, { method: "POST" })
         : await fetch("/api/channels/test-gateway", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url: gatewayUrl.trim(),
-            token: gatewayToken.trim(),
-          }),
-        });
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: gatewayUrl.trim(),
+              token: gatewayToken.trim(),
+            }),
+          });
       const data = await res.json();
       if (res.ok) {
         setGatewayConnectionState({ status: "connected" });
@@ -320,9 +333,9 @@ export default function ChannelSettingsModal({
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         if (
-          data?.errorCode === "gateway_change_requires_npc_reset"
-          && !confirmNpcReset
-          && window.confirm(t("settings.gatewayChangeResetWarning"))
+          data?.errorCode === "gateway_change_requires_npc_reset" &&
+          !confirmNpcReset &&
+          window.confirm(t("settings.gatewayChangeResetWarning"))
         ) {
           await handleSaveGateway(true);
           return;
@@ -330,7 +343,8 @@ export default function ChannelSettingsModal({
         setGatewayError(getLocalizedErrorMessage(t, data, "settings.failedToSave"));
       } else {
         const data = await res.json().catch(() => ({}));
-        const nextGatewayId = typeof data?.gatewayConfig?.gatewayId === "string" ? data.gatewayConfig.gatewayId : null;
+        const nextGatewayId =
+          typeof data?.gatewayConfig?.gatewayId === "string" ? data.gatewayConfig.gatewayId : null;
         setGatewayId(nextGatewayId);
         setSelectedGatewayId(nextGatewayId ?? "");
         setGatewayMode(nextGatewayId ? "resource" : "direct");
@@ -340,14 +354,18 @@ export default function ChannelSettingsModal({
         if (nextGatewayId) {
           setGatewayOptions((prev) => {
             if (prev.some((item) => item.id === nextGatewayId)) return prev;
-            return [{
-              id: nextGatewayId,
-              displayName: data?.gatewayConfig?.displayName || data?.gatewayConfig?.url || nextGatewayId,
-              baseUrl: data?.gatewayConfig?.url || "",
-              canEditCredentials: data?.gatewayConfig?.canEditCredentials !== false,
-              isOwner: data?.gatewayConfig?.canEditCredentials !== false,
-              shareRole: null,
-            }, ...prev];
+            return [
+              {
+                id: nextGatewayId,
+                displayName:
+                  data?.gatewayConfig?.displayName || data?.gatewayConfig?.url || nextGatewayId,
+                baseUrl: data?.gatewayConfig?.url || "",
+                canEditCredentials: data?.gatewayConfig?.canEditCredentials !== false,
+                isOwner: data?.gatewayConfig?.canEditCredentials !== false,
+                shareRole: null,
+              },
+              ...prev,
+            ];
           });
         }
         onUpdated({
@@ -355,7 +373,8 @@ export default function ChannelSettingsModal({
             gatewayId: data?.gatewayConfig?.gatewayId ?? gatewayId,
             url: data?.gatewayConfig?.url ?? gatewayConfig.url,
             token: data?.gatewayConfig?.token ?? gatewayConfig.token,
-            canEditCredentials: data?.gatewayConfig?.canEditCredentials ?? gatewayCanEditCredentials,
+            canEditCredentials:
+              data?.gatewayConfig?.canEditCredentials ?? gatewayCanEditCredentials,
             taskAutomation: data?.gatewayConfig?.taskAutomation || gatewayConfig.taskAutomation,
           },
         });
@@ -379,9 +398,9 @@ export default function ChannelSettingsModal({
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         if (
-          data?.errorCode === "gateway_disconnect_requires_npc_reset"
-          && !confirmNpcReset
-          && window.confirm(t("settings.gatewayDisconnectResetWarning"))
+          data?.errorCode === "gateway_disconnect_requires_npc_reset" &&
+          !confirmNpcReset &&
+          window.confirm(t("settings.gatewayDisconnectResetWarning"))
         ) {
           await handleDeleteGateway(true);
           return;
@@ -419,20 +438,32 @@ export default function ChannelSettingsModal({
       <div className="bg-gray-800 rounded-xl w-full max-w-lg border border-gray-700 max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
           <h2 className="text-lg font-bold text-white">{t("settings.title")}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl" aria-label={t("common.close")}>&times;</button>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white text-xl"
+            aria-label={t("common.close")}
+          >
+            &times;
+          </button>
         </div>
 
         <div className="flex border-b border-gray-700">
-          <button onClick={() => setTab("settings")}
-            className={`flex-1 py-2 text-sm font-semibold ${tab === "settings" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-gray-400"}`}>
+          <button
+            onClick={() => setTab("settings")}
+            className={`flex-1 py-2 text-sm font-semibold ${tab === "settings" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-gray-400"}`}
+          >
             {t("settings.general")}
           </button>
-          <button onClick={() => setTab("members")}
-            className={`flex-1 py-2 text-sm font-semibold ${tab === "members" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-gray-400"}`}>
+          <button
+            onClick={() => setTab("members")}
+            className={`flex-1 py-2 text-sm font-semibold ${tab === "members" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-gray-400"}`}
+          >
             {t("settings.members")}
           </button>
-          <button onClick={() => setTab("gateway")}
-            className={`flex-1 py-2 text-sm font-semibold ${tab === "gateway" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-gray-400"}`}>
+          <button
+            onClick={() => setTab("gateway")}
+            className={`flex-1 py-2 text-sm font-semibold ${tab === "gateway" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-gray-400"}`}
+          >
             {t("settings.gateway")}
           </button>
         </div>
@@ -441,52 +472,111 @@ export default function ChannelSettingsModal({
           {tab === "settings" ? (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-1">{t("settings.channelName")}</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} maxLength={100}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-indigo-500" />
+                <label className="block text-sm font-semibold text-gray-300 mb-1">
+                  {t("settings.channelName")}
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={100}
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-indigo-500"
+                />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-1">{t("settings.description")}</label>
-                <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={2}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-indigo-500 resize-none" />
+                <label className="block text-sm font-semibold text-gray-300 mb-1">
+                  {t("settings.description")}
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  maxLength={500}
+                  rows={2}
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-indigo-500 resize-none"
+                />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-1">{t("settings.visibility")}</label>
+                <label className="block text-sm font-semibold text-gray-300 mb-1">
+                  {t("settings.visibility")}
+                </label>
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => setVisibility(true)}
-                    className={`px-3 py-1 rounded text-sm ${visibility ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-400"}`}>{t("channels.public")}</button>
-                  <button type="button" onClick={() => setVisibility(false)}
-                    className={`px-3 py-1 rounded text-sm ${!visibility ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-400"}`}>{t("channels.private")}</button>
+                  <button
+                    type="button"
+                    onClick={() => setVisibility(true)}
+                    className={`px-3 py-1 rounded text-sm ${visibility ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-400"}`}
+                  >
+                    {t("channels.public")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisibility(false)}
+                    className={`px-3 py-1 rounded text-sm ${!visibility ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-400"}`}
+                  >
+                    {t("channels.private")}
+                  </button>
                 </div>
-                {!visibility && isPublic && <p className="text-amber-400 text-xs mt-1">{t("settings.switchToPrivateWarning")}</p>}
-                {visibility && !isPublic && <p className="text-amber-400 text-xs mt-1">{t("settings.switchToPublicWarning")}</p>}
+                {!visibility && isPublic && (
+                  <p className="text-amber-400 text-xs mt-1">
+                    {t("settings.switchToPrivateWarning")}
+                  </p>
+                )}
+                {visibility && !isPublic && (
+                  <p className="text-amber-400 text-xs mt-1">
+                    {t("settings.switchToPublicWarning")}
+                  </p>
+                )}
               </div>
               {!visibility && (
                 <div>
-                  <label className="block text-sm font-semibold text-gray-300 mb-1">{isPublic ? t("settings.setPassword") : t("settings.changePassword")}</label>
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={100}
-                    placeholder={isPublic ? t("settings.passwordPlaceholderNew") : t("settings.passwordPlaceholderKeep")}
-                    className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500" />
+                  <label className="block text-sm font-semibold text-gray-300 mb-1">
+                    {isPublic ? t("settings.setPassword") : t("settings.changePassword")}
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    maxLength={100}
+                    placeholder={
+                      isPublic
+                        ? t("settings.passwordPlaceholderNew")
+                        : t("settings.passwordPlaceholderKeep")
+                    }
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+                  />
                 </div>
               )}
               <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-1">{t("settings.inviteCode")}</label>
+                <label className="block text-sm font-semibold text-gray-300 mb-1">
+                  {t("settings.inviteCode")}
+                </label>
                 <div className="flex gap-2">
-                  <code className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded text-amber-400 font-mono text-sm">{inviteCode || "—"}</code>
-                  <button onClick={copyInviteCode} className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white">{copied ? t("game.copied") : t("common.copy")}</button>
+                  <code className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded text-amber-400 font-mono text-sm">
+                    {inviteCode || "—"}
+                  </code>
+                  <button
+                    onClick={copyInviteCode}
+                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
+                  >
+                    {copied ? t("game.copied") : t("common.copy")}
+                  </button>
                 </div>
               </div>
               {saveError && <p className="text-red-400 text-sm">{saveError}</p>}
               {saveSuccess && <p className="text-green-400 text-sm">{t("settings.saved")}</p>}
-              <button onClick={handleSave} disabled={saving}
-                className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded font-semibold text-white disabled:opacity-50">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded font-semibold text-white disabled:opacity-50"
+              >
                 {saving ? t("common.loading") : t("common.save")}
               </button>
             </div>
           ) : tab === "members" ? (
             <div>
               {membersLoading ? (
-                <p className="text-gray-400 text-sm py-4 text-center">{t("settings.loadingMembers")}</p>
+                <p className="text-gray-400 text-sm py-4 text-center">
+                  {t("settings.loadingMembers")}
+                </p>
               ) : membersError ? (
                 <p className="text-red-400 text-sm py-4 text-center">{membersError}</p>
               ) : members.length === 0 ? (
@@ -494,17 +584,29 @@ export default function ChannelSettingsModal({
               ) : (
                 <div className="space-y-2">
                   {members.map((m) => (
-                    <div key={m.userId} className="flex items-center justify-between px-3 py-2 bg-gray-900 rounded">
+                    <div
+                      key={m.userId}
+                      className="flex items-center justify-between px-3 py-2 bg-gray-900 rounded"
+                    >
                       <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${m.isOnline ? "bg-green-400" : "bg-gray-600"}`} />
+                        <span
+                          className={`w-2 h-2 rounded-full ${m.isOnline ? "bg-green-400" : "bg-gray-600"}`}
+                        />
                         <span className="text-white text-sm">{m.nickname}</span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${m.role === "owner" ? "bg-amber-600/30 text-amber-400" : "bg-gray-700 text-gray-400"}`}>
+                        <span
+                          className={`text-xs px-1.5 py-0.5 rounded ${m.role === "owner" ? "bg-amber-600/30 text-amber-400" : "bg-gray-700 text-gray-400"}`}
+                        >
                           {m.role === "owner" ? t("settings.roleOwner") : t("settings.roleMember")}
                         </span>
                       </div>
                       {m.role !== "owner" && (
-                        <button onClick={() => setConfirmKick(m)} disabled={kickingUserId === m.userId}
-                          className="text-red-400 hover:text-red-300 text-xs px-2 py-1 disabled:opacity-50">{t("settings.kick")}</button>
+                        <button
+                          onClick={() => setConfirmKick(m)}
+                          disabled={kickingUserId === m.userId}
+                          className="text-red-400 hover:text-red-300 text-xs px-2 py-1 disabled:opacity-50"
+                        >
+                          {t("settings.kick")}
+                        </button>
                       )}
                     </div>
                   ))}
@@ -512,10 +614,22 @@ export default function ChannelSettingsModal({
               )}
               {confirmKick && (
                 <div className="mt-4 p-3 bg-red-900/30 border border-red-700 rounded">
-                  <p className="text-sm text-white mb-2">{t("settings.kickConfirm", { name: confirmKick.nickname })}</p>
+                  <p className="text-sm text-white mb-2">
+                    {t("settings.kickConfirm", { name: confirmKick.nickname })}
+                  </p>
                   <div className="flex gap-2">
-                    <button onClick={() => handleKick(confirmKick)} className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm text-white">{t("common.confirm")}</button>
-                    <button onClick={() => setConfirmKick(null)} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-300">{t("common.cancel")}</button>
+                    <button
+                      onClick={() => handleKick(confirmKick)}
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm text-white"
+                    >
+                      {t("common.confirm")}
+                    </button>
+                    <button
+                      onClick={() => setConfirmKick(null)}
+                      className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-300"
+                    >
+                      {t("common.cancel")}
+                    </button>
                   </div>
                 </div>
               )}
@@ -523,11 +637,15 @@ export default function ChannelSettingsModal({
           ) : (
             <div className="space-y-4">
               {gatewayLoading ? (
-                <p className="text-gray-400 text-sm py-4 text-center">{t("settings.loadingGateway")}</p>
+                <p className="text-gray-400 text-sm py-4 text-center">
+                  {t("settings.loadingGateway")}
+                </p>
               ) : (
                 <>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">{t("settings.gatewaySource")}</label>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">
+                      {t("settings.gatewaySource")}
+                    </label>
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -537,7 +655,9 @@ export default function ChannelSettingsModal({
                           setGatewayNotice(null);
                         }}
                         className={`px-3 py-2 rounded text-sm font-semibold ${
-                          gatewayMode === "resource" ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-300"
+                          gatewayMode === "resource"
+                            ? "bg-indigo-600 text-white"
+                            : "bg-gray-700 text-gray-300"
                         }`}
                       >
                         {t("settings.gatewayUseSaved")}
@@ -551,7 +671,9 @@ export default function ChannelSettingsModal({
                           setGatewayNotice(null);
                         }}
                         className={`px-3 py-2 rounded text-sm font-semibold ${
-                          gatewayMode === "direct" ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-300"
+                          gatewayMode === "direct"
+                            ? "bg-indigo-600 text-white"
+                            : "bg-gray-700 text-gray-300"
                         }`}
                       >
                         {t("settings.gatewayUseCustom")}
@@ -561,7 +683,9 @@ export default function ChannelSettingsModal({
                   {gatewayMode === "resource" ? (
                     <>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-300 mb-1">{t("settings.gatewaySaved")}</label>
+                        <label className="block text-sm font-semibold text-gray-300 mb-1">
+                          {t("settings.gatewaySaved")}
+                        </label>
                         <select
                           value={selectedGatewayId}
                           onChange={(e) => {
@@ -588,57 +712,70 @@ export default function ChannelSettingsModal({
                         </select>
                         {selectedGatewayId && (
                           <p className="mt-2 text-xs text-gray-400">
-                            {gatewayOptions.find((option) => option.id === selectedGatewayId)?.baseUrl ?? ""}
+                            {gatewayOptions.find((option) => option.id === selectedGatewayId)
+                              ?.baseUrl ?? ""}
                           </p>
                         )}
                         {gatewayOptions.length === 0 && (
-                          <p className="mt-2 text-xs text-amber-300">{t("settings.gatewayNoSaved")}</p>
+                          <p className="mt-2 text-xs text-amber-300">
+                            {t("settings.gatewayNoSaved")}
+                          </p>
                         )}
                       </div>
                       {!gatewayCanEditCredentials && selectedGatewayId && (
-                        <p className="text-xs text-amber-300">{t("settings.gatewaySharedReadOnly")}</p>
+                        <p className="text-xs text-amber-300">
+                          {t("settings.gatewaySharedReadOnly")}
+                        </p>
                       )}
                     </>
                   ) : (
                     <>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-1">{t("settings.gatewayUrl")}</label>
-                    <input
-                      type="text"
-                      value={gatewayUrl}
-                      onChange={(e) => setGatewayUrl(e.target.value)}
-                      placeholder={t("settings.gatewayUrlPlaceholder")}
-                      disabled={!gatewayCanEditCredentials}
-                      className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-1">{t("settings.gatewayToken")}</label>
-                    <div className="flex gap-2">
-                      <input
-                        type={showToken ? "text" : "password"}
-                        value={gatewayToken}
-                        onChange={(e) => setGatewayToken(e.target.value)}
-                        placeholder={t("settings.gatewayTokenPlaceholder")}
-                        disabled={!gatewayCanEditCredentials}
-                        className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowToken((v) => !v)}
-                        className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-300"
-                      >
-                        {showToken ? t("common.hide") : t("common.show")}
-                      </button>
-                    </div>
-                  </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-300 mb-1">
+                          {t("settings.gatewayUrl")}
+                        </label>
+                        <input
+                          type="text"
+                          value={gatewayUrl}
+                          onChange={(e) => setGatewayUrl(e.target.value)}
+                          placeholder={t("settings.gatewayUrlPlaceholder")}
+                          disabled={!gatewayCanEditCredentials}
+                          className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-300 mb-1">
+                          {t("settings.gatewayToken")}
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type={showToken ? "text" : "password"}
+                            value={gatewayToken}
+                            onChange={(e) => setGatewayToken(e.target.value)}
+                            placeholder={t("settings.gatewayTokenPlaceholder")}
+                            disabled={!gatewayCanEditCredentials}
+                            className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowToken((v) => !v)}
+                            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-300"
+                          >
+                            {showToken ? t("common.hide") : t("common.show")}
+                          </button>
+                        </div>
+                      </div>
                     </>
                   )}
                   <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3 space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-gray-200">{t("settings.taskAutomation")}</p>
-                        <p className="text-xs text-gray-400 mt-1">{t("settings.autoProgressNudgeHelp")}</p>
+                        <p className="text-sm font-semibold text-gray-200">
+                          {t("settings.taskAutomation")}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {t("settings.autoProgressNudgeHelp")}
+                        </p>
                       </div>
                       <button
                         type="button"
@@ -703,11 +840,17 @@ export default function ChannelSettingsModal({
                     <GatewayStatusCard
                       status={gatewayConnectionState.status}
                       error={gatewayConnectionState.error}
-                      detail={gatewayConnectionState.status === "connected" ? t("settings.connected") : undefined}
+                      detail={
+                        gatewayConnectionState.status === "connected"
+                          ? t("settings.connected")
+                          : undefined
+                      }
                     />
                   )}
                   {gatewayNotice && (
-                    <p className={`text-sm ${gatewayNotice.success ? "text-green-400" : "text-red-400"}`}>
+                    <p
+                      className={`text-sm ${gatewayNotice.success ? "text-green-400" : "text-red-400"}`}
+                    >
                       {gatewayNotice.message}
                     </p>
                   )}
@@ -726,7 +869,10 @@ export default function ChannelSettingsModal({
                     <button
                       type="button"
                       onClick={() => void handleTestConnection()}
-                      disabled={gatewayTesting || (gatewayMode === "resource" ? !selectedGatewayId : !gatewayUrl.trim())}
+                      disabled={
+                        gatewayTesting ||
+                        (gatewayMode === "resource" ? !selectedGatewayId : !gatewayUrl.trim())
+                      }
                       className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded font-semibold text-white disabled:opacity-50"
                     >
                       {gatewayTesting ? t("common.loading") : t("settings.testConnection")}

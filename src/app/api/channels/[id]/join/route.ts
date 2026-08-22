@@ -3,17 +3,17 @@ import { channels, channelMembers, groupMembers } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { verifyPassword } from "@/lib/password";
-import { summarizeChannelDetailAccess, summarizeChannelJoinAccess } from "@/lib/rbac/channel-access";
+import {
+  summarizeChannelDetailAccess,
+  summarizeChannelJoinAccess,
+} from "@/lib/rbac/channel-access";
 
 function getUserId(req: NextRequest): string | null {
   return req.headers.get("x-user-id");
 }
 
 // POST /api/channels/:id/join
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
@@ -23,11 +23,7 @@ export async function POST(
 
   try {
     // Check if channel exists
-    const [channel] = await db
-      .select()
-      .from(channels)
-      .where(eq(channels.id, id))
-      .limit(1);
+    const [channel] = await db.select().from(channels).where(eq(channels.id, id)).limit(1);
 
     if (!channel) {
       return NextResponse.json(
@@ -45,10 +41,10 @@ export async function POST(
 
     const groupMembership = channel.groupId
       ? await db
-        .select({ role: groupMembers.role })
-        .from(groupMembers)
-        .where(and(eq(groupMembers.groupId, channel.groupId), eq(groupMembers.userId, userId)))
-        .limit(1)
+          .select({ role: groupMembers.role })
+          .from(groupMembers)
+          .where(and(eq(groupMembers.groupId, channel.groupId), eq(groupMembers.userId, userId)))
+          .limit(1)
       : [];
 
     const detailAccess = summarizeChannelDetailAccess({
@@ -64,12 +60,14 @@ export async function POST(
     });
 
     if (!joinAccess.allowed) {
-      const errorCode = joinAccess.reason === "groupless_public_browse_only"
-        ? "public_channel_browse_only"
-        : "group_membership_required";
-      const error = joinAccess.reason === "groupless_public_browse_only"
-        ? "public channel browse only"
-        : "group membership required";
+      const errorCode =
+        joinAccess.reason === "groupless_public_browse_only"
+          ? "public_channel_browse_only"
+          : "group_membership_required";
+      const error =
+        joinAccess.reason === "groupless_public_browse_only"
+          ? "public channel browse only"
+          : "group membership required";
 
       return NextResponse.json({ errorCode, error }, { status: 403 });
     }

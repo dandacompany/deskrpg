@@ -84,20 +84,28 @@ test("registerMeetingDiscussionHandlers starts a broker and emits mode change", 
       adapterRegistry: new AdapterRegistry(),
       getNpcConfigsForChannel: async () => [
         {
-          id: "npc-1", name: "Analyst", agentId: "agent-1", sessionKeyPrefix: "sess-1",
-          adapterType: "openclaw", hermesProfileId: null, role: "Participant", passPolicy: null,
+          id: "npc-1",
+          name: "Analyst",
+          agentId: "agent-1",
+          sessionKeyPrefix: "sess-1",
+          adapterType: "openclaw",
+          hermesProfileId: null,
+          role: "Participant",
+          passPolicy: null,
         },
       ],
       canControlMeeting: async () => true,
       createMeetingBroker: () => ({
         config: {
-          participants: [{
-            npcId: "npc-1",
-            displayName: "Analyst",
-            role: "Participant",
-            passPolicy: null,
-            openclawAgentId: "agent-1",
-          }],
+          participants: [
+            {
+              npcId: "npc-1",
+              displayName: "Analyst",
+              role: "Participant",
+              passPolicy: null,
+              openclawAgentId: "agent-1",
+            },
+          ],
           sessionKeyPrefix: "sess-1",
           meetingId: "meet-1",
         },
@@ -170,7 +178,9 @@ function recordingAdapter(replies: string[]) {
       const text = queue.length > 1 ? queue.shift()! : queue[0];
       return { response: text, session: { sessionRef: options.sessionKey } };
     },
-    async testConnection() { return { status: "ok" as const }; },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
   };
 }
 
@@ -197,10 +207,20 @@ test("resolution layer: 제외 사유를 각각 그 사유로 통지한다", asy
     brokerConfig(
       [
         npcConfig({ id: "n-unbound", name: "Unbound", adapterType: "unbound" }),
-        npcConfig({ id: "n-hermes", name: "Hermes", adapterType: "hermes", hermesProfileId: "p-1" }),
+        npcConfig({
+          id: "n-hermes",
+          name: "Hermes",
+          adapterType: "hermes",
+          hermesProfileId: "p-1",
+        }),
         // OpenClaw 제거 후: adapterType 이 openclaw 로 남아 있는 NPC 는 agentId 유무와
         // 무관하게 unbound 로 제외된다 — 쓸 백엔드가 더는 존재하지 않기 때문이다.
-        npcConfig({ id: "n-oc", name: "LegacyOpenClaw", adapterType: "openclaw", agentId: "agent-9" }),
+        npcConfig({
+          id: "n-oc",
+          name: "LegacyOpenClaw",
+          adapterType: "openclaw",
+          agentId: "agent-9",
+        }),
         npcConfig({ id: "n-registry", name: "Registry", adapterType: "cli" }),
       ],
       { adapterRegistry: registry },
@@ -229,8 +249,18 @@ test("resolution layer: hermes / registry 디스패치가 각각 맞는 백엔�
   const broker = await defaultCreateMeetingBroker(
     brokerConfig(
       [
-        npcConfig({ id: "n-hermes", name: "Hermes", adapterType: "hermes", hermesProfileId: "p-1" }),
-        npcConfig({ id: "n-oc", name: "LegacyOpenClaw", adapterType: "openclaw", agentId: "agent-9" }),
+        npcConfig({
+          id: "n-hermes",
+          name: "Hermes",
+          adapterType: "hermes",
+          hermesProfileId: "p-1",
+        }),
+        npcConfig({
+          id: "n-oc",
+          name: "LegacyOpenClaw",
+          adapterType: "openclaw",
+          agentId: "agent-9",
+        }),
         npcConfig({ id: "n-cli", name: "Cli", adapterType: "cli" }),
       ],
       { adapterRegistry: registry },
@@ -284,7 +314,14 @@ test("resolution layer: npc.passPolicy가 엔진까지 살아남아 폴링 프�
 
   const broker = await defaultCreateMeetingBroker(
     brokerConfig(
-      [npcConfig({ id: "n-cli", name: "Cli", adapterType: "cli", passPolicy: "근거 없으면 PASS 하세요" })],
+      [
+        npcConfig({
+          id: "n-cli",
+          name: "Cli",
+          adapterType: "cli",
+          passPolicy: "근거 없으면 PASS 하세요",
+        }),
+      ],
       { adapterRegistry: registry },
     ),
     {},
@@ -308,10 +345,10 @@ test("resolution layer: 잘못된 settings.initialMode는 캐스팅되지 않고
 
   const modeChanges: Array<[string, string]> = [];
   const broker = await defaultCreateMeetingBroker(
-    brokerConfig(
-      [npcConfig({ id: "n-cli", name: "Cli", adapterType: "cli" })],
-      { adapterRegistry: registry, settings: { initialMode: "bogus" } },
-    ),
+    brokerConfig([npcConfig({ id: "n-cli", name: "Cli", adapterType: "cli" })], {
+      adapterRegistry: registry,
+      settings: { initialMode: "bogus" },
+    }),
     { onModeChanged: (mode: string, by: string) => modeChanges.push([mode, by]) },
   );
 

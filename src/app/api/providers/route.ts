@@ -57,7 +57,10 @@ export async function POST(req: NextRequest) {
     baseUrl = normalizeOptionalProviderText(body.baseUrl);
   } catch {
     return NextResponse.json(
-      { errorCode: "invalid_provider_payload", error: "displayName/baseUrl must be a string or null" },
+      {
+        errorCode: "invalid_provider_payload",
+        error: "displayName/baseUrl must be a string or null",
+      },
       { status: 400 },
     );
   }
@@ -68,7 +71,10 @@ export async function POST(req: NextRequest) {
       credentialsEncrypted = encryptGatewayToken(serializeProviderCredentials(body.credentials));
     } catch {
       return NextResponse.json(
-        { errorCode: "invalid_provider_credentials", error: "Provider credentials must be serializable" },
+        {
+          errorCode: "invalid_provider_credentials",
+          error: "Provider credentials must be serializable",
+        },
         { status: 400 },
       );
     }

@@ -20,9 +20,7 @@ const currentPort = parseInt(process.env.PORT, 10) || 3000;
 const hostname = process.env.HOSTNAME || "0.0.0.0";
 
 // Load Next.js config from standalone build
-const nextConfig = require(
-  path.join(dir, ".next", "required-server-files.json"),
-).config;
+const nextConfig = require(path.join(dir, ".next", "required-server-files.json")).config;
 process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(nextConfig);
 
 require("next");
@@ -41,14 +39,8 @@ async function main() {
     }
     return moduleNamespace;
   };
-  const socketHandlers = unwrapTsModule(
-    await import("./src/server/socket-handlers.ts"),
-  );
-  const {
-    setupSocketHandlers,
-    getRoomUserIds,
-    getSocketIdsForUser,
-  } = socketHandlers;
+  const socketHandlers = unwrapTsModule(await import("./src/server/socket-handlers.ts"));
+  const { setupSocketHandlers, getRoomUserIds, getSocketIdsForUser } = socketHandlers;
 
   const { db, schema } = require("./src/db/server-db.js");
   const { eq } = require("drizzle-orm");
@@ -156,9 +148,7 @@ async function main() {
 
   const internalHostname = getInternalSocketHostname(process.env);
   socketHttpServer.listen(SOCKET_PORT, internalHostname, () => {
-    console.log(
-      `[socket.io] Listening on http://${internalHostname}:${SOCKET_PORT}`,
-    );
+    console.log(`[socket.io] Listening on http://${internalHostname}:${SOCKET_PORT}`);
   });
 }
 

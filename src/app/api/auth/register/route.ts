@@ -72,12 +72,15 @@ export async function POST(req: NextRequest) {
 
   const passwordHash = await hashPassword(password);
   const [{ value: userCount }] = await db.select({ value: count() }).from(users);
-  const [createdUser] = await db.insert(users).values({
-    loginId,
-    nickname,
-    passwordHash,
-    systemRole: "user",
-  }).returning();
+  const [createdUser] = await db
+    .insert(users)
+    .values({
+      loginId,
+      nickname,
+      passwordHash,
+      systemRole: "user",
+    })
+    .returning();
 
   const bootstrap = buildBootstrapActions({
     existingUserCount: Number(userCount),
@@ -88,17 +91,20 @@ export async function POST(req: NextRequest) {
   let createdGroupId: string | null = null;
 
   if (bootstrap.createDefaultGroup && bootstrap.defaultGroup) {
-    const insertedGroups = await db.insert(groups).values({
-      ...bootstrap.defaultGroup,
-      createdBy: createdUser.id,
-    }).onConflictDoNothing({
-      target: groups.slug,
-    }).returning();
+    const insertedGroups = await db
+      .insert(groups)
+      .values({
+        ...bootstrap.defaultGroup,
+        createdBy: createdUser.id,
+      })
+      .onConflictDoNothing({
+        target: groups.slug,
+      })
+      .returning();
 
     const createdGroup = insertedGroups[0];
     defaultGroupCreated = Boolean(createdGroup);
     createdGroupId = createdGroup?.id ?? null;
-
   }
 
   const completion = resolveBootstrapCompletion({
@@ -132,13 +138,16 @@ export async function POST(req: NextRequest) {
       .limit(1);
 
     if (defaultGroup) {
-      await db.insert(groupMembers).values({
-        groupId: defaultGroup.id,
-        userId: createdUser.id,
-        role: "member",
-        approvedBy: createdUser.id,
-        approvedAt: (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date,
-      }).onConflictDoNothing();
+      await db
+        .insert(groupMembers)
+        .values({
+          groupId: defaultGroup.id,
+          userId: createdUser.id,
+          role: "member",
+          approvedBy: createdUser.id,
+          approvedAt: (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date,
+        })
+        .onConflictDoNothing();
     }
   }
 

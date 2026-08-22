@@ -95,12 +95,7 @@ test("join-request approval creates member role when no membership exists", () =
 });
 
 test("group slug candidates provide deterministic retry sequence", () => {
-  assert.deepEqual(buildGroupSlugCandidates("team", 4), [
-    "team",
-    "team-2",
-    "team-3",
-    "team-4",
-  ]);
+  assert.deepEqual(buildGroupSlugCandidates("team", 4), ["team", "team-2", "team-3", "team-4"]);
 });
 
 test("management capabilities derive a single canManageGroup flag", () => {

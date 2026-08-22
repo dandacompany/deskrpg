@@ -10,7 +10,13 @@ export interface CardProps {
   className?: string;
 }
 
-export default function Card({ selectable, selected, onClick, children, className = "" }: CardProps) {
+export default function Card({
+  selectable,
+  selected,
+  onClick,
+  children,
+  className = "",
+}: CardProps) {
   return (
     <div
       onClick={selectable || onClick ? onClick : undefined}
@@ -20,7 +26,9 @@ export default function Card({ selectable, selected, onClick, children, classNam
         ${selectable && !selected ? "hover:ring-2 hover:ring-primary cursor-pointer" : ""}
         ${onClick && !selectable ? "cursor-pointer hover:border-primary-light" : ""}
         ${className}
-      `.trim().replace(/\s+/g, " ")}
+      `
+        .trim()
+        .replace(/\s+/g, " ")}
     >
       {children}
     </div>

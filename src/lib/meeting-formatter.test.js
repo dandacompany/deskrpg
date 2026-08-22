@@ -6,7 +6,10 @@ const { formatSpeakMessage } = require("./meeting-formatter.js");
 test("발언 프롬프트가 멘션 형식을 알려준다", () => {
   const prompt = formatSpeakMessage(
     "점심 메뉴",
-    [{ displayName: "단비", role: "팀장" }, { displayName: "소피", role: "개발자" }],
+    [
+      { displayName: "단비", role: "팀장" },
+      { displayName: "소피", role: "개발자" },
+    ],
     [],
     { displayName: "소피" },
     1,

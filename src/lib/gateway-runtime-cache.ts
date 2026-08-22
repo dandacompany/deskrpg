@@ -1,10 +1,5 @@
 export type GatewayRuntimeStatus =
-  | "unbound"
-  | "valid"
-  | "pairing_required"
-  | "forbidden"
-  | "unreachable"
-  | "error";
+  "unbound" | "valid" | "pairing_required" | "forbidden" | "unreachable" | "error";
 
 export interface GatewayRuntimeState {
   gatewayId: string;
@@ -68,4 +63,3 @@ export function setGatewayRuntimeState(
 export function invalidateGatewayRuntimeState(gatewayId: string) {
   runtimeCache.delete(gatewayId);
 }
-

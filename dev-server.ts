@@ -5,10 +5,7 @@ import { createServer } from "node:http";
 import { parse } from "node:url";
 import next from "next";
 import { Server as SocketServer } from "socket.io";
-import {
-  registerGatewayConfigUpdatedHandler,
-  registerRpcHandler,
-} from "./src/lib/rpc-registry";
+import { registerGatewayConfigUpdatedHandler, registerRpcHandler } from "./src/lib/rpc-registry";
 
 const envLoader = (
   process as typeof process & {
@@ -26,10 +23,7 @@ try {
 const hostname = process.env.HOSTNAME || "localhost";
 const preferredPort = parseInt(process.env.PORT || "3000", 10);
 
-async function findAvailablePort(
-  start: number,
-  maxAttempts = 10,
-): Promise<number> {
+async function findAvailablePort(start: number, maxAttempts = 10): Promise<number> {
   const net = await import("node:net");
   for (let p = start; p < start + maxAttempts; p++) {
     const available = await new Promise<boolean>((resolve) => {
@@ -41,9 +35,7 @@ async function findAvailablePort(
     });
     if (available) return p;
   }
-  throw new Error(
-    `No available port found in range ${start}-${start + maxAttempts - 1}`,
-  );
+  throw new Error(`No available port found in range ${start}-${start + maxAttempts - 1}`);
 }
 
 const app = next({ dev: true, hostname, port: preferredPort });

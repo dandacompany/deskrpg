@@ -19,12 +19,20 @@ interface NpcAssignModalProps {
   onCancel: () => void;
 }
 
-export default function NpcAssignModal({ taskTitle, npcs, onAssign, onCancel }: NpcAssignModalProps) {
+export default function NpcAssignModal({
+  taskTitle,
+  npcs,
+  onAssign,
+  onCancel,
+}: NpcAssignModalProps) {
   const t = useT();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60" onClick={onCancel}>
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60"
+      onClick={onCancel}
+    >
       <div
         className="bg-surface-raised rounded-xl border border-border w-[340px] max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -60,7 +68,10 @@ export default function NpcAssignModal({ taskTitle, npcs, onAssign, onCancel }: 
               <div className="flex-1 text-left">
                 <div className="text-caption font-bold text-text">{npc.name}</div>
                 <div className="text-[10px] text-text-muted">
-                  {t("task.npcWorkload", { inProgress: npc.inProgressCount, pending: npc.pendingCount })}
+                  {t("task.npcWorkload", {
+                    inProgress: npc.inProgressCount,
+                    pending: npc.pendingCount,
+                  })}
                 </div>
               </div>
               <div className={`text-[10px] ${npc.isActive ? "text-success" : "text-danger"}`}>

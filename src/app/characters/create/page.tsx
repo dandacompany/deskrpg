@@ -15,7 +15,13 @@ import { useEffect } from "react";
 export default function CharacterCreatePage() {
   const t = useT();
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">{t("common.loading")}</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+          {t("common.loading")}
+        </div>
+      }
+    >
       <CharacterCreatePageInner />
     </Suspense>
   );
@@ -31,11 +37,22 @@ function CharacterCreatePageInner() {
 
   const appearance = useCharacterAppearance();
   const {
-    bodyType, setBodyType, layers, setLayers,
-    activeCategory, setActiveCategory,
-    handleBodyTypeChange, selectItem, clearCategory, setVariant, setSkin,
-    isItemCompatible, getItemBodyTypes, compatibleCount,
-    randomize, buildAppearance,
+    bodyType,
+    setBodyType,
+    layers,
+    setLayers,
+    activeCategory,
+    setActiveCategory,
+    handleBodyTypeChange,
+    selectItem,
+    clearCategory,
+    setVariant,
+    setSkin,
+    isItemCompatible,
+    getItemBodyTypes,
+    compatibleCount,
+    randomize,
+    buildAppearance,
   } = appearance;
 
   const [name, setName] = useState("");
@@ -199,9 +216,7 @@ function CharacterCreatePageInner() {
             disabled={saving}
             className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded font-semibold"
           >
-            {saving
-              ? t("common.loading")
-              : isEditMode ? t("common.save") : t("characters.create")}
+            {saving ? t("common.loading") : isEditMode ? t("common.save") : t("characters.create")}
           </button>
         </div>
       </div>

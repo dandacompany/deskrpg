@@ -14,9 +14,19 @@
  * @param {string|null} [passPolicy]
  * @returns {string}
  */
-function formatPollMessage(topic, recentTurns, agent, currentTurn, maxTurns, remainingTurns, passPolicy) {
+function formatPollMessage(
+  topic,
+  recentTurns,
+  agent,
+  currentTurn,
+  maxTurns,
+  remainingTurns,
+  passPolicy,
+) {
   const recentSummary = recentTurns
-    .map((t) => `[${t.displayName}] ${t.content.slice(0, 150)}${t.content.length > 150 ? "..." : ""}`)
+    .map(
+      (t) => `[${t.displayName}] ${t.content.slice(0, 150)}${t.content.length > 150 ? "..." : ""}`,
+    )
     .join("\n");
 
   let message = `📋 [회의 알림: ${topic}]
@@ -51,14 +61,18 @@ ${recentSummary}
  * @param {number} remainingTurns
  * @returns {string}
  */
-function formatSpeakMessage(topic, participants, turns, agent, currentTurn, maxTurns, remainingTurns) {
-  const participantList = participants
-    .map((p) => `${p.displayName}(${p.role})`)
-    .join(", ");
+function formatSpeakMessage(
+  topic,
+  participants,
+  turns,
+  agent,
+  currentTurn,
+  maxTurns,
+  remainingTurns,
+) {
+  const participantList = participants.map((p) => `${p.displayName}(${p.role})`).join(", ");
 
-  const historyText = turns
-    .map((t) => `[${t.displayName}] ${t.content}`)
-    .join("\n\n");
+  const historyText = turns.map((t) => `[${t.displayName}] ${t.content}`).join("\n\n");
 
   return `📋 [회의: ${topic}]
 참석자: ${participantList}

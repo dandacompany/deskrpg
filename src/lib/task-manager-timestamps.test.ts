@@ -37,7 +37,11 @@ const { TaskManager } = require("./task-manager.js") as {
     _nowForDb(): Date | string;
     completeTask(taskId: string, channelId: string): Promise<Record<string, unknown> | null>;
     markTaskNudged(taskId: string, channelId: string): Promise<Record<string, unknown> | null>;
-    markTaskStalled(taskId: string, channelId: string, reason?: string): Promise<Record<string, unknown> | null>;
+    markTaskStalled(
+      taskId: string,
+      channelId: string,
+      reason?: string,
+    ): Promise<Record<string, unknown> | null>;
     resumeTask(taskId: string, channelId: string): Promise<Record<string, unknown> | null>;
     moveTask(
       taskId: string,
@@ -46,7 +50,10 @@ const { TaskManager } = require("./task-manager.js") as {
       npcId: string | null,
       options?: { expectedFromStatus?: string },
     ): Promise<Record<string, unknown> | null>;
-    getStaleInProgressTasks(channelId: string, olderThanIso: string): Promise<Record<string, unknown>[]>;
+    getStaleInProgressTasks(
+      channelId: string,
+      olderThanIso: string,
+    ): Promise<Record<string, unknown>[]>;
   };
 };
 
@@ -153,7 +160,12 @@ function fakeRow(overrides: Record<string, unknown> = {}): Record<string, unknow
 const fakeSchema = { tasks: sqliteTasks, npcs: sqliteNpcs };
 
 /** Walk a drizzle SQL expression and collect every bound Param value. */
-function collectParamValues(node: unknown, acc: unknown[], seen = new Set<unknown>(), depth = 0): unknown[] {
+function collectParamValues(
+  node: unknown,
+  acc: unknown[],
+  seen = new Set<unknown>(),
+  depth = 0,
+): unknown[] {
   // The cutoff is bound inside and(eq, eq, or(and(lte..), and(lte..))), so the
   // lte() Params sit deep in the SQL chunk tree (~depth 14). Allow generous depth.
   if (depth > 40 || node == null || typeof node !== "object") return acc;
@@ -201,7 +213,10 @@ test("completeTask writes Date timestamps in PG mode", async () => {
   assert.equal(capture.setPayloads.length, 1, "expected exactly one .set() call");
   const payload = capture.setPayloads[0];
   for (const field of ["completedAt", "lastReportedAt", "updatedAt"] as const) {
-    assert.ok(payload[field] instanceof Date, `PG completeTask: ${field} should be a Date, got ${typeof payload[field]}`);
+    assert.ok(
+      payload[field] instanceof Date,
+      `PG completeTask: ${field} should be a Date, got ${typeof payload[field]}`,
+    );
   }
 });
 
@@ -214,8 +229,16 @@ test("completeTask writes ISO-string timestamps in SQLite mode", async () => {
 
   const payload = capture.setPayloads[0];
   for (const field of ["completedAt", "lastReportedAt", "updatedAt"] as const) {
-    assert.equal(typeof payload[field], "string", `SQLite completeTask: ${field} should be a string`);
-    assert.match(payload[field] as string, ISO_RE, `SQLite completeTask: ${field} should be ISO-8601`);
+    assert.equal(
+      typeof payload[field],
+      "string",
+      `SQLite completeTask: ${field} should be a string`,
+    );
+    assert.match(
+      payload[field] as string,
+      ISO_RE,
+      `SQLite completeTask: ${field} should be ISO-8601`,
+    );
   }
 });
 
@@ -231,10 +254,17 @@ test("markTaskNudged writes Date timestamps in PG mode", async () => {
 
   // The .set() payload is from the update branch.
   const payload = capture.setPayloads.at(-1)!;
-  assert.ok(payload.lastNudgedAt instanceof Date, "PG markTaskNudged: lastNudgedAt should be a Date");
+  assert.ok(
+    payload.lastNudgedAt instanceof Date,
+    "PG markTaskNudged: lastNudgedAt should be a Date",
+  );
   assert.ok(payload.updatedAt instanceof Date, "PG markTaskNudged: updatedAt should be a Date");
   // autoNudgeCount is a number, not a timestamp.
-  assert.equal(payload.autoNudgeCount, 3, "autoNudgeCount should increment from the read row (2 -> 3)");
+  assert.equal(
+    payload.autoNudgeCount,
+    3,
+    "autoNudgeCount should increment from the read row (2 -> 3)",
+  );
 });
 
 test("markTaskNudged writes ISO-string timestamps in SQLite mode", async () => {
@@ -245,7 +275,11 @@ test("markTaskNudged writes ISO-string timestamps in SQLite mode", async () => {
   await mgr.markTaskNudged("task-1", "channel-1");
 
   const payload = capture.setPayloads.at(-1)!;
-  assert.equal(typeof payload.lastNudgedAt, "string", "SQLite markTaskNudged: lastNudgedAt should be a string");
+  assert.equal(
+    typeof payload.lastNudgedAt,
+    "string",
+    "SQLite markTaskNudged: lastNudgedAt should be a string",
+  );
   assert.match(payload.lastNudgedAt as string, ISO_RE);
   assert.equal(typeof payload.updatedAt, "string");
   assert.match(payload.updatedAt as string, ISO_RE);
@@ -275,7 +309,11 @@ test("markTaskStalled writes ISO-string timestamps in SQLite mode", async () => 
   await mgr.markTaskStalled("task-1", "channel-1", "max_nudges_reached");
 
   const payload = capture.setPayloads[0];
-  assert.equal(typeof payload.stalledAt, "string", "SQLite markTaskStalled: stalledAt should be a string");
+  assert.equal(
+    typeof payload.stalledAt,
+    "string",
+    "SQLite markTaskStalled: stalledAt should be a string",
+  );
   assert.match(payload.stalledAt as string, ISO_RE);
   assert.equal(typeof payload.updatedAt, "string");
   assert.match(payload.updatedAt as string, ISO_RE);

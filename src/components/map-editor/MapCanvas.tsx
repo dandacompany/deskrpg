@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useRef, useEffect, useCallback, useState } from 'react';
-import type { EditorState, TileRegion, TilesetImageInfo, EditorAction } from './hooks/useMapEditor';
-import { useCanvasRenderer, type CharacterState } from './hooks/useCanvasRenderer';
-import { usePanZoom } from './hooks/usePanZoom';
-import { compositeCharacter } from '@/lib/sprite-compositor';
-import { getDefaultLayers } from '@/hooks/useCharacterAppearance';
-import { useT } from '@/lib/i18n';
+import { useRef, useEffect, useCallback, useState } from "react";
+import type { EditorState, TileRegion, TilesetImageInfo, EditorAction } from "./hooks/useMapEditor";
+import { useCanvasRenderer, type CharacterState } from "./hooks/useCanvasRenderer";
+import { usePanZoom } from "./hooks/usePanZoom";
+import { compositeCharacter } from "@/lib/sprite-compositor";
+import { getDefaultLayers } from "@/hooks/useCharacterAppearance";
+import { useT } from "@/lib/i18n";
 
 // === Props ===
 
@@ -16,7 +16,13 @@ interface MapCanvasProps {
   findTileset: (gid: number) => TilesetImageInfo | null;
   onStatusUpdate?: (info: { tileX: number; tileY: number; gid: number }) => void;
   layerOverlayMap?: Record<number, boolean>;
-  onEditSelectionPixels?: (dataUrl: string, width: number, height: number, tileWidth: number, tileHeight: number) => void;
+  onEditSelectionPixels?: (
+    dataUrl: string,
+    width: number,
+    height: number,
+    tileWidth: number,
+    tileHeight: number,
+  ) => void;
   onCopySelection?: () => void;
   onSaveAsStamp?: (thumbnail: string | null) => void;
   activeStamp?: any | null;
@@ -31,7 +37,18 @@ const WALK_INTERVAL_MS = 120;
 
 // === Component ===
 
-export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerOverlayMap, onEditSelectionPixels, onCopySelection, onSaveAsStamp, activeStamp, onPlaceStamp }: MapCanvasProps) {
+export function MapCanvas({
+  state,
+  dispatch,
+  findTileset,
+  onStatusUpdate,
+  layerOverlayMap,
+  onEditSelectionPixels,
+  onCopySelection,
+  onSaveAsStamp,
+  activeStamp,
+  onPlaceStamp,
+}: MapCanvasProps) {
   const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -52,7 +69,9 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
   const isSelectDragging = useRef(false);
   const isMovingSelection = useRef(false);
   const moveOrigin = useRef<{ x: number; y: number } | null>(null);
-  const moveStartSelection = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const moveStartSelection = useRef<{ x: number; y: number; width: number; height: number } | null>(
+    null,
+  );
   const selectStart = useRef<{ x: number; y: number } | null>(null);
   const pendingChanges = useRef<Array<{ index: number; oldGid: number; newGid: number }>>([]);
   const pendingLayerIndex = useRef<number>(0);
@@ -72,8 +91,8 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
   // === Load character spritesheet (composited from default appearance) ===
 
   useEffect(() => {
-    const canvas = document.createElement('canvas');
-    const appearance = { bodyType: 'male', layers: getDefaultLayers('male') };
+    const canvas = document.createElement("canvas");
+    const appearance = { bodyType: "male", layers: getDefaultLayers("male") };
     compositeCharacter(canvas, appearance)
       .then(() => {
         // Convert composited canvas to an Image for the renderer
@@ -82,7 +101,7 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
           characterSheetRef.current = img;
           setCharacterLoaded(true);
         };
-        img.src = canvas.toDataURL('image/png');
+        img.src = canvas.toDataURL("image/png");
       })
       .catch(() => {
         characterSheetRef.current = null;
@@ -94,9 +113,9 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
   useEffect(() => {
     if (!state.mapData) return;
     for (const layer of state.mapData.layers) {
-      if (layer.type === 'objectgroup' && layer.objects) {
+      if (layer.type === "objectgroup" && layer.objects) {
         const spawn = layer.objects.find(
-          (o) => o.type === 'spawn' || o.name.toLowerCase() === 'spawn',
+          (o) => o.type === "spawn" || o.name.toLowerCase() === "spawn",
         );
         if (spawn) {
           setCharacterState((prev) => ({
@@ -133,13 +152,26 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         canvas.height = height * dpr;
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext("2d");
         if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const preview = activeStamp && stampCursorTile
-          ? { tileX: stampCursorTile.x, tileY: stampCursorTile.y, cols: activeStamp.cols, rows: activeStamp.rows, previewImage: stampPreviewImgRef.current ?? undefined }
-          : isPasteMode && pasteCursorTile && state.clipboard
-          ? { tileX: pasteCursorTile.x, tileY: pasteCursorTile.y, cols: state.clipboard.width, rows: state.clipboard.height, previewImage: pastePreviewImgRef.current ?? undefined }
-          : undefined;
+        const preview =
+          activeStamp && stampCursorTile
+            ? {
+                tileX: stampCursorTile.x,
+                tileY: stampCursorTile.y,
+                cols: activeStamp.cols,
+                rows: activeStamp.rows,
+                previewImage: stampPreviewImgRef.current ?? undefined,
+              }
+            : isPasteMode && pasteCursorTile && state.clipboard
+              ? {
+                  tileX: pasteCursorTile.x,
+                  tileY: pasteCursorTile.y,
+                  cols: state.clipboard.width,
+                  rows: state.clipboard.height,
+                  previewImage: pastePreviewImgRef.current ?? undefined,
+                }
+              : undefined;
         render(canvas, characterSheetRef.current ?? undefined, characterState, {
           layerOverlayMap,
           stampPreview: preview,
@@ -156,16 +188,38 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const preview = activeStamp && stampCursorTile
-      ? { tileX: stampCursorTile.x, tileY: stampCursorTile.y, cols: activeStamp.cols, rows: activeStamp.rows, previewImage: stampPreviewImgRef.current ?? undefined }
-      : isPasteMode && pasteCursorTile && state.clipboard
-      ? { tileX: pasteCursorTile.x, tileY: pasteCursorTile.y, cols: state.clipboard.width, rows: state.clipboard.height, previewImage: pastePreviewImgRef.current ?? undefined }
-      : undefined;
+    const preview =
+      activeStamp && stampCursorTile
+        ? {
+            tileX: stampCursorTile.x,
+            tileY: stampCursorTile.y,
+            cols: activeStamp.cols,
+            rows: activeStamp.rows,
+            previewImage: stampPreviewImgRef.current ?? undefined,
+          }
+        : isPasteMode && pasteCursorTile && state.clipboard
+          ? {
+              tileX: pasteCursorTile.x,
+              tileY: pasteCursorTile.y,
+              cols: state.clipboard.width,
+              rows: state.clipboard.height,
+              previewImage: pastePreviewImgRef.current ?? undefined,
+            }
+          : undefined;
     render(canvas, characterSheetRef.current ?? undefined, characterState, {
       layerOverlayMap,
       stampPreview: preview,
     });
-  }, [state, characterState, characterLoaded, render, stampCursorTile, activeStamp, isPasteMode, pasteCursorTile]);
+  }, [
+    state,
+    characterState,
+    characterLoaded,
+    render,
+    stampCursorTile,
+    activeStamp,
+    isPasteMode,
+    pasteCursorTile,
+  ]);
 
   // === Coordinate conversion ===
 
@@ -191,10 +245,10 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
       const idx = tileY * mapW + tileX;
 
       for (const layer of state.mapData.layers) {
-        if (layer.type !== 'tilelayer' || !layer.data) continue;
-        const name = (layer.name || '').toLowerCase();
+        if (layer.type !== "tilelayer" || !layer.data) continue;
+        const name = (layer.name || "").toLowerCase();
         // Check Collision layer only
-        if (name === 'collision') {
+        if (name === "collision") {
           if (layer.data[idx] !== 0) return true;
         }
       }
@@ -230,7 +284,7 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
     (mx: number, my: number) => {
       if (!state.mapData) return;
       const layer = state.mapData.layers[state.activeLayerIndex];
-      if (!layer || layer.type !== 'tilelayer' || !layer.data) return;
+      if (!layer || layer.type !== "tilelayer" || !layer.data) return;
 
       const tile = screenToTile(mx, my);
       const mapW = state.mapData.width;
@@ -240,13 +294,13 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
 
       const changes: Array<{ index: number; oldGid: number; newGid: number }> = [];
 
-      if (state.tool === 'erase') {
+      if (state.tool === "erase") {
         const idx = tile.y * mapW + tile.x;
         const oldGid = layer.data[idx];
         if (oldGid !== 0) {
           changes.push({ index: idx, oldGid, newGid: 0 });
         }
-      } else if (state.tool === 'paint') {
+      } else if (state.tool === "paint") {
         const region = state.selectedRegion;
         if (region && (region.width > 1 || region.height > 1)) {
           // Stamp region
@@ -279,13 +333,21 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         pendingChanges.current.push(...changes);
         // Apply immediately for visual feedback
         dispatch({
-          type: 'PAINT_TILE',
+          type: "PAINT_TILE",
           layerIndex: state.activeLayerIndex,
           changes,
         });
       }
     },
-    [state.mapData, state.activeLayerIndex, state.tool, state.selectedTileGid, state.selectedRegion, screenToTile, dispatch],
+    [
+      state.mapData,
+      state.activeLayerIndex,
+      state.tool,
+      state.selectedTileGid,
+      state.selectedRegion,
+      screenToTile,
+      dispatch,
+    ],
   );
 
   // === Walk animation helpers ===
@@ -360,12 +422,12 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
       }
 
       // 3. Select tool
-      if (state.tool === 'select' && e.button === 0) {
+      if (state.tool === "select" && e.button === 0) {
         const tile = screenToTile(mx, my);
 
         // Paste mode: click to place clipboard content
         if (isPasteMode && state.clipboard) {
-          dispatch({ type: 'PASTE_CLIPBOARD', x: tile.x, y: tile.y });
+          dispatch({ type: "PASTE_CLIPBOARD", x: tile.x, y: tile.y });
           // Stay in paste mode for multiple pastes; Escape to exit
           return;
         }
@@ -374,8 +436,10 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         if (state.selection) {
           const sel = state.selection;
           if (
-            tile.x >= sel.x && tile.x < sel.x + sel.width &&
-            tile.y >= sel.y && tile.y < sel.y + sel.height
+            tile.x >= sel.x &&
+            tile.x < sel.x + sel.width &&
+            tile.y >= sel.y &&
+            tile.y < sel.y + sel.height
           ) {
             isMovingSelection.current = true;
             moveOrigin.current = { x: tile.x, y: tile.y };
@@ -388,23 +452,34 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         isSelectDragging.current = true;
         selectStart.current = { x: tile.x, y: tile.y };
         setIsPasteMode(false);
-        dispatch({ type: 'CLEAR_SELECTION' });
+        dispatch({ type: "CLEAR_SELECTION" });
         dispatch({
-          type: 'SET_SELECTION',
+          type: "SET_SELECTION",
           selection: { x: tile.x, y: tile.y, width: 1, height: 1 },
         });
         return;
       }
 
       // 4. Paint/Erase
-      if ((state.tool === 'paint' || state.tool === 'erase') && e.button === 0) {
+      if ((state.tool === "paint" || state.tool === "erase") && e.button === 0) {
         isDraggingTile.current = true;
         pendingChanges.current = [];
         pendingLayerIndex.current = state.activeLayerIndex;
         applyTool(mx, my);
       }
     },
-    [state.mapData, state.tool, state.activeLayerIndex, state.clipboard, panZoom, isCharacterHit, applyTool, startWalkAnimation, screenToTile, dispatch],
+    [
+      state.mapData,
+      state.tool,
+      state.activeLayerIndex,
+      state.clipboard,
+      panZoom,
+      isCharacterHit,
+      applyTool,
+      startWalkAnimation,
+      screenToTile,
+      dispatch,
+    ],
   );
 
   const handleMouseMove = useCallback(
@@ -461,7 +536,7 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         if (dx !== 0 || dy !== 0) {
           // Move the selection rectangle
           dispatch({
-            type: 'SET_SELECTION',
+            type: "SET_SELECTION",
             selection: {
               x: state.selection.x + dx,
               y: state.selection.y + dy,
@@ -482,7 +557,7 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         const ex = Math.max(selectStart.current.x, tile.x);
         const ey = Math.max(selectStart.current.y, tile.y);
         dispatch({
-          type: 'SET_SELECTION',
+          type: "SET_SELECTION",
           selection: { x: sx, y: sy, width: ex - sx + 1, height: ey - sy + 1 },
         });
         return;
@@ -514,66 +589,77 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
         if (tile.x >= 0 && tile.x < mapW && tile.y >= 0 && tile.y < mapH) {
           const layer = state.mapData.layers[state.activeLayerIndex];
           const gid =
-            layer?.type === 'tilelayer' && layer.data
-              ? layer.data[tile.y * mapW + tile.x]
-              : 0;
+            layer?.type === "tilelayer" && layer.data ? layer.data[tile.y * mapW + tile.x] : 0;
           onStatusUpdate({ tileX: tile.x, tileY: tile.y, gid });
         }
       }
     },
-    [state.mapData, state.activeLayerIndex, panZoom, screenToTile, applyTool, directionFromDelta, onStatusUpdate, dispatch, isBlocked],
+    [
+      state.mapData,
+      state.activeLayerIndex,
+      panZoom,
+      screenToTile,
+      applyTool,
+      directionFromDelta,
+      onStatusUpdate,
+      dispatch,
+      isBlocked,
+    ],
   );
 
-  const handleMouseUp = useCallback((e?: React.MouseEvent) => {
-    // Pan
-    panZoom.handleMouseUp();
+  const handleMouseUp = useCallback(
+    (e?: React.MouseEvent) => {
+      // Pan
+      panZoom.handleMouseUp();
 
-    // Character drag
-    if (isDraggingCharacter.current) {
-      isDraggingCharacter.current = false;
-      stopWalkAnimation();
-    }
-
-    // Move selection finalize — apply tile data move
-    if (isMovingSelection.current && moveStartSelection.current && state.selection) {
-      const from = moveStartSelection.current;
-      const to = state.selection;
-      if (from.x !== to.x || from.y !== to.y) {
-        dispatch({
-          type: 'MOVE_TILES',
-          fromX: from.x,
-          fromY: from.y,
-          toX: to.x,
-          toY: to.y,
-          width: from.width,
-          height: from.height,
-        });
+      // Character drag
+      if (isDraggingCharacter.current) {
+        isDraggingCharacter.current = false;
+        stopWalkAnimation();
       }
-      isMovingSelection.current = false;
-      moveOrigin.current = null;
-      moveStartSelection.current = null;
-    } else if (isMovingSelection.current) {
-      isMovingSelection.current = false;
-      moveOrigin.current = null;
-      moveStartSelection.current = null;
-    }
 
-    // Select drag finalize → auto show context menu
-    if (isSelectDragging.current) {
-      isSelectDragging.current = false;
-      selectStart.current = null;
-      if (e && state.selection && state.selection.width > 0 && state.selection.height > 0) {
-        setContextMenu({ x: e.clientX, y: e.clientY });
+      // Move selection finalize — apply tile data move
+      if (isMovingSelection.current && moveStartSelection.current && state.selection) {
+        const from = moveStartSelection.current;
+        const to = state.selection;
+        if (from.x !== to.x || from.y !== to.y) {
+          dispatch({
+            type: "MOVE_TILES",
+            fromX: from.x,
+            fromY: from.y,
+            toX: to.x,
+            toY: to.y,
+            width: from.width,
+            height: from.height,
+          });
+        }
+        isMovingSelection.current = false;
+        moveOrigin.current = null;
+        moveStartSelection.current = null;
+      } else if (isMovingSelection.current) {
+        isMovingSelection.current = false;
+        moveOrigin.current = null;
+        moveStartSelection.current = null;
       }
-    }
 
-    // Tile drag -- changes already applied per-stroke via dispatch;
-    // pendingChanges tracked for potential grouped-undo if needed
-    if (isDraggingTile.current) {
-      isDraggingTile.current = false;
-      pendingChanges.current = [];
-    }
-  }, [panZoom, stopWalkAnimation, state.selection, dispatch]);
+      // Select drag finalize → auto show context menu
+      if (isSelectDragging.current) {
+        isSelectDragging.current = false;
+        selectStart.current = null;
+        if (e && state.selection && state.selection.width > 0 && state.selection.height > 0) {
+          setContextMenu({ x: e.clientX, y: e.clientY });
+        }
+      }
+
+      // Tile drag -- changes already applied per-stroke via dispatch;
+      // pendingChanges tracked for potential grouped-undo if needed
+      if (isDraggingTile.current) {
+        isDraggingTile.current = false;
+        pendingChanges.current = [];
+      }
+    },
+    [panZoom, stopWalkAnimation, state.selection, dispatch],
+  );
 
   // Register wheel handler as non-passive native listener to allow preventDefault
   useEffect(() => {
@@ -583,8 +669,8 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
       e.preventDefault();
       panZoom.handleWheel(e, canvas.getBoundingClientRect());
     };
-    canvas.addEventListener('wheel', handler, { passive: false });
-    return () => canvas.removeEventListener('wheel', handler);
+    canvas.addEventListener("wheel", handler, { passive: false });
+    return () => canvas.removeEventListener("wheel", handler);
   }, [panZoom]);
 
   const renderSelectionToDataUrl = useCallback((): string | null => {
@@ -595,21 +681,27 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
     const pw = sel.width * tw;
     const ph = sel.height * th;
 
-    const offscreen = document.createElement('canvas');
+    const offscreen = document.createElement("canvas");
     offscreen.width = pw;
     offscreen.height = ph;
-    const ctx = offscreen.getContext('2d');
+    const ctx = offscreen.getContext("2d");
     if (!ctx) return null;
 
     // Only render active layer's tiles
     const layer = state.mapData.layers[state.activeLayerIndex];
-    if (!layer || layer.type !== 'tilelayer' || !layer.data) return null;
+    if (!layer || layer.type !== "tilelayer" || !layer.data) return null;
 
     for (let row = 0; row < sel.height; row++) {
       for (let col = 0; col < sel.width; col++) {
         const mapCol = sel.x + col;
         const mapRow = sel.y + row;
-        if (mapCol < 0 || mapCol >= state.mapData!.width || mapRow < 0 || mapRow >= state.mapData!.height) continue;
+        if (
+          mapCol < 0 ||
+          mapCol >= state.mapData!.width ||
+          mapRow < 0 ||
+          mapRow >= state.mapData!.height
+        )
+          continue;
 
         const gid = layer.data[mapRow * state.mapData!.width + mapCol];
         if (gid === 0) continue;
@@ -623,14 +715,19 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
 
         ctx.drawImage(
           tsInfo.img,
-          srcCol * tsInfo.tilewidth, srcRow * tsInfo.tileheight,
-          tsInfo.tilewidth, tsInfo.tileheight,
-          col * tw, row * th, tw, th,
+          srcCol * tsInfo.tilewidth,
+          srcRow * tsInfo.tileheight,
+          tsInfo.tilewidth,
+          tsInfo.tileheight,
+          col * tw,
+          row * th,
+          tw,
+          th,
         );
       }
     }
 
-    return offscreen.toDataURL('image/png');
+    return offscreen.toDataURL("image/png");
   }, [state.mapData, state.selection, state.activeLayerIndex, findTileset]);
 
   // Render selection from ALL visible layers (for stamp thumbnail)
@@ -639,22 +736,28 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
     const sel = state.selection;
     const tw = state.mapData.tilewidth;
     const th = state.mapData.tileheight;
-    const offscreen = document.createElement('canvas');
+    const offscreen = document.createElement("canvas");
     offscreen.width = sel.width * tw;
     offscreen.height = sel.height * th;
-    const ctx = offscreen.getContext('2d');
+    const ctx = offscreen.getContext("2d");
     if (!ctx) return null;
 
     for (const layer of state.mapData.layers) {
-      if (!layer.visible || layer.type !== 'tilelayer' || !layer.data) continue;
-      if (layer.name.toLowerCase() === 'collision') continue;
+      if (!layer.visible || layer.type !== "tilelayer" || !layer.data) continue;
+      if (layer.name.toLowerCase() === "collision") continue;
       const prevAlpha = ctx.globalAlpha;
       ctx.globalAlpha = layer.opacity;
       for (let row = 0; row < sel.height; row++) {
         for (let col = 0; col < sel.width; col++) {
           const mapCol = sel.x + col;
           const mapRow = sel.y + row;
-          if (mapCol < 0 || mapCol >= state.mapData!.width || mapRow < 0 || mapRow >= state.mapData!.height) continue;
+          if (
+            mapCol < 0 ||
+            mapCol >= state.mapData!.width ||
+            mapRow < 0 ||
+            mapRow >= state.mapData!.height
+          )
+            continue;
           const gid = layer.data[mapRow * state.mapData!.width + mapCol];
           if (gid === 0) continue;
           const tsInfo = findTileset(gid);
@@ -662,30 +765,43 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
           const localId = gid - tsInfo.firstgid;
           const srcCol = localId % tsInfo.columns;
           const srcRow = Math.floor(localId / tsInfo.columns);
-          ctx.drawImage(tsInfo.img, srcCol * tsInfo.tilewidth, srcRow * tsInfo.tileheight, tsInfo.tilewidth, tsInfo.tileheight, col * tw, row * th, tw, th);
+          ctx.drawImage(
+            tsInfo.img,
+            srcCol * tsInfo.tilewidth,
+            srcRow * tsInfo.tileheight,
+            tsInfo.tilewidth,
+            tsInfo.tileheight,
+            col * tw,
+            row * th,
+            tw,
+            th,
+          );
         }
       }
       ctx.globalAlpha = prevAlpha;
     }
-    return offscreen.toDataURL('image/png');
+    return offscreen.toDataURL("image/png");
   }, [state.mapData, state.selection, findTileset]);
 
   // Close context menu on any keypress
   useEffect(() => {
     if (!contextMenu) return;
     const handleKey = () => setContextMenu(null);
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
   }, [contextMenu]);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    if (state.tool === 'select' && state.selection) {
-      setContextMenu({ x: e.clientX, y: e.clientY });
-    } else {
-      setContextMenu(null);
-    }
-  }, [state.tool, state.selection]);
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (state.tool === "select" && state.selection) {
+        setContextMenu({ x: e.clientX, y: e.clientY });
+      } else {
+        setContextMenu(null);
+      }
+    },
+    [state.tool, state.selection],
+  );
 
   const handleEditSelectionPixels = useCallback(() => {
     if (!state.selection || !state.mapData || !onEditSelectionPixels) return;
@@ -700,20 +816,25 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
   // === Escape key to exit paste mode ===
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (isPasteMode) { setIsPasteMode(false); setPasteCursorTile(null); }
+      if (e.key === "Escape") {
+        if (isPasteMode) {
+          setIsPasteMode(false);
+          setPasteCursorTile(null);
+        }
         setStampCursorTile(null);
       }
     };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
   }, [isPasteMode]);
 
   // === Load stamp preview image ===
   useEffect(() => {
     if (activeStamp?.thumbnail) {
       const img = new Image();
-      img.onload = () => { stampPreviewImgRef.current = img; };
+      img.onload = () => {
+        stampPreviewImgRef.current = img;
+      };
       img.src = activeStamp.thumbnail;
     } else {
       stampPreviewImgRef.current = null;
@@ -722,16 +843,16 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
 
   // === Enter paste mode when clipboard is set ===
   useEffect(() => {
-    if (state.clipboard && state.tool === 'select') {
+    if (state.clipboard && state.tool === "select") {
       setIsPasteMode(true);
       // Generate paste preview image from clipboard GIDs
       if (state.mapData) {
         const tw = state.mapData.tilewidth;
         const th = state.mapData.tileheight;
-        const offscreen = document.createElement('canvas');
+        const offscreen = document.createElement("canvas");
         offscreen.width = state.clipboard.width * tw;
         offscreen.height = state.clipboard.height * th;
-        const ctx = offscreen.getContext('2d');
+        const ctx = offscreen.getContext("2d");
         if (ctx) {
           for (let row = 0; row < state.clipboard.height; row++) {
             for (let col = 0; col < state.clipboard.width; col++) {
@@ -742,12 +863,24 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
               const localId = gid - tsInfo.firstgid;
               const srcCol = localId % tsInfo.columns;
               const srcRow = Math.floor(localId / tsInfo.columns);
-              ctx.drawImage(tsInfo.img, srcCol * tsInfo.tilewidth, srcRow * tsInfo.tileheight, tsInfo.tilewidth, tsInfo.tileheight, col * tw, row * th, tw, th);
+              ctx.drawImage(
+                tsInfo.img,
+                srcCol * tsInfo.tilewidth,
+                srcRow * tsInfo.tileheight,
+                tsInfo.tilewidth,
+                tsInfo.tileheight,
+                col * tw,
+                row * th,
+                tw,
+                th,
+              );
             }
           }
           const img = new Image();
-          img.onload = () => { pastePreviewImgRef.current = img; };
-          img.src = offscreen.toDataURL('image/png');
+          img.onload = () => {
+            pastePreviewImgRef.current = img;
+          };
+          img.src = offscreen.toDataURL("image/png");
         }
       }
     } else {
@@ -793,66 +926,132 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
               className="w-full text-left px-3 py-1.5 text-caption text-text hover:bg-surface-raised transition-colors flex items-center gap-2"
               onClick={handleEditSelectionPixels}
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                className="w-3.5 h-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                 <path d="m15 5 4 4" />
               </svg>
-              {t('mapEditor.context.editPixels')}
+              {t("mapEditor.context.editPixels")}
             </button>
             <div className="border-t border-border my-1" />
             {/* Copy */}
             <button
               className="w-full text-left px-3 py-1.5 text-caption text-text hover:bg-surface-raised transition-colors flex items-center gap-2"
-              onClick={() => { onCopySelection?.(); setContextMenu(null); }}
+              onClick={() => {
+                onCopySelection?.();
+                setContextMenu(null);
+              }}
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                className="w-3.5 h-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
                 <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
               </svg>
-              {t('mapEditor.context.copy')}
+              {t("mapEditor.context.copy")}
             </button>
             {/* Cut */}
             <button
               className="w-full text-left px-3 py-1.5 text-caption text-text hover:bg-surface-raised transition-colors flex items-center gap-2"
-              onClick={() => { onCopySelection?.(); dispatch({ type: 'DELETE_SELECTION' }); setContextMenu(null); }}
+              onClick={() => {
+                onCopySelection?.();
+                dispatch({ type: "DELETE_SELECTION" });
+                setContextMenu(null);
+              }}
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4 8.12 15.88" /><path d="M14.47 14.48 20 20" /><path d="M8.12 8.12 12 12" />
+              <svg
+                className="w-3.5 h-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="6" cy="6" r="3" />
+                <circle cx="6" cy="18" r="3" />
+                <path d="M20 4 8.12 15.88" />
+                <path d="M14.47 14.48 20 20" />
+                <path d="M8.12 8.12 12 12" />
               </svg>
-              {t('mapEditor.context.cut')}
+              {t("mapEditor.context.cut")}
             </button>
             {/* Delete */}
             <button
               className="w-full text-left px-3 py-1.5 text-caption text-text hover:bg-surface-raised transition-colors flex items-center gap-2"
-              onClick={() => { dispatch({ type: 'DELETE_SELECTION' }); setIsPasteMode(false); setPasteCursorTile(null); pastePreviewImgRef.current = null; setContextMenu(null); }}
+              onClick={() => {
+                dispatch({ type: "DELETE_SELECTION" });
+                setIsPasteMode(false);
+                setPasteCursorTile(null);
+                pastePreviewImgRef.current = null;
+                setContextMenu(null);
+              }}
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+              <svg
+                className="w-3.5 h-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 6h18" />
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
               </svg>
-              {t('mapEditor.context.delete')}
+              {t("mapEditor.context.delete")}
             </button>
             {/* Move to Layer */}
-            {state.mapData && state.mapData.layers.filter(l => l.type === 'tilelayer').length > 1 && (
-              <>
-                <div className="border-t border-border my-1" />
-                <div className="px-3 py-1 text-micro text-text-dim uppercase tracking-wider">{t('mapEditor.context.moveToLayer')}</div>
-                {state.mapData.layers.map((layer, idx) => {
-                  if (layer.type !== 'tilelayer' || idx === state.activeLayerIndex) return null;
-                  return (
-                    <button
-                      key={idx}
-                      className="w-full text-left px-3 py-1.5 text-caption text-text hover:bg-surface-raised transition-colors flex items-center gap-2"
-                      onClick={() => { dispatch({ type: 'MOVE_SELECTION_TO_LAYER', targetLayerIndex: idx }); setContextMenu(null); }}
-                    >
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect width="18" height="18" x="3" y="3" rx="2" /><path d="M3 15h18" />
-                      </svg>
-                      {layer.name}
-                    </button>
-                  );
-                })}
-              </>
-            )}
+            {state.mapData &&
+              state.mapData.layers.filter((l) => l.type === "tilelayer").length > 1 && (
+                <>
+                  <div className="border-t border-border my-1" />
+                  <div className="px-3 py-1 text-micro text-text-dim uppercase tracking-wider">
+                    {t("mapEditor.context.moveToLayer")}
+                  </div>
+                  {state.mapData.layers.map((layer, idx) => {
+                    if (layer.type !== "tilelayer" || idx === state.activeLayerIndex) return null;
+                    return (
+                      <button
+                        key={idx}
+                        className="w-full text-left px-3 py-1.5 text-caption text-text hover:bg-surface-raised transition-colors flex items-center gap-2"
+                        onClick={() => {
+                          dispatch({ type: "MOVE_SELECTION_TO_LAYER", targetLayerIndex: idx });
+                          setContextMenu(null);
+                        }}
+                      >
+                        <svg
+                          className="w-3.5 h-3.5"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <rect width="18" height="18" x="3" y="3" rx="2" />
+                          <path d="M3 15h18" />
+                        </svg>
+                        {layer.name}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
             <div className="border-t border-border my-1" />
             {/* Save as Stamp */}
             <button
@@ -863,11 +1062,20 @@ export function MapCanvas({ state, dispatch, findTileset, onStatusUpdate, layerO
                 setContextMenu(null);
               }}
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                className="w-3.5 h-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                <path d="M3 9h18" /><path d="M9 21V9" />
+                <path d="M3 9h18" />
+                <path d="M9 21V9" />
               </svg>
-              {t('mapEditor.stamps.saveAsStamp')}
+              {t("mapEditor.stamps.saveAsStamp")}
             </button>
           </div>
         </>

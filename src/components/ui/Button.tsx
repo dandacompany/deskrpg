@@ -37,7 +37,19 @@ const ICON_ONLY_SIZE: Record<string, string> = {
 };
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = "primary", size = "md", icon, loading, disabled, children, className = "", ...rest }, ref) => {
+  (
+    {
+      variant = "primary",
+      size = "md",
+      icon,
+      loading,
+      disabled,
+      children,
+      className = "",
+      ...rest
+    },
+    ref,
+  ) => {
     const isDisabled = disabled || loading;
     const iconOnly = !children && (icon || loading);
 
@@ -51,18 +63,22 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           ${iconOnly ? ICON_ONLY_SIZE[size] : SIZE_CLASSES[size]}
           ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
           ${className}
-        `.trim().replace(/\s+/g, " ")}
+        `
+          .trim()
+          .replace(/\s+/g, " ")}
         {...rest}
       >
         {loading ? (
-          <span className={`${ICON_SIZE[size]} animate-spin border-2 border-current border-t-transparent rounded-full`} />
+          <span
+            className={`${ICON_SIZE[size]} animate-spin border-2 border-current border-t-transparent rounded-full`}
+          />
         ) : icon ? (
           <span className={ICON_SIZE[size]}>{icon}</span>
         ) : null}
         {children}
       </button>
     );
-  }
+  },
 );
 Button.displayName = "Button";
 export default Button;

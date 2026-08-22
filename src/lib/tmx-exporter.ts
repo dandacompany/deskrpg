@@ -1,29 +1,34 @@
 // src/lib/tmx-exporter.ts — Convert TiledMap JSON to TMX XML string
 
-import type { TiledMap, TiledLayer, TiledTileset, TiledObject } from '@/components/map-editor/hooks/useMapEditor';
+import type {
+  TiledMap,
+  TiledLayer,
+  TiledTileset,
+  TiledObject,
+} from "@/components/map-editor/hooks/useMapEditor";
 
 /** Escape special XML characters in attribute values and text content. */
 function xmlEscape(value: string): string {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function tilesetToXml(ts: TiledTileset): string {
   const lines: string[] = [];
   lines.push(
     ` <tileset firstgid="${ts.firstgid}" name="${xmlEscape(ts.name)}"` +
-    ` tilewidth="${ts.tilewidth}" tileheight="${ts.tileheight}"` +
-    ` tilecount="${ts.tilecount}" columns="${ts.columns}">`
+      ` tilewidth="${ts.tilewidth}" tileheight="${ts.tileheight}"` +
+      ` tilecount="${ts.tilecount}" columns="${ts.columns}">`,
   );
   lines.push(
     `  <image source="${xmlEscape(ts.image)}"` +
-    ` width="${ts.imagewidth}" height="${ts.imageheight}"/>`
+      ` width="${ts.imagewidth}" height="${ts.imageheight}"/>`,
   );
   lines.push(` </tileset>`);
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 function objectToXml(obj: TiledObject): string {
@@ -32,7 +37,7 @@ function objectToXml(obj: TiledObject): string {
     ` type="${xmlEscape(obj.type)}"` +
     ` x="${obj.x}" y="${obj.y}"` +
     ` width="${obj.width}" height="${obj.height}"` +
-    (obj.visible === false ? ' visible="0"' : '') +
+    (obj.visible === false ? ' visible="0"' : "") +
     `/>`
   );
 }
@@ -40,13 +45,13 @@ function objectToXml(obj: TiledObject): string {
 function layerToXml(layer: TiledLayer): string {
   const lines: string[] = [];
 
-  if (layer.type === 'tilelayer') {
+  if (layer.type === "tilelayer") {
     lines.push(
       ` <layer id="${layer.id}" name="${xmlEscape(layer.name)}"` +
-      ` width="${layer.width ?? 0}" height="${layer.height ?? 0}"` +
-      ` opacity="${layer.opacity}"` +
-      (layer.visible === false ? ' visible="0"' : '') +
-      `>`
+        ` width="${layer.width ?? 0}" height="${layer.height ?? 0}"` +
+        ` opacity="${layer.opacity}"` +
+        (layer.visible === false ? ' visible="0"' : "") +
+        `>`,
     );
 
     // Properties
@@ -55,8 +60,8 @@ function layerToXml(layer: TiledLayer): string {
       for (const prop of layer.properties) {
         lines.push(
           `   <property name="${xmlEscape(prop.name)}"` +
-          ` type="${xmlEscape(prop.type)}"` +
-          ` value="${xmlEscape(String(prop.value))}"/>`
+            ` type="${xmlEscape(prop.type)}"` +
+            ` value="${xmlEscape(String(prop.value))}"/>`,
         );
       }
       lines.push(`  </properties>`);
@@ -67,21 +72,21 @@ function layerToXml(layer: TiledLayer): string {
     const width = layer.width ?? 0;
     const rows: string[] = [];
     for (let r = 0; r < (layer.height ?? 0); r++) {
-      rows.push(data.slice(r * width, r * width + width).join(','));
+      rows.push(data.slice(r * width, r * width + width).join(","));
     }
-    const csv = rows.join(',\n   ');
+    const csv = rows.join(",\n   ");
     lines.push(`  <data encoding="csv">`);
     lines.push(`   ${csv}`);
     lines.push(`  </data>`);
     lines.push(` </layer>`);
-  } else if (layer.type === 'objectgroup') {
-    const draworder = layer.draworder ? ` draworder="${xmlEscape(layer.draworder)}"` : '';
+  } else if (layer.type === "objectgroup") {
+    const draworder = layer.draworder ? ` draworder="${xmlEscape(layer.draworder)}"` : "";
     lines.push(
       ` <objectgroup id="${layer.id}" name="${xmlEscape(layer.name)}"` +
-      ` opacity="${layer.opacity}"` +
-      (layer.visible === false ? ' visible="0"' : '') +
-      draworder +
-      `>`
+        ` opacity="${layer.opacity}"` +
+        (layer.visible === false ? ' visible="0"' : "") +
+        draworder +
+        `>`,
     );
 
     // Properties
@@ -90,8 +95,8 @@ function layerToXml(layer: TiledLayer): string {
       for (const prop of layer.properties) {
         lines.push(
           `   <property name="${xmlEscape(prop.name)}"` +
-          ` type="${xmlEscape(prop.type)}"` +
-          ` value="${xmlEscape(String(prop.value))}"/>`
+            ` type="${xmlEscape(prop.type)}"` +
+            ` value="${xmlEscape(String(prop.value))}"/>`,
         );
       }
       lines.push(`  </properties>`);
@@ -103,7 +108,7 @@ function layerToXml(layer: TiledLayer): string {
     lines.push(` </objectgroup>`);
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
@@ -119,13 +124,13 @@ export function exportTmx(mapData: TiledMap): string {
   // <map> opening tag
   parts.push(
     `<map version="${xmlEscape(mapData.version)}"` +
-    ` tiledversion="${xmlEscape(mapData.tiledversion)}"` +
-    ` orientation="${xmlEscape(mapData.orientation)}"` +
-    ` renderorder="${xmlEscape(mapData.renderorder)}"` +
-    ` width="${mapData.width}" height="${mapData.height}"` +
-    ` tilewidth="${mapData.tilewidth}" tileheight="${mapData.tileheight}"` +
-    ` infinite="${mapData.infinite ? 1 : 0}"` +
-    ` nextlayerid="${mapData.nextlayerid}" nextobjectid="${mapData.nextobjectid}">`
+      ` tiledversion="${xmlEscape(mapData.tiledversion)}"` +
+      ` orientation="${xmlEscape(mapData.orientation)}"` +
+      ` renderorder="${xmlEscape(mapData.renderorder)}"` +
+      ` width="${mapData.width}" height="${mapData.height}"` +
+      ` tilewidth="${mapData.tilewidth}" tileheight="${mapData.tileheight}"` +
+      ` infinite="${mapData.infinite ? 1 : 0}"` +
+      ` nextlayerid="${mapData.nextlayerid}" nextobjectid="${mapData.nextobjectid}">`,
   );
 
   // Tilesets
@@ -140,5 +145,5 @@ export function exportTmx(mapData: TiledMap): string {
 
   parts.push(`</map>`);
 
-  return parts.join('\n');
+  return parts.join("\n");
 }

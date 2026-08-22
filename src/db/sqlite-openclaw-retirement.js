@@ -13,7 +13,10 @@
 /** @param {import('better-sqlite3').Database} sqlite */
 function tableColumns(sqlite, table) {
   try {
-    return sqlite.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+    return sqlite
+      .prepare(`PRAGMA table_info(${table})`)
+      .all()
+      .map((c) => c.name);
   } catch {
     return [];
   }

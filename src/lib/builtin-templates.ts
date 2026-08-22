@@ -18,9 +18,7 @@ export interface BuiltinTemplateSnapshot {
 }
 
 export async function seedBuiltinTemplates() {
-  const [{ value: existingCount }] = await db
-    .select({ value: count() })
-    .from(mapTemplates);
+  const [{ value: existingCount }] = await db.select({ value: count() }).from(mapTemplates);
 
   if (Number(existingCount) > 0) return null;
 

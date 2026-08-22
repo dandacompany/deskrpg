@@ -4,9 +4,7 @@ export const MAX_ARCHIVE_ENTRIES = 128;
 export const MAX_ARCHIVE_TOTAL_BYTES = 25 * 1024 * 1024;
 
 export type UploadLimitErrorCode =
-  | "upload_file_too_large"
-  | "upload_archive_too_large"
-  | "upload_archive_too_many_entries";
+  "upload_file_too_large" | "upload_archive_too_large" | "upload_archive_too_many_entries";
 
 export class UploadLimitError extends Error {
   errorCode: UploadLimitErrorCode;

@@ -25,7 +25,9 @@ describe("DmHub.processResponseMarkers", () => {
 
   test("removes markers from finalResponse", () => {
     const hub = new DmHub();
-    const result = hub.processResponseMarkers("응답 [NEED_TASK_DETAIL:T-1] 본문 [CONTINUE_TASK:T-2]");
+    const result = hub.processResponseMarkers(
+      "응답 [NEED_TASK_DETAIL:T-1] 본문 [CONTINUE_TASK:T-2]",
+    );
 
     assert.equal(result.finalResponse, "응답  본문");
   });
@@ -134,13 +136,15 @@ describe("DmHub.buildTaskDashboard", () => {
 
     taskManagerModule.TaskManager = class {
       async getTasksByNpc() {
-        return [{
-          npcTaskId: "TASK-99",
-          title: "허브 동기화",
-          status: "blocked",
-          summary: "외부 응답 대기",
-          updatedAt: "2026-04-09T00:00:00.000Z",
-        }];
+        return [
+          {
+            npcTaskId: "TASK-99",
+            title: "허브 동기화",
+            status: "blocked",
+            summary: "외부 응답 대기",
+            updatedAt: "2026-04-09T00:00:00.000Z",
+          },
+        ];
       }
     };
 

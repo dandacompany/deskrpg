@@ -17,12 +17,14 @@ import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 function slugifyGroupName(name: string) {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "group";
+  return (
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "group"
+  );
 }
 
 export async function GET(req: NextRequest) {
@@ -73,37 +75,39 @@ export async function GET(req: NextRequest) {
     .where(eq(groupMembers.userId, userId))
     .orderBy(groups.name);
 
-  const groupsWithCapabilities = await Promise.all(rows.map(async (row) => {
-    const context: GroupActorContext = {
-      userId,
-      systemRole,
-      group: {
+  const groupsWithCapabilities = await Promise.all(
+    rows.map(async (row) => {
+      const context: GroupActorContext = {
+        userId,
+        systemRole,
+        group: {
+          id: row.id,
+          name: row.name,
+          slug: row.slug,
+          description: row.description,
+          isDefault: row.isDefault,
+          createdBy: row.createdBy,
+        },
+        groupRole: (row.role as GroupMemberRole | undefined) ?? null,
+      };
+
+      return {
         id: row.id,
         name: row.name,
         slug: row.slug,
         description: row.description,
         isDefault: row.isDefault,
         createdBy: row.createdBy,
-      },
-      groupRole: (row.role as GroupMemberRole | undefined) ?? null,
-    };
-
-    return {
-      id: row.id,
-      name: row.name,
-      slug: row.slug,
-      description: row.description,
-      isDefault: row.isDefault,
-      createdBy: row.createdBy,
-      role: row.role,
-      ...summarizeGroupManagementCapabilities({
-        canCreateChannel: await hasGroupPermission(context, "create_channel"),
-        canManageMembers: await hasGroupPermission(context, "manage_group_members"),
-        canManagePermissions: await hasGroupPermission(context, "manage_group_permissions"),
-        canApproveJoinRequests: await hasGroupPermission(context, "approve_join_requests"),
-      }),
-    };
-  }));
+        role: row.role,
+        ...summarizeGroupManagementCapabilities({
+          canCreateChannel: await hasGroupPermission(context, "create_channel"),
+          canManageMembers: await hasGroupPermission(context, "manage_group_members"),
+          canManagePermissions: await hasGroupPermission(context, "manage_group_permissions"),
+          canApproveJoinRequests: await hasGroupPermission(context, "approve_join_requests"),
+        }),
+      };
+    }),
+  );
 
   return NextResponse.json({
     groups: groupsWithCapabilities.map((row) => ({
@@ -151,9 +155,8 @@ export async function POST(req: NextRequest) {
   }
   const memberRole = requestedRole as GroupMemberRole;
 
-  const requestedSlug = typeof slug === "string" && slug.trim()
-    ? slugifyGroupName(slug)
-    : slugifyGroupName(name);
+  const requestedSlug =
+    typeof slug === "string" && slug.trim() ? slugifyGroupName(slug) : slugifyGroupName(name);
   const now = new Date().toISOString();
 
   const slugCandidates = [

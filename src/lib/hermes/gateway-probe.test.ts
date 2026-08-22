@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { probeHermesGateway } from "./gateway-probe";
 
 function fakeFetch(impl: (url: string) => Promise<Response> | Response) {
-  return ((input: RequestInfo | URL) => Promise.resolve(impl(String(input)))) as unknown as typeof fetch;
+  return ((input: RequestInfo | URL) =>
+    Promise.resolve(impl(String(input)))) as unknown as typeof fetch;
 }
 
 test("probeHermesGateway", async (t) => {

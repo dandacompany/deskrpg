@@ -22,15 +22,9 @@ import {
 } from "@/lib/gateway-resources";
 import { getDefaultMeetingProtocol } from "@/lib/npc-agent-defaults";
 import { normalizeLocale } from "@/lib/i18n/server";
-import {
-  resolvePermission,
-  type PermissionEffect,
-} from "@/lib/rbac/permissions";
+import { resolvePermission, type PermissionEffect } from "@/lib/rbac/permissions";
 import type { GroupMemberRole, SystemRole } from "@/lib/rbac/constants";
-import {
-  generateChannelInviteCode,
-  isChannelPasswordValid,
-} from "@/lib/security-policy";
+import { generateChannelInviteCode, isChannelPasswordValid } from "@/lib/security-policy";
 import {
   summarizeChannelCreateAccess,
   summarizeChannelDetailAccess,
@@ -51,9 +45,7 @@ async function canCreateChannel(userId: string, groupId: string) {
   const [membership] = await db
     .select({ role: groupMembers.role })
     .from(groupMembers)
-    .where(
-      and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)),
-    )
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
     .limit(1);
 
   const groupEffectRows = await db
@@ -95,10 +87,7 @@ async function canCreateChannel(userId: string, groupId: string) {
 export async function GET(req: NextRequest) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
 
   try {
@@ -123,17 +112,11 @@ export async function GET(req: NextRequest) {
       .leftJoin(groups, eq(channels.groupId, groups.id))
       .leftJoin(
         channelMembers,
-        and(
-          eq(channelMembers.channelId, channels.id),
-          eq(channelMembers.userId, userId),
-        ),
+        and(eq(channelMembers.channelId, channels.id), eq(channelMembers.userId, userId)),
       )
       .leftJoin(
         groupMembers,
-        and(
-          eq(groupMembers.groupId, channels.groupId),
-          eq(groupMembers.userId, userId),
-        ),
+        and(eq(groupMembers.groupId, channels.groupId), eq(groupMembers.userId, userId)),
       )
       .orderBy(channels.createdAt);
 
@@ -142,8 +125,7 @@ export async function GET(req: NextRequest) {
         const isOwner = r.ownerId === userId;
         const isChannelMember = isOwner || !!r.memberRole;
         const hasActiveGroupMembership = !!r.groupMemberRole;
-        const canView =
-          r.isPublic || isChannelMember || hasActiveGroupMembership;
+        const canView = r.isPublic || isChannelMember || hasActiveGroupMembership;
         const detailAccess = summarizeChannelDetailAccess({
           groupId: r.groupId,
           isPublic: r.isPublic ?? true,
@@ -181,9 +163,7 @@ export async function GET(req: NextRequest) {
           playerCount: 0, // TODO: query from socket.io state
         };
       })
-      .filter(
-        (channel): channel is NonNullable<typeof channel> => channel !== null,
-      );
+      .filter((channel): channel is NonNullable<typeof channel> => channel !== null);
 
     return NextResponse.json({ channels: result, currentUserId: userId });
   } catch (err) {
@@ -202,10 +182,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
 
   try {
@@ -221,12 +198,7 @@ export async function POST(req: NextRequest) {
       groupId,
     } = body;
 
-    if (
-      !name ||
-      typeof name !== "string" ||
-      name.length < 1 ||
-      name.length > 100
-    ) {
+    if (!name || typeof name !== "string" || name.length < 1 || name.length > 100) {
       return NextResponse.json(
         {
           errorCode: "channel_name_required",
@@ -365,9 +337,7 @@ export async function POST(req: NextRequest) {
         }),
         password: passwordHash,
         gatewayConfig: jsonForDb(
-          gatewayConfig
-            ? { taskAutomation: gatewayConfig.taskAutomation || null }
-            : null,
+          gatewayConfig ? { taskAutomation: gatewayConfig.taskAutomation || null } : null,
         ),
       })
       .returning();
@@ -376,20 +346,13 @@ export async function POST(req: NextRequest) {
       try {
         const resource =
           typeof gatewayConfig.gatewayId === "string" && gatewayConfig.gatewayId
-            ? ((
-                await getAccessibleGatewayResource(
-                  userId,
-                  gatewayConfig.gatewayId,
-                )
-              )?.resource ?? null)
+            ? ((await getAccessibleGatewayResource(userId, gatewayConfig.gatewayId))?.resource ??
+              null)
             : gatewayConfig?.url
               ? await upsertOwnedGatewayResource({
                   ownerUserId: userId,
                   baseUrl: gatewayConfig.url,
-                  token:
-                    typeof gatewayConfig.token === "string"
-                      ? gatewayConfig.token
-                      : "",
+                  token: typeof gatewayConfig.token === "string" ? gatewayConfig.token : "",
                   displayName:
                     typeof gatewayConfig.displayName === "string"
                       ? gatewayConfig.displayName
@@ -413,10 +376,7 @@ export async function POST(req: NextRequest) {
           boundByUserId: userId,
         });
       } catch (gatewayErr) {
-        console.error(
-          "Failed to bind gateway resource during channel creation:",
-          gatewayErr,
-        );
+        console.error("Failed to bind gateway resource during channel creation:", gatewayErr);
       }
     }
 
@@ -434,8 +394,7 @@ export async function POST(req: NextRequest) {
         const isMainAgent = agentId === "main";
         const defaultNpcLocale = normalizeLocale(defaultNpc.locale);
         const meetingProtocol =
-          defaultNpc.meetingProtocol ||
-          getDefaultMeetingProtocol(defaultNpcLocale);
+          defaultNpc.meetingProtocol || getDefaultMeetingProtocol(defaultNpcLocale);
 
         // 예전에는 여기서 OpenClaw 게이트웨이에 에이전트를 만들고
         // ~/.openclaw/workspace-<id> 에 IDENTITY/SOUL/AGENTS/USER.md 를 써 넣었다.
@@ -488,10 +447,7 @@ export async function POST(req: NextRequest) {
     const { password: channelPassword, ...channelWithoutPassword } = channel;
     void channelPassword;
 
-    return NextResponse.json(
-      { channel: channelWithoutPassword },
-      { status: 201 },
-    );
+    return NextResponse.json({ channel: channelWithoutPassword }, { status: 201 });
   } catch (err) {
     console.error("Failed to create channel:", err);
     return NextResponse.json(

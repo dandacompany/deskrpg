@@ -12,7 +12,8 @@ const JWT_EXPIRY = "7d";
 import { DEV_JWT_SECRET } from "./dev-constants";
 
 function getSecret() {
-  const secret = process.env.JWT_SECRET || (process.env.NODE_ENV !== "production" ? DEV_JWT_SECRET : "");
+  const secret =
+    process.env.JWT_SECRET || (process.env.NODE_ENV !== "production" ? DEV_JWT_SECRET : "");
   if (!secret) throw new Error("Missing JWT_SECRET");
   return new TextEncoder().encode(secret);
 }

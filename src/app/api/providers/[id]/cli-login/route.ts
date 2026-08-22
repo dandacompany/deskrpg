@@ -25,10 +25,7 @@ function getCliLoginCommand(providerType: string): CliLoginCommand | null {
   }
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
@@ -67,16 +64,18 @@ export async function POST(
   });
   requestId = execution.requestId;
 
-  void execution.then((result) => {
-    console.log(
-      `[providers cli-login:${requestId}] exited code=${result.exitCode} durationMs=${result.durationMs}`,
-    );
-    if (result.stderr) {
-      console.error(`[providers cli-login:${requestId}:stderr] ${result.stderr.trimEnd()}`);
-    }
-  }).catch((error) => {
-    console.error(`[providers cli-login:${requestId}] failed`, error);
-  });
+  void execution
+    .then((result) => {
+      console.log(
+        `[providers cli-login:${requestId}] exited code=${result.exitCode} durationMs=${result.durationMs}`,
+      );
+      if (result.stderr) {
+        console.error(`[providers cli-login:${requestId}:stderr] ${result.stderr.trimEnd()}`);
+      }
+    })
+    .catch((error) => {
+      console.error(`[providers cli-login:${requestId}] failed`, error);
+    });
 
   return NextResponse.json({
     status: "pending",

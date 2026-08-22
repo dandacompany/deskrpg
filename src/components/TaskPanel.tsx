@@ -5,7 +5,7 @@ import TaskCard from "./TaskCard";
 import type { Task } from "./TaskCard";
 import type { Socket } from "socket.io-client";
 import { useT } from "@/lib/i18n";
-import TaskCreateForm from './TaskCreateForm';
+import TaskCreateForm from "./TaskCreateForm";
 
 interface TaskPanelProps {
   npcId: string;
@@ -41,7 +41,13 @@ export default function TaskPanel({
   useEffect(() => {
     if (!socket || !npcId) return;
 
-    const handleTaskList = ({ tasks: taskList, npcId: responseNpcId }: { tasks: Task[]; npcId: string | null }) => {
+    const handleTaskList = ({
+      tasks: taskList,
+      npcId: responseNpcId,
+    }: {
+      tasks: Task[];
+      npcId: string | null;
+    }) => {
       if (responseNpcId !== npcId) return;
       setTasks(taskList);
       setLoadedNpcId(npcId);
@@ -49,7 +55,9 @@ export default function TaskPanel({
 
     socket.on("task:list-response", handleTaskList);
     socket.emit("task:list", { channelId: null, npcId });
-    return () => { socket.off("task:list-response", handleTaskList); };
+    return () => {
+      socket.off("task:list-response", handleTaskList);
+    };
   }, [socket, npcId]);
 
   useEffect(() => {
@@ -81,7 +89,10 @@ export default function TaskPanel({
 
     socket.on("task:updated", handleTaskUpdated);
     socket.on("task:deleted", handleTaskDeleted);
-    return () => { socket.off("task:updated", handleTaskUpdated); socket.off("task:deleted", handleTaskDeleted); };
+    return () => {
+      socket.off("task:updated", handleTaskUpdated);
+      socket.off("task:deleted", handleTaskDeleted);
+    };
   }, [socket, npcId]);
 
   const handleDelete = (taskId: string) => {
@@ -122,7 +133,7 @@ export default function TaskPanel({
 
   const handleCreateForNpc = (title: string, summary: string) => {
     if (!socket) return;
-    socket.emit('task:create', { channelId, title, summary: summary || undefined, npcId });
+    socket.emit("task:create", { channelId, title, summary: summary || undefined, npcId });
     setShowCreateForm(false);
   };
 
@@ -131,72 +142,97 @@ export default function TaskPanel({
   const doneTasks = tasks.filter((t) => t.status === "complete" || t.status === "cancelled");
 
   if (loading) {
-    return <div className='flex-1 flex items-center justify-center text-text-muted text-body'>{t('common.loading')}</div>;
+    return (
+      <div className="flex-1 flex items-center justify-center text-text-muted text-body">
+        {t("common.loading")}
+      </div>
+    );
   }
 
   return (
-    <div className='flex-1 overflow-y-auto p-2 space-y-2'>
+    <div className="flex-1 overflow-y-auto p-2 space-y-2">
       {/* Add Task button */}
-      <div className='mb-2'>
+      <div className="mb-2">
         {showCreateForm ? (
-          <TaskCreateForm
-            onSubmit={handleCreateForNpc}
-            onCancel={() => setShowCreateForm(false)}
-          />
+          <TaskCreateForm onSubmit={handleCreateForNpc} onCancel={() => setShowCreateForm(false)} />
         ) : (
           <button
             onClick={() => setShowCreateForm(true)}
-            className='w-full border border-dashed border-primary/50 rounded-lg py-1.5 text-[10px] text-primary hover:border-primary hover:bg-primary/5 transition'
+            className="w-full border border-dashed border-primary/50 rounded-lg py-1.5 text-[10px] text-primary hover:border-primary hover:bg-primary/5 transition"
           >
-            + {t('task.addToNpc')}
+            + {t("task.addToNpc")}
           </button>
         )}
       </div>
 
       {tasks.length === 0 && !showCreateForm && (
-        <div className='flex items-center justify-center text-text-muted text-body py-8'>
-          {t('task.noTasks', { name: npcName })}
+        <div className="flex items-center justify-center text-text-muted text-body py-8">
+          {t("task.noTasks", { name: npcName })}
         </div>
       )}
 
       {activeTasks.length > 0 && (
         <>
-          <div className='text-micro text-text-dim font-bold px-1'>{t('task.active')} ({activeTasks.length})</div>
+          <div className="text-micro text-text-dim font-bold px-1">
+            {t("task.active")} ({activeTasks.length})
+          </div>
           {activeTasks.map((task) => (
             <div
               key={task.id}
               onClick={() => onTaskClick?.(task.npcTaskId || task.id)}
-              className={onTaskClick ? 'cursor-pointer hover:brightness-110 transition' : ''}
+              className={onTaskClick ? "cursor-pointer hover:brightness-110 transition" : ""}
             >
-              <TaskCard task={task} onDelete={handleDelete} onRequestReport={handleRequestReport} onResume={handleResume} onComplete={handleComplete} />
+              <TaskCard
+                task={task}
+                onDelete={handleDelete}
+                onRequestReport={handleRequestReport}
+                onResume={handleResume}
+                onComplete={handleComplete}
+              />
             </div>
           ))}
         </>
       )}
       {stalledTasks.length > 0 && (
         <>
-          <div className='text-micro text-text-dim font-bold px-1 mt-2'>{t('task.stalled')} ({stalledTasks.length})</div>
+          <div className="text-micro text-text-dim font-bold px-1 mt-2">
+            {t("task.stalled")} ({stalledTasks.length})
+          </div>
           {stalledTasks.map((task) => (
             <div
               key={task.id}
               onClick={() => onTaskClick?.(task.npcTaskId || task.id)}
-              className={onTaskClick ? 'cursor-pointer hover:brightness-110 transition' : ''}
+              className={onTaskClick ? "cursor-pointer hover:brightness-110 transition" : ""}
             >
-              <TaskCard task={task} onDelete={handleDelete} onRequestReport={handleRequestReport} onResume={handleResume} onComplete={handleComplete} />
+              <TaskCard
+                task={task}
+                onDelete={handleDelete}
+                onRequestReport={handleRequestReport}
+                onResume={handleResume}
+                onComplete={handleComplete}
+              />
             </div>
           ))}
         </>
       )}
       {doneTasks.length > 0 && (
         <>
-          <div className='text-micro text-text-dim font-bold px-1 mt-2'>{t('task.done')} ({doneTasks.length})</div>
+          <div className="text-micro text-text-dim font-bold px-1 mt-2">
+            {t("task.done")} ({doneTasks.length})
+          </div>
           {doneTasks.map((task) => (
             <div
               key={task.id}
               onClick={() => onTaskClick?.(task.npcTaskId || task.id)}
-              className={onTaskClick ? 'cursor-pointer hover:brightness-110 transition' : ''}
+              className={onTaskClick ? "cursor-pointer hover:brightness-110 transition" : ""}
             >
-              <TaskCard task={task} onDelete={handleDelete} onRequestReport={handleRequestReport} onResume={handleResume} onComplete={handleComplete} />
+              <TaskCard
+                task={task}
+                onDelete={handleDelete}
+                onRequestReport={handleRequestReport}
+                onResume={handleResume}
+                onComplete={handleComplete}
+              />
             </div>
           ))}
         </>

@@ -27,10 +27,7 @@ async function requirePermissionManager(groupId: string, userId: string) {
   return { context };
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 
@@ -53,10 +50,7 @@ export async function GET(
   return NextResponse.json({ permissions: rows });
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 

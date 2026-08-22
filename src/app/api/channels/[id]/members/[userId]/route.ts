@@ -19,7 +19,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; userId: string }> },
 ) {
   const currentUserId = getUserId(req);
-  if (!currentUserId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  if (!currentUserId)
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   const { id: channelId, userId: targetUserId } = await params;
 
@@ -30,11 +31,22 @@ export async function DELETE(
       .where(eq(channels.id, channelId))
       .limit(1);
 
-    if (!channel) return NextResponse.json({ errorCode: "channel_not_found", error: "Channel not found" }, { status: 404 });
-    if (channel.ownerId !== currentUserId) return NextResponse.json({ errorCode: "forbidden", error: "Not authorized" }, { status: 403 });
+    if (!channel)
+      return NextResponse.json(
+        { errorCode: "channel_not_found", error: "Channel not found" },
+        { status: 404 },
+      );
+    if (channel.ownerId !== currentUserId)
+      return NextResponse.json(
+        { errorCode: "forbidden", error: "Not authorized" },
+        { status: 403 },
+      );
 
     if (targetUserId === currentUserId) {
-      return NextResponse.json({ errorCode: "cannot_kick_owner", error: "Cannot kick the owner" }, { status: 400 });
+      return NextResponse.json(
+        { errorCode: "cannot_kick_owner", error: "Cannot kick the owner" },
+        { status: 400 },
+      );
     }
 
     const deleted = await db
@@ -43,7 +55,10 @@ export async function DELETE(
       .returning();
 
     if (deleted.length === 0) {
-      return NextResponse.json({ errorCode: "member_not_found", error: "Member not found" }, { status: 404 });
+      return NextResponse.json(
+        { errorCode: "member_not_found", error: "Member not found" },
+        { status: 404 },
+      );
     }
 
     try {

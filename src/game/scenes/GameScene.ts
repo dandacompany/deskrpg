@@ -1,7 +1,17 @@
 import Phaser from "phaser";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import type { Socket } from "socket.io-client";
-import { MapObject, MapData, OBJECT_TYPES, OBJECT_TYPE_LIST, computeOccupiedTiles, detectAndConvertMapData, generateObjectId, canPlaceObject, getObjectDimensions } from "@/lib/object-types";
+import {
+  MapObject,
+  MapData,
+  OBJECT_TYPES,
+  OBJECT_TYPE_LIST,
+  computeOccupiedTiles,
+  detectAndConvertMapData,
+  generateObjectId,
+  canPlaceObject,
+  getObjectDimensions,
+} from "@/lib/object-types";
 import { getCenteredCameraBounds } from "../camera-layout";
 
 // ---------------------------------------------------------------------------
@@ -58,9 +68,7 @@ const T = {
 };
 
 // Tiles that block movement (walls layer only; objects handled by objectOccupiedTiles)
-const COLLISION_TILES = new Set([
-  T.WALL,
-]);
+const COLLISION_TILES = new Set([T.WALL]);
 
 // Tile names for the editor toolbar
 const TILE_NAMES = [
@@ -96,9 +104,11 @@ interface PathNode {
 }
 
 function findPath(
-  startTileX: number, startTileY: number,
-  endTileX: number, endTileY: number,
-  isWalkable: (tx: number, ty: number) => boolean
+  startTileX: number,
+  startTileY: number,
+  endTileX: number,
+  endTileY: number,
+  isWalkable: (tx: number, ty: number) => boolean,
 ): { x: number; y: number }[] | null {
   const open: PathNode[] = [];
   const closed = new Set<string>();
@@ -125,7 +135,12 @@ function findPath(
 
     closed.add(key);
 
-    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+    for (const [dx, dy] of [
+      [0, -1],
+      [0, 1],
+      [-1, 0],
+      [1, 0],
+    ]) {
       const nx = current.x + dx;
       const ny = current.y + dy;
       const nkey = `${nx},${ny}`;
@@ -137,7 +152,7 @@ function findPath(
       const h = Math.abs(endTileX - nx) + Math.abs(endTileY - ny);
       const f = g + h;
 
-      const existing = open.find(n => n.x === nx && n.y === ny);
+      const existing = open.find((n) => n.x === nx && n.y === ny);
       if (existing) {
         if (g < existing.g) {
           existing.g = g;
@@ -261,13 +276,9 @@ class RemotePlayer {
       }
       this.highlightGlow.clear();
       this.highlightGlow.lineStyle(3, 0x60a5fa, 0.8);
-      this.highlightGlow.strokeRoundedRect(
-        this.sprite.x - 15, this.sprite.y - 39, 30, 48, 6
-      );
+      this.highlightGlow.strokeRoundedRect(this.sprite.x - 15, this.sprite.y - 39, 30, 48, 6);
       this.highlightGlow.lineStyle(5, 0x60a5fa, 0.3);
-      this.highlightGlow.strokeRoundedRect(
-        this.sprite.x - 17, this.sprite.y - 41, 34, 52, 8
-      );
+      this.highlightGlow.strokeRoundedRect(this.sprite.x - 17, this.sprite.y - 41, 34, 52, 8);
     } else {
       this.highlightGlow?.clear();
     }
@@ -277,13 +288,9 @@ class RemotePlayer {
     if (this.isHighlighted && this.highlightGlow) {
       this.highlightGlow.clear();
       this.highlightGlow.lineStyle(3, 0x60a5fa, 0.8);
-      this.highlightGlow.strokeRoundedRect(
-        this.sprite.x - 15, this.sprite.y - 39, 30, 48, 6
-      );
+      this.highlightGlow.strokeRoundedRect(this.sprite.x - 15, this.sprite.y - 39, 30, 48, 6);
       this.highlightGlow.lineStyle(5, 0x60a5fa, 0.3);
-      this.highlightGlow.strokeRoundedRect(
-        this.sprite.x - 17, this.sprite.y - 41, 34, 52, 8
-      );
+      this.highlightGlow.strokeRoundedRect(this.sprite.x - 17, this.sprite.y - 41, 34, 52, 8);
     }
   }
 
@@ -419,7 +426,10 @@ class NpcSprite {
         ];
         for (const wd of walkDirs) {
           const wKey = `npc-${this.id}-walk-${wd.name}`;
-          if (!this.scene.anims.exists(wKey) && (wd.row * SPRITE_COLS + SPRITE_COLS - 1) < totalFrames) {
+          if (
+            !this.scene.anims.exists(wKey) &&
+            wd.row * SPRITE_COLS + SPRITE_COLS - 1 < totalFrames
+          ) {
             this.scene.anims.create({
               key: wKey,
               frames: this.scene.anims.generateFrameNumbers(uniqueKey, {
@@ -470,13 +480,9 @@ class NpcSprite {
       }
       this.highlightGlow.clear();
       this.highlightGlow.lineStyle(3, 0xfbbf24, 0.8);
-      this.highlightGlow.strokeRoundedRect(
-        this.pixelX - 15, this.pixelY - 39, 30, 48, 6
-      );
+      this.highlightGlow.strokeRoundedRect(this.pixelX - 15, this.pixelY - 39, 30, 48, 6);
       this.highlightGlow.lineStyle(5, 0xfbbf24, 0.3);
-      this.highlightGlow.strokeRoundedRect(
-        this.pixelX - 17, this.pixelY - 41, 34, 52, 8
-      );
+      this.highlightGlow.strokeRoundedRect(this.pixelX - 17, this.pixelY - 41, 34, 52, 8);
     } else {
       if (this.highlightGlow) {
         this.highlightGlow.clear();
@@ -539,7 +545,13 @@ class NpcSprite {
   moveTo(
     targetCol: number,
     targetRow: number,
-    findPathFn: (sx: number, sy: number, ex: number, ey: number, walkable: (tx: number, ty: number) => boolean) => { x: number; y: number }[] | null,
+    findPathFn: (
+      sx: number,
+      sy: number,
+      ex: number,
+      ey: number,
+      walkable: (tx: number, ty: number) => boolean,
+    ) => { x: number; y: number }[] | null,
     isWalkableFn: (tx: number, ty: number) => boolean,
     options?: {
       message?: string;
@@ -572,7 +584,13 @@ class NpcSprite {
   }
 
   returnToHome(
-    findPathFn: (sx: number, sy: number, ex: number, ey: number, walkable: (tx: number, ty: number) => boolean) => { x: number; y: number }[] | null,
+    findPathFn: (
+      sx: number,
+      sy: number,
+      ex: number,
+      ey: number,
+      walkable: (tx: number, ty: number) => boolean,
+    ) => { x: number; y: number }[] | null,
     isWalkableFn: (tx: number, ty: number) => boolean,
   ): boolean {
     const startCol = Math.floor(this.pixelX / TILE_SIZE);
@@ -633,7 +651,13 @@ class NpcSprite {
     delta: number,
     playerX: number,
     playerY: number,
-    findPathFn: (sx: number, sy: number, ex: number, ey: number, walkable: (tx: number, ty: number) => boolean) => { x: number; y: number }[] | null,
+    findPathFn: (
+      sx: number,
+      sy: number,
+      ex: number,
+      ey: number,
+      walkable: (tx: number, ty: number) => boolean,
+    ) => { x: number; y: number }[] | null,
     isWalkableFn: (tx: number, ty: number) => boolean,
   ): "arrived" | "returning-done" | "moving" | "idle" {
     if (this.moveState === "idle" || this.moveState === "waiting") return "idle";
@@ -662,7 +686,8 @@ class NpcSprite {
 
       // --- Arrival check — close enough to interact (1 tile distance) ---
       const distToPlayer = this.distanceTo(playerX, playerY);
-      if (distToPlayer < TILE_SIZE + 4) { // ~36px — right next to player
+      if (distToPlayer < TILE_SIZE + 4) {
+        // ~36px — right next to player
         this.currentPath = null;
         this.moveState = "waiting";
         const adx = playerX - this.pixelX;
@@ -806,7 +831,12 @@ export class GameScene extends Phaser.Scene {
   private dialogOpen = false;
   private lastToastMessage: string | null = null;
   private lastChatInputEnabled: boolean | null = null;
-  private editorKeys: { one?: Phaser.Input.Keyboard.Key; two?: Phaser.Input.Keyboard.Key; three?: Phaser.Input.Keyboard.Key; oKey?: Phaser.Input.Keyboard.Key } = {};
+  private editorKeys: {
+    one?: Phaser.Input.Keyboard.Key;
+    two?: Phaser.Input.Keyboard.Key;
+    three?: Phaser.Input.Keyboard.Key;
+    oKey?: Phaser.Input.Keyboard.Key;
+  } = {};
   private editorObjectMode = false;
   private selectedObjectType: string = "desk";
   private editorObjectPreview: Phaser.GameObjects.Sprite | null = null;
@@ -899,7 +929,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private isWalkable(tileX: number, tileY: number): boolean {
-    if (tileX < 0 || tileX >= this.effectiveMapCols || tileY < 0 || tileY >= this.effectiveMapRows) return false;
+    if (tileX < 0 || tileX >= this.effectiveMapCols || tileY < 0 || tileY >= this.effectiveMapRows)
+      return false;
     // Check Collision layer (Tiled maps)
     if (this.collisionData.length > 0) {
       const collisionGid = this.collisionData[tileY]?.[tileX] ?? 0;
@@ -915,7 +946,11 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  private createNpcWalkValidator(npcSelf: NpcSprite, targetCol: number, targetRow: number): (tx: number, ty: number) => boolean {
+  private createNpcWalkValidator(
+    npcSelf: NpcSprite,
+    targetCol: number,
+    targetRow: number,
+  ): (tx: number, ty: number) => boolean {
     return (tx: number, ty: number) => {
       if (!this.isWalkable(tx, ty)) return false;
       if (tx === targetCol && ty === targetRow) return true;
@@ -924,10 +959,15 @@ export class GameScene extends Phaser.Scene {
       const threshold = TILE_SIZE * 0.8;
       for (const other of this.npcSprites) {
         if (other === npcSelf) continue;
-        if (Math.abs(other.pixelX - cx) < threshold && Math.abs(other.pixelY - cy) < threshold) return false;
+        if (Math.abs(other.pixelX - cx) < threshold && Math.abs(other.pixelY - cy) < threshold)
+          return false;
       }
       for (const remote of this.remotePlayers.values()) {
-        if (Math.abs(remote.sprite.x - cx) < threshold && Math.abs(remote.sprite.y - cy) < threshold) return false;
+        if (
+          Math.abs(remote.sprite.x - cx) < threshold &&
+          Math.abs(remote.sprite.y - cy) < threshold
+        )
+          return false;
       }
       return true;
     };
@@ -951,15 +991,9 @@ export class GameScene extends Phaser.Scene {
     if (path.length >= 2) {
       g.lineStyle(1.5, 0xfbbf24, 0.3);
       g.beginPath();
-      g.moveTo(
-        path[0].x * TILE_SIZE + TILE_SIZE / 2,
-        path[0].y * TILE_SIZE + TILE_SIZE / 2
-      );
+      g.moveTo(path[0].x * TILE_SIZE + TILE_SIZE / 2, path[0].y * TILE_SIZE + TILE_SIZE / 2);
       for (let i = 1; i < path.length; i++) {
-        g.lineTo(
-          path[i].x * TILE_SIZE + TILE_SIZE / 2,
-          path[i].y * TILE_SIZE + TILE_SIZE / 2
-        );
+        g.lineTo(path[i].x * TILE_SIZE + TILE_SIZE / 2, path[i].y * TILE_SIZE + TILE_SIZE / 2);
       }
       g.strokePath();
     }
@@ -1080,7 +1114,11 @@ export class GameScene extends Phaser.Scene {
     // Input keys
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
-      this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FORWARD_SLASH, false, false);
+      this.interactKey = this.input.keyboard.addKey(
+        Phaser.Input.Keyboard.KeyCodes.FORWARD_SLASH,
+        false,
+        false,
+      );
       this.tabKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, false, false);
       this.editorKeys = {
         one: this.input.keyboard.addKey("ONE", false, false),
@@ -1149,7 +1187,7 @@ export class GameScene extends Phaser.Scene {
       this.scale.width - MINIMAP_SIZE - MINIMAP_PADDING,
       MINIMAP_TOP,
       MINIMAP_SIZE,
-      MINIMAP_SIZE
+      MINIMAP_SIZE,
     );
     minimap.setZoom(MINIMAP_SIZE / Math.max(mapWidth, mapHeight));
     minimap.setBackgroundColor(0x1a1a2e);
@@ -1182,10 +1220,7 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.setSize(gameSize.width, gameSize.height);
       this.applyMainCameraBounds(this.currentMapPixelWidth, this.currentMapPixelHeight);
       if (this.minimap) {
-        this.minimap.setPosition(
-          gameSize.width - MINIMAP_SIZE - MINIMAP_PADDING,
-          MINIMAP_TOP
-        );
+        this.minimap.setPosition(gameSize.width - MINIMAP_SIZE - MINIMAP_PADDING, MINIMAP_TOP);
       }
       // Redraw minimap border on resize
       if (this.minimapBorder) {
@@ -1213,7 +1248,9 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Placement mode events
-    EventBus.on("placement-mode-start", () => { this.placementMode = true; });
+    EventBus.on("placement-mode-start", () => {
+      this.placementMode = true;
+    });
     EventBus.on("placement-mode-end", () => {
       this.placementMode = false;
       this.placementHighlight?.destroy();
@@ -1221,7 +1258,9 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Spawn set mode events
-    EventBus.on("spawn-set-mode-start", () => { this.spawnSetMode = true; });
+    EventBus.on("spawn-set-mode-start", () => {
+      this.spawnSetMode = true;
+    });
     EventBus.on("spawn-set-mode-end", () => {
       this.spawnSetMode = false;
       this.spawnHighlight?.destroy();
@@ -1232,95 +1271,116 @@ export class GameScene extends Phaser.Scene {
         this.reportWaitMs = Math.max(5000, data.reportWaitSeconds * 1000);
       }
     });
-    EventBus.on("owner-status", (data: { isOwner: boolean }) => { this.isChannelOwner = data.isOwner; });
+    EventBus.on("owner-status", (data: { isOwner: boolean }) => {
+      this.isChannelOwner = data.isOwner;
+    });
 
     // Local NPC spawn/remove (from own hire/fire actions)
-    EventBus.on("npc:spawn-local", (raw: { id: string; name: string; positionX: number; positionY: number; direction?: string; appearance?: unknown }) => {
-      const npcData: NpcData = { ...raw, direction: raw.direction || "down" };
-      if (this.npcSprites.some(n => n.id === npcData.id)) return;
-      const npc = new NpcSprite(this, npcData);
-      this.npcSprites.push(npc);
-      this.npcTilePositions.add(`${npcData.positionX},${npcData.positionY}`);
-    });
+    EventBus.on(
+      "npc:spawn-local",
+      (raw: {
+        id: string;
+        name: string;
+        positionX: number;
+        positionY: number;
+        direction?: string;
+        appearance?: unknown;
+      }) => {
+        const npcData: NpcData = { ...raw, direction: raw.direction || "down" };
+        if (this.npcSprites.some((n) => n.id === npcData.id)) return;
+        const npc = new NpcSprite(this, npcData);
+        this.npcSprites.push(npc);
+        this.npcTilePositions.add(`${npcData.positionX},${npcData.positionY}`);
+      },
+    );
     EventBus.on("npc:remove-local", (data: { npcId: string }) => {
       this.removeNpcById(data.npcId);
     });
-    EventBus.on("npc:update-local", (data: { npcId: string; name?: string; direction?: string; appearance?: unknown }) => {
-      const npc = this.npcSprites.find(n => n.id === data.npcId);
-      if (!npc) return;
-      npc.updateFromData(data);
-    });
+    EventBus.on(
+      "npc:update-local",
+      (data: { npcId: string; name?: string; direction?: string; appearance?: unknown }) => {
+        const npc = this.npcSprites.find((n) => n.id === data.npcId);
+        if (!npc) return;
+        npc.updateFromData(data);
+      },
+    );
 
-    EventBus.on("npc:start-move", (data: { npcId: string; targetCol: number; targetRow: number; message?: string }) => {
-      const npc = this.npcSprites.find(n => n.id === data.npcId);
-      if (!npc || npc.moveState !== "idle") return;
-      this.npcTilePositions.delete(`${npc.homeCol},${npc.homeRow}`);
-      npc.moveTo(
-        data.targetCol,
-        data.targetRow,
-        findPath,
-        (tx: number, ty: number) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
-        data.message ? { message: data.message } : undefined,
-      );
-    });
+    EventBus.on(
+      "npc:start-move",
+      (data: { npcId: string; targetCol: number; targetRow: number; message?: string }) => {
+        const npc = this.npcSprites.find((n) => n.id === data.npcId);
+        if (!npc || npc.moveState !== "idle") return;
+        this.npcTilePositions.delete(`${npc.homeCol},${npc.homeRow}`);
+        npc.moveTo(
+          data.targetCol,
+          data.targetRow,
+          findPath,
+          (tx: number, ty: number) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
+          data.message ? { message: data.message } : undefined,
+        );
+      },
+    );
 
-    EventBus.on("npc:call-to-player", (data: {
-      npcId: string;
-      message?: string;
-      reportId?: string;
-      reportKind?: string;
-      bubbleText?: string;
-      npcName?: string;
-    }) => {
-      if (!this.player) return;
-      const playerCol = Math.floor(this.player.x / TILE_SIZE);
-      const playerRow = Math.floor(this.player.y / TILE_SIZE);
-      const npc = this.npcSprites.find(n => n.id === data.npcId);
-      if (!npc || npc.moveState !== "idle") return;
+    EventBus.on(
+      "npc:call-to-player",
+      (data: {
+        npcId: string;
+        message?: string;
+        reportId?: string;
+        reportKind?: string;
+        bubbleText?: string;
+        npcName?: string;
+      }) => {
+        if (!this.player) return;
+        const playerCol = Math.floor(this.player.x / TILE_SIZE);
+        const playerRow = Math.floor(this.player.y / TILE_SIZE);
+        const npc = this.npcSprites.find((n) => n.id === data.npcId);
+        if (!npc || npc.moveState !== "idle") return;
 
-      const dist = npc.distanceTo(this.player.x, this.player.y);
-      if (dist < TILE_SIZE + 4) {
-        npc.pendingMessage = data.message || null;
-        npc.pendingReportId = data.reportId || null;
-        npc.pendingReportKind = data.reportKind || null;
-        npc.arrivalBubbleText = data.bubbleText || null;
-        npc.waitDurationMs = data.reportKind === "complete" ? this.reportWaitMs : 10000;
-        npc.moveState = "waiting";
-        npc.waitTimer = 0;
-        EventBus.emit("npc:bubble", { npcId: npc.id, text: npc.arrivalBubbleText || undefined });
-        EventBus.emit("toast:show", {
-          message: `Press / to talk to ${data.npcName || npc.name}`,
-        });
-        EventBus.emit("npc:movement-arrived", {
-          npcId: npc.id,
-          npcName: data.npcName || npc.name,
-          pendingMessage: npc.pendingMessage,
-          reportId: npc.pendingReportId,
-          reportKind: npc.pendingReportKind,
-        });
-        return;
-      }
+        const dist = npc.distanceTo(this.player.x, this.player.y);
+        if (dist < TILE_SIZE + 4) {
+          npc.pendingMessage = data.message || null;
+          npc.pendingReportId = data.reportId || null;
+          npc.pendingReportKind = data.reportKind || null;
+          npc.arrivalBubbleText = data.bubbleText || null;
+          npc.waitDurationMs = data.reportKind === "complete" ? this.reportWaitMs : 10000;
+          npc.moveState = "waiting";
+          npc.waitTimer = 0;
+          EventBus.emit("npc:bubble", { npcId: npc.id, text: npc.arrivalBubbleText || undefined });
+          EventBus.emit("toast:show", {
+            message: `Press / to talk to ${data.npcName || npc.name}`,
+          });
+          EventBus.emit("npc:movement-arrived", {
+            npcId: npc.id,
+            npcName: data.npcName || npc.name,
+            pendingMessage: npc.pendingMessage,
+            reportId: npc.pendingReportId,
+            reportKind: npc.pendingReportKind,
+          });
+          return;
+        }
 
-      this.npcTilePositions.delete(`${npc.homeCol},${npc.homeRow}`);
-      npc.moveTo(
-        playerCol,
-        playerRow,
-        findPath,
-        this.createNpcWalkValidator(npc, playerCol, playerRow),
-        {
-          message: data.message,
-          reportId: data.reportId,
-          reportKind: data.reportKind,
-          bubbleText: data.bubbleText,
-          waitDurationMs: data.reportKind === "complete" ? this.reportWaitMs : 10000,
-        },
-      );
-    });
+        this.npcTilePositions.delete(`${npc.homeCol},${npc.homeRow}`);
+        npc.moveTo(
+          playerCol,
+          playerRow,
+          findPath,
+          this.createNpcWalkValidator(npc, playerCol, playerRow),
+          {
+            message: data.message,
+            reportId: data.reportId,
+            reportKind: data.reportKind,
+            bubbleText: data.bubbleText,
+            waitDurationMs: data.reportKind === "complete" ? this.reportWaitMs : 10000,
+          },
+        );
+      },
+    );
 
     // NPC finished responding — if far from player, walk to deliver the response
     EventBus.on("npc:deliver-response", (data: { npcId: string; npcName: string }) => {
       if (!this.player) return;
-      const npc = this.npcSprites.find(n => n.id === data.npcId);
+      const npc = this.npcSprites.find((n) => n.id === data.npcId);
       if (!npc) return;
 
       const dist = npc.distanceTo(this.player.x, this.player.y);
@@ -1347,7 +1407,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     EventBus.on("npc:start-return", (data: { npcId: string }) => {
-      const npc = this.npcSprites.find(n => n.id === data.npcId);
+      const npc = this.npcSprites.find((n) => n.id === data.npcId);
       if (!npc || npc.moveState !== "waiting") return;
       npc.returnToHome(
         findPath,
@@ -1361,8 +1421,12 @@ export class GameScene extends Phaser.Scene {
 
     // ESC key handler
     this.input.keyboard?.on("keydown-ESC", () => {
-      if (this.placementMode) { EventBus.emit("placement-cancel"); }
-      if (this.spawnSetMode) { EventBus.emit("spawn-set-cancel"); }
+      if (this.placementMode) {
+        EventBus.emit("placement-cancel");
+      }
+      if (this.spawnSetMode) {
+        EventBus.emit("spawn-set-cancel");
+      }
     });
 
     // Disable browser context menu so right-click is available for game use
@@ -1405,7 +1469,13 @@ export class GameScene extends Phaser.Scene {
               this.editorObjectPreview.setPosition(x, y);
               this.editorObjectPreview.setVisible(true);
 
-              const valid = canPlaceObject(this.selectedObjectType, tileX, tileY, this.mapObjects, this.wallsData);
+              const valid = canPlaceObject(
+                this.selectedObjectType,
+                tileX,
+                tileY,
+                this.mapObjects,
+                this.wallsData,
+              );
               this.editorObjectPreview.setTint(valid ? 0x44ff44 : 0xff4444);
             }
           } else {
@@ -1454,7 +1524,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (this.game.canvas) {
-        this.game.canvas.style.cursor = (hoveredNpc || hoveredRemote) ? "pointer" : "default";
+        this.game.canvas.style.cursor = hoveredNpc || hoveredRemote ? "pointer" : "default";
       }
     });
 
@@ -1495,7 +1565,9 @@ export class GameScene extends Phaser.Scene {
               const def = OBJECT_TYPES[obj.type];
               const w = def?.width || 1;
               const h = def?.height || 1;
-              return tileX >= obj.col && tileX < obj.col + w && tileY >= obj.row && tileY < obj.row + h;
+              return (
+                tileX >= obj.col && tileX < obj.col + w && tileY >= obj.row && tileY < obj.row + h
+              );
             });
             if (objIndex >= 0) {
               const removed = this.mapObjects.splice(objIndex, 1)[0];
@@ -1504,7 +1576,9 @@ export class GameScene extends Phaser.Scene {
             }
           } else {
             // Left-click: place object
-            if (canPlaceObject(this.selectedObjectType, tileX, tileY, this.mapObjects, this.wallsData)) {
+            if (
+              canPlaceObject(this.selectedObjectType, tileX, tileY, this.mapObjects, this.wallsData)
+            ) {
               const obj: MapObject = {
                 id: generateObjectId(),
                 type: this.selectedObjectType,
@@ -1572,7 +1646,9 @@ export class GameScene extends Phaser.Scene {
           [destTileX - 1, destTileY],
           [destTileX + 1, destTileY],
         ];
-        const walkable = neighbors.find(([x, y]) => this.isWalkable(x, y) && !this.isTileOccupied(x, y));
+        const walkable = neighbors.find(
+          ([x, y]) => this.isWalkable(x, y) && !this.isTileOccupied(x, y),
+        );
         if (walkable) {
           destTileX = walkable[0];
           destTileY = walkable[1];
@@ -1589,8 +1665,13 @@ export class GameScene extends Phaser.Scene {
         destTileY = nearest.y;
       }
 
-      const path = findPath(startTileX, startTileY, destTileX, destTileY,
-        (tx, ty) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty));
+      const path = findPath(
+        startTileX,
+        startTileY,
+        destTileX,
+        destTileY,
+        (tx, ty) => this.isWalkable(tx, ty) && !this.isTileOccupied(tx, ty),
+      );
 
       if (path && path.length > 1) {
         this.currentPath = path;
@@ -1659,16 +1740,27 @@ export class GameScene extends Phaser.Scene {
     // (e.g. React Strict Mode double-invocation).
     this.events.once("destroy", () => {
       const gameSceneEvents = [
-        "dialog:open", "dialog:close",
-        "placement-mode-start", "placement-mode-end",
-        "spawn-set-mode-start", "spawn-set-mode-end",
+        "dialog:open",
+        "dialog:close",
+        "placement-mode-start",
+        "placement-mode-end",
+        "spawn-set-mode-start",
+        "spawn-set-mode-end",
         "task-automation-updated",
         "owner-status",
-        "npc:spawn-local", "npc:remove-local", "npc:update-local",
-        "npc:start-move", "npc:call-to-player",
-        "npc:deliver-response", "npc:start-return", "npc:approach-and-interact",
-        "spritesheet-ready", "socket-ready",
-        "chat:bubble", "npc:bubble", "npc:bubble-clear",
+        "npc:spawn-local",
+        "npc:remove-local",
+        "npc:update-local",
+        "npc:start-move",
+        "npc:call-to-player",
+        "npc:deliver-response",
+        "npc:start-return",
+        "npc:approach-and-interact",
+        "spritesheet-ready",
+        "socket-ready",
+        "chat:bubble",
+        "npc:bubble",
+        "npc:bubble-clear",
         "request-player-position",
       ];
       for (const ev of gameSceneEvents) {
@@ -1709,8 +1801,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Destroy existing layers if any
-    if (this.floorLayer) { this.floorLayer.destroy(); this.floorLayer = null; }
-    if (this.wallsLayer) { this.wallsLayer.destroy(); this.wallsLayer = null; }
+    if (this.floorLayer) {
+      this.floorLayer.destroy();
+      this.floorLayer = null;
+    }
+    if (this.wallsLayer) {
+      this.wallsLayer.destroy();
+      this.wallsLayer = null;
+    }
     for (const s of this.foregroundTileSprites) s.destroy();
     this.foregroundTileSprites = [];
 
@@ -1721,14 +1819,15 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Load custom tileset images before creating the tilemap
-    const tilesetDefs = (tiledJson.tilesets as Array<{
-      firstgid: number;
-      source?: string;
-      name?: string;
-      image?: string;
-      tilewidth?: number;
-      tileheight?: number;
-    }>) || [];
+    const tilesetDefs =
+      (tiledJson.tilesets as Array<{
+        firstgid: number;
+        source?: string;
+        name?: string;
+        image?: string;
+        tilewidth?: number;
+        tileheight?: number;
+      }>) || [];
 
     const imagesToLoad: { key: string; url: string; tileWidth: number; tileHeight: number }[] = [];
     for (const ts of tilesetDefs) {
@@ -1749,7 +1848,12 @@ export class GameScene extends Phaser.Scene {
         imagesToLoad.push({ key: tsName, url: tsImage, tileWidth: tileW, tileHeight: tileH });
       } else if (tsImage && tsImage !== "deskrpg-tileset.png") {
         // Relative path — try common locations
-        imagesToLoad.push({ key: tsName, url: `/assets/uploads/${tsImage}`, tileWidth: tileW, tileHeight: tileH });
+        imagesToLoad.push({
+          key: tsName,
+          url: `/assets/uploads/${tsImage}`,
+          tileWidth: tileW,
+          tileHeight: tileH,
+        });
       }
     }
 
@@ -1772,18 +1876,22 @@ export class GameScene extends Phaser.Scene {
     this.finishTiledMapLoad(tiledJson, []);
   }
 
-  private finishTiledMapLoad(tiledJson: Record<string, unknown>, loadedImages: { key: string; tileWidth: number; tileHeight: number }[]): void {
+  private finishTiledMapLoad(
+    tiledJson: Record<string, unknown>,
+    loadedImages: { key: string; tileWidth: number; tileHeight: number }[],
+  ): void {
     const map = this.make.tilemap({ key: "channel-map" });
 
     // Add tilesets to the map
-    const tilesetDefs = (tiledJson.tilesets as Array<{
-      firstgid: number;
-      source?: string;
-      name?: string;
-      image?: string;
-      tilewidth?: number;
-      tileheight?: number;
-    }>) || [];
+    const tilesetDefs =
+      (tiledJson.tilesets as Array<{
+        firstgid: number;
+        source?: string;
+        name?: string;
+        image?: string;
+        tilewidth?: number;
+        tileheight?: number;
+      }>) || [];
 
     for (const ts of tilesetDefs) {
       const tsName = ts.name || ts.source?.replace(/\.tsx$/, "") || "deskrpg-tileset";
@@ -1793,7 +1901,10 @@ export class GameScene extends Phaser.Scene {
       if (this.textures.exists(tsName)) {
         // Custom loaded texture or BootScene texture
         map.addTilesetImage(tsName, tsName, tileW, tileH, 0, 0);
-      } else if (this.textures.exists("office-tiles") && (tsName === "deskrpg-tileset" || (ts.image || "").includes("deskrpg"))) {
+      } else if (
+        this.textures.exists("office-tiles") &&
+        (tsName === "deskrpg-tileset" || (ts.image || "").includes("deskrpg"))
+      ) {
         // DeskRPG default tileset → use office-tiles
         map.addTilesetImage(tsName, "office-tiles", TILE_SIZE, TILE_SIZE, 0, 0);
       } else if (this.textures.exists("office-tiles")) {
@@ -1837,8 +1948,16 @@ export class GameScene extends Phaser.Scene {
     this.applyMainCameraBounds(tiledPixelW, tiledPixelH);
     // Extract collision layer data for walkability checks
     this.collisionData = [];
-    const tiledLayersRaw = (tiledJson.layers as Array<{ name: string; type: string; data?: number[]; width?: number }>) || [];
-    const collisionLayerData = tiledLayersRaw.find(l => l.type === 'tilelayer' && l.name.toLowerCase() === 'collision');
+    const tiledLayersRaw =
+      (tiledJson.layers as Array<{
+        name: string;
+        type: string;
+        data?: number[];
+        width?: number;
+      }>) || [];
+    const collisionLayerData = tiledLayersRaw.find(
+      (l) => l.type === "tilelayer" && l.name.toLowerCase() === "collision",
+    );
     if (collisionLayerData?.data) {
       const w = collisionLayerData.width || mapWidth;
       for (let r = 0; r < mapHeight; r++) {
@@ -1848,11 +1967,13 @@ export class GameScene extends Phaser.Scene {
 
     // Get all tile layer names from the Tiled JSON
     const tiledLayers = (tiledJson.layers as Array<{ name: string; type: string }>) || [];
-    const tileLayerNames = tiledLayers.filter(l => l.type === "tilelayer").map(l => l.name);
+    const tileLayerNames = tiledLayers.filter((l) => l.type === "tilelayer").map((l) => l.name);
 
     // Try named layers first, fallback to first/second tile layer by order
-    const floorLayerName = tileLayerNames.find(n => n.toLowerCase() === "floor") || tileLayerNames[0];
-    const wallsLayerName = tileLayerNames.find(n => n.toLowerCase() === "walls") || tileLayerNames[1];
+    const floorLayerName =
+      tileLayerNames.find((n) => n.toLowerCase() === "floor") || tileLayerNames[0];
+    const wallsLayerName =
+      tileLayerNames.find((n) => n.toLowerCase() === "walls") || tileLayerNames[1];
 
     let floorLayer: Phaser.Tilemaps.TilemapLayer | null = null;
     if (floorLayerName) {
@@ -1882,14 +2003,15 @@ export class GameScene extends Phaser.Scene {
 
     /** Read the numeric `depth` property from a Tiled layer's properties array. */
     const getLayerDepthProp = (layerName: string, fallback: number): number => {
-      const raw = allRawLayers.find(l => l.name === layerName);
+      const raw = allRawLayers.find((l) => l.name === layerName);
       if (!raw) return fallback;
-      const props = raw.properties as Array<{ name: string; type: string; value: unknown }> | undefined;
+      const props = raw.properties as
+        Array<{ name: string; type: string; value: unknown }> | undefined;
       if (!props) return fallback;
-      const dp = props.find(p => p.name === 'depth');
+      const dp = props.find((p) => p.name === "depth");
       if (!dp) return fallback;
-      if (dp.type === 'int' || dp.type === 'float') return Number(dp.value) || fallback;
-      if (dp.type === 'string' && dp.value === 'y-sort') return 5000;
+      if (dp.type === "int" || dp.type === "float") return Number(dp.value) || fallback;
+      if (dp.type === "string" && dp.value === "y-sort") return 5000;
       return fallback;
     };
 
@@ -1914,7 +2036,7 @@ export class GameScene extends Phaser.Scene {
         // that matches the map editor's charAboveRow split-render logic.
         const tempLayer = map.createLayer(name, map.tilesets);
         if (tempLayer) {
-          const layerAlpha = (allRawLayers.find(l => l.name === name)?.opacity as number) ?? 1;
+          const layerAlpha = (allRawLayers.find((l) => l.name === name)?.opacity as number) ?? 1;
           tempLayer.forEachTile((tile: Phaser.Tilemaps.Tile) => {
             if (tile.index < 0) return;
             const tileset = tile.tileset;
@@ -2063,8 +2185,14 @@ export class GameScene extends Phaser.Scene {
 
   private createTilemap(): void {
     // Destroy existing layers if any
-    if (this.floorLayer) { this.floorLayer.destroy(); this.floorLayer = null; }
-    if (this.wallsLayer) { this.wallsLayer.destroy(); this.wallsLayer = null; }
+    if (this.floorLayer) {
+      this.floorLayer.destroy();
+      this.floorLayer = null;
+    }
+    if (this.wallsLayer) {
+      this.wallsLayer.destroy();
+      this.wallsLayer = null;
+    }
 
     // Floor layer
     const floorMap = this.make.tilemap({
@@ -2072,7 +2200,14 @@ export class GameScene extends Phaser.Scene {
       tileWidth: TILE_SIZE,
       tileHeight: TILE_SIZE,
     });
-    const floorTileset = floorMap.addTilesetImage("office-tiles", "office-tiles", TILE_SIZE, TILE_SIZE, 0, 0);
+    const floorTileset = floorMap.addTilesetImage(
+      "office-tiles",
+      "office-tiles",
+      TILE_SIZE,
+      TILE_SIZE,
+      0,
+      0,
+    );
     if (floorTileset) {
       this.floorLayer = floorMap.createLayer(0, floorTileset, 0, 0);
       if (this.floorLayer) {
@@ -2086,7 +2221,14 @@ export class GameScene extends Phaser.Scene {
       tileWidth: TILE_SIZE,
       tileHeight: TILE_SIZE,
     });
-    const wallsTileset = wallsMap.addTilesetImage("office-tiles", "office-tiles", TILE_SIZE, TILE_SIZE, 0, 0);
+    const wallsTileset = wallsMap.addTilesetImage(
+      "office-tiles",
+      "office-tiles",
+      TILE_SIZE,
+      TILE_SIZE,
+      0,
+      0,
+    );
     if (wallsTileset) {
       this.wallsLayer = wallsMap.createLayer(0, wallsTileset, 0, 0);
       if (this.wallsLayer) {
@@ -2189,14 +2331,19 @@ export class GameScene extends Phaser.Scene {
     this.editorLayerText.setVisible(true);
 
     // Status text
-    const statusText = this.add.text(10, 35, "Editor Mode | LMB: place | RMB: erase | 1/2/3: layer | Tab: exit", {
-      fontSize: "10px",
-      color: "#aaaaaa",
-      stroke: "#000000",
-      strokeThickness: 2,
-      backgroundColor: "#000000aa",
-      padding: { x: 4, y: 2 },
-    });
+    const statusText = this.add.text(
+      10,
+      35,
+      "Editor Mode | LMB: place | RMB: erase | 1/2/3: layer | Tab: exit",
+      {
+        fontSize: "10px",
+        color: "#aaaaaa",
+        stroke: "#000000",
+        strokeThickness: 2,
+        backgroundColor: "#000000aa",
+        padding: { x: 4, y: 2 },
+      },
+    );
     statusText.setDepth(20020);
     statusText.setScrollFactor(0);
     statusText.setName("editor-status");
@@ -2342,10 +2489,14 @@ export class GameScene extends Phaser.Scene {
     if (this.editorObjectMode) {
       const typeIndex = OBJECT_TYPE_LIST.findIndex((t) => t.id === this.selectedObjectType);
       const indexLabel = typeIndex >= 0 ? ` (${typeIndex + 1})` : "";
-      this.editorLayerText.setText(`Object Mode: ${this.selectedObjectType}${indexLabel} | O: toggle mode`);
+      this.editorLayerText.setText(
+        `Object Mode: ${this.selectedObjectType}${indexLabel} | O: toggle mode`,
+      );
     } else {
       const layerNames = ["Floor (1)", "Walls (2)"];
-      this.editorLayerText.setText(`Layer: ${layerNames[this.selectedLayer] ?? "Unknown"} | Tile: ${TILE_NAMES[this.selectedTile]} | O: object mode`);
+      this.editorLayerText.setText(
+        `Layer: ${layerNames[this.selectedLayer] ?? "Unknown"} | Tile: ${TILE_NAMES[this.selectedTile]} | O: object mode`,
+      );
     }
   }
 
@@ -2388,7 +2539,6 @@ export class GameScene extends Phaser.Scene {
 
     // Broadcast tile change to other players in the channel
     this.socket?.emit("map:tiles-update", { layer: layerName, row: tileY, col: tileX, tileId });
-
   }
 
   private saveMap(): void {
@@ -2410,13 +2560,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Save to server (channel API if available, otherwise legacy maps API)
-    const saveUrl = this.channelId
-      ? `/api/channels/${this.channelId}`
-      : "/api/maps/office";
+    const saveUrl = this.channelId ? `/api/channels/${this.channelId}` : "/api/maps/office";
     const saveMethod = this.channelId ? "PUT" : "POST";
-    const saveBody = this.channelId
-      ? { mapData }
-      : { mapId: "office", layers: mapData };
+    const saveBody = this.channelId ? { mapData } : { mapId: "office", layers: mapData };
     fetch(saveUrl, {
       method: saveMethod,
       headers: { "Content-Type": "application/json" },
@@ -2425,7 +2571,9 @@ export class GameScene extends Phaser.Scene {
       .then((res) => {
         if (res.ok) {
           // Flash the save button green
-          const saveBtn = this.children.getByName("editor-save-btn") as Phaser.GameObjects.Text | null;
+          const saveBtn = this.children.getByName(
+            "editor-save-btn",
+          ) as Phaser.GameObjects.Text | null;
           if (saveBtn) {
             saveBtn.setText("[ SAVED! ]");
             this.time.delayedCall(1500, () => {
@@ -2471,7 +2619,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private removeNpcById(npcId: string): void {
-    const idx = this.npcSprites.findIndex(n => n.id === npcId);
+    const idx = this.npcSprites.findIndex((n) => n.id === npcId);
     if (idx === -1) return;
     const npc = this.npcSprites[idx];
     const col = Math.floor(npc.pixelX / TILE_SIZE);
@@ -2505,7 +2653,7 @@ export class GameScene extends Phaser.Scene {
         if (remote) {
           remote.updatePosition(data.x, data.y, data.direction, data.animation);
         }
-      }
+      },
     );
 
     this.socket.on("player:left", (data: { id: string }) => {
@@ -2518,17 +2666,20 @@ export class GameScene extends Phaser.Scene {
 
     // NPC real-time sync
     this.socket.on("npc:added", (npcData: NpcData) => {
-      if (this.npcSprites.some(n => n.id === npcData.id)) return;
+      if (this.npcSprites.some((n) => n.id === npcData.id)) return;
       const npc = new NpcSprite(this, npcData);
       this.npcSprites.push(npc);
       this.npcTilePositions.add(`${npcData.positionX},${npcData.positionY}`);
     });
 
-    this.socket.on("npc:updated", (data: { npcId: string; name?: string; direction?: string; appearance?: unknown }) => {
-      const npc = this.npcSprites.find(n => n.id === data.npcId);
-      if (!npc) return;
-      npc.updateFromData(data);
-    });
+    this.socket.on(
+      "npc:updated",
+      (data: { npcId: string; name?: string; direction?: string; appearance?: unknown }) => {
+        const npc = this.npcSprites.find((n) => n.id === data.npcId);
+        if (!npc) return;
+        npc.updateFromData(data);
+      },
+    );
 
     this.socket.on("npc:removed", (data: { npcId: string }) => {
       this.removeNpcById(data.npcId);
@@ -2541,22 +2692,25 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.socket.on("map:object-removed", (data: { objectId: string }) => {
-      this.mapObjects = this.mapObjects.filter(o => o.id !== data.objectId);
+      this.mapObjects = this.mapObjects.filter((o) => o.id !== data.objectId);
       this.renderObjects();
     });
 
-    this.socket.on("map:tiles-updated", (data: { layer: string; row: number; col: number; tileId: number }) => {
-      if (this.tiledMode) return; // Tiled JSON maps don't use legacy tile editing
-      if (data.layer === "floor" && this.floorData[data.row]) {
-        this.floorData[data.row][data.col] = data.tileId;
-      } else if (data.layer === "walls" && this.wallsData[data.row]) {
-        this.wallsData[data.row][data.col] = data.tileId;
-      }
-      this.createTilemap();
-    });
+    this.socket.on(
+      "map:tiles-updated",
+      (data: { layer: string; row: number; col: number; tileId: number }) => {
+        if (this.tiledMode) return; // Tiled JSON maps don't use legacy tile editing
+        if (data.layer === "floor" && this.floorData[data.row]) {
+          this.floorData[data.row][data.col] = data.tileId;
+        } else if (data.layer === "walls" && this.wallsData[data.row]) {
+          this.wallsData[data.row][data.col] = data.tileId;
+        }
+        this.createTilemap();
+      },
+    );
 
     this.socket.on("npc:stop-moving", (data: { npcId: string }) => {
-      const npc = this.npcSprites.find(n => n.id === data.npcId);
+      const npc = this.npcSprites.find((n) => n.id === data.npcId);
       if (!npc) return;
       if (npc.sprite instanceof Phaser.GameObjects.Sprite) {
         npc.sprite.stop();
@@ -2565,23 +2719,26 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    this.socket.on("npc:position-sync", (data: { npcId: string; x: number; y: number; direction: string }) => {
-      const npc = this.npcSprites.find(n => n.id === data.npcId);
-      if (!npc) return;
-      npc.pixelX = data.x;
-      npc.pixelY = data.y;
-      npc.direction = DIR_NAME_MAP[data.direction] ?? DIR_DOWN;
-      npc.sprite.setPosition(data.x, data.y);
-      npc.nameLabel.setPosition(data.x, data.y - 44);
+    this.socket.on(
+      "npc:position-sync",
+      (data: { npcId: string; x: number; y: number; direction: string }) => {
+        const npc = this.npcSprites.find((n) => n.id === data.npcId);
+        if (!npc) return;
+        npc.pixelX = data.x;
+        npc.pixelY = data.y;
+        npc.direction = DIR_NAME_MAP[data.direction] ?? DIR_DOWN;
+        npc.sprite.setPosition(data.x, data.y);
+        npc.nameLabel.setPosition(data.x, data.y - 44);
 
-      // Play walk animation matching direction (on other clients)
-      if (npc.sprite instanceof Phaser.GameObjects.Sprite) {
-        const walkKey = `npc-${npc.id}-walk-${data.direction}`;
-        if (this.anims.exists(walkKey) && npc.sprite.anims.currentAnim?.key !== walkKey) {
-          npc.sprite.play(walkKey, true);
+        // Play walk animation matching direction (on other clients)
+        if (npc.sprite instanceof Phaser.GameObjects.Sprite) {
+          const walkKey = `npc-${npc.id}-walk-${data.direction}`;
+          if (this.anims.exists(walkKey) && npc.sprite.anims.currentAnim?.key !== walkKey) {
+            npc.sprite.play(walkKey, true);
+          }
         }
-      }
-    });
+      },
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -2688,7 +2845,10 @@ export class GameScene extends Phaser.Scene {
       }
     }
     for (const remote of this.remotePlayers.values()) {
-      if (Math.abs(remote.sprite.x - cx) < threshold && Math.abs(remote.sprite.y - cy) < threshold) {
+      if (
+        Math.abs(remote.sprite.x - cx) < threshold &&
+        Math.abs(remote.sprite.y - cy) < threshold
+      ) {
         return true;
       }
     }
@@ -2726,7 +2886,10 @@ export class GameScene extends Phaser.Scene {
     // Priority: mapConfig spawn (owner-set) > savedPosition (last session) > Objects layer / default
     if (this.mapConfigSpawnCol !== null && this.mapConfigSpawnRow !== null) {
       // Owner explicitly configured spawn — always use it, ignore saved position
-      const { col: spawnCol, row: spawnRow } = this.findFreeSpawn(this.mapConfigSpawnCol, this.mapConfigSpawnRow);
+      const { col: spawnCol, row: spawnRow } = this.findFreeSpawn(
+        this.mapConfigSpawnCol,
+        this.mapConfigSpawnRow,
+      );
       spawnX = spawnCol * TILE_SIZE + TILE_SIZE / 2;
       spawnY = spawnRow * TILE_SIZE + TILE_SIZE / 2;
       this.savedPosition = null;
@@ -2745,7 +2908,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     const playerTex = this.textures.exists("player") ? "player" : "fallback-char";
-    this.player = this.physics.add.sprite(spawnX, spawnY, playerTex, playerTex === "player" ? DIR_DOWN * SPRITE_COLS : 0);
+    this.player = this.physics.add.sprite(
+      spawnX,
+      spawnY,
+      playerTex,
+      playerTex === "player" ? DIR_DOWN * SPRITE_COLS : 0,
+    );
     this.player.setOrigin(0.5, 0.85);
     this.player.setDisplaySize(48, 48);
     this.player.setSize(15, 12);
@@ -2940,8 +3108,9 @@ export class GameScene extends Phaser.Scene {
         nearby.push(npc);
       }
     }
-    nearby.sort((a, b) =>
-      a.distanceTo(this.player.x, this.player.y) - b.distanceTo(this.player.x, this.player.y)
+    nearby.sort(
+      (a, b) =>
+        a.distanceTo(this.player.x, this.player.y) - b.distanceTo(this.player.x, this.player.y),
     );
     this.nearbyNpcs = nearby;
 
@@ -2966,8 +3135,13 @@ export class GameScene extends Phaser.Scene {
 
     // NPC dialog: auto-close when no NPCs nearby
     // But don't auto-close if an NPC is walking toward the player (delivering response)
-    const npcApproaching = this.npcSprites.some(n => n.moveState === "moving-to-player");
-    if (this.dialogOpen && nearby.length === 0 && this.nearbyPlayers.length === 0 && !npcApproaching) {
+    const npcApproaching = this.npcSprites.some((n) => n.moveState === "moving-to-player");
+    if (
+      this.dialogOpen &&
+      nearby.length === 0 &&
+      this.nearbyPlayers.length === 0 &&
+      !npcApproaching
+    ) {
       EventBus.emit("npc:dialog-auto-close");
     }
 
@@ -2981,9 +3155,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (hasNearby && !this.dialogOpen) {
-      const targetName = nearby.length > 0
-        ? nearby[0].name
-        : nearbyP[0].name;
+      const targetName = nearby.length > 0 ? nearby[0].name : nearbyP[0].name;
       const msg = `Press / to talk to ${targetName}`;
       if (msg !== this.lastToastMessage) {
         this.lastToastMessage = msg;
@@ -3001,7 +3173,12 @@ export class GameScene extends Phaser.Scene {
   // Y-sort depth helper
   // ---------------------------------------------------------------------------
 
-  private updateYSortDepth(sprite: { y: number; displayHeight: number; originY: number; setDepth(v: number): void }): void {
+  private updateYSortDepth(sprite: {
+    y: number;
+    displayHeight: number;
+    originY: number;
+    setDepth(v: number): void;
+  }): void {
     // footY = pixel y of the character's bottom edge.
     // Base 10000 puts characters in the same depth range as foreground tile sprites
     // (depth = 10000 + tile.bottom) so per-tile y-sort works for all players/NPCs.
@@ -3033,7 +3210,9 @@ export class GameScene extends Phaser.Scene {
       [npcTileX - 1, npcTileY],
       [npcTileX + 1, npcTileY],
     ];
-    const walkable = neighbors.find(([x, y]) => this.isWalkable(x, y) && !this.isTileOccupied(x, y));
+    const walkable = neighbors.find(
+      ([x, y]) => this.isWalkable(x, y) && !this.isTileOccupied(x, y),
+    );
     if (walkable) {
       destTileX = walkable[0];
       destTileY = walkable[1];
@@ -3116,10 +3295,18 @@ export class GameScene extends Phaser.Scene {
             const threshold = TILE_SIZE * 0.8;
             for (const other of this.npcSprites) {
               if (other === npcSelf) continue; // skip self
-              if (Math.abs(other.pixelX - cx) < threshold && Math.abs(other.pixelY - cy) < threshold) return false;
+              if (
+                Math.abs(other.pixelX - cx) < threshold &&
+                Math.abs(other.pixelY - cy) < threshold
+              )
+                return false;
             }
             for (const remote of this.remotePlayers.values()) {
-              if (Math.abs(remote.sprite.x - cx) < threshold && Math.abs(remote.sprite.y - cy) < threshold) return false;
+              if (
+                Math.abs(remote.sprite.x - cx) < threshold &&
+                Math.abs(remote.sprite.y - cy) < threshold
+              )
+                return false;
             }
             return true;
           },
@@ -3151,7 +3338,7 @@ export class GameScene extends Phaser.Scene {
 
       // Update NPC bubble positions to follow sprites
       for (const [npcId, bubble] of this.npcBubbles) {
-        const npc = this.npcSprites.find(n => n.id === npcId);
+        const npc = this.npcSprites.find((n) => n.id === npcId);
         if (npc) bubble.setPosition(npc.pixelX, npc.pixelY - 44);
       }
 
@@ -3230,7 +3417,10 @@ export class GameScene extends Phaser.Scene {
           this.placementHighlight = this.add.rectangle(0, 0, TILE_SIZE, TILE_SIZE, 0x4f46e5, 0.4);
           this.placementHighlight.setDepth(20020);
         }
-        this.placementHighlight.setPosition(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2);
+        this.placementHighlight.setPosition(
+          col * TILE_SIZE + TILE_SIZE / 2,
+          row * TILE_SIZE + TILE_SIZE / 2,
+        );
         this.placementHighlight.setVisible(true);
       } else {
         this.placementHighlight?.setVisible(false);
@@ -3249,7 +3439,10 @@ export class GameScene extends Phaser.Scene {
           this.spawnHighlight = this.add.rectangle(0, 0, TILE_SIZE, TILE_SIZE, 0x22c55e, 0.5);
           this.spawnHighlight.setDepth(20020);
         }
-        this.spawnHighlight.setPosition(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2);
+        this.spawnHighlight.setPosition(
+          col * TILE_SIZE + TILE_SIZE / 2,
+          row * TILE_SIZE + TILE_SIZE / 2,
+        );
         this.spawnHighlight.setVisible(true);
       } else {
         this.spawnHighlight?.setVisible(false);
@@ -3264,18 +3457,26 @@ export class GameScene extends Phaser.Scene {
     // / key for NPC/player interaction
     if (this.interactKey && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
       const activeEl = document.activeElement as HTMLElement | null;
-      const isTypingTarget = !!activeEl && (
-        activeEl.tagName === "INPUT" ||
-        activeEl.tagName === "TEXTAREA" ||
-        activeEl.tagName === "SELECT" ||
-        activeEl.isContentEditable
-      );
+      const isTypingTarget =
+        !!activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.tagName === "SELECT" ||
+          activeEl.isContentEditable);
       if (isTypingTarget) {
         return;
       }
       if (!this.dialogOpen) {
-        const npcEntries = this.nearbyNpcs.map((n) => ({ id: n.id, name: n.name, type: "npc" as const }));
-        const playerEntries = this.nearbyPlayers.map((p) => ({ id: p.id, name: p.name, type: "player" as const }));
+        const npcEntries = this.nearbyNpcs.map((n) => ({
+          id: n.id,
+          name: n.name,
+          type: "npc" as const,
+        }));
+        const playerEntries = this.nearbyPlayers.map((p) => ({
+          id: p.id,
+          name: p.name,
+          type: "player" as const,
+        }));
         const allNearby = [...npcEntries, ...playerEntries];
 
         if (allNearby.length === 1) {
@@ -3345,10 +3546,7 @@ export class GameScene extends Phaser.Scene {
         }
       } else {
         const angle = Math.atan2(dy, dx);
-        body.setVelocity(
-          Math.cos(angle) * PLAYER_SPEED,
-          Math.sin(angle) * PLAYER_SPEED
-        );
+        body.setVelocity(Math.cos(angle) * PLAYER_SPEED, Math.sin(angle) * PLAYER_SPEED);
 
         if (Math.abs(dx) > Math.abs(dy)) {
           this.currentDirection = dx > 0 ? DIR_RIGHT : DIR_LEFT;
@@ -3366,7 +3564,7 @@ export class GameScene extends Phaser.Scene {
         this.player.x,
         this.player.y,
         DIR_NUM_TO_NAME[this.currentDirection],
-        "walk"
+        "walk",
       );
 
       // Update player name label position
@@ -3404,19 +3602,23 @@ export class GameScene extends Phaser.Scene {
       // Check horizontal movement (walkable + not occupied by NPC/player)
       if (left) {
         const checkX = Math.floor((this.player.x - 12) / TILE_SIZE);
-        if (this.isWalkable(checkX, currentTileY) && !this.isTileOccupied(checkX, currentTileY)) vx = -PLAYER_SPEED;
+        if (this.isWalkable(checkX, currentTileY) && !this.isTileOccupied(checkX, currentTileY))
+          vx = -PLAYER_SPEED;
       } else if (right) {
         const checkX = Math.floor((this.player.x + 12) / TILE_SIZE);
-        if (this.isWalkable(checkX, currentTileY) && !this.isTileOccupied(checkX, currentTileY)) vx = PLAYER_SPEED;
+        if (this.isWalkable(checkX, currentTileY) && !this.isTileOccupied(checkX, currentTileY))
+          vx = PLAYER_SPEED;
       }
 
       // Check vertical movement (walkable + not occupied by NPC/player)
       if (up) {
         const checkY = Math.floor((this.player.y - 12) / TILE_SIZE);
-        if (this.isWalkable(currentTileX, checkY) && !this.isTileOccupied(currentTileX, checkY)) vy = -PLAYER_SPEED;
+        if (this.isWalkable(currentTileX, checkY) && !this.isTileOccupied(currentTileX, checkY))
+          vy = -PLAYER_SPEED;
       } else if (down) {
         const checkY = Math.floor((this.player.y + 12) / TILE_SIZE);
-        if (this.isWalkable(currentTileX, checkY) && !this.isTileOccupied(currentTileX, checkY)) vy = PLAYER_SPEED;
+        if (this.isWalkable(currentTileX, checkY) && !this.isTileOccupied(currentTileX, checkY))
+          vy = PLAYER_SPEED;
       }
 
       if (vx !== 0 && vy !== 0) {
@@ -3441,7 +3643,7 @@ export class GameScene extends Phaser.Scene {
           this.player.x,
           this.player.y,
           DIR_NUM_TO_NAME[this.currentDirection],
-          "walk"
+          "walk",
         );
       } else {
         this.player.anims.stop();
@@ -3451,7 +3653,7 @@ export class GameScene extends Phaser.Scene {
           this.player.x,
           this.player.y,
           DIR_NUM_TO_NAME[this.currentDirection],
-          "idle"
+          "idle",
         );
       }
     } else {
@@ -3463,7 +3665,7 @@ export class GameScene extends Phaser.Scene {
         this.player.x,
         this.player.y,
         DIR_NUM_TO_NAME[this.currentDirection],
-        "idle"
+        "idle",
       );
     }
 

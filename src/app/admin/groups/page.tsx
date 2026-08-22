@@ -48,10 +48,7 @@ function AdminGroupsPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const manageableGroups = useMemo(
-    () => groups.filter((group) => group.canManageGroup),
-    [groups],
-  );
+  const manageableGroups = useMemo(() => groups.filter((group) => group.canManageGroup), [groups]);
 
   useEffect(() => {
     fetch("/api/groups")
@@ -114,59 +111,53 @@ function AdminGroupsPageInner() {
           </div>
         )}
 
-        {manageableGroups.length === 0
-          ? (
-            <div className="rounded-xl border border-border bg-surface px-6 py-10 text-center text-text-muted">
-              {t("admin.groups.empty")}
-            </div>
-          )
-          : (
-            <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-              <aside className="rounded-xl border border-border bg-surface p-4">
-                <h2 className="mb-3 text-lg font-semibold">{t("admin.groups.manage")}</h2>
-                <div className="space-y-2">
-                  {manageableGroups.map((group) => (
-                    <button
-                      key={group.id}
-                      type="button"
-                      onClick={() => setSelectedGroupId(group.id)}
-                      className={`w-full rounded-lg px-3 py-3 text-left transition ${
-                        selectedGroupId === group.id
-                          ? "bg-primary-muted text-primary-light ring-1 ring-primary-light"
-                          : "bg-bg hover:bg-surface-raised"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-medium">{group.name}</span>
-                        {group.role && (
-                          <span className="text-xs text-text-muted">{group.role}</span>
-                        )}
-                      </div>
-                      <p className="mt-1 text-xs text-text-muted">
-                        {group.canCreateChannel
-                          ? t("admin.groups.canCreate")
-                          : t("admin.groups.readOnly")}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </aside>
+        {manageableGroups.length === 0 ? (
+          <div className="rounded-xl border border-border bg-surface px-6 py-10 text-center text-text-muted">
+            {t("admin.groups.empty")}
+          </div>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+            <aside className="rounded-xl border border-border bg-surface p-4">
+              <h2 className="mb-3 text-lg font-semibold">{t("admin.groups.manage")}</h2>
+              <div className="space-y-2">
+                {manageableGroups.map((group) => (
+                  <button
+                    key={group.id}
+                    type="button"
+                    onClick={() => setSelectedGroupId(group.id)}
+                    className={`w-full rounded-lg px-3 py-3 text-left transition ${
+                      selectedGroupId === group.id
+                        ? "bg-primary-muted text-primary-light ring-1 ring-primary-light"
+                        : "bg-bg hover:bg-surface-raised"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium">{group.name}</span>
+                      {group.role && <span className="text-xs text-text-muted">{group.role}</span>}
+                    </div>
+                    <p className="mt-1 text-xs text-text-muted">
+                      {group.canCreateChannel
+                        ? t("admin.groups.canCreate")
+                        : t("admin.groups.readOnly")}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </aside>
 
-              <main>
-                {selectedGroup
-                  ? (
-                    <GroupAccessPanel
-                      groupId={selectedGroup.id}
-                      groupName={selectedGroup.name}
-                      canManageMembers={selectedGroup.canManageMembers ?? false}
-                      canManagePermissions={selectedGroup.canManagePermissions ?? false}
-                      canApproveJoinRequests={selectedGroup.canApproveJoinRequests ?? false}
-                    />
-                  )
-                  : null}
-              </main>
-            </div>
-          )}
+            <main>
+              {selectedGroup ? (
+                <GroupAccessPanel
+                  groupId={selectedGroup.id}
+                  groupName={selectedGroup.name}
+                  canManageMembers={selectedGroup.canManageMembers ?? false}
+                  canManagePermissions={selectedGroup.canManagePermissions ?? false}
+                  canApproveJoinRequests={selectedGroup.canApproveJoinRequests ?? false}
+                />
+              ) : null}
+            </main>
+          </div>
+        )}
       </div>
     </div>
   );

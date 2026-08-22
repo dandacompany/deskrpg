@@ -19,7 +19,8 @@ type GatewayConfigUpdatedHandler = (channelId: string) => Promise<void> | void;
 
 const KEY = "__deskrpg_rpc_handler__";
 const GATEWAY_CONFIG_UPDATED_KEY = "__deskrpg_gateway_config_updated_handler__";
-const g = globalThis as typeof globalThis & Record<string, RpcHandler | GatewayConfigUpdatedHandler | undefined>;
+const g = globalThis as typeof globalThis &
+  Record<string, RpcHandler | GatewayConfigUpdatedHandler | undefined>;
 
 export function registerRpcHandler(handler: RpcHandler): void {
   g[KEY] = handler;
@@ -36,5 +37,5 @@ export function registerGatewayConfigUpdatedHandler(handler: GatewayConfigUpdate
 
 export function getGatewayConfigUpdatedHandler(): GatewayConfigUpdatedHandler | undefined {
   const handler = g[GATEWAY_CONFIG_UPDATED_KEY];
-  return typeof handler === "function" ? handler as GatewayConfigUpdatedHandler : undefined;
+  return typeof handler === "function" ? (handler as GatewayConfigUpdatedHandler) : undefined;
 }

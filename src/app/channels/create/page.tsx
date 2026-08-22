@@ -75,9 +75,7 @@ function CreateChannelPageInner() {
   // --- AI Gateway ---
   const [gatewayOpen, setGatewayOpen] = useState(false);
   const [gatewayMode, setGatewayMode] = useState<"direct" | "stored">("direct");
-  const [storedGateways, setStoredGateways] = useState<GatewayResourceOption[]>(
-    [],
-  );
+  const [storedGateways, setStoredGateways] = useState<GatewayResourceOption[]>([]);
   const [storedGatewaysLoading, setStoredGatewaysLoading] = useState(false);
   const [storedGatewaysError, setStoredGatewaysError] = useState("");
   const [selectedGatewayId, setSelectedGatewayId] = useState("");
@@ -85,8 +83,9 @@ function CreateChannelPageInner() {
   const [gatewayToken, setGatewayToken] = useState("");
   const [showGatewayToken, setShowGatewayToken] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
-  const [gatewayConnectionState, setGatewayConnectionState] =
-    useState<GatewayConnectionState>({ status: "idle" });
+  const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>({
+    status: "idle",
+  });
 
   // Auto-select template from URL param
   useEffect(() => {
@@ -100,9 +99,7 @@ function CreateChannelPageInner() {
     setStoredGatewaysError("");
 
     fetch("/api/gateways")
-      .then((res) =>
-        res.ok ? res.json() : Promise.reject(new Error("failed")),
-      )
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("failed"))))
       .then((data) => {
         if (cancelled) return;
         setStoredGateways(Array.isArray(data.gateways) ? data.gateways : []);
@@ -131,22 +128,17 @@ function CreateChannelPageInner() {
         const nextGroups = Array.isArray(data.groups) ? data.groups : [];
         setGroups(nextGroups);
         setGroupId((currentGroupId) => {
-          const creatableGroups = nextGroups.filter(
-            (group: GroupOption) => group.canCreateChannel,
-          );
+          const creatableGroups = nextGroups.filter((group: GroupOption) => group.canCreateChannel);
           if (
             currentGroupId &&
-            creatableGroups.some(
-              (group: GroupOption) => group.id === currentGroupId,
-            )
+            creatableGroups.some((group: GroupOption) => group.id === currentGroupId)
           ) {
             return currentGroupId;
           }
 
           const preferredGroup =
-            creatableGroups.find(
-              (group: GroupOption) => group.role !== "member",
-            ) ?? creatableGroups[0];
+            creatableGroups.find((group: GroupOption) => group.role !== "member") ??
+            creatableGroups[0];
           return preferredGroup?.id ?? "";
         });
         setLoadingGroups(false);
@@ -168,10 +160,7 @@ function CreateChannelPageInner() {
       if (selectedGatewayId) setSelectedGatewayId("");
       return;
     }
-    if (
-      !selectedGatewayId ||
-      !storedGateways.some((gateway) => gateway.id === selectedGatewayId)
-    ) {
+    if (!selectedGatewayId || !storedGateways.some((gateway) => gateway.id === selectedGatewayId)) {
       setSelectedGatewayId(storedGateways[0].id);
     }
   }, [gatewayMode, selectedGatewayId, storedGateways]);
@@ -275,9 +264,7 @@ function CreateChannelPageInner() {
         return;
       }
 
-      router.push(
-        `/game?channelId=${data.channel.id}&characterId=${characterId}`,
-      );
+      router.push(`/game?channelId=${data.channel.id}&characterId=${characterId}`);
     } catch {
       setError(t("channels.create.failed"));
       setSubmitting(false);
@@ -287,9 +274,7 @@ function CreateChannelPageInner() {
   return (
     <div className="theme-web min-h-screen bg-bg text-text p-8">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">
-          {t("channels.create.title")}
-        </h1>
+        <h1 className="text-3xl font-bold mb-6">{t("channels.create.title")}</h1>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Name */}
@@ -341,9 +326,7 @@ function CreateChannelPageInner() {
                 ))
               ) : (
                 <option value="">
-                  {loadingGroups
-                    ? t("common.loading")
-                    : t("channels.create.noAvailableGroups")}
+                  {loadingGroups ? t("common.loading") : t("channels.create.noAvailableGroups")}
                 </option>
               )}
             </select>
@@ -356,16 +339,12 @@ function CreateChannelPageInner() {
 
           {/* Public/Private */}
           <div className="flex items-center gap-3">
-            <label className="text-sm font-semibold">
-              {t("channels.create.visibility")}
-            </label>
+            <label className="text-sm font-semibold">{t("channels.create.visibility")}</label>
             <button
               type="button"
               onClick={() => setIsPublic(true)}
               className={`px-3 py-1 rounded text-sm ${
-                isPublic
-                  ? "bg-primary text-white"
-                  : "bg-surface-raised text-text-muted"
+                isPublic ? "bg-primary text-white" : "bg-surface-raised text-text-muted"
               }`}
             >
               {t("channels.public")}
@@ -374,9 +353,7 @@ function CreateChannelPageInner() {
               type="button"
               onClick={() => setIsPublic(false)}
               className={`px-3 py-1 rounded text-sm ${
-                !isPublic
-                  ? "bg-primary text-white"
-                  : "bg-surface-raised text-text-muted"
+                !isPublic ? "bg-primary text-white" : "bg-surface-raised text-text-muted"
               }`}
             >
               {t("channels.private")}
@@ -406,12 +383,9 @@ function CreateChannelPageInner() {
                   {showPassword ? t("common.hide") : t("common.show")}
                 </button>
               </div>
-              {password.length > 0 &&
-                password.length < CHANNEL_PASSWORD_MIN_LENGTH && (
-                  <p className="text-danger text-xs mt-1">
-                    {t("channels.create.passwordMinError")}
-                  </p>
-                )}
+              {password.length > 0 && password.length < CHANNEL_PASSWORD_MIN_LENGTH && (
+                <p className="text-danger text-xs mt-1">{t("channels.create.passwordMinError")}</p>
+              )}
             </div>
           )}
 
@@ -490,9 +464,7 @@ function CreateChannelPageInner() {
                           setSelectedGatewayId(e.target.value);
                           resetGatewayTestState();
                         }}
-                        disabled={
-                          storedGatewaysLoading || storedGateways.length === 0
-                        }
+                        disabled={storedGatewaysLoading || storedGateways.length === 0}
                         className="w-full px-3 py-2 bg-surface border border-border rounded text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-transparent disabled:opacity-60"
                       >
                         {storedGateways.length > 0 ? (
@@ -517,9 +489,7 @@ function CreateChannelPageInner() {
                         )}
                       </select>
                       {storedGatewaysError && (
-                        <p className="mt-1 text-xs text-danger">
-                          {storedGatewaysError}
-                        </p>
+                        <p className="mt-1 text-xs text-danger">{storedGatewaysError}</p>
                       )}
                       {selectedStoredGateway && (
                         <p className="mt-1 text-xs text-text-muted">
@@ -562,9 +532,7 @@ function CreateChannelPageInner() {
                           onClick={() => setShowGatewayToken(!showGatewayToken)}
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text text-xs px-2 py-1"
                         >
-                          {showGatewayToken
-                            ? t("common.hide")
-                            : t("common.show")}
+                          {showGatewayToken ? t("common.hide") : t("common.show")}
                         </button>
                       </div>
                     </div>
@@ -577,15 +545,11 @@ function CreateChannelPageInner() {
                     onClick={handleTestConnection}
                     disabled={
                       testingConnection ||
-                      (gatewayMode === "stored"
-                        ? !selectedGatewayId
-                        : !gatewayUrl.trim())
+                      (gatewayMode === "stored" ? !selectedGatewayId : !gatewayUrl.trim())
                     }
                     className="px-4 py-2 bg-primary hover:bg-primary-hover rounded text-sm font-semibold disabled:opacity-50"
                   >
-                    {testingConnection
-                      ? t("gateway.testing")
-                      : t("gateway.testConnection")}
+                    {testingConnection ? t("gateway.testing") : t("gateway.testConnection")}
                   </button>
                   {gatewayConnectionState.status !== "idle" && (
                     <GatewayStatusCard

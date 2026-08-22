@@ -1,6 +1,10 @@
 import { MEETING_NPC_STREAM_EVENT } from "./meeting-socket";
 import type { AdapterRegistry, NpcAdapter } from "../lib/adapters/types";
-import { ConversationEngine, type EngineParticipant, type RunMode } from "../lib/conversation/conversation-engine";
+import {
+  ConversationEngine,
+  type EngineParticipant,
+  type RunMode,
+} from "../lib/conversation/conversation-engine";
 import type { Turn } from "../lib/conversation/transcript";
 import {
   classifyNpcDispatch,
@@ -9,7 +13,8 @@ import {
 } from "./hermes-dispatch";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { generateTranscript } = require("../lib/meeting-formatter.js") as typeof import("../lib/meeting-formatter.js");
+const { generateTranscript } =
+  require("../lib/meeting-formatter.js") as typeof import("../lib/meeting-formatter.js");
 
 // 회의는 소켓 이벤트로만 흐르고 HTTP 로그를 남기지 않는다. 그래서 "화면에는 시작됐다고
 // 뜨는데 아무도 발언하지 않는" 상태가 되면 서버 쪽에 단서가 하나도 없다 — 실제로 그
@@ -18,7 +23,6 @@ const DEBUG_MEETING = process.env.DEBUG_CHAT === "1" || process.env.DEBUG_MEETIN
 function meetingLog(...args: unknown[]) {
   if (DEBUG_MEETING) console.log("[meeting]", ...args);
 }
-
 
 type MeetingRoom = {
   participants: Set<string>;
@@ -121,7 +125,10 @@ export type MeetingBrokerLike = {
 
 type MeetingBrokerCallbacks = {
   onPollStart?: () => void;
-  onPollResult?: (raises: Array<{ agent: MeetingBrokerParticipant; reason: string }>, passes: string[]) => void;
+  onPollResult?: (
+    raises: Array<{ agent: MeetingBrokerParticipant; reason: string }>,
+    passes: string[],
+  ) => void;
   onTurnStart?: (agent: MeetingBrokerParticipant) => void;
   onTurnChunk?: (npcId: string, chunk: string) => void;
   onTurnEnd?: (npcId: string, fullResponse: string) => void;
@@ -238,7 +245,9 @@ export async function resolveNpcAdapter(
     const createAdapter = ctx.createHermesAdapter ?? createHermesAdapterForNpc;
     const adapter = await createAdapter(npc.id, ctx.userId, contextKey);
     if (!adapter) {
-      return { excluded: { npcId: npc.id, displayName: npc.name, reason: "hermes_profile_unavailable" } };
+      return {
+        excluded: { npcId: npc.id, displayName: npc.name, reason: "hermes_profile_unavailable" },
+      };
     }
     return { participant: participantBase, adapter, sessionKey };
   }
@@ -253,7 +262,11 @@ export async function resolveNpcAdapter(
   if (!ctx.adapterRegistry.has(adapterType)) {
     return { excluded: { npcId: npc.id, displayName: npc.name, reason: "adapter_unavailable" } };
   }
-  return { participant: participantBase, adapter: ctx.adapterRegistry.get(adapterType), sessionKey };
+  return {
+    participant: participantBase,
+    adapter: ctx.adapterRegistry.get(adapterType),
+    sessionKey,
+  };
 }
 
 export async function defaultCreateMeetingBroker(
@@ -284,17 +297,19 @@ export async function defaultCreateMeetingBroker(
 
   const participantByNpcId = new Map(resolved.map((r) => [r.participant.npcId, r.participant]));
 
-  const engineParticipants: EngineParticipant[] = resolved.map(({ participant, adapter, sessionKey }) => ({
-    npcId: participant.npcId,
-    displayName: participant.displayName,
-    seated: true,
-    turnCount: 0,
-    lastSpokeAt: 0,
-    adapter,
-    sessionKey,
-    role: participant.role,
-    passPolicy: participant.passPolicy,
-  }));
+  const engineParticipants: EngineParticipant[] = resolved.map(
+    ({ participant, adapter, sessionKey }) => ({
+      npcId: participant.npcId,
+      displayName: participant.displayName,
+      seated: true,
+      turnCount: 0,
+      lastSpokeAt: 0,
+      adapter,
+      sessionKey,
+      role: participant.role,
+      passPolicy: participant.passPolicy,
+    }),
+  );
 
   let turns: Turn[] = [];
   const startedAt = Date.now();
@@ -320,7 +335,12 @@ export async function defaultCreateMeetingBroker(
     {
       onPollStart: () => callbacks.onPollStart?.(),
       onPollResult: (raises, passes) => {
-        meetingLog("폴링 결과: raises=", raises.map((r) => r.npcId).join(",") || "(없음)", "passes=", passes.join(",") || "(없음)");
+        meetingLog(
+          "폴링 결과: raises=",
+          raises.map((r) => r.npcId).join(",") || "(없음)",
+          "passes=",
+          passes.join(",") || "(없음)",
+        );
         callbacks.onPollResult?.(
           raises
             .map((r) => {
@@ -347,7 +367,10 @@ export async function defaultCreateMeetingBroker(
         const transcript = generateTranscript(
           config.topic,
           finalTurns,
-          resolved.map(({ participant }) => ({ displayName: participant.displayName, role: participant.role })),
+          resolved.map(({ participant }) => ({
+            displayName: participant.displayName,
+            role: participant.role,
+          })),
         );
         const durationSeconds = Math.floor((Date.now() - startedAt) / 1000);
         void callbacks.onMeetingEnd?.(transcript, durationSeconds);
@@ -395,12 +418,7 @@ export function registerMeetingDiscussionHandlers({
   } = deps;
 
   socket.on("meeting:start-discussion", async (payload: unknown) => {
-    const {
-      channelId,
-      topic,
-      settings,
-      selectedNpcIds,
-    } = (payload ?? {}) as {
+    const { channelId, topic, settings, selectedNpcIds } = (payload ?? {}) as {
       channelId?: string;
       topic?: string;
       settings?: Record<string, unknown> & { maxTotalTurns?: number; initialMode?: string };
@@ -428,13 +446,21 @@ export function registerMeetingDiscussionHandlers({
       candidateNpcs = candidateNpcs.filter((npc) => selectedSet.has(npc.id));
     }
 
-    meetingLog("후보 NPC:", candidateNpcs.map((n) => `${n.name}(${n.adapterType})`).join(", ") || "(없음)");
+    meetingLog(
+      "후보 NPC:",
+      candidateNpcs.map((n) => `${n.name}(${n.adapterType})`).join(", ") || "(없음)",
+    );
     if (candidateNpcs.length === 0) {
       socket.emit("meeting:error", { error: "No AI NPCs in this channel" });
       return;
     }
 
-    const meetingParticipants: Array<{ id: string; name: string; type: "npc" | "player"; agentId?: string }> = [
+    const meetingParticipants: Array<{
+      id: string;
+      name: string;
+      type: "npc" | "player";
+      agentId?: string;
+    }> = [
       ...candidateNpcs.map((npc) => ({
         id: npc.id,
         name: npc.name,
@@ -491,7 +517,10 @@ export function registerMeetingDiscussionHandlers({
         },
         onPollResult: (raises, passes) => {
           io.to(getMeetingRoomId(channelId)).emit("meeting:poll-status", {
-            raises: raises.map((raise) => ({ name: raise.agent.displayName, reason: raise.reason })),
+            raises: raises.map((raise) => ({
+              name: raise.agent.displayName,
+              reason: raise.reason,
+            })),
             passes,
           });
         },
@@ -509,7 +538,9 @@ export function registerMeetingDiscussionHandlers({
           });
         },
         onTurnEnd: (npcId, fullResponse) => {
-          const agent = brokerInstance.config.participants.find((participant) => participant.npcId === npcId);
+          const agent = brokerInstance.config.participants.find(
+            (participant) => participant.npcId === npcId,
+          );
           io.to(getMeetingRoomId(channelId)).emit(MEETING_NPC_STREAM_EVENT, {
             npcId,
             npcName: agent?.displayName || npcId,
@@ -552,7 +583,9 @@ export function registerMeetingDiscussionHandlers({
           });
         },
         onMentionSkipped: (npcId, reason) => {
-          const agent = brokerInstance.config.participants.find((participant) => participant.npcId === npcId);
+          const agent = brokerInstance.config.participants.find(
+            (participant) => participant.npcId === npcId,
+          );
           meetingLog("지목 건너뜀:", `${agent?.displayName || npcId}=${reason}`);
           // 표시 문구는 여기서 만들지 않는다 — npcId/reason 만 넘기고 클라이언트가
           // i18n(meeting.mentionSkipped.*)으로 렌더한다.
@@ -570,7 +603,12 @@ export function registerMeetingDiscussionHandlers({
             const summaryKey = `${brokerInstance.config.sessionKeyPrefix || sessionKeyPrefix}-summary-${
               brokerInstance.config.meetingId || meetingId
             }`;
-            summary = await generateMeetingSummary(summarizerAdapter, summaryKey, topic, transcript);
+            summary = await generateMeetingSummary(
+              summarizerAdapter,
+              summaryKey,
+              topic,
+              transcript,
+            );
           }
 
           const minutesId = await persistMeetingMinutes({

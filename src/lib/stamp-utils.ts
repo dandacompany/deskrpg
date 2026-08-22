@@ -76,9 +76,14 @@ function renderTileToHash(
   ctx.drawImage(img, srcCol * tw, srcRow * th, tw, th, 0, 0, tw, th);
   const data = ctx.getImageData(0, 0, tw, th).data;
   // Fast hash: sample every 4th pixel's RGBA
-  let hash = '';
+  let hash = "";
   for (let i = 0; i < data.length; i += 16) {
-    hash += String.fromCharCode(data[i] & 0xff, data[i + 1] & 0xff, data[i + 2] & 0xff, data[i + 3] & 0xff);
+    hash += String.fromCharCode(
+      data[i] & 0xff,
+      data[i + 1] & 0xff,
+      data[i + 2] & 0xff,
+      data[i + 3] & 0xff,
+    );
   }
   return hash;
 }
@@ -107,17 +112,25 @@ export function buildPixelMatchRemap(
   // Build hash → mapGid lookup from all map tilesets
   const tw = Object.values(mapTilesetImages)[0]?.tilewidth ?? 32;
   const th = Object.values(mapTilesetImages)[0]?.tileheight ?? 32;
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = tw;
   canvas.height = th;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext("2d")!;
 
   const mapHashToGid = new Map<string, number>();
   for (const info of Object.values(mapTilesetImages)) {
     for (let i = 0; i < info.tilecount; i++) {
-      const hash = renderTileToHash(info.img, i, info.columns, info.tilewidth, info.tileheight, canvas, ctx);
+      const hash = renderTileToHash(
+        info.img,
+        i,
+        info.columns,
+        info.tilewidth,
+        info.tileheight,
+        canvas,
+        ctx,
+      );
       // Skip fully transparent tiles
-      if (hash.split('').every((c) => c === '\0')) continue;
+      if (hash.split("").every((c) => c === "\0")) continue;
       mapHashToGid.set(hash, info.firstgid + i);
     }
   }
@@ -142,10 +155,7 @@ export function buildPixelMatchRemap(
 /**
  * Find matching layer index in map by name (case-insensitive)
  */
-export function findLayerByName(
-  mapLayers: Array<{ name: string }>,
-  targetName: string,
-): number {
+export function findLayerByName(mapLayers: Array<{ name: string }>, targetName: string): number {
   const lower = targetName.toLowerCase();
   return mapLayers.findIndex((l) => l.name.toLowerCase() === lower);
 }

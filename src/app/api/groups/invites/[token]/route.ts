@@ -14,10 +14,7 @@ function normalizeTimestamp(value: string | Date | null | undefined): string | n
   return value instanceof Date ? value.toISOString() : value;
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ token: string }> },
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 

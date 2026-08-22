@@ -162,10 +162,19 @@ export function normalizeAppearance(
 ): CharacterAppearance {
   // SQLite stores JSON as text — parse if needed
   if (typeof raw === "string") {
-    try { raw = JSON.parse(raw) as CharacterAppearance | LegacyCharacterAppearance; } catch { raw = {} as CharacterAppearance; }
+    try {
+      raw = JSON.parse(raw) as CharacterAppearance | LegacyCharacterAppearance;
+    } catch {
+      raw = {} as CharacterAppearance;
+    }
   }
   // If it has a "layers" key with an object, it's already new format
-  if ("layers" in raw && typeof raw.layers === "object" && raw.layers !== null && !("type" in raw.layers)) {
+  if (
+    "layers" in raw &&
+    typeof raw.layers === "object" &&
+    raw.layers !== null &&
+    !("type" in raw.layers)
+  ) {
     return raw as CharacterAppearance;
   }
 

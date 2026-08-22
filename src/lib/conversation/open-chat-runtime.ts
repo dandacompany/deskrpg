@@ -23,7 +23,11 @@ export type OpenChatCallbacks = {
    */
   onTurnStart?: (npcId: string, displayName: string, callerSocketId: string | null) => void;
   onTurnChunk?: (npcId: string, chunk: string) => void;
-  onTurnEnd?: (npcId: string, fullResponse: string, meta?: { aborted: true; reason: string }) => void;
+  onTurnEnd?: (
+    npcId: string,
+    fullResponse: string,
+    meta?: { aborted: true; reason: string },
+  ) => void;
   /** 지명받았으나 게이트웨이가 죽어 건너뛴 NPC. 회의의 같은 이름 콜백과 짝이다. */
   onMentionSkipped?: (npcId: string, reason: "backend_failing") => void;
   onError?: (err: unknown, npcId: string) => void;
@@ -80,7 +84,11 @@ export class OpenChatRuntime {
   }
 
   /** 사람이 말했다. 예산을 채우고, 지명된 NPC 들을 동시에 깨운다. */
-  async handleHumanMessage(senderName: string, text: string, callerSocketId: string | null = null): Promise<void> {
+  async handleHumanMessage(
+    senderName: string,
+    text: string,
+    callerSocketId: string | null = null,
+  ): Promise<void> {
     this.quota.resetByHuman();
     this.currentCallerSocketId = callerSocketId;
     const targets = parseAllMentions(text, this.participantsView(), null);

@@ -16,10 +16,7 @@ import { NextRequest } from "next/server";
 // runner treats `[id]` as a glob character class when discovering files by path, so a
 // `*.test.ts` file placed inside a bracketed route segment is silently never collected.
 // Sibling `profiles-route.test.ts` establishes this same top-level naming convention.
-const sqlitePath = path.join(
-  os.tmpdir(),
-  `probe-route-test-${crypto.randomUUID()}.db`,
-);
+const sqlitePath = path.join(os.tmpdir(), `probe-route-test-${crypto.randomUUID()}.db`);
 process.env.DESKRPG_HOME = os.tmpdir();
 process.env.SQLITE_PATH = sqlitePath;
 for (const ext of ["", "-wal", "-shm"]) {
@@ -69,25 +66,18 @@ describe("POST /api/gateways/[id]/profiles/probe", () => {
     }) as typeof fetch;
 
     try {
-      const req = new NextRequest(
-        `http://localhost/api/gateways/${gateway.id}/profiles/probe`,
-        {
-          method: "POST",
-          headers: { "x-user-id": user.id, "content-type": "application/json" },
-          body: JSON.stringify({ profileName: ".." }),
-        },
-      );
+      const req = new NextRequest(`http://localhost/api/gateways/${gateway.id}/profiles/probe`, {
+        method: "POST",
+        headers: { "x-user-id": user.id, "content-type": "application/json" },
+        body: JSON.stringify({ profileName: ".." }),
+      });
 
       const res = await POST(req, {
         params: Promise.resolve({ id: gateway.id }),
       });
       const body = await res.json();
 
-      assert.equal(
-        fetchCalled,
-        false,
-        "fetch must never be called for a rejected profile name",
-      );
+      assert.equal(fetchCalled, false, "fetch must never be called for a rejected profile name");
       assert.equal(body.status, "not_found");
     } finally {
       globalThis.fetch = originalFetch;

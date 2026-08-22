@@ -8,10 +8,18 @@ import { hermesProfiles, npcs } from "./schema";
 test("hermes_profiles has the profile triple and validation columns", () => {
   const cols = getTableColumns(hermesProfiles);
   for (const name of [
-    "id", "gatewayId", "profileName", "tokenEncrypted", "displayName",
-    "description", "provisionedByDeskrpg",
-    "lastValidatedAt", "lastValidationStatus", "lastValidationError",
-    "createdAt", "updatedAt",
+    "id",
+    "gatewayId",
+    "profileName",
+    "tokenEncrypted",
+    "displayName",
+    "description",
+    "provisionedByDeskrpg",
+    "lastValidatedAt",
+    "lastValidationStatus",
+    "lastValidationError",
+    "createdAt",
+    "updatedAt",
   ]) {
     assert.ok(name in cols, `missing column: ${name}`);
   }

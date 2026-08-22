@@ -21,7 +21,8 @@ import { getDeskRpgTemplateUploadDir } from "@/lib/runtime-paths";
  */
 export async function POST(req: NextRequest) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  if (!userId)
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   try {
     const formData = await req.formData();
@@ -32,7 +33,10 @@ export async function POST(req: NextRequest) {
     const tags = (formData.get("tags") as string) || null;
 
     if (!file) {
-      return NextResponse.json({ errorCode: "file_required", error: "File is required" }, { status: 400 });
+      return NextResponse.json(
+        { errorCode: "file_required", error: "File is required" },
+        { status: 400 },
+      );
     }
     throwIfUploadLimitExceeded(validateMainUploadSize(file.size));
 
@@ -139,19 +143,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ template }, { status: 201 });
   } catch (err) {
     if (err instanceof UploadLimitError) {
-      return NextResponse.json({ errorCode: err.errorCode, error: err.message }, { status: err.status });
+      return NextResponse.json(
+        { errorCode: err.errorCode, error: err.message },
+        { status: err.status },
+      );
     }
     console.error("Failed to upload map template:", err);
-    return NextResponse.json({
-      errorCode: "failed_to_upload_template",
-      error: `Upload failed: ${err instanceof Error ? err.message : "unknown"}`,
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        errorCode: "failed_to_upload_template",
+        error: `Upload failed: ${err instanceof Error ? err.message : "unknown"}`,
+      },
+      { status: 500 },
+    );
   }
 }
 
 // ── Helper: Parse single TMJ/TMX file ──
 async function parseTiledFile(text: string, fileName: string): Promise<Record<string, unknown>> {
-  if (fileName.endsWith(".tmx") || fileName.endsWith(".xml") || text.trimStart().startsWith("<?xml") || text.trimStart().startsWith("<map")) {
+  if (
+    fileName.endsWith(".tmx") ||
+    fileName.endsWith(".xml") ||
+    text.trimStart().startsWith("<?xml") ||
+    text.trimStart().startsWith("<map")
+  ) {
     return tmxToJson(text);
   }
   return JSON.parse(text);
@@ -204,8 +219,15 @@ async function processZip(buffer: ArrayBuffer): Promise<{
         if (parsed.tiledversion || parsed.layers) {
           mapFile = { name: filePath, content: text };
         }
-      } catch { /* not JSON, skip */ }
-    } else if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp")) {
+      } catch {
+        /* not JSON, skip */
+      }
+    } else if (
+      lower.endsWith(".png") ||
+      lower.endsWith(".jpg") ||
+      lower.endsWith(".jpeg") ||
+      lower.endsWith(".webp")
+    ) {
       const buf = await zipEntry.async("nodebuffer");
       throwIfUploadLimitExceeded(validateAuxiliaryUploadSize(buf.length));
       const budgetResult = consumeArchiveEntry(archiveBudget, buf.length);

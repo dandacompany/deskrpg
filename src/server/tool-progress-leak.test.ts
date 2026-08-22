@@ -58,9 +58,9 @@ test("1:1 대화 경로가 tool progress 를 답변 청크로 흘리지 않는�
   assert.deepEqual(
     offenders,
     [],
-    "onToolProgress 가 답변 청크를 emit 하고 있습니다. tool.progress 는 진행 신호이지 "
-      + "본문이 아닙니다 — Hermes 의 `_thinking` 은 완성된 답변 전체를 다시 보내므로 "
-      + `사용자에게 같은 답이 두 번 보입니다:\n${offenders.join("\n---\n")}`,
+    "onToolProgress 가 답변 청크를 emit 하고 있습니다. tool.progress 는 진행 신호이지 " +
+      "본문이 아닙니다 — Hermes 의 `_thinking` 은 완성된 답변 전체를 다시 보내므로 " +
+      `사용자에게 같은 답이 두 번 보입니다:\n${offenders.join("\n---\n")}`,
   );
 });
 
@@ -87,18 +87,18 @@ test("회의 경로는 tool progress 를 진행 신호로만 쓴다", () => {
     found.length,
     1,
     found.length === 0
-      ? `${dir}/ 안 어디에서도 onToolProgress 핸들러를 찾지 못했습니다 — 회의 경로가 `
-        + "tool.progress 를 더 이상 처리하지 않게 됐거나, 핸들러 모양이 이 정규식과 달라졌습니다."
-      : `${dir}/ 안에서 onToolProgress 핸들러를 ${found.length}개 찾았습니다 `
-        + `(${found.map((f) => f.file).join(", ")}) — 회의 경로가 tool.progress 를 두 곳에서 `
-        + "서로 다르게 처리하고 있을 수 있습니다. 정확히 한 곳에서만 처리해야 합니다.",
+      ? `${dir}/ 안 어디에서도 onToolProgress 핸들러를 찾지 못했습니다 — 회의 경로가 ` +
+          "tool.progress 를 더 이상 처리하지 않게 됐거나, 핸들러 모양이 이 정규식과 달라졌습니다."
+      : `${dir}/ 안에서 onToolProgress 핸들러를 ${found.length}개 찾았습니다 ` +
+          `(${found.map((f) => f.file).join(", ")}) — 회의 경로가 tool.progress 를 두 곳에서 ` +
+          "서로 다르게 처리하고 있을 수 있습니다. 정확히 한 곳에서만 처리해야 합니다.",
   );
 
   const [{ file, body }] = found;
   assert.doesNotMatch(
     body,
     /onTurnChunk|rawText\s*\+=|onChunk/,
-    `회의 경로(${dir}/${file})가 tool progress 를 발언 본문에 섞고 있습니다 — 1:1 에서 고친 `
-      + "것과 같은 결함입니다.",
+    `회의 경로(${dir}/${file})가 tool progress 를 발언 본문에 섞고 있습니다 — 1:1 에서 고친 ` +
+      "것과 같은 결함입니다.",
   );
 });

@@ -4,11 +4,8 @@ import test from "node:test";
 import { parseMention } from "./conversation/mention";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const {
-  formatSpeakMessage,
-  sanitizeSpokenResponse,
-  sanitizeStreamingSpokenResponse,
-} = require("./meeting-formatter.js") as typeof import("./meeting-formatter.js");
+const { formatSpeakMessage, sanitizeSpokenResponse, sanitizeStreamingSpokenResponse } =
+  require("./meeting-formatter.js") as typeof import("./meeting-formatter.js");
 
 test("sanitizeSpokenResponse removes a leading SPEAK prefix", () => {
   assert.equal(sanitizeSpokenResponse("SPEAK: 안녕하세요"), "안녕하세요");

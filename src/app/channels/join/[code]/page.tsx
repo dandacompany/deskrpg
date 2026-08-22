@@ -44,9 +44,7 @@ function JoinChannelPageInner() {
 
         if (characterId) {
           // Has character selected, go directly to game
-          router.replace(
-            `/game?channelId=${data.channel.id}&characterId=${characterId}`,
-          );
+          router.replace(`/game?channelId=${data.channel.id}&characterId=${characterId}`);
         } else {
           // Need to select character first, then come back
           router.replace(`/characters?joinChannel=${data.channel.id}`);

@@ -7,8 +7,13 @@ import { gatewayResources as sqliteTable } from "./schema-sqlite";
 const NEW_COLUMNS = ["local_discovery_opted_in_at", "local_discovery_opted_in_by"];
 
 test("옵인 컬럼이 두 dialect 모두에 있다", () => {
-  for (const [label, table] of [["pg", pgTable], ["sqlite", sqliteTable]] as const) {
-    const names = Object.values(table).map((c) => (c as { name?: string })?.name).filter(Boolean);
+  for (const [label, table] of [
+    ["pg", pgTable],
+    ["sqlite", sqliteTable],
+  ] as const) {
+    const names = Object.values(table)
+      .map((c) => (c as { name?: string })?.name)
+      .filter(Boolean);
     for (const col of NEW_COLUMNS) {
       assert.ok(names.includes(col), `[${label}] ${col} 컬럼이 없다`);
     }
@@ -47,8 +52,9 @@ test("컬럼이 없는 기존 DB도 호환 경로가 채워준다", async () => 
     );
   `);
   ensureSqliteCompatibility(db);
-  const names = (db.prepare("PRAGMA table_info(gateway_resources)").all() as { name: string }[])
-    .map((c) => c.name);
+  const names = (
+    db.prepare("PRAGMA table_info(gateway_resources)").all() as { name: string }[]
+  ).map((c) => c.name);
   for (const col of NEW_COLUMNS) {
     assert.ok(names.includes(col), `${col} 이 기존 DB 마이그레이션에서 누락됐다`);
   }

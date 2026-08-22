@@ -1,19 +1,19 @@
-'use client';
+"use client";
 
-import { useCallback } from 'react';
-import type { EditorState, TilesetImageInfo, TiledLayer } from './useMapEditor';
-import { getLayerColor } from './useMapEditor';
+import { useCallback } from "react";
+import type { EditorState, TilesetImageInfo, TiledLayer } from "./useMapEditor";
+import { getLayerColor } from "./useMapEditor";
 
 // === Helpers ===
 
 function getLayerDepth(layer: TiledLayer): number {
   if (!layer.properties) return 0;
-  const depthProp = layer.properties.find((p) => p.name === 'depth');
+  const depthProp = layer.properties.find((p) => p.name === "depth");
   if (!depthProp) return 0;
-  if (depthProp.type === 'int' || depthProp.type === 'float') {
+  if (depthProp.type === "int" || depthProp.type === "float") {
     return Number(depthProp.value) || 0;
   }
-  if (depthProp.type === 'string' && depthProp.value === 'y-sort') {
+  if (depthProp.type === "string" && depthProp.value === "y-sort") {
     return 5000; // between walls and foreground
   }
   return Number(depthProp.value) || 0;
@@ -28,10 +28,7 @@ export interface CharacterState {
 
 type FindTilesetFn = (gid: number) => TilesetImageInfo | null;
 
-export function useCanvasRenderer(
-  state: EditorState,
-  findTileset: FindTilesetFn,
-) {
+export function useCanvasRenderer(state: EditorState, findTileset: FindTilesetFn) {
   const render = useCallback(
     (
       canvas: HTMLCanvasElement,
@@ -48,7 +45,7 @@ export function useCanvasRenderer(
         };
       },
     ) => {
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
       const { mapData, zoom, panX, panY, showGrid, showCollision } = state;
@@ -57,7 +54,7 @@ export function useCanvasRenderer(
 
       // 1. Clear canvas + background
       ctx.clearRect(0, 0, cw, ch);
-      ctx.fillStyle = '#0a0f1e';
+      ctx.fillStyle = "#0a0f1e";
       ctx.fillRect(0, 0, cw, ch);
 
       if (!mapData) return;
@@ -75,7 +72,7 @@ export function useCanvasRenderer(
       ctx.scale(zoom, zoom);
 
       // 3. Map background
-      ctx.fillStyle = '#111827';
+      ctx.fillStyle = "#111827";
       ctx.fillRect(0, 0, mapPixelW, mapPixelH);
 
       // 4. Calculate visible tile range (frustum culling)
@@ -93,17 +90,17 @@ export function useCanvasRenderer(
       const layers = mapData.layers;
       const charAboveRow = characterState ? characterState.tileY - 1 : -1;
       // Collect foreground layers to split-render around character
-      const fgLayers: { li: number; layer: typeof layers[0] }[] = [];
+      const fgLayers: { li: number; layer: (typeof layers)[0] }[] = [];
 
       // Pass 1: Draw all non-foreground layers + foreground above-row only
       for (let li = 0; li < layers.length; li++) {
         const layer = layers[li];
-        if (!showCollision && layer.name.toLowerCase() === 'collision') continue;
+        if (!showCollision && layer.name.toLowerCase() === "collision") continue;
         if (!layer.visible) continue;
 
         const depth = getLayerDepth(layer);
 
-        if (layer.type === 'tilelayer' && layer.data) {
+        if (layer.type === "tilelayer" && layer.data) {
           const prevAlpha = ctx.globalAlpha;
           ctx.globalAlpha = layer.opacity;
 
@@ -111,10 +108,32 @@ export function useCanvasRenderer(
             // Foreground: draw ONLY the above-character row now (before character)
             fgLayers.push({ li, layer });
             if (charAboveRow >= startRow && charAboveRow <= endRow) {
-              drawTileLayer(ctx, layer, mapW, tw, th, startCol, charAboveRow, endCol, charAboveRow, findTileset);
+              drawTileLayer(
+                ctx,
+                layer,
+                mapW,
+                tw,
+                th,
+                startCol,
+                charAboveRow,
+                endCol,
+                charAboveRow,
+                findTileset,
+              );
             }
           } else {
-            drawTileLayer(ctx, layer, mapW, tw, th, startCol, startRow, endCol, endRow, findTileset);
+            drawTileLayer(
+              ctx,
+              layer,
+              mapW,
+              tw,
+              th,
+              startCol,
+              startRow,
+              endCol,
+              endRow,
+              findTileset,
+            );
           }
 
           // Layer color overlay
@@ -131,7 +150,7 @@ export function useCanvasRenderer(
           }
 
           ctx.globalAlpha = prevAlpha;
-        } else if (layer.type === 'objectgroup' && layer.objects) {
+        } else if (layer.type === "objectgroup" && layer.objects) {
           drawObjectLayer(ctx, layer);
         }
       }
@@ -143,13 +162,24 @@ export function useCanvasRenderer(
 
       // Pass 3: Draw foreground layers — all rows EXCEPT the above-character row
       for (const { li, layer } of fgLayers) {
-        if (layer.type !== 'tilelayer' || !layer.data) continue;
+        if (layer.type !== "tilelayer" || !layer.data) continue;
         const prevAlpha = ctx.globalAlpha;
         ctx.globalAlpha = layer.opacity;
 
         // Rows above the charAboveRow
         if (startRow < charAboveRow) {
-          drawTileLayer(ctx, layer, mapW, tw, th, startCol, startRow, endCol, charAboveRow - 1, findTileset);
+          drawTileLayer(
+            ctx,
+            layer,
+            mapW,
+            tw,
+            th,
+            startCol,
+            startRow,
+            endCol,
+            charAboveRow - 1,
+            findTileset,
+          );
         }
         // Rows below the charAboveRow
         const resumeRow = charAboveRow >= startRow ? charAboveRow + 1 : startRow;
@@ -188,7 +218,7 @@ export function useCanvasRenderer(
 
         ctx.save();
         ctx.setLineDash([4, 4]);
-        ctx.strokeStyle = 'rgba(168, 85, 247, 0.8)';
+        ctx.strokeStyle = "rgba(168, 85, 247, 0.8)";
         ctx.lineWidth = 2;
         ctx.strokeRect(sx, sy, sw, sh);
         ctx.restore();
@@ -267,7 +297,7 @@ function drawCharacter(
   // Shadow ellipse beneath character
   ctx.save();
   ctx.globalAlpha = 0.3;
-  ctx.fillStyle = '#000000';
+  ctx.fillStyle = "#000000";
   ctx.beginPath();
   ctx.ellipse(
     dx + drawSize / 2,
@@ -282,23 +312,10 @@ function drawCharacter(
   ctx.restore();
 
   // Draw character sprite
-  ctx.drawImage(
-    sheet,
-    sx,
-    sy,
-    frameSize,
-    frameSize,
-    dx,
-    dy,
-    drawSize,
-    drawSize,
-  );
+  ctx.drawImage(sheet, sx, sy, frameSize, frameSize, dx, dy, drawSize, drawSize);
 }
 
-function drawObjectLayer(
-  ctx: CanvasRenderingContext2D,
-  layer: TiledLayer,
-) {
+function drawObjectLayer(ctx: CanvasRenderingContext2D, layer: TiledLayer) {
   if (!layer.objects) return;
 
   const prevAlpha = ctx.globalAlpha;
@@ -307,13 +324,11 @@ function drawObjectLayer(
   for (const obj of layer.objects) {
     if (!obj.visible) continue;
 
-    const isSpawn =
-      obj.type === 'spawn' ||
-      obj.name.toLowerCase() === 'spawn';
+    const isSpawn = obj.type === "spawn" || obj.name.toLowerCase() === "spawn";
 
     if (isSpawn) {
       // Green diamond for spawn points
-      ctx.fillStyle = '#22c55e';
+      ctx.fillStyle = "#22c55e";
       const cx = obj.x + obj.width / 2;
       const cy = obj.y + obj.height / 2;
       const rx = obj.width / 2;
@@ -328,28 +343,24 @@ function drawObjectLayer(
       ctx.fill();
 
       // Label
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('S', cx, cy + 4);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "10px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("S", cx, cy + 4);
     } else {
       // Purple rectangle for other objects
-      ctx.fillStyle = 'rgba(168, 85, 247, 0.4)';
+      ctx.fillStyle = "rgba(168, 85, 247, 0.4)";
       ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
-      ctx.strokeStyle = '#a855f7';
+      ctx.strokeStyle = "#a855f7";
       ctx.lineWidth = 1;
       ctx.strokeRect(obj.x, obj.y, obj.width, obj.height);
 
       // Label
       if (obj.name || obj.type) {
-        ctx.fillStyle = '#e9d5ff';
-        ctx.font = '9px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText(
-          obj.name || obj.type,
-          obj.x + 2,
-          obj.y + 10,
-        );
+        ctx.fillStyle = "#e9d5ff";
+        ctx.font = "9px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText(obj.name || obj.type, obj.x + 2, obj.y + 10);
       }
     }
   }
@@ -368,7 +379,7 @@ function drawGrid(
   endCol: number,
   endRow: number,
 ) {
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
   ctx.lineWidth = 0.5;
 
   ctx.beginPath();
@@ -402,13 +413,13 @@ function drawSelection(
   const sh = selection.height * th;
 
   // Semi-transparent fill
-  ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+  ctx.fillStyle = "rgba(16, 185, 129, 0.15)";
   ctx.fillRect(sx, sy, sw, sh);
 
   // Dashed border
   ctx.save();
   ctx.setLineDash([4, 4]);
-  ctx.strokeStyle = 'rgba(16, 185, 129, 0.7)';
+  ctx.strokeStyle = "rgba(16, 185, 129, 0.7)";
   ctx.lineWidth = 2;
   ctx.strokeRect(sx, sy, sw, sh);
   ctx.restore();

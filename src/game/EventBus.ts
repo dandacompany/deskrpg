@@ -57,9 +57,11 @@ const PENDING_CHANNEL_DATA_KEY = "__deskrpgPendingChannelData";
 
 function readPendingChannelData(): PendingChannelData {
   if (typeof globalThis === "undefined") return null;
-  return (globalThis as typeof globalThis & { [PENDING_CHANNEL_DATA_KEY]?: PendingChannelData })[
-    PENDING_CHANNEL_DATA_KEY
-  ] ?? null;
+  return (
+    (globalThis as typeof globalThis & { [PENDING_CHANNEL_DATA_KEY]?: PendingChannelData })[
+      PENDING_CHANNEL_DATA_KEY
+    ] ?? null
+  );
 }
 
 function writePendingChannelData(data: PendingChannelData) {

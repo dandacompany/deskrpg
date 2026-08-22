@@ -31,10 +31,18 @@ export function validateMapTemplate(data: {
   if (!data.name || data.name.length < 1 || data.name.length > 200) {
     return "name is required (1-200 chars)";
   }
-  if (typeof data.cols !== "number" || data.cols < MAP_SIZE_MIN_COLS || data.cols > MAP_SIZE_MAX_COLS) {
+  if (
+    typeof data.cols !== "number" ||
+    data.cols < MAP_SIZE_MIN_COLS ||
+    data.cols > MAP_SIZE_MAX_COLS
+  ) {
     return `cols must be ${MAP_SIZE_MIN_COLS}-${MAP_SIZE_MAX_COLS}`;
   }
-  if (typeof data.rows !== "number" || data.rows < MAP_SIZE_MIN_ROWS || data.rows > MAP_SIZE_MAX_ROWS) {
+  if (
+    typeof data.rows !== "number" ||
+    data.rows < MAP_SIZE_MIN_ROWS ||
+    data.rows > MAP_SIZE_MAX_ROWS
+  ) {
     return `rows must be ${MAP_SIZE_MIN_ROWS}-${MAP_SIZE_MAX_ROWS}`;
   }
   if (typeof data.spawnCol !== "number" || data.spawnCol < 0 || data.spawnCol >= data.cols) {

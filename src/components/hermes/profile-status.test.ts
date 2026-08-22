@@ -4,7 +4,10 @@ import { profileStatusLabel } from "./profile-status";
 
 describe("profileStatusLabel", () => {
   test("valid renders as ok", () => {
-    assert.deepEqual(profileStatusLabel("valid"), { tone: "ok", key: "gateway.profile.status.valid" });
+    assert.deepEqual(profileStatusLabel("valid"), {
+      tone: "ok",
+      key: "gateway.profile.status.valid",
+    });
   });
 
   test("unauthorized renders as an error the operator must fix", () => {

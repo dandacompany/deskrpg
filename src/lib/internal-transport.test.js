@@ -3,11 +3,8 @@ import test from "node:test";
 
 import internalTransport from "./internal-transport.js";
 
-const {
-  buildInternalAuthHeaders,
-  getInternalSocketHostname,
-  isInternalRequestAuthorized,
-} = internalTransport;
+const { buildInternalAuthHeaders, getInternalSocketHostname, isInternalRequestAuthorized } =
+  internalTransport;
 
 test("internal socket hostname defaults to loopback", () => {
   assert.equal(getInternalSocketHostname({}), "127.0.0.1");
@@ -29,11 +26,17 @@ test("internal auth headers include the configured secret", () => {
 test("internal requests are rejected when secret is missing or mismatched", () => {
   assert.equal(isInternalRequestAuthorized(new Headers(), "secret-token"), false);
   assert.equal(
-    isInternalRequestAuthorized(new Headers({ "x-deskrpg-internal-secret": "wrong" }), "secret-token"),
+    isInternalRequestAuthorized(
+      new Headers({ "x-deskrpg-internal-secret": "wrong" }),
+      "secret-token",
+    ),
     false,
   );
   assert.equal(
-    isInternalRequestAuthorized(new Headers({ "x-deskrpg-internal-secret": "secret-token" }), "secret-token"),
+    isInternalRequestAuthorized(
+      new Headers({ "x-deskrpg-internal-secret": "secret-token" }),
+      "secret-token",
+    ),
     true,
   );
 });

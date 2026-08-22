@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useRef, useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 interface TooltipProps {
   label: string;
@@ -37,32 +37,40 @@ export default function Tooltip({ label, shortcut, children }: TooltipProps) {
   };
 
   useEffect(() => {
-    return () => { if (timeout.current) clearTimeout(timeout.current); };
+    return () => {
+      if (timeout.current) clearTimeout(timeout.current);
+    };
   }, []);
 
   return (
-    <div ref={triggerRef} className="inline-flex" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+    <div
+      ref={triggerRef}
+      className="inline-flex"
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+    >
       {children}
-      {show && createPortal(
-        <div
-          className="fixed z-[9999] pointer-events-none whitespace-nowrap"
-          style={{
-            left: pos.x,
-            top: pos.y,
-            transform: pos.above ? 'translate(-50%, -100%)' : 'translateX(-50%)',
-          }}
-        >
-          <div className="bg-bg border border-border rounded-md px-2 py-1 shadow-lg flex items-center gap-2">
-            <span className="text-micro text-text">{label}</span>
-            {shortcut && (
-              <span className="text-micro text-text-dim bg-surface-raised px-1 py-0.5 rounded font-mono">
-                {shortcut}
-              </span>
-            )}
-          </div>
-        </div>,
-        document.body,
-      )}
+      {show &&
+        createPortal(
+          <div
+            className="fixed z-[9999] pointer-events-none whitespace-nowrap"
+            style={{
+              left: pos.x,
+              top: pos.y,
+              transform: pos.above ? "translate(-50%, -100%)" : "translateX(-50%)",
+            }}
+          >
+            <div className="bg-bg border border-border rounded-md px-2 py-1 shadow-lg flex items-center gap-2">
+              <span className="text-micro text-text">{label}</span>
+              {shortcut && (
+                <span className="text-micro text-text-dim bg-surface-raised px-1 py-0.5 rounded font-mono">
+                  {shortcut}
+                </span>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

@@ -7,7 +7,10 @@ import { getUserId } from "@/lib/internal-rpc";
 import { parseDbJson, parseDbObject } from "@/lib/db-json";
 import { getChannelGatewayBinding } from "@/lib/gateway-resources";
 import { getTaskAutomationConfig } from "@/lib/task-reporting";
-import { summarizeChannelDetailAccess, summarizeChannelJoinAccess } from "@/lib/rbac/channel-access";
+import {
+  summarizeChannelDetailAccess,
+  summarizeChannelJoinAccess,
+} from "@/lib/rbac/channel-access";
 import { isChannelPasswordValid } from "@/lib/security-policy";
 import internalTransport from "@/lib/internal-transport.js";
 
@@ -26,12 +29,10 @@ type RestorableMapData = {
 };
 
 // GET /api/channels/:id — get channel details + map data
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  if (!userId)
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
 
@@ -69,16 +70,20 @@ export async function GET(
 
     // Check membership
     const memberRows = await db
-      .select({ role: channelMembers.role, lastX: channelMembers.lastX, lastY: channelMembers.lastY })
+      .select({
+        role: channelMembers.role,
+        lastX: channelMembers.lastX,
+        lastY: channelMembers.lastY,
+      })
       .from(channelMembers)
       .where(and(eq(channelMembers.channelId, id), eq(channelMembers.userId, userId)))
       .limit(1);
     const groupMemberRows = channel.groupId
       ? await db
-        .select({ role: groupMembers.role })
-        .from(groupMembers)
-        .where(and(eq(groupMembers.groupId, channel.groupId), eq(groupMembers.userId, userId)))
-        .limit(1)
+          .select({ role: groupMembers.role })
+          .from(groupMembers)
+          .where(and(eq(groupMembers.groupId, channel.groupId), eq(groupMembers.userId, userId)))
+          .limit(1)
       : [];
 
     const memberRole = memberRows[0]?.role ?? null;
@@ -115,7 +120,8 @@ export async function GET(
 
     // Restore tileset images in mapData if they were stripped
     const parsedMapData = parseDbJson<Record<string, unknown>>(channel.mapData) ?? channel.mapData;
-    const parsedMapConfig = parseDbJson<Record<string, unknown>>(channel.mapConfig) ?? channel.mapConfig;
+    const parsedMapConfig =
+      parseDbJson<Record<string, unknown>>(channel.mapConfig) ?? channel.mapConfig;
 
     if (parsedMapData && typeof parsedMapData === "object" && !Array.isArray(parsedMapData)) {
       try {
@@ -123,17 +129,25 @@ export async function GET(
         if (mapObj?.tilesets) {
           let restored = false;
           for (const ts of mapObj.tilesets) {
-            if ((!ts.image || ts.image === '') && ts.name) {
-              const [dbTs] = await db.select({ image: tilesetImages.image })
-                .from(tilesetImages).where(eq(tilesetImages.name, ts.name)).limit(1);
-              if (dbTs) { ts.image = dbTs.image; restored = true; }
+            if ((!ts.image || ts.image === "") && ts.name) {
+              const [dbTs] = await db
+                .select({ image: tilesetImages.image })
+                .from(tilesetImages)
+                .where(eq(tilesetImages.name, ts.name))
+                .limit(1);
+              if (dbTs) {
+                ts.image = dbTs.image;
+                restored = true;
+              }
             }
           }
           if (restored) {
             (channel as Record<string, unknown>).mapData = mapObj;
           }
         }
-      } catch { /* ignore parse errors */ }
+      } catch {
+        /* ignore parse errors */
+      }
     }
 
     const parsedGatewayConfig = parseDbObject(channel.gatewayConfig);
@@ -175,12 +189,10 @@ export async function GET(
 }
 
 // PUT /api/channels/:id — update channel (owner only)
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  if (!userId)
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
 
@@ -193,11 +205,17 @@ export async function PUT(
       .limit(1);
 
     if (rows.length === 0) {
-      return NextResponse.json({ errorCode: "channel_not_found", error: "Channel not found" }, { status: 404 });
+      return NextResponse.json(
+        { errorCode: "channel_not_found", error: "Channel not found" },
+        { status: 404 },
+      );
     }
 
     if (rows[0].ownerId !== userId) {
-      return NextResponse.json({ errorCode: "forbidden", error: "Not authorized" }, { status: 403 });
+      return NextResponse.json(
+        { errorCode: "forbidden", error: "Not authorized" },
+        { status: 403 },
+      );
     }
 
     const body = await req.json();
@@ -221,7 +239,10 @@ export async function PUT(
     if (body.password !== undefined) {
       if (typeof body.password !== "string" || !isChannelPasswordValid(body.password)) {
         return NextResponse.json(
-          { errorCode: "channel_password_length_invalid", error: "Password must be at least 8 characters" },
+          {
+            errorCode: "channel_password_length_invalid",
+            error: "Password must be at least 8 characters",
+          },
           { status: 400 },
         );
       }
@@ -230,23 +251,19 @@ export async function PUT(
 
     updates.updatedAt = (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date;
 
-    const [updated] = await db
-      .update(channels)
-      .set(updates)
-      .where(eq(channels.id, id))
-      .returning({
-        id: channels.id,
-        name: channels.name,
-        description: channels.description,
-        ownerId: channels.ownerId,
-        isPublic: channels.isPublic,
-        inviteCode: channels.inviteCode,
-        maxPlayers: channels.maxPlayers,
-        mapData: channels.mapData,
-        mapConfig: channels.mapConfig,
-        createdAt: channels.createdAt,
-        updatedAt: channels.updatedAt,
-      });
+    const [updated] = await db.update(channels).set(updates).where(eq(channels.id, id)).returning({
+      id: channels.id,
+      name: channels.name,
+      description: channels.description,
+      ownerId: channels.ownerId,
+      isPublic: channels.isPublic,
+      inviteCode: channels.inviteCode,
+      maxPlayers: channels.maxPlayers,
+      mapData: channels.mapData,
+      mapConfig: channels.mapConfig,
+      createdAt: channels.createdAt,
+      updatedAt: channels.updatedAt,
+    });
 
     // Emit socket event to notify clients of channel update
     try {
@@ -278,12 +295,10 @@ export async function PUT(
 }
 
 // DELETE /api/channels/:id — delete channel (owner only)
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
+  if (!userId)
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
 
@@ -295,11 +310,17 @@ export async function DELETE(
       .limit(1);
 
     if (rows.length === 0) {
-      return NextResponse.json({ errorCode: "channel_not_found", error: "Channel not found" }, { status: 404 });
+      return NextResponse.json(
+        { errorCode: "channel_not_found", error: "Channel not found" },
+        { status: 404 },
+      );
     }
 
     if (rows[0].ownerId !== userId) {
-      return NextResponse.json({ errorCode: "forbidden", error: "Not authorized" }, { status: 403 });
+      return NextResponse.json(
+        { errorCode: "forbidden", error: "Not authorized" },
+        { status: 403 },
+      );
     }
 
     // Notify connected players before deletion
@@ -317,7 +338,7 @@ export async function DELETE(
         }),
       });
       // Brief delay to let clients receive the event before DB deletion
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 500));
     } catch {
       // Non-critical
     }

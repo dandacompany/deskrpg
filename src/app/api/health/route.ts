@@ -20,9 +20,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error("[api/health] database probe failed", error);
-    return NextResponse.json(
-      { status: "error", db: "disconnected" },
-      { status: 503 }
-    );
+    return NextResponse.json({ status: "error", db: "disconnected" }, { status: 503 });
   }
 }

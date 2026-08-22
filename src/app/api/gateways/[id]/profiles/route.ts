@@ -1,24 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
-import {
-  listHermesProfiles,
-  registerHermesProfile,
-} from "@/lib/hermes-profiles";
+import { listHermesProfiles, registerHermesProfile } from "@/lib/hermes-profiles";
 import { getUserId } from "@/lib/internal-rpc";
 
 import { validateProfileRegistration } from "./validation";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
 
@@ -34,16 +25,10 @@ export async function GET(
   return NextResponse.json({ profiles });
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
-    return NextResponse.json(
-      { errorCode: "unauthorized", error: "unauthorized" },
-      { status: 401 },
-    );
+    return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
 
@@ -64,8 +49,7 @@ export async function POST(
     );
   }
 
-  const displayName =
-    typeof body.displayName === "string" ? body.displayName : undefined;
+  const displayName = typeof body.displayName === "string" ? body.displayName : undefined;
 
   const result = await registerHermesProfile({
     userId,
@@ -76,10 +60,7 @@ export async function POST(
   });
 
   if ("error" in result) {
-    return NextResponse.json(
-      { errorCode: result.error, error: result.error },
-      { status: 403 },
-    );
+    return NextResponse.json({ errorCode: result.error, error: result.error }, { status: 403 });
   }
 
   // Never serialize tokenEncrypted — it is ciphertext of a credential.

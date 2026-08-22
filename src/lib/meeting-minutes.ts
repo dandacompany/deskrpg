@@ -16,6 +16,8 @@ export function normalizeMeetingMinutesRecord<T extends MeetingMinutesRecord>(re
   return {
     ...record,
     participants: parseDbArray<MeetingParticipant>(record.participants),
-    keyTopics: parseDbArray<string>(record.keyTopics).filter((topic): topic is string => typeof topic === "string"),
+    keyTopics: parseDbArray<string>(record.keyTopics).filter(
+      (topic): topic is string => typeof topic === "string",
+    ),
   };
 }

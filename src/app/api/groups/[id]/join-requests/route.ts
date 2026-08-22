@@ -29,10 +29,7 @@ async function requireJoinRequestManager(groupId: string, userId: string) {
   return { context };
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 
@@ -60,10 +57,7 @@ export async function GET(
   return NextResponse.json({ joinRequests: rows });
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 
@@ -109,10 +103,7 @@ export async function POST(
   return NextResponse.json({ joinRequest, created: true }, { status: 201 });
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
 
@@ -123,10 +114,7 @@ export async function PATCH(
   const body = await req.json();
   const { requestId, action } = body ?? {};
 
-  if (
-    typeof requestId !== "string" ||
-    (action !== "approve" && action !== "reject")
-  ) {
+  if (typeof requestId !== "string" || (action !== "approve" && action !== "reject")) {
     return NextResponse.json(
       { errorCode: "missing_required_fields", error: "requestId and valid action are required" },
       { status: 400 },
@@ -140,12 +128,7 @@ export async function PATCH(
       status: groupJoinRequests.status,
     })
     .from(groupJoinRequests)
-    .where(
-      and(
-        eq(groupJoinRequests.id, requestId),
-        eq(groupJoinRequests.groupId, groupId),
-      ),
-    )
+    .where(and(eq(groupJoinRequests.id, requestId), eq(groupJoinRequests.groupId, groupId)))
     .limit(1);
 
   if (!existing) {
@@ -158,18 +141,14 @@ export async function PATCH(
   const [membership] = await db
     .select({ role: groupMembers.role })
     .from(groupMembers)
-    .where(
-      and(
-        eq(groupMembers.groupId, groupId),
-        eq(groupMembers.userId, existing.userId),
-      ),
-    )
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, existing.userId)))
     .limit(1);
 
   const review = resolveJoinRequestReview({
     currentStatus: existing.status as "pending" | "approved" | "rejected",
     action,
-    existingMembershipRole: (membership?.role as "group_admin" | "member" | null | undefined) ?? null,
+    existingMembershipRole:
+      (membership?.role as "group_admin" | "member" | null | undefined) ?? null,
   });
 
   if (!review.ok) {

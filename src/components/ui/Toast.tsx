@@ -14,7 +14,9 @@ export default function Toast({ message, visible }: ToastProps) {
         px-4 py-2.5 text-body text-text
         transition-all duration-300
         ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}
-      `.trim().replace(/\s+/g, " ")}
+      `
+        .trim()
+        .replace(/\s+/g, " ")}
     >
       {message}
     </div>

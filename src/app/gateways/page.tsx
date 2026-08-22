@@ -131,23 +131,26 @@ function GatewayManagementPageInner() {
     setToken("");
   }, [selectedGateway]);
 
-  const loadShares = useCallback(async (gatewayId: string) => {
-    setSharesLoading(true);
-    setShareError("");
-    try {
-      const res = await fetch(`/api/gateways/${gatewayId}/shares`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw data;
+  const loadShares = useCallback(
+    async (gatewayId: string) => {
+      setSharesLoading(true);
+      setShareError("");
+      try {
+        const res = await fetch(`/api/gateways/${gatewayId}/shares`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw data;
+        }
+        setShares(Array.isArray(data.shares) ? data.shares : []);
+      } catch (nextError) {
+        setShareError(getLocalizedErrorMessage(t, nextError, "common.error"));
+        setShares([]);
+      } finally {
+        setSharesLoading(false);
       }
-      setShares(Array.isArray(data.shares) ? data.shares : []);
-    } catch (nextError) {
-      setShareError(getLocalizedErrorMessage(t, nextError, "common.error"));
-      setShares([]);
-    } finally {
-      setSharesLoading(false);
-    }
-  }, [t]);
+    },
+    [t],
+  );
 
   useEffect(() => {
     if (!selectedGateway?.isOwner) {
@@ -441,14 +444,18 @@ function GatewayManagementPageInner() {
                     disabled={testingGatewayId === selectedGateway.id}
                     className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-raised/80 disabled:opacity-60"
                   >
-                    {testingGatewayId === selectedGateway.id ? t("gateway.testing") : t("gateway.testConnection")}
+                    {testingGatewayId === selectedGateway.id
+                      ? t("gateway.testing")
+                      : t("gateway.testConnection")}
                   </button>
                 )}
               </div>
 
               <div className="grid gap-4">
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-300">{t("gateways.displayName")}</label>
+                  <label className="mb-1 block text-sm font-semibold text-gray-300">
+                    {t("gateways.displayName")}
+                  </label>
                   <input
                     type="text"
                     value={displayName}
@@ -458,7 +465,9 @@ function GatewayManagementPageInner() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-300">{t("settings.gatewayUrl")}</label>
+                  <label className="mb-1 block text-sm font-semibold text-gray-300">
+                    {t("settings.gatewayUrl")}
+                  </label>
                   <input
                     type="text"
                     value={baseUrl}
@@ -523,7 +532,12 @@ function GatewayManagementPageInner() {
                     <button
                       type="button"
                       onClick={() => void handleUpdate()}
-                      disabled={saving || !selectedGateway?.isOwner || !displayName.trim() || !baseUrl.trim()}
+                      disabled={
+                        saving ||
+                        !selectedGateway?.isOwner ||
+                        !displayName.trim() ||
+                        !baseUrl.trim()
+                      }
                       className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                       {saving ? t("common.loading") : t("common.save")}
@@ -542,7 +556,10 @@ function GatewayManagementPageInner() {
             </section>
 
             {selectedGateway && (
-              <HermesProfileList gatewayId={selectedGateway.id} canRegister={!!selectedGateway.isOwner} />
+              <HermesProfileList
+                gatewayId={selectedGateway.id}
+                canRegister={!!selectedGateway.isOwner}
+              />
             )}
 
             <section className="rounded-xl border border-border bg-surface p-5">
@@ -582,9 +599,14 @@ function GatewayManagementPageInner() {
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
-                        <div key={share.userId} className="flex items-center justify-between rounded-lg bg-bg px-3 py-3">
+                        <div
+                          key={share.userId}
+                          className="flex items-center justify-between rounded-lg bg-bg px-3 py-3"
+                        >
                           <div>
-                            <p className="font-medium text-white">{share.nickname || share.loginId}</p>
+                            <p className="font-medium text-white">
+                              {share.nickname || share.loginId}
+                            </p>
                             <p className="text-xs text-text-muted">{share.loginId}</p>
                           </div>
                           <button

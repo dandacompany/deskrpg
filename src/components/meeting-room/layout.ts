@@ -28,9 +28,7 @@ function buildSeatSides(total: number): SeatSide[] {
   if (total <= 0) return [];
 
   if (total <= 6) {
-    return Array.from({ length: total }, (_, index) =>
-      index % 2 === 0 ? "top" : "bottom",
-    );
+    return Array.from({ length: total }, (_, index) => (index % 2 === 0 ? "top" : "bottom"));
   }
 
   const sides: SeatSide[] = ["top", "bottom", "top", "bottom", "top", "left", "right"];
@@ -61,9 +59,7 @@ function getSeatPosition(side: SeatSide, sideIndex: number, sideCount: number) {
   return { x: 86, y: 28 + progress * 44 };
 }
 
-export function computeMeetingTableLayout(args: {
-  participantIds: string[];
-}): MeetingTableLayout {
+export function computeMeetingTableLayout(args: { participantIds: string[] }): MeetingTableLayout {
   const sides = buildSeatSides(args.participantIds.length);
   const sideTotals = sides.reduce<Record<SeatSide, number>>(
     (totals, side) => {

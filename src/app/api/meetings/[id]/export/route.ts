@@ -6,27 +6,34 @@ import { getUserId } from "@/lib/internal-rpc";
 import { normalizeLocale, translateServer } from "@/lib/i18n/server";
 import { resolveMeetingMinutesAccess } from "../../meeting-access";
 
-function formatMinutesMarkdown(m: {
-  topic: string;
-  createdAt: Date;
-  participants: unknown;
-  totalTurns: number;
-  durationSeconds: number | null;
-  keyTopics: unknown;
-  conclusions: string | null;
-  transcript: string;
-}, locale: string | null | undefined): string {
-  const rawParticipants = typeof m.participants === "string" ? JSON.parse(m.participants) : m.participants;
-  const participants = (Array.isArray(rawParticipants) ? rawParticipants : []) as { name: string }[];
+function formatMinutesMarkdown(
+  m: {
+    topic: string;
+    createdAt: Date;
+    participants: unknown;
+    totalTurns: number;
+    durationSeconds: number | null;
+    keyTopics: unknown;
+    conclusions: string | null;
+    transcript: string;
+  },
+  locale: string | null | undefined,
+): string {
+  const rawParticipants =
+    typeof m.participants === "string" ? JSON.parse(m.participants) : m.participants;
+  const participants = (Array.isArray(rawParticipants) ? rawParticipants : []) as {
+    name: string;
+  }[];
   const rawKeyTopics = typeof m.keyTopics === "string" ? JSON.parse(m.keyTopics) : m.keyTopics;
   const keyTopics = (Array.isArray(rawKeyTopics) ? rawKeyTopics : []) as string[];
   const normalizedLocale = normalizeLocale(locale);
-  const duration = m.durationSeconds == null
-    ? translateServer(normalizedLocale, "minutes.notAvailable")
-    : translateServer(normalizedLocale, "meeting.duration", {
-      min: Math.floor(m.durationSeconds / 60),
-      sec: m.durationSeconds % 60,
-    });
+  const duration =
+    m.durationSeconds == null
+      ? translateServer(normalizedLocale, "minutes.notAvailable")
+      : translateServer(normalizedLocale, "meeting.duration", {
+          min: Math.floor(m.durationSeconds / 60),
+          sec: m.durationSeconds % 60,
+        });
 
   let md = `# ${translateServer(normalizedLocale, "minutes.exportTitle", { topic: m.topic })}\n\n`;
   md += `**${translateServer(normalizedLocale, "meeting.dateLabel")}:** ${new Date(m.createdAt).toLocaleString(normalizedLocale)}\n`;
@@ -35,7 +42,9 @@ function formatMinutesMarkdown(m: {
 
   if (keyTopics.length > 0) {
     md += `## ${translateServer(normalizedLocale, "meeting.keyTopics")}\n`;
-    keyTopics.forEach((topic) => { md += `- ${topic}\n`; });
+    keyTopics.forEach((topic) => {
+      md += `- ${topic}\n`;
+    });
     md += "\n";
   }
 
@@ -47,10 +56,7 @@ function formatMinutesMarkdown(m: {
   return md;
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
@@ -71,19 +77,34 @@ export async function GET(
       channelId: row.channelId,
       deps: {
         loadChannelOwner: async (channelIdToLoad) => {
-          const [channel] = await db.select({ ownerId: channels.ownerId }).from(channels).where(eq(channels.id, channelIdToLoad)).limit(1);
+          const [channel] = await db
+            .select({ ownerId: channels.ownerId })
+            .from(channels)
+            .where(eq(channels.id, channelIdToLoad))
+            .limit(1);
           return channel?.ownerId ?? null;
         },
         loadMembership: async (channelIdToLoad, userIdToLoad) => {
-          const [member] = await db.select({ role: channelMembers.role }).from(channelMembers)
-            .where(and(eq(channelMembers.channelId, channelIdToLoad), eq(channelMembers.userId, userIdToLoad))).limit(1);
+          const [member] = await db
+            .select({ role: channelMembers.role })
+            .from(channelMembers)
+            .where(
+              and(
+                eq(channelMembers.channelId, channelIdToLoad),
+                eq(channelMembers.userId, userIdToLoad),
+              ),
+            )
+            .limit(1);
           return Boolean(member);
         },
       },
     });
 
     if (!access.ok) {
-      return NextResponse.json({ errorCode: access.errorCode, error: access.error }, { status: access.status });
+      return NextResponse.json(
+        { errorCode: access.errorCode, error: access.error },
+        { status: access.status },
+      );
     }
 
     const markdown = formatMinutesMarkdown(row, locale);

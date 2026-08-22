@@ -68,18 +68,9 @@ test("isLoopbackBaseUrl", async (t) => {
   });
 
   await t.test("자격증명·경로에 루프백 문자열을 심어도 통과하지 않는다", () => {
-    assert.equal(
-      isLoopbackBaseUrl("http://127.0.0.1@attacker.example/"),
-      false,
-    );
-    assert.equal(
-      isLoopbackBaseUrl("https://attacker.example/127.0.0.1"),
-      false,
-    );
-    assert.equal(
-      isLoopbackBaseUrl("https://attacker.example/#127.0.0.1"),
-      false,
-    );
+    assert.equal(isLoopbackBaseUrl("http://127.0.0.1@attacker.example/"), false);
+    assert.equal(isLoopbackBaseUrl("https://attacker.example/127.0.0.1"), false);
+    assert.equal(isLoopbackBaseUrl("https://attacker.example/#127.0.0.1"), false);
   });
 
   await t.test("파싱 불가하거나 http(s)가 아니면 로컬이 아니다", () => {
@@ -93,26 +84,15 @@ test("isLoopbackBaseUrl", async (t) => {
 test("isLocalDiscoveryEnabled — 기본값은 꺼짐", async (t) => {
   await t.test("설정하지 않으면 꺼져 있다", () => {
     assert.equal(isLocalDiscoveryEnabled({}), false);
-    assert.equal(
-      isLocalDiscoveryEnabled({ [LOCAL_DISCOVERY_ENV_FLAG]: "" }),
-      false,
-    );
+    assert.equal(isLocalDiscoveryEnabled({ [LOCAL_DISCOVERY_ENV_FLAG]: "" }), false);
   });
 
   await t.test("명시적으로 켠 값만 통과한다", () => {
     for (const v of ["1", "true", "TRUE", "yes", "on", " true "]) {
-      assert.equal(
-        isLocalDiscoveryEnabled({ [LOCAL_DISCOVERY_ENV_FLAG]: v }),
-        true,
-        v,
-      );
+      assert.equal(isLocalDiscoveryEnabled({ [LOCAL_DISCOVERY_ENV_FLAG]: v }), true, v);
     }
     for (const v of ["0", "false", "no", "off", "maybe"]) {
-      assert.equal(
-        isLocalDiscoveryEnabled({ [LOCAL_DISCOVERY_ENV_FLAG]: v }),
-        false,
-        v,
-      );
+      assert.equal(isLocalDiscoveryEnabled({ [LOCAL_DISCOVERY_ENV_FLAG]: v }), false, v);
     }
   });
 });
@@ -120,21 +100,12 @@ test("isLocalDiscoveryEnabled — 기본값은 꺼짐", async (t) => {
 test("localDiscoveryAllowed — 두 게이트의 논리곱", async (t) => {
   const on = { [LOCAL_DISCOVERY_ENV_FLAG]: "true" };
   await t.test("둘 다 참일 때만 허용", () => {
-    assert.equal(
-      localDiscoveryAllowed({ env: on, baseUrl: "http://127.0.0.1:8000" }),
-      true,
-    );
+    assert.equal(localDiscoveryAllowed({ env: on, baseUrl: "http://127.0.0.1:8000" }), true);
   });
   await t.test("스위치가 꺼져 있으면 루프백이어도 불허", () => {
-    assert.equal(
-      localDiscoveryAllowed({ env: {}, baseUrl: "http://127.0.0.1:8000" }),
-      false,
-    );
+    assert.equal(localDiscoveryAllowed({ env: {}, baseUrl: "http://127.0.0.1:8000" }), false);
   });
   await t.test("스위치가 켜져 있어도 원격 URL은 불허", () => {
-    assert.equal(
-      localDiscoveryAllowed({ env: on, baseUrl: "https://attacker.example" }),
-      false,
-    );
+    assert.equal(localDiscoveryAllowed({ env: on, baseUrl: "https://attacker.example" }), false);
   });
 });

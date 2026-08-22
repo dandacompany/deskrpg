@@ -64,25 +64,61 @@ class TaskManager {
 
     switch (action) {
       case "create":
-        return this._upsertTask(channelId, npcId, assignerId, npcTaskId, title, summary, status || "in_progress", {
-          autoNudgeMax,
-          markReported: true,
-        });
+        return this._upsertTask(
+          channelId,
+          npcId,
+          assignerId,
+          npcTaskId,
+          title,
+          summary,
+          status || "in_progress",
+          {
+            autoNudgeMax,
+            markReported: true,
+          },
+        );
       case "update":
-        return this._updateOrCreate(channelId, npcId, assignerId, npcTaskId, title, summary, status || "in_progress", {
-          autoNudgeMax,
-          markReported: true,
-        });
+        return this._updateOrCreate(
+          channelId,
+          npcId,
+          assignerId,
+          npcTaskId,
+          title,
+          summary,
+          status || "in_progress",
+          {
+            autoNudgeMax,
+            markReported: true,
+          },
+        );
       case "complete":
-        return this._updateOrCreate(channelId, npcId, assignerId, npcTaskId, title, summary, "complete", {
-          autoNudgeMax,
-          markReported: true,
-        });
+        return this._updateOrCreate(
+          channelId,
+          npcId,
+          assignerId,
+          npcTaskId,
+          title,
+          summary,
+          "complete",
+          {
+            autoNudgeMax,
+            markReported: true,
+          },
+        );
       case "cancel":
-        return this._updateOrCreate(channelId, npcId, assignerId, npcTaskId, title, summary, "cancelled", {
-          autoNudgeMax,
-          markReported: true,
-        });
+        return this._updateOrCreate(
+          channelId,
+          npcId,
+          assignerId,
+          npcTaskId,
+          title,
+          summary,
+          "cancelled",
+          {
+            autoNudgeMax,
+            markReported: true,
+          },
+        );
       default:
         console.warn(`[TaskManager] Unknown action: ${action}`);
         return null;
@@ -92,7 +128,7 @@ class TaskManager {
   async _upsertTask(channelId, npcId, assignerId, npcTaskId, title, summary, status, options = {}) {
     const { db, schema } = this;
     const autoNudgeMax = options.autoNudgeMax ?? 5;
-    const completedAt = (status === "complete" || status === "cancelled") ? this._nowForDb() : null;
+    const completedAt = status === "complete" || status === "cancelled" ? this._nowForDb() : null;
     const updatedAt = this._nowForDb();
     const lastReportedAt = options.markReported ? updatedAt : null;
 
@@ -130,10 +166,19 @@ class TaskManager {
     return normalizeTask(row);
   }
 
-  async _updateOrCreate(channelId, npcId, assignerId, npcTaskId, title, summary, status, options = {}) {
+  async _updateOrCreate(
+    channelId,
+    npcId,
+    assignerId,
+    npcTaskId,
+    title,
+    summary,
+    status,
+    options = {},
+  ) {
     const { db, schema } = this;
     const autoNudgeMax = options.autoNudgeMax ?? 5;
-    const completedAt = (status === "complete" || status === "cancelled") ? this._nowForDb() : null;
+    const completedAt = status === "complete" || status === "cancelled" ? this._nowForDb() : null;
     const updatedAt = this._nowForDb();
     const lastReportedAt = options.markReported ? updatedAt : null;
 
@@ -147,12 +192,7 @@ class TaskManager {
         lastReportedAt: lastReportedAt ?? sql`${schema.tasks.lastReportedAt}`,
         completedAt,
       })
-      .where(
-        and(
-          eq(schema.tasks.npcId, npcId),
-          eq(schema.tasks.npcTaskId, npcTaskId)
-        )
-      )
+      .where(and(eq(schema.tasks.npcId, npcId), eq(schema.tasks.npcTaskId, npcTaskId)))
       .returning();
 
     if (rows.length > 0) return normalizeTask(rows[0]);
@@ -183,12 +223,7 @@ class TaskManager {
 
     const [row] = await db
       .delete(schema.tasks)
-      .where(
-        and(
-          eq(schema.tasks.id, taskId),
-          eq(schema.tasks.channelId, channelId)
-        )
-      )
+      .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.channelId, channelId)))
       .returning();
 
     return normalizeTask(row);
@@ -200,12 +235,7 @@ class TaskManager {
     const rows = await db
       .select()
       .from(schema.tasks)
-      .where(
-        and(
-          eq(schema.tasks.id, taskId),
-          eq(schema.tasks.channelId, channelId),
-        ),
-      )
+      .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.channelId, channelId)))
       .limit(1);
 
     return normalizeTask(rows[0]);
@@ -236,16 +266,10 @@ class TaskManager {
           eq(schema.tasks.channelId, channelId),
           eq(schema.tasks.status, "in_progress"),
           or(
-            and(
-              isNotNull(schema.tasks.lastReportedAt),
-              lte(schema.tasks.lastReportedAt, cutoff),
-            ),
-            and(
-              isNull(schema.tasks.lastReportedAt),
-              lte(schema.tasks.updatedAt, cutoff),
-            ),
+            and(isNotNull(schema.tasks.lastReportedAt), lte(schema.tasks.lastReportedAt, cutoff)),
+            and(isNull(schema.tasks.lastReportedAt), lte(schema.tasks.updatedAt, cutoff)),
           ),
-        )
+        ),
       )
       .orderBy(desc(schema.tasks.updatedAt));
 
@@ -264,12 +288,7 @@ class TaskManager {
         lastNudgedAt: this._nowForDb(),
         updatedAt: this._nowForDb(),
       })
-      .where(
-        and(
-          eq(schema.tasks.id, taskId),
-          eq(schema.tasks.channelId, channelId),
-        ),
-      )
+      .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.channelId, channelId)))
       .returning();
 
     return normalizeTask(row);
@@ -285,12 +304,7 @@ class TaskManager {
         stalledReason: reason,
         updatedAt: this._nowForDb(),
       })
-      .where(
-        and(
-          eq(schema.tasks.id, taskId),
-          eq(schema.tasks.channelId, channelId),
-        ),
-      )
+      .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.channelId, channelId)))
       .returning();
 
     return normalizeTask(row);
@@ -308,12 +322,7 @@ class TaskManager {
         stalledReason: null,
         updatedAt: this._nowForDb(),
       })
-      .where(
-        and(
-          eq(schema.tasks.id, taskId),
-          eq(schema.tasks.channelId, channelId),
-        ),
-      )
+      .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.channelId, channelId)))
       .returning();
 
     return normalizeTask(row);
@@ -349,7 +358,7 @@ class TaskManager {
     }
 
     const now = this._nowForDb();
-    const completedAt = (toStatus === "complete" || toStatus === "cancelled") ? now : null;
+    const completedAt = toStatus === "complete" || toStatus === "cancelled" ? now : null;
 
     const updates = {
       status: toStatus,
@@ -429,12 +438,7 @@ class TaskManager {
     const rows = await db
       .select()
       .from(schema.tasks)
-      .where(
-        and(
-          eq(schema.tasks.npcId, npcId),
-          eq(schema.tasks.npcTaskId, npcTaskId),
-        ),
-      )
+      .where(and(eq(schema.tasks.npcId, npcId), eq(schema.tasks.npcTaskId, npcTaskId)))
       .limit(1);
 
     return rows[0] ? normalizeTask(rows[0]) : null;
@@ -451,12 +455,7 @@ class TaskManager {
         lastReportedAt: completedAt,
         updatedAt: completedAt,
       })
-      .where(
-        and(
-          eq(schema.tasks.id, taskId),
-          eq(schema.tasks.channelId, channelId),
-        ),
-      )
+      .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.channelId, channelId)))
       .returning();
 
     return normalizeTask(row);

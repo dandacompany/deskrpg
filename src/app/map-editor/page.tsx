@@ -11,7 +11,13 @@ import ProjectBrowser from "@/components/map-editor/ProjectBrowser";
 export default function MapEditorPage() {
   const t = useT();
   return (
-    <Suspense fallback={<div className="theme-web min-h-screen flex items-center justify-center bg-bg text-text">{t("common.loading")}</div>}>
+    <Suspense
+      fallback={
+        <div className="theme-web min-h-screen flex items-center justify-center bg-bg text-text">
+          {t("common.loading")}
+        </div>
+      }
+    >
       <MapEditorListPage />
     </Suspense>
   );
@@ -51,7 +57,8 @@ function MapEditorListPage() {
 
         // Use DB thumbnails if available, fallback to generated thumbnails
         try {
-          const { generateMapThumbnail, generateTiledThumbnail } = await import("@/lib/map-thumbnail");
+          const { generateMapThumbnail, generateTiledThumbnail } =
+            await import("@/lib/map-thumbnail");
           const thumbs: Record<string, string> = {};
           for (const t of list) {
             // Use stored thumbnail if available
@@ -67,12 +74,22 @@ function MapEditorListPage() {
               if (tmpl.tiledJson) {
                 thumbs[t.id] = generateTiledThumbnail(tmpl.tiledJson, 6);
               } else if (tmpl.layers) {
-                thumbs[t.id] = generateMapThumbnail(tmpl.layers, tmpl.objects || [], tmpl.cols, tmpl.rows, 6);
+                thumbs[t.id] = generateMapThumbnail(
+                  tmpl.layers,
+                  tmpl.objects || [],
+                  tmpl.cols,
+                  tmpl.rows,
+                  6,
+                );
               }
-            } catch { /* skip */ }
+            } catch {
+              /* skip */
+            }
           }
           setThumbnails(thumbs);
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       })
       .finally(() => setLoading(false));
   }, []);
@@ -198,7 +215,11 @@ function MapEditorListPage() {
           const res = await fetch("/api/projects", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, tiledJson: mapData, settings: { cols, rows, tileWidth: tw, tileHeight: th } }),
+            body: JSON.stringify({
+              name,
+              tiledJson: mapData,
+              settings: { cols, rows, tileWidth: tw, tileHeight: th },
+            }),
           });
           if (res.ok) {
             const project = await res.json();
@@ -225,8 +246,12 @@ function MapEditorListPage() {
 
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("mapEditor.template.search")}
-            className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("mapEditor.template.search")}
+            className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
 
         {loading ? (
@@ -238,11 +263,19 @@ function MapEditorListPage() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {filteredTemplates.map((tmpl) => (
-              <div key={tmpl.id} className="group relative bg-gray-800 rounded-lg border border-gray-700 hover:border-blue-500 cursor-pointer transition-colors overflow-hidden"
-                onClick={() => handleEditTemplate(tmpl.id)}>
+              <div
+                key={tmpl.id}
+                className="group relative bg-gray-800 rounded-lg border border-gray-700 hover:border-blue-500 cursor-pointer transition-colors overflow-hidden"
+                onClick={() => handleEditTemplate(tmpl.id)}
+              >
                 <div className="aspect-video bg-gray-900 flex items-center justify-center">
                   {thumbnails[tmpl.id] ? (
-                    <img src={thumbnails[tmpl.id]} alt={tmpl.name} className="w-full h-full object-contain" style={{ imageRendering: "pixelated" }} />
+                    <img
+                      src={thumbnails[tmpl.id]}
+                      alt={tmpl.name}
+                      className="w-full h-full object-contain"
+                      style={{ imageRendering: "pixelated" }}
+                    />
                   ) : (
                     <div className="text-gray-600 text-xs">{t("common.noPreview")}</div>
                   )}
@@ -251,25 +284,50 @@ function MapEditorListPage() {
                   <div className="flex items-center gap-1">
                     <span className="text-sm font-medium truncate">{tmpl.name}</span>
                   </div>
-                  {tmpl.description && <p className="text-xs text-gray-500 mt-0.5 truncate">{tmpl.description}</p>}
-                  <div className="text-xs text-gray-600 mt-1">{tmpl.cols}×{tmpl.rows}</div>
+                  {tmpl.description && (
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">{tmpl.description}</p>
+                  )}
+                  <div className="text-xs text-gray-600 mt-1">
+                    {tmpl.cols}×{tmpl.rows}
+                  </div>
                 </div>
                 {creatingFrom === tmpl.id && (
                   <div className="absolute inset-0 bg-gray-900/80 flex items-center justify-center">
-                    <span className="text-sm text-blue-400">{t("mapEditor.template.creating")}</span>
+                    <span className="text-sm text-blue-400">
+                      {t("mapEditor.template.creating")}
+                    </span>
                   </div>
                 )}
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"
-                    onClick={(e) => { e.stopPropagation(); handleDownload(tmpl.id); }} title={t("mapEditor.template.downloadTmj")} aria-label={t("mapEditor.template.downloadTmj")}>
+                  <button
+                    className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownload(tmpl.id);
+                    }}
+                    title={t("mapEditor.template.downloadTmj")}
+                    aria-label={t("mapEditor.template.downloadTmj")}
+                  >
                     <Download size={14} />
                   </button>
-                  <button className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"
-                    onClick={(e) => { e.stopPropagation(); handleDuplicate(tmpl.id); }} title={t("mapEditor.project.duplicate")}>
+                  <button
+                    className="p-1.5 bg-gray-700/80 rounded hover:bg-gray-600 text-gray-300"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDuplicate(tmpl.id);
+                    }}
+                    title={t("mapEditor.project.duplicate")}
+                  >
                     <Copy size={14} />
                   </button>
-                  <button className="p-1.5 bg-gray-700/80 rounded hover:bg-red-600 text-gray-300"
-                    onClick={(e) => { e.stopPropagation(); handleDelete(tmpl.id, tmpl.name); }} title={t("common.delete")}>
+                  <button
+                    className="p-1.5 bg-gray-700/80 rounded hover:bg-red-600 text-gray-300"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(tmpl.id, tmpl.name);
+                    }}
+                    title={t("common.delete")}
+                  >
                     <Trash2 size={14} />
                   </button>
                 </div>

@@ -38,17 +38,24 @@ export default function Dropdown({ trigger, items, align = "right" }: DropdownPr
             absolute top-full mt-1 z-50 min-w-[140px]
             bg-surface border border-border rounded-lg shadow-xl py-1
             ${align === "right" ? "right-0" : "left-0"}
-          `.trim().replace(/\s+/g, " ")}
+          `
+            .trim()
+            .replace(/\s+/g, " ")}
         >
           {items.map((item) => (
             <button
               key={item.key}
-              onClick={() => { item.onClick(); setOpen(false); }}
+              onClick={() => {
+                item.onClick();
+                setOpen(false);
+              }}
               className={`
                 w-full text-left px-3 py-2 text-body text-text hover:bg-surface-raised
                 flex items-center gap-2 transition-colors
                 ${item.className || ""}
-              `.trim().replace(/\s+/g, " ")}
+              `
+                .trim()
+                .replace(/\s+/g, " ")}
             >
               {item.icon && <span className="w-3.5 h-3.5 shrink-0">{item.icon}</span>}
               {item.label}

@@ -56,9 +56,9 @@ function ensureSqliteBootstrapUser(sqlite) {
   }
 
   const orderBy = getSqliteUserOrderBy(sqlite);
-  const existingAdmin = sqlite.prepare(
-    `SELECT id FROM users WHERE system_role = 'system_admin' ORDER BY ${orderBy} LIMIT 1`,
-  ).get();
+  const existingAdmin = sqlite
+    .prepare(`SELECT id FROM users WHERE system_role = 'system_admin' ORDER BY ${orderBy} LIMIT 1`)
+    .get();
   if (existingAdmin) return existingAdmin.id;
 
   const earliestUser = sqlite.prepare(`SELECT id FROM users ORDER BY ${orderBy} LIMIT 1`).get();
@@ -71,9 +71,9 @@ function ensureSqliteBootstrapUser(sqlite) {
 function ensureSqliteDefaultGroup(sqlite, createdBy) {
   if (!sqliteTableExists(sqlite, "groups") || !sqliteTableExists(sqlite, "users")) return null;
 
-  const existingGroup = sqlite.prepare(
-    "SELECT id FROM groups WHERE slug = 'default' ORDER BY rowid ASC LIMIT 1",
-  ).get();
+  const existingGroup = sqlite
+    .prepare("SELECT id FROM groups WHERE slug = 'default' ORDER BY rowid ASC LIMIT 1")
+    .get();
   if (existingGroup) {
     sqlite.prepare("UPDATE groups SET is_default = 1 WHERE id = ?").run(existingGroup.id);
     return existingGroup.id;
@@ -81,14 +81,18 @@ function ensureSqliteDefaultGroup(sqlite, createdBy) {
 
   const now = new Date().toISOString();
   const groupId = randomUUID();
-  sqlite.prepare(`
+  sqlite
+    .prepare(
+      `
     INSERT OR IGNORE INTO groups (id, name, slug, description, is_default, created_by, created_at, updated_at)
     VALUES (?, 'Default', 'default', 'Default workspace', 1, ?, ?, ?)
-  `).run(groupId, createdBy, now, now);
+  `,
+    )
+    .run(groupId, createdBy, now, now);
 
-  const defaultGroup = sqlite.prepare(
-    "SELECT id FROM groups WHERE slug = 'default' ORDER BY rowid ASC LIMIT 1",
-  ).get();
+  const defaultGroup = sqlite
+    .prepare("SELECT id FROM groups WHERE slug = 'default' ORDER BY rowid ASC LIMIT 1")
+    .get();
   return defaultGroup ? defaultGroup.id : null;
 }
 
@@ -96,21 +100,33 @@ function ensureSqliteBootstrapGroupAdminMembership(sqlite, groupId, userId) {
   if (!groupId || !userId || !sqliteTableExists(sqlite, "group_members")) return;
 
   const now = new Date().toISOString();
-  sqlite.prepare(`
+  sqlite
+    .prepare(
+      `
     INSERT OR IGNORE INTO group_members (id, group_id, user_id, role, approved_by, approved_at, joined_at)
     VALUES (?, ?, ?, 'group_admin', ?, ?, ?)
-  `).run(randomUUID(), groupId, userId, userId, now, now);
-  sqlite.prepare(`
+  `,
+    )
+    .run(randomUUID(), groupId, userId, userId, now, now);
+  sqlite
+    .prepare(
+      `
     UPDATE group_members
     SET role = 'group_admin',
         approved_by = COALESCE(approved_by, ?),
         approved_at = COALESCE(approved_at, ?)
     WHERE group_id = ? AND user_id = ?
-  `).run(userId, now, groupId, userId);
+  `,
+    )
+    .run(userId, now, groupId, userId);
 }
 
 function assignLegacyChannelsToDefaultGroup(sqlite, groupId) {
-  if (!groupId || !sqliteTableExists(sqlite, "channels") || !sqliteColumnExists(sqlite, "channels", "group_id")) {
+  if (
+    !groupId ||
+    !sqliteTableExists(sqlite, "channels") ||
+    !sqliteColumnExists(sqlite, "channels", "group_id")
+  ) {
     return;
   }
 
@@ -126,7 +142,9 @@ function dedupeSqliteGroupJoinRequests(sqlite) {
     return;
   }
 
-  const rows = sqlite.prepare(`
+  const rows = sqlite
+    .prepare(
+      `
     SELECT rowid, group_id, user_id, status, created_at
     FROM group_join_requests
     ORDER BY
@@ -139,7 +157,9 @@ function dedupeSqliteGroupJoinRequests(sqlite) {
       END ASC,
       created_at DESC,
       rowid DESC
-  `).all();
+  `,
+    )
+    .all();
 
   const seen = new Set();
   const deleteStmt = sqlite.prepare("DELETE FROM group_join_requests WHERE rowid = ?");
@@ -336,12 +356,17 @@ function ensureSqliteCompatibility(sqlite) {
     CREATE UNIQUE INDEX IF NOT EXISTS npc_sessions_npc_user_context_idx ON npc_sessions(npc_id, user_id, context_key);
   `);
 
-  const gwCols = sqlite.prepare("PRAGMA table_info(gateway_resources)").all().map((c) => c.name);
+  const gwCols = sqlite
+    .prepare("PRAGMA table_info(gateway_resources)")
+    .all()
+    .map((c) => c.name);
   if (!gwCols.includes("local_discovery_opted_in_at")) {
     sqlite.exec("ALTER TABLE gateway_resources ADD COLUMN local_discovery_opted_in_at TEXT");
   }
   if (!gwCols.includes("local_discovery_opted_in_by")) {
-    sqlite.exec("ALTER TABLE gateway_resources ADD COLUMN local_discovery_opted_in_by TEXT REFERENCES users(id) ON DELETE SET NULL");
+    sqlite.exec(
+      "ALTER TABLE gateway_resources ADD COLUMN local_discovery_opted_in_by TEXT REFERENCES users(id) ON DELETE SET NULL",
+    );
   }
 
   applySqliteAlterStatements(sqlite, "npcs", [
@@ -369,7 +394,9 @@ function ensureSqliteCompatibility(sqlite) {
   ]);
 
   dedupeSqliteGroupJoinRequests(sqlite);
-  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS group_join_requests_group_user_unique ON group_join_requests(group_id, user_id)");
+  sqlite.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS group_join_requests_group_user_unique ON group_join_requests(group_id, user_id)",
+  );
 
   sqlite.transaction(() => {
     const bootstrapUserId = ensureSqliteBootstrapUser(sqlite);
@@ -397,7 +424,7 @@ if (isPostgres) {
 
   console.log("[server-db] PostgreSQL mode — Drizzle ORM initialized");
 
-// ─── SQLite mode ──────────────────────────────────────────────────────────────
+  // ─── SQLite mode ──────────────────────────────────────────────────────────────
 } else {
   const { drizzle } = require("drizzle-orm/better-sqlite3");
   const Database = require("better-sqlite3");
@@ -425,4 +452,14 @@ if (isPostgres) {
   console.log(`[server-db] SQLite mode — Drizzle ORM initialized (${dbPath})`);
 }
 
-module.exports = { db, schema, isPostgres, eq, and, desc, sql, ensureSqliteBaseSchema, ensureSqliteCompatibility };
+module.exports = {
+  db,
+  schema,
+  isPostgres,
+  eq,
+  and,
+  desc,
+  sql,
+  ensureSqliteBaseSchema,
+  ensureSqliteCompatibility,
+};

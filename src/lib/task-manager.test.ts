@@ -15,15 +15,39 @@ const { TaskManager } = require("./task-manager.js") as {
   ) => {
     handleTaskAction: (...args: unknown[]) => Promise<Record<string, unknown> | null>;
     getTaskById: (taskId: string, channelId: string) => Promise<Record<string, unknown> | null>;
-    moveTask: (taskId: string, channelId: string, toStatus: string, npcId: string | null, options?: { expectedFromStatus?: string }) => Promise<Record<string, unknown> | null>;
-    createBacklogTask: (channelId: string, assignerId: string, title: string, summary: string | null) => Promise<Record<string, unknown>>;
+    moveTask: (
+      taskId: string,
+      channelId: string,
+      toStatus: string,
+      npcId: string | null,
+      options?: { expectedFromStatus?: string },
+    ) => Promise<Record<string, unknown> | null>;
+    createBacklogTask: (
+      channelId: string,
+      assignerId: string,
+      title: string,
+      summary: string | null,
+    ) => Promise<Record<string, unknown>>;
     hasInProgressTask: (npcId: string, channelId: string) => Promise<boolean>;
-    getNextPendingTask: (npcId: string, channelId: string) => Promise<Record<string, unknown> | null>;
+    getNextPendingTask: (
+      npcId: string,
+      channelId: string,
+    ) => Promise<Record<string, unknown> | null>;
     markTaskNudged: (taskId: string, channelId: string) => Promise<Record<string, unknown> | null>;
-    markTaskStalled: (taskId: string, channelId: string, reason?: string) => Promise<Record<string, unknown> | null>;
+    markTaskStalled: (
+      taskId: string,
+      channelId: string,
+      reason?: string,
+    ) => Promise<Record<string, unknown> | null>;
     resumeTask: (taskId: string, channelId: string) => Promise<Record<string, unknown> | null>;
-    getTaskByNpcTaskId: (npcId: string, npcTaskId: string) => Promise<Record<string, unknown> | null>;
-    getStaleInProgressTasks: (channelId: string, olderThanIso: string) => Promise<Record<string, unknown>[]>;
+    getTaskByNpcTaskId: (
+      npcId: string,
+      npcTaskId: string,
+    ) => Promise<Record<string, unknown> | null>;
+    getStaleInProgressTasks: (
+      channelId: string,
+      olderThanIso: string,
+    ) => Promise<Record<string, unknown>[]>;
   };
 };
 
@@ -80,19 +104,21 @@ function createTaskTestDb() {
   sqlite.prepare("INSERT INTO users (id) VALUES (?)").run("user-1");
   sqlite.prepare("INSERT INTO channels (id) VALUES (?)").run("channel-1");
   sqlite.prepare("INSERT INTO characters (id, user_id) VALUES (?, ?)").run("character-1", "user-1");
-  sqlite.prepare(
-    "INSERT INTO npcs (id, channel_id, name, position_x, position_y, appearance, openclaw_config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-  ).run(
-    "npc-1",
-    "channel-1",
-    "으뉴",
-    10,
-    10,
-    "{}",
-    "{}",
-    "2026-03-31T00:00:00.000Z",
-    "2026-03-31T00:00:00.000Z",
-  );
+  sqlite
+    .prepare(
+      "INSERT INTO npcs (id, channel_id, name, position_x, position_y, appearance, openclaw_config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .run(
+      "npc-1",
+      "channel-1",
+      "으뉴",
+      10,
+      10,
+      "{}",
+      "{}",
+      "2026-03-31T00:00:00.000Z",
+      "2026-03-31T00:00:00.000Z",
+    );
 
   const mgr = new TaskManager(db, { tasks, npcs });
   return { sqlite, db, manager: mgr, mgr };
@@ -115,7 +141,11 @@ test("handleTaskAction(create) initializes auto-nudge metadata", async () => {
   assert.equal(typeof created?.lastReportedAt, "string");
   assert.equal(created?.stalledAt, null);
 
-  const row = sqlite.prepare("SELECT auto_nudge_count, auto_nudge_max, last_reported_at FROM tasks WHERE npc_task_id = ?").get("eunyu-1") as {
+  const row = sqlite
+    .prepare(
+      "SELECT auto_nudge_count, auto_nudge_max, last_reported_at FROM tasks WHERE npc_task_id = ?",
+    )
+    .get("eunyu-1") as {
     auto_nudge_count: number;
     auto_nudge_max: number;
     last_reported_at: string | null;
@@ -149,7 +179,11 @@ test("markTaskStalled sets stalled status and metadata", async () => {
     "character-1",
   );
 
-  const stalled = await manager.markTaskStalled(String(created?.id), "channel-1", "max_nudges_reached");
+  const stalled = await manager.markTaskStalled(
+    String(created?.id),
+    "channel-1",
+    "max_nudges_reached",
+  );
 
   assert.equal(stalled?.status, "stalled");
   assert.equal(stalled?.stalledReason, "max_nudges_reached");
@@ -200,23 +234,37 @@ test("getStaleInProgressTasks prefers lastReportedAt when present", async () => 
   const { sqlite, manager } = createTaskTestDb();
 
   await manager.handleTaskAction(
-    { action: "create", id: "eunyu-1", title: "오래된 작업", summary: "진행중", status: "in_progress" },
+    {
+      action: "create",
+      id: "eunyu-1",
+      title: "오래된 작업",
+      summary: "진행중",
+      status: "in_progress",
+    },
     "channel-1",
     "npc-1",
     "character-1",
   );
-  sqlite.prepare(
-    "UPDATE tasks SET updated_at = ?, last_reported_at = ? WHERE npc_task_id = ?",
-  ).run("2026-03-31T00:01:00.000Z", "2026-03-31T00:09:00.000Z", "eunyu-1");
+  sqlite
+    .prepare("UPDATE tasks SET updated_at = ?, last_reported_at = ? WHERE npc_task_id = ?")
+    .run("2026-03-31T00:01:00.000Z", "2026-03-31T00:09:00.000Z", "eunyu-1");
 
   const stale = await manager.getStaleInProgressTasks("channel-1", "2026-03-31T00:05:00.000Z");
 
-  assert.deepEqual(stale.map((task) => task.npcTaskId), []);
+  assert.deepEqual(
+    stale.map((task) => task.npcTaskId),
+    [],
+  );
 });
 
 test("createBacklogTask: creates task with null npcId and backlog status", async () => {
   const { mgr } = createTaskTestDb();
-  const task = await mgr.createBacklogTask("channel-1", "character-1", "Backlog task title", "Some description");
+  const task = await mgr.createBacklogTask(
+    "channel-1",
+    "character-1",
+    "Backlog task title",
+    "Some description",
+  );
   assert.ok(task);
   assert.equal(task.status, "backlog");
   assert.equal(task.npcId, null);
@@ -272,10 +320,9 @@ test("moveTask: any → cancelled without npcId", async () => {
 test("moveTask: rejects non-backlog/cancelled without npcId when task unassigned", async () => {
   const { mgr } = createTaskTestDb();
   const task = await mgr.createBacklogTask("channel-1", "character-1", "Test task", null);
-  await assert.rejects(
-    () => mgr.moveTask(task.id, "channel-1", "pending", null),
-    { message: /npcId required/ },
-  );
+  await assert.rejects(() => mgr.moveTask(task.id, "channel-1", "pending", null), {
+    message: /npcId required/,
+  });
 });
 
 // ── New feature tests: race condition guard, hasInProgressTask, getNextPendingTask ──
@@ -287,12 +334,16 @@ test("moveTask: expectedFromStatus guards against concurrent promotion", async (
   await mgr.moveTask(task.id, "channel-1", "pending", "npc-1");
 
   // First promotion succeeds
-  const first = await mgr.moveTask(task.id, "channel-1", "in_progress", "npc-1", { expectedFromStatus: "pending" });
+  const first = await mgr.moveTask(task.id, "channel-1", "in_progress", "npc-1", {
+    expectedFromStatus: "pending",
+  });
   assert.notEqual(first, null);
   assert.equal(first?.status, "in_progress");
 
   // Second attempt with expectedFromStatus: "pending" should return null (already promoted)
-  const second = await mgr.moveTask(task.id, "channel-1", "in_progress", "npc-1", { expectedFromStatus: "pending" });
+  const second = await mgr.moveTask(task.id, "channel-1", "in_progress", "npc-1", {
+    expectedFromStatus: "pending",
+  });
   assert.equal(second, null);
 });
 
@@ -304,7 +355,9 @@ test("moveTask: atomic WHERE prevents stale status update", async () => {
   await mgr.moveTask(task.id, "channel-1", "in_progress", "npc-1");
 
   // Try to move from "pending" but it's already "in_progress" — should return null
-  const result = await mgr.moveTask(task.id, "channel-1", "complete", "npc-1", { expectedFromStatus: "pending" });
+  const result = await mgr.moveTask(task.id, "channel-1", "complete", "npc-1", {
+    expectedFromStatus: "pending",
+  });
   assert.equal(result, null);
 
   // Without expectedFromStatus, move should succeed

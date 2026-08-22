@@ -73,15 +73,23 @@ describe("Phase2A: buildArgs output", () => {
   test("ClaudeAdapter default args include stream-json and skip-permissions", () => {
     const adapter = new ClaudeAdapter();
     const args = adapter.buildArgs({ sessionKey: "k", prompt: "p" });
-    assert.ok(args.includes("--output-format") || args.some(a => a.includes("stream-json")),
-      "should include stream-json output format");
-    assert.ok(args.some(a => a.includes("dangerously-skip-permissions")),
-      "should include dangerously-skip-permissions");
+    assert.ok(
+      args.includes("--output-format") || args.some((a) => a.includes("stream-json")),
+      "should include stream-json output format",
+    );
+    assert.ok(
+      args.some((a) => a.includes("dangerously-skip-permissions")),
+      "should include dangerously-skip-permissions",
+    );
   });
 
   test("ClaudeAdapter adds --model when specified", () => {
     const adapter = new ClaudeAdapter();
-    const args = adapter.buildArgs({ sessionKey: "k", prompt: "p", model: "claude-sonnet-4-20250514" });
+    const args = adapter.buildArgs({
+      sessionKey: "k",
+      prompt: "p",
+      model: "claude-sonnet-4-20250514",
+    });
     assert.ok(args.includes("--model"), "should include --model flag");
     assert.ok(args.includes("claude-sonnet-4-20250514"), "should include model name");
   });
@@ -89,8 +97,10 @@ describe("Phase2A: buildArgs output", () => {
   test("ClaudeAdapter adds --resume when session exists", () => {
     const adapter = new ClaudeAdapter();
     const args = adapter.buildArgs({ sessionKey: "k", prompt: "p" }, "session-abc-123");
-    assert.ok(args.some(a => a.includes("resume") || a === "--resume" || a === "-r"),
-      "should include resume flag");
+    assert.ok(
+      args.some((a) => a.includes("resume") || a === "--resume" || a === "-r"),
+      "should include resume flag",
+    );
     assert.ok(args.includes("session-abc-123"), "should include session ref");
   });
 
@@ -98,15 +108,19 @@ describe("Phase2A: buildArgs output", () => {
     const adapter = new CodexAdapter();
     const args = adapter.buildArgs({ sessionKey: "k", prompt: "p" });
     assert.ok(args.includes("exec"), "should include exec subcommand");
-    assert.ok(args.some(a => a.includes("bypass")),
-      "should include bypass approvals flag");
+    assert.ok(
+      args.some((a) => a.includes("bypass")),
+      "should include bypass approvals flag",
+    );
   });
 
   test("GeminiAdapter default args include yolo approval mode", () => {
     const adapter = new GeminiAdapter();
     const args = adapter.buildArgs({ sessionKey: "k", prompt: "p" });
-    assert.ok(args.some(a => a === "yolo" || a.includes("yolo")),
-      "should include yolo approval mode");
+    assert.ok(
+      args.some((a) => a === "yolo" || a.includes("yolo")),
+      "should include yolo approval mode",
+    );
   });
 
   test("GeminiAdapter adds -m model when specified", () => {
@@ -128,8 +142,12 @@ describe("Phase2A: WorkspaceManager persona per adapter", () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "deskrpg-test-"));
     const wm = new WorkspaceManager();
 
-    await wm.writePersonaFiles(tmpDir, "claude",
-      { identity: "You are a developer", soul: "Be helpful" }, "en");
+    await wm.writePersonaFiles(
+      tmpDir,
+      "claude",
+      { identity: "You are a developer", soul: "Be helpful" },
+      "en",
+    );
 
     const content = await fs.readFile(path.join(tmpDir, "CLAUDE.md"), "utf-8");
     assert.ok(content.includes("You are a developer"));
@@ -141,8 +159,12 @@ describe("Phase2A: WorkspaceManager persona per adapter", () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "deskrpg-test-"));
     const wm = new WorkspaceManager();
 
-    await wm.writePersonaFiles(tmpDir, "codex",
-      { identity: "You are a coder", soul: "Be precise" }, "en");
+    await wm.writePersonaFiles(
+      tmpDir,
+      "codex",
+      { identity: "You are a coder", soul: "Be precise" },
+      "en",
+    );
 
     const content = await fs.readFile(path.join(tmpDir, "AGENTS.md"), "utf-8");
     assert.ok(content.includes("You are a coder"));
@@ -153,8 +175,12 @@ describe("Phase2A: WorkspaceManager persona per adapter", () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "deskrpg-test-"));
     const wm = new WorkspaceManager();
 
-    await wm.writePersonaFiles(tmpDir, "gemini",
-      { identity: "You are an analyst", soul: "Be thorough" }, "en");
+    await wm.writePersonaFiles(
+      tmpDir,
+      "gemini",
+      { identity: "You are an analyst", soul: "Be thorough" },
+      "en",
+    );
 
     const content = await fs.readFile(path.join(tmpDir, "GEMINI.md"), "utf-8");
     assert.ok(content.includes("You are an analyst"));
@@ -165,8 +191,7 @@ describe("Phase2A: WorkspaceManager persona per adapter", () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "deskrpg-test-"));
     const wm = new WorkspaceManager();
 
-    await wm.writePersonaFiles(tmpDir, "openclaw",
-      { identity: "test", soul: "test" }, "en");
+    await wm.writePersonaFiles(tmpDir, "openclaw", { identity: "test", soul: "test" }, "en");
 
     const files = await fs.readdir(tmpDir);
     assert.equal(files.length, 0, "openclaw should not create any files");
@@ -215,7 +240,10 @@ describe("Phase2A: SubprocessPool real execution", () => {
     const pool = new SubprocessPool();
     const result = await pool.execute({
       command: "node",
-      args: ["-e", 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>process.stdout.write(d.toUpperCase()))'],
+      args: [
+        "-e",
+        'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>process.stdout.write(d.toUpperCase()))',
+      ],
       stdin: "hello adapters",
       timeoutMs: 5000,
     });
@@ -227,7 +255,10 @@ describe("Phase2A: SubprocessPool real execution", () => {
     const chunks: string[] = [];
     await pool.execute({
       command: "node",
-      args: ["-e", 'process.stdout.write("a");setTimeout(()=>process.stdout.write("b"),50);setTimeout(()=>process.stdout.write("c"),100)'],
+      args: [
+        "-e",
+        'process.stdout.write("a");setTimeout(()=>process.stdout.write("b"),50);setTimeout(()=>process.stdout.write("c"),100)',
+      ],
       onStdout: (chunk) => chunks.push(chunk),
       timeoutMs: 5000,
     });
@@ -259,16 +290,15 @@ describe("Phase2A: Full adapter registry", () => {
   });
 
   test("each adapter implements NpcAdapter interface", async () => {
-    const adapters = [
-      new ClaudeAdapter(),
-      new CodexAdapter(),
-      new GeminiAdapter(),
-    ];
+    const adapters = [new ClaudeAdapter(), new CodexAdapter(), new GeminiAdapter()];
 
     for (const adapter of adapters) {
       assert.ok(typeof adapter.type === "string", `${adapter.type} should have type`);
       assert.ok(typeof adapter.execute === "function", `${adapter.type} should have execute`);
-      assert.ok(typeof adapter.testConnection === "function", `${adapter.type} should have testConnection`);
+      assert.ok(
+        typeof adapter.testConnection === "function",
+        `${adapter.type} should have testConnection`,
+      );
     }
   });
 });

@@ -4,10 +4,7 @@ import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react"
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { Socket } from "socket.io-client";
 import ChatInput from "./ChatInput";
-import type {
-  CharacterAppearance,
-  LegacyCharacterAppearance,
-} from "@/lib/lpc-registry";
+import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import MinutesModal from "./MinutesModal";
 import { useLocale, useT } from "@/lib/i18n";
 import { ChevronDown, ChevronUp, Pause, Play } from "lucide-react";
@@ -18,7 +15,10 @@ import { formatPollRaises, type PollRaiseItem } from "./meeting-room/poll-status
 import { clampMeetingSidebarWidth } from "./meeting-room/responsive";
 import { computeMeetingTopicRows } from "./meeting-room/start-form";
 import { consumeNpcStreamBuffer } from "./meeting-room/stream-state";
-import { sanitizeClientFinalSpeech, sanitizeClientStreamingSpeech } from "./meeting-room/stream-text";
+import {
+  sanitizeClientFinalSpeech,
+  sanitizeClientStreamingSpeech,
+} from "./meeting-room/stream-text";
 import MeetingSidebar from "./meeting-room/MeetingSidebar";
 import MeetingTableScene, { type MeetingSceneSeat } from "./meeting-room/MeetingTableScene";
 import { computeMeetingTableLayout } from "./meeting-room/layout";
@@ -66,8 +66,16 @@ interface MeetingRoomProps {
 // ---------------------------------------------------------------------------
 
 function MeetingControlBar({
-  mode, isWaiting, currentSpeaker, npcs, lastSpokeTimes,
-  nowMs, onSetMode, onNextTurn, onDirectSpeak, onStop,
+  mode,
+  isWaiting,
+  currentSpeaker,
+  npcs,
+  lastSpokeTimes,
+  nowMs,
+  onSetMode,
+  onNextTurn,
+  onDirectSpeak,
+  onStop,
   t,
 }: {
   mode: "auto" | "manual" | "directed";
@@ -82,7 +90,12 @@ function MeetingControlBar({
   onStop: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
-  const modeLabel = mode === "auto" ? t("meeting.modeAuto") : mode === "manual" ? t("meeting.modeManual") : t("meeting.modeDirected");
+  const modeLabel =
+    mode === "auto"
+      ? t("meeting.modeAuto")
+      : mode === "manual"
+        ? t("meeting.modeManual")
+        : t("meeting.modeDirected");
 
   const formatElapsed = (npcId: string) => {
     const lastTime = lastSpokeTimes[npcId];
@@ -96,7 +109,9 @@ function MeetingControlBar({
     <div className="border-t border-border bg-surface/80">
       {mode !== "auto" && (
         <div className="px-3 py-2 border-b border-border flex flex-wrap gap-1.5">
-          <span className="text-caption text-text-dim self-center mr-1">{t("meeting.npcLabel")}</span>
+          <span className="text-caption text-text-dim self-center mr-1">
+            {t("meeting.npcLabel")}
+          </span>
           {npcs.map((npc) => {
             const isSpeaking = currentSpeaker?.npcId === npc.id;
             return (
@@ -150,7 +165,9 @@ function MeetingControlBar({
             <span className="text-npc">{t("meeting.nextTurn")}</span>
           )}
           {!isWaiting && mode !== "auto" && currentSpeaker && (
-            <span className="text-npc">{t("meeting.isSpeaking", { name: currentSpeaker.npcName })}</span>
+            <span className="text-npc">
+              {t("meeting.isSpeaking", { name: currentSpeaker.npcName })}
+            </span>
           )}
         </span>
         <span className="text-micro bg-surface-raised px-1.5 py-0.5 rounded text-text-secondary">
@@ -375,11 +392,7 @@ export default function MeetingRoom({
       setNpcStreams({});
     };
 
-    const handleParticipantJoined = (data: {
-      id: string;
-      name: string;
-      appearance: unknown;
-    }) => {
+    const handleParticipantJoined = (data: { id: string; name: string; appearance: unknown }) => {
       setParticipants((prev) => {
         if (prev.some((p) => p.id === data.id)) return prev;
         return [
@@ -399,12 +412,13 @@ export default function MeetingRoom({
     };
 
     const handleMessage = (msg: MeetingMessage) => {
-      const nextMessage = msg.senderType === "npc"
-        ? {
-          ...msg,
-          content: sanitizeClientFinalSpeech(msg.content),
-        }
-        : msg;
+      const nextMessage =
+        msg.senderType === "npc"
+          ? {
+              ...msg,
+              content: sanitizeClientFinalSpeech(msg.content),
+            }
+          : msg;
       setMessages((prev) => appendMeetingMessage(prev, nextMessage));
     };
 
@@ -430,15 +444,15 @@ export default function MeetingRoom({
         const nextRawStreams = { ...npcRawStreamsRef.current };
         delete nextRawStreams[data.npcId];
         npcRawStreamsRef.current = nextRawStreams;
-      npcStreamsRef.current = result.nextStreams;
-      setNpcStreams(result.nextStreams);
-      if (result.finalizedMessage) {
-        const finalizedMessage: MeetingMessage = {
-          ...result.finalizedMessage,
-          content: sanitizeClientFinalSpeech(result.finalizedMessage.content),
-        };
-        setMessages((msgs) => appendMeetingMessage(msgs, finalizedMessage));
-      }
+        npcStreamsRef.current = result.nextStreams;
+        setNpcStreams(result.nextStreams);
+        if (result.finalizedMessage) {
+          const finalizedMessage: MeetingMessage = {
+            ...result.finalizedMessage,
+            content: sanitizeClientFinalSpeech(result.finalizedMessage.content),
+          };
+          setMessages((msgs) => appendMeetingMessage(msgs, finalizedMessage));
+        }
         setCurrentSpeaker(null);
       } else {
         if (data.chunk) {
@@ -535,7 +549,11 @@ export default function MeetingRoom({
       setMessages((prev) => appendMeetingMessage(prev, infoMsg));
     };
 
-    const handleModeChanged = (data: { mode: "auto" | "manual" | "directed"; by: string; initiatorId?: string }) => {
+    const handleModeChanged = (data: {
+      mode: "auto" | "manual" | "directed";
+      by: string;
+      initiatorId?: string;
+    }) => {
       setMeetingMode(data.mode);
       setIsWaitingInput(data.mode !== "auto");
     };
@@ -623,9 +641,8 @@ export default function MeetingRoom({
         initialMode: startMode,
         maxTotalTurns: maxTurns,
         hybridMode,
-        hybridAutoResumeMs: hybridMode && hybridResumeMode === "timer"
-          ? hybridResumeSeconds * 1000
-          : null,
+        hybridAutoResumeMs:
+          hybridMode && hybridResumeMode === "timer" ? hybridResumeSeconds * 1000 : null,
       },
     });
     // 지난 회의의 종료 화면을 걷어낸다. 렌더 조건이 `meetingEnded && lastMeetingResult`
@@ -639,19 +656,33 @@ export default function MeetingRoom({
     setIsInitiator(true);
     setMeetingMode(startMode);
     setStartingMeeting(false);
-  }, [meetingTopic, startingMeeting, socket, channelId, selectedNpcIds, startMode, maxTurns, hybridMode, hybridResumeMode, hybridResumeSeconds]);
+  }, [
+    meetingTopic,
+    startingMeeting,
+    socket,
+    channelId,
+    selectedNpcIds,
+    startMode,
+    maxTurns,
+    hybridMode,
+    hybridResumeMode,
+    hybridResumeSeconds,
+  ]);
 
   const handleEndMeeting = useCallback(() => {
     if (!socket) return;
     socket.emit("meeting:stop", { channelId });
   }, [socket, channelId]);
 
-  const handleSetMode = useCallback((mode: "auto" | "manual") => {
-    if (!socket) return;
-    setMeetingMode(mode);
-    setIsWaitingInput(mode !== "auto");
-    socket.emit("meeting:set-mode", { channelId, mode });
-  }, [socket, channelId]);
+  const handleSetMode = useCallback(
+    (mode: "auto" | "manual") => {
+      if (!socket) return;
+      setMeetingMode(mode);
+      setIsWaitingInput(mode !== "auto");
+      socket.emit("meeting:set-mode", { channelId, mode });
+    },
+    [socket, channelId],
+  );
 
   const handleResetDiscussion = useCallback(() => {
     if (!socket || !meetingActive) return;
@@ -684,24 +715,30 @@ export default function MeetingRoom({
     setIsWaitingInput(false);
   }, [socket, channelId]);
 
-  const handleDirectSpeak = useCallback((npcId: string) => {
-    if (!socket) return;
-    socket.emit("meeting:direct-speak", { channelId, npcId });
-    setIsWaitingInput(false);
-  }, [socket, channelId]);
+  const handleDirectSpeak = useCallback(
+    (npcId: string) => {
+      if (!socket) return;
+      socket.emit("meeting:direct-speak", { channelId, npcId });
+      setIsWaitingInput(false);
+    },
+    [socket, channelId],
+  );
 
-  const handleSend = useCallback((msg?: string) => {
-    const trimmed = (msg ?? input).trim();
-    if (!trimmed || cooldown || !socket) return;
-    if (!msg) setInput("");
-    if (meetingActive) {
-      socket.emit("meeting:user-speak", { channelId, message: trimmed });
-    } else {
-      socket.emit("meeting:chat", { channelId, message: trimmed });
-    }
-    setCooldown(true);
-    setTimeout(() => setCooldown(false), 2000);
-  }, [input, cooldown, socket, channelId, meetingActive]);
+  const handleSend = useCallback(
+    (msg?: string) => {
+      const trimmed = (msg ?? input).trim();
+      if (!trimmed || cooldown || !socket) return;
+      if (!msg) setInput("");
+      if (meetingActive) {
+        socket.emit("meeting:user-speak", { channelId, message: trimmed });
+      } else {
+        socket.emit("meeting:chat", { channelId, message: trimmed });
+      }
+      setCooldown(true);
+      setTimeout(() => setCooldown(false), 2000);
+    },
+    [input, cooldown, socket, channelId, meetingActive],
+  );
 
   const sceneParticipants = [currentUser, ...otherParticipants];
   const layout = computeMeetingTableLayout({
@@ -714,9 +751,8 @@ export default function MeetingRoom({
     ? buildSpeechBubblePreview(npcStreams[currentSpeaker.npcId] || "")
     : null;
   const raiseNames = formatPollRaises(pollStatus?.raises);
-  const tableAvailableWidth = contentWidth > 0
-    ? Math.max(contentWidth - sidebarWidth - 32, 320)
-    : 980;
+  const tableAvailableWidth =
+    contentWidth > 0 ? Math.max(contentWidth - sidebarWidth - 32, 320) : 980;
   const sceneSeats: MeetingSceneSeat[] = layout.seats.map((seat) => {
     const participant = participantMap.get(seat.participantId);
     const isChair = seat.participantId === currentUser.id;
@@ -756,7 +792,11 @@ export default function MeetingRoom({
         <span className="truncate">
           {`${showStartOptions ? t("common.hide") : t("common.show")} ${t("meeting.settings")} · ${selectedNpcIds.size}/${npcs.length} NPC · ${maxTurns}`}
         </span>
-        {showStartOptions ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+        {showStartOptions ? (
+          <ChevronUp className="h-4 w-4 shrink-0" />
+        ) : (
+          <ChevronDown className="h-4 w-4 shrink-0" />
+        )}
       </button>
       {showStartOptions && (
         <>
@@ -827,27 +867,68 @@ export default function MeetingRoom({
             <div className="flex items-center gap-3 text-caption">
               <span className="text-text-muted w-16">{t("meeting.startMode")}</span>
               <label className="flex items-center gap-1 text-text-secondary cursor-pointer">
-                <input type="radio" name="startMode" checked={startMode === "auto"} onChange={() => setStartMode("auto")} className="accent-primary" />
+                <input
+                  type="radio"
+                  name="startMode"
+                  checked={startMode === "auto"}
+                  onChange={() => setStartMode("auto")}
+                  className="accent-primary"
+                />
                 {t("meeting.modeAuto")}
               </label>
               <label className="flex items-center gap-1 text-text-secondary cursor-pointer">
-                <input type="radio" name="startMode" checked={startMode === "manual"} onChange={() => setStartMode("manual")} className="accent-primary" />
+                <input
+                  type="radio"
+                  name="startMode"
+                  checked={startMode === "manual"}
+                  onChange={() => setStartMode("manual")}
+                  className="accent-primary"
+                />
                 {t("meeting.modeManual")}
               </label>
             </div>
             <label className="flex items-center gap-2 text-caption text-text-secondary cursor-pointer">
-              <input type="checkbox" checked={hybridMode} onChange={(e) => setHybridMode(e.target.checked)} className="accent-primary" />
+              <input
+                type="checkbox"
+                checked={hybridMode}
+                onChange={(e) => setHybridMode(e.target.checked)}
+                className="accent-primary"
+              />
               {t("meeting.hybridModeDesc")}
             </label>
             {hybridMode && (
               <div className="ml-5 space-y-1">
                 <label className="flex items-center gap-1 text-caption text-text-muted cursor-pointer">
-                  <input type="radio" name="hybridResume" checked={hybridResumeMode === "manual"} onChange={() => setHybridResumeMode("manual")} className="accent-primary" />
+                  <input
+                    type="radio"
+                    name="hybridResume"
+                    checked={hybridResumeMode === "manual"}
+                    onChange={() => setHybridResumeMode("manual")}
+                    className="accent-primary"
+                  />
                   {t("meeting.manualResume")}
                 </label>
                 <label className="flex items-center gap-1 text-caption text-text-muted cursor-pointer">
-                  <input type="radio" name="hybridResume" checked={hybridResumeMode === "timer"} onChange={() => setHybridResumeMode("timer")} className="accent-primary" />
-                  <input type="number" min={5} max={120} value={hybridResumeSeconds} onChange={(e) => setHybridResumeSeconds(Math.max(5, Math.min(120, Number(e.target.value) || 30)))} className="w-12 bg-surface-raised text-text px-1 py-0.5 rounded border border-border text-caption text-center" disabled={hybridResumeMode !== "timer"} />
+                  <input
+                    type="radio"
+                    name="hybridResume"
+                    checked={hybridResumeMode === "timer"}
+                    onChange={() => setHybridResumeMode("timer")}
+                    className="accent-primary"
+                  />
+                  <input
+                    type="number"
+                    min={5}
+                    max={120}
+                    value={hybridResumeSeconds}
+                    onChange={(e) =>
+                      setHybridResumeSeconds(
+                        Math.max(5, Math.min(120, Number(e.target.value) || 30)),
+                      )
+                    }
+                    className="w-12 bg-surface-raised text-text px-1 py-0.5 rounded border border-border text-caption text-center"
+                    disabled={hybridResumeMode !== "timer"}
+                  />
                   {t("meeting.timerResumeAfter")}
                 </label>
               </div>
@@ -860,11 +941,7 @@ export default function MeetingRoom({
         onChange={(e) => setMeetingTopic(e.target.value.slice(0, 200))}
         rows={computeMeetingTopicRows(meetingTopic)}
         onKeyDown={(e) => {
-          if (
-            e.key === "Enter" &&
-            !e.nativeEvent.isComposing &&
-            (e.metaKey || e.ctrlKey)
-          ) {
+          if (e.key === "Enter" && !e.nativeEvent.isComposing && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             handleStartDiscussion();
           }
@@ -912,7 +989,7 @@ export default function MeetingRoom({
           width={sidebarWidth}
           onResizeStart={handleSidebarResizeStart}
           isResizing={isResizingSidebar}
-          actions={(
+          actions={
             <>
               <button
                 onClick={() => setShowMinutesModal(true)}
@@ -937,27 +1014,26 @@ export default function MeetingRoom({
                 </button>
               )}
             </>
-          )}
-          statusBar={meetingActive && pollStatus ? (
-            <div className="flex flex-wrap gap-1 items-center">
-              <span className="text-npc font-semibold">{t("meeting.polling")}</span>
-              {raiseNames.length > 0 && (
-                <span className="text-success">
-                  {t("meeting.raiseLabel")} {raiseNames.join(", ")}
-                </span>
-              )}
-              {pollStatus.passes && pollStatus.passes.length > 0 && (
-                <span className="text-text-dim">
-                  {t("meeting.passLabel")} {pollStatus.passes.join(", ")}
-                </span>
-              )}
-              {pollStatus.status && (
-                <span className="text-text-muted">{pollStatus.status}</span>
-              )}
-            </div>
-          ) : null}
+          }
+          statusBar={
+            meetingActive && pollStatus ? (
+              <div className="flex flex-wrap gap-1 items-center">
+                <span className="text-npc font-semibold">{t("meeting.polling")}</span>
+                {raiseNames.length > 0 && (
+                  <span className="text-success">
+                    {t("meeting.raiseLabel")} {raiseNames.join(", ")}
+                  </span>
+                )}
+                {pollStatus.passes && pollStatus.passes.length > 0 && (
+                  <span className="text-text-dim">
+                    {t("meeting.passLabel")} {pollStatus.passes.join(", ")}
+                  </span>
+                )}
+                {pollStatus.status && <span className="text-text-muted">{pollStatus.status}</span>}
+              </div>
+            ) : null
+          }
         >
-
           {/* Messages or Topic Input */}
           {meetingActive ? (
             <div className="h-full flex flex-col min-h-0 overflow-hidden">
@@ -1021,15 +1097,11 @@ export default function MeetingRoom({
                 {streamingEntries.map(([npcId, content]) => {
                   const npc = npcs.find((n) => n.id === npcId);
                   const speakerName =
-                    currentSpeaker?.npcId === npcId
-                      ? currentSpeaker.npcName
-                      : npc?.name || npcId;
+                    currentSpeaker?.npcId === npcId ? currentSpeaker.npcName : npc?.name || npcId;
                   return (
                     <div key={`stream-${npcId}`} className="flex justify-start">
                       <div className="max-w-[85%]">
-                        <div className="text-micro font-medium mb-0.5 text-npc">
-                          {speakerName}
-                        </div>
+                        <div className="text-micro font-medium mb-0.5 text-npc">{speakerName}</div>
                         <div className="px-3 py-2 rounded-lg text-body bg-surface-raised text-text border border-npc/30">
                           {content}
                           <span className="inline-block w-1.5 h-4 bg-npc ml-0.5 animate-pulse" />
@@ -1071,10 +1143,14 @@ export default function MeetingRoom({
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-surface-raised/50 rounded px-3 py-2 text-center">
                       <div className="text-heading font-bold text-info">{sceneSeats.length}</div>
-                      <div className="text-micro text-text-muted">{t("meeting.participantCount")}</div>
+                      <div className="text-micro text-text-muted">
+                        {t("meeting.participantCount")}
+                      </div>
                     </div>
                     <div className="bg-surface-raised/50 rounded px-3 py-2 text-center">
-                      <div className="text-heading font-bold text-npc">{lastMeetingResult.totalTurns}</div>
+                      <div className="text-heading font-bold text-npc">
+                        {lastMeetingResult.totalTurns}
+                      </div>
                       <div className="text-micro text-text-muted">{t("meeting.totalTurns")}</div>
                     </div>
                   </div>
@@ -1084,10 +1160,15 @@ export default function MeetingRoom({
                     <>
                       {lastMeetingResult.keyTopics.length > 0 && (
                         <div className="space-y-1">
-                          <p className="text-caption text-text-dim font-medium">{t("meeting.keyTopics")}</p>
+                          <p className="text-caption text-text-dim font-medium">
+                            {t("meeting.keyTopics")}
+                          </p>
                           <ul className="space-y-0.5">
                             {lastMeetingResult.keyTopics.map((topic, i) => (
-                              <li key={i} className="text-caption text-text-secondary flex items-start gap-1.5">
+                              <li
+                                key={i}
+                                className="text-caption text-text-secondary flex items-start gap-1.5"
+                              >
                                 <span className="text-info mt-0.5">•</span>
                                 <span>{topic}</span>
                               </li>
@@ -1097,13 +1178,19 @@ export default function MeetingRoom({
                       )}
                       {lastMeetingResult.conclusions && (
                         <div className="space-y-1">
-                          <p className="text-caption text-text-dim font-medium">{t("meeting.conclusions")}</p>
-                          <p className="text-caption text-text-secondary leading-relaxed">{lastMeetingResult.conclusions}</p>
+                          <p className="text-caption text-text-dim font-medium">
+                            {t("meeting.conclusions")}
+                          </p>
+                          <p className="text-caption text-text-secondary leading-relaxed">
+                            {lastMeetingResult.conclusions}
+                          </p>
                         </div>
                       )}
                     </>
                   ) : (
-                    <p className="text-caption text-text-dim italic text-center py-2">{t("meeting.noSummary")}</p>
+                    <p className="text-caption text-text-dim italic text-center py-2">
+                      {t("meeting.noSummary")}
+                    </p>
                   )}
                 </div>
 
@@ -1112,7 +1199,9 @@ export default function MeetingRoom({
 
                 {/* New meeting form */}
                 <div className="space-y-3">
-                  <h4 className="text-title text-text-secondary text-center">{t("meeting.newMeeting")}</h4>
+                  <h4 className="text-title text-text-secondary text-center">
+                    {t("meeting.newMeeting")}
+                  </h4>
                   {renderMeetingStartForm()}
                   <button
                     onClick={() => {
@@ -1153,7 +1242,9 @@ export default function MeetingRoom({
                             a.href = `/api/meetings/${lastMeetingResult.minutesId}/export?${params.toString()}`;
                             a.download = "";
                             a.click();
-                          } catch { /* ignore */ }
+                          } catch {
+                            /* ignore */
+                          }
                           setShowExportMenu(false);
                         }}
                         className="w-full px-3 py-1.5 text-left text-caption text-text-secondary hover:bg-surface-raised"
@@ -1165,12 +1256,16 @@ export default function MeetingRoom({
                           if (!lastMeetingResult.minutesId) return;
                           try {
                             const params = new URLSearchParams({ format: "clipboard", locale });
-                            const res = await fetch(`/api/meetings/${lastMeetingResult.minutesId}/export?${params.toString()}`);
+                            const res = await fetch(
+                              `/api/meetings/${lastMeetingResult.minutesId}/export?${params.toString()}`,
+                            );
                             const data = await res.json();
                             if (data.text) {
                               await navigator.clipboard.writeText(data.text);
                             }
-                          } catch { /* ignore */ }
+                          } catch {
+                            /* ignore */
+                          }
                           setShowExportMenu(false);
                         }}
                         className="w-full px-3 py-1.5 text-left text-caption text-text-secondary hover:bg-surface-raised"

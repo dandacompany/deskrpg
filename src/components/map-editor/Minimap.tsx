@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useRef, useEffect, useCallback } from 'react';
-import { useT } from '@/lib/i18n';
-import type { EditorState, TilesetImageInfo } from './hooks/useMapEditor';
+import { useRef, useEffect, useCallback } from "react";
+import { useT } from "@/lib/i18n";
+import type { EditorState, TilesetImageInfo } from "./hooks/useMapEditor";
 
 interface MinimapProps {
   state: EditorState;
@@ -45,12 +45,12 @@ export default function Minimap({
     canvas.width = containerW;
     canvas.height = minimapH;
 
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, containerW, minimapH);
 
     // Dark background
-    ctx.fillStyle = '#1a1a2e';
+    ctx.fillStyle = "#1a1a2e";
     ctx.fillRect(0, 0, containerW, minimapH);
 
     ctx.save();
@@ -58,7 +58,7 @@ export default function Minimap({
 
     // Draw tile layers
     for (const layer of mapData.layers) {
-      if (layer.type !== 'tilelayer' || !layer.data) continue;
+      if (layer.type !== "tilelayer" || !layer.data) continue;
       if (!layer.visible) continue;
 
       for (let y = 0; y < mapData.height; y++) {
@@ -75,8 +75,14 @@ export default function Minimap({
 
           ctx.drawImage(
             tsInfo.img,
-            sx, sy, tsInfo.tilewidth, tsInfo.tileheight,
-            x * tw, y * th, tw, th,
+            sx,
+            sy,
+            tsInfo.tilewidth,
+            tsInfo.tileheight,
+            x * tw,
+            y * th,
+            tw,
+            th,
           );
         }
       }
@@ -91,12 +97,20 @@ export default function Minimap({
     const vpW = (viewportWidth / zoom) * scale;
     const vpH = (viewportHeight / zoom) * scale;
 
-    ctx.strokeStyle = 'rgba(16, 185, 129, 0.9)';
+    ctx.strokeStyle = "rgba(16, 185, 129, 0.9)";
     ctx.lineWidth = 2;
     ctx.strokeRect(vpX, vpY, vpW, vpH);
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.08)';
+    ctx.fillStyle = "rgba(16, 185, 129, 0.08)";
     ctx.fillRect(vpX, vpY, vpW, vpH);
-  }, [state.mapData, state.zoom, state.panX, state.panY, viewportWidth, viewportHeight, findTileset]);
+  }, [
+    state.mapData,
+    state.zoom,
+    state.panX,
+    state.panY,
+    viewportWidth,
+    viewportHeight,
+    findTileset,
+  ]);
 
   useEffect(() => {
     render();
@@ -133,14 +147,14 @@ export default function Minimap({
     <div>
       {!hideHeader && (
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-border">
-          <span className="text-caption text-text-secondary">{t('mapEditor.minimap.title')}</span>
+          <span className="text-caption text-text-secondary">{t("mapEditor.minimap.title")}</span>
         </div>
       )}
       <div ref={containerRef} className="px-2 py-2">
         <canvas
           ref={canvasRef}
           className="w-full cursor-pointer rounded"
-          style={{ imageRendering: 'pixelated' }}
+          style={{ imageRendering: "pixelated" }}
           onClick={handleClick}
         />
       </div>

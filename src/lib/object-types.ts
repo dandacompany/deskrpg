@@ -33,24 +33,128 @@ export interface ObjectTypeDef {
 
 // V1 object type registry
 export const OBJECT_TYPES: Record<string, ObjectTypeDef> = {
-  desk:           { id: "desk",           name: "Desk",           width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
-  chair:          { id: "chair",          name: "Chair",          width: 1, height: 1, collision: false, renderType: "graphic", depthMode: "y-sort", directional: true },
-  computer:       { id: "computer",       name: "Computer",       width: 1, height: 1, collision: false, renderType: "graphic", depthMode: "y-sort", directional: true },
-  plant:          { id: "plant",          name: "Plant",          width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
-  bookshelf:      { id: "bookshelf",      name: "Bookshelf",      width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "fixed", fixedDepth: 5, directional: true },
-  meeting_table:  { id: "meeting_table",  name: "Meeting Table",  width: 2, height: 2, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
-  coffee:         { id: "coffee",         name: "Coffee Machine", width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
-  water_cooler:   { id: "water_cooler",   name: "Water Cooler",   width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
-  whiteboard:     { id: "whiteboard",     name: "Whiteboard",     width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "fixed", fixedDepth: 5, directional: true },
-  reception_desk: { id: "reception_desk", name: "Reception Desk", width: 2, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
-  cubicle_wall:   { id: "cubicle_wall",   name: "Cubicle Wall",   width: 1, height: 1, collision: true,  renderType: "graphic", depthMode: "y-sort", directional: true },
+  desk: {
+    id: "desk",
+    name: "Desk",
+    width: 1,
+    height: 1,
+    collision: true,
+    renderType: "graphic",
+    depthMode: "y-sort",
+    directional: true,
+  },
+  chair: {
+    id: "chair",
+    name: "Chair",
+    width: 1,
+    height: 1,
+    collision: false,
+    renderType: "graphic",
+    depthMode: "y-sort",
+    directional: true,
+  },
+  computer: {
+    id: "computer",
+    name: "Computer",
+    width: 1,
+    height: 1,
+    collision: false,
+    renderType: "graphic",
+    depthMode: "y-sort",
+    directional: true,
+  },
+  plant: {
+    id: "plant",
+    name: "Plant",
+    width: 1,
+    height: 1,
+    collision: true,
+    renderType: "graphic",
+    depthMode: "y-sort",
+    directional: true,
+  },
+  bookshelf: {
+    id: "bookshelf",
+    name: "Bookshelf",
+    width: 1,
+    height: 1,
+    collision: true,
+    renderType: "graphic",
+    depthMode: "fixed",
+    fixedDepth: 5,
+    directional: true,
+  },
+  meeting_table: {
+    id: "meeting_table",
+    name: "Meeting Table",
+    width: 2,
+    height: 2,
+    collision: true,
+    renderType: "graphic",
+    depthMode: "y-sort",
+    directional: true,
+  },
+  coffee: {
+    id: "coffee",
+    name: "Coffee Machine",
+    width: 1,
+    height: 1,
+    collision: true,
+    renderType: "graphic",
+    depthMode: "y-sort",
+    directional: true,
+  },
+  water_cooler: {
+    id: "water_cooler",
+    name: "Water Cooler",
+    width: 1,
+    height: 1,
+    collision: true,
+    renderType: "graphic",
+    depthMode: "y-sort",
+    directional: true,
+  },
+  whiteboard: {
+    id: "whiteboard",
+    name: "Whiteboard",
+    width: 1,
+    height: 1,
+    collision: true,
+    renderType: "graphic",
+    depthMode: "fixed",
+    fixedDepth: 5,
+    directional: true,
+  },
+  reception_desk: {
+    id: "reception_desk",
+    name: "Reception Desk",
+    width: 2,
+    height: 1,
+    collision: true,
+    renderType: "graphic",
+    depthMode: "y-sort",
+    directional: true,
+  },
+  cubicle_wall: {
+    id: "cubicle_wall",
+    name: "Cubicle Wall",
+    width: 1,
+    height: 1,
+    collision: true,
+    renderType: "graphic",
+    depthMode: "y-sort",
+    directional: true,
+  },
 };
 
 // List for editor toolbar ordering
 export const OBJECT_TYPE_LIST: ObjectTypeDef[] = Object.values(OBJECT_TYPES);
 
 // Get effective width/height considering direction (left/right swap w and h for non-square objects)
-export function getObjectDimensions(type: string, direction?: string): { width: number; height: number } {
+export function getObjectDimensions(
+  type: string,
+  direction?: string,
+): { width: number; height: number } {
   const def = OBJECT_TYPES[type];
   if (!def) return { width: 1, height: 1 };
   const w = def.width || 1;
@@ -67,9 +171,17 @@ export function getObjectDimensions(type: string, direction?: string): { width: 
 // GameScene T constants: 3=DESK, 4=CHAIR, 5=COMPUTER, 6=PLANT, 8=MEETING_TABLE,
 // 9=COFFEE, 10=WATER_COOLER, 11=BOOKSHELF, 13=WHITEBOARD, 14=RECEPTION_DESK, 15=CUBICLE_WALL
 const TILE_ID_TO_OBJECT: Record<number, string> = {
-  3: "desk", 4: "chair", 5: "computer", 6: "plant",
-  8: "meeting_table", 9: "coffee", 10: "water_cooler", 11: "bookshelf",
-  13: "whiteboard", 14: "reception_desk", 15: "cubicle_wall",
+  3: "desk",
+  4: "chair",
+  5: "computer",
+  6: "plant",
+  8: "meeting_table",
+  9: "coffee",
+  10: "water_cooler",
+  11: "bookshelf",
+  13: "whiteboard",
+  14: "reception_desk",
+  15: "cubicle_wall",
 };
 
 // Floor tile IDs: 0=EMPTY, 1=FLOOR, 12=CARPET
@@ -104,8 +216,11 @@ export function computeOccupiedTiles(objects: MapObject[]): Set<string> {
 // Stacking validation
 // ---------------------------------------------------------------------------
 export function canPlaceObject(
-  type: string, col: number, row: number,
-  existingObjects: MapObject[], wallsData: number[][],
+  type: string,
+  col: number,
+  row: number,
+  existingObjects: MapObject[],
+  wallsData: number[][],
   direction?: "down" | "left" | "right" | "up",
 ): boolean {
   const def = OBJECT_TYPES[type];

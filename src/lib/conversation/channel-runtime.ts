@@ -25,11 +25,7 @@ export type RunMode = "auto" | "manual" | "directed";
 
 /** 루프가 왜 끝났는지. onEnd로 함께 통지한다. */
 export type EngineEndReason =
-  | "max_turns"
-  | "consecutive_passes"
-  | "consecutive_failures"
-  | "no_candidates"
-  | "stopped";
+  "max_turns" | "consecutive_passes" | "consecutive_failures" | "no_candidates" | "stopped";
 
 export type EngineCallbacks = {
   onPollStart?: () => void;
@@ -46,7 +42,11 @@ export type EngineCallbacks = {
    *
    * meta.reason 으로 갈래를 구분한다: `empty_after_mention`(지목만 남김) /
    * `empty_response`(쓸 만한 텍스트 없음) / `adapter_error` / `timeout:<kind>`. */
-  onTurnEnd?: (npcId: string, fullResponse: string, meta?: { aborted: true; reason: string }) => void;
+  onTurnEnd?: (
+    npcId: string,
+    fullResponse: string,
+    meta?: { aborted: true; reason: string },
+  ) => void;
   onEnd?: (turns: Turn[], reason: EngineEndReason) => void;
   onError?: (err: unknown, npcId: string) => void;
   /** RunMode가 바뀔 때. source: 사용자의 setMode 호출로 바뀌면 "user"(드레인 시점에 일괄 통지 —
@@ -373,7 +373,9 @@ export class ChannelRuntime {
         // 왜 아무도 없는가를 구분한다. 전원이 실패 예산을 소진한 것과, 다들 할당량을
         // 다 쓴 것은 운영상 전혀 다른 상황이다 — 전자는 백엔드가 죽었다는 뜻이다.
         const seated = this.config.participants.filter((p) => p.seated);
-        const allBurnedOut = seated.length > 0 && seated.every((p) => this.runtimes.get(p.npcId)?.isBurnedOut() ?? false);
+        const allBurnedOut =
+          seated.length > 0 &&
+          seated.every((p) => this.runtimes.get(p.npcId)?.isBurnedOut() ?? false);
         this.endReason = allBurnedOut ? "consecutive_failures" : "no_candidates";
         break;
       }

@@ -37,50 +37,89 @@ describe("HermesClient auth and errors", () => {
       seen = new Headers(init?.headers);
       return new Response(JSON.stringify({ features: {}, endpoints: {} }), { status: 200 });
     };
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: "sophie", token: "secret-key", fetchImpl: fetchImpl as typeof fetch });
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "sophie",
+      token: "secret-key",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
     await c.getCapabilities();
     assert.equal(seen?.get("Authorization"), "Bearer secret-key");
   });
 
   test("maps 401 to unauthorized", async () => {
-    const fetchImpl = async () => new Response(JSON.stringify({ error: { message: "bad key" } }), { status: 401 });
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: "sophie", token: "t", fetchImpl: fetchImpl as typeof fetch });
-    await assert.rejects(() => c.getCapabilities(), (err: HermesError) => {
-      assert.equal(err.code, "unauthorized");
-      assert.equal(err.status, 401);
-      return true;
+    const fetchImpl = async () =>
+      new Response(JSON.stringify({ error: { message: "bad key" } }), { status: 401 });
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "sophie",
+      token: "t",
+      fetchImpl: fetchImpl as typeof fetch,
     });
+    await assert.rejects(
+      () => c.getCapabilities(),
+      (err: HermesError) => {
+        assert.equal(err.code, "unauthorized");
+        assert.equal(err.status, 401);
+        return true;
+      },
+    );
   });
 
   test("maps 404 to unknown_profile", async () => {
-    const fetchImpl = async () => new Response(JSON.stringify({ error: "Unknown or unconfigured profile" }), { status: 404 });
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: "ghost", token: "t", fetchImpl: fetchImpl as typeof fetch });
-    await assert.rejects(() => c.getCapabilities(), (err: HermesError) => {
-      assert.equal(err.code, "unknown_profile");
-      return true;
+    const fetchImpl = async () =>
+      new Response(JSON.stringify({ error: "Unknown or unconfigured profile" }), { status: 404 });
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "ghost",
+      token: "t",
+      fetchImpl: fetchImpl as typeof fetch,
     });
+    await assert.rejects(
+      () => c.getCapabilities(),
+      (err: HermesError) => {
+        assert.equal(err.code, "unknown_profile");
+        return true;
+      },
+    );
   });
 
   test("maps a network throw to unreachable", async () => {
-    const fetchImpl = async () => { throw new Error("ECONNREFUSED"); };
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: null, token: "t", fetchImpl: fetchImpl as typeof fetch });
-    await assert.rejects(() => c.getCapabilities(), (err: HermesError) => {
-      assert.equal(err.code, "unreachable");
-      return true;
+    const fetchImpl = async () => {
+      throw new Error("ECONNREFUSED");
+    };
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: null,
+      token: "t",
+      fetchImpl: fetchImpl as typeof fetch,
     });
+    await assert.rejects(
+      () => c.getCapabilities(),
+      (err: HermesError) => {
+        assert.equal(err.code, "unreachable");
+        return true;
+      },
+    );
   });
 });
 
 describe("HermesClient.streamSessionChat", () => {
   test("accumulates deltas and returns the final text with run_id", async () => {
-    const fetchImpl = async () => sseResponse([
-      'event: run.started\ndata: {"run_id":"run-1","seq":1}\n\n',
-      'event: assistant.delta\ndata: {"delta":"안녕","run_id":"run-1","seq":2}\n\n',
-      'event: assistant.delta\ndata: {"delta":"하세요","run_id":"run-1","seq":3}\n\n',
-      'event: assistant.completed\ndata: {"content":"안녕하세요","session_id":"sess-9","run_id":"run-1","seq":4}\n\n',
-      'event: run.completed\ndata: {"run_id":"run-1","seq":5}\n\n',
-    ]);
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: "sophie", token: "t", fetchImpl: fetchImpl as typeof fetch });
+    const fetchImpl = async () =>
+      sseResponse([
+        'event: run.started\ndata: {"run_id":"run-1","seq":1}\n\n',
+        'event: assistant.delta\ndata: {"delta":"안녕","run_id":"run-1","seq":2}\n\n',
+        'event: assistant.delta\ndata: {"delta":"하세요","run_id":"run-1","seq":3}\n\n',
+        'event: assistant.completed\ndata: {"content":"안녕하세요","session_id":"sess-9","run_id":"run-1","seq":4}\n\n',
+        'event: run.completed\ndata: {"run_id":"run-1","seq":5}\n\n',
+      ]);
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "sophie",
+      token: "t",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
 
     const names: string[] = [];
     const result = await c.streamSessionChat({
@@ -92,35 +131,57 @@ describe("HermesClient.streamSessionChat", () => {
     assert.equal(result.text, "안녕하세요");
     assert.equal(result.runId, "run-1");
     assert.equal(result.sessionId, "sess-9");
-    assert.deepEqual(names, ["run.started", "assistant.delta", "assistant.delta", "assistant.completed", "run.completed"]);
+    assert.deepEqual(names, [
+      "run.started",
+      "assistant.delta",
+      "assistant.delta",
+      "assistant.completed",
+      "run.completed",
+    ]);
   });
 
   test("prefers assistant.completed content over accumulated deltas", async () => {
-    const fetchImpl = async () => sseResponse([
-      'event: assistant.delta\ndata: {"delta":"부분"}\n\n',
-      'event: assistant.completed\ndata: {"content":"완성본"}\n\n',
-      'event: done\ndata: {}\n\n',
-    ]);
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: null, token: "t", fetchImpl: fetchImpl as typeof fetch });
+    const fetchImpl = async () =>
+      sseResponse([
+        'event: assistant.delta\ndata: {"delta":"부분"}\n\n',
+        'event: assistant.completed\ndata: {"content":"완성본"}\n\n',
+        "event: done\ndata: {}\n\n",
+      ]);
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: null,
+      token: "t",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
     const result = await c.streamSessionChat({ sessionId: "s", message: "m", onEvent: () => {} });
     assert.equal(result.text, "완성본");
   });
 
   test("returns accumulated deltas when the stream ends without a completed event", async () => {
-    const fetchImpl = async () => sseResponse([
-      'event: assistant.delta\ndata: {"delta":"끊긴 "}\n\n',
-      'event: assistant.delta\ndata: {"delta":"응답"}\n\n',
-    ]);
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: null, token: "t", fetchImpl: fetchImpl as typeof fetch });
+    const fetchImpl = async () =>
+      sseResponse([
+        'event: assistant.delta\ndata: {"delta":"끊긴 "}\n\n',
+        'event: assistant.delta\ndata: {"delta":"응답"}\n\n',
+      ]);
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: null,
+      token: "t",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
     const result = await c.streamSessionChat({ sessionId: "s", message: "m", onEvent: () => {} });
     assert.equal(result.text, "끊긴 응답");
   });
 
   test("rejects on run.failed", async () => {
-    const fetchImpl = async () => sseResponse([
-      'event: run.failed\ndata: {"message":"provider exploded"}\n\n',
-    ]);
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: null, token: "t", fetchImpl: fetchImpl as typeof fetch });
+    const fetchImpl = async () =>
+      sseResponse(['event: run.failed\ndata: {"message":"provider exploded"}\n\n']);
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: null,
+      token: "t",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
     await assert.rejects(
       () => c.streamSessionChat({ sessionId: "s", message: "m", onEvent: () => {} }),
       (err: unknown) => {
@@ -135,61 +196,93 @@ describe("HermesClient.streamSessionChat", () => {
     let seen: Headers | undefined;
     const fetchImpl = async (_u: string | URL | Request, init?: RequestInit) => {
       seen = new Headers(init?.headers);
-      return sseResponse(['event: done\ndata: {}\n\n']);
+      return sseResponse(["event: done\ndata: {}\n\n"]);
     };
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: "sophie", token: "t", fetchImpl: fetchImpl as typeof fetch });
-    await c.streamSessionChat({ sessionId: "s", message: "m", sessionKey: "npc-42", onEvent: () => {} });
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "sophie",
+      token: "t",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+    await c.streamSessionChat({
+      sessionId: "s",
+      message: "m",
+      sessionKey: "npc-42",
+      onEvent: () => {},
+    });
     assert.equal(seen?.get("X-Hermes-Session-Key"), "npc-42");
   });
 
-  test("stops reading the outer loop once a terminal event arrives (does not hang on a held-open connection)", { timeout: 5000 }, async () => {
-    // A real Hermes server can keep the HTTP connection open past a terminal
-    // event (run.completed/done/etc). Simulate that: one chunk carries a
-    // non-terminal event followed by the terminal event, and the underlying
-    // stream is never closed and never enqueues anything further. If
-    // HermesClient's outer `reader.read()` loop is still running after the
-    // terminal event (i.e. only the inner `for...of` was broken), it would
-    // call read() again here and hang forever, since nothing more ever
-    // arrives and the stream never completes.
-    const enc = new TextEncoder();
-    let controllerRef: ReadableStreamDefaultController<Uint8Array> | undefined;
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controllerRef = controller;
-        controller.enqueue(enc.encode(
-          'event: assistant.delta\ndata: {"delta":"부분"}\n\n' +
-          'event: run.completed\ndata: {"run_id":"run-1"}\n\n',
-        ));
-        // Deliberately never closed — mimics a server holding the connection open.
-      },
-    });
-    const realReader = stream.getReader();
-    let readCallCount = 0;
-    let cancelled = false;
-    const wrappedReader = {
-      read: () => {
-        readCallCount += 1;
-        return realReader.read();
-      },
-      cancel: (reason?: unknown) => {
-        cancelled = true;
-        return realReader.cancel(reason);
-      },
-    };
-    const response = new Response(new ReadableStream(), { status: 200, headers: { "Content-Type": "text/event-stream" } });
-    Object.defineProperty(response, "body", { value: { getReader: () => wrappedReader } });
-    const fetchImpl = async () => response;
+  test(
+    "stops reading the outer loop once a terminal event arrives (does not hang on a held-open connection)",
+    { timeout: 5000 },
+    async () => {
+      // A real Hermes server can keep the HTTP connection open past a terminal
+      // event (run.completed/done/etc). Simulate that: one chunk carries a
+      // non-terminal event followed by the terminal event, and the underlying
+      // stream is never closed and never enqueues anything further. If
+      // HermesClient's outer `reader.read()` loop is still running after the
+      // terminal event (i.e. only the inner `for...of` was broken), it would
+      // call read() again here and hang forever, since nothing more ever
+      // arrives and the stream never completes.
+      const enc = new TextEncoder();
+      let controllerRef: ReadableStreamDefaultController<Uint8Array> | undefined;
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controllerRef = controller;
+          controller.enqueue(
+            enc.encode(
+              'event: assistant.delta\ndata: {"delta":"부분"}\n\n' +
+                'event: run.completed\ndata: {"run_id":"run-1"}\n\n',
+            ),
+          );
+          // Deliberately never closed — mimics a server holding the connection open.
+        },
+      });
+      const realReader = stream.getReader();
+      let readCallCount = 0;
+      let cancelled = false;
+      const wrappedReader = {
+        read: () => {
+          readCallCount += 1;
+          return realReader.read();
+        },
+        cancel: (reason?: unknown) => {
+          cancelled = true;
+          return realReader.cancel(reason);
+        },
+      };
+      const response = new Response(new ReadableStream(), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+      Object.defineProperty(response, "body", { value: { getReader: () => wrappedReader } });
+      const fetchImpl = async () => response;
 
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: null, token: "t", fetchImpl: fetchImpl as typeof fetch });
-    const names: string[] = [];
-    const result = await c.streamSessionChat({ sessionId: "s", message: "m", onEvent: (e) => names.push(e.event) });
+      const c = new HermesClient({
+        baseUrl: "http://gw:8642",
+        profileName: null,
+        token: "t",
+        fetchImpl: fetchImpl as typeof fetch,
+      });
+      const names: string[] = [];
+      const result = await c.streamSessionChat({
+        sessionId: "s",
+        message: "m",
+        onEvent: (e) => names.push(e.event),
+      });
 
-    assert.equal(result.runId, "run-1");
-    assert.deepEqual(names, ["assistant.delta", "run.completed"]);
-    assert.equal(readCallCount, 1, "the outer read loop must not call read() again after the terminal event");
-    assert.equal(cancelled, true, "the stream reader must be cancelled after the terminal event");
-    void controllerRef;
-  });
+      assert.equal(result.runId, "run-1");
+      assert.deepEqual(names, ["assistant.delta", "run.completed"]);
+      assert.equal(
+        readCallCount,
+        1,
+        "the outer read loop must not call read() again after the terminal event",
+      );
+      assert.equal(cancelled, true, "the stream reader must be cancelled after the terminal event");
+      void controllerRef;
+    },
+  );
 });
 
 describe("HermesClient.startRun", () => {
@@ -201,7 +294,12 @@ describe("HermesClient.startRun", () => {
       body = JSON.parse(String(init?.body));
       return new Response(JSON.stringify({ run_id: "run-7" }), { status: 202 });
     };
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: "danvi", token: "t", fetchImpl: fetchImpl as typeof fetch });
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "danvi",
+      token: "t",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
 
     const result = await c.startRun({
       input: "의견 주세요",
@@ -222,7 +320,12 @@ describe("HermesClient.stopRun / steerRun", () => {
       calledUrl = String(u);
       return new Response("{}", { status: 200 });
     };
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: "sophie", token: "t", fetchImpl: fetchImpl as typeof fetch });
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "sophie",
+      token: "t",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
     await c.stopRun("run-3");
     assert.equal(calledUrl, "http://gw:8642/p/sophie/v1/runs/run-3/stop");
   });
@@ -233,7 +336,12 @@ describe("HermesClient.stopRun / steerRun", () => {
       body = JSON.parse(String(init?.body));
       return new Response("{}", { status: 200 });
     };
-    const c = new HermesClient({ baseUrl: "http://gw:8642", profileName: "sophie", token: "t", fetchImpl: fetchImpl as typeof fetch });
+    const c = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "sophie",
+      token: "t",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
     await c.steerRun("run-3", "짧게 답하세요");
     assert.equal(body.text, "짧게 답하세요");
   });
@@ -292,7 +400,9 @@ describe("HermesClient.createSession — 제목 충돌", () => {
         calls.push(`${init?.method ?? "GET"} ${url}`);
         if (init?.method === "POST") {
           return new Response(
-            JSON.stringify({ error: { code: "invalid_title", message: "Title already in use by session api_old" } }),
+            JSON.stringify({
+              error: { code: "invalid_title", message: "Title already in use by session api_old" },
+            }),
             { status: 400 },
           );
         }
@@ -314,10 +424,14 @@ describe("HermesClient.createSession — 제목 충돌", () => {
       fetchImpl: (async (_i: RequestInfo | URL, init?: RequestInit) =>
         init?.method === "POST"
           ? new Response(JSON.stringify({ error: { code: "invalid_title" } }), { status: 400 })
-          : new Response(JSON.stringify({ object: "list", data: [] }), { status: 200 })
-      ) as unknown as typeof fetch,
+          : new Response(JSON.stringify({ object: "list", data: [] }), {
+              status: 200,
+            })) as unknown as typeof fetch,
     });
-    await assert.rejects(() => c.createSession("없는제목"), (e: unknown) => e instanceof HermesError);
+    await assert.rejects(
+      () => c.createSession("없는제목"),
+      (e: unknown) => e instanceof HermesError,
+    );
   });
 });
 
@@ -368,9 +482,10 @@ describe("drain — 종료 이벤트 뒤 취소가 끝나지 않는 스트림", 
     const body = {
       getReader() {
         return {
-          read: async () => (i < frames.length
-            ? { done: false, value: enc.encode(frames[i++]) }
-            : { done: true, value: undefined }),
+          read: async () =>
+            i < frames.length
+              ? { done: false, value: enc.encode(frames[i++]) }
+              : { done: true, value: undefined },
           // 영영 settle 하지 않는다 — await 하면 그 자리에서 멈춘다.
           cancel: () => new Promise<void>(() => {}),
         };
@@ -384,11 +499,12 @@ describe("drain — 종료 이벤트 뒤 취소가 끝나지 않는 스트림", 
       baseUrl: "http://gw:8642",
       profileName: "danvi",
       token: "t",
-      fetchImpl: (async () => neverCancellingSse([
-        'data: {"event":"message.delta","delta":"사"}\n\n',
-        'data: {"event":"message.delta","delta":"과"}\n\n',
-        'data: {"event":"run.completed","output":"사과"}\n\n',
-      ])) as unknown as typeof fetch,
+      fetchImpl: (async () =>
+        neverCancellingSse([
+          'data: {"event":"message.delta","delta":"사"}\n\n',
+          'data: {"event":"message.delta","delta":"과"}\n\n',
+          'data: {"event":"run.completed","output":"사과"}\n\n',
+        ])) as unknown as typeof fetch,
     });
 
     const result = await Promise.race([

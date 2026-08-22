@@ -9,9 +9,7 @@ test("normalizeMeetingMinutesRecord parses SQLite JSON strings into arrays", () 
     keyTopics: '["우선순위","KPI"]',
   });
 
-  assert.deepEqual(normalized.participants, [
-    { id: "npc-1", name: "마틴", type: "npc" },
-  ]);
+  assert.deepEqual(normalized.participants, [{ id: "npc-1", name: "마틴", type: "npc" }]);
   assert.deepEqual(normalized.keyTopics, ["우선순위", "KPI"]);
 });
 

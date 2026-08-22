@@ -1,9 +1,7 @@
 import type { ErrorCode } from "@/lib/i18n/error-codes";
 
 export type ChannelCreateAccessReason =
-  | "group_member"
-  | "group_membership_required"
-  | "channel_creation_forbidden";
+  "group_member" | "group_membership_required" | "channel_creation_forbidden";
 
 export type ChannelJoinAccessReason =
   | "group_member"
@@ -29,14 +27,14 @@ export type ChannelParticipationAccessReason =
   | "password_required"
   | "legacy_private_password_required";
 
-export type ChannelAccessDeniedAction =
-  | "player:join"
-  | "meeting:join"
-  | "meeting:chat";
+export type ChannelAccessDeniedAction = "player:join" | "meeting:join" | "meeting:chat";
 
 export type ChannelAccessDeniedReason = Extract<
   ChannelParticipationAccessReason,
-  "groupless_public_browse_only" | "group_membership_required" | "password_required" | "legacy_private_password_required"
+  | "groupless_public_browse_only"
+  | "group_membership_required"
+  | "password_required"
+  | "legacy_private_password_required"
 >;
 
 export function summarizeChannelCreateAccess(args: {
@@ -62,7 +60,9 @@ export function summarizeChannelJoinAccess(args: {
   if (!args.groupId) {
     return {
       allowed: true,
-      reason: args.isPublic ? ("legacy_public_channel" as const) : ("legacy_private_channel" as const),
+      reason: args.isPublic
+        ? ("legacy_public_channel" as const)
+        : ("legacy_private_channel" as const),
     };
   }
 
@@ -93,15 +93,27 @@ export function summarizeChannelDetailAccess(args: {
       return { allowed: true, requiresPassword: false, reason: "legacy_public_channel" as const };
     }
 
-    return { allowed: false, requiresPassword: true, reason: "legacy_private_password_required" as const };
+    return {
+      allowed: false,
+      requiresPassword: true,
+      reason: "legacy_private_password_required" as const,
+    };
   }
 
   if (args.isPublic && !args.hasActiveGroupMembership) {
-    return { allowed: true, requiresPassword: false, reason: "groupless_public_browse_only" as const };
+    return {
+      allowed: true,
+      requiresPassword: false,
+      reason: "groupless_public_browse_only" as const,
+    };
   }
 
   if (!args.hasActiveGroupMembership) {
-    return { allowed: false, requiresPassword: false, reason: "group_membership_required" as const };
+    return {
+      allowed: false,
+      requiresPassword: false,
+      reason: "group_membership_required" as const,
+    };
   }
 
   return {
@@ -143,9 +155,7 @@ export function summarizeChannelParticipationAccess(args: {
   return { allowed: true, reason: "group_member" as const };
 }
 
-export function getChannelAccessDeniedErrorCode(
-  reason: ChannelAccessDeniedReason,
-): ErrorCode {
+export function getChannelAccessDeniedErrorCode(reason: ChannelAccessDeniedReason): ErrorCode {
   if (reason === "groupless_public_browse_only") {
     return "public_channel_browse_only";
   }

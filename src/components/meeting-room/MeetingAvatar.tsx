@@ -2,10 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-import type {
-  CharacterAppearance,
-  LegacyCharacterAppearance,
-} from "@/lib/lpc-registry";
+import type { CharacterAppearance, LegacyCharacterAppearance } from "@/lib/lpc-registry";
 import { compositeCharacter } from "@/lib/sprite-compositor";
 
 import type { AvatarFacing } from "./avatar-frame";

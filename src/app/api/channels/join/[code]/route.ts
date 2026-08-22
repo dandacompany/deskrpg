@@ -9,10 +9,7 @@ function getUserId(req: NextRequest): string | null {
 }
 
 // GET /api/channels/join/:code — resolve invite code to channel
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ code: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
@@ -51,10 +48,10 @@ export async function GET(
 
     const groupMembership = channel.groupId
       ? await db
-        .select({ role: groupMembers.role })
-        .from(groupMembers)
-        .where(and(eq(groupMembers.groupId, channel.groupId), eq(groupMembers.userId, userId)))
-        .limit(1)
+          .select({ role: groupMembers.role })
+          .from(groupMembers)
+          .where(and(eq(groupMembers.groupId, channel.groupId), eq(groupMembers.userId, userId)))
+          .limit(1)
       : [];
 
     const joinAccess = summarizeChannelJoinAccess({
@@ -64,12 +61,14 @@ export async function GET(
     });
 
     if (!joinAccess.allowed) {
-      const errorCode = joinAccess.reason === "groupless_public_browse_only"
-        ? "public_channel_browse_only"
-        : "group_membership_required";
-      const error = joinAccess.reason === "groupless_public_browse_only"
-        ? "public channel browse only"
-        : "group membership required";
+      const errorCode =
+        joinAccess.reason === "groupless_public_browse_only"
+          ? "public_channel_browse_only"
+          : "group_membership_required";
+      const error =
+        joinAccess.reason === "groupless_public_browse_only"
+          ? "public channel browse only"
+          : "group membership required";
 
       return NextResponse.json({ errorCode, error }, { status: 403 });
     }

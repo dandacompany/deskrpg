@@ -17,9 +17,12 @@ function sseResponse(frames: string[]): Response {
 }
 
 function clientWith(handler: (url: string, init?: RequestInit) => Response) {
-  const fetchImpl = async (u: string | URL | Request, init?: RequestInit) => handler(String(u), init);
+  const fetchImpl = async (u: string | URL | Request, init?: RequestInit) =>
+    handler(String(u), init);
   return new HermesClient({
-    baseUrl: "http://gw:8642", profileName: "sophie", token: "t",
+    baseUrl: "http://gw:8642",
+    profileName: "sophie",
+    token: "t",
     fetchImpl: fetchImpl as typeof fetch,
   });
 }
@@ -57,7 +60,8 @@ describe("HermesAdapter", () => {
     const urls: string[] = [];
     const client = clientWith((url) => {
       urls.push(url);
-      if (url.endsWith("/v1/runs")) return new Response(JSON.stringify({ run_id: "r9" }), { status: 202 });
+      if (url.endsWith("/v1/runs"))
+        return new Response(JSON.stringify({ run_id: "r9" }), { status: 202 });
       return sseResponse(['event: assistant.completed\ndata: {"content":"제 의견은"}\n\n']);
     });
 
@@ -80,12 +84,17 @@ describe("HermesAdapter", () => {
     const urls: string[] = [];
     const client = clientWith((url) => {
       urls.push(url);
-      if (url.endsWith("/v1/runs")) return new Response(JSON.stringify({ run_id: "r7" }), { status: 202 });
+      if (url.endsWith("/v1/runs"))
+        return new Response(JSON.stringify({ run_id: "r7" }), { status: 202 });
       return sseResponse(['event: assistant.completed\ndata: {"content":"PASS"}\n\n']);
     });
 
     const adapter = new HermesAdapter(client);
-    await adapter.execute({ sessionKey: "meeting-1-poll", prompt: "SPEAK 또는 PASS", multiParty: true });
+    await adapter.execute({
+      sessionKey: "meeting-1-poll",
+      prompt: "SPEAK 또는 PASS",
+      multiParty: true,
+    });
 
     assert.ok(urls[0].endsWith("/p/sophie/v1/runs"), urls.join("\n"));
     assert.equal(
@@ -97,14 +106,16 @@ describe("HermesAdapter", () => {
 
   test("reports the run handle so callers can abort", async () => {
     const client = clientWith((url) => {
-      if (url.endsWith("/v1/runs")) return new Response(JSON.stringify({ run_id: "r5" }), { status: 202 });
+      if (url.endsWith("/v1/runs"))
+        return new Response(JSON.stringify({ run_id: "r5" }), { status: 202 });
       return sseResponse(['event: assistant.completed\ndata: {"content":"ok"}\n\n']);
     });
 
     const adapter = new HermesAdapter(client);
     const seen: string[] = [];
     await adapter.execute({
-      sessionKey: "m", prompt: "p",
+      sessionKey: "m",
+      prompt: "p",
       multiParty: true,
       conversationHistory: [{ role: "user", content: "c" }],
       onRunStarted: (id) => seen.push(id),
@@ -113,15 +124,18 @@ describe("HermesAdapter", () => {
   });
 
   test("forwards tool progress to the caller", async () => {
-    const client = clientWith(() => sseResponse([
-      'event: tool.progress\ndata: {"tool_name":"read_file","delta":"src/app.ts"}\n\n',
-      'event: assistant.completed\ndata: {"content":"완료"}\n\n',
-    ]));
+    const client = clientWith(() =>
+      sseResponse([
+        'event: tool.progress\ndata: {"tool_name":"read_file","delta":"src/app.ts"}\n\n',
+        'event: assistant.completed\ndata: {"content":"완료"}\n\n',
+      ]),
+    );
 
     const adapter = new HermesAdapter(client, { sessionId: "s" });
     const progress: Array<[string, string]> = [];
     await adapter.execute({
-      sessionKey: "k", prompt: "p",
+      sessionKey: "k",
+      prompt: "p",
       onToolProgress: (name, preview) => progress.push([name, preview]),
     });
     assert.deepEqual(progress, [["read_file", "src/app.ts"]]);
@@ -131,15 +145,24 @@ describe("HermesAdapter", () => {
     const urls: string[] = [];
     const client = clientWith((url) => {
       urls.push(url);
-      if (url.endsWith("/v1/runs")) return new Response(JSON.stringify({ run_id: "r2" }), { status: 202 });
+      if (url.endsWith("/v1/runs"))
+        return new Response(JSON.stringify({ run_id: "r2" }), { status: 202 });
       if (url.includes("/stop")) return new Response("{}", { status: 200 });
       return sseResponse(['event: assistant.completed\ndata: {"content":"x"}\n\n']);
     });
 
     const adapter = new HermesAdapter(client);
-    await adapter.execute({ sessionKey: "k", prompt: "p", multiParty: true, conversationHistory: [{ role: "user", content: "c" }] });
+    await adapter.execute({
+      sessionKey: "k",
+      prompt: "p",
+      multiParty: true,
+      conversationHistory: [{ role: "user", content: "c" }],
+    });
     await adapter.abort("k");
-    assert.ok(urls.some((u) => u.endsWith("/v1/runs/r2/stop")), urls.join("\n"));
+    assert.ok(
+      urls.some((u) => u.endsWith("/v1/runs/r2/stop")),
+      urls.join("\n"),
+    );
   });
 
   test("abort is a no-op when no run is in flight", async () => {
@@ -148,10 +171,13 @@ describe("HermesAdapter", () => {
   });
 
   test("testConnection reports ok when capabilities are readable", async () => {
-    const client = clientWith(() => new Response(
-      JSON.stringify({ features: { run_steer: true }, endpoints: {}, version: "0.20.2" }),
-      { status: 200 },
-    ));
+    const client = clientWith(
+      () =>
+        new Response(
+          JSON.stringify({ features: { run_steer: true }, endpoints: {}, version: "0.20.2" }),
+          { status: 200 },
+        ),
+    );
     const result = await new HermesAdapter(client).testConnection({});
     assert.equal(result.status, "ok");
   });
@@ -164,42 +190,62 @@ describe("HermesAdapter", () => {
 });
 
 describe("ConversationEngine × HermesAdapter — 전송 경로", () => {
-  test("첫 폴과 첫 발언 턴이 모두 runs 경로를 탄다(영속 세션은 한 번도 쓰지 않는다)", { timeout: 5000 }, async () => {
-    // 리뷰의 재현(final-review.md:109-116)을 뒤집은 형태다. 예전에는 호출 로그가
-    // createSession → streamSessionChat(poll) → streamSessionChat(첫 발언) → startRun(둘째 발언)
-    // 이었다 — 폴 문답이 NPC의 장기 세션에 쌓이고, 1턴과 2턴의 전송 경로가 달랐다.
-    const log: string[] = [];
-    let runSeq = 0;
-    const replies = ["SPEAK: 하겠습니다", "제 의견은 이렇습니다"];
-    const client = clientWith((url) => {
-      if (url.endsWith("/v1/runs")) {
-        log.push("startRun");
-        return new Response(JSON.stringify({ run_id: `r${++runSeq}` }), { status: 202 });
-      }
-      if (url.includes("/v1/runs/")) {
-        const text = replies[Math.min(runSeq - 1, replies.length - 1)];
-        return sseResponse([`event: assistant.completed\ndata: ${JSON.stringify({ content: text })}\n\n`]);
-      }
-      log.push(`session:${url}`);
-      return sseResponse(['event: assistant.completed\ndata: {"content":"PASS","session_id":"sess-1"}\n\n']);
-    });
+  test(
+    "첫 폴과 첫 발언 턴이 모두 runs 경로를 탄다(영속 세션은 한 번도 쓰지 않는다)",
+    { timeout: 5000 },
+    async () => {
+      // 리뷰의 재현(final-review.md:109-116)을 뒤집은 형태다. 예전에는 호출 로그가
+      // createSession → streamSessionChat(poll) → streamSessionChat(첫 발언) → startRun(둘째 발언)
+      // 이었다 — 폴 문답이 NPC의 장기 세션에 쌓이고, 1턴과 2턴의 전송 경로가 달랐다.
+      const log: string[] = [];
+      let runSeq = 0;
+      const replies = ["SPEAK: 하겠습니다", "제 의견은 이렇습니다"];
+      const client = clientWith((url) => {
+        if (url.endsWith("/v1/runs")) {
+          log.push("startRun");
+          return new Response(JSON.stringify({ run_id: `r${++runSeq}` }), { status: 202 });
+        }
+        if (url.includes("/v1/runs/")) {
+          const text = replies[Math.min(runSeq - 1, replies.length - 1)];
+          return sseResponse([
+            `event: assistant.completed\ndata: ${JSON.stringify({ content: text })}\n\n`,
+          ]);
+        }
+        log.push(`session:${url}`);
+        return sseResponse([
+          'event: assistant.completed\ndata: {"content":"PASS","session_id":"sess-1"}\n\n',
+        ]);
+      });
 
-    const adapter = new HermesAdapter(client);
-    const engine = new ConversationEngine(
-      {
-        mode: "meeting", topic: "T",
-        participants: [{
-          npcId: "a", displayName: "에이", seated: true, turnCount: 0, lastSpokeAt: 0,
-          adapter, sessionKey: "sk-a",
-        }],
-        quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 },
-      },
-      {},
-    );
-    await engine.run();
+      const adapter = new HermesAdapter(client);
+      const engine = new ConversationEngine(
+        {
+          mode: "meeting",
+          topic: "T",
+          participants: [
+            {
+              npcId: "a",
+              displayName: "에이",
+              seated: true,
+              turnCount: 0,
+              lastSpokeAt: 0,
+              adapter,
+              sessionKey: "sk-a",
+            },
+          ],
+          quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 },
+        },
+        {},
+      );
+      await engine.run();
 
-    assert.deepEqual(log, ["startRun", "startRun"], `첫 폴과 첫 발언 모두 startRun이어야 한다: ${JSON.stringify(log)}`);
-  });
+      assert.deepEqual(
+        log,
+        ["startRun", "startRun"],
+        `첫 폴과 첫 발언 모두 startRun이어야 한다: ${JSON.stringify(log)}`,
+      );
+    },
+  );
 });
 
 // 실측 회귀 — Hermes v0.20.2 의 `_thinking` 툴은 완성된 답변 전체를 tool.progress 의
@@ -224,12 +270,18 @@ describe("HermesAdapter — tool.progress 는 답변 본문이 아니다", () =>
     const { response } = await adapter.execute({
       sessionKey: "k",
       prompt: "p",
-      onDelta: (chunk) => { streamed += chunk; },
+      onDelta: (chunk) => {
+        streamed += chunk;
+      },
       onToolProgress: () => {},
     });
 
     assert.equal(response, "사과딸기");
-    assert.equal(streamed, "사과딸기", "본문 스트림에 tool.progress 가 섞였다 — 화면에 두 번 보인다");
+    assert.equal(
+      streamed,
+      "사과딸기",
+      "본문 스트림에 tool.progress 가 섞였다 — 화면에 두 번 보인다",
+    );
   });
 
   test("_thinking 의 통짜 에코는 onToolProgress 로만 나간다", async () => {
@@ -256,7 +308,8 @@ describe("HermesAdapter — 회의 경로의 델타 이벤트 이름", () => {
     // 응답은 execute() 반환값으로 왔으므로 NPC 는 발언했지만, 클라이언트의 스트림 버퍼가
     // 비어 done:true 에 확정할 말풍선이 없었고 화면에는 아무것도 붙지 않았다.
     const client = clientWith((url) => {
-      if (url.endsWith("/v1/runs")) return new Response(JSON.stringify({ run_id: "r9" }), { status: 202 });
+      if (url.endsWith("/v1/runs"))
+        return new Response(JSON.stringify({ run_id: "r9" }), { status: 202 });
       return sseResponse([
         'data: {"event":"message.delta","delta":"김치"}\n\n',
         'data: {"event":"message.delta","delta":"찌개"}\n\n',

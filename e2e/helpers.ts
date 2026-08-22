@@ -36,8 +36,8 @@ export async function login(page: Page): Promise<void> {
   });
   if (!res.ok()) {
     throw new Error(
-      `개발 계정 로그인 실패 (${res.status()}). DESKRPG_E2E_LOGIN_ID / `
-        + `DESKRPG_E2E_PASSWORD 를 확인하십시오. 응답: ${(await res.text()).slice(0, 200)}`,
+      `개발 계정 로그인 실패 (${res.status()}). DESKRPG_E2E_LOGIN_ID / ` +
+        `DESKRPG_E2E_PASSWORD 를 확인하십시오. 응답: ${(await res.text()).slice(0, 200)}`,
     );
   }
 }
@@ -65,9 +65,9 @@ export async function waitForGameLoop(page: Page, minFps = 10): Promise<number> 
   });
   if (fps < minFps) {
     throw new Error(
-      `게임 루프가 ${fps}fps 로 돌고 있습니다(최소 ${minFps} 필요). 창이 가려져 Chrome 이 `
-        + "requestAnimationFrame 을 스로틀하는 상태입니다 — headless 로 실행하거나 "
-        + "브라우저 창을 앞으로 올리십시오.",
+      `게임 루프가 ${fps}fps 로 돌고 있습니다(최소 ${minFps} 필요). 창이 가려져 Chrome 이 ` +
+        "requestAnimationFrame 을 스로틀하는 상태입니다 — headless 로 실행하거나 " +
+        "브라우저 창을 앞으로 올리십시오.",
     );
   }
   return fps;
@@ -75,12 +75,19 @@ export async function waitForGameLoop(page: Page, minFps = 10): Promise<number> 
 
 /** 상단 로스터에서 NPC 를 골라 대화를 시작한다. 대화창이 열리면 반환한다. */
 export async function openNpcDialog(page: Page, npcName: string): Promise<void> {
-  await page.locator("button").filter({ hasText: /NPC.*\d|명/ }).last().click();
+  await page
+    .locator("button")
+    .filter({ hasText: /NPC.*\d|명/ })
+    .last()
+    .click();
   await page.locator("button, div").filter({ hasText: npcName }).last().click();
   await page.getByRole("button", { name: "대화하기" }).click();
 
   // NPC 옆까지 걸어간 뒤에야 대화창이 열린다 — 이동 시간을 감안한다.
-  await page.locator('[data-chat-bubble], textarea, input[type="text"]').last().waitFor({ timeout: 60_000 });
+  await page
+    .locator('[data-chat-bubble], textarea, input[type="text"]')
+    .last()
+    .waitFor({ timeout: 60_000 });
 }
 
 /** 메시지를 보내고 NPC 답변 한 건이 끝날 때까지 기다린 뒤 그 텍스트를 돌려준다. */
@@ -135,14 +142,20 @@ export async function ensureTwoHermesNpcs(page: Page): Promise<string[]> {
 
   const listRes = await page.request.get(`/api/npcs?channelId=${channelId}`);
   const { npcs = [] } = (await listRes.json()) as {
-    npcs?: { name: string; adapterType: string; hermesProfileId: string | null; positionX: number; positionY: number }[];
+    npcs?: {
+      name: string;
+      adapterType: string;
+      hermesProfileId: string | null;
+      positionX: number;
+      positionY: number;
+    }[];
   };
   const hermesNpcs = npcs.filter((n) => n.adapterType === "hermes" && n.hermesProfileId);
   if (hermesNpcs.length >= 2) return hermesNpcs.map((n) => n.name);
   if (hermesNpcs.length === 0) {
     throw new Error(
-      "Hermes 프로필이 묶인 NPC 가 하나도 없습니다. 회의 시나리오는 최소 한 명을 전제로 "
-        + "두 번째만 만들어 줍니다 — 먼저 UI 에서 NPC 를 한 명 고용하십시오.",
+      "Hermes 프로필이 묶인 NPC 가 하나도 없습니다. 회의 시나리오는 최소 한 명을 전제로 " +
+        "두 번째만 만들어 줍니다 — 먼저 UI 에서 NPC 를 한 명 고용하십시오.",
     );
   }
 
@@ -170,8 +183,8 @@ export async function ensureTwoHermesNpcs(page: Page): Promise<string[]> {
   }
   if (!free) {
     throw new Error(
-      "남는 Hermes 프로필이 없습니다. 회의에는 서로 다른 프로필을 쓰는 NPC 가 둘 필요합니다 "
-        + "— 게이트웨이에서 프로필을 하나 더 연결하십시오.",
+      "남는 Hermes 프로필이 없습니다. 회의에는 서로 다른 프로필을 쓰는 NPC 가 둘 필요합니다 " +
+        "— 게이트웨이에서 프로필을 하나 더 연결하십시오.",
     );
   }
 
@@ -192,7 +205,9 @@ export async function ensureTwoHermesNpcs(page: Page): Promise<string[]> {
     },
   });
   if (!created.ok()) {
-    throw new Error(`두 번째 NPC 생성 실패 (${created.status()}): ${(await created.text()).slice(0, 200)}`);
+    throw new Error(
+      `두 번째 NPC 생성 실패 (${created.status()}): ${(await created.text()).slice(0, 200)}`,
+    );
   }
   const body = (await created.json()) as { npc: { name: string } };
   return [seed.name, body.npc.name];

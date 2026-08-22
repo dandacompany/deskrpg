@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Button, Modal, Input } from '@/components/ui';
-import { useT } from '@/lib/i18n';
-import type { TiledTileset, TilesetImageInfo } from './hooks/useMapEditor';
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Button, Modal, Input } from "@/components/ui";
+import { useT } from "@/lib/i18n";
+import type { TiledTileset, TilesetImageInfo } from "./hooks/useMapEditor";
 
 export interface ImportTilesetResult {
   tileset: TiledTileset;
@@ -48,17 +48,17 @@ export default function ImportTilesetModal({
   onLinkTileset,
 }: ImportTilesetModalProps) {
   const t = useT();
-  const importedTilesetName = t('mapEditor.tilesets.importedTileset');
+  const importedTilesetName = t("mapEditor.tilesets.importedTileset");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [activeTab, setActiveTab] = useState<'upload' | 'myTilesets' | 'builtIn'>('upload');
+  const [activeTab, setActiveTab] = useState<"upload" | "myTilesets" | "builtIn">("upload");
   const [libraryTilesets, setLibraryTilesets] = useState<LibraryTileset[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
 
   const [image, setImage] = useState<HTMLImageElement | null>(null);
-  const [fileName, setFileName] = useState('');
-  const [name, setName] = useState('');
+  const [fileName, setFileName] = useState("");
+  const [name, setName] = useState("");
   const [tileWidth, setTileWidth] = useState(32);
   const [tileHeight, setTileHeight] = useState(32);
   const [margin, setMargin] = useState(0);
@@ -79,8 +79,8 @@ export default function ImportTilesetModal({
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'myTilesets') fetchLibrary(false);
-    else if (activeTab === 'builtIn') fetchLibrary(true);
+    if (activeTab === "myTilesets") fetchLibrary(false);
+    else if (activeTab === "builtIn") fetchLibrary(true);
   }, [activeTab, fetchLibrary]);
 
   // Calculate grid dimensions
@@ -98,7 +98,7 @@ export default function ImportTilesetModal({
     (sel: SelectionRect | null) => {
       const canvas = canvasRef.current;
       if (!canvas || !image) return;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
       canvas.width = image.naturalWidth;
@@ -110,7 +110,7 @@ export default function ImportTilesetModal({
       const { columns, rows } = calcGrid();
 
       // Draw grid
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
       ctx.lineWidth = 1;
       for (let c = 0; c <= columns; c++) {
         const x = margin + c * (tileWidth + spacing);
@@ -138,9 +138,9 @@ export default function ImportTilesetModal({
       const sw = (maxCol - minCol + 1) * (tileWidth + spacing) - spacing;
       const sh = (maxRow - minRow + 1) * (tileHeight + spacing) - spacing;
 
-      ctx.fillStyle = 'rgba(16, 185, 129, 0.25)';
+      ctx.fillStyle = "rgba(16, 185, 129, 0.25)";
       ctx.fillRect(sx, sy, sw, sh);
-      ctx.strokeStyle = 'rgba(16, 185, 129, 0.7)';
+      ctx.strokeStyle = "rgba(16, 185, 129, 0.7)";
       ctx.lineWidth = 2;
       ctx.strokeRect(sx, sy, sw, sh);
     },
@@ -157,7 +157,7 @@ export default function ImportTilesetModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const baseName = file.name.replace(/\.[^.]+$/, '');
+    const baseName = file.name.replace(/\.[^.]+$/, "");
     setFileName(baseName);
     setName(baseName);
     setSelection(null);
@@ -178,8 +178,14 @@ export default function ImportTilesetModal({
       const nativeX = (e.clientX - rect.left) * scaleX;
       const nativeY = (e.clientY - rect.top) * scaleY;
       const { columns, rows } = calcGrid();
-      const col = Math.max(0, Math.min(columns - 1, Math.floor((nativeX - margin) / (tileWidth + spacing))));
-      const row = Math.max(0, Math.min(rows - 1, Math.floor((nativeY - margin) / (tileHeight + spacing))));
+      const col = Math.max(
+        0,
+        Math.min(columns - 1, Math.floor((nativeX - margin) / (tileWidth + spacing))),
+      );
+      const row = Math.max(
+        0,
+        Math.min(rows - 1, Math.floor((nativeY - margin) / (tileHeight + spacing))),
+      );
       return { col, row };
     },
     [image, calcGrid, tileWidth, tileHeight, margin, spacing],
@@ -189,7 +195,12 @@ export default function ImportTilesetModal({
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const cell = getCellFromEvent(e);
       if (!cell) return;
-      const sel: SelectionRect = { startCol: cell.col, startRow: cell.row, endCol: cell.col, endRow: cell.row };
+      const sel: SelectionRect = {
+        startCol: cell.col,
+        startRow: cell.row,
+        endCol: cell.col,
+        endRow: cell.row,
+      };
       dragRef.current = sel;
       setDragging(true);
       setSelection(sel);
@@ -220,15 +231,15 @@ export default function ImportTilesetModal({
   useEffect(() => {
     if (!open) {
       setImage(null);
-      setFileName('');
-      setName('');
+      setFileName("");
+      setName("");
       setTileWidth(32);
       setTileHeight(32);
       setMargin(0);
       setSpacing(0);
       setSelection(null);
       setDragging(false);
-      setActiveTab('upload');
+      setActiveTab("upload");
       setLibraryTilesets([]);
     }
   }, [open]);
@@ -242,7 +253,7 @@ export default function ImportTilesetModal({
       img.onload = () => {
         setImage(img);
         setFileName(initialFile.name);
-        setName(initialFile.name.replace(/\.[^.]+$/, ''));
+        setName(initialFile.name.replace(/\.[^.]+$/, ""));
       };
       img.src = reader.result as string;
     };
@@ -266,20 +277,30 @@ export default function ImportTilesetModal({
     const tilecount = selW * selH;
 
     // Create new tileset canvas with selected tiles
-    const outCanvas = document.createElement('canvas');
+    const outCanvas = document.createElement("canvas");
     outCanvas.width = selW * tileWidth;
     outCanvas.height = selH * tileHeight;
-    const outCtx = outCanvas.getContext('2d')!;
+    const outCtx = outCanvas.getContext("2d")!;
 
     for (let r = 0; r < selH; r++) {
       for (let c = 0; c < selW; c++) {
         const srcX = margin + (minCol + c) * (tileWidth + spacing);
         const srcY = margin + (minRow + r) * (tileHeight + spacing);
-        outCtx.drawImage(image, srcX, srcY, tileWidth, tileHeight, c * tileWidth, r * tileHeight, tileWidth, tileHeight);
+        outCtx.drawImage(
+          image,
+          srcX,
+          srcY,
+          tileWidth,
+          tileHeight,
+          c * tileWidth,
+          r * tileHeight,
+          tileWidth,
+          tileHeight,
+        );
       }
     }
 
-    const imageDataUrl = outCanvas.toDataURL('image/png');
+    const imageDataUrl = outCanvas.toDataURL("image/png");
 
     // Calculate firstgid
     let firstgid = 1;
@@ -319,9 +340,9 @@ export default function ImportTilesetModal({
     // Save tileset to DB and link to project (await before closing)
     if (projectId) {
       try {
-        const saveRes = await fetch('/api/tilesets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const saveRes = await fetch("/api/tilesets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: name || importedTilesetName,
             tilewidth: tileWidth,
@@ -336,42 +357,60 @@ export default function ImportTilesetModal({
           await onLinkTileset?.(saved.id, firstgid);
         }
       } catch (err) {
-        console.error('Failed to save tileset to DB:', err);
-        alert(err instanceof Error ? err.message : t('errors.failedToLinkTileset'));
+        console.error("Failed to save tileset to DB:", err);
+        alert(err instanceof Error ? err.message : t("errors.failedToLinkTileset"));
       }
     }
 
     onClose();
-  }, [image, calcGrid, selection, tileWidth, tileHeight, margin, spacing, name, existingTilesets, onImport, onClose, projectId, onLinkTileset, importedTilesetName, t]);
+  }, [
+    image,
+    calcGrid,
+    selection,
+    tileWidth,
+    tileHeight,
+    margin,
+    spacing,
+    name,
+    existingTilesets,
+    onImport,
+    onClose,
+    projectId,
+    onLinkTileset,
+    importedTilesetName,
+    t,
+  ]);
 
   return (
-    <Modal open={open} onClose={onClose} title={t('mapEditor.importTileset.title')} size="lg">
+    <Modal open={open} onClose={onClose} title={t("mapEditor.importTileset.title")} size="lg">
       <Modal.Body>
         {/* Tab bar */}
         <div className="flex border-b border-gray-700 mb-4">
-          {(['upload', 'myTilesets', 'builtIn'] as const).map((tab) => (
+          {(["upload", "myTilesets", "builtIn"] as const).map((tab) => (
             <button
               key={tab}
               className={`px-4 py-2 text-sm ${
                 activeTab === tab
-                  ? 'border-b-2 border-blue-500 text-blue-400'
-                  : 'text-gray-400 hover:text-white'
+                  ? "border-b-2 border-blue-500 text-blue-400"
+                  : "text-gray-400 hover:text-white"
               }`}
               onClick={() => setActiveTab(tab)}
             >
-              {tab === 'upload' && t('mapEditor.assets.tabUpload')}
-              {tab === 'myTilesets' && t('mapEditor.assets.tabMyTilesets')}
-              {tab === 'builtIn' && t('mapEditor.assets.tabBuiltIn')}
+              {tab === "upload" && t("mapEditor.assets.tabUpload")}
+              {tab === "myTilesets" && t("mapEditor.assets.tabMyTilesets")}
+              {tab === "builtIn" && t("mapEditor.assets.tabBuiltIn")}
             </button>
           ))}
         </div>
 
         {/* Upload tab */}
-        {activeTab === 'upload' && (
+        {activeTab === "upload" && (
           <div className="space-y-4">
             {/* File picker */}
             <div>
-              <label className="text-caption text-text-secondary block mb-1">{t('mapEditor.importTileset.imageFile')}</label>
+              <label className="text-caption text-text-secondary block mb-1">
+                {t("mapEditor.importTileset.imageFile")}
+              </label>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -389,7 +428,7 @@ export default function ImportTilesetModal({
                   <canvas
                     ref={canvasRef}
                     className="cursor-crosshair"
-                    style={{ width: '100%', minWidth: '200px', imageRendering: 'pixelated' }}
+                    style={{ width: "100%", minWidth: "200px", imageRendering: "pixelated" }}
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
@@ -400,29 +439,67 @@ export default function ImportTilesetModal({
                 {/* Settings */}
                 <div className="w-48 flex-shrink-0 space-y-3">
                   <div>
-                    <label className="text-caption text-text-secondary block mb-1">{t('mapEditor.importTileset.name')}</label>
-                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('mapEditor.importTileset.namePlaceholder')} />
+                    <label className="text-caption text-text-secondary block mb-1">
+                      {t("mapEditor.importTileset.name")}
+                    </label>
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={t("mapEditor.importTileset.namePlaceholder")}
+                    />
                   </div>
                   <div>
-                    <label className="text-caption text-text-secondary block mb-1">{t('mapEditor.importTileset.tileWidth')}</label>
-                    <Input type="number" value={tileWidth} onChange={(e) => setTileWidth(Math.max(1, Number(e.target.value)))} min={1} />
+                    <label className="text-caption text-text-secondary block mb-1">
+                      {t("mapEditor.importTileset.tileWidth")}
+                    </label>
+                    <Input
+                      type="number"
+                      value={tileWidth}
+                      onChange={(e) => setTileWidth(Math.max(1, Number(e.target.value)))}
+                      min={1}
+                    />
                   </div>
                   <div>
-                    <label className="text-caption text-text-secondary block mb-1">{t('mapEditor.importTileset.tileHeight')}</label>
-                    <Input type="number" value={tileHeight} onChange={(e) => setTileHeight(Math.max(1, Number(e.target.value)))} min={1} />
+                    <label className="text-caption text-text-secondary block mb-1">
+                      {t("mapEditor.importTileset.tileHeight")}
+                    </label>
+                    <Input
+                      type="number"
+                      value={tileHeight}
+                      onChange={(e) => setTileHeight(Math.max(1, Number(e.target.value)))}
+                      min={1}
+                    />
                   </div>
                   <div>
-                    <label className="text-caption text-text-secondary block mb-1">{t('mapEditor.importTileset.margin')}</label>
-                    <Input type="number" value={margin} onChange={(e) => setMargin(Math.max(0, Number(e.target.value)))} min={0} />
+                    <label className="text-caption text-text-secondary block mb-1">
+                      {t("mapEditor.importTileset.margin")}
+                    </label>
+                    <Input
+                      type="number"
+                      value={margin}
+                      onChange={(e) => setMargin(Math.max(0, Number(e.target.value)))}
+                      min={0}
+                    />
                   </div>
                   <div>
-                    <label className="text-caption text-text-secondary block mb-1">{t('mapEditor.importTileset.spacing')}</label>
-                    <Input type="number" value={spacing} onChange={(e) => setSpacing(Math.max(0, Number(e.target.value)))} min={0} />
+                    <label className="text-caption text-text-secondary block mb-1">
+                      {t("mapEditor.importTileset.spacing")}
+                    </label>
+                    <Input
+                      type="number"
+                      value={spacing}
+                      onChange={(e) => setSpacing(Math.max(0, Number(e.target.value)))}
+                      min={0}
+                    />
                   </div>
                   <div className="text-caption text-text-dim pt-1">
                     {(() => {
                       const { columns, rows } = calcGrid();
-                      return t('mapEditor.importTileset.tileInfo', { columns, rows, total: columns * rows });
+                      return t("mapEditor.importTileset.tileInfo", {
+                        columns,
+                        rows,
+                        total: columns * rows,
+                      });
                     })()}
                   </div>
                 </div>
@@ -432,12 +509,14 @@ export default function ImportTilesetModal({
         )}
 
         {/* Library tabs (My Tilesets / Built-in) */}
-        {activeTab !== 'upload' && (
+        {activeTab !== "upload" && (
           <div className="grid grid-cols-3 gap-3 max-h-80 overflow-auto p-4">
             {libraryLoading ? (
               <div className="col-span-3 text-center text-gray-500 py-8">{t("common.loading")}</div>
             ) : libraryTilesets.length === 0 ? (
-              <div className="col-span-3 text-center text-gray-500 py-8">{t('mapEditor.assets.noTilesets')}</div>
+              <div className="col-span-3 text-center text-gray-500 py-8">
+                {t("mapEditor.assets.noTilesets")}
+              </div>
             ) : (
               libraryTilesets.map((ts) => (
                 <button
@@ -452,7 +531,7 @@ export default function ImportTilesetModal({
                     try {
                       await new Promise<void>((resolve, reject) => {
                         img.onload = () => resolve();
-                        img.onerror = () => reject(new Error(t('errors.failedToLinkTileset')));
+                        img.onerror = () => reject(new Error(t("errors.failedToLinkTileset")));
                         img.src = ts.image;
                       });
                       onImport({
@@ -481,13 +560,21 @@ export default function ImportTilesetModal({
                       await onLinkTileset?.(ts.id, nextFirstgid);
                       onClose();
                     } catch (err) {
-                      alert(err instanceof Error ? err.message : t('errors.failedToLinkTileset'));
+                      alert(err instanceof Error ? err.message : t("errors.failedToLinkTileset"));
                     }
                   }}
                 >
-                  <img src={ts.image} alt={ts.name} className="w-16 h-16 object-contain bg-gray-900 rounded" />
-                  <span className="text-xs text-gray-300 mt-1 truncate w-full text-center">{ts.name}</span>
-                  <span className="text-xs text-gray-500">{ts.tilewidth}×{ts.tileheight}</span>
+                  <img
+                    src={ts.image}
+                    alt={ts.name}
+                    className="w-16 h-16 object-contain bg-gray-900 rounded"
+                  />
+                  <span className="text-xs text-gray-300 mt-1 truncate w-full text-center">
+                    {ts.name}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {ts.tilewidth}×{ts.tileheight}
+                  </span>
                 </button>
               ))
             )}
@@ -497,11 +584,11 @@ export default function ImportTilesetModal({
 
       <Modal.Footer>
         <Button variant="ghost" onClick={onClose}>
-          {t('common.cancel')}
+          {t("common.cancel")}
         </Button>
-        {activeTab === 'upload' && (
+        {activeTab === "upload" && (
           <Button variant="primary" onClick={handleImport} disabled={!image}>
-            {t('mapEditor.importTileset.import')}
+            {t("mapEditor.importTileset.import")}
           </Button>
         )}
       </Modal.Footer>

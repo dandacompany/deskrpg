@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useRef, useEffect, useCallback, useState } from 'react';
-import { Button } from '@/components/ui';
-import { CheckSquare, X, Pencil } from 'lucide-react';
-import type { TileRegion, TilesetImageInfo } from './hooks/useMapEditor';
-import { BUILTIN_TILESET_NAME } from './hooks/useMapEditor';
-import Tooltip from './Tooltip';
-import { useT } from '@/lib/i18n';
+import { useRef, useEffect, useCallback, useState } from "react";
+import { Button } from "@/components/ui";
+import { CheckSquare, X, Pencil } from "lucide-react";
+import type { TileRegion, TilesetImageInfo } from "./hooks/useMapEditor";
+import { BUILTIN_TILESET_NAME } from "./hooks/useMapEditor";
+import Tooltip from "./Tooltip";
+import { useT } from "@/lib/i18n";
 
 export interface TilePaletteProps {
   tilesets: TilesetImageInfo[];
@@ -58,7 +58,7 @@ function TilesetSection({
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState('');
+  const [editName, setEditName] = useState("");
   const editRef = useRef<HTMLInputElement>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -71,7 +71,7 @@ function TilesetSection({
     (currentDrag: DragState | null) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
       canvas.width = img.naturalWidth;
@@ -81,7 +81,7 @@ function TilesetSection({
       ctx.drawImage(img, 0, 0);
 
       // Grid overlay
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
       ctx.lineWidth = 1;
       for (let c = 0; c <= columns; c++) {
         const x = c * tilewidth;
@@ -117,14 +117,14 @@ function TilesetSection({
       }
 
       if (showSelection) {
-        ctx.fillStyle = 'rgba(16, 185, 129, 0.25)';
+        ctx.fillStyle = "rgba(16, 185, 129, 0.25)";
         ctx.fillRect(
           selMinCol! * tilewidth,
           selMinRow! * tileheight,
           (selMaxCol! - selMinCol! + 1) * tilewidth,
           (selMaxRow! - selMinRow! + 1) * tileheight,
         );
-        ctx.strokeStyle = 'rgba(16, 185, 129, 0.7)';
+        ctx.strokeStyle = "rgba(16, 185, 129, 0.7)";
         ctx.lineWidth = 2;
         ctx.strokeRect(
           selMinCol! * tilewidth,
@@ -244,7 +244,7 @@ function TilesetSection({
 
   return (
     <div
-      className={`mb-3 ${isDragOver ? 'border-t-2 border-primary-light' : 'border-t-2 border-transparent'}`}
+      className={`mb-3 ${isDragOver ? "border-t-2 border-primary-light" : "border-t-2 border-transparent"}`}
       onDragOver={(e) => {
         e.preventDefault();
         onDragOver(e);
@@ -258,7 +258,7 @@ function TilesetSection({
         className="flex items-center justify-between px-1 py-1 cursor-grab active:cursor-grabbing"
         draggable
         onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.effectAllowed = "move";
           onDragStart();
         }}
         onDragEnd={onDragEnd}
@@ -266,25 +266,43 @@ function TilesetSection({
         <span className="text-caption text-text-secondary truncate flex items-center gap-1 min-w-0">
           <button
             className="text-micro flex-shrink-0 w-3 text-center text-text-dim hover:text-text"
-            onClick={(e) => { e.stopPropagation(); setIsCollapsed((v) => !v); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsCollapsed((v) => !v);
+            }}
           >
-            {isCollapsed ? '▸' : '▾'}
+            {isCollapsed ? "▸" : "▾"}
           </button>
           {isEditing ? (
             <input
               ref={editRef}
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              onBlur={() => { const t = editName.trim(); if (t && t !== name) onRename(t); setIsEditing(false); }}
-              onKeyDown={(e) => { if (e.key === 'Enter') { const t = editName.trim(); if (t && t !== name) onRename(t); setIsEditing(false); } if (e.key === 'Escape') setIsEditing(false); }}
+              onBlur={() => {
+                const t = editName.trim();
+                if (t && t !== name) onRename(t);
+                setIsEditing(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const t = editName.trim();
+                  if (t && t !== name) onRename(t);
+                  setIsEditing(false);
+                }
+                if (e.key === "Escape") setIsEditing(false);
+              }}
               onClick={(e) => e.stopPropagation()}
               className="bg-surface text-caption text-text px-1 py-0 rounded border border-border outline-none focus:border-primary-light w-full"
             />
           ) : (
             <span
               className="truncate"
-              title={`${name} — ${t('mapEditor.tilesets.doubleClickToRename')}`}
-              onDoubleClick={() => { setEditName(name); setIsEditing(true); setTimeout(() => editRef.current?.select(), 0); }}
+              title={`${name} — ${t("mapEditor.tilesets.doubleClickToRename")}`}
+              onDoubleClick={() => {
+                setEditName(name);
+                setIsEditing(true);
+                setTimeout(() => editRef.current?.select(), 0);
+              }}
             >
               {name}
             </span>
@@ -292,66 +310,64 @@ function TilesetSection({
         </span>
         <div className="flex items-center gap-1 flex-shrink-0">
           {name !== BUILTIN_TILESET_NAME && (
-            <Tooltip label={t('mapEditor.tilesets.selectAll')}>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const region: TileRegion = {
-                  firstgid,
-                  col: 0,
-                  row: 0,
-                  width: columns,
-                  height: rows,
-                  gids: Array.from({ length: rows }, (_, r) =>
-                    Array.from({ length: columns }, (_, c) => firstgid + r * columns + c),
-                  ),
-                };
-                onSelectRegion(region);
-              }}
-            >
-              <CheckSquare className="w-3.5 h-3.5" />
-            </Button>
+            <Tooltip label={t("mapEditor.tilesets.selectAll")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const region: TileRegion = {
+                    firstgid,
+                    col: 0,
+                    row: 0,
+                    width: columns,
+                    height: rows,
+                    gids: Array.from({ length: rows }, (_, r) =>
+                      Array.from({ length: columns }, (_, c) => firstgid + r * columns + c),
+                    ),
+                  };
+                  onSelectRegion(region);
+                }}
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+              </Button>
             </Tooltip>
           )}
           {onEditPixels && hasSelectionInThisTileset && name !== BUILTIN_TILESET_NAME && (
-            <Tooltip label={t('mapEditor.tilesets.editPixels')}>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onEditPixels}
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </Button>
+            <Tooltip label={t("mapEditor.tilesets.editPixels")}>
+              <Button variant="ghost" size="sm" onClick={onEditPixels}>
+                <Pencil className="w-3.5 h-3.5" />
+              </Button>
             </Tooltip>
           )}
           {name !== BUILTIN_TILESET_NAME && (
-            <Tooltip label={t('mapEditor.tilesets.removeTileset')}>
-            <button
-              onClick={onDelete}
-              className="text-text-dim hover:text-danger text-body transition-colors px-1"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+            <Tooltip label={t("mapEditor.tilesets.removeTileset")}>
+              <button
+                onClick={onDelete}
+                className="text-text-dim hover:text-danger text-body transition-colors px-1"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </Tooltip>
           )}
         </div>
       </div>
-      {!isCollapsed && <div>
-        <canvas
-          ref={canvasRef}
-          className="cursor-crosshair"
-          style={{
-            width: '100%',
-            imageRendering: 'pixelated',
-            ...(isCompact ? { maxHeight: '48px', objectFit: 'contain' as const } : {}),
-          }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-        />
-      </div>}
+      {!isCollapsed && (
+        <div>
+          <canvas
+            ref={canvasRef}
+            className="cursor-crosshair"
+            style={{
+              width: "100%",
+              imageRendering: "pixelated",
+              ...(isCompact ? { maxHeight: "48px", objectFit: "contain" as const } : {}),
+            }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -377,9 +393,14 @@ export default function TilePalette({
       {/* Header */}
       {!hideHeader && (
         <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
-          <span className="text-title text-text">{t('mapEditor.tilesets.title')}</span>
-          <Button variant="ghost" size="sm" onClick={onImportTileset} title={t('mapEditor.tilesets.importTooltip')}>
-            {t('mapEditor.tilesets.importButton')}
+          <span className="text-title text-text">{t("mapEditor.tilesets.title")}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onImportTileset}
+            title={t("mapEditor.tilesets.importTooltip")}
+          >
+            {t("mapEditor.tilesets.importButton")}
           </Button>
         </div>
       )}
@@ -390,7 +411,7 @@ export default function TilePalette({
       <div className="px-2 py-2">
         {tilesets.length === 0 && (
           <p className="text-caption text-text-dim text-center py-8">
-            {t('mapEditor.tilesets.noTilesets')}
+            {t("mapEditor.tilesets.noTilesets")}
           </p>
         )}
         {tilesets.map((info) => (
@@ -414,7 +435,11 @@ export default function TilePalette({
               }
             }}
             onDrop={() => {
-              if (dragFromFirstgid != null && dragFromFirstgid !== info.firstgid && onReorderTileset) {
+              if (
+                dragFromFirstgid != null &&
+                dragFromFirstgid !== info.firstgid &&
+                onReorderTileset
+              ) {
                 onReorderTileset(dragFromFirstgid, info.firstgid);
               }
               setDragFromFirstgid(null);

@@ -27,11 +27,14 @@ export default function Tab({ tabs, activeKey, onChange, className = "" }: TabPr
             onClick={() => onChange(tab.key)}
             className={`
               flex-1 py-1.5 text-caption text-center flex items-center justify-center gap-1
-              ${isActive
-                ? "text-primary-light border-b-2 border-primary-light font-bold"
-                : "text-text-muted"
+              ${
+                isActive
+                  ? "text-primary-light border-b-2 border-primary-light font-bold"
+                  : "text-text-muted"
               }
-            `.trim().replace(/\s+/g, " ")}
+            `
+              .trim()
+              .replace(/\s+/g, " ")}
           >
             {tab.icon && <span className="w-3.5 h-3.5">{tab.icon}</span>}
             {tab.label}

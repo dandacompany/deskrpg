@@ -70,7 +70,8 @@ export abstract class CliBaseAdapter implements NpcAdapter {
       fullResponse = result.fullOutput;
     }
 
-    const sessionRef = this.extractSessionId(result.fullOutput) || existingRef || crypto.randomUUID();
+    const sessionRef =
+      this.extractSessionId(result.fullOutput) || existingRef || crypto.randomUUID();
     sessionStore.set(sessionKey, sessionRef);
 
     return {

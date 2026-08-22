@@ -24,13 +24,10 @@ test.describe("맵 채팅", () => {
 
     // 사람 메시지 1건 + NPC 2건 = 최소 3건이 늘어야 한다.
     await expect
-      .poll(
-        async () => (await page.locator("[data-chat-bubble]").count()) - before,
-        {
-          timeout: 150_000,
-          intervals: [2000],
-        },
-      )
+      .poll(async () => (await page.locator("[data-chat-bubble]").count()) - before, {
+        timeout: 150_000,
+        intervals: [2000],
+      })
       .toBeGreaterThanOrEqual(3);
 
     // 이번 전송으로 새로 생긴 NPC 말풍선 전체(이번에 몇 번 말했든)를 모아 두 NPC 이름이
