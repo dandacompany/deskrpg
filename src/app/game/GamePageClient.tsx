@@ -268,6 +268,12 @@ function GamePageInner() {
   const npcGreetings = useRef<Map<string, string>>(new Map());
   const npcMessagesRef = useRef<NpcChatMessage[]>([]);
   const pendingNpcReportsRef = useRef<Map<string, PendingNpcReport>>(new Map());
+  /**
+   * 맵 채팅 지명 때문에 걸어오는 중인 NPC 들. 도착했을 때 1:1 대화창을 **열지 않기**
+   * 위해서다 — 대답은 맵 채팅에 나오는데 대화창이 뜨면 그 채팅을 가려 버린다.
+   * 컨텍스트 메뉴로 부른 경우(자동으로 대화창을 여는 기존 동작)와는 다른 사건이다.
+   */
+  const mapChatWalkersRef = useRef<Set<string>>(new Set());
   const consumedNpcReportIdsRef = useRef<Set<string>>(new Set());
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -639,10 +645,13 @@ function GamePageInner() {
       });
 
       // NPC movement socket events — relay to GameScene via EventBus
-      socketInstance.on("npc:come-to-player", (data: { npcId: string; targetPlayerId: string }) => {
+      socketInstance.on("npc:come-to-player", (data: { npcId: string; targetPlayerId: string; reason?: string }) => {
         setNpcCallers(prev => ({ ...prev, [data.npcId]: data.targetPlayerId }));
         // Only the caller runs local A* pathfinding; other clients follow npc:position-sync
         if (socketInstance && data.targetPlayerId === socketInstance.id) {
+          // 표시는 도착 시점에 정해지지만 사유는 지금만 알 수 있다. 근거리면 아래 emit 이
+          // 그 자리에서 도착까지 진행하므로, 반드시 emit 앞에서 기록해야 한다.
+          if (data.reason === "map-chat") mapChatWalkersRef.current.add(data.npcId);
           EventBus.emit("npc:call-to-player", { npcId: data.npcId });
         }
       });
@@ -955,8 +964,11 @@ function GamePageInner() {
       if (data.reportId) {
         return;
       }
+      // 맵 채팅으로 부른 NPC 는 맵 채팅에서 대답한다 — 여기서 1:1 대화창을 열면 그 대답이
+      // 보이는 패널을 덮어 버린다.
+      const fromMapChat = mapChatWalkersRef.current.delete(data.npcId);
       // Auto-open dialog when NPC arrives — preserve existing messages (don't resetDialog)
-      if (data.npcName) {
+      if (data.npcName && !fromMapChat) {
         const nextDialogNpc = { npcId: data.npcId, npcName: data.npcName };
         dialogNpcRef.current = nextDialogNpc;
         setDialogNpc(nextDialogNpc);
@@ -970,6 +982,7 @@ function GamePageInner() {
       }
     };
     const handleMovementReturned = (data: { npcId: string }) => {
+      mapChatWalkersRef.current.delete(data.npcId);
       setNpcMoveStates(prev => ({ ...prev, [data.npcId]: "idle" }));
       setNpcCallers(prev => { const next = { ...prev }; delete next[data.npcId]; return next; });
     };

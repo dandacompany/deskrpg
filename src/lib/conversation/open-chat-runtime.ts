@@ -17,7 +17,11 @@ const UNUSED_TOPIC = "__open_chat_topic_should_never_be_read__";
 const UNUSED_MAX_TURNS = -1;
 
 export type OpenChatCallbacks = {
-  onTurnStart?: (npcId: string, displayName: string) => void;
+  /**
+   * 턴이 열렸다. `callerSocketId` 는 **이 사슬을 시작한 사람의 소켓 id** 다 — NPC 가
+   * 누구 곁으로 걸어갈지를 정하는 값이라, NPC 가 NPC 를 부른 턴도 같은 값을 쓴다.
+   */
+  onTurnStart?: (npcId: string, displayName: string, callerSocketId: string | null) => void;
   onTurnChunk?: (npcId: string, chunk: string) => void;
   onTurnEnd?: (npcId: string, fullResponse: string, meta?: { aborted: true; reason: string }) => void;
   /** 지명받았으나 게이트웨이가 죽어 건너뛴 NPC. 회의의 같은 이름 콜백과 짝이다. */
@@ -42,6 +46,11 @@ export class OpenChatRuntime {
   private readonly quota: ChatQuota;
   /** 지금 말하는 중인 NPC. 한 NPC 는 한 번에 한 마디 — 사슬의 두 번째 브레이크다. */
   private readonly speaking = new Set<string>();
+  /**
+   * 이 채널에서 마지막으로 NPC 를 부른 사람의 소켓 id. 런타임은 채널당 하나이고 여러 사람이
+   * 번갈아 부르므로 생성 시점에 박아 둘 수 없다 — 사람이 말할 때마다 갱신한다.
+   */
+  private currentCallerSocketId: string | null = null;
 
   constructor(deps: OpenChatDeps, callbacks: OpenChatCallbacks) {
     this.deps = deps;
@@ -71,8 +80,9 @@ export class OpenChatRuntime {
   }
 
   /** 사람이 말했다. 예산을 채우고, 지명된 NPC 들을 동시에 깨운다. */
-  async handleHumanMessage(senderName: string, text: string): Promise<void> {
+  async handleHumanMessage(senderName: string, text: string, callerSocketId: string | null = null): Promise<void> {
     this.quota.resetByHuman();
+    this.currentCallerSocketId = callerSocketId;
     const targets = parseAllMentions(text, this.participantsView(), null);
     await this.dispatch(targets, senderName, /* fromHuman */ true);
   }
@@ -110,7 +120,7 @@ export class OpenChatRuntime {
     if (!runtime) return;
 
     this.speaking.add(npcId);
-    this.callbacks.onTurnStart?.(npcId, runtime.displayName);
+    this.callbacks.onTurnStart?.(npcId, runtime.displayName, this.currentCallerSocketId);
 
     const others = this.deps.participants
       .filter((p) => p.npcId !== npcId)

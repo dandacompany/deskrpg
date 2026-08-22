@@ -699,9 +699,15 @@ async function createOpenChat(io: Server, channelId: string, userId: string): Pr
       turnTimeout: { idleMs: 180_000, maxMs: 600_000 },
     },
     {
-      onTurnStart: (npcId) => {
+      onTurnStart: (npcId, _displayName, callerSocketId) => {
         // 걷기와 말하기가 동시에 시작된다 — 도착을 기다리지 않는다.
-        io.to(channelId).emit("npc:come-to-player", { npcId, targetPlayerId: null });
+        // targetPlayerId 가 진짜 소켓 id 여야 한다: 클라이언트는 이 값이 자기 id 일 때만 A* 를
+        // 돌린다(GamePageClient 의 npc:come-to-player 리스너). null 을 실으면 아무도 걷지 않고,
+        // 게다가 모든 클라이언트의 npcCallers 를 null 로 덮어써 "돌려보내기"까지 망가진다.
+        if (!callerSocketId) return;
+        // reason: 클라이언트가 도착했을 때 1:1 대화창을 열지 말지를 이 값으로 가른다
+        // (컨텍스트 메뉴 호출은 열고, 맵 채팅 지명은 열지 않는다).
+        io.to(channelId).emit("npc:come-to-player", { npcId, targetPlayerId: callerSocketId, reason: "map-chat" });
       },
       // onTurnChunk 는 넘기지 않는다: 맵 채팅 클라이언트는 chat:message(완성본)만 듣고,
       // 스트리밍 버블을 그릴 리스너가 아직 없다(회의방 전용 meeting:npc-stream 뿐).
@@ -1381,7 +1387,7 @@ export function setupSocketHandlers(io: Server) {
         void (async () => {
           const runtime = await getOrCreateOpenChat(io, player.mapId, user.userId);
           if (!runtime) return;
-          await runtime.handleHumanMessage(chatMessage.sender, trimmed);
+          await runtime.handleHumanMessage(chatMessage.sender, trimmed, socket.id);
         })().catch((err) => console.error("[openchat] dispatch failed:", err));
       }
     });

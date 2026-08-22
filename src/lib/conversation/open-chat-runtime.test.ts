@@ -141,6 +141,39 @@ describe("OpenChatRuntime", () => {
     assert.equal(errors.length, 1);
   });
 
+  test("onTurnStart 는 호출자의 소켓 id 를 싣는다 — NPC 사슬도 같은 값", async () => {
+    // 이 값이 클라이언트의 A* 대상이다. null 이면 아무 클라이언트도 걷기를 시작하지 않는다.
+    const a = p("n1", "단비", always("@[하늘] 네 생각은?"));
+    const b = p("n2", "하늘", always("저는 좋아요"));
+    const starts: Array<[string, string | null]> = [];
+    const rt = new OpenChatRuntime(
+      { participants: [a, b], recent: () => [], turnTimeout: TIMEOUT },
+      { onTurnStart: (npcId, _name, callerSocketId) => starts.push([npcId, callerSocketId]) },
+    );
+
+    await rt.handleHumanMessage("지호", "@[단비] 시작해줘", "socket-abc");
+
+    assert.deepEqual(
+      starts,
+      [["n1", "socket-abc"], ["n2", "socket-abc"]],
+      "사슬을 시작한 사람이 여전히 걸어갈 대상이므로 NPC 가 부른 턴도 같은 소켓 id 를 쓴다",
+    );
+  });
+
+  test("호출자가 바뀌면 다음 턴부터 새 호출자에게 걸어간다", async () => {
+    const a = p("n1", "단비", always("네"));
+    const starts: Array<string | null> = [];
+    const rt = new OpenChatRuntime(
+      { participants: [a], recent: () => [], turnTimeout: TIMEOUT },
+      { onTurnStart: (_id, _name, callerSocketId) => starts.push(callerSocketId) },
+    );
+
+    await rt.handleHumanMessage("지호", "@[단비] 하나", "socket-a");
+    await rt.handleHumanMessage("소라", "@[단비] 둘", "socket-b");
+
+    assert.deepEqual(starts, ["socket-a", "socket-b"], "런타임은 채널당 하나라 호출자를 박아 두면 안 된다");
+  });
+
   test("지명이 없으면 아무도 깨지 않는다", async () => {
     const a = p("n1", "단비", always("네"));
     const spoke: string[] = [];
