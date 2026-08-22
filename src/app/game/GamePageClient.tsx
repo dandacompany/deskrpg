@@ -672,7 +672,12 @@ function GamePageInner() {
         if (socketInstance && data.targetPlayerId === socketInstance.id) {
           // 표시는 도착 시점에 정해지지만 사유는 지금만 알 수 있다. 근거리면 아래 emit 이
           // 그 자리에서 도착까지 진행하므로, 반드시 emit 앞에서 기록해야 한다.
+          // 컨텍스트 메뉴 호출(reason 없음)은 이전 맵 채팅 대기를 무효화한다. 지우지 않으면
+          // 그 NPC 가 도착했을 때 사용자가 방금 명시적으로 요청한 1:1 대화창이 삼켜진다 —
+          // GameScene 은 이미 걷고 있는 NPC 의 재호출을 조용히 무시하므로, 도착은 원래
+          // 걷기로 일어나고 항목은 그때까지 살아 있다.
           if (data.reason === "map-chat") mapChatWalkersRef.current.add(data.npcId);
+          else mapChatWalkersRef.current.delete(data.npcId);
           EventBus.emit("npc:call-to-player", { npcId: data.npcId });
         }
       });

@@ -149,3 +149,29 @@ test("socket-handlers never broadcasts meeting-only events to the map room", () 
     `맵 룸 브로드캐스트에 회의 전용 이벤트가 섞였습니다: ${leaked.join(", ")}`,
   );
 });
+
+// 위 가드는 **이름**만 본다. C1 은 이름이 멀쩡한 채로 죽어 있던 결함이었다 — 서버가
+// targetPlayerId: null 을 실었고, 클라이언트 조건(=== socket.id)이 어떤 소켓에서도 참이
+// 될 수 없었다. 그래서 그 두 끝을 각각 못박는다. 이 테스트가 없으면 C1 을 되돌리는
+// 한 줄짜리 뮤테이션이 684개 테스트를 전부 초록으로 통과한다(재리뷰에서 실측).
+test("npc:come-to-player always carries a real caller socket id", () => {
+  const src = readFileSync(path.join(repoRoot, "src/server/socket-handlers.ts"), "utf8");
+  const dead = [...src.matchAll(/emit\(\s*"npc:come-to-player"\s*,\s*\{([^}]*)\}/g)]
+    .filter((m) => /targetPlayerId\s*:\s*(null|undefined)/.test(m[1]))
+    .map((m) => m[1].trim());
+  assert.deepEqual(
+    dead,
+    [],
+    "npc:come-to-player 가 targetPlayerId 없이 나갑니다 — 클라이언트 조건이 "
+      + "어떤 소켓에서도 참이 되지 않아 NPC 가 걸어오지 않습니다(무음 실패).",
+  );
+});
+
+test("the map client still gates A* on being the caller", () => {
+  const client = readFileSync(path.join(repoRoot, "src/app/game/GamePageClient.tsx"), "utf8");
+  assert.ok(
+    /data\.targetPlayerId\s*===\s*socketInstance\.id/.test(client),
+    "npc:come-to-player 리스너가 호출자 판정을 잃었습니다 — 조건이 늘 거짓이면 아무도 "
+      + "경로탐색을 돌리지 않고, 늘 참이면 모든 클라이언트가 같은 NPC 를 각자 움직입니다.",
+  );
+});
