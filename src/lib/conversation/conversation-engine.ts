@@ -361,22 +361,22 @@ export class ConversationEngine {
         break;
       }
 
+      // pollResult !== null 일 때만, 그리고 그때는 내용과 무관하게 통지한다 — 폴링 참가자
+      // 전원의 어댑터가 실패하면 raises/passes 가 둘 다 빈 배열이 되지만, 그래도 폴링은
+      // 일어났다는 사실 자체를 클라이언트가 알아야 한다. all-passed/speaker 두 갈래가
+      // 같은 필드(decision.pollResult)를 쓰므로 kind 와 무관하게 갈래 앞으로 뺀다 — 한쪽만
+      // 고치다 다른 쪽에 남는 사고를 구조적으로 없앤다.
+      if (decision.pollResult) {
+        this.callbacks.onPollResult?.(decision.pollResult.raises, decision.pollResult.passes);
+      }
+
       if (decision.kind === "all-passed") {
-        // pollResult !== null 일 때만, 그리고 그때는 내용과 무관하게 통지한다 — 폴링 참가자
-        // 전원의 어댑터가 실패하면 raises/passes 가 둘 다 빈 배열이 되지만, 그래도 폴링은
-        // 일어났다는 사실 자체를 클라이언트가 알아야 한다.
-        if (decision.pollResult) {
-          this.callbacks.onPollResult?.(decision.pollResult.raises, decision.pollResult.passes);
-        }
         this.consecutivePasses++;
         if (this.consecutivePasses >= this.maxConsecutivePasses()) {
           this.endReason = "consecutive_passes";
           break;
         }
       } else {
-        if (decision.pollResult) {
-          this.callbacks.onPollResult?.(decision.pollResult.raises, decision.pollResult.passes);
-        }
         this.consecutivePasses = 0;
         const runtime = this.runtimes.get(decision.npcId);
         if (runtime) {
