@@ -206,10 +206,10 @@ export type ResolvedMeetingParticipant = {
  * 그 회의 동안 재사용 — 여러 회의가 공유하는 싱글턴으로 등록하지 않는다)을 지키기 위해, 이 함수는
  * 회의 시작 시점에 참가자별로 정확히 한 번만 호출된다.
  */
-export async function resolveMeetingParticipant(
+export async function resolveNpcAdapter(
   npc: MeetingNpcConfig,
   ctx: {
-    meetingId: string;
+    sessionScope: string;
     userId: string;
     adapterRegistry: AdapterRegistry;
     /** 테스트에서 DB·게이트웨이 없이 hermes 갈래를 관찰하기 위한 주입점. 기본값이 실제 배선이다. */
@@ -220,7 +220,7 @@ export async function resolveMeetingParticipant(
   const hermesProfileId = npc.hermesProfileId ?? null;
   const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
   const sessionKeyBase = npc.sessionKeyPrefix || npc.id;
-  const sessionKey = `${sessionKeyBase}-meeting-${ctx.meetingId}`;
+  const sessionKey = `${sessionKeyBase}-${ctx.sessionScope}`;
 
   const participantBase: MeetingBrokerParticipant = {
     npcId: npc.id,
@@ -265,8 +265,8 @@ export async function defaultCreateMeetingBroker(
   const excluded: ExcludedMeetingNpc[] = [];
 
   for (const npc of config.npcs) {
-    const result = await resolveMeetingParticipant(npc, {
-      meetingId: config.meetingId,
+    const result = await resolveNpcAdapter(npc, {
+      sessionScope: `meeting-${config.meetingId}`,
       userId: config.userId,
       adapterRegistry: config.adapterRegistry,
       createHermesAdapter: deps.createHermesAdapter,
@@ -463,8 +463,8 @@ export function registerMeetingDiscussionHandlers({
     // 는 어댑터를 담지 않는 조회용 뷰이므로(위 타입 주석 참조) 밖에서는 닿을 수 없고,
     // 요약 세션은 어차피 회의 세션과 분리되어야 한다 — 요약 프롬프트가 그 NPC 의 회의
     // 맥락에 섞이면 다음 회의 발언이 오염된다.
-    const summarizerResolution = await resolveMeetingParticipant(candidateNpcs[0], {
-      meetingId: `${meetingId}-summary`,
+    const summarizerResolution = await resolveNpcAdapter(candidateNpcs[0], {
+      sessionScope: `meeting-${meetingId}-summary`,
       userId: user.userId,
       adapterRegistry,
     });
