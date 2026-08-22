@@ -136,6 +136,8 @@ export class ChannelRuntime {
   /** "다음 발언자가 누구인가" 정책. 스펙 §6의 정책 교체점 — floor-controller.ts 참고. */
   private readonly floor: MeetingFloorController;
   private waitResolve: (() => void) | null = null;
+  /** 대기가 걸리기 전에 도착한 해제. 래치(불리언)이지 카운터가 아니다 — releaseWait 주석 참고. */
+  private pendingRelease = false;
   /** abortCurrentTurn 대상 — speak() 진행 중에만 채워진다. meeting-broker.js:_currentSessionKey/_currentAgentId. */
   private current: NpcRuntime | null = null;
 
@@ -253,6 +255,13 @@ export class ChannelRuntime {
    * 안전하게 조정했다. 관찰 가능한 타이밍/순서는 바뀌지 않는다).
    */
   private armWait(): Promise<void> {
+    // 대기를 걸기 전에 이미 해제가 도착했으면 그것을 소비하고 곧바로 통과시킨다.
+    // 이 래치가 없으면 releaseWait()가 waitResolve 를 못 찾고 조용히 버려지고, 뒤이어
+    // 걸린 대기는 아무도 깨우지 않아 회의가 멈춘 채로 남는다.
+    if (this.pendingRelease) {
+      this.pendingRelease = false;
+      return Promise.resolve();
+    }
     return new Promise((resolve) => {
       this.waitResolve = resolve;
     });
@@ -262,7 +271,12 @@ export class ChannelRuntime {
     if (this.waitResolve) {
       this.waitResolve();
       this.waitResolve = null;
+      return;
     }
+    // 아직 대기가 걸리지 않았다 — 버리지 말고 기억해 둔다. 카운터가 아니라 **래치**인
+    // 이유: 해제가 두 번 도착해도 대기 하나만 통과해야 한다. 세었다면 쌓인 해제가 이후
+    // 대기들을 연달아 통과시켜 manual 모드가 사실상 auto 처럼 돈다.
+    this.pendingRelease = true;
   }
 
   private clearAutoResumeTimer(): void {
@@ -318,12 +332,6 @@ export class ChannelRuntime {
       // 의존한다(그 틱이 생기면 push 가 armWait() 이전에 일어나 releaseWait()가 무효화된다).
       // 인박스가 비어 있지 않을 때는 이 최적화가 필요 없다 — 부여가 이미 쌓여 있으므로
       // 이번 틱이든 다음 틱이든 next()가 그것을 집어간다.
-      if (this.runMode === "directed" && this.inbox.pendingCount() === 0) {
-        const waiting = this.armWait();
-        this.callbacks.onWaitingInput?.(null);
-        await waiting;
-        continue;
-      }
 
       const decision = await this.floor.next({
         participants: this.participantsView(),

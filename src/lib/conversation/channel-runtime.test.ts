@@ -1270,3 +1270,68 @@ describe("실패한 턴도 말풍선을 닫는다", () => {
     assert.equal(ends[0].reason, "adapter_error");
   });
 });
+
+describe("대기가 걸리기 전에 도착한 해제도 유실되지 않는다", () => {
+  // releaseWait()는 waitResolve가 null이면 조용히 버렸다. 대기가 걸리기 **전에** 도착한
+  // 해제는 사라지고, 뒤이어 걸린 대기는 아무도 깨우지 않는다 — 회의가 멈춘다.
+  //
+  // 실제로 이 창이 열린 적이 있다: MeetingFloorController.next()를 async로 만들자
+  // await가 강제하는 마이크로태스크 한 틱 동안 directSpeak()가 끼어들었고, 그때는
+  // "directed이고 인박스가 비었으면 next()를 건너뛴다"는 특례로 그 경로만 동기로
+  // 되돌려 막았다. 이 테스트는 그 특례가 아니라 대기 원시형 자체를 고정한다.
+
+  test("run() 시작과 같은 동기 구간에서 지목해도 그 지목이 처리된다", { timeout: 5000 }, async () => {
+    const a = participant("a", ["PASS", "..."]);
+    const b = participant("b", ["PASS", "김치찌개요"]);
+    const spoke: string[] = [];
+    const engine = new ChannelRuntime(
+      { mode: "meeting", topic: "T", participants: [a, b], initialRunMode: "directed",
+        quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 4, maxTurnsPerAgent: 20 },
+        now: () => 0 },
+      { onTurnStart: (npcId: string) => spoke.push(npcId) },
+    );
+
+    // run()을 await하지 않고 **같은 동기 구간에서** 곧바로 지목한다. run()은 아직
+    // armWait()에 도달하지 못했으므로 releaseWait()는 걸린 대기를 찾지 못한다.
+    const running = engine.run();
+    engine.directSpeak("b");
+
+    await new Promise((r) => setTimeout(r, 60));
+    engine.stop();
+    await running;
+
+    assert.deepEqual(spoke, ["b"], `동기 구간의 지목이 유실됐습니다. 실제: ${JSON.stringify(spoke)}`);
+  });
+
+  test("해제가 두 번 도착해도 대기 하나만 통과시킨다", { timeout: 5000 }, async () => {
+    // 기억이 래치가 아니라 **카운터**가 되면 쌓인 해제가 이후 대기들을 연달아 통과시켜
+    // manual 모드가 사실상 auto 처럼 돈다. 대기 하나에 해제 하나여야 한다.
+    //
+    // 판별 근거(실측): run() 을 await 하지 않고 같은 동기 구간에서 nextTurn() 을 두 번 부르면
+    // 래치는 2턴, 카운터는 3턴이 돈다 — 두 번째 해제가 뒤이은 대기까지 삼키기 때문이다.
+    // mockAdapter 는 폴링과 발언이 대본 큐를 공유해 두 번째 라운드부터 PASS 로 읽힌다 —
+    // 그러면 턴이 더 안 돌아 래치와 카운터의 차이가 드러나지 않는다. 계속 손드는 목을 쓴다.
+    const a = participant("a", [], { adapter: alwaysRaisesAndSpeaks(["발언"]) });
+    const turns: string[] = [];
+    const engine = new ChannelRuntime(
+      { mode: "meeting", topic: "T", participants: [a], initialRunMode: "manual",
+        quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 20, maxTurnsPerAgent: 20 },
+        now: () => 0 },
+      { onTurnStart: (npcId: string) => turns.push(npcId) },
+    );
+
+    const running = engine.run();
+    engine.nextTurn();
+    engine.nextTurn(); // 두 번째는 삼켜져야 한다
+
+    await new Promise((r) => setTimeout(r, 80));
+    engine.stop();
+    await running;
+
+    assert.equal(
+      turns.length,
+      2,
+      `해제 두 번이 대기 두 번을 통과시켰습니다(카운터 의미). 실제 턴 수: ${turns.length}`,
+    );
+  });
+});
