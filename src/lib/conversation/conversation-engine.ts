@@ -141,8 +141,12 @@ export class ConversationEngine {
 
   private running = false;
   private consecutivePasses = 0;
-  /** 연속으로 실패한 턴 수. 성공한 턴 하나로 0으로 돌아간다. */
-  private consecutiveFailures = 0;
+  /**
+   * NPC 별 연속 실패 횟수. 예전에는 엔진 전역이라 NPC 하나의 백엔드가 죽으면
+   * 3연속 실패로 회의 전체가 끝났다. NPC 가 자기 예산을 소유하면 고장난 쪽만
+   * 후보에서 빠지고 나머지는 계속한다.
+   */
+  private consecutiveFailures = new Map<string, number>();
   private endReason: EngineEndReason | null = null;
   private lastSpeakerId: string | null = null;
   private userMessageQueue: Array<{ userName: string; content: string }> = [];
@@ -313,7 +317,7 @@ export class ConversationEngine {
     this.running = true;
     this.endReason = null;
     // 이전 run()이 남긴 실패 카운터를 물려받으면 두 번째 run()은 예산 3이 아니라 1로 시작한다.
-    this.consecutiveFailures = 0;
+    this.consecutiveFailures.clear();
 
     while (this.running && !this.isFinished()) {
       // 1. 커맨드 큐 비우기(setMode)
@@ -334,7 +338,6 @@ export class ConversationEngine {
         const engineSpeaker = this.findParticipant(directNpcId);
         if (engineSpeaker) {
           await this.speak(engineSpeaker);
-          if (this.failureBudgetExhausted()) break;
         }
         if (this.runMode !== "auto") {
           const waiting = this.armWait();
@@ -358,10 +361,14 @@ export class ConversationEngine {
       // 5. auto/manual 공통 — 후보 산출 → (필요 시) 폴링 → 발언. meeting-broker.js:114-157 이식.
       const candidates = eligibleParticipants(
         this.participantsView(),
-        (npcId) => this.remainingTurns(npcId),
+        (npcId) => (this.isBurnedOut(npcId) ? 0 : this.remainingTurns(npcId)),
       );
       if (candidates.length === 0) {
-        this.endReason = "no_candidates";
+        // 왜 아무도 없는가를 구분한다. 전원이 실패 예산을 소진한 것과, 다들 할당량을
+        // 다 쓴 것은 운영상 전혀 다른 상황이다 — 전자는 백엔드가 죽었다는 뜻이다.
+        const seated = this.config.participants.filter((p) => p.seated);
+        const allBurnedOut = seated.length > 0 && seated.every((p) => this.isBurnedOut(p.npcId));
+        this.endReason = allBurnedOut ? "consecutive_failures" : "no_candidates";
         break;
       }
 
@@ -394,8 +401,7 @@ export class ConversationEngine {
         if (engineSpeaker) {
           await this.speak(engineSpeaker);
           // 실패한 턴은 트랜스크립트에 아무것도 남기지 않아 다른 어떤 종료 조건도 전진시키지
-          // 못한다 — 연속 실패 한도가 유일한 브레이크다(peer/group/meeting 모두 적용).
-          if (this.failureBudgetExhausted()) break;
+          // 못한다 — 소진된 NPC 는 다음 루프의 후보 필터에서 빠진다(peer/group/meeting 모두 적용).
         }
       }
 
@@ -422,11 +428,21 @@ export class ConversationEngine {
     this.callbacks.onEnd?.(this.transcript.all(), this.resolveEndReason());
   }
 
-  /** 연속 실패 한도에 도달했으면 종료 사유를 기록하고 true를 돌려준다. */
-  private failureBudgetExhausted(): boolean {
-    if (this.consecutiveFailures < MAX_CONSECUTIVE_FAILURES) return false;
-    this.endReason = "consecutive_failures";
-    return true;
+  private failureCount(npcId: string): number {
+    return this.consecutiveFailures.get(npcId) ?? 0;
+  }
+
+  private noteFailure(npcId: string): void {
+    this.consecutiveFailures.set(npcId, this.failureCount(npcId) + 1);
+  }
+
+  private noteSuccess(npcId: string): void {
+    this.consecutiveFailures.delete(npcId);
+  }
+
+  /** 이 NPC 가 실패 예산을 소진했는가. 소진한 NPC 는 후보에서 빠진다. */
+  private isBurnedOut(npcId: string): boolean {
+    return this.failureCount(npcId) >= MAX_CONSECUTIVE_FAILURES;
   }
 
   private resolveEndReason(): EngineEndReason {
@@ -622,7 +638,7 @@ export class ConversationEngine {
         );
 
         if (mention.text) {
-          this.consecutiveFailures = 0;
+          this.noteSuccess(participant.npcId);
           this.transcript.add(participant.npcId, participant.displayName, mention.text, this.now());
           this.lastSpeakerId = participant.npcId;
           this.callbacks.onTurnEnd?.(participant.npcId, mention.text);
@@ -632,7 +648,7 @@ export class ConversationEngine {
           // 말도, 트랜스크립트에 남길 발언도 없다. 아래 catch-all과 동일하게 "쓸 만한 텍스트가
           // 하나도 없는 턴"으로 취급해 실패 카운터만 올리고 transcript.add/onTurnEnd는 건너뛴다
           // (빈 턴이 maxTotalTurns를 소비하거나 화면에 빈 말풍선을 남기지 않도록).
-          this.consecutiveFailures++;
+          this.noteFailure(participant.npcId);
         }
 
         // directSpeak() 메서드를 부르지 않는다 — 그쪽은 사용자 지목용이라
@@ -648,12 +664,12 @@ export class ConversationEngine {
         // consecutivePasses 중 무엇도 전진하지 않는다. 여기서 카운터를 리셋해버리면 예외를
         // 던지는 어댑터에만 브레이크가 걸리고, 빈 응답을 돌려주는 어댑터는 그대로 무한 루프다
         // (프로덕션은 cooldownMs가 1000이라 바쁜 루프가 아니라 "끝나지 않는 회의"로 나타난다).
-        this.consecutiveFailures++;
+        this.noteFailure(participant.npcId);
       }
     } catch (err) {
       this.currentSessionKey = null;
       this.currentAdapter = null;
-      this.consecutiveFailures++;
+      this.noteFailure(participant.npcId);
       this.callbacks.onError?.(err, participant.npcId);
       if (timedOutKind) {
         // 타임아웃으로 끊은 턴도 반드시 닫아준다 — onError만 보내면 클라이언트의 스트리밍

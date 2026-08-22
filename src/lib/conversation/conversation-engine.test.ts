@@ -23,6 +23,45 @@ function mockAdapter(replies: string[]): NpcAdapter & { calls: AdapterExecuteOpt
   };
 }
 
+/** 폴링에는 항상 손을 들고, 실제 발언에서는 항상 터지는 목. 실패 격리 검증용. */
+function alwaysFailsToSpeak(): NpcAdapter {
+  return {
+    type: "mock",
+    async execute(options: AdapterExecuteOptions) {
+      if (options.sessionKey.endsWith("-poll")) {
+        return { response: "SPEAK: 말할래요", session: { sessionRef: options.sessionKey } };
+      }
+      throw new Error("backend down");
+    },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
+  };
+}
+
+/**
+ * 폴링에는 항상 손을 들고, 실제 발언은 대본을 순서대로 내놓는 목. mockAdapter와 달리
+ * 폴링 호출이 대본 큐를 소비하지 않는다 — 다른 참가자가 계속 이기는 회의에서는 매 라운드
+ * 폴링만 여러 번 일어나고 실제 발언은 드물게 일어나므로, 큐를 공유하면(mockAdapter처럼)
+ * 실제로 말하기도 전에 대본이 바닥나 "SPEAK:" 신호를 잃는다. 실패 격리 검증용.
+ */
+function alwaysRaisesAndSpeaks(replies: string[]): NpcAdapter {
+  const queue = [...replies];
+  return {
+    type: "mock",
+    async execute(options: AdapterExecuteOptions) {
+      if (options.sessionKey.endsWith("-poll")) {
+        return { response: "SPEAK: 계속 말할래요", session: { sessionRef: options.sessionKey } };
+      }
+      const text = queue.length > 1 ? queue.shift()! : queue[0];
+      return { response: text, session: { sessionRef: options.sessionKey } };
+    },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
+  };
+}
+
 function participant(npcId: string, replies: string[], over: Partial<EngineParticipant> = {}): EngineParticipant {
   return {
     npcId, displayName: npcId, seated: true, turnCount: 0, lastSpokeAt: 0,
@@ -120,15 +159,19 @@ describe("ConversationEngine — 연속 실패 예산", () => {
     };
   }
 
-  test("peer 모드에서 모든 턴이 실패하면 무한 루프 대신 연속 실패 한도에서 끝난다", { timeout: 5000 }, async () => {
+  test("peer 모드에서 모든 턴이 실패하면 무한 루프 대신 전원이 예산을 소진하고 끝난다", { timeout: 5000 }, async () => {
     // 수정 전에는 실패한 턴이 트랜스크립트에 아무것도 남기지 않아 maxTotalTurns가 전진하지
     // 못했고, peer는 폴링이 없어 consecutivePasses도 오르지 않는다 — 루프가 영영 돌았다.
     // 하드 가드: 회귀 시 CI가 매달리는 대신 이 단언에서 빠르게 실패한다.
+    //
+    // 실패 예산이 엔진 전역이던 시절엔 "합쳐서 3회"였다. 지금은 참가자마다 예산 3을 따로
+    // 가지므로, 2명이 각자 소진할 때까지 총 6회(참가자 수 × MAX_CONSECUTIVE_FAILURES) 실패해야
+    // 끝난다 — 실측으로 확인했다(하드 가드 임계값 10은 6보다 넉넉히 남겨 그대로 둔다).
     const errors: string[] = [];
     let endReason: string | null = null;
     const engine = new ConversationEngine(
       { mode: "peer", topic: "T", participants: [alwaysThrows("a"), alwaysThrows("b")],
-        quota: { cooldownMs: 0, maxTotalTurns: 3, maxTurnsPerAgent: 20 } },
+        quota: { cooldownMs: 0, maxTotalTurns: 99, maxTurnsPerAgent: 20 } },
       {
         onError: (err: unknown) => {
           errors.push(String(err));
@@ -139,13 +182,14 @@ describe("ConversationEngine — 연속 실패 예산", () => {
     );
     await engine.run();
 
-    assert.equal(errors.length, 3, `연속 3회 실패에서 멈춰야 한다(실측: ${errors.length}회)`);
+    assert.equal(errors.length, 6, `참가자 2명 × 예산 3 = 6회 실패 후 멈춰야 한다(실측: ${errors.length}회)`);
     assert.equal(endReason, "consecutive_failures", "종료 사유가 다른 종료와 구분되어야 한다");
   });
 
-  test("빈 응답만 돌려주는 어댑터도(예외를 던지지 않아도) 루프를 끝낸다", { timeout: 5000 }, async () => {
+  test("빈 응답만 돌려주는 어댑터도(예외를 던지지 않아도) 전원 예산 소진으로 루프를 끝낸다", { timeout: 5000 }, async () => {
     // 정상 resolve + 쓸 만한 텍스트 없음 = 트랜스크립트에 아무것도 안 남는다. 예외 경로에만
     // 브레이크를 걸면 이 경로는 그대로 무한 루프였다(리뷰 실측: maxTotalTurns 3에 20회 이상).
+    // 위 테스트와 같은 이유로 기대치는 참가자 2명 × 예산 3 = 6이다(실측으로 확인).
     function silent(npcId: string): EngineParticipant {
       return {
         npcId, displayName: npcId, seated: true, turnCount: 0, lastSpokeAt: 0,
@@ -163,35 +207,36 @@ describe("ConversationEngine — 연속 실패 예산", () => {
     let endReason: string | null = null;
     const engine = new ConversationEngine(
       { mode: "peer", topic: "T", participants: [silent("a"), silent("b")],
-        quota: { cooldownMs: 0, maxTotalTurns: 3, maxTurnsPerAgent: 20 } },
+        quota: { cooldownMs: 0, maxTotalTurns: 99, maxTurnsPerAgent: 20 } },
       {
         onTurnStart: () => {
           turnStarts++;
-          if (turnStarts > 10) engine.stop(); // 하드 가드 — 회귀 시 매달리지 않고 여기서 깨진다
+          if (turnStarts > 20) engine.stop(); // 하드 가드 — 회귀 시 매달리지 않고 여기서 깨진다
         },
         onEnd: (_turns: unknown, reason: string) => { endReason = reason; },
       },
     );
     await engine.run();
 
-    assert.equal(turnStarts, 3, `빈 응답 3회에서 멈춰야 한다(실측: ${turnStarts}회)`);
+    assert.equal(turnStarts, 6, `참가자 2명 × 예산 3 = 6회에서 멈춰야 한다(실측: ${turnStarts}회)`);
     assert.equal(endReason, "consecutive_failures");
   });
 
   test("run()을 다시 부르면 실패 예산이 초기화된다", { timeout: 5000 }, async () => {
     // 이전 run()의 카운터가 남아 있으면 두 번째 run()은 첫 실패에서 바로 끝난다.
+    // 참가자 2명 × 예산 3 = 6(위 테스트와 동일한 이유로 실측 확인).
     let errors = 0;
     const engine = new ConversationEngine(
       { mode: "peer", topic: "T", participants: [alwaysThrows("a"), alwaysThrows("b")],
-        quota: { cooldownMs: 0, maxTotalTurns: 3, maxTurnsPerAgent: 20 } },
-      { onError: () => { errors++; if (errors > 10) engine.stop(); } }, // 하드 가드
+        quota: { cooldownMs: 0, maxTotalTurns: 99, maxTurnsPerAgent: 20 } },
+      { onError: () => { errors++; if (errors > 20) engine.stop(); } }, // 하드 가드
     );
     await engine.run();
-    assert.equal(errors, 3);
+    assert.equal(errors, 6);
 
     errors = 0;
     await engine.run();
-    assert.equal(errors, 3, `두 번째 run()도 예산 3으로 시작해야 한다(실측: ${errors}회)`);
+    assert.equal(errors, 6, `두 번째 run()도 예산 3(참가자 2명분 6)으로 시작해야 한다(실측: ${errors}회)`);
   });
 
   test("성공한 턴 하나가 연속 실패 카운터를 되돌린다", { timeout: 5000 }, async () => {
@@ -844,5 +889,83 @@ describe("빈 본문 멘션은 실패 턴으로 처리하되 지목은 살린다
     await engine.run();
 
     assert.deepEqual(spoken, ["b"], "본문이 비어 실패 처리되어도 멘션은 커맨드 큐에 반영돼야 한다");
+  });
+});
+
+describe("실패 예산은 NPC 마다 따로다", () => {
+  test("한 NPC 가 계속 실패해도 나머지가 회의를 이어간다", async () => {
+    const a = participant("a", [], { adapter: alwaysFailsToSpeak() });
+    const b = participant("b", [], { adapter: alwaysRaisesAndSpeaks(["저도요", "김치찌개요"]) });
+
+    let turns: Array<{ speakerId: string }> = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "점심",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 20, maxTotalTurns: 3, cooldownMs: 0 },
+        now: () => 0,
+      },
+      { onEnd: (all: Array<{ speakerId: string }>) => { turns = all; } },
+    );
+
+    await engine.run();
+
+    // a 는 예산 3 을 소진하고 후보에서 빠진다. 그 뒤로 b 가 maxTotalTurns 를 채운다.
+    assert.equal(turns.length, 3, `a 의 실패가 회의를 죽이면 안 된다. 턴: ${JSON.stringify(turns)}`);
+    assert.ok(
+      turns.every((t) => t.speakerId === "b"),
+      `발언은 전부 b 여야 한다. 실제: ${JSON.stringify(turns.map((t) => t.speakerId))}`,
+    );
+  });
+
+  test("전원이 실패 예산을 소진하면 consecutive_failures 로 끝난다(운영자에게 no_candidates와 구분해 보인다)", async () => {
+    const a = participant("a", [], { adapter: alwaysFailsToSpeak() });
+    const b = participant("b", [], { adapter: alwaysFailsToSpeak() });
+
+    let reason: string | null = null;
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "점심",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 20, maxTotalTurns: 99, cooldownMs: 0 },
+        now: () => 0,
+      },
+      { onEnd: (_all, endReason: string) => { reason = endReason; } },
+    );
+
+    await engine.run();
+
+    // 후보가 0이 되는 두 경로(전원 소진 vs 전원 할당량 소진)를 같은 no_candidates로 뭉치면
+    // 운영자가 "백엔드가 다 죽었다"를 "정상적으로 회의가 끝났다"로 오독한다.
+    assert.equal(reason, "consecutive_failures");
+  });
+
+  test("전원이 발언 할당량(remainingTurns)을 소진하면 no_candidates 로 끝난다(예산 소진과 구분)", async () => {
+    // maxTurnsPerAgent를 1로 좁혀 둘 다 정상적으로 한 번씩 말하고 할당량을 다 쓰게 만든다 —
+    // 실패는 전혀 없으므로 isBurnedOut은 항상 false다. 후보가 0이 되는 원인이 실패 예산이
+    // 아니라 순수 할당량이면 no_candidates 여야 한다.
+    // alwaysRaisesAndSpeaks를 쓰는 이유: mockAdapter는 폴링과 실제 발언이 대본 큐를 공유해서,
+    // 공정성 동률로 a가 먼저 뽑히는 동안 b가 반복 폴링만 당하면 b의 SPEAK 신호가 발언 전에
+    // 소진된다(위 "한 NPC 가 계속 실패해도..." 테스트에서 발견한 것과 같은 함정).
+    const a = participant("a", [], { adapter: alwaysRaisesAndSpeaks(["제 의견"]) });
+    const b = participant("b", [], { adapter: alwaysRaisesAndSpeaks(["제 의견도"]) });
+
+    let reason: string | null = null;
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "점심",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 1, maxTotalTurns: 99, cooldownMs: 0 },
+        now: () => 0,
+      },
+      { onEnd: (_all, endReason: string) => { reason = endReason; } },
+    );
+
+    await engine.run();
+
+    assert.equal(reason, "no_candidates");
   });
 });
