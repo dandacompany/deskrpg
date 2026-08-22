@@ -640,15 +640,15 @@ describe("멘션이 다음 발언권을 정한다", () => {
   });
 });
 
-describe("drainCommands — 사용자 지목이 멘션을 무음으로 덮어쓰지 않는다", () => {
-  test("사용자 지목과 멘션이 같은 드레인에 함께 있으면 사용자가 이긴다", async () => {
+describe("발언권 인박스 — 사용자 지목이 멘션을 밀어내지 않는다", () => {
+  test("사용자 지목이 먼저 말하고, 멘션은 그 뒤에 남아 말한다", async () => {
     // a가 발언을 끝내며 b를 멘션한다. 하지만 그 발언이 끝나는 순간(onTurnEnd) 사용자가
     // UI에서 c를 지목한다고 가정한다 — speak()는 onTurnEnd를 먼저 부르고 멘션 커맨드는
-    // 그 뒤에 큐에 넣으므로, 콜백에서 동기적으로 directSpeak()를 호출하면 큐에는
-    // [user:c, mention:b] 순서로 쌓인다. "마지막 것이 이긴다"만으로 드레인하면 멘션(b)이
-    // 채택되어 사용자가 고른 c가 무음으로 사라진다 — 그게 이 테스트가 막는 회귀다.
+    // 그 뒤에 큐에 넣으므로, 콜백에서 동기적으로 directSpeak()를 호출하면 인박스에는
+    // [user:c, mention:b] 순서로 쌓인다. 사용자 지목이 먼저 나가고, 멘션은 버려지지 않고
+    // 그 뒤에 남아 나간다 — 그게 이 테스트가 지키는 새 동작이다.
     const a = participant("a", ["SPEAK: 의견 있어요", "TO: b\n의견 부탁해요"]);
-    const b = participant("b", ["PASS"]);
+    const b = participant("b", ["PASS", "알겠습니다"]);
     const c = participant("c", ["PASS", "알겠습니다"]);
 
     const spoken: string[] = [];
@@ -657,7 +657,7 @@ describe("drainCommands — 사용자 지목이 멘션을 무음으로 덮어쓰
         mode: "meeting",
         topic: "T",
         participants: [a, b, c],
-        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 2, cooldownMs: 0 },
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 3, cooldownMs: 0 },
       },
       {
         onTurnEnd: (npcId: string) => {
@@ -669,10 +669,37 @@ describe("drainCommands — 사용자 지목이 멘션을 무음으로 덮어쓰
 
     await engine.run();
 
-    assert.deepEqual(spoken, ["a", "c"], "멘션(b)이 아니라 사용자가 지목한 c가 다음에 말해야 한다");
-    assert.equal(
-      (b.adapter as unknown as { calls: unknown[] }).calls.length, 1,
-      "b는 폴링 1회만 불리고 멘션으로는 선택되지 않아야 한다",
+    assert.deepEqual(
+      spoken,
+      ["a", "c", "b"],
+      "사용자가 지목한 c 가 먼저, 멘션된 b 가 그 뒤에 말해야 한다",
+    );
+  });
+
+  test("멘션 사슬이 순서대로 전부 처리된다 — 하나도 버려지지 않는다", async () => {
+    // a 가 한 번의 발언에서 b 를 지목하고, b 가 발언하며 c 를 지목한다.
+    // 예전 단일 슬롯에서는 이 사슬 중 하나만 살아남았다.
+    const a = participant("a", ["SPEAK: 의견 있어요", "TO: b\n먼저 b 의견 부탁해요"]);
+    const b = participant("b", ["PASS", "TO: c\n저는 이렇게 봅니다"]);
+    const c = participant("c", ["PASS", "저도 동의합니다"]);
+
+    const spoke: string[] = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "T",
+        participants: [a, b, c],
+        quota: { maxTurnsPerAgent: 5, maxTotalTurns: 3, cooldownMs: 0 },
+      },
+      { onTurnStart: (npcId) => spoke.push(npcId) },
+    );
+
+    await engine.run();
+
+    assert.deepEqual(
+      spoke,
+      ["a", "b", "c"],
+      `지목 사슬이 순서대로 이어져야 합니다. 실제: ${JSON.stringify(spoke)}`,
     );
   });
 

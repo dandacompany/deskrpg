@@ -9,6 +9,7 @@ import type { NpcAdapter } from "@/lib/adapters/types";
 import { parseMention } from "./mention";
 import { Transcript, USER_SPEAKER_ID, type Turn } from "./transcript";
 import { createTurnTimeout, type TurnTimeoutConfig } from "./turn-timeout";
+import { FloorInbox } from "./inbox";
 import {
   eligibleParticipants,
   needsPolling,
@@ -151,9 +152,9 @@ export class ConversationEngine {
   private readonly hybridMode: boolean;
   private readonly hybridAutoResumeMs: number | null;
   private autoResumeTimer: ReturnType<typeof setTimeout> | null = null;
-  private commandQueue: Array<
-    { type: "setMode"; mode: string } | { type: "directSpeak"; npcId: string; source: "user" | "mention" }
-  > = [];
+  private commandQueue: Array<{ type: "setMode"; mode: string }> = [];
+  /** 발언권 부여 대기열. 예전 단일 슬롯을 대체한다 — 지목이 더는 무음으로 사라지지 않는다. */
+  private readonly inbox = new FloorInbox();
   private waitResolve: (() => void) | null = null;
   /** abortCurrentTurn 대상 — speak() 진행 중에만 채워진다. meeting-broker.js:_currentSessionKey/_currentAgentId. */
   private currentSessionKey: string | null = null;
@@ -220,7 +221,7 @@ export class ConversationEngine {
    * (meeting-broker.js의 run()이 agent를 못 찾을 때와 동일한 무음 실패 — 고치지 않는다).
    */
   directSpeak(npcId: string): void {
-    this.commandQueue.push({ type: "directSpeak", npcId, source: "user" });
+    this.inbox.push(npcId, "user");
     this.abortCurrentTurn();
     if (this.hybridMode && this.runMode === "auto") {
       this.runMode = "manual";
@@ -263,35 +264,32 @@ export class ConversationEngine {
   }
 
   /**
-   * meeting-broker.js:259-279 이식.
+   * setMode 커맨드만 소비한다. 발언권 부여는 FloorInbox 가 따로 들고 있다.
    *
-   * 큐에 여러 directSpeak가 섞여 있을 수 있다 — 사용자가 UI에서 지목한 것과, NPC가 발언 중
-   * 멘션으로 다음 지목을 남긴 것. 사용자 지목은 abortCurrentTurn()으로 진행 중인 턴을 끊으려
-   * 시도하지만 adapter.abort는 선택적이고 비동기라 못 먹을 수 있다 — 그러면 원래 턴이 정상
-   * 종료하며 멘션을 나중에 push하고, "마지막 것이 이긴다"만으로는 사용자 지목이 무음으로
-   * 덮인다. 그래서 한 번의 드레인에서 사용자 지목이 하나라도 있으면 그것을(마지막 것을) 채택하고,
-   * 없을 때만 멘션(마지막 것을) 채택한다.
+   * 예전에는 여기서 부여도 함께 드레인하면서 "하나만 살아남는" 슬롯 역할을 했다.
+   * 그 구조에서는 지목이 로그도 없이 버려졌다 — 이제 인박스가 순서대로 보관한다.
    */
-  private drainCommands(): { directNpcId: string | null } {
-    let lastUserNpcId: string | null = null;
-    let lastMentionNpcId: string | null = null;
+  private drainCommands(): void {
     let modeChanged = false;
     while (this.commandQueue.length > 0) {
       const cmd = this.commandQueue.shift()!;
       if (cmd.type === "setMode") {
         this.runMode = cmd.mode as RunMode;
         modeChanged = true;
-      } else if (cmd.type === "directSpeak") {
-        if (cmd.source === "user") {
-          lastUserNpcId = cmd.npcId;
-        } else {
-          lastMentionNpcId = cmd.npcId;
-        }
-        this.clearAutoResumeTimer();
       }
     }
     if (modeChanged) this.callbacks.onModeChanged?.(this.runMode, "user");
-    return { directNpcId: lastUserNpcId ?? lastMentionNpcId };
+  }
+
+  /**
+   * 다음 발언자를 인박스에서 꺼낸다. 이번 단계에서는 자격 검사를 하지 않는다 —
+   * 쿼터 게이트는 Task 4 에서 켠다.
+   */
+  private takeGrant(): string | null {
+    return this.inbox.take(
+      () => true,
+      () => {},
+    );
   }
 
   async run(): Promise<void> {
@@ -301,8 +299,8 @@ export class ConversationEngine {
     this.consecutiveFailures = 0;
 
     while (this.running && !this.isFinished()) {
-      // 1. 커맨드 큐 비우기(setMode/directSpeak) — meeting-broker.js:84 이식
-      const { directNpcId } = this.drainCommands();
+      // 1. 커맨드 큐 비우기(setMode)
+      this.drainCommands();
 
       // 2. 사용자 메시지 큐 비우기
       while (this.userMessageQueue.length > 0) {
@@ -311,8 +309,10 @@ export class ConversationEngine {
         this.consecutivePasses = 0;
       }
 
-      // 3. 지정 발언(directSpeak) — 어느 runMode에서든 최우선 처리된다. meeting-broker.js:93-111 이식.
-      //    보존된 결함: npcId를 참가자 목록에서 못 찾으면 조용히 아무도 발언하지 않는다(위 directSpeak 참고).
+      // 3. 지정 발언 — 어느 runMode 에서든 최우선. 인박스가 사용자 지목을 먼저,
+      //    그다음 멘션을 FIFO 로 내놓는다.
+      //    보존된 결함: npcId 를 참가자 목록에서 못 찾으면 조용히 아무도 발언하지 않는다.
+      const directNpcId = this.takeGrant();
       if (directNpcId !== null) {
         const engineSpeaker = this.findParticipant(directNpcId);
         if (engineSpeaker) {
@@ -620,10 +620,10 @@ export class ConversationEngine {
 
         // directSpeak() 메서드를 부르지 않는다 — 그쪽은 사용자 지목용이라
         // abortCurrentTurn() 으로 진행 중인 턴을 끊고 hybridMode 를 manual 로 승격시킨다.
-        // 멘션은 발언이 끝난 뒤의 힌트일 뿐이므로 큐에만 넣는다. 본문이 비어 실패로 처리되는
-        // 경우에도 지목 자체는 유효한 의사표시이므로 큐에는 넣는다(본문은 버리되 지목은 반영).
+        // 멘션은 발언이 끝난 뒤의 힌트일 뿐이므로 인박스에만 넣는다. 본문이 비어 실패로
+        // 처리되는 경우에도 지목 자체는 유효한 의사표시이므로 넣는다.
         if (mention.npcId) {
-          this.commandQueue.push({ type: "directSpeak", npcId: mention.npcId, source: "mention" });
+          this.inbox.push(mention.npcId, "mention");
         }
       } else {
         // 정상적으로 resolve했지만 쓸 만한 텍스트가 하나도 없는 턴은, 루프 입장에서는 실패한
