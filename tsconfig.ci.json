@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    "assets",
+    "public",
+    "scripts/local",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.test.js"
+  ]
+}
