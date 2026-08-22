@@ -471,6 +471,52 @@ describe("ConversationEngine — 컨트롤 서페이스: setMode / nextTurn / di
     },
   );
 
+  test(
+    "hybridMode: 자동 복귀 타이머가 걸린 도중 directSpeak을 받으면 타이머가 취소된다(회귀)",
+    { timeout: 5000 },
+    async () => {
+      // waitCount1에서 nextTurn()으로 재개-대기 타이머를 건다. 그 타이머가 만료되기 전,
+      // waitCount2에서 directSpeak("b")를 호출한다 — 예전 drainCommands는 이 커맨드를 다음
+      // 드레인에서 소비하며 clearAutoResumeTimer()를 불렀지만, FloorInbox로 갈아끼운 뒤에는
+      // 그 취소 호출이 사라져 타이머가 그대로 살아남았다(이번 라운드에서 고친 회귀).
+      // stop()을 hybridAutoResumeMs보다 한참 뒤에 호출해, 고쳐지지 않았다면 그 사이에
+      // 타이머가 만료돼 onModeChanged("auto", ...)가 뜰 시간을 충분히 준다.
+      const a = participant("a", ["PASS"]);
+      const b = participant("b", ["PASS", "안녕하세요"]);
+      const modeChanges: Array<[string, string]> = [];
+      const spoken: string[] = [];
+      let waitCount = 0;
+      let stopScheduled = false;
+      const engine = new ConversationEngine(
+        { mode: "meeting", topic: "T", participants: [a, b], initialRunMode: "manual",
+          hybridMode: true, hybridAutoResumeMs: 20,
+          quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 } },
+        {
+          onModeChanged: (mode: string, source: string) => modeChanges.push([mode, source]),
+          onTurnEnd: (npcId: string) => spoken.push(npcId),
+          onWaitingInput: () => {
+            waitCount++;
+            if (waitCount === 1) {
+              engine.nextTurn(); // 재개-대기 타이머를 건다
+            } else if (waitCount === 2) {
+              engine.directSpeak("b"); // 타이머 만료 전에 지목 — 타이머가 취소돼야 한다
+            } else if (!stopScheduled) {
+              stopScheduled = true;
+              setTimeout(() => engine.stop(), 60); // hybridAutoResumeMs(20)보다 한참 뒤
+            }
+          },
+        },
+      );
+      await engine.run();
+
+      assert.deepEqual(spoken, ["b"], "지목된 b가 발언해야 한다");
+      assert.ok(
+        !modeChanges.some(([mode]) => mode === "auto"),
+        `directSpeak으로 지목한 뒤에는 자동 복귀 타이머가 취소돼 auto로 전환되면 안 된다. 실제: ${JSON.stringify(modeChanges)}`,
+      );
+    },
+  );
+
   test("발언자가 없을 때 abortCurrentTurn은 아무 일도 하지 않는다", () => {
     const a = participant("a", ["PASS"]);
     const engine = new ConversationEngine(

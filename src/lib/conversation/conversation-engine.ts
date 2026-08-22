@@ -219,10 +219,18 @@ export class ConversationEngine {
    * 보존된 결함: npcId가 참가자 목록에 없어도 여기서는 검증하지 않는다. run()이 다음 루프에서
    * 그 npcId로 참가자를 찾다가 실패하면 조용히 아무도 발언하지 않고 대기로 돌아간다
    * (meeting-broker.js의 run()이 agent를 못 찾을 때와 동일한 무음 실패 — 고치지 않는다).
+   *
+   * setMode()처럼 clearAutoResumeTimer()를 호출 즉시 부른다(드레인을 기다리지 않는다).
+   * manual 대기가 풀릴 때마다 run()이 무조건 새 자동 복귀 타이머를 재장전하므로(위 run() 5번
+   * 참고), 여기서 미리 지우지 않으면 이전 타이머의 핸들을 그 새 타이머가 덮어써 이전 타이머가
+   * 필드 참조를 잃은 채 고아로 계속 돌다가, 뒤이어 사용자가 만든 개입과 무관하게 만료되어
+   * auto로 튄다(takeGrant()가 발언권을 소비할 때 거는 clearAutoResumeTimer()만으로는 이 경합을
+   * 못 막는다 — 그 시점엔 이미 새 타이머로 필드가 덮인 뒤다).
    */
   directSpeak(npcId: string): void {
     this.inbox.push(npcId, "user");
     this.abortCurrentTurn();
+    this.clearAutoResumeTimer();
     if (this.hybridMode && this.runMode === "auto") {
       this.runMode = "manual";
       this.callbacks.onModeChanged?.("manual", "system");
@@ -284,12 +292,21 @@ export class ConversationEngine {
   /**
    * 다음 발언자를 인박스에서 꺼낸다. 이번 단계에서는 자격 검사를 하지 않는다 —
    * 쿼터 게이트는 Task 4 에서 켠다.
+   *
+   * 무언가를 실제로 꺼낼 때는 clearAutoResumeTimer()를 함께 부른다. 예전
+   * drainCommands는 directSpeak 커맨드를 소비할 때 이걸 불렀다 — hybrid 모드에서
+   * manual 대기 중 자동 복귀 타이머가 걸려 있어도, 발언권 부여가 실제로 처리되면
+   * 그 타이머는 더 이상 유효하지 않다(사용자가 손을 뗀 게 아니라 이미 개입했으므로).
+   * 여기서 취소하지 않으면 지목 처리 도중에도 타이머가 살아남아 만료 시
+   * setMode("auto")가 사용자 조작과 무관하게 발화한다.
    */
   private takeGrant(): string | null {
-    return this.inbox.take(
+    const npcId = this.inbox.take(
       () => true,
       () => {},
     );
+    if (npcId !== null) this.clearAutoResumeTimer();
+    return npcId;
   }
 
   async run(): Promise<void> {
