@@ -118,3 +118,34 @@ test("socket-handlers extraction regex captures multi-line socket.on() registrat
       + "이 파일의 다른 어서션들도 신뢰할 수 없습니다 — 정규식부터 고치세요.",
   );
 });
+
+// 이 브랜치의 서명 결함 가드: 자유채팅 서버가 쏘는 이벤트에 맵 클라이언트 리스너가 있는가.
+//
+// C1 이 정확히 이 모양이었다 — 서버는 npc:come-to-player 를 쐈지만 클라이언트 리스너의
+// 조건(targetPlayerId === socket.id)이 절대 참이 될 수 없어 아무도 반응하지 않았다.
+// 이름이 있어도 소비자가 없으면 검증할 수 없는 죽은 배선이므로, 이름 존재만이라도 묶어 둔다.
+test("map chat events emitted by the server have a listener in the map client", () => {
+  const client = readFileSync(path.join(repoRoot, "src/app/game/GamePageClient.tsx"), "utf8");
+  for (const event of ["npc:come-to-player", "chat:mention-skipped", "chat:npc-aborted"]) {
+    assert.ok(
+      client.includes(`socketInstance.on("${event}"`),
+      `서버가 ${event} 를 쏘지만 맵 클라이언트에 리스너가 없습니다 — 죽은 배선입니다.`,
+    );
+  }
+});
+
+// 회의 전용 이벤트를 맵 룸으로 재사용하면 회의 중인 사람의 트랜스크립트에 남의 맵 사건이
+// 삽입된다(회의 참가자는 맵 룸을 떠나지 않는다).
+test("socket-handlers never broadcasts meeting-only events to the map room", () => {
+  const src = readFileSync(path.join(repoRoot, "src/server/socket-handlers.ts"), "utf8");
+  // 회의 전용 이벤트 자체는 정상이다 — 문제는 **어느 방으로** 쏘느냐다. 회의 룸
+  // (`meeting-<id>`)이 아닌 방으로 나가는 meeting:* 만 잡는다.
+  const leaked = [...src.matchAll(/\.to\(([^)]*)\)\s*\.emit\(\s*"(meeting:[^"]+)"/g)]
+    .filter((m) => !m[1].includes("meeting-"))
+    .map((m) => `${m[2]} → ${m[1]}`);
+  assert.deepEqual(
+    leaked,
+    [],
+    `맵 룸 브로드캐스트에 회의 전용 이벤트가 섞였습니다: ${leaked.join(", ")}`,
+  );
+});

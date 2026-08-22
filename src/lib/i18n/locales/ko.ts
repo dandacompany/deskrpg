@@ -1334,6 +1334,7 @@ const ko: Record<string, string> = {
   "chat.responding": "응답 중...",
   "chat.newConversation": "새 대화",
   "chat.disconnected": "연결 끊김",
+  "chat.npcNoResponse": "{name}님이 응답하지 못했습니다.",
   "chat.attachFile": "파일 첨부",
   "chat.removeFile": "파일 제거",
   "about.title": "About DeskRPG",

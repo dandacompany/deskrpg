@@ -713,8 +713,17 @@ async function createOpenChat(io: Server, channelId: string, userId: string): Pr
       // 스트리밍 버블을 그릴 리스너가 아직 없다(회의방 전용 meeting:npc-stream 뿐).
       // 소비자 없는 이벤트를 새로 만들면 검증할 수 없는 죽은 배선만 늘어난다.
       onTurnEnd: (npcId, fullResponse, meta) => {
-        if (meta?.aborted || !fullResponse) return;
         const npc = participants.find((x) => x.npcId === npcId);
+        if (meta?.aborted || !fullResponse) {
+          // 맵에는 스트리밍 말풍선이 없어서 실패가 곧 무음이다 — 사용자는 자기 말풍선 하나만
+          // 보고 끝난다. 회의방의 meeting:turn-aborted 에 해당하는 자유채팅 신호를 하나 쏜다.
+          io.to(channelId).emit("chat:npc-aborted", {
+            npcId,
+            npcName: npc?.displayName || npcId,
+            reason: meta?.reason || "empty_response",
+          });
+          return;
+        }
         const chatMessage: ChannelChatMessage = {
           id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           sender: npc?.displayName || npcId,
@@ -729,7 +738,10 @@ async function createOpenChat(io: Server, channelId: string, userId: string): Pr
       },
       onMentionSkipped: (npcId, reason) => {
         const npc = participants.find((x) => x.npcId === npcId);
-        io.to(channelId).emit("meeting:mention-skipped", {
+        // 회의 전용 이름(meeting:mention-skipped)을 쓰면 맵 룸 방송이 회의 중인 사람의
+        // MeetingRoom 리스너에 걸려 진행 중인 트랜스크립트에 남의 맵 사건이 삽입된다
+        // (회의 참가자는 맵 룸을 떠나지 않는다).
+        io.to(channelId).emit("chat:mention-skipped", {
           npcId,
           npcName: npc?.displayName || npcId,
           reason,
