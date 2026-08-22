@@ -13,6 +13,7 @@ import { useLocale, useT } from "@/lib/i18n";
 import { ChevronDown, ChevronUp, Pause, Play } from "lucide-react";
 import { buildSpeechBubblePreview } from "./meeting-room/speech-preview";
 import { appendMeetingMessage } from "./meeting-room/message-state";
+import { mentionSkipI18nKey } from "./meeting-room/mention-skip-notice";
 import { formatPollRaises, type PollRaiseItem } from "./meeting-room/poll-status";
 import { clampMeetingSidebarWidth } from "./meeting-room/responsive";
 import { computeMeetingTopicRows } from "./meeting-room/start-form";
@@ -521,10 +522,8 @@ export default function MeetingRoom({
       npcName: string;
       reason: "quota_exhausted" | "backend_failing";
     }) => {
-      const i18nKey =
-        data.reason === "backend_failing"
-          ? "meeting.mentionSkipped.backendFailing"
-          : "meeting.mentionSkipped.quotaExhausted";
+      // 삼항이 아니라 표에서 고른다 — 사유가 늘 때 컴파일러가 막아 준다(mention-skip-notice.ts).
+      const i18nKey = mentionSkipI18nKey(data.reason);
       const infoMsg: MeetingMessage = {
         id: `mention-skipped-${Date.now()}-${data.npcId}`,
         sender: tRef.current("meeting.systemSender"),
