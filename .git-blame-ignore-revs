@@ -1,0 +1,6 @@
+# 대규모 포매팅 커밋 — blame 에서 건너뛴다.
+# 로컬 적용: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub 은 이 파일을 자동으로 인식한다)
+
+# style: format the codebase with prettier
+11cb90a7df1e8bab5b66ec966c706f931e0fefb8
