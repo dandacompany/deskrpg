@@ -72,3 +72,6 @@ deploy/pre-deploy-checklist.md
 /test-results/
 /playwright-report/
 /blob-report/
+
+# remember 플러그인 런타임 로그·pid — 저장소 산출물이 아니다
+.remember/
