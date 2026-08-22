@@ -53,8 +53,11 @@ export type NpcRuntimeDeps = {
 
 export type SpeakOutcome =
   | { kind: "spoke"; text: string; mentionNpcId: string | null }
-  | { kind: "empty"; mentionNpcId: string | null }
-  | { kind: "error"; error: unknown; timedOut: { kind: string; partialText: string } | null };
+  // partialText: 스트리밍으로 이미 화면에 나간 텍스트. 실패한 턴에도 실어 보내는 이유는
+  // 클라이언트의 말풍선이 onTurnEnd 없이는 닫히지 않기 때문이다 — 닫을 때 화면에 남은
+  // 것과 같은 내용을 넘겨야 확정된 말풍선이 스트리밍 중과 달라 보이지 않는다.
+  | { kind: "empty"; mentionNpcId: string | null; partialText: string }
+  | { kind: "error"; error: unknown; partialText: string; timedOut: { kind: string } | null };
 
 export class NpcRuntime {
   readonly npcId: string;
@@ -209,17 +212,18 @@ export class NpcRuntime {
         // 말도, 트랜스크립트에 남길 발언도 없다. 아래 catch-all과 동일하게 "쓸 만한 텍스트가
         // 하나도 없는 턴"으로 취급한다. 다만 지목 자체는 유효한 의사표시이므로 mentionNpcId는
         // 그대로 돌려준다(엔진이 인박스에 넣는다).
-        return { kind: "empty", mentionNpcId: mention.npcId };
+        return { kind: "empty", mentionNpcId: mention.npcId, partialText: emittedText };
       }
       // 정상적으로 resolve했지만 쓸 만한 텍스트가 하나도 없는 턴은, 루프 입장에서는 실패한
       // 턴이다 — 트랜스크립트에 아무것도 안 실리므로 maxTotalTurns·remainingTurns·
       // consecutivePasses 중 무엇도 전진하지 않는다.
-      return { kind: "empty", mentionNpcId: null };
+      return { kind: "empty", mentionNpcId: null, partialText: emittedText };
     } catch (err) {
       return {
         kind: "error",
         error: err,
-        timedOut: timedOutKind ? { kind: timedOutKind, partialText: emittedText } : null,
+        partialText: emittedText,
+        timedOut: timedOutKind ? { kind: timedOutKind } : null,
       };
     }
   }

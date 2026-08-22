@@ -904,14 +904,19 @@ describe("빈 본문 멘션은 실패 턴으로 처리하되 지목은 살린다
         quota: { maxTurnsPerAgent: 5, maxTotalTurns: 1, cooldownMs: 0 },
       },
       {
-        onTurnEnd: (npcId: string) => spoken.push(npcId),
+        // onTurnEnd 는 이제 "발언했다"와 "말풍선을 닫았다" 둘 다를 뜻한다 — 실패한 턴도
+        // 닫아야 클라이언트 말풍선이 열린 채 남지 않기 때문이다. 여기서 보려는 것은
+        // 앞쪽이므로 중단 표시가 붙은 호출은 걸러낸다.
+        onTurnEnd: (npcId: string, _text: string, meta?: { aborted: true }) => {
+          if (!meta?.aborted) spoken.push(npcId);
+        },
         onEnd: (all: Array<{ speakerId: string; content: string }>) => { turns = all; },
       },
     );
 
     await engine.run();
 
-    assert.deepEqual(spoken, ["b"], "본문 없는 a의 턴은 onTurnEnd를 트리거하지 않아야 한다");
+    assert.deepEqual(spoken, ["b"], "본문 없는 a의 턴은 발언으로 집계되면 안 된다");
     assert.equal(turns.length, 1, "트랜스크립트에는 빈 턴이 쌓이면 안 된다");
     assert.equal(turns[0].speakerId, "b");
   });
@@ -928,12 +933,16 @@ describe("빈 본문 멘션은 실패 턴으로 처리하되 지목은 살린다
         participants: [a, b],
         quota: { maxTurnsPerAgent: 5, maxTotalTurns: 1, cooldownMs: 0 },
       },
-      { onTurnEnd: (npcId: string) => spoken.push(npcId) },
+      {
+        onTurnEnd: (npcId: string, _text: string, meta?: { aborted: true }) => {
+          if (!meta?.aborted) spoken.push(npcId);
+        },
+      },
     );
 
     await engine.run();
 
-    assert.deepEqual(spoken, ["b"], "본문이 비어 실패 처리되어도 멘션은 커맨드 큐에 반영돼야 한다");
+    assert.deepEqual(spoken, ["b"], "본문이 비어 실패 처리되어도 멘션은 인박스에 반영돼야 한다");
   });
 });
 
@@ -1153,5 +1162,111 @@ describe("멘션은 쿼터를 존중하고, 건너뛴 지목을 알린다", () =
     await running;
 
     assert.deepEqual(spoke, ["b"], "사용자 지목은 할당량 0 이어도 발언해야 한다");
+  });
+});
+
+describe("실패한 턴도 말풍선을 닫는다", () => {
+  // 클라이언트의 스트리밍 말풍선은 onTurnEnd 가 만드는 done:true 로만 닫힌다
+  // (meeting-discussion.ts 가 MEETING_NPC_STREAM_EVENT 를 done:true 로 방출하고,
+  // MeetingRoom 의 handleNpcStream 이 그때 버퍼를 확정하며 setCurrentSpeaker(null) 도 푼다).
+  // 예전에는 다섯 갈래 중 성공과 타임아웃 둘만 onTurnEnd 를 불러, 빈 응답과 평범한 에러에서는
+  // 말풍선이 열린 채 남고 "발언 중" 표시도 풀리지 않았다.
+
+  /** 정상 resolve 하지만 쓸 만한 텍스트가 하나도 없는 목. */
+  function silent(): NpcAdapter {
+    return {
+      type: "mock",
+      async execute(options: AdapterExecuteOptions) {
+        if (options.sessionKey.endsWith("-poll")) {
+          return { response: "SPEAK: 말할래요", session: { sessionRef: options.sessionKey } };
+        }
+        return { response: "", session: { sessionRef: options.sessionKey } };
+      },
+      async testConnection() { return { status: "ok" as const }; },
+    };
+  }
+
+  /** 폴링은 통과하고 발언에서 TO: 만 돌려주는 목 — 본문이 없다. */
+  function mentionOnly(target: string): NpcAdapter {
+    return {
+      type: "mock",
+      async execute(options: AdapterExecuteOptions) {
+        if (options.sessionKey.endsWith("-poll")) {
+          return { response: "SPEAK: 말할래요", session: { sessionRef: options.sessionKey } };
+        }
+        return { response: `TO: ${target}`, session: { sessionRef: options.sessionKey } };
+      },
+      async testConnection() { return { status: "ok" as const }; },
+    };
+  }
+
+  type EndCall = { npcId: string; text: string; reason: string | null };
+
+  function collectEnds(participants: EngineParticipant[], maxTotalTurns = 1) {
+    const ends: EndCall[] = [];
+    const engine = new ChannelRuntime(
+      { mode: "meeting", topic: "T", participants,
+        quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns, maxTurnsPerAgent: 20 },
+        now: () => 0 },
+      {
+        onTurnEnd: (npcId: string, text: string, meta?: { aborted: true; reason: string }) =>
+          ends.push({ npcId, text, reason: meta?.reason ?? null }),
+      },
+    );
+    return { engine, ends };
+  }
+
+  test("빈 응답만 돌려준 턴도 onTurnEnd 로 닫힌다", async () => {
+    const a = participant("a", [], { adapter: silent() });
+    const { engine, ends } = collectEnds([a]);
+    // 빈 응답은 트랜스크립트를 늘리지 않아 maxTotalTurns 로는 안 끝난다 — 실패 예산이 끝낸다.
+    await engine.run();
+
+    assert.ok(ends.length > 0, "빈 응답 턴에서 onTurnEnd 가 한 번도 불리지 않았습니다");
+    assert.equal(ends[0].reason, "empty_response");
+  });
+
+  test("TO: 만 있고 본문이 없는 턴도 닫히고, 지목은 그대로 살아난다", async () => {
+    const a = participant("a", [], { adapter: mentionOnly("b") });
+    const b = participant("b", ["PASS", "김치찌개요"]);
+    const spoke: string[] = [];
+    const ends: EndCall[] = [];
+    const engine = new ChannelRuntime(
+      { mode: "meeting", topic: "T", participants: [a, b],
+        quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 },
+        now: () => 0 },
+      {
+        onTurnStart: (npcId: string) => spoke.push(npcId),
+        onTurnEnd: (npcId: string, text: string, meta?: { aborted: true; reason: string }) =>
+          ends.push({ npcId, text, reason: meta?.reason ?? null }),
+      },
+    );
+    await engine.run();
+
+    const aEnd = ends.find((e) => e.npcId === "a");
+    assert.ok(aEnd, `a 의 턴이 닫히지 않았습니다. 실제: ${JSON.stringify(ends)}`);
+    assert.equal(aEnd!.reason, "empty_after_mention");
+    assert.ok(spoke.includes("b"), "본문이 비어도 지목은 살아 b 가 발언해야 합니다");
+  });
+
+  test("평범한 throw 도 onError 와 함께 말풍선을 닫는다", async () => {
+    const a = participant("a", [], { adapter: alwaysFailsToSpeak() });
+    const errors: string[] = [];
+    const ends: EndCall[] = [];
+    const engine = new ChannelRuntime(
+      { mode: "meeting", topic: "T", participants: [a],
+        quota: { maxConsecutivePasses: 50, cooldownMs: 0, maxTotalTurns: 1, maxTurnsPerAgent: 20 },
+        now: () => 0 },
+      {
+        onError: (err: unknown) => errors.push(String(err)),
+        onTurnEnd: (npcId: string, text: string, meta?: { aborted: true; reason: string }) =>
+          ends.push({ npcId, text, reason: meta?.reason ?? null }),
+      },
+    );
+    await engine.run();
+
+    assert.ok(errors.length > 0, "onError 가 불려야 합니다");
+    assert.ok(ends.length > 0, "throw 한 턴에서 onTurnEnd 가 한 번도 불리지 않았습니다");
+    assert.equal(ends[0].reason, "adapter_error");
   });
 });

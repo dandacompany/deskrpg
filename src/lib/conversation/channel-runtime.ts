@@ -42,8 +42,15 @@ export type EngineCallbacks = {
   onTurnStart?: (npcId: string, displayName: string) => void;
   onTurnChunk?: (npcId: string, chunk: string) => void;
   /** meta는 턴이 중단되어 끝났을 때만 실린다 — 그 경우 fullResponse는 그때까지 스트리밍된
-   * 부분 텍스트(없을 수도 있다)이며 트랜스크립트에는 기록되지 않는다. 중단이든 아니든 항상
-   * 호출되어야 클라이언트의 스트리밍 말풍선이 닫힌다. */
+   * 부분 텍스트(없을 수도 있다)이며 트랜스크립트에는 기록되지 않는다.
+   *
+   * **다섯 갈래 전부에서 호출된다** — 발언 성공, 지목만 남긴 턴, 빈 응답, 어댑터 예외,
+   * 타임아웃. 클라이언트의 스트리밍 말풍선은 이 콜백이 만드는 done:true 로만 닫히고
+   * 같은 신호가 "발언 중" 표시도 푼다. 예전에는 성공과 타임아웃 둘만 불러서, 빈 응답과
+   * 평범한 예외에서는 말풍선이 영영 열린 채 남았다.
+   *
+   * meta.reason 으로 갈래를 구분한다: `empty_after_mention`(지목만 남김) /
+   * `empty_response`(쓸 만한 텍스트 없음) / `adapter_error` / `timeout:<kind>`. */
   onTurnEnd?: (npcId: string, fullResponse: string, meta?: { aborted: true; reason: string }) => void;
   onEnd?: (turns: Turn[], reason: EngineEndReason) => void;
   onError?: (err: unknown, npcId: string) => void;
@@ -488,20 +495,25 @@ export class ChannelRuntime {
 
     if (outcome.kind === "empty") {
       // "TO: 이름"만 있고 본문이 없는 응답이거나, 쓸 만한 텍스트가 하나도 없는 턴이다.
-      // onTurnEnd 를 부르지 않는다 — 현행 동작 그대로다. 본문이 비어 실패로 처리되는
-      // 경우에도 지목 자체는 유효한 의사표시이므로 인박스에는 넣는다.
+      // 트랜스크립트에는 남기지 않지만 **말풍선은 닫아 준다** — 클라이언트의 스트리밍
+      // 말풍선은 onTurnEnd 가 만드는 done:true 로만 닫히고, 같은 신호가 "발언 중" 표시도
+      // 푼다. 두 사유를 구분하는 이유: 지목만 남긴 턴은 다음 발언자가 정해진 정상 흐름이고,
+      // 아무것도 못 만든 턴은 백엔드를 의심해야 하는 상황이다.
+      this.callbacks.onTurnEnd?.(runtime.npcId, outcome.partialText, {
+        aborted: true,
+        reason: outcome.mentionNpcId ? "empty_after_mention" : "empty_response",
+      });
+      // 본문이 비어 실패로 처리되는 경우에도 지목 자체는 유효한 의사표시다.
       if (outcome.mentionNpcId) this.inbox.push(outcome.mentionNpcId, "mention");
       return;
     }
 
     this.callbacks.onError?.(outcome.error, runtime.npcId);
-    if (outcome.timedOut) {
-      // 타임아웃으로 끊은 턴만 닫아준다 — onError 만 보내면 클라이언트의 스트리밍
-      // 말풍선(done:true 를 기다린다)이 영영 열린 채로 남는다.
-      this.callbacks.onTurnEnd?.(runtime.npcId, outcome.timedOut.partialText, {
-        aborted: true,
-        reason: `timeout:${outcome.timedOut.kind}`,
-      });
-    }
+    // 타임아웃이든 평범한 예외든 말풍선은 반드시 닫는다. 예전에는 타임아웃만 닫아서,
+    // 어댑터가 다른 이유로 터지면 onError 만 나가고 말풍선이 영영 열린 채 남았다.
+    this.callbacks.onTurnEnd?.(runtime.npcId, outcome.partialText, {
+      aborted: true,
+      reason: outcome.timedOut ? `timeout:${outcome.timedOut.kind}` : "adapter_error",
+    });
   }
 }
