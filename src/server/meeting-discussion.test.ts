@@ -4,6 +4,8 @@ import test from "node:test";
 import { AdapterRegistry } from "../lib/adapters/types";
 import {
   defaultCreateMeetingBroker,
+  meetingSessionScope,
+  meetingSummarySessionScope,
   registerMeetingDiscussionHandlers,
   resolveNpcAdapter,
   type MeetingBrokerLike,
@@ -375,4 +377,22 @@ test("resolution layer: 참가자의 role이 발언 프롬프트까지 전달된
   const speakPrompt = adapter.prompts.find((p) => p.includes("참석자"));
   assert.ok(speakPrompt, "발언 프롬프트가 있어야 한다");
   assert.match(speakPrompt!, /Cli\(Facilitator\)/);
+});
+
+// Hermes 세션은 `<prefix>-<scope>` 로 키가 잡힌다. 이 문자열이 바뀌면 그 NPC 의 대화
+// 맥락이 조용히 끊긴다 — 에러가 아니라 "어제 얘기를 기억 못 하는" 증상으로 나타나므로
+// 리터럴을 글자 그대로 붙들어 둔다. 실제로 요약 범위에서 `-meeting-` 이 빠진 적이 있다.
+test("회의 세션 범위는 meeting-<id> 다", () => {
+  assert.equal(meetingSessionScope("meet-1"), "meeting-meet-1");
+});
+
+test("요약자 세션 범위는 회의 범위 뒤에 -summary 를 붙인다", () => {
+  assert.equal(meetingSummarySessionScope("meet-1"), "meeting-meet-1-summary");
+});
+
+test("요약자 범위는 회의 범위와 절대 같지 않다", () => {
+  // 같으면 요약 프롬프트가 그 NPC 의 회의 맥락에 섞여 다음 회의 발언이 오염된다.
+  for (const id of ["meet-1", "a", "meet-1-summary"]) {
+    assert.notEqual(meetingSummarySessionScope(id), meetingSessionScope(id));
+  }
 });

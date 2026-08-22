@@ -213,6 +213,23 @@ export type ResolvedMeetingParticipant = {
  * 그 회의 동안 재사용 — 여러 회의가 공유하는 싱글턴으로 등록하지 않는다)을 지키기 위해, 이 함수는
  * 회의 시작 시점에 참가자별로 정확히 한 번만 호출된다.
  */
+/**
+ * 회의 세션 범위. Hermes 세션은 `<prefix>-<scope>` 로 키가 잡히므로 이 문자열이
+ * 바뀌면 그 NPC 의 대화 맥락이 끊긴다. 리터럴을 호출부에 흩어 두지 않는 이유는
+ * 실제로 한 번 어긋난 적이 있기 때문이다 — 요약 범위에서 `-meeting-` 이 빠졌다.
+ */
+export function meetingSessionScope(meetingId: string): string {
+  return `meeting-${meetingId}`;
+}
+
+/**
+ * 요약자 세션 범위. 회의 범위와 **반드시 달라야** 한다 — 같으면 요약 프롬프트가
+ * 그 NPC 의 회의 맥락에 섞여 다음 회의 발언이 오염된다.
+ */
+export function meetingSummarySessionScope(meetingId: string): string {
+  return `${meetingSessionScope(meetingId)}-summary`;
+}
+
 export async function resolveNpcAdapter(
   npc: MeetingNpcConfig,
   ctx: {
@@ -279,7 +296,7 @@ export async function defaultCreateMeetingBroker(
 
   for (const npc of config.npcs) {
     const result = await resolveNpcAdapter(npc, {
-      sessionScope: `meeting-${config.meetingId}`,
+      sessionScope: meetingSessionScope(config.meetingId),
       userId: config.userId,
       adapterRegistry: config.adapterRegistry,
       createHermesAdapter: deps.createHermesAdapter,
@@ -490,7 +507,7 @@ export function registerMeetingDiscussionHandlers({
     // 요약 세션은 어차피 회의 세션과 분리되어야 한다 — 요약 프롬프트가 그 NPC 의 회의
     // 맥락에 섞이면 다음 회의 발언이 오염된다.
     const summarizerResolution = await resolveNpcAdapter(candidateNpcs[0], {
-      sessionScope: `meeting-${meetingId}-summary`,
+      sessionScope: meetingSummarySessionScope(meetingId),
       userId: user.userId,
       adapterRegistry,
     });
