@@ -1395,7 +1395,7 @@ export function setupSocketHandlers(io: Server) {
       // NPC 는 지명받을 때만 깨어난다. 지명이 없으면 여기서 끝 — 맵에 NPC 가 열 명이어도
       // 조용하고, 비용도 호출한 만큼만 든다. (parseAllMentions 가 런타임 안에서 다시 정확히
       // 판정한다 — 이 정규식은 DB 조회·어댑터 해석을 건너뛰기 위한 최적화일 뿐이다.)
-      if (/@\[|^TO:/im.test(trimmed)) {
+      if (/@\[|^TO:/i.test(trimmed)) {
         void (async () => {
           const runtime = await getOrCreateOpenChat(io, player.mapId, user.userId);
           if (!runtime) return;

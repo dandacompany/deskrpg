@@ -120,22 +120,29 @@ export class OpenChatRuntime {
     if (!runtime) return;
 
     this.speaking.add(npcId);
-    this.callbacks.onTurnStart?.(npcId, runtime.displayName, this.currentCallerSocketId);
+    let outcome: Awaited<ReturnType<typeof runtime.speakWithPrompt>>;
+    try {
+      this.callbacks.onTurnStart?.(npcId, runtime.displayName, this.currentCallerSocketId);
 
-    const others = this.deps.participants
-      .filter((p) => p.npcId !== npcId)
-      .map((p) => ({ displayName: p.displayName, role: p.role || "동료" }));
-    const prompt = formatOpenChatMessage(
-      { displayName: runtime.displayName },
-      others,
-      this.deps.recent(),
-      calledBy,
-    );
+      const others = this.deps.participants
+        .filter((p) => p.npcId !== npcId)
+        .map((p) => ({ displayName: p.displayName, role: p.role || "동료" }));
+      const prompt = formatOpenChatMessage(
+        { displayName: runtime.displayName },
+        others,
+        this.deps.recent(),
+        calledBy,
+      );
 
-    const outcome = await runtime.speakWithPrompt(prompt, {
-      onChunk: (chunk) => this.callbacks.onTurnChunk?.(npcId, chunk),
-    });
-    this.speaking.delete(npcId);
+      outcome = await runtime.speakWithPrompt(prompt, {
+        onChunk: (chunk) => this.callbacks.onTurnChunk?.(npcId, chunk),
+      });
+    } finally {
+      // finally 인 이유: onTurnStart·recent() 는 호출부가 주입하는 남의 코드다. io.emit 이나
+      // 히스토리 조회가 한 번 던지면 이 NPC 는 이 채널에서 영구히 잠긴다 — 런타임이 프로세스
+      // 수명 동안 살기 때문이다.
+      this.speaking.delete(npcId);
+    }
 
     if (outcome.kind === "spoke") {
       this.callbacks.onTurnEnd?.(npcId, outcome.text);

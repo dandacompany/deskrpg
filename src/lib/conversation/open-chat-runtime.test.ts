@@ -141,6 +141,31 @@ describe("OpenChatRuntime", () => {
     assert.equal(errors.length, 1);
   });
 
+  test("소진된 NPC 를 지명하면 onMentionSkipped 만 부르고 말하지 않는다", async () => {
+    // 실패를 MAX_CONSECUTIVE_FAILURES(3)만큼 쌓아 실제로 burned out 상태를 만든다 —
+    // 내부 필드를 건드리지 않아야 "언젠가 이 분기로 들어온다"가 진짜로 고정된다.
+    const a = p("n1", "단비", throwing());
+    const starts: string[] = [];
+    const skipped: Array<[string, string]> = [];
+    const rt = new OpenChatRuntime(
+      { participants: [a], recent: () => [], turnTimeout: TIMEOUT },
+      {
+        onTurnStart: (npcId) => starts.push(npcId),
+        onMentionSkipped: (npcId, reason) => skipped.push([npcId, reason]),
+        onError: () => {},
+      },
+    );
+
+    for (let i = 0; i < 3; i++) await rt.handleHumanMessage("지호", "@[단비] 어때?");
+    assert.deepEqual(starts, ["n1", "n1", "n1"], "소진되기 전까지는 세 번 다 시도한다");
+    assert.deepEqual(skipped, [], "소진 전에는 건너뛰지 않는다");
+
+    await rt.handleHumanMessage("지호", "@[단비] 이번엔?");
+
+    assert.deepEqual(skipped, [["n1", "backend_failing"]], "소진된 NPC 는 사유와 함께 정확히 한 번 알린다");
+    assert.equal(starts.length, 3, "소진된 NPC 는 새 턴을 열지 않는다");
+  });
+
   test("onTurnStart 는 호출자의 소켓 id 를 싣는다 — NPC 사슬도 같은 값", async () => {
     // 이 값이 클라이언트의 A* 대상이다. null 이면 아무 클라이언트도 걷기를 시작하지 않는다.
     const a = p("n1", "단비", always("@[하늘] 네 생각은?"));
@@ -172,6 +197,25 @@ describe("OpenChatRuntime", () => {
     await rt.handleHumanMessage("소라", "@[단비] 둘", "socket-b");
 
     assert.deepEqual(starts, ["socket-a", "socket-b"], "런타임은 채널당 하나라 호출자를 박아 두면 안 된다");
+  });
+
+  test("onTurnStart 가 던져도 그 NPC 가 영구히 잠기지 않는다", async () => {
+    // io.emit 은 호출부가 주입하는 남의 코드다. 한 번 던졌다고 speaking 집합에 남으면
+    // 그 NPC 는 프로세스가 죽을 때까지 이 채널에서 말하지 못한다.
+    const a = p("n1", "단비", always("네"));
+    let boom = true;
+    const rt = new OpenChatRuntime(
+      { participants: [a], recent: () => [], turnTimeout: TIMEOUT },
+      {
+        onTurnStart: () => {
+          if (boom) { boom = false; throw new Error("emit failed"); }
+        },
+      },
+    );
+
+    await assert.rejects(() => rt.handleHumanMessage("지호", "@[단비] 하나", "socket-a"));
+
+    assert.equal(rt.isSpeaking("n1"), false, "실패한 턴 뒤에도 잠금이 풀려 있어야 한다");
   });
 
   test("지명이 없으면 아무도 깨지 않는다", async () => {
