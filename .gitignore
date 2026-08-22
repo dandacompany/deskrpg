@@ -45,7 +45,10 @@ next-env.d.ts
 
 # LPC spritesheet assets (downloaded via scripts/download-lpc-assets.sh)
 .superpowers/
-.github/
+# .github 은 개발 메타(.claude/.codex 등)와 함께 묶여 무시됐지만, workflows 는
+# 저장소 인프라다 — 원격에 파일이 없으면 CI 가 아예 돌지 않는다.
+.github/*
+!.github/workflows/
 .claude/
 .codex/
 scripts/local/

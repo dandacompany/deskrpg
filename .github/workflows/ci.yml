@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# 같은 브랜치에 새 푸시가 오면 이전 실행을 취소한다 — 오래된 결과를 기다릴 이유가 없다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # 실패해도 나머지를 계속 돌린다 — 한 번에 무엇이 깨졌는지 전부 보이는 편이
+      # "고치고 다시 밀고 다음 실패를 본다"를 반복하는 것보다 싸다.
+      - name: 단위 테스트
+        if: always()
+        run: npm run test
+
+      - name: 타입 검사 (소스만)
+        if: always()
+        run: npm run typecheck
+
+      # 이 저장소에서 가장 값진 게이트다. 없는 모듈을 import 하는 코드가 넉 달을
+      # 살아남은 적이 있다(ec60ca2d) — 단위 테스트는 그 라우트를 import 하지 않고,
+      # dev 서버는 요청된 라우트만 컴파일하므로 전체 빌드만이 그걸 본다.
+      - name: 빌드
+        if: always()
+        run: npm run build
+
+      - name: 포매팅
+        if: always()
+        run: npm run format:check
