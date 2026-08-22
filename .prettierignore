@@ -1,0 +1,18 @@
+# 빌드 산출물 · 의존성
+.next/
+out/
+node_modules/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+
+# 생성물 — 손으로 고치지 않으므로 포매팅 대상이 아니다
+public/third-party-licenses.html
+public/assets/lpc-registry.json
+package-lock.json
+drizzle/meta/
+
+# 런타임 자산
+public/assets/tilesets/
+public/assets/spritesheets/
