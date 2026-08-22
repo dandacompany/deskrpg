@@ -2,14 +2,11 @@
 // MeetingBroker.run()(meeting-broker.js:78-184)의 루프 구조를 어댑터 위로 이식한 것 —
 // 게이트웨이 호출을 NpcAdapter.execute() 호출로 바꾸고, 정책 판단은 turn-policy.ts에 위임한다.
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { formatPollMessage, formatSpeakMessage, parseHandRaise, sanitizeSpokenResponse, sanitizeStreamingSpokenResponse } = require("../meeting-formatter.js") as typeof import("../meeting-formatter.js");
-
 import type { NpcAdapter } from "@/lib/adapters/types";
-import { parseMention } from "./mention";
 import { Transcript, USER_SPEAKER_ID, type Turn } from "./transcript";
-import { createTurnTimeout, type TurnTimeoutConfig } from "./turn-timeout";
+import type { TurnTimeoutConfig } from "./turn-timeout";
 import { FloorInbox } from "./inbox";
+import { DEFAULT_IDLE_MS, DEFAULT_MAX_MS, NpcRuntime } from "./npc-runtime";
 import {
   eligibleParticipants,
   needsPolling,
@@ -17,23 +14,6 @@ import {
   type ConversationMode,
   type Participant,
 } from "./turn-policy";
-
-/**
- * 신호(assistant delta / tool progress)가 이만큼 끊기면 턴을 끊는다.
- *
- * 이건 이식이 아니라 새 동작이다. meeting-broker.js:72의 turnTimeoutMs는 초기화 구문
- * 외에는 아무 데서도 읽히지 않는 죽은 설정이었고, 옛 브로커는 턴을 타임아웃시킨 적이 없다 —
- * 멈춘 에이전트는 회의를 영원히 붙잡았다. 값(180초)만 그 죽은 설정에서 가져왔다.
- *
- * 대가가 있다: idle 타이머는 onDelta/onToolProgress에서만 리셋되는데
- * OpenClawAdapter는 onToolProgress를 절대 호출하지 않는다(openclaw-adapter.ts:33,39 —
- * onDelta만 전달한다). 그래서 도구를 3분 넘게 조용히 돌리는 OpenClaw NPC는 예전이라면
- * 완주했을 턴이 지금은 중단되고 에러로 보고된다. 스펙의 "tool.progress 수신 시 idle
- * 타이머를 리셋한다"는 현재 Hermes 경로에만 구현돼 있다.
- */
-const DEFAULT_IDLE_MS = 180_000;
-/** idle보다 넉넉히 큰 절대 상한. 정상적인 다중 도구 호출 턴을 죽이지 않으면서 폭주를 막는다. */
-const DEFAULT_MAX_MS = 600_000;
 
 export type EngineParticipant = Participant & {
   adapter: NpcAdapter;
@@ -57,19 +37,6 @@ export type EngineEndReason =
   | "consecutive_failures"
   | "no_candidates"
   | "stopped";
-
-/**
- * 연속 실패 한도. 이 횟수만큼 턴이 연속으로 실패하면 루프를 끝낸다.
- *
- * 실패한 턴은 트랜스크립트에 아무것도 남기지 않으므로 maxTotalTurns·remainingTurns·
- * consecutivePasses 중 어느 것도 전진하지 않는다 — 폴링이 없는 peer 모드에서는 브레이크가
- * 하나도 없어 루프가 무한히 돈다(리뷰 실측: maxTotalTurns 3에 50회 이상).
- *
- * 3인 이유: 1이면 일시적인 네트워크 오류 한 번에 회의가 죽고, 크게 잡으면 백엔드가 완전히
- * 내려간 상황에서 사용자가 기다리는 시간만 길어진다. 3연속이면 "일시적"이라고 보기 어렵다.
- * 설정값으로 빼지 않는다 — 이 값을 읽는 설정 경로가 아직 없다.
- */
-const MAX_CONSECUTIVE_FAILURES = 3;
 
 export type EngineCallbacks = {
   onPollStart?: () => void;
@@ -154,11 +121,11 @@ export class ConversationEngine {
   private running = false;
   private consecutivePasses = 0;
   /**
-   * NPC 별 연속 실패 횟수. 예전에는 엔진 전역이라 NPC 하나의 백엔드가 죽으면
-   * 3연속 실패로 회의 전체가 끝났다. NPC 가 자기 예산을 소유하면 고장난 쪽만
-   * 후보에서 빠지고 나머지는 계속한다.
+   * npcId별 NpcRuntime. 프롬프트 조립·타임아웃·스트리밍 정제·멘션 파싱과 함께
+   * 연속 실패 카운터(NPC 별로 소유 — 예전에는 엔진 전역이라 NPC 하나의 백엔드가 죽으면
+   * 3연속 실패로 회의 전체가 끝났다)도 여기 산다.
    */
-  private consecutiveFailures = new Map<string, number>();
+  private readonly runtimes: Map<string, NpcRuntime>;
   private endReason: EngineEndReason | null = null;
   private lastSpeakerId: string | null = null;
   private userMessageQueue: Array<{ userName: string; content: string }> = [];
@@ -173,8 +140,7 @@ export class ConversationEngine {
   private readonly inbox = new FloorInbox();
   private waitResolve: (() => void) | null = null;
   /** abortCurrentTurn 대상 — speak() 진행 중에만 채워진다. meeting-broker.js:_currentSessionKey/_currentAgentId. */
-  private currentSessionKey: string | null = null;
-  private currentAdapter: NpcAdapter | null = null;
+  private current: NpcRuntime | null = null;
 
   constructor(config: EngineConfig, callbacks: EngineCallbacks) {
     this.config = config;
@@ -183,6 +149,23 @@ export class ConversationEngine {
     this.runMode = config.initialRunMode ?? "auto";
     this.hybridMode = config.hybridMode ?? false;
     this.hybridAutoResumeMs = config.hybridAutoResumeMs ?? null;
+    this.runtimes = new Map(
+      config.participants.map((p) => [
+        p.npcId,
+        new NpcRuntime(p, {
+          transcript: this.transcript,
+          topic: config.topic,
+          allParticipants: config.participants,
+          maxTotalTurns: config.quota.maxTotalTurns,
+          historyLimit: config.historyLimit ?? 10,
+          turnTimeout: {
+            idleMs: config.turnTimeout?.idleMs ?? DEFAULT_IDLE_MS,
+            maxMs: config.turnTimeout?.maxMs ?? DEFAULT_MAX_MS,
+          },
+          now: this.now,
+        }),
+      ]),
+    );
   }
 
   isRunning(): boolean {
@@ -254,11 +237,10 @@ export class ConversationEngine {
     this.releaseWait();
   }
 
-  /** 현재 발언 중인 참가자의 어댑터에 abort를 요청한다. meeting-broker.js:249-253 이식. */
+  /** 발언권을 쥔 런타임에 abort 를 요청한다. 회의 정책에서 이 포인터는 항상 0개나 1개다.
+   * meeting-broker.js:249-253 이식. */
   abortCurrentTurn(): void {
-    if (this.currentSessionKey && this.currentAdapter) {
-      this.currentAdapter.abort?.(this.currentSessionKey)?.catch(() => {});
-    }
+    this.current?.abort();
   }
 
   /** 대기 프라미스를 먼저 걸어둔 뒤(need) 콜백을 부른다 — 콜백이 동기적으로
@@ -325,7 +307,7 @@ export class ConversationEngine {
    */
   private takeGrant(): string | null {
     const npcId = this.inbox.take(
-      (npcId) => !this.isBurnedOut(npcId) && this.remainingTurns(npcId) > 0,
+      (npcId) => !(this.runtimes.get(npcId)?.isBurnedOut() ?? false) && this.remainingTurns(npcId) > 0,
       (npcId) => this.callbacks.onMentionSkipped?.(npcId, "quota_exhausted"),
     );
     if (npcId !== null) this.clearAutoResumeTimer();
@@ -336,7 +318,7 @@ export class ConversationEngine {
     this.running = true;
     this.endReason = null;
     // 이전 run()이 남긴 실패 카운터를 물려받으면 두 번째 run()은 예산 3이 아니라 1로 시작한다.
-    this.consecutiveFailures.clear();
+    for (const r of this.runtimes.values()) r.noteSuccess();
 
     while (this.running && !this.isFinished()) {
       // 1. 커맨드 큐 비우기(setMode)
@@ -354,9 +336,9 @@ export class ConversationEngine {
       //    보존된 결함: npcId 를 참가자 목록에서 못 찾으면 조용히 아무도 발언하지 않는다.
       const directNpcId = this.takeGrant();
       if (directNpcId !== null) {
-        const engineSpeaker = this.findParticipant(directNpcId);
-        if (engineSpeaker) {
-          await this.speak(engineSpeaker);
+        const runtime = this.runtimes.get(directNpcId);
+        if (runtime) {
+          await this.speak(runtime);
         }
         if (this.runMode !== "auto") {
           const waiting = this.armWait();
@@ -380,13 +362,13 @@ export class ConversationEngine {
       // 5. auto/manual 공통 — 후보 산출 → (필요 시) 폴링 → 발언. meeting-broker.js:114-157 이식.
       const candidates = eligibleParticipants(
         this.participantsView(),
-        (npcId) => (this.isBurnedOut(npcId) ? 0 : this.remainingTurns(npcId)),
+        (npcId) => (this.runtimes.get(npcId)?.isBurnedOut() ? 0 : this.remainingTurns(npcId)),
       );
       if (candidates.length === 0) {
         // 왜 아무도 없는가를 구분한다. 전원이 실패 예산을 소진한 것과, 다들 할당량을
         // 다 쓴 것은 운영상 전혀 다른 상황이다 — 전자는 백엔드가 죽었다는 뜻이다.
         const seated = this.config.participants.filter((p) => p.seated);
-        const allBurnedOut = seated.length > 0 && seated.every((p) => this.isBurnedOut(p.npcId));
+        const allBurnedOut = seated.length > 0 && seated.every((p) => this.runtimes.get(p.npcId)?.isBurnedOut() ?? false);
         this.endReason = allBurnedOut ? "consecutive_failures" : "no_candidates";
         break;
       }
@@ -416,9 +398,9 @@ export class ConversationEngine {
       }
 
       if (speaker) {
-        const engineSpeaker = this.findParticipant(speaker.npcId);
-        if (engineSpeaker) {
-          await this.speak(engineSpeaker);
+        const runtime = this.runtimes.get(speaker.npcId);
+        if (runtime) {
+          await this.speak(runtime);
           // 실패한 턴은 트랜스크립트에 아무것도 남기지 않아 다른 어떤 종료 조건도 전진시키지
           // 못한다 — 소진된 NPC 는 다음 루프의 후보 필터에서 빠진다(peer/group/meeting 모두 적용).
         }
@@ -447,23 +429,6 @@ export class ConversationEngine {
     this.callbacks.onEnd?.(this.transcript.all(), this.resolveEndReason());
   }
 
-  private failureCount(npcId: string): number {
-    return this.consecutiveFailures.get(npcId) ?? 0;
-  }
-
-  private noteFailure(npcId: string): void {
-    this.consecutiveFailures.set(npcId, this.failureCount(npcId) + 1);
-  }
-
-  private noteSuccess(npcId: string): void {
-    this.consecutiveFailures.delete(npcId);
-  }
-
-  /** 이 NPC 가 실패 예산을 소진했는가. 소진한 NPC 는 후보에서 빠진다. */
-  private isBurnedOut(npcId: string): boolean {
-    return this.failureCount(npcId) >= MAX_CONSECUTIVE_FAILURES;
-  }
-
   private resolveEndReason(): EngineEndReason {
     if (this.endReason) return this.endReason;
     if (this.transcript.all().length >= this.config.quota.maxTotalTurns) return "max_turns";
@@ -473,10 +438,6 @@ export class ConversationEngine {
 
   private maxConsecutivePasses(): number {
     return this.config.quota.maxConsecutivePasses ?? 2;
-  }
-
-  private findParticipant(npcId: string): EngineParticipant | undefined {
-    return this.config.participants.find((p) => p.npcId === npcId);
   }
 
   /**
@@ -515,33 +476,15 @@ export class ConversationEngine {
 
     const raises: Array<{ npcId: string; reason: string }> = [];
     const passes: string[] = [];
-    const currentTurn = this.transcript.all().length;
-    const maxTurns = this.config.quota.maxTotalTurns;
-    const recentTurns = this.transcript.recent(3);
     const maxConcurrentPolls = this.config.maxConcurrentPolls ?? 4;
 
     for (const group of chunk(candidates, maxConcurrentPolls)) {
       const results = await Promise.allSettled(
         group.map(async (c) => {
-          const engineParticipant = this.findParticipant(c.npcId)!;
+          const runtime = this.runtimes.get(c.npcId)!;
           const remaining = this.remainingTurns(c.npcId);
-          const pollMsg = formatPollMessage(
-            this.config.topic,
-            recentTurns,
-            { displayName: c.displayName },
-            currentTurn,
-            maxTurns,
-            remaining,
-            engineParticipant.passPolicy ?? null,
-          );
-          const { response } = await engineParticipant.adapter.execute({
-            sessionKey: `${engineParticipant.sessionKey}-poll`,
-            prompt: pollMsg,
-            // 폴은 히스토리를 싣지 않지만 그래도 다자 대화다 — NPC의 영속 세션에
-            // "SPEAK:/PASS" 문답이 쌓이면 안 된다.
-            multiParty: true,
-          });
-          return { npcId: c.npcId, text: response };
+          const parsed = await runtime.poll(remaining);
+          return { npcId: c.npcId, parsed };
         }),
       );
 
@@ -550,8 +493,7 @@ export class ConversationEngine {
           // 실패한 참가자는 조용히 건너뛴다 — 회의를 중단하지 않는다(보존된 결함 3).
           continue;
         }
-        const { npcId, text } = result.value;
-        const parsed = parseHandRaise(text);
+        const { npcId, parsed } = result.value;
         if (parsed.wantsToSpeak) {
           raises.push({ npcId, reason: parsed.reason });
         } else {
@@ -564,140 +506,47 @@ export class ConversationEngine {
   }
 
   /** 발언권을 부여하고 스트리밍 응답을 받아 트랜스크립트에 기록한다. */
-  private async speak(participant: EngineParticipant): Promise<void> {
-    this.callbacks.onTurnStart?.(participant.npcId, participant.displayName);
+  private async speak(runtime: NpcRuntime): Promise<void> {
+    this.callbacks.onTurnStart?.(runtime.npcId, runtime.displayName);
+    this.current = runtime;
 
-    // abortCurrentTurn 대상 표시. meeting-broker.js:_speakWithAbort와 동일하게 메시지 조립 전부터
-    // 표시해둔다.
-    this.currentSessionKey = participant.sessionKey;
-    this.currentAdapter = participant.adapter;
+    // takeTurn 은 throw 하지 않는다 — 모든 실패를 SpeakOutcome 으로 돌려준다.
+    // 그래야 콜백 호출 조건이 한곳(여기)에 모인다.
+    const outcome = await runtime.takeTurn(this.remainingTurns(runtime.npcId), {
+      onChunk: (chunk) => this.callbacks.onTurnChunk?.(runtime.npcId, chunk),
+    });
+    this.current = null;
 
-    const currentTurn = this.transcript.all().length;
-    const maxTurns = this.config.quota.maxTotalTurns;
-    const remaining = this.remainingTurns(participant.npcId);
-    const historyLimit = this.config.historyLimit ?? 10;
-    const recentTurns = this.transcript.recent(historyLimit);
+    if (outcome.kind === "spoke") {
+      runtime.noteSuccess();
+      this.transcript.add(runtime.npcId, runtime.displayName, outcome.text, this.now());
+      this.lastSpeakerId = runtime.npcId;
+      this.callbacks.onTurnEnd?.(runtime.npcId, outcome.text);
+      // directSpeak() 메서드를 부르지 않는다 — 그쪽은 사용자 지목용이라
+      // abortCurrentTurn() 으로 진행 중인 턴을 끊고 hybridMode 를 manual 로 승격시킨다.
+      // 멘션은 발언이 끝난 뒤의 힌트일 뿐이므로 인박스에만 넣는다.
+      if (outcome.mentionNpcId) this.inbox.push(outcome.mentionNpcId, "mention");
+      return;
+    }
 
-    // 프롬프트/히스토리 중복에 대한 판단: formatSpeakMessage는 recentTurns를 그대로
-    // 프롬프트 텍스트에 접어넣는다. conversationHistory도 함께 실어 보내면 같은 내용이
-    // 프롬프트와 구조화 히스토리 양쪽에 중복된다. D9(동작 보존)가 이번 단계의 성공 기준이므로
-    // 프롬프트 조립 방식을 그대로 유지하고(옵션 a), conversationHistory는 별도 필드로 추가한다 —
-    // 토큰 낭비를 감수하는 대신 회귀 위험을 없앤다. (초기 구현의 주석은 프롬프트가 "바이트 단위로
-    // 동일"하다고 단언했지만, 그때 passPolicy와 role이 함께 빠져 있어 사실이 아니었다.)
-    const participantsForFormat = this.config.participants.map((p) => ({
-      displayName: p.displayName,
-      role: p.role || "Participant",
-    }));
-    const message = formatSpeakMessage(
-      this.config.topic,
-      participantsForFormat,
-      recentTurns,
-      { displayName: participant.displayName },
-      currentTurn,
-      maxTurns,
-      remaining,
-    );
+    runtime.noteFailure();
 
-    let rawText = "";
-    let emittedText = "";
-    // 두 겹 타임아웃(§3.5) — idle은 onDelta/onToolProgress(활동 신호)가 올 때마다 touch()로
-    // 리셋되고, max는 아무것도 리셋하지 않는 절대 상한이다. 어느 쪽이 먼저 발화하든 adapter.abort()로
-    // 이 턴을 끊고 execute()의 대기를 reject해서 회의 루프가 다음 턴으로 넘어가게 한다 —
-    // 회의 전체는 멈추지 않는다(옛 turnTimeoutMs 실패 처리와 동일).
-    const timeoutConfig: TurnTimeoutConfig = {
-      idleMs: this.config.turnTimeout?.idleMs ?? DEFAULT_IDLE_MS,
-      maxMs: this.config.turnTimeout?.maxMs ?? DEFAULT_MAX_MS,
-    };
-    let timedOutKind: string | null = null;
-    try {
-      const { response } = await new Promise<{ response: string }>((resolve, reject) => {
-        const timeout = createTurnTimeout(timeoutConfig, (kind) => {
-          timedOutKind = kind;
-          participant.adapter.abort?.(participant.sessionKey)?.catch(() => {});
-          reject(new Error(`turn timeout (${kind})`));
-        });
-        participant.adapter
-          .execute({
-            sessionKey: participant.sessionKey,
-            prompt: message,
-            // 트랜스크립트는 엔진이 소유한다. 첫 턴은 히스토리가 비지만 그것도 다자 대화의
-            // 한 턴이므로 전송 경로가 2번째 턴부터와 달라지면 안 된다.
-            multiParty: true,
-            conversationHistory: this.transcript.toConversationHistory(historyLimit),
-            onDelta: (chunk) => {
-              timeout.touch();
-              rawText += chunk;
-              const sanitizedText = sanitizeStreamingSpokenResponse(rawText);
-              const delta = sanitizedText.slice(emittedText.length);
-              emittedText = sanitizedText;
-              if (delta) this.callbacks.onTurnChunk?.(participant.npcId, delta);
-            },
-            onToolProgress: () => {
-              timeout.touch();
-            },
-          })
-          .then((result) => {
-            timeout.clear();
-            resolve(result);
-          })
-          .catch((err) => {
-            timeout.clear();
-            reject(err);
-          });
+    if (outcome.kind === "empty") {
+      // "TO: 이름"만 있고 본문이 없는 응답이거나, 쓸 만한 텍스트가 하나도 없는 턴이다.
+      // onTurnEnd 를 부르지 않는다 — 현행 동작 그대로다. 본문이 비어 실패로 처리되는
+      // 경우에도 지목 자체는 유효한 의사표시이므로 인박스에는 넣는다.
+      if (outcome.mentionNpcId) this.inbox.push(outcome.mentionNpcId, "mention");
+      return;
+    }
+
+    this.callbacks.onError?.(outcome.error, runtime.npcId);
+    if (outcome.timedOut) {
+      // 타임아웃으로 끊은 턴만 닫아준다 — onError 만 보내면 클라이언트의 스트리밍
+      // 말풍선(done:true 를 기다린다)이 영영 열린 채로 남는다.
+      this.callbacks.onTurnEnd?.(runtime.npcId, outcome.timedOut.partialText, {
+        aborted: true,
+        reason: `timeout:${outcome.timedOut.kind}`,
       });
-      this.currentSessionKey = null;
-      this.currentAdapter = null;
-      const sanitizedResponse = sanitizeSpokenResponse(response || rawText);
-      if (sanitizedResponse) {
-        // 지목을 뽑고, 화면·트랜스크립트에는 제어 라인이 빠진 본문만 남긴다.
-        const mention = parseMention(
-          sanitizedResponse,
-          this.config.participants.map((p) => ({ npcId: p.npcId, displayName: p.displayName })),
-          participant.npcId,
-        );
-
-        if (mention.text) {
-          this.noteSuccess(participant.npcId);
-          this.transcript.add(participant.npcId, participant.displayName, mention.text, this.now());
-          this.lastSpeakerId = participant.npcId;
-          this.callbacks.onTurnEnd?.(participant.npcId, mention.text);
-        } else {
-          // "TO: 이름"만 있고 본문이 없는 응답 — parseMention이 지목 줄을 걷어내면 남는 텍스트가
-          // 없다. sanitizedResponse 자체는 비어있지 않아 위 gate는 통과하지만, 화면에 보여줄
-          // 말도, 트랜스크립트에 남길 발언도 없다. 아래 catch-all과 동일하게 "쓸 만한 텍스트가
-          // 하나도 없는 턴"으로 취급해 실패 카운터만 올리고 transcript.add/onTurnEnd는 건너뛴다
-          // (빈 턴이 maxTotalTurns를 소비하거나 화면에 빈 말풍선을 남기지 않도록).
-          this.noteFailure(participant.npcId);
-        }
-
-        // directSpeak() 메서드를 부르지 않는다 — 그쪽은 사용자 지목용이라
-        // abortCurrentTurn() 으로 진행 중인 턴을 끊고 hybridMode 를 manual 로 승격시킨다.
-        // 멘션은 발언이 끝난 뒤의 힌트일 뿐이므로 인박스에만 넣는다. 본문이 비어 실패로
-        // 처리되는 경우에도 지목 자체는 유효한 의사표시이므로 넣는다.
-        if (mention.npcId) {
-          this.inbox.push(mention.npcId, "mention");
-        }
-      } else {
-        // 정상적으로 resolve했지만 쓸 만한 텍스트가 하나도 없는 턴은, 루프 입장에서는 실패한
-        // 턴이다 — 트랜스크립트에 아무것도 안 실리므로 maxTotalTurns·remainingTurns·
-        // consecutivePasses 중 무엇도 전진하지 않는다. 여기서 카운터를 리셋해버리면 예외를
-        // 던지는 어댑터에만 브레이크가 걸리고, 빈 응답을 돌려주는 어댑터는 그대로 무한 루프다
-        // (프로덕션은 cooldownMs가 1000이라 바쁜 루프가 아니라 "끝나지 않는 회의"로 나타난다).
-        this.noteFailure(participant.npcId);
-      }
-    } catch (err) {
-      this.currentSessionKey = null;
-      this.currentAdapter = null;
-      this.noteFailure(participant.npcId);
-      this.callbacks.onError?.(err, participant.npcId);
-      if (timedOutKind) {
-        // 타임아웃으로 끊은 턴도 반드시 닫아준다 — onError만 보내면 클라이언트의 스트리밍
-        // 말풍선(done:true를 기다린다)이 영영 열린 채로 남는다.
-        this.callbacks.onTurnEnd?.(participant.npcId, emittedText, {
-          aborted: true,
-          reason: `timeout:${timedOutKind}`,
-        });
-      }
     }
   }
 }
