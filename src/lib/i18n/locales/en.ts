@@ -1333,6 +1333,7 @@ const en: Record<string, string> = {
   "chat.responding": "Responding...",
   "chat.newConversation": "New chat",
   "chat.disconnected": "Disconnected",
+  "chat.npcNoResponse": "{name} couldn't respond.",
   "chat.attachFile": "Attach file",
   "chat.removeFile": "Remove file",
   "about.title": "About DeskRPG",

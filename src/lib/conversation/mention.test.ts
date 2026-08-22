@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseMention } from "./mention";
+import { parseMention, parseAllMentions, MentionParticipant } from "./mention";
 
 const P = [
   { npcId: "n-danbi", displayName: "단비" },
@@ -124,5 +124,56 @@ describe("parseMention — 멘션이 아닌 것", () => {
       npcId: null,
       text: "@[단비] 어때요?",
     });
+  });
+});
+
+describe("parseAllMentions — 지명 전부를 등장 순서대로", () => {
+  const people: MentionParticipant[] = [
+    { npcId: "n1", displayName: "단비" },
+    { npcId: "n2", displayName: "하늘" },
+    { npcId: "n3", displayName: "단비수" },
+  ];
+
+  test("여러 지명을 등장 순서대로 돌려준다", () => {
+    assert.deepEqual(parseAllMentions("@[하늘] @[단비] 어때?", people, null), ["n2", "n1"]);
+  });
+
+  test("같은 이름이 두 번 나오면 한 번만 돌려준다", () => {
+    assert.deepEqual(parseAllMentions("@[단비] 그리고 @[단비] 또", people, null), ["n1"]);
+  });
+
+  test("자기 자신 지명은 뺀다", () => {
+    assert.deepEqual(parseAllMentions("@[단비] @[하늘]", people, "n1"), ["n2"]);
+  });
+
+  test("사람이 말할 때(null)는 아무도 빠지지 않는다", () => {
+    assert.deepEqual(parseAllMentions("@[단비] @[하늘]", people, null), ["n1", "n2"]);
+  });
+
+  test("대괄호 없는 @이름 은 지명이 아니다", () => {
+    // 한국어 조사(@단비는)와 접두 일치(@단비 가 @단비수 를 삼킴) 때문에 형식을 강제한다.
+    assert.deepEqual(parseAllMentions("@단비 어때?", people, null), []);
+    assert.deepEqual(parseAllMentions("@단비는 어때?", people, null), []);
+  });
+
+  test("접두가 겹치는 이름을 삼키지 않는다", () => {
+    assert.deepEqual(parseAllMentions("@[단비수] 안녕", people, null), ["n3"]);
+  });
+
+  test("TO: 첫 줄도 지명으로 읽는다", () => {
+    assert.deepEqual(parseAllMentions("TO: 하늘\n의견 부탁해요", people, null), ["n2"]);
+  });
+
+  test("TO: 와 본문 @[..] 가 함께 있으면 둘 다 센다", () => {
+    // TO: 는 "다음 발언자", @[..] 는 본문 속 호명 — 자유채팅에서는 둘 다 깨운다.
+    assert.deepEqual(parseAllMentions("TO: 하늘\n@[단비] 너도", people, null), ["n2", "n1"]);
+  });
+
+  test("참가자에 없는 이름은 무시한다", () => {
+    assert.deepEqual(parseAllMentions("@[없는사람] @[단비]", people, null), ["n1"]);
+  });
+
+  test("문자열이 아니면 빈 배열", () => {
+    assert.deepEqual(parseAllMentions(null as unknown as string, people, null), []);
   });
 });

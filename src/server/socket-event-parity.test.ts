@@ -118,3 +118,60 @@ test("socket-handlers extraction regex captures multi-line socket.on() registrat
       + "이 파일의 다른 어서션들도 신뢰할 수 없습니다 — 정규식부터 고치세요.",
   );
 });
+
+// 이 브랜치의 서명 결함 가드: 자유채팅 서버가 쏘는 이벤트에 맵 클라이언트 리스너가 있는가.
+//
+// C1 이 정확히 이 모양이었다 — 서버는 npc:come-to-player 를 쐈지만 클라이언트 리스너의
+// 조건(targetPlayerId === socket.id)이 절대 참이 될 수 없어 아무도 반응하지 않았다.
+// 이름이 있어도 소비자가 없으면 검증할 수 없는 죽은 배선이므로, 이름 존재만이라도 묶어 둔다.
+test("map chat events emitted by the server have a listener in the map client", () => {
+  const client = readFileSync(path.join(repoRoot, "src/app/game/GamePageClient.tsx"), "utf8");
+  for (const event of ["npc:come-to-player", "chat:mention-skipped", "chat:npc-aborted"]) {
+    assert.ok(
+      client.includes(`socketInstance.on("${event}"`),
+      `서버가 ${event} 를 쏘지만 맵 클라이언트에 리스너가 없습니다 — 죽은 배선입니다.`,
+    );
+  }
+});
+
+// 회의 전용 이벤트를 맵 룸으로 재사용하면 회의 중인 사람의 트랜스크립트에 남의 맵 사건이
+// 삽입된다(회의 참가자는 맵 룸을 떠나지 않는다).
+test("socket-handlers never broadcasts meeting-only events to the map room", () => {
+  const src = readFileSync(path.join(repoRoot, "src/server/socket-handlers.ts"), "utf8");
+  // 회의 전용 이벤트 자체는 정상이다 — 문제는 **어느 방으로** 쏘느냐다. 회의 룸
+  // (`meeting-<id>`)이 아닌 방으로 나가는 meeting:* 만 잡는다.
+  const leaked = [...src.matchAll(/\.to\(([^)]*)\)\s*\.emit\(\s*"(meeting:[^"]+)"/g)]
+    .filter((m) => !m[1].includes("meeting-"))
+    .map((m) => `${m[2]} → ${m[1]}`);
+  assert.deepEqual(
+    leaked,
+    [],
+    `맵 룸 브로드캐스트에 회의 전용 이벤트가 섞였습니다: ${leaked.join(", ")}`,
+  );
+});
+
+// 위 가드는 **이름**만 본다. C1 은 이름이 멀쩡한 채로 죽어 있던 결함이었다 — 서버가
+// targetPlayerId: null 을 실었고, 클라이언트 조건(=== socket.id)이 어떤 소켓에서도 참이
+// 될 수 없었다. 그래서 그 두 끝을 각각 못박는다. 이 테스트가 없으면 C1 을 되돌리는
+// 한 줄짜리 뮤테이션이 684개 테스트를 전부 초록으로 통과한다(재리뷰에서 실측).
+test("npc:come-to-player always carries a real caller socket id", () => {
+  const src = readFileSync(path.join(repoRoot, "src/server/socket-handlers.ts"), "utf8");
+  const dead = [...src.matchAll(/emit\(\s*"npc:come-to-player"\s*,\s*\{([^}]*)\}/g)]
+    .filter((m) => /targetPlayerId\s*:\s*(null|undefined)/.test(m[1]))
+    .map((m) => m[1].trim());
+  assert.deepEqual(
+    dead,
+    [],
+    "npc:come-to-player 가 targetPlayerId 없이 나갑니다 — 클라이언트 조건이 "
+      + "어떤 소켓에서도 참이 되지 않아 NPC 가 걸어오지 않습니다(무음 실패).",
+  );
+});
+
+test("the map client still gates A* on being the caller", () => {
+  const client = readFileSync(path.join(repoRoot, "src/app/game/GamePageClient.tsx"), "utf8");
+  assert.ok(
+    /data\.targetPlayerId\s*===\s*socketInstance\.id/.test(client),
+    "npc:come-to-player 리스너가 호출자 판정을 잃었습니다 — 조건이 늘 거짓이면 아무도 "
+      + "경로탐색을 돌리지 않고, 늘 참이면 모든 클라이언트가 같은 NPC 를 각자 움직입니다.",
+  );
+});

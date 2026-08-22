@@ -69,3 +69,40 @@ export function parseMention(
 
   return { npcId: null, text };
 }
+
+/**
+ * 지목 대상을 **전부** 등장 순서대로 돌려준다. 자유채팅은 여럿이 동시에 대답하므로
+ * parseMention 처럼 하나만 고를 수 없다.
+ *
+ * parseMention 과 갈라 둔 이유: 그쪽은 "다음 발언자 한 명"을 뜻하고 본문에서 TO: 라인을
+ * 걷어낸 텍스트까지 돌려준다. 의미가 다른 두 질문에 한 함수가 답하면 호출부가 결과를
+ * 잘못 읽는다.
+ *
+ * speakerNpcId 가 null 이면 사람이 말한 것이다 — 제외할 자기 자신이 없다.
+ */
+export function parseAllMentions(
+  text: string,
+  participants: MentionParticipant[],
+  speakerNpcId: string | null,
+): string[] {
+  if (typeof text !== "string") return [];
+
+  const names: string[] = [];
+  const to = splitToLine(text);
+  if (to) {
+    names.push(to[0]);
+    names.push(...bracketMentions(to[1]));
+  } else {
+    names.push(...bracketMentions(text));
+  }
+
+  const out: string[] = [];
+  for (const name of names) {
+    const hit = participants.find((p) => p.displayName === name);
+    if (!hit) continue;
+    if (hit.npcId === speakerNpcId) continue;
+    if (out.includes(hit.npcId)) continue;
+    out.push(hit.npcId);
+  }
+  return out;
+}

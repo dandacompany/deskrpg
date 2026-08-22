@@ -1333,6 +1333,7 @@ const ja: Record<string, string> = {
   "chat.responding": "応答中...",
   "chat.newConversation": "新しい会話",
   "chat.disconnected": "接続切れ",
+  "chat.npcNoResponse": "{name}さんは応答できませんでした。",
   "chat.attachFile": "ファイルを添付",
   "chat.removeFile": "ファイルを削除",
   "about.title": "About DeskRPG",

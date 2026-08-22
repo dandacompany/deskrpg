@@ -5,6 +5,7 @@ import { AdapterRegistry } from "../lib/adapters/types";
 import {
   defaultCreateMeetingBroker,
   registerMeetingDiscussionHandlers,
+  resolveNpcAdapter,
   type MeetingBrokerLike,
 } from "./meeting-discussion";
 
@@ -137,7 +138,7 @@ test("registerMeetingDiscussionHandlers starts a broker and emits mode change", 
 });
 
 // ---------------------------------------------------------------------------
-// 해석/배선 레이어 — defaultCreateMeetingBroker + resolveMeetingParticipant
+// 해석/배선 레이어 — defaultCreateMeetingBroker + resolveNpcAdapter
 // 이 층(디스패치 분류, 제외 사유, 어댑터 구성, 엔진 콜백 재매핑)은 이 커밋 전까지
 // 어떤 테스트도 실행하지 않았다(M5).
 // ---------------------------------------------------------------------------
@@ -250,6 +251,28 @@ test("resolution layer: hermes / registry 디스패치가 각각 맞는 백엔�
     broker.config.participants.map((p) => p.npcId),
     ["n-hermes", "n-cli"],
   );
+});
+
+test("resolution layer: 개명 후에도 회의 세션키 형식이 그대로다", async () => {
+  const adapterRegistry = new AdapterRegistry();
+  const resolved = await resolveNpcAdapter(
+    npcConfig({
+      id: "npc123",
+      name: "단비",
+      sessionKeyPrefix: null,
+      adapterType: "hermes",
+      hermesProfileId: "p-1",
+    }) as never,
+    {
+      sessionScope: "meeting-abc",
+      userId: "u1",
+      adapterRegistry,
+      createHermesAdapter: async () => recordingAdapter(["PASS"]) as never,
+    },
+  );
+
+  assert.ok(!("excluded" in resolved));
+  assert.equal((resolved as { sessionKey: string }).sessionKey, "npc123-meeting-abc");
 });
 
 test("resolution layer: npc.passPolicy가 엔진까지 살아남아 폴링 프롬프트에 실린다", async () => {
