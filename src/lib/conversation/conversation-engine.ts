@@ -91,6 +91,18 @@ export type EngineCallbacks = {
    * 항상 고정된 빈 값 { raises: [], passes: [] }을 보낸다(meeting-broker.js:159 그대로 이식 — 실제
    * 폴 결과를 담지 않는 특이 동작). directed 및 direct-speak 이후 대기는 null. */
   onWaitingInput?: (pollResult: { raises: unknown[]; passes: string[] } | null) => void;
+  /**
+   * 지목받았지만 발언 할당량이 없어 건너뛴 NPC. 조용히 빼지 않고 알린다
+   * (meeting-discussion 의 onParticipantsExcluded 와 같은 계열).
+   *
+   * 트랜스크립트 턴이 아니라 콜백인 이유: 턴으로 넣으면 maxTotalTurns 예산을 갉아먹고,
+   * totalTurns 집계를 부풀리고, 프롬프트 히스토리에 실려 NPC 들이 할당량 이야기를
+   * 연기하기 시작한다.
+   *
+   * 완성된 문장이 아니라 (npcId, reason) 을 넘기는 이유: 엔진에는 사용자용 문자열이
+   * 하나도 없다. 표시 문구는 i18n 로케일에 있고 클라이언트가 렌더한다.
+   */
+  onMentionSkipped?: (npcId: string, reason: "quota_exhausted") => void;
 };
 
 export type EngineQuota = {
@@ -304,10 +316,17 @@ export class ConversationEngine {
    * 여기서 취소하지 않으면 지목 처리 도중에도 타이머가 살아남아 만료 시
    * setMode("auto")가 사용자 조작과 무관하게 발화한다.
    */
+  /**
+   * 다음 발언자를 인박스에서 꺼낸다.
+   *
+   * 멘션 부여만 자격 검사를 받는다 — 큐가 생긴 뒤로 지목 사슬이 한 NPC 를 할당량
+   * 너머로 반복 호출할 수 있게 됐기 때문이다. 사용자 부여는 인박스가 검사 없이
+   * 돌려주므로 여기 게이트가 걸리지 않는다.
+   */
   private takeGrant(): string | null {
     const npcId = this.inbox.take(
-      () => true,
-      () => {},
+      (npcId) => !this.isBurnedOut(npcId) && this.remainingTurns(npcId) > 0,
+      (npcId) => this.callbacks.onMentionSkipped?.(npcId, "quota_exhausted"),
     );
     if (npcId !== null) this.clearAutoResumeTimer();
     return npcId;

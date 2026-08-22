@@ -129,6 +129,8 @@ type MeetingBrokerCallbacks = {
   onWaitingInput?: (pollResult: unknown) => void;
   onTurnAborted?: (npcId: string) => void;
   onMeetingEnd?: (transcript: string, durationSeconds?: number) => void | Promise<void>;
+  /** 지목받았으나 할당량이 없어 건너뛴 NPC. onParticipantsExcluded 와 같은 계열. */
+  onMentionSkipped?: (npcId: string, reason: "quota_exhausted") => void;
   onError?: (error: unknown) => void;
   /** 어댑터를 해석하지 못해 참가자 목록에서 제외된 NPC. 조용히 빼지 않고 알린다(요구사항). */
   onParticipantsExcluded?: (excluded: ExcludedMeetingNpc[]) => void;
@@ -336,6 +338,7 @@ export async function defaultCreateMeetingBroker(
       onTurnEnd: (npcId, fullResponse) => callbacks.onTurnEnd?.(npcId, fullResponse),
       onModeChanged: (mode, source) => callbacks.onModeChanged?.(mode, source),
       onWaitingInput: (pollResult) => callbacks.onWaitingInput?.(pollResult),
+      onMentionSkipped: (npcId, reason) => callbacks.onMentionSkipped?.(npcId, reason),
       onError: (err) => callbacks.onError?.(err),
       onEnd: (finalTurns) => {
         turns = finalTurns;

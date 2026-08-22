@@ -969,3 +969,85 @@ describe("실패 예산은 NPC 마다 따로다", () => {
     assert.equal(reason, "no_candidates");
   });
 });
+
+describe("멘션은 쿼터를 존중하고, 건너뛴 지목을 알린다", () => {
+  test("할당량이 소진된 NPC 의 지목은 건너뛰고 안내한다", async () => {
+    // 브리프 원안은 참가자 2명(a, b)이었다: a 가 b 를 지목하고 b 가 그 할당량(1)을 쓴 뒤,
+    // a 가 "매 발언마다" b 를 다시 지목해 두 번째 지목이 건너뛰어지는 그림이었다. 그런데
+    // maxTurnsPerAgent 는 a 에게도 똑같이 1 이라 a 는 물리적으로 딱 한 번만 말할 수 있고,
+    // 따라서 지목도 딱 한 번만 나갈 수 있다 — b 가 소진되기도 전에 유일한 지목이 이미
+    // 전달돼 버려 "소진 후 건너뜀"을 재현할 방법이 없다(디버그 스크립트로 실측: spoke=[a,b],
+    // notices=[] 고정). task-3-report.md 가 문서화한 것과 같은 종류의 함정 — mockAdapter 조합이
+    // 아니라 이번엔 "지목자의 할당량이 피지목자의 할당량과 같다"는 구조적 제약. 참가자 c 를
+    // 하나 더 두어 c 가 두 번째 지목자 역할을 한다: a 의 지목으로 b 가 할당량을 다 쓴 뒤,
+    // a·b 모두 소진돼 유일하게 남은 후보 c 가 뽑혀 b 를 다시 지목한다 — 이번엔 b 가 이미
+    // 소진돼 있으므로 건너뛰어야 한다. 헬퍼(participant/mockAdapter)와 구현 계약은 브리프와
+    // 동일하게 유지했고, 바뀐 것은 이 새 테스트 안의 참가자 구성뿐이다.
+    //
+    // c 는 mockAdapter가 아니라 alwaysRaisesAndSpeaks를 쓴다 — c는 turn1의 폴링에서 a와
+    // 동시에 손을 들지만 동률 공정성 규칙 때문에 a에게 진다(task-3-report.md와 같은 함정).
+    // mockAdapter라면 그 폴링 한 번으로 c의 "SPEAK:" 신호(대본 큐)가 이미 소진돼, 정작
+    // c 차례가 왔을 때는 대본 마지막 항목("TO: b...")이 SPEAK: 접두 없이 반복 반환되어
+    // PASS로 오인된다 — c가 영영 뽑히지 못해 테스트가 성립하지 않는다.
+    const a = participant("a", ["SPEAK: 의견 있어요", "TO: b\nb 의견 부탁해요"]);
+    const b = participant("b", ["PASS", "김치찌개요"]);
+    const c = participant("c", [], { adapter: alwaysRaisesAndSpeaks(["TO: b\n한 번 더 부탁해요"]) });
+
+    const notices: string[] = [];
+    const spoke: string[] = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "점심",
+        participants: [a, b, c],
+        quota: { maxTurnsPerAgent: 1, maxTotalTurns: 4, cooldownMs: 0 },
+        now: () => 0,
+      },
+      {
+        onTurnStart: (npcId) => spoke.push(npcId),
+        onMentionSkipped: (npcId, reason) => notices.push(`${npcId}:${reason}`),
+      },
+    );
+
+    await engine.run();
+
+    assert.equal(
+      spoke.filter((id) => id === "b").length,
+      1,
+      `b 는 할당량 1 만큼만 말해야 한다. 실제 발언: ${JSON.stringify(spoke)}`,
+    );
+    assert.deepEqual(
+      notices,
+      ["b:quota_exhausted"],
+      `건너뛴 지목은 무음이면 안 된다. 안내: ${JSON.stringify(notices)}`,
+    );
+  });
+
+  test("사용자 지목은 할당량이 소진돼도 말한다", async () => {
+    const a = participant("a", ["PASS", "..."]);
+    const b = participant("b", ["PASS", "김치찌개요"]);
+
+    const spoke: string[] = [];
+    const engine = new ConversationEngine(
+      {
+        mode: "meeting",
+        topic: "점심",
+        // maxTurnsPerAgent 0 이면 누구도 폴링 후보가 아니다 — 발언이 있었다면
+        // 그것은 오직 사용자 지목이 쿼터를 우회했기 때문이다.
+        quota: { maxTurnsPerAgent: 0, maxTotalTurns: 4, cooldownMs: 0 },
+        participants: [a, b],
+        initialRunMode: "directed",
+        now: () => 0,
+      },
+      { onTurnStart: (npcId) => spoke.push(npcId) },
+    );
+
+    const running = engine.run();
+    engine.directSpeak("b");
+    await new Promise((r) => setTimeout(r, 30));
+    engine.stop();
+    await running;
+
+    assert.deepEqual(spoke, ["b"], "사용자 지목은 할당량 0 이어도 발언해야 한다");
+  });
+});
