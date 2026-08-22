@@ -1477,6 +1477,8 @@ const ko: Record<string, string> = {
   "meeting.systemSender": "시스템",
   "meeting.endedTranscriptPrefix": "[회의 종료]",
   "meeting.errorPrefix": "[오류]",
+  "meeting.mentionSkipped.quotaExhausted": "{name}님이 지목받았지만 발언 할당량을 다 써서 말하지 않았습니다.",
+  "meeting.mentionSkipped.backendFailing": "{name}님이 지목받았지만 AI 백엔드가 응답하지 않아 말하지 않았습니다.",
 
   // Minutes
   "minutes.title": "회의록 보관함",

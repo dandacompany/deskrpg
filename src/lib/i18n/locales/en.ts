@@ -1476,6 +1476,8 @@ const en: Record<string, string> = {
   "meeting.systemSender": "System",
   "meeting.endedTranscriptPrefix": "[Meeting ended]",
   "meeting.errorPrefix": "[Error]",
+  "meeting.mentionSkipped.quotaExhausted": "{name} was mentioned but has used up their turn quota, so they didn't speak.",
+  "meeting.mentionSkipped.backendFailing": "{name} was mentioned but their AI backend isn't responding, so they didn't speak.",
 
   // Minutes
   "minutes.title": "Meeting Minutes",

@@ -10,7 +10,7 @@ import { Transcript, USER_SPEAKER_ID, type Turn } from "./transcript";
 import type { TurnTimeoutConfig } from "./turn-timeout";
 import { FloorInbox } from "./inbox";
 import { DEFAULT_IDLE_MS, DEFAULT_MAX_MS, NpcRuntime } from "./npc-runtime";
-import { MeetingFloorController } from "./floor-controller";
+import { MeetingFloorController, type MentionSkipReason } from "./floor-controller";
 import type { ConversationMode, Participant } from "./turn-policy";
 
 export type EngineParticipant = Participant & {
@@ -66,8 +66,12 @@ export type EngineCallbacks = {
    *
    * 완성된 문장이 아니라 (npcId, reason) 을 넘기는 이유: 엔진에는 사용자용 문자열이
    * 하나도 없다. 표시 문구는 i18n 로케일에 있고 클라이언트가 렌더한다.
+   *
+   * reason 이 유니온인 이유: "quota_exhausted"(발언 할당량 소진)와 "backend_failing"
+   * (게이트웨이 연속 실패로 burnout)을 합치면 죽은 게이트웨이가 정상적인 할당량 소진으로
+   * 보인다 — endReason 에서 이미 피한 혼동(§8)을 여기서도 피한다.
    */
-  onMentionSkipped?: (npcId: string, reason: "quota_exhausted") => void;
+  onMentionSkipped?: (npcId: string, reason: MentionSkipReason) => void;
 };
 
 export type EngineQuota = {
@@ -327,7 +331,7 @@ export class ChannelRuntime {
         // directed 는 폴링 없이 지정 발언만 받는다. 부여를 먼저 보는 구조이므로 이 플래그가
         // 없으면 부여가 없을 때 없던 LLM 폴링 호출이 매 라운드 생긴다.
         pollingAllowed: this.runMode !== "directed",
-        onSkippedGrant: (npcId) => this.callbacks.onMentionSkipped?.(npcId, "quota_exhausted"),
+        onSkippedGrant: (npcId, reason) => this.callbacks.onMentionSkipped?.(npcId, reason),
       });
 
       if (decision.kind === "grant") {

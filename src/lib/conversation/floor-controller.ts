@@ -29,6 +29,12 @@ export type FloorDecision =
   | { kind: "all-passed"; pollResult: PollReport }
   | { kind: "no-candidates" };
 
+/** 멘션 부여를 건너뛴 이유. 유니온으로 둔 이유: 나중에 사유가 늘 때 이 자리만 넓어진다
+ * (스펙 §5.3). `isBurnedOut()` 이 참이면 게이트웨이가 죽은 것("backend_failing")이고,
+ * 그렇지 않은데 자격이 없으면 발언 할당량 소진("quota_exhausted")이다. 둘 다 참이면
+ * backend_failing 을 우선한다 — 운영자에게 더 시급한 사실이다. */
+export type MentionSkipReason = "quota_exhausted" | "backend_failing";
+
 /** 청크 단위로 나눠 순차 실행한다. Hermes의 max_concurrent_runs를 넘는 폴링이
  * 한꺼번에 발사되어 429로 조용히 유실되는 것을 막는다(스펙 §3.5). */
 function chunk<T>(items: T[], size: number): T[][] {
@@ -66,11 +72,16 @@ export class MeetingFloorController {
   private takeGrant(ctx: {
     runtimeFor: (npcId: string) => NpcRuntime | undefined;
     remainingTurns: (npcId: string) => number;
-    onSkippedGrant: (npcId: string) => void;
+    onSkippedGrant: (npcId: string, reason: MentionSkipReason) => void;
   }): string | null {
     return this.inbox.take(
       (npcId) => !(ctx.runtimeFor(npcId)?.isBurnedOut() ?? false) && ctx.remainingTurns(npcId) > 0,
-      ctx.onSkippedGrant,
+      (npcId) => {
+        // isBurnedOut() 이 참이면 게이트웨이가 죽은 것이지 할당량 문제가 아니다 — 두 조건이
+        // 둘 다 걸려 있어도 이쪽이 더 시급한 사실이므로 우선한다.
+        const reason: MentionSkipReason = ctx.runtimeFor(npcId)?.isBurnedOut() ? "backend_failing" : "quota_exhausted";
+        ctx.onSkippedGrant(npcId, reason);
+      },
     );
   }
 
@@ -81,7 +92,7 @@ export class MeetingFloorController {
     lastSpeakerId: string | null;
     /** false 면 부여가 없을 때 폴링하지 않고 all-passed 를 돌려준다 — directed 모드 보존용. */
     pollingAllowed: boolean;
-    onSkippedGrant: (npcId: string) => void;
+    onSkippedGrant: (npcId: string, reason: MentionSkipReason) => void;
   }): Promise<FloorDecision> {
     const grantedNpcId = this.takeGrant(ctx);
     if (grantedNpcId !== null) {

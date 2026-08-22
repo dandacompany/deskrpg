@@ -516,6 +516,26 @@ export default function MeetingRoom({
       setMessages((prev) => appendMeetingMessage(prev, errorMsg));
     };
 
+    const handleMentionSkipped = (data: {
+      npcId: string;
+      npcName: string;
+      reason: "quota_exhausted" | "backend_failing";
+    }) => {
+      const i18nKey =
+        data.reason === "backend_failing"
+          ? "meeting.mentionSkipped.backendFailing"
+          : "meeting.mentionSkipped.quotaExhausted";
+      const infoMsg: MeetingMessage = {
+        id: `mention-skipped-${Date.now()}-${data.npcId}`,
+        sender: tRef.current("meeting.systemSender"),
+        senderId: "system",
+        senderType: "npc",
+        content: tRef.current(i18nKey, { name: data.npcName }),
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => appendMeetingMessage(prev, infoMsg));
+    };
+
     const handleModeChanged = (data: { mode: "auto" | "manual" | "directed"; by: string; initiatorId?: string }) => {
       setMeetingMode(data.mode);
       setIsWaitingInput(data.mode !== "auto");
@@ -564,6 +584,7 @@ export default function MeetingRoom({
     socket.on("meeting:mode-changed", handleModeChanged);
     socket.on("meeting:waiting-input", handleWaitingInput);
     socket.on("meeting:turn-aborted", handleTurnAborted);
+    socket.on("meeting:mention-skipped", handleMentionSkipped);
 
     return () => {
       socket.off("meeting:state", handleState);
@@ -578,6 +599,7 @@ export default function MeetingRoom({
       socket.off("meeting:mode-changed", handleModeChanged);
       socket.off("meeting:waiting-input", handleWaitingInput);
       socket.off("meeting:turn-aborted", handleTurnAborted);
+      socket.off("meeting:mention-skipped", handleMentionSkipped);
       socket.emit("meeting:leave", { channelId });
       joinedRef.current = false;
     };

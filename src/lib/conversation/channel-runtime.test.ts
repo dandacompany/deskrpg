@@ -1023,6 +1023,65 @@ describe("멘션은 쿼터를 존중하고, 건너뛴 지목을 알린다", () =
     );
   });
 
+  test("게이트웨이 연속 실패로 소진된 NPC 의 지목은 backend_failing 으로 건너뛴다(quota_exhausted 와 구분)", async () => {
+    // b 는 폴에는 응하지만 실제 발언은 항상 던진다 — 할당량(remainingTurns)은 그대로 남은
+    // 채 실패 예산만 소진된다. directSpeak 는 인박스의 user 슬롯을 써서 isEligible 검사를
+    // 우회하므로(inbox.ts take()), 자연스러운 멘션 사슬 없이도 b 를 반복 소환해 3연속
+    // 실패(MAX_CONSECUTIVE_FAILURES)를 확정적으로 만들 수 있다. 그 뒤 a 가 b 를 멘션하면
+    // 그 지목은 이번엔 자격 검사를 받아 건너뛰어야 하고, 사유는 quota_exhausted 가 아니라
+    // backend_failing 이어야 한다 — floor-controller.ts 의 술어는 여전히 참지만(할당량은
+    // 남아 있으므로) isBurnedOut() 이 true 라서 원인은 게이트웨이 사망이다.
+    const a = participant("a", ["TO: b\n한 번 더 부탁해요"]);
+    const b = participant("b", [], { adapter: alwaysFailsToSpeak() });
+
+    const notices: string[] = [];
+    const engine = new ChannelRuntime(
+      {
+        mode: "meeting",
+        topic: "점심",
+        participants: [a, b],
+        quota: { maxTurnsPerAgent: 20, maxTotalTurns: 99, cooldownMs: 0 },
+        initialRunMode: "directed",
+        now: () => 0,
+      },
+      { onMentionSkipped: (npcId, reason) => notices.push(`${npcId}:${reason}`) },
+    );
+
+    const running = engine.run();
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    // b 를 세 번 직접 소환해 연속 실패 3회를 채운다(할당량 20은 그대로 남는다 — 실패한
+    // 턴은 트랜스크립트에 기록되지 않으므로 remainingTurns 를 갉아먹지 않는다).
+    engine.directSpeak("b");
+    await wait(20);
+    engine.directSpeak("b");
+    await wait(20);
+    engine.directSpeak("b");
+    await wait(20);
+
+    // a 를 소환해 b 를 멘션시킨다 — 이번엔 인박스 mentions 큐를 거치므로 isEligible 검사를
+    // 받는다.
+    engine.directSpeak("a");
+    await wait(20);
+
+    // a 의 턴이 끝나면 루프는 다시 armWait() 로 대기에 들어간다(directed 는 그랜트 처리
+    // 뒤 항상 다음 입력을 기다린다) — 그 대기를 풀어야 다음 루프 반복이 인박스에 쌓인 b
+    // 멘션을 floor.next() 로 실제로 소비한다. directSpeak 를 다시 쓰면 user 슬롯을 채워
+    // b 의 멘션(mentions 큐)보다 먼저 소비돼 버리므로, 같은 모드로 setMode 를 다시 걸어
+    // user 슬롯을 건드리지 않고 대기만 해제한다.
+    engine.setMode("directed");
+    await wait(20);
+
+    engine.stop();
+    await running;
+
+    assert.deepEqual(
+      notices,
+      ["b:backend_failing"],
+      `실패 예산 소진(할당량은 남음)은 quota_exhausted 가 아니라 backend_failing 으로 알려야 한다. 실제: ${JSON.stringify(notices)}`,
+    );
+  });
+
   test("사용자 지목은 할당량이 소진돼도 말한다", async () => {
     const a = participant("a", ["PASS", "..."]);
     const b = participant("b", ["PASS", "김치찌개요"]);
