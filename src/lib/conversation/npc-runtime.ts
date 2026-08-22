@@ -73,15 +73,21 @@ export class NpcRuntime {
     this.deps = deps;
   }
 
-  failureCount(): number {
-    return this.failures;
+  /**
+   * 새 run() 을 위해 실패 예산을 되돌린다.
+   *
+   * 턴 결과에 따른 갱신(noteFailure/noteSuccess)과 달리 이것은 **바깥이 정할 일**이다 —
+   * "회의가 새로 시작한다"는 사실은 NPC 가 알 수 없다. 그래서 이것만 public 이다.
+   */
+  resetFailures(): void {
+    this.failures = 0;
   }
 
-  noteFailure(): void {
+  private noteFailure(): void {
     this.failures += 1;
   }
 
-  noteSuccess(): void {
+  private noteSuccess(): void {
     this.failures = 0;
   }
 
@@ -205,6 +211,7 @@ export class NpcRuntime {
         );
 
         if (mention.text) {
+          this.noteSuccess();
           return { kind: "spoke", text: mention.text, mentionNpcId: mention.npcId };
         }
         // "TO: 이름"만 있고 본문이 없는 응답 — parseMention이 지목 줄을 걷어내면 남는 텍스트가
@@ -212,13 +219,16 @@ export class NpcRuntime {
         // 말도, 트랜스크립트에 남길 발언도 없다. 아래 catch-all과 동일하게 "쓸 만한 텍스트가
         // 하나도 없는 턴"으로 취급한다. 다만 지목 자체는 유효한 의사표시이므로 mentionNpcId는
         // 그대로 돌려준다(엔진이 인박스에 넣는다).
+        this.noteFailure();
         return { kind: "empty", mentionNpcId: mention.npcId, partialText: emittedText };
       }
       // 정상적으로 resolve했지만 쓸 만한 텍스트가 하나도 없는 턴은, 루프 입장에서는 실패한
       // 턴이다 — 트랜스크립트에 아무것도 안 실리므로 maxTotalTurns·remainingTurns·
       // consecutivePasses 중 무엇도 전진하지 않는다.
+      this.noteFailure();
       return { kind: "empty", mentionNpcId: null, partialText: emittedText };
     } catch (err) {
+      this.noteFailure();
       return {
         kind: "error",
         error: err,

@@ -294,7 +294,7 @@ export class ChannelRuntime {
     this.running = true;
     this.endReason = null;
     // 이전 run()이 남긴 실패 카운터를 물려받으면 두 번째 run()은 예산 3이 아니라 1로 시작한다.
-    for (const r of this.runtimes.values()) r.noteSuccess();
+    for (const r of this.runtimes.values()) r.resetFailures();
 
     while (this.running && !this.isFinished()) {
       // 1. 커맨드 큐 비우기(setMode)
@@ -475,7 +475,6 @@ export class ChannelRuntime {
     this.current = null;
 
     if (outcome.kind === "spoke") {
-      runtime.noteSuccess();
       this.transcript.add(runtime.npcId, runtime.displayName, outcome.text, this.now());
       this.lastSpeakerId = runtime.npcId;
       this.callbacks.onTurnEnd?.(runtime.npcId, outcome.text);
@@ -485,8 +484,6 @@ export class ChannelRuntime {
       if (outcome.mentionNpcId) this.inbox.push(outcome.mentionNpcId, "mention");
       return;
     }
-
-    runtime.noteFailure();
 
     if (outcome.kind === "empty") {
       // "TO: 이름"만 있고 본문이 없는 응답이거나, 쓸 만한 텍스트가 하나도 없는 턴이다.
