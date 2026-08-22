@@ -2971,8 +2971,10 @@ export class GameScene extends Phaser.Scene {
       EventBus.emit("npc:dialog-auto-close");
     }
 
-    // Channel chat: notify input enable/disable based on player proximity
-    const inputEnabled = nearbyP.length > 0;
+    // Channel chat: notify input enable/disable based on proximity to a talk target.
+    // NPC 도 맵 채팅으로 지명할 수 있으므로(@[이름]), 사람 없이 NPC 만 근처에 있어도
+    // 입력을 열어야 한다 — nearbyP 만 보면 혼자 있는 플레이어는 NPC 를 영영 부를 수 없다.
+    const inputEnabled = hasNearby;
     if (inputEnabled !== this.lastChatInputEnabled) {
       this.lastChatInputEnabled = inputEnabled;
       EventBus.emit("chat:input-enabled", inputEnabled);

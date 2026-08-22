@@ -318,7 +318,7 @@ export default function ChatPanel({
                 );
               })}
             </div>
-            <ChatInput onSend={onSendChannelChat} placeholder={channelChatInputDisabled ? t("chat.moveCloser") : t("chat.placeholder")} disabled={!!channelChatInputDisabled} autoFocus />
+            <ChatInput onSend={onSendChannelChat} placeholder={t("chat.placeholder")} disabledPlaceholder={t("chat.moveCloser")} disabled={!!channelChatInputDisabled} autoFocus />
           </>
         )}
       </div>
