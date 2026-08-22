@@ -85,7 +85,11 @@ const { withTaskReminder, normalizeTaskPromptLocale, buildTaskSessionPrompt } = 
 const adapterRegistry = new AdapterRegistry();
 
 /** 채널별 자유채팅 런타임. 회의(activeBrokers)와 달리 시작·종료가 없고 첫 지명에 생겨 계속 산다. */
-const openChats = new Map<string, OpenChatRuntime>();
+// 값이 런타임이 아니라 **약속**인 이유: 생성이 두 번의 DB 왕복을 거치는데 호출부가
+// fire-and-forget 이라, 완성된 런타임을 넣으면 그 사이에 들어온 두 번째 지명이 두 번째
+// 인스턴스를 만든다. 인스턴스가 둘이면 speaking 가드도 예산도 인스턴스별이라 동시에
+// 무력화된다. 약속을 동기적으로 등록하면 두 번째 호출이 첫 번째를 기다린다.
+const openChats = new Map<string, Promise<OpenChatRuntime | null>>();
 
 // Register CLI adapters when the corresponding local CLI is installed.
 for (const AdapterClass of [ClaudeAdapter, CodexAdapter, GeminiAdapter, OpenCodeAdapter]) {
@@ -644,10 +648,26 @@ async function getNpcConfigsForChannel(channelId: string): Promise<NpcConfig[]> 
  * 을 이미 쓰고 있어 그대로 재사용한다 — 별도 toNpcConfig 를 만들면 조립 규칙이 둘로 갈려
  * 회의 NPC 와 수다 NPC 의 페르소나가 어긋난다.
  */
-async function getOrCreateOpenChat(io: Server, channelId: string, userId: string): Promise<OpenChatRuntime | null> {
+function getOrCreateOpenChat(io: Server, channelId: string, userId: string): Promise<OpenChatRuntime | null> {
   const existing = openChats.get(channelId);
   if (existing) return existing;
 
+  const creating = createOpenChat(io, channelId, userId).then(
+    (runtime) => {
+      // 참가자가 없어 null 이면 캐시하지 않는다 — NPC 가 나중에 배치되면 다시 시도해야 한다.
+      if (!runtime && openChats.get(channelId) === creating) openChats.delete(channelId);
+      return runtime;
+    },
+    (err) => {
+      if (openChats.get(channelId) === creating) openChats.delete(channelId);
+      throw err;
+    },
+  );
+  openChats.set(channelId, creating);
+  return creating;
+}
+
+async function createOpenChat(io: Server, channelId: string, userId: string): Promise<OpenChatRuntime | null> {
   const npcConfigs = await getNpcConfigsForChannel(channelId);
   const participants: EngineParticipant[] = [];
   for (const npc of npcConfigs) {
@@ -714,7 +734,7 @@ async function getOrCreateOpenChat(io: Server, channelId: string, userId: string
       },
     },
   );
-  openChats.set(channelId, runtime);
+  // 캐시 등록은 getOrCreateOpenChat 이 약속 단위로 한다 — 여기서 다시 넣으면 등록 지점이 둘이 된다.
   return runtime;
 }
 
