@@ -43,11 +43,17 @@ describe("건너뛴 지목 안내 — 사유별 i18n 키", () => {
       // 사라져, 참가자가 여럿인 회의에서 안내가 쓸모없어진다.
       const src = localeSource(lang);
       for (const key of Object.values(MENTION_SKIP_I18N_KEY)) {
-        const line = src.split("\n").find((l) => l.includes(`"${key}"`));
-        assert.ok(line, `${lang}.ts 에서 "${key}" 줄을 찾지 못했습니다.`);
+        // 줄 단위로 찾지 않는다 — 포매터가 긴 항목을 키와 값 두 줄로 쪼개면
+        // 값이 다음 줄로 내려가 "줄을 못 찾았다"가 아니라 "{name} 이 없다"로 잘못 실패한다.
+        const m = src.match(
+          new RegExp(
+            `"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*:\\s*("(?:[^"\\\\]|\\\\.)*")`,
+          ),
+        );
+        assert.ok(m, `${lang}.ts 에서 "${key}" 의 값을 찾지 못했습니다.`);
         assert.ok(
-          line!.includes("{name}"),
-          `${lang}.ts 의 "${key}" 에 {name} 이 없습니다: ${line!.trim()}`,
+          m![1].includes("{name}"),
+          `${lang}.ts 의 "${key}" 에 {name} 이 없습니다: ${m![1]}`,
         );
       }
     });

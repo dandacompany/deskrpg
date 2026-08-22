@@ -34,9 +34,9 @@ test("server.js registers no socket handlers of its own", () => {
   assert.deepEqual(
     events,
     [],
-    `server.js가 소켓 핸들러를 직접 등록하고 있습니다: ${events.join(", ")}\n`
-      + "핸들러는 src/server/socket-handlers.ts 한 곳에만 있어야 합니다 "
-      + "(server.js는 setupSocketHandlers(io)를 호출하기만 합니다).",
+    `server.js가 소켓 핸들러를 직접 등록하고 있습니다: ${events.join(", ")}\n` +
+      "핸들러는 src/server/socket-handlers.ts 한 곳에만 있어야 합니다 " +
+      "(server.js는 setupSocketHandlers(io)를 호출하기만 합니다).",
   );
 });
 
@@ -52,9 +52,14 @@ test("server.js delegates to setupSocketHandlers", () => {
 test("socket-handlers still registers the events server.js used to own", () => {
   const events = socketEventsIn("src/server/socket-handlers.ts");
   for (const required of [
-    "player:join", "player:move", "chat:send",
-    "map:object-add", "map:object-remove", "map:tiles-update",
-    "npc:chat", "npc:position-update",
+    "player:join",
+    "player:move",
+    "chat:send",
+    "map:object-add",
+    "map:object-remove",
+    "map:tiles-update",
+    "npc:chat",
+    "npc:position-update",
   ]) {
     assert.ok(
       events.includes(required),
@@ -76,8 +81,8 @@ test("게이트웨이 설정이 바뀌면 런타임 상태 캐시가 무효화�
   assert.match(
     src,
     /invalidateGatewayRuntimeState\s*\(/,
-    "gateway-resources.ts 가 invalidateGatewayRuntimeState 를 호출하지 않습니다 — "
-      + "게이트웨이 주소나 토큰을 바꿔도 캐시된 상태가 그대로 쓰입니다.",
+    "gateway-resources.ts 가 invalidateGatewayRuntimeState 를 호출하지 않습니다 — " +
+      "게이트웨이 주소나 토큰을 바꿔도 캐시된 상태가 그대로 쓰입니다.",
   );
 });
 
@@ -91,9 +96,9 @@ test("socket-handlers enforces single-session-per-user by emitting session:kicke
   assert.match(
     src,
     /session:kicked/,
-    "socket-handlers.ts가 \"session:kicked\"를 더 이상 emit하지 않습니다 — "
-      + "단일 세션 강제(single-session-per-user)가 다시 사라졌습니다. "
-      + "player:join 핸들러에서 이전 세션을 disconnect하는 로직을 복원하세요.",
+    'socket-handlers.ts가 "session:kicked"를 더 이상 emit하지 않습니다 — ' +
+      "단일 세션 강제(single-session-per-user)가 다시 사라졌습니다. " +
+      "player:join 핸들러에서 이전 세션을 disconnect하는 로직을 복원하세요.",
   );
 });
 
@@ -112,10 +117,10 @@ test("socket-handlers extraction regex captures multi-line socket.on() registrat
   const events = socketEventsIn("src/server/socket-handlers.ts");
   assert.ok(
     events.includes("player:join"),
-    "socket-handlers.ts에서 \"player:join\"을 추출하지 못했습니다 — "
-      + "이 이벤트는 socket.on(\\n  \"player:join\",\\n  ...) 형태의 여러 줄 등록입니다. "
-      + "추출 정규식이 개행을 포함한 socket.on(...) 등록을 놓치고 있다는 뜻이며, "
-      + "이 파일의 다른 어서션들도 신뢰할 수 없습니다 — 정규식부터 고치세요.",
+    'socket-handlers.ts에서 "player:join"을 추출하지 못했습니다 — ' +
+      '이 이벤트는 socket.on(\\n  "player:join",\\n  ...) 형태의 여러 줄 등록입니다. ' +
+      "추출 정규식이 개행을 포함한 socket.on(...) 등록을 놓치고 있다는 뜻이며, " +
+      "이 파일의 다른 어서션들도 신뢰할 수 없습니다 — 정규식부터 고치세요.",
   );
 });
 
@@ -127,8 +132,10 @@ test("socket-handlers extraction regex captures multi-line socket.on() registrat
 test("map chat events emitted by the server have a listener in the map client", () => {
   const client = readFileSync(path.join(repoRoot, "src/app/game/GamePageClient.tsx"), "utf8");
   for (const event of ["npc:come-to-player", "chat:mention-skipped", "chat:npc-aborted"]) {
+    // 공백에 둔감하게 — 포매터가 `socketInstance.on(` 다음에서 줄을 바꿔도
+    // 리스너는 그대로 있다. 형식이 바뀌었을 뿐인데 빨개지는 가드는 신뢰를 잃는다.
     assert.ok(
-      client.includes(`socketInstance.on("${event}"`),
+      new RegExp(`socketInstance\\.on\\(\\s*"${event}"`).test(client),
       `서버가 ${event} 를 쏘지만 맵 클라이언트에 리스너가 없습니다 — 죽은 배선입니다.`,
     );
   }
@@ -162,8 +169,8 @@ test("npc:come-to-player always carries a real caller socket id", () => {
   assert.deepEqual(
     dead,
     [],
-    "npc:come-to-player 가 targetPlayerId 없이 나갑니다 — 클라이언트 조건이 "
-      + "어떤 소켓에서도 참이 되지 않아 NPC 가 걸어오지 않습니다(무음 실패).",
+    "npc:come-to-player 가 targetPlayerId 없이 나갑니다 — 클라이언트 조건이 " +
+      "어떤 소켓에서도 참이 되지 않아 NPC 가 걸어오지 않습니다(무음 실패).",
   );
 });
 
@@ -171,7 +178,7 @@ test("the map client still gates A* on being the caller", () => {
   const client = readFileSync(path.join(repoRoot, "src/app/game/GamePageClient.tsx"), "utf8");
   assert.ok(
     /data\.targetPlayerId\s*===\s*socketInstance\.id/.test(client),
-    "npc:come-to-player 리스너가 호출자 판정을 잃었습니다 — 조건이 늘 거짓이면 아무도 "
-      + "경로탐색을 돌리지 않고, 늘 참이면 모든 클라이언트가 같은 NPC 를 각자 움직입니다.",
+    "npc:come-to-player 리스너가 호출자 판정을 잃었습니다 — 조건이 늘 거짓이면 아무도 " +
+      "경로탐색을 돌리지 않고, 늘 참이면 모든 클라이언트가 같은 NPC 를 각자 움직입니다.",
   );
 });
