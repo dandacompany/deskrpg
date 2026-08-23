@@ -60,6 +60,7 @@ import {
   registerMeetingSocketHandlers,
 } from "./meeting-socket";
 import { registerMeetingDiscussionHandlers, resolveNpcAdapter } from "./meeting-discussion";
+import { getOrCreateCached } from "./promise-cache";
 import { OpenChatRuntime } from "../lib/conversation/open-chat-runtime";
 import type { EngineParticipant } from "../lib/conversation/types";
 import { AdapterRegistry } from "../lib/adapters/types.js";
@@ -699,22 +700,7 @@ function getOrCreateOpenChat(
   channelId: string,
   userId: string,
 ): Promise<OpenChatRuntime | null> {
-  const existing = openChats.get(channelId);
-  if (existing) return existing;
-
-  const creating = createOpenChat(io, channelId, userId).then(
-    (runtime) => {
-      // 참가자가 없어 null 이면 캐시하지 않는다 — NPC 가 나중에 배치되면 다시 시도해야 한다.
-      if (!runtime && openChats.get(channelId) === creating) openChats.delete(channelId);
-      return runtime;
-    },
-    (err) => {
-      if (openChats.get(channelId) === creating) openChats.delete(channelId);
-      throw err;
-    },
-  );
-  openChats.set(channelId, creating);
-  return creating;
+  return getOrCreateCached(openChats, channelId, () => createOpenChat(io, channelId, userId));
 }
 
 async function createOpenChat(
