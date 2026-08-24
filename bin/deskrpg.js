@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { spawn, execSync } = require("node:child_process");
+const readline = require("node:readline");
 
 const EXTERNAL_ALIAS_PACKAGE_MAP = new Map([
   ["better-sqlite3-", "better-sqlite3"],
@@ -16,6 +17,13 @@ function getPackageRoot() {
 
 function loadRuntimePathsModule() {
   return require(path.join(getPackageRoot(), "src", "lib", "runtime-paths.js"));
+}
+
+// runtime-paths 와 같은 규칙으로 지연 로드한다. 최상위에서 `../src/...` 로 부르면
+// (1) 이 파일이 필요 없는 명령(init·doctor 등)까지 그 파일에 묶이고,
+// (2) 패키지 루트를 __dirname 상대경로로 가정하게 된다 — getPackageRoot() 가 있는 이유다.
+function loadCliPasswordModule() {
+  return require(path.join(getPackageRoot(), "src", "lib", "cli-password.js"));
 }
 
 function getInstalledPackageRoot(packageName) {
@@ -217,7 +225,8 @@ function printHelp() {
   console.log("create-user options:");
   console.log("  --login-id ID         Login ID (required)");
   console.log("  --nickname NAME       Display name (required)");
-  console.log("  --password PW         Password (required, 8+ chars)");
+  console.log("  --password PW         Password (8+ chars). Beware: stays in shell history");
+  console.log("  --password-stdin      Read the password from stdin instead");
   console.log("  --role ROLE           User role: admin or user (default: user)");
   console.log("");
   console.log("Examples:");
@@ -226,7 +235,12 @@ function printHelp() {
   console.log("  deskrpg start -p 8080 # Start on port 8080");
   console.log("  deskrpg start -d      # Start in background");
   console.log("  deskrpg stop          # Stop background server");
-  console.log("  deskrpg create-user --login-id alice --nickname Alice --password secret123");
+  console.log(
+    "  deskrpg create-user --login-id alice --nickname Alice   # prompts for the password",
+  );
+  console.log(
+    '  echo "$PW" | deskrpg create-user --login-id alice --nickname Alice --password-stdin',
+  );
 }
 
 function printUsage() {
@@ -573,6 +587,7 @@ function parseCreateUserArgs() {
     loginId: null,
     nickname: null,
     password: null,
+    passwordStdin: false,
     role: "user",
   };
   for (let i = 0; i < args.length; i++) {
@@ -582,6 +597,8 @@ function parseCreateUserArgs() {
       result.nickname = args[++i];
     } else if (args[i] === "--password" && args[i + 1]) {
       result.password = args[++i];
+    } else if (args[i] === "--password-stdin") {
+      result.passwordStdin = true;
     } else if (args[i] === "--role" && args[i + 1]) {
       result.role = args[++i];
     }
@@ -589,13 +606,71 @@ function parseCreateUserArgs() {
   return result;
 }
 
-async function runCreateUser() {
-  const { loginId, nickname, password, role } = parseCreateUserArgs();
+/** stdin 을 끝까지 읽는다. `echo pw | deskrpg create-user --password-stdin` 용. */
+function readStdin() {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => (data += chunk));
+    process.stdin.on("end", () => resolve(data));
+    process.stdin.on("error", reject);
+  });
+}
 
-  if (!loginId || !nickname || !password) {
+/**
+ * 에코 없이 한 줄을 받는다. readline 의 output 을 가로채 입력 문자를 화면에 쓰지
+ * 않는다 — 어깨너머로 보이는 것도, 터미널 스크롤백에 남는 것도 막는다.
+ */
+function promptPassword(label = "Password: ") {
+  return new Promise((resolve, reject) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: true,
+    });
+    const onWrite = (chunk, encoding, callback) => {
+      // 라벨 자체는 보여야 하지만 그 뒤의 입력 에코는 삼킨다.
+      if (chunk.toString() !== label) return callback();
+      return rlWrite.call(process.stdout, chunk, encoding, callback);
+    };
+    const rlWrite = process.stdout.write;
+    process.stdout.write = onWrite;
+    rl.question(label, (answer) => {
+      process.stdout.write = rlWrite;
+      process.stdout.write("\n");
+      rl.close();
+      resolve(answer);
+    });
+    rl.on("error", (err) => {
+      process.stdout.write = rlWrite;
+      reject(err);
+    });
+  });
+}
+
+async function runCreateUser() {
+  const args = parseCreateUserArgs();
+  const { loginId, nickname, role } = args;
+
+  if (!loginId || !nickname) {
     console.error(
-      "Usage: deskrpg create-user --login-id ID --nickname NAME --password PW [--role admin|user]",
+      "Usage: deskrpg create-user --login-id ID --nickname NAME [--password PW | --password-stdin] [--role admin|user]",
     );
+    process.exit(1);
+  }
+
+  let password;
+  try {
+    const { resolvePassword } = loadCliPasswordModule();
+    password = await resolvePassword({
+      passwordArg: args.password,
+      fromStdin: args.passwordStdin,
+      readStdin,
+      promptPassword,
+      isTty: Boolean(process.stdin.isTTY),
+    });
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
     process.exit(1);
   }
 
