@@ -39,9 +39,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/server.js ./server.js
 
 # CommonJS modules required by server.js (not traced by Next.js standalone)
-COPY --from=builder /app/src/lib/meeting-broker.js ./src/lib/meeting-broker.js
 COPY --from=builder /app/src/lib/meeting-formatter.js ./src/lib/meeting-formatter.js
-COPY --from=builder /app/src/lib/openclaw-gateway.js ./src/lib/openclaw-gateway.js
 COPY --from=builder /app/src/lib/runtime-paths.js ./src/lib/runtime-paths.js
 COPY --from=builder /app/src/lib/task-parser.js ./src/lib/task-parser.js
 COPY --from=builder /app/src/lib/task-block-utils.js ./src/lib/task-block-utils.js
@@ -56,20 +54,19 @@ COPY --from=builder /app/src/lib/i18n/task-prompt-messages.js ./src/lib/i18n/tas
 COPY --from=builder /app/src/lib/internal-transport.js ./src/lib/internal-transport.js
 COPY --from=builder /app/src/lib/task-reporting.ts ./src/lib/task-reporting.ts
 COPY --from=builder /app/src/lib/rbac/channel-access.ts ./src/lib/rbac/channel-access.ts
-COPY --from=builder /app/src/server/meeting-socket.ts ./src/server/meeting-socket.ts
-COPY --from=builder /app/src/server/meeting-discussion.ts ./src/server/meeting-discussion.ts
 
-# conversation-engine.ts and its sibling modules (meeting-discussion.ts's deps,
-# not traced by Next.js standalone, same reason as the files above)
-COPY --from=builder /app/src/lib/conversation/conversation-engine.ts ./src/lib/conversation/conversation-engine.ts
-COPY --from=builder /app/src/lib/conversation/transcript.ts ./src/lib/conversation/transcript.ts
-COPY --from=builder /app/src/lib/conversation/turn-policy.ts ./src/lib/conversation/turn-policy.ts
-COPY --from=builder /app/src/lib/conversation/turn-timeout.ts ./src/lib/conversation/turn-timeout.ts
+# 대화 런타임과 소켓 서버는 **디렉토리째** 복사한다.
+#
+# 예전에는 파일을 한 줄씩 나열했는데, 그 목록은 파일이 추가·개명될 때마다 썩었다.
+# 실제로 삭제된 meeting-broker.js·openclaw-gateway.js 를 계속 COPY 해 빌드가 깨졌고,
+# 2단계에서 늘어난 conversation 모듈 여덟 개는 아예 빠져 있었다 — server.js 가 런타임에
+# socket-handlers.ts 를 import 하므로 그대로 두면 컨테이너가 기동에서 죽는다.
+#
+# 목록을 손으로 맞추는 대신 경계를 통째로 옮긴다. 새 형제 파일이 생겨도 따라온다.
+COPY --from=builder /app/src/lib/conversation ./src/lib/conversation
+COPY --from=builder /app/src/server ./src/server
+COPY --from=builder /app/src/lib/open-chat-formatter.ts ./src/lib/open-chat-formatter.ts
 
-# socket-handlers.ts (server.js entrypoint) and its transitive TS deps
-# (not traced by Next.js standalone, same reason as the files above)
-COPY --from=builder /app/src/server/socket-handlers.ts ./src/server/socket-handlers.ts
-COPY --from=builder /app/src/server/hermes-dispatch.ts ./src/server/hermes-dispatch.ts
 COPY --from=builder /app/src/db/index.ts ./src/db/index.ts
 COPY --from=builder /app/src/db/schema.ts ./src/db/schema.ts
 COPY --from=builder /app/src/db/schema-sqlite.ts ./src/db/schema-sqlite.ts
