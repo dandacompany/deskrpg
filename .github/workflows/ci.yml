@@ -45,3 +45,29 @@ jobs:
       - name: 포매팅
         if: always()
         run: npm run format:check
+
+  # 런타임 이미지가 실제로 빌드되는지 본다.
+  #
+  # verify 잡으로는 이 층을 못 본다. 단위 테스트는 .ts 소스를 직접 읽으므로 파일이
+  # 다 있고, `next build` 는 앱을 번들할 뿐 Dockerfile 의 COPY 목록과 무관하다.
+  # 그래서 삭제된 파일을 계속 COPY 하던 Dockerfile 이 넉 달을 살아남았고, 2단계에서
+  # 늘어난 런타임 모듈이 통째로 빠진 것도 배포 때서야 드러났다.
+  #
+  # 러너는 amd64 이고 배포 대상(MiniPC)도 x86_64 라 아키텍처가 맞는다.
+  # 여기서는 빌드만 한다 — 푸시는 릴리스 파이프라인의 몫이다.
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 런타임 이미지 빌드
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
