@@ -2002,7 +2002,13 @@ const ko: Record<string, string> = {
   "errors.groupAdminRequired": "그룹 관리자 권한이 필요합니다",
   "errors.groupNotFound": "그룹을 찾을 수 없습니다",
   "errors.failedToJoinChannel": "채널 참가에 실패했습니다",
-  "errors.failedToReachTestEndpoint": "테스트 엔드포인트에 연결하지 못했습니다",
+  "errors.failedToReachTestEndpoint":
+    "그 주소에 연결하지 못했습니다. Hermes 게이트웨이가 실행 중이고 이 서버에서 닿는 주소인지 확인하세요",
+  "errors.notAHermesGateway": "Hermes API 서버가 아닙니다. 주소와 포트를 확인하세요",
+  "errors.gatewayIsNotApiServer":
+    "Hermes 웹 화면에 연결됐습니다. API 서버가 아닙니다 — 포트를 확인하세요(대시보드는 보통 9119, API 서버는 8643)",
+  "errors.gatewayLoopbackInContainer":
+    "DeskRPG 는 컨테이너 안에서 실행 중입니다. 여기서 127.0.0.1 은 Hermes 가 아니라 컨테이너 자신을 가리킵니다 — 호스트의 실제 IP 를 쓰세요",
   "errors.failedToResolveInviteCode": "초대 코드를 확인하지 못했습니다",
   "errors.inviteExpirationInvalid": "초대 만료일은 현재보다 미래여야 합니다",
   "errors.groupInviteExpired": "이 그룹 초대코드는 만료되었습니다",

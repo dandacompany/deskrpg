@@ -447,7 +447,11 @@ export async function getGatewayRuntimeStateForChannel(
   // 한 번 더 시도했지만, 그 백엔드는 사라졌다 — 프로브 결과를 그대로 실패로 보고한다.
   {
     const errorCode =
-      probe.kind === "unreachable" ? "failed_to_reach_test_endpoint" : "not_a_hermes_gateway";
+      probe.kind === "unreachable"
+        ? "failed_to_reach_test_endpoint"
+        : probe.kind === "dashboard"
+          ? "gateway_is_not_api_server"
+          : "not_a_hermes_gateway";
     const error =
       probe.kind === "unreachable" ? probe.error : `Not a Hermes API Server (HTTP ${probe.status})`;
     const status = mapGatewayErrorStatus(errorCode, 502);

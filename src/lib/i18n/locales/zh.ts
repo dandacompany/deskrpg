@@ -1977,7 +1977,13 @@ const zh: Record<string, string> = {
   "errors.groupAdminRequired": "需要群组管理员权限",
   "errors.groupNotFound": "未找到群组",
   "errors.failedToJoinChannel": "加入频道失败",
-  "errors.failedToReachTestEndpoint": "无法访问测试端点",
+  "errors.failedToReachTestEndpoint":
+    "无法连接到该地址。请确认 Hermes 网关正在运行且本服务器可以访问",
+  "errors.notAHermesGateway": "这不是 Hermes API 服务器。请检查地址和端口",
+  "errors.gatewayIsNotApiServer":
+    "连接到的是 Hermes 网页界面，而不是 API 服务器 — 请检查端口（仪表板通常为 9119，API 服务器为 8643）",
+  "errors.gatewayLoopbackInContainer":
+    "DeskRPG 运行在容器内，这里的 127.0.0.1 指向容器本身而不是 Hermes — 请使用宿主机的实际 IP 地址",
   "errors.failedToResolveInviteCode": "无法解析邀请码",
   "errors.inviteExpirationInvalid": "邀请码过期时间必须晚于当前时间",
   "errors.groupInviteExpired": "此群组邀请码已过期",

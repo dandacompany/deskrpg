@@ -2002,7 +2002,14 @@ const ja: Record<string, string> = {
   "errors.groupAdminRequired": "グループ管理者権限が必要です",
   "errors.groupNotFound": "グループが見つかりません",
   "errors.failedToJoinChannel": "チャンネルへの参加に失敗しました",
-  "errors.failedToReachTestEndpoint": "テストエンドポイントに到達できませんでした",
+  "errors.failedToReachTestEndpoint":
+    "そのアドレスに接続できませんでした。Hermes ゲートウェイが起動していて、このサーバーから到達できるか確認してください",
+  "errors.notAHermesGateway":
+    "Hermes API サーバーではありません。アドレスとポートを確認してください",
+  "errors.gatewayIsNotApiServer":
+    "Hermes の Web 画面に接続しました。API サーバーではありません — ポートを確認してください（ダッシュボードは通常 9119、API サーバーは 8643）",
+  "errors.gatewayLoopbackInContainer":
+    "DeskRPG はコンテナ内で動作しています。ここでの 127.0.0.1 は Hermes ではなくコンテナ自身を指します — ホストの実際の IP を使用してください",
   "errors.failedToResolveInviteCode": "招待コードを解決できませんでした",
   "errors.inviteExpirationInvalid": "招待の有効期限は現在より未来である必要があります",
   "errors.groupInviteExpired": "このグループ招待は期限切れです",

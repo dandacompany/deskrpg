@@ -31,6 +31,9 @@ export type ErrorCode =
   | "public_channel_browse_only"
   | "failed_to_join_channel"
   | "failed_to_reach_test_endpoint"
+  | "not_a_hermes_gateway"
+  | "gateway_is_not_api_server"
+  | "gateway_loopback_in_container"
   | "failed_to_resolve_invite_code"
   | "invite_expiration_invalid"
   | "group_invite_expired"
@@ -129,7 +132,8 @@ export type ErrorCode =
   | "profile_not_found"
   | "gateway_not_found";
 
-const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
+/** 등록된 모든 에러코드 → 번역 키. 커버리지 가드가 이 표 전체를 훑는다. */
+export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   invalid_credentials: "errors.invalidCredentials",
   login_id_password_required: "errors.loginIdPasswordRequired",
   login_id_nickname_password_required: "errors.loginIdNicknamePasswordRequired",
@@ -162,6 +166,9 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   public_channel_browse_only: "errors.forbidden",
   failed_to_join_channel: "errors.failedToJoinChannel",
   failed_to_reach_test_endpoint: "errors.failedToReachTestEndpoint",
+  not_a_hermes_gateway: "errors.notAHermesGateway",
+  gateway_is_not_api_server: "errors.gatewayIsNotApiServer",
+  gateway_loopback_in_container: "errors.gatewayLoopbackInContainer",
   failed_to_resolve_invite_code: "errors.failedToResolveInviteCode",
   invite_expiration_invalid: "errors.inviteExpirationInvalid",
   group_invite_expired: "errors.groupInviteExpired",

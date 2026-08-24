@@ -5,7 +5,7 @@ import en from "./locales/en";
 import ja from "./locales/ja";
 import ko from "./locales/ko";
 import zh from "./locales/zh";
-import { getErrorMessageKey, type ErrorCode } from "./error-codes";
+import { ERROR_MESSAGE_KEYS, getErrorMessageKey, type ErrorCode } from "./error-codes";
 
 const REQUIRED_KEYS = [
   "metadata.title",
@@ -355,4 +355,29 @@ test("group RBAC error codes map to stable translation keys", () => {
   assert.equal(getErrorMessageKey("system_admin_required"), "errors.systemAdminRequired");
   assert.equal(getErrorMessageKey("group_admin_required"), "errors.groupAdminRequired");
   assert.equal(getErrorMessageKey("group_not_found"), "errors.groupNotFound");
+});
+
+// 에러코드는 등록만으로는 화면에 뜨지 않는다. 번역 키가 로케일에 없으면
+// getLocalizedMessage 가 fallback 으로 떨어져 사용자는 "오류가 발생했습니다" 만 본다.
+// 실제로 not_a_hermes_gateway 는 서버가 보내는데 타입에도 로케일에도 없어서, 게이트웨이
+// 주소가 틀렸다는 사실이 화면에 전혀 전달되지 않았다.
+test("every registered error code has a message in every locale", () => {
+  const locales: Array<[string, Record<string, string>]> = [
+    ["ko", ko],
+    ["en", en],
+    ["ja", ja],
+    ["zh", zh],
+  ];
+  const missing: string[] = [];
+  for (const [code, key] of Object.entries(ERROR_MESSAGE_KEYS)) {
+    for (const [lang, dict] of locales) {
+      if (!dict[key]) missing.push(`${lang}: ${key} (${code})`);
+    }
+  }
+  assert.deepEqual(
+    missing,
+    [],
+    "번역이 없는 에러코드가 있습니다 — 사용자에게는 generic 메시지만 보입니다:\n  " +
+      missing.join("\n  "),
+  );
 });

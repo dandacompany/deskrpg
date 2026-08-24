@@ -3,11 +3,23 @@
  *
  * Hermes에서 인증이 걸리는 것은 프로필 스코프이므로(named 프로필은 fail-closed로
  * 자기 API_SERVER_KEY를 요구한다), 게이트웨이 레벨에서 확인할 수 있는 것은
- * "이 주소에 Hermes API Server가 떠 있는가"뿐이다. `/health`는 인증이 없다.
- * 토큰이 맞는지는 프로필 테스트(validateHermesProfile)가 본다.
+ * "이 주소에 Hermes API Server가 떠 있는가"뿐이다. 토큰이 맞는지는 프로필
+ * 테스트(validateHermesProfile)가 본다 — 여기서 중복하지 않는다.
+ *
+ * **`/health` 하나로는 부족하다.** 그 엔드포인트는 무인증이고, Hermes 대시보드도
+ * 200을 낸다. 대시보드는 SPA라 catch-all로 아무 경로에나 200 + HTML을 돌려주므로
+ * 상태 코드만 보면 진짜 API Server와 구분되지 않는다 — 실측으로 확인했다:
+ *
+ *     API Server (8643)  /health 200 · /v1/models 401 application/json
+ *     대시보드   (9119)  /health 200 · /v1/models 200 text/html
+ *
+ * 그래서 `/v1/models`를 한 번 더 찌르고 **content-type이 JSON인지**로 가른다.
+ * 토큰은 필요 없다 — 진짜 API Server는 무인증 요청을 JSON으로 거절한다.
  */
 export type GatewayProbeResult =
   | { kind: "hermes"; status: number }
+  /** 응답은 Hermes지만 API Server가 아니다(대시보드 등). 고칠 것은 토큰이 아니라 포트다. */
+  | { kind: "dashboard"; status: number }
   | { kind: "not-hermes"; status: number }
   | { kind: "unreachable"; error: string };
 
@@ -35,10 +47,19 @@ export async function probeHermesGateway(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetchImpl(url, { method: "GET", signal: controller.signal });
-    return res.ok
-      ? { kind: "hermes", status: res.status }
-      : { kind: "not-hermes", status: res.status };
+    const health = await fetchImpl(url, { method: "GET", signal: controller.signal });
+    if (!health.ok) return { kind: "not-hermes", status: health.status };
+
+    // 여기부터가 대시보드와 API Server 를 가르는 자리다(위 주석 참조).
+    const models = await fetchImpl(`${prefix}/v1/models`, {
+      method: "GET",
+      signal: controller.signal,
+    });
+    const contentType = models.headers.get("content-type") ?? "";
+    if (!contentType.toLowerCase().includes("json")) {
+      return { kind: "dashboard", status: models.status };
+    }
+    return { kind: "hermes", status: health.status };
   } catch (err) {
     // AbortError도 여기로 온다 — 호출자 입장에서 "못 닿았다"와 구분할 실익이 없다.
     return { kind: "unreachable", error: err instanceof Error ? err.message : String(err) };

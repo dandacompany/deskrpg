@@ -8,13 +8,35 @@ function fakeFetch(impl: (url: string) => Promise<Response> | Response) {
     Promise.resolve(impl(String(input)))) as unknown as typeof fetch;
 }
 
+/** 진짜 Hermes API Server 의 실측 응답. /health 는 무인증 200, /v1/models 는 401 JSON. */
+function apiServerFetch(onCall?: (url: string) => void) {
+  return fakeFetch((url) => {
+    onCall?.(url);
+    if (url.endsWith("/health")) return new Response("ok", { status: 200 });
+    return new Response(JSON.stringify({ error: { code: "gateway_auth_failed" } }), {
+      status: 401,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  });
+}
+
+/** Hermes 대시보드(SPA). 실측: 아무 경로에나 200 + HTML 을 돌려준다. */
+function dashboardFetch() {
+  return fakeFetch(
+    () =>
+      new Response("<!doctype html><html><head>", {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      }),
+  );
+}
+
 test("probeHermesGateway", async (t) => {
   await t.test("/health 200이면 hermes로 판정한다", async () => {
     let called = "";
     const result = await probeHermesGateway("http://127.0.0.1:8642", {
-      fetchImpl: fakeFetch((url) => {
-        called = url;
-        return new Response("ok", { status: 200 });
+      fetchImpl: apiServerFetch((url) => {
+        if (url.endsWith("/health")) called = url;
       }),
     });
     assert.deepEqual(result, { kind: "hermes", status: 200 });
@@ -24,9 +46,8 @@ test("probeHermesGateway", async (t) => {
   await t.test("끝의 슬래시를 중복시키지 않는다", async () => {
     let called = "";
     await probeHermesGateway("http://127.0.0.1:8642/", {
-      fetchImpl: fakeFetch((url) => {
-        called = url;
-        return new Response("ok", { status: 200 });
+      fetchImpl: apiServerFetch((url) => {
+        if (url.endsWith("/health")) called = url;
       }),
     });
     assert.equal(called, "http://127.0.0.1:8642/health");
@@ -66,9 +87,8 @@ test("probeHermesGateway", async (t) => {
     let called = "";
     const result = await probeHermesGateway("http://127.0.0.1:8642", {
       profile: "sophie",
-      fetchImpl: fakeFetch((url) => {
-        called = url;
-        return new Response("ok", { status: 200 });
+      fetchImpl: apiServerFetch((url) => {
+        if (url.endsWith("/health")) called = url;
       }),
     });
     assert.deepEqual(result, { kind: "hermes", status: 200 });
@@ -88,11 +108,59 @@ test("probeHermesGateway", async (t) => {
     let called = "";
     await probeHermesGateway("http://127.0.0.1:8642", {
       profile: "a b",
-      fetchImpl: fakeFetch((url) => {
-        called = url;
-        return new Response("ok", { status: 200 });
+      fetchImpl: apiServerFetch((url) => {
+        if (url.endsWith("/health")) called = url;
       }),
     });
     assert.equal(called, "http://127.0.0.1:8642/p/a%20b/health");
+  });
+
+  await t.test("대시보드는 hermes 가 아니다 — /health 200 만으로 통과시키지 않는다", async () => {
+    // 오늘 우리를 가장 오래 막은 오탐이다. Hermes 대시보드(9119)는 /health 에 200 을
+    // 내고, SPA catch-all 이라 /v1/models 에도 200 + HTML 을 낸다. 상태 코드만 보면
+    // 진짜 API 서버(8643)와 구분되지 않아, 틀린 포트가 "연결됨"으로 통과했다.
+    const result = await probeHermesGateway("http://127.0.0.1:9119", {
+      fetchImpl: dashboardFetch(),
+    });
+    assert.deepEqual(result, { kind: "dashboard", status: 200 });
+  });
+
+  await t.test("판별은 상태 코드가 아니라 content-type 으로 한다", async () => {
+    // 대시보드도 200 을 낸다. 갈리는 것은 본문이 JSON 이냐 HTML 이냐다.
+    const result = await probeHermesGateway("http://127.0.0.1:8642", {
+      fetchImpl: fakeFetch((url) =>
+        url.endsWith("/health")
+          ? new Response("ok", { status: 200 })
+          : new Response("{}", {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }),
+      ),
+    });
+    assert.equal(result.kind, "hermes");
+  });
+
+  await t.test("두 번째 요청도 프로필 스코프를 지킨다", async () => {
+    const urls: string[] = [];
+    await probeHermesGateway("http://127.0.0.1:8642", {
+      profile: "sophie",
+      fetchImpl: apiServerFetch((url) => urls.push(url)),
+    });
+    assert.deepEqual(urls, [
+      "http://127.0.0.1:8642/p/sophie/health",
+      "http://127.0.0.1:8642/p/sophie/v1/models",
+    ]);
+  });
+
+  await t.test("확인을 끝내지 못하면 hermes 라고 하지 않는다", async () => {
+    // /health 는 통과했지만 두 번째 요청이 실패한 경우. 여기서 hermes 로 통과시키면
+    // 지금 고치려는 오탐이 그대로 남는다 — 긍정적 증거가 있을 때만 hermes 다.
+    const result = await probeHermesGateway("http://127.0.0.1:8642", {
+      fetchImpl: fakeFetch((url) => {
+        if (url.endsWith("/health")) return new Response("ok", { status: 200 });
+        throw new Error("ECONNRESET");
+      }),
+    });
+    assert.equal(result.kind, "unreachable");
   });
 });

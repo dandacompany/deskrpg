@@ -2001,7 +2001,13 @@ const en: Record<string, string> = {
   "errors.groupAdminRequired": "Group administrator access is required",
   "errors.groupNotFound": "Group not found",
   "errors.failedToJoinChannel": "Failed to join channel",
-  "errors.failedToReachTestEndpoint": "Failed to reach test endpoint",
+  "errors.failedToReachTestEndpoint":
+    "Could not reach that address. Check that the Hermes gateway is running and reachable from this server",
+  "errors.notAHermesGateway": "That is not a Hermes API Server. Check the address and port",
+  "errors.gatewayIsNotApiServer":
+    "Reached the Hermes web UI, not the API Server — check the port (dashboard is usually 9119, API Server 8643)",
+  "errors.gatewayLoopbackInContainer":
+    "DeskRPG runs inside a container, where 127.0.0.1 points at the container itself, not at Hermes — use the host's real IP address",
   "errors.failedToResolveInviteCode": "Failed to resolve invite code",
   "errors.inviteExpirationInvalid": "Invite expiration must be in the future",
   "errors.groupInviteExpired": "This group invite has expired",

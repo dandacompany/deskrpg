@@ -77,7 +77,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     baseUrl: accessible.resource.baseUrl,
     localProfiles: listLocalProfiles(root, fs),
     registeredNames: registered.map((r) => r.profileName),
-    probe: async (baseUrl, profile) => (await probeHermesGateway(baseUrl, { profile })).kind,
+    probe: async (baseUrl, profile) => {
+      const { kind } = await probeHermesGateway(baseUrl, { profile });
+      // 로컬 디스커버리가 묻는 것은 "이 프로필이 이 게이트웨이에 있는가"다.
+      // 주소가 API Server 가 아니면(대시보드 등) 프로필 유무를 논할 수 없으므로
+      // not-hermes 로 접는다 — 그 판정은 게이트웨이 테스트가 따로 보여준다.
+      return kind === "dashboard" ? "not-hermes" : kind;
+    },
   });
   return NextResponse.json({ available, optedIn: true, candidates });
 }
