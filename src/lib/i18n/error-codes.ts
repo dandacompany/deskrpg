@@ -34,6 +34,29 @@ export type ErrorCode =
   | "not_a_hermes_gateway"
   | "gateway_is_not_api_server"
   | "gateway_loopback_in_container"
+  | "gateway_in_use_by_channels"
+  | "gateway_access_denied"
+  | "gateway_change_requires_npc_reset"
+  | "gateway_disconnect_requires_npc_reset"
+  | "local_discovery_unavailable"
+  | "not_opted_in"
+  | "no_profiles"
+  | "no_token"
+  | "not_channel_owner"
+  | "share_target_not_found"
+  | "register_failed"
+  | "failed_to_delete_meeting"
+  | "invalid_request_body"
+  | "invalid_title"
+  | "missing_required_field"
+  | "login_id_required"
+  | "user_id_required"
+  | "provider_not_found"
+  | "provider_type_required"
+  | "provider_auth_method_required"
+  | "unsupported_provider_type"
+  | "invalid_provider_payload"
+  | "invalid_provider_credentials"
   | "failed_to_resolve_invite_code"
   | "invite_expiration_invalid"
   | "group_invite_expired"
@@ -169,6 +192,29 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   not_a_hermes_gateway: "errors.notAHermesGateway",
   gateway_is_not_api_server: "errors.gatewayIsNotApiServer",
   gateway_loopback_in_container: "errors.gatewayLoopbackInContainer",
+  gateway_in_use_by_channels: "errors.gatewayInUseByChannels",
+  gateway_access_denied: "errors.gatewayAccessDenied",
+  gateway_change_requires_npc_reset: "errors.gatewayChangeRequiresNpcReset",
+  gateway_disconnect_requires_npc_reset: "errors.gatewayDisconnectRequiresNpcReset",
+  local_discovery_unavailable: "errors.localDiscoveryUnavailable",
+  not_opted_in: "errors.notOptedIn",
+  no_profiles: "errors.noProfiles",
+  no_token: "errors.noToken",
+  not_channel_owner: "errors.notChannelOwner",
+  share_target_not_found: "errors.shareTargetNotFound",
+  register_failed: "errors.registerFailed",
+  failed_to_delete_meeting: "errors.failedToDeleteMeeting",
+  invalid_request_body: "errors.invalidRequestBody",
+  invalid_title: "errors.invalidTitle",
+  missing_required_field: "errors.missingRequiredField",
+  login_id_required: "errors.loginIdRequired",
+  user_id_required: "errors.userIdRequired",
+  provider_not_found: "errors.providerNotFound",
+  provider_type_required: "errors.providerTypeRequired",
+  provider_auth_method_required: "errors.providerAuthMethodRequired",
+  unsupported_provider_type: "errors.unsupportedProviderType",
+  invalid_provider_payload: "errors.invalidProviderPayload",
+  invalid_provider_credentials: "errors.invalidProviderCredentials",
   failed_to_resolve_invite_code: "errors.failedToResolveInviteCode",
   invite_expiration_invalid: "errors.inviteExpirationInvalid",
   group_invite_expired: "errors.groupInviteExpired",

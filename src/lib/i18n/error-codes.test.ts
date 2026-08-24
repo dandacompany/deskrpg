@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -379,5 +382,44 @@ test("every registered error code has a message in every locale", () => {
     [],
     "번역이 없는 에러코드가 있습니다 — 사용자에게는 generic 메시지만 보입니다:\n  " +
       missing.join("\n  "),
+  );
+});
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+
+/** src 아래 모든 .ts 를 훑어 라우트가 실제로 내보내는 errorCode 를 모은다. */
+function emittedErrorCodes(): Set<string> {
+  const found = new Set<string>();
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir)) {
+      const full = path.join(dir, entry);
+      if (statSync(full).isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!entry.endsWith(".ts") && !entry.endsWith(".tsx")) continue;
+      if (entry.includes(".test.")) continue;
+      const src = readFileSync(full, "utf8");
+      for (const m of src.matchAll(/errorCode:\s*"([a-z0-9_]+)"/g)) found.add(m[1]);
+    }
+  };
+  walk(path.join(repoRoot, "src"));
+  return found;
+}
+
+// 앞 테스트는 **등록된** 코드만 순회한다. 등록 자체가 빠진 코드는 그 표에 없으므로
+// 순회 대상이 아니고, 그래서 잡히지 않는다 — 실제로 그 상태로 23개가 남아 있었고
+// gateway_in_use_by_channels 를 누른 사용자는 "오류가 발생했습니다" 만 봤다
+// ("채널에 묶여 있어 지울 수 없다"가 아니라).
+//
+// 세는 쪽을 뒤집는다: 라우트가 **보내는** 코드 전부가 등록돼 있어야 한다.
+test("every error code a route emits is registered", () => {
+  const registered = new Set(Object.keys(ERROR_MESSAGE_KEYS));
+  const missing = [...emittedErrorCodes()].filter((c) => !registered.has(c)).sort();
+  assert.deepEqual(
+    missing,
+    [],
+    "라우트가 보내지만 등록되지 않은 에러코드입니다 — 사용자에게는 generic 메시지만 " +
+      `보입니다:\n  ${missing.join("\n  ")}`,
   );
 });
