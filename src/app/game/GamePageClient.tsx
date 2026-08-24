@@ -1,5 +1,6 @@
 "use client";
 
+import { MapChatWalkers } from "./map-chat-walkers";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -306,7 +307,7 @@ function GamePageInner() {
    * 위해서다 — 대답은 맵 채팅에 나오는데 대화창이 뜨면 그 채팅을 가려 버린다.
    * 컨텍스트 메뉴로 부른 경우(자동으로 대화창을 여는 기존 동작)와는 다른 사건이다.
    */
-  const mapChatWalkersRef = useRef<Set<string>>(new Set());
+  const mapChatWalkersRef = useRef<MapChatWalkers>(new MapChatWalkers());
   const consumedNpcReportIdsRef = useRef<Set<string>>(new Set());
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -783,8 +784,7 @@ function GamePageInner() {
             // 그 NPC 가 도착했을 때 사용자가 방금 명시적으로 요청한 1:1 대화창이 삼켜진다 —
             // GameScene 은 이미 걷고 있는 NPC 의 재호출을 조용히 무시하므로, 도착은 원래
             // 걷기로 일어나고 항목은 그때까지 살아 있다.
-            if (data.reason === "map-chat") mapChatWalkersRef.current.add(data.npcId);
-            else mapChatWalkersRef.current.delete(data.npcId);
+            mapChatWalkersRef.current.noteCall(data.npcId, data.reason);
             EventBus.emit("npc:call-to-player", { npcId: data.npcId });
           }
         },
@@ -1184,7 +1184,7 @@ function GamePageInner() {
       }
       // 맵 채팅으로 부른 NPC 는 맵 채팅에서 대답한다 — 여기서 1:1 대화창을 열면 그 대답이
       // 보이는 패널을 덮어 버린다.
-      const fromMapChat = mapChatWalkersRef.current.delete(data.npcId);
+      const fromMapChat = mapChatWalkersRef.current.takeOnArrival(data.npcId);
       // Auto-open dialog when NPC arrives — preserve existing messages (don't resetDialog)
       if (data.npcName && !fromMapChat) {
         const nextDialogNpc = { npcId: data.npcId, npcName: data.npcName };
@@ -1200,7 +1200,7 @@ function GamePageInner() {
       }
     };
     const handleMovementReturned = (data: { npcId: string }) => {
-      mapChatWalkersRef.current.delete(data.npcId);
+      mapChatWalkersRef.current.forget(data.npcId);
       setNpcMoveStates((prev) => ({ ...prev, [data.npcId]: "idle" }));
       setNpcCallers((prev) => {
         const next = { ...prev };
