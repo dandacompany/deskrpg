@@ -338,6 +338,32 @@ export function getLocalizedMessage(
   return fallbackKey ? t(fallbackKey) : keyOrCode;
 }
 
+/** 에러코드를 본문과 **함께** 실어 보내는 헤더 이름. */
+export const ERROR_CODE_HEADER = "X-DeskRPG-Error-Code";
+
+/**
+ * 응답 본문이 사라져도 진단을 잃지 않게 헤더의 코드로 보충한다.
+ *
+ * 실측: 스테이징에서 502 응답의 본문이 브라우저에 도달하지 않았다(`[gw-test] 502 {}`).
+ * 서버는 errorCode 를 정확히 보냈고 클라이언트 매핑도 정상이었지만, 그 사이에서 본문이
+ * 비워져 사용자에게는 generic 폴백만 보였다. 같은 정보를 두 경로로 보내면 한쪽이
+ * 끊겨도 진단이 살아남는다.
+ */
+export function withHeaderErrorCode(
+  payload: unknown,
+  headers: { get(name: string): string | null },
+): unknown {
+  const hasCode =
+    !!payload &&
+    typeof payload === "object" &&
+    typeof (payload as { errorCode?: unknown }).errorCode === "string";
+  if (hasCode) return payload;
+
+  const code = headers.get(ERROR_CODE_HEADER);
+  if (!code) return payload;
+  return { ...(payload && typeof payload === "object" ? payload : {}), errorCode: code };
+}
+
 export function getLocalizedErrorMessage(
   t: Translator,
   payload: unknown,

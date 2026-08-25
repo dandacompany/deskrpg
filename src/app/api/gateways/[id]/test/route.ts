@@ -5,6 +5,7 @@ import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import { diagnoseUnreachable } from "@/lib/hermes/unreachable-hint";
 import { existsSync } from "node:fs";
 import { getUserId } from "@/lib/internal-rpc";
+import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
@@ -43,7 +44,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         errorCode: "gateway_is_not_api_server",
         error: `Reached a Hermes web UI, not the API Server (HTTP ${probe.status})`,
       },
-      { status: 502 },
+      // 코드를 헤더에도 싣는다 — 본문이 중간에서 사라져도 진단이 살아남는다(실측: 502 의
+      // 본문이 브라우저에 `{}` 로 도착했다).
+      { status: 502, headers: { [ERROR_CODE_HEADER]: "gateway_is_not_api_server" } },
     );
   }
 
@@ -54,7 +57,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       baseUrl: accessible.resource.baseUrl,
       inContainer: existsSync("/.dockerenv"),
     });
-    return NextResponse.json({ ok: false, errorCode, error: probe.error }, { status: 502 });
+    return NextResponse.json(
+      { ok: false, errorCode, error: probe.error },
+      { status: 502, headers: { [ERROR_CODE_HEADER]: errorCode } },
+    );
   }
 
   // 응답은 왔지만 Hermes API Server 가 아니다. 고쳐야 할 것은 자격증명이 아니라 주소다.
@@ -64,6 +70,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       errorCode: "not_a_hermes_gateway",
       error: `Not a Hermes API Server (HTTP ${probe.status})`,
     },
-    { status: 502 },
+    { status: 502, headers: { [ERROR_CODE_HEADER]: "not_a_hermes_gateway" } },
   );
 }

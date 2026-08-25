@@ -8,7 +8,13 @@ import en from "./locales/en";
 import ja from "./locales/ja";
 import ko from "./locales/ko";
 import zh from "./locales/zh";
-import { ERROR_MESSAGE_KEYS, getErrorMessageKey, type ErrorCode } from "./error-codes";
+import {
+  ERROR_CODE_HEADER,
+  ERROR_MESSAGE_KEYS,
+  getErrorMessageKey,
+  withHeaderErrorCode,
+  type ErrorCode,
+} from "./error-codes";
 
 const REQUIRED_KEYS = [
   "metadata.title",
@@ -441,4 +447,30 @@ test("all locales carry the same keys", () => {
     }
   }
   assert.deepEqual(missing, [], `로케일 키가 어긋납니다:\n  ${missing.join("\n  ")}`);
+});
+
+test("헤더의 에러코드로 사라진 본문을 보충한다", () => {
+  // 스테이징에서 실제로 겪은 모양: 502 인데 본문이 {} 로 도착했다.
+  const headers = {
+    get: (n: string) => (n === ERROR_CODE_HEADER ? "gateway_in_use_by_channels" : null),
+  };
+  assert.deepEqual(withHeaderErrorCode({}, headers), {
+    errorCode: "gateway_in_use_by_channels",
+  });
+});
+
+test("본문에 코드가 있으면 헤더가 덮어쓰지 않는다", () => {
+  // 본문이 더 풍부하다(error 문구 등). 헤더는 어디까지나 보충이다.
+  const headers = { get: () => "gateway_in_use_by_channels" };
+  const body = { errorCode: "forbidden", error: "nope" };
+  assert.deepEqual(withHeaderErrorCode(body, headers), body);
+});
+
+test("헤더도 본문도 없으면 그대로 둔다", () => {
+  assert.deepEqual(withHeaderErrorCode({}, { get: () => null }), {});
+});
+
+test("본문이 객체가 아니어도 헤더만으로 코드를 만든다", () => {
+  const headers = { get: () => "not_a_hermes_gateway" };
+  assert.deepEqual(withHeaderErrorCode(null, headers), { errorCode: "not_a_hermes_gateway" });
 });

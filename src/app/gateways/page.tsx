@@ -7,7 +7,7 @@ import LocaleSwitcher from "@/components/LocaleSwitcher";
 import LogoutButton from "@/components/LogoutButton";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import HermesProfileList from "@/components/hermes/HermesProfileList";
-import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
+import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
 
 type GatewayRow = {
@@ -293,7 +293,8 @@ function GatewayManagementPageInner() {
     }));
     try {
       const res = await fetch(`/api/gateways/${gatewayId}/test`, { method: "POST" });
-      const data = await res.json().catch(() => ({}));
+      // 본문이 사라져도 헤더의 코드로 진단을 살린다(위 withHeaderErrorCode 주석 참조).
+      const data = withHeaderErrorCode(await res.json().catch(() => ({})), res.headers);
       if (res.ok) {
         setTestStates((prev) => ({
           ...prev,
@@ -309,10 +310,17 @@ function GatewayManagementPageInner() {
           },
         }));
       }
-    } catch {
+    } catch (err) {
+      // 여기는 응답이 아예 오지 않은 경우다(브라우저가 요청을 끊었거나 네트워크가 죽었거나).
+      // 폴백 문구만 띄우면 서버가 보낸 진단과 구분되지 않아, 어느 층에서 끊겼는지 알 수
+      // 없다 — 실제로 그 구분이 안 돼 한참을 헤맸다. 원인을 함께 보여준다.
+      const detail = err instanceof Error ? err.message : String(err);
       setTestStates((prev) => ({
         ...prev,
-        [gatewayId]: { status: "error", error: t("errors.connectionFailed") },
+        [gatewayId]: {
+          status: "error",
+          error: `${t("errors.connectionFailed")} (${detail})`,
+        },
       }));
     } finally {
       setTestingGatewayId(null);
