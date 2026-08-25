@@ -295,7 +295,10 @@ function GatewayManagementPageInner() {
       const res = await fetch(`/api/gateways/${gatewayId}/test`, { method: "POST" });
       // 본문이 사라져도 헤더의 코드로 진단을 살린다(위 withHeaderErrorCode 주석 참조).
       const data = withHeaderErrorCode(await res.json().catch(() => ({})), res.headers);
-      if (res.ok) {
+      // 프로브 실패는 200 + { ok: false } 로 온다(라우트의 PROBE_RESULT_INIT 주석 참조).
+      // res.ok 로 판정하면 실패를 성공으로 읽는다.
+      const succeeded = res.ok && (data as { ok?: unknown } | null)?.ok !== false;
+      if (succeeded) {
         setTestStates((prev) => ({
           ...prev,
           [gatewayId]: { status: "connected" },

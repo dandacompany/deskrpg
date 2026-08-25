@@ -7,6 +7,23 @@ import { existsSync } from "node:fs";
 import { getUserId } from "@/lib/internal-rpc";
 import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 
+/**
+ * 프로브 실패는 **200 으로** 돌려준다. 사용자가 입력한 외부 주소가 응답하지 않은 것은
+ * 우리 서버의 실패가 아니라 요청 처리의 정상적인 결과이고, 5xx 로 답하면 진단이 사라진다 —
+ * 실측: Cloudflare 가 오리진의 5xx 를 자기 에러 페이지로 통째로 갈아치운다.
+ *
+ *     컨테이너 내부  502  body={"errorCode":"probe_502_marker",...}
+ *     Caddy 까지     502  body 그대로
+ *     인터넷 경유    502  server: cloudflare · body="error code: 502"
+ *
+ * 그래서 브라우저는 `502 {}` 만 받았고 화면에는 generic 폴백만 떴다. 4xx 는 통과하므로
+ * 인증·권한 응답은 그대로 둔다. 코드는 헤더에도 실어 다른 프록시 뒤에서도 살아남게 한다.
+ */
+const PROBE_RESULT_INIT = (errorCode: string) => ({
+  status: 200,
+  headers: { [ERROR_CODE_HEADER]: errorCode },
+});
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
@@ -44,9 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         errorCode: "gateway_is_not_api_server",
         error: `Reached a Hermes web UI, not the API Server (HTTP ${probe.status})`,
       },
-      // 코드를 헤더에도 싣는다 — 본문이 중간에서 사라져도 진단이 살아남는다(실측: 502 의
-      // 본문이 브라우저에 `{}` 로 도착했다).
-      { status: 502, headers: { [ERROR_CODE_HEADER]: "gateway_is_not_api_server" } },
+      PROBE_RESULT_INIT("gateway_is_not_api_server"),
     );
   }
 
@@ -59,7 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
     return NextResponse.json(
       { ok: false, errorCode, error: probe.error },
-      { status: 502, headers: { [ERROR_CODE_HEADER]: errorCode } },
+      PROBE_RESULT_INIT(errorCode),
     );
   }
 
@@ -70,6 +85,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       errorCode: "not_a_hermes_gateway",
       error: `Not a Hermes API Server (HTTP ${probe.status})`,
     },
-    { status: 502, headers: { [ERROR_CODE_HEADER]: "not_a_hermes_gateway" } },
+    PROBE_RESULT_INIT("not_a_hermes_gateway"),
   );
 }

@@ -203,3 +203,21 @@ test("every npc:broadcast-* handler drops the open-chat runtime cache", () => {
     );
   }
 });
+
+// 프로브 실패를 5xx 로 답하면 진단이 사용자에게 도달하지 않는다 — Cloudflare 가 오리진의
+// 5xx 를 자기 에러 페이지로 갈아치우기 때문이다(실측: 컨테이너 내부와 Caddy 까지는 본문이
+// 멀쩡한데, 인터넷 경유에서 `server: cloudflare` · `body="error code: 502"` 가 된다).
+// 그래서 브라우저는 `502 {}` 만 받았고 화면에는 generic 폴백만 떴다.
+//
+// 4xx 는 통과하므로 인증·권한 응답은 대상이 아니다. 이 가드는 게이트웨이 테스트 라우트가
+// 5xx 로 되돌아가는 것만 막는다.
+test("the gateway test route never answers with 5xx", () => {
+  const src = readFileSync(path.join(repoRoot, "src/app/api/gateways/[id]/test/route.ts"), "utf8");
+  const serverErrors = [...src.matchAll(/status:\s*(5\d\d)/g)].map((m) => m[1]);
+  assert.deepEqual(
+    serverErrors,
+    [],
+    "게이트웨이 테스트가 5xx 를 돌려줍니다 — Cloudflare 가 본문을 갈아치워 사용자는 " +
+      `이유를 볼 수 없습니다: ${serverErrors.join(", ")}`,
+  );
+});
