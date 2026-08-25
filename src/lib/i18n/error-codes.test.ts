@@ -423,3 +423,22 @@ test("every error code a route emits is registered", () => {
       `보입니다:\n  ${missing.join("\n  ")}`,
   );
 });
+
+// 로케일 간 키가 어긋나면 그 언어 사용자에게는 **키 문자열이 그대로** 보인다. 에러코드
+// 쪽은 위 두 가드가 지키지만 UI 키(gateways.*, mapEditor.* 등)는 아무도 안 봤고,
+// 실제로 mapEditor.toolbar.saveAsTemplate 가 ja·zh 에서 빠진 채 새고 있었다.
+test("all locales carry the same keys", () => {
+  const base = Object.keys(ko).sort();
+  const missing: string[] = [];
+  for (const [lang, dict] of [
+    ["en", en],
+    ["ja", ja],
+    ["zh", zh],
+  ] as const) {
+    for (const key of base) if (!(key in dict)) missing.push(`${lang}: ${key}`);
+    for (const key of Object.keys(dict)) {
+      if (!(key in ko)) missing.push(`ko 에 없는데 ${lang} 에만 있음: ${key}`);
+    }
+  }
+  assert.deepEqual(missing, [], `로케일 키가 어긋납니다:\n  ${missing.join("\n  ")}`);
+});

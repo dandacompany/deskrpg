@@ -5,6 +5,7 @@ import { db, gatewayResources } from "@/db";
 import { getUserId } from "@/lib/internal-rpc";
 import {
   countChannelBindingsForGateway,
+  listChannelBindingsForGateway,
   decryptGatewayToken,
   getAccessibleGatewayResource,
   getOwnedGatewayResource,
@@ -122,12 +123,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
   }
 
-  const bindingCount = await countChannelBindingsForGateway(id);
-  if (bindingCount > 0) {
+  const bindings = await listChannelBindingsForGateway(id, userId);
+  if (bindings.length > 0) {
+    // 개수만 돌려주면 사용자가 어느 채널인지 찾아 헤맨다. 이름과 "풀면 무엇이 사라지는가"
+    // 까지 실어 보내, 게이트웨이 화면에서 그대로 결정할 수 있게 한다.
     return NextResponse.json(
       {
         errorCode: "gateway_in_use_by_channels",
         error: "Gateway is currently bound to one or more channels",
+        channels: bindings,
       },
       { status: 409 },
     );

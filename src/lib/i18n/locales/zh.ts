@@ -1561,6 +1561,12 @@ const zh: Record<string, string> = {
   "gateways.testSuccess": "网关连接成功。",
   "gateways.saved": "网关已保存。",
   "gateways.deleted": "网关已删除。",
+  "gateways.unbind": "断开连接",
+  "gateways.unbindHint": "断开以下所有频道的连接后即可删除此网关。",
+  "gateways.unbindLoses": "将删除 {npcs} 个 NPC 和 {minutes} 条会议记录",
+  "gateways.unbindConfirm": "要断开 {name} 频道的连接吗？该频道的 NPC 和会议记录将被删除。",
+  "gateways.unbound": "已断开 {name} 频道的连接。",
+  "gateways.unbindNotOwner": "只有频道所有者才能断开连接",
   "gateways.deleteConfirm": "要删除这个网关吗？已绑定到频道的网关无法删除。",
   "gateways.shareTitle": "共享管理",
   "gateways.shareHelp": "输入其他用户的登录 ID，即可共享此网关的使用权限。",
@@ -1667,6 +1673,7 @@ const zh: Record<string, string> = {
   "mapEditor.context.moveToLayer": "移动到图层",
 
   // Map Editor - Toolbar
+  "mapEditor.toolbar.saveAsTemplate": "另存为地图模板",
   "mapEditor.toolbar.title": "DeskRPG 地图编辑器",
   "mapEditor.toolbar.file": "文件",
   "mapEditor.toolbar.newMap": "新建地图",

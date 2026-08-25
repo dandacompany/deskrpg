@@ -1577,6 +1577,14 @@ const ja: Record<string, string> = {
   "gateways.testSuccess": "ゲートウェイ接続を確認しました。",
   "gateways.saved": "ゲートウェイを保存しました。",
   "gateways.deleted": "ゲートウェイを削除しました。",
+  "gateways.unbind": "接続を解除",
+  "gateways.unbindHint":
+    "以下のチャンネルの接続をすべて解除すると、このゲートウェイを削除できます。",
+  "gateways.unbindLoses": "NPC {npcs} 件・議事録 {minutes} 件が削除されます",
+  "gateways.unbindConfirm":
+    "{name} チャンネルの接続を解除しますか？ そのチャンネルの NPC と議事録が削除されます。",
+  "gateways.unbound": "{name} チャンネルの接続を解除しました。",
+  "gateways.unbindNotOwner": "チャンネルの所有者のみが接続を解除できます",
   "gateways.deleteConfirm":
     "このゲートウェイを削除しますか？ チャンネルに接続されたゲートウェイは削除できません。",
   "gateways.shareTitle": "共有管理",
@@ -1686,6 +1694,7 @@ const ja: Record<string, string> = {
   "mapEditor.context.moveToLayer": "レイヤーに移動",
 
   // Map Editor - Toolbar
+  "mapEditor.toolbar.saveAsTemplate": "マップテンプレートとして保存",
   "mapEditor.toolbar.title": "DeskRPG マップエディタ",
   "mapEditor.toolbar.file": "ファイル",
   "mapEditor.toolbar.newMap": "新規マップ",

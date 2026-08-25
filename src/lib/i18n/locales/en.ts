@@ -1576,6 +1576,13 @@ const en: Record<string, string> = {
   "gateways.testSuccess": "Gateway connection succeeded.",
   "gateways.saved": "Gateway saved.",
   "gateways.deleted": "Gateway deleted.",
+  "gateways.unbind": "Disconnect",
+  "gateways.unbindHint": "Disconnect every channel below to delete this gateway.",
+  "gateways.unbindLoses": "deletes {npcs} NPC(s) and {minutes} meeting record(s)",
+  "gateways.unbindConfirm":
+    "Disconnect the gateway from {name}? That channel's NPCs and meeting records will be deleted.",
+  "gateways.unbound": "Disconnected the gateway from {name}.",
+  "gateways.unbindNotOwner": "Only the channel owner can disconnect it",
   "gateways.deleteConfirm":
     "Delete this gateway? A gateway still bound to channels cannot be deleted.",
   "gateways.shareTitle": "Share Access",

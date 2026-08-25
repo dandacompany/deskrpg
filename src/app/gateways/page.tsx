@@ -34,6 +34,15 @@ type GatewayShare = {
 
 /** 게이트웨이 연결 테스트 결과. 예전 이름은 PairingState 였지만 페어링(OpenClaw 디바이스
  * 승인)은 사라졌고 남은 것은 연결 테스트 상태뿐이다. */
+/** 삭제를 막고 있는 채널. 서버가 409 와 함께 실어 보낸다. */
+type BlockingChannel = {
+  channelId: string;
+  channelName: string;
+  canUnbind: boolean;
+  npcCount: number;
+  meetingMinutesCount: number;
+};
+
 type GatewayTestState = {
   status: GatewayStatus;
   error?: string | null;
@@ -80,6 +89,8 @@ function GatewayManagementPageInner() {
   const [shareError, setShareError] = useState("");
 
   const [testStates, setTestStates] = useState<Record<string, GatewayTestState>>({});
+  const [blockingChannels, setBlockingChannels] = useState<BlockingChannel[]>([]);
+  const [unbinding, setUnbinding] = useState("");
 
   const loadGateways = useCallback(async () => {
     setLoading(true);
@@ -219,12 +230,34 @@ function GatewayManagementPageInner() {
     }
   };
 
+  const handleUnbindChannel = async (channel: BlockingChannel) => {
+    if (!window.confirm(t("gateways.unbindConfirm", { name: channel.channelName }))) return;
+    setUnbinding(channel.channelId);
+    setError("");
+    try {
+      // confirmNpcReset=1: 이 해제는 그 채널의 NPC 와 회의록을 삭제한다. 위 confirm 이
+      // 사용자에게 그 사실을 알린 뒤에만 여기에 온다.
+      const res = await fetch(`/api/channels/${channel.channelId}/gateway?confirmNpcReset=1`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw data;
+      setBlockingChannels((prev) => prev.filter((c) => c.channelId !== channel.channelId));
+      setNotice(t("gateways.unbound", { name: channel.channelName }));
+    } catch (nextError) {
+      setError(getLocalizedErrorMessage(t, nextError, "common.error"));
+    } finally {
+      setUnbinding("");
+    }
+  };
+
   const handleDelete = async () => {
     if (!selectedGateway) return;
     if (!window.confirm(t("gateways.deleteConfirm"))) return;
     setDeleting(true);
     setError("");
     setNotice("");
+    setBlockingChannels([]);
     try {
       const res = await fetch(`/api/gateways/${selectedGateway.id}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
@@ -243,6 +276,10 @@ function GatewayManagementPageInner() {
       setNotice(t("gateways.deleted"));
     } catch (nextError) {
       setError(getLocalizedErrorMessage(t, nextError, "common.error"));
+      // 막고 있는 채널을 그 자리에서 풀 수 있게 목록을 띄운다 — 채널 화면까지
+      // 찾아가게 만드는 왕복이 이 화면의 가장 큰 마찰이었다.
+      const blocked = (nextError as { channels?: BlockingChannel[] })?.channels;
+      if (Array.isArray(blocked)) setBlockingChannels(blocked);
     } finally {
       setDeleting(false);
     }
@@ -358,6 +395,35 @@ function GatewayManagementPageInner() {
         {error && (
           <div className="mb-6 rounded-lg border border-danger/40 bg-surface px-4 py-3 text-sm text-danger">
             {error}
+          </div>
+        )}
+        {blockingChannels.length > 0 && (
+          <div className="mb-6 rounded-lg border border-danger/40 bg-surface px-4 py-3 text-sm">
+            <p className="mb-3 text-text-muted">{t("gateways.unbindHint")}</p>
+            <ul className="space-y-2">
+              {blockingChannels.map((channel) => (
+                <li key={channel.channelId} className="flex items-center justify-between gap-4">
+                  <span>
+                    <span className="font-medium">{channel.channelName}</span>
+                    <span className="ml-2 text-text-muted">
+                      {t("gateways.unbindLoses", {
+                        npcs: String(channel.npcCount),
+                        minutes: String(channel.meetingMinutesCount),
+                      })}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={!channel.canUnbind || unbinding === channel.channelId}
+                    onClick={() => void handleUnbindChannel(channel)}
+                    title={channel.canUnbind ? undefined : t("gateways.unbindNotOwner")}
+                    className="shrink-0 rounded-lg bg-surface-raised px-3 py-1.5 text-sm font-medium hover:bg-surface-raised/80 disabled:opacity-50"
+                  >
+                    {t("gateways.unbind")}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         {notice && (

@@ -1577,6 +1577,13 @@ const ko: Record<string, string> = {
   "gateways.testSuccess": "게이트웨이 연결이 확인되었습니다.",
   "gateways.saved": "게이트웨이를 저장했습니다.",
   "gateways.deleted": "게이트웨이를 삭제했습니다.",
+  "gateways.unbind": "연결 해제",
+  "gateways.unbindHint": "아래 채널의 연결을 모두 해제하면 이 게이트웨이를 삭제할 수 있습니다.",
+  "gateways.unbindLoses": "NPC {npcs}개 · 회의록 {minutes}건이 함께 삭제됩니다",
+  "gateways.unbindConfirm":
+    "{name} 채널의 연결을 해제하시겠습니까? 그 채널의 NPC 와 회의록이 삭제됩니다.",
+  "gateways.unbound": "{name} 채널의 연결을 해제했습니다.",
+  "gateways.unbindNotOwner": "채널 소유자만 연결을 해제할 수 있습니다",
   "gateways.deleteConfirm":
     "이 게이트웨이를 삭제하시겠습니까? 채널에 연결된 게이트웨이는 삭제할 수 없습니다.",
   "gateways.shareTitle": "공유 관리",

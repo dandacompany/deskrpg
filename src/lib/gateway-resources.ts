@@ -315,6 +315,52 @@ export async function countChannelBindingsForGateway(gatewayId: string) {
   return value;
 }
 
+/** 게이트웨이를 삭제하려는 사용자에게 "무엇이 막고 있고, 풀면 무엇이 사라지는가"를 보여준다. */
+export type GatewayChannelBinding = {
+  channelId: string;
+  channelName: string;
+  /** 요청자가 이 채널의 소유자인가. 연결 해제는 채널 소유자만 할 수 있다. */
+  canUnbind: boolean;
+  /** 연결을 해제하면 함께 삭제되는 것들 — deleteChannelGatewayArtifacts() 가 지우는 범위다. */
+  npcCount: number;
+  meetingMinutesCount: number;
+};
+
+/**
+ * 이 게이트웨이에 묶인 채널들. 삭제가 409 로 거절될 때 "어느 채널이 막고 있는가"를
+ * 이름으로 답하기 위한 것 — 개수만 알려주면 사용자가 채널을 찾아 헤매야 한다.
+ */
+export async function listChannelBindingsForGateway(
+  gatewayId: string,
+  requesterUserId: string,
+): Promise<GatewayChannelBinding[]> {
+  const rows = await db
+    .select({ channelId: channels.id, channelName: channels.name, ownerId: channels.ownerId })
+    .from(channelGatewayBindings)
+    .innerJoin(channels, eq(channels.id, channelGatewayBindings.channelId))
+    .where(eq(channelGatewayBindings.gatewayId, gatewayId));
+
+  return Promise.all(
+    rows.map(async (row) => {
+      const [{ value: npcCount }] = await db
+        .select({ value: count() })
+        .from(npcs)
+        .where(eq(npcs.channelId, row.channelId));
+      const [{ value: meetingMinutesCount }] = await db
+        .select({ value: count() })
+        .from(meetingMinutes)
+        .where(eq(meetingMinutes.channelId, row.channelId));
+      return {
+        channelId: row.channelId,
+        channelName: row.channelName,
+        canUnbind: row.ownerId === requesterUserId,
+        npcCount,
+        meetingMinutesCount,
+      };
+    }),
+  );
+}
+
 export async function getChannelGatewayBinding(channelId: string) {
   const [binding] = await db
     .select()
