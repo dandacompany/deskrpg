@@ -166,6 +166,16 @@ const ko: Record<string, string> = {
   "gateway.profile.tokenPlaceholder": "프로필 토큰 (16자 이상)",
   "gateway.profile.add": "추가",
   "gateway.profile.test": "연결 테스트",
+  "gateway.profile.edit": "수정",
+  "gateway.profile.delete": "삭제",
+  "gateway.profile.save": "저장",
+  "gateway.profile.displayNamePlaceholder": "표시 이름 (선택)",
+  "gateway.profile.tokenPlaceholder": "새 프로필 토큰 (16자 이상)",
+  "gateway.profile.tokenKeepHint": "토큰을 비워 두면 기존 토큰을 유지합니다.",
+  "gateway.profile.deleteConfirm":
+    "{name} 프로필을 삭제하시겠습니까? 이 프로필을 쓰던 NPC 는 연결만 해제되고 삭제되지 않습니다.",
+  "gateway.profile.deletedUnbound":
+    "프로필을 삭제했습니다. NPC {count}개의 연결이 해제되어 다시 묶기 전까지 대화할 수 없습니다.",
   "gateway.profile.ownerOnly": "프로필 등록은 게이트웨이 소유자만 가능합니다.",
   "gateway.profile.status.valid": "정상",
   "gateway.profile.status.unauthorized": "인증 실패",

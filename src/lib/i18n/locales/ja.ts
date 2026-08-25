@@ -168,6 +168,16 @@ const ja: Record<string, string> = {
   "gateway.profile.tokenPlaceholder": "プロファイルトークン (16文字以上)",
   "gateway.profile.add": "追加",
   "gateway.profile.test": "接続テスト",
+  "gateway.profile.edit": "編集",
+  "gateway.profile.delete": "削除",
+  "gateway.profile.save": "保存",
+  "gateway.profile.displayNamePlaceholder": "表示名（任意）",
+  "gateway.profile.tokenPlaceholder": "新しいプロファイルトークン（16文字以上）",
+  "gateway.profile.tokenKeepHint": "トークンを空のままにすると既存のトークンを維持します。",
+  "gateway.profile.deleteConfirm":
+    "{name} プロファイルを削除しますか？ 使用中の NPC は接続が解除されるだけで削除されません。",
+  "gateway.profile.deletedUnbound":
+    "プロファイルを削除しました。NPC {count} 件の接続が解除され、再度紐付けるまで会話できません。",
   "gateway.profile.ownerOnly": "プロファイルの登録はゲートウェイ所有者のみ可能です。",
   "gateway.profile.status.valid": "正常",
   "gateway.profile.status.unauthorized": "認証エラー",

@@ -168,6 +168,16 @@ const en: Record<string, string> = {
   "gateway.profile.tokenPlaceholder": "Profile token (16+ characters)",
   "gateway.profile.add": "Add",
   "gateway.profile.test": "Test connection",
+  "gateway.profile.edit": "Edit",
+  "gateway.profile.delete": "Delete",
+  "gateway.profile.save": "Save",
+  "gateway.profile.displayNamePlaceholder": "Display name (optional)",
+  "gateway.profile.tokenPlaceholder": "New profile token (16+ chars)",
+  "gateway.profile.tokenKeepHint": "Leave the token blank to keep the existing one.",
+  "gateway.profile.deleteConfirm":
+    "Delete the profile {name}? NPCs using it are unbound, not deleted.",
+  "gateway.profile.deletedUnbound":
+    "Profile deleted. {count} NPC(s) were unbound and cannot talk until rebound.",
   "gateway.profile.ownerOnly": "Only the gateway owner can register profiles.",
   "gateway.profile.status.valid": "Valid",
   "gateway.profile.status.unauthorized": "Unauthorized",

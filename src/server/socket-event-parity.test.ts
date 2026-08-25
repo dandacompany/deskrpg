@@ -221,3 +221,31 @@ test("the gateway test route never answers with 5xx", () => {
       `이유를 볼 수 없습니다: ${serverErrors.join(", ")}`,
   );
 });
+
+// 프로필은 만들 수만 있고 고칠 수도 지울 수도 없었다 — 토큰을 잘못 넣으면 화면에서
+// 손댈 방법이 없는 막다른 길이었다. 게이트웨이 쪽에는 PATCH·DELETE 가 있는데 프로필
+// 쪽에만 없던, 리소스 간 비대칭이었다.
+test("hermes profiles support edit and delete, not just create", () => {
+  const src = readFileSync(
+    path.join(repoRoot, "src/app/api/gateways/[id]/profiles/[profileId]/route.ts"),
+    "utf8",
+  );
+  for (const method of ["PATCH", "DELETE"]) {
+    assert.ok(
+      new RegExp(`export async function ${method}\\b`).test(src),
+      `프로필 라우트에 ${method} 가 없습니다 — 잘못 만든 프로필을 되돌릴 수 없습니다.`,
+    );
+  }
+});
+
+// 빈 문자열로 자격증명을 지우는 사고를 막는 규약. 화면이 빈 칸을 보내지 않는 것과
+// 서버가 빈 값을 무시하는 것, 둘 다 있어야 한 쪽이 바뀌어도 토큰이 날아가지 않는다.
+test("a blank token never overwrites a stored profile credential", () => {
+  const src = readFileSync(path.join(repoRoot, "src/lib/hermes-profiles.ts"), "utf8");
+  const fn = src.slice(src.indexOf("export async function updateHermesProfile"));
+  const body = fn.slice(0, fn.indexOf("\nexport "));
+  assert.ok(
+    /typeof input\.token === "string" && input\.token\.trim\(\)/.test(body),
+    "updateHermesProfile 이 빈 토큰을 걸러내지 않습니다 — 저장을 누르면 토큰이 지워집니다.",
+  );
+});

@@ -35,6 +35,13 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // 수정 중인 프로필. 행 안에서 펼쳐 고친다 — 잘못 넣은 토큰을 화면에서 손댈 방법이
+  // 아예 없었다(만들 수만 있고 고칠 수도 지울 수도 없었다).
+  const [editingId, setEditingId] = useState("");
+  const [editToken, setEditToken] = useState("");
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [busyId, setBusyId] = useState("");
+
   const [profileName, setProfileName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [token, setToken] = useState("");
@@ -123,6 +130,60 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
     }
   };
 
+  const startEdit = (profile: HermesProfileRow) => {
+    setEditingId(profile.id);
+    setEditToken("");
+    setEditDisplayName(profile.displayName ?? "");
+    setError("");
+  };
+
+  const handleSaveEdit = async (profileId: string) => {
+    setBusyId(profileId);
+    setError("");
+    try {
+      const body: Record<string, unknown> = { displayName: editDisplayName };
+      // 빈 칸은 아예 보내지 않는다 — 게이트웨이 수정과 같은 규약이고, 빈 문자열로
+      // 자격증명을 지우는 사고를 막는다.
+      if (editToken.trim()) body.token = editToken.trim();
+      const res = await fetch(`/api/gateways/${gatewayId}/profiles/${profileId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw data;
+      setEditingId("");
+      setEditToken("");
+      await loadProfiles();
+    } catch (err) {
+      setError(getLocalizedErrorMessage(t, err, "common.error"));
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  const handleDelete = async (profile: HermesProfileRow) => {
+    if (!window.confirm(t("gateway.profile.deleteConfirm", { name: profile.profileName }))) return;
+    setBusyId(profile.id);
+    setError("");
+    try {
+      const res = await fetch(`/api/gateways/${gatewayId}/profiles/${profile.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw data;
+      const unbound = Number((data as { unboundNpcs?: unknown }).unboundNpcs ?? 0);
+      // NPC 는 지워지지 않고 연결만 풀린다. 다만 다시 묶기 전까지 대화할 수 없으므로
+      // 몇 개가 그렇게 됐는지 알린다.
+      if (unbound > 0) setError(t("gateway.profile.deletedUnbound", { count: String(unbound) }));
+      await loadProfiles();
+    } catch (err) {
+      setError(getLocalizedErrorMessage(t, err, "common.error"));
+    } finally {
+      setBusyId("");
+    }
+  };
+
   const handleTest = async (profileId: string) => {
     setTestingId(profileId);
     setTestErrors((prev) => {
@@ -191,8 +252,55 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
                     >
                       {testingId === profile.id ? t("gateway.testing") : t("gateway.profile.test")}
                     </button>
+                    {canRegister && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            editingId === profile.id ? setEditingId("") : startEdit(profile)
+                          }
+                          className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80"
+                        >
+                          {t("gateway.profile.edit")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(profile)}
+                          disabled={busyId === profile.id}
+                          className="rounded bg-danger/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-danger disabled:opacity-60"
+                        >
+                          {t("gateway.profile.delete")}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
+                {editingId === profile.id && (
+                  <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                    <input
+                      value={editDisplayName}
+                      onChange={(e) => setEditDisplayName(e.target.value)}
+                      placeholder={t("gateway.profile.displayNamePlaceholder")}
+                      className="w-full rounded bg-surface-raised px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="password"
+                      value={editToken}
+                      onChange={(e) => setEditToken(e.target.value)}
+                      placeholder={t("gateway.profile.tokenPlaceholder")}
+                      className="w-full rounded bg-surface-raised px-3 py-2 text-sm"
+                    />
+                    <p className="text-xs text-text-muted">{t("gateway.profile.tokenKeepHint")}</p>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveEdit(profile.id)}
+                      disabled={busyId === profile.id}
+                      className="rounded bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                    >
+                      {t("gateway.profile.save")}
+                    </button>
+                  </div>
+                )}
                 {testErrors[profile.id] && (
                   <p className="mt-1 text-xs text-danger">{testErrors[profile.id]}</p>
                 )}

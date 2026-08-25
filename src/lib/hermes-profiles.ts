@@ -156,6 +156,73 @@ export async function listHermesProfiles(userId: string, gatewayId: string) {
   }));
 }
 
+/**
+ * 프로필 수정. 토큰은 **보낼 때만** 바뀐다 — 게이트웨이 PATCH 와 같은 규약이다
+ * (화면이 빈 칸을 아예 보내지 않는다). 빈 문자열로 자격증명을 지우는 사고를 막는다.
+ *
+ * `profileName` 은 바꾸지 않는다. 그것은 Hermes 쪽 정체성이고 `/p/<name>/` 라우팅과
+ * 세션 키가 그 이름에 걸려 있어, 바꾸는 것은 사실상 다른 프로필이다 — 새로 만들어야 한다.
+ */
+export async function updateHermesProfile(
+  userId: string,
+  profileId: string,
+  input: { token?: string; displayName?: string },
+): Promise<{ ok: true } | { ok: false; errorCode: "profile_not_found" | "forbidden" }> {
+  const [row] = await db
+    .select()
+    .from(hermesProfiles)
+    .where(eq(hermesProfiles.id, profileId))
+    .limit(1);
+  if (!row) return { ok: false, errorCode: "profile_not_found" };
+
+  const access = await getAccessibleGatewayResource(userId, row.gatewayId);
+  if (!access) return { ok: false, errorCode: "forbidden" };
+
+  const patch: Record<string, unknown> = { updatedAt: nowForDb() };
+  if (typeof input.displayName === "string") patch.displayName = input.displayName;
+  if (typeof input.token === "string" && input.token.trim()) {
+    patch.tokenEncrypted = encryptGatewayToken(input.token.trim());
+    // 자격증명이 바뀌었으므로 예전 검증 결과는 더 이상 이 토큰에 대한 것이 아니다.
+    // 남겨 두면 "인증 실패" 배지가 새 토큰에 대해서도 계속 붙어 사용자를 오도한다.
+    patch.lastValidationStatus = null;
+    patch.lastValidationError = null;
+    patch.lastValidatedAt = null;
+  }
+
+  await db.update(hermesProfiles).set(patch).where(eq(hermesProfiles.id, profileId));
+  return { ok: true };
+}
+
+/**
+ * 프로필 삭제. 이 프로필을 쓰던 NPC 는 지워지지 않고 연결만 풀린다
+ * (`npcs.hermes_profile_id` 가 `set null`). 다만 그 NPC 들은 다시 묶기 전까지
+ * 대화할 수 없으므로, 호출부가 사용자에게 그 수를 먼저 보여줘야 한다.
+ */
+export async function deleteHermesProfile(
+  userId: string,
+  profileId: string,
+): Promise<
+  { ok: true; unboundNpcs: number } | { ok: false; errorCode: "profile_not_found" | "forbidden" }
+> {
+  const [row] = await db
+    .select()
+    .from(hermesProfiles)
+    .where(eq(hermesProfiles.id, profileId))
+    .limit(1);
+  if (!row) return { ok: false, errorCode: "profile_not_found" };
+
+  const access = await getAccessibleGatewayResource(userId, row.gatewayId);
+  if (!access) return { ok: false, errorCode: "forbidden" };
+
+  const bound = await db
+    .select({ id: npcs.id })
+    .from(npcs)
+    .where(eq(npcs.hermesProfileId, profileId));
+
+  await db.delete(hermesProfiles).where(eq(hermesProfiles.id, profileId));
+  return { ok: true, unboundNpcs: bound.length };
+}
+
 export async function validateHermesProfile(
   userId: string,
   profileId: string,
