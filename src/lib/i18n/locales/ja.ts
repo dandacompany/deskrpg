@@ -172,7 +172,7 @@ const ja: Record<string, string> = {
   "gateway.profile.delete": "削除",
   "gateway.profile.save": "保存",
   "gateway.profile.displayNamePlaceholder": "表示名（任意）",
-  "gateway.profile.tokenPlaceholder": "新しいプロファイルトークン（16文字以上）",
+  "gateway.profile.newTokenPlaceholder": "新しいプロファイルトークン（16文字以上）",
   "gateway.profile.tokenKeepHint": "トークンを空のままにすると既存のトークンを維持します。",
   "gateway.profile.deleteConfirm":
     "{name} プロファイルを削除しますか？ 使用中の NPC は接続が解除されるだけで削除されません。",

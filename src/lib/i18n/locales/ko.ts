@@ -170,7 +170,7 @@ const ko: Record<string, string> = {
   "gateway.profile.delete": "삭제",
   "gateway.profile.save": "저장",
   "gateway.profile.displayNamePlaceholder": "표시 이름 (선택)",
-  "gateway.profile.tokenPlaceholder": "새 프로필 토큰 (16자 이상)",
+  "gateway.profile.newTokenPlaceholder": "새 프로필 토큰 (16자 이상)",
   "gateway.profile.tokenKeepHint": "토큰을 비워 두면 기존 토큰을 유지합니다.",
   "gateway.profile.deleteConfirm":
     "{name} 프로필을 삭제하시겠습니까? 이 프로필을 쓰던 NPC 는 연결만 해제되고 삭제되지 않습니다.",

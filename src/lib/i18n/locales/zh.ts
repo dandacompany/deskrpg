@@ -168,7 +168,7 @@ const zh: Record<string, string> = {
   "gateway.profile.delete": "删除",
   "gateway.profile.save": "保存",
   "gateway.profile.displayNamePlaceholder": "显示名称（可选）",
-  "gateway.profile.tokenPlaceholder": "新的配置文件令牌（16 位以上）",
+  "gateway.profile.newTokenPlaceholder": "新的配置文件令牌（16 位以上）",
   "gateway.profile.tokenKeepHint": "令牌留空则保留现有令牌。",
   "gateway.profile.deleteConfirm":
     "要删除配置文件 {name} 吗？使用它的 NPC 只会解除绑定，不会被删除。",

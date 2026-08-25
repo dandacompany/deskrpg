@@ -287,7 +287,7 @@ export default function HermesProfileList({ gatewayId, canRegister }: HermesProf
                       type="password"
                       value={editToken}
                       onChange={(e) => setEditToken(e.target.value)}
-                      placeholder={t("gateway.profile.tokenPlaceholder")}
+                      placeholder={t("gateway.profile.newTokenPlaceholder")}
                       className="w-full rounded bg-surface-raised px-3 py-2 text-sm"
                     />
                     <p className="text-xs text-text-muted">{t("gateway.profile.tokenKeepHint")}</p>

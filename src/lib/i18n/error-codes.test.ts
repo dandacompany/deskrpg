@@ -474,3 +474,22 @@ test("본문이 객체가 아니어도 헤더만으로 코드를 만든다", () 
   const headers = { get: () => "not_a_hermes_gateway" };
   assert.deepEqual(withHeaderErrorCode(null, headers), { errorCode: "not_a_hermes_gateway" });
 });
+
+// 로케일 파일에 같은 키가 두 번 있으면 **뒤엣것이 조용히 이긴다** — 앞의 문구를 고쳐도
+// 화면은 그대로다. TypeScript 가 빌드에서 잡아 주지만(`An object literal cannot have
+// multiple properties with the same name`), 그건 몇 분짜리 검사이고 실제로 그 상태로
+// 커밋·푸시가 나간 적이 있다. 몇 초 안에 잡는다.
+//
+// 앞의 세 가드는 키의 **존재**만 봤다. 중복은 존재하므로 그물을 빠져나갔다.
+test("no locale defines the same key twice", () => {
+  const dupes: string[] = [];
+  for (const lang of ["ko", "en", "ja", "zh"]) {
+    const src = readFileSync(path.join(repoRoot, `src/lib/i18n/locales/${lang}.ts`), "utf8");
+    const seen = new Set<string>();
+    for (const m of src.matchAll(/^\s*"([^"]+)":/gm)) {
+      if (seen.has(m[1])) dupes.push(`${lang}: ${m[1]}`);
+      seen.add(m[1]);
+    }
+  }
+  assert.deepEqual(dupes, [], `중복 키는 뒤엣것이 이깁니다:\n  ${dupes.join("\n  ")}`);
+});

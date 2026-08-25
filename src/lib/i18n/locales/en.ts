@@ -172,7 +172,7 @@ const en: Record<string, string> = {
   "gateway.profile.delete": "Delete",
   "gateway.profile.save": "Save",
   "gateway.profile.displayNamePlaceholder": "Display name (optional)",
-  "gateway.profile.tokenPlaceholder": "New profile token (16+ chars)",
+  "gateway.profile.newTokenPlaceholder": "New profile token (16+ chars)",
   "gateway.profile.tokenKeepHint": "Leave the token blank to keep the existing one.",
   "gateway.profile.deleteConfirm":
     "Delete the profile {name}? NPCs using it are unbound, not deleted.",
