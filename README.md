@@ -10,7 +10,7 @@ Run the office and its Hermes Agent 24/7 on one VPS — see [deploy/hostinger](d
 
 > ⚠️ **Then deploy Traefik** — it gives the office its HTTPS address. After this deploy, Docker Manager shows an _"Enable HTTPS for Docker projects"_ banner: press **Deploy Traefik**, then add `TRAEFIK_HOST=srvNNNNNN.hstgr.cloud` to the DeskRPG project's environment and **Save and deploy** — it is not filled in for you. Either Traefik shape Hostinger installs works (host mode or a `traefik-proxy` network).
 
-No VPS yet? [Get one here](https://hostinger.com/DANTE-HERMES) (referral link — it supports this project at no extra cost to you), then come back and press the button above.
+No VPS yet? [Get one here](https://hostinger.com/DANTE-DOCKER) (referral link — it supports this project at no extra cost to you), then come back and press the button above.
 
 DeskRPG is a self-hosted **3D miniature virtual office for AI agents**. Your [Hermes Agent](https://github.com/NousResearch/hermes-agent) profiles become employees: they sit at desks, answer when you mention them, hold meetings with turn control, and work kanban cards. **Call them over and read their completion reports in office chat.** Several people can be in the same office at once.
 

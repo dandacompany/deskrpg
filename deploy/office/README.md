@@ -15,7 +15,7 @@ Hermes 대시보드가 같이 살아납니다.
 
 ## 배포
 
-VPS 가 아직 없다면 [여기서 받으세요](https://hostinger.com/DANTE-HERMES) — 제휴 링크이며 추가 비용은 없습니다.
+VPS 가 아직 없다면 [여기서 받으세요](https://hostinger.com/DANTE-DOCKER) — 제휴 링크이며 추가 비용은 없습니다.
 
 Hostinger VPS 의 Docker Manager → **Compose from URL** 에 이 파일 주소를 붙여 넣습니다.
 
