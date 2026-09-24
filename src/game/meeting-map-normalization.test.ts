@@ -206,7 +206,7 @@ test("the official map's meeting room uses the existing space instead of the lou
 test("an invalid map is not replaced with a separate space", () => {
   assert.throws(
     () => normalizeMeetingMap({ nonsense: true }),
-    (e: unknown) => e instanceof MeetingMapError && e.code === "unsupported_map_data",
+    (e: unknown) => e instanceof MeetingMapError && e.reason === "unsupported_map_data",
   );
 });
 
@@ -347,7 +347,7 @@ test("unreachable maps and invalid explicit meeting rooms fail", () => {
   map.objects = [];
   assert.throws(
     () => normalizeMeetingMap(map),
-    (e: unknown) => e instanceof MeetingMapError && e.code === "edge_corridor_unavailable",
+    (e: unknown) => e instanceof MeetingMapError && e.reason === "edge_corridor_unavailable",
   );
   assert.throws(
     () =>
@@ -355,7 +355,7 @@ test("unreachable maps and invalid explicit meeting rooms fail", () => {
         ...legacy(),
         meetingSpace: { id: "bad", bounds: { x: 1, y: 1, width: 3, height: 3 } },
       }),
-    (e: unknown) => e instanceof MeetingMapError && e.code === "meeting_space_invalid",
+    (e: unknown) => e instanceof MeetingMapError && e.reason === "meeting_space_invalid",
   );
 });
 test("an invalid explicit Tiled meeting room property does not quietly extend", () => {
@@ -375,7 +375,7 @@ test("an invalid explicit Tiled meeting room property does not quietly extend", 
     });
   assert.throws(
     () => normalizeMeetingMap(map),
-    (e: unknown) => e instanceof MeetingMapError && e.code === "meeting_space_invalid",
+    (e: unknown) => e instanceof MeetingMapError && e.reason === "meeting_space_invalid",
   );
 });
 test("Tiled saves preserve collision objects, layers and existing object IDs", () => {
@@ -440,7 +440,7 @@ test("meeting map errors carry a code and an English message", () => {
     assert.fail("expected a MeetingMapError");
   } catch (error) {
     assert.ok(error instanceof MeetingMapError);
-    assert.equal(error.code, "unsupported_map_data");
+    assert.equal(error.reason, "unsupported_map_data");
     assert.match(error.message, /^Invalid meeting map: /);
     assert.doesNotMatch(error.message, /[가-힣]/);
   }

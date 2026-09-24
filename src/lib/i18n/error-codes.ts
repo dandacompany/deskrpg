@@ -517,6 +517,7 @@ export function getLocalizedErrorMessage(
 
   const data = payload as {
     errorCode?: unknown;
+    reason?: unknown;
     messageCode?: unknown;
     error?: unknown;
     message?: unknown;
@@ -524,6 +525,13 @@ export function getLocalizedErrorMessage(
 
   if (typeof data.messageCode === "string") {
     return getLocalizedMessage(t, data.messageCode, fallbackKey);
+  }
+
+  if (data.errorCode === "meeting_map_invalid" && typeof data.reason === "string") {
+    const reasonKey = `meetingMap.reason.${data.reason}`;
+    const reason = t(reasonKey);
+    // An unknown reason comes back as its own key; show the general message instead.
+    if (reason !== reasonKey) return t("errors.meetingMapInvalidReason", { reason });
   }
 
   if (typeof data.errorCode === "string") {

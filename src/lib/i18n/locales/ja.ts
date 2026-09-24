@@ -3333,6 +3333,20 @@ const ja: Record<string, string> = {
   "mapPreview.controlsHint": "右ドラッグ: 回転 · ホイール: 拡大/縮小 · 中ボタン: 移動",
   "errors.meetingMapInvalid":
     "会議室マップを確認できません。入口と会議室への通路があるマップか確認してください。",
+  "errors.meetingMapInvalidReason": "会議室マップのエラー: {reason}",
+  "meetingMap.reason.tiled_layers_invalid": "Tiled のサイズまたはレイヤーが正しくありません",
+  "meetingMap.reason.tile_layer_size_mismatch": "タイルレイヤーのサイズがマップと異なります",
+  "meetingMap.reason.unsupported_map_data": "対応していないマップデータです",
+  "meetingMap.reason.no_entrance": "歩いて入れる入口がありません",
+  "meetingMap.reason.meeting_space_property_invalid":
+    "会議室エリアのプロパティが正しい JSON ではありません",
+  "meetingMap.reason.spawn_unreachable": "スポーン地点から移動経路が見つかりません",
+  "meetingMap.reason.meeting_space_invalid": "指定された会議室の入口・座席・待機位置が無効です",
+  "meetingMap.reason.edge_corridor_unavailable": "既存の配置を保ったまま端の連絡通路を作れません",
+  "meetingMap.reason.extended_map_too_large": "増築後のマップサイズが対応範囲を超えています",
+  "meetingMap.reason.corridor_collision_blocked":
+    "通路境界の衝突オブジェクトを安全に開放できません",
+  "meetingMap.reason.extension_unreachable": "増築した会議室への経路の検証に失敗しました",
   // --- /content-i18n:D ---
 };
 

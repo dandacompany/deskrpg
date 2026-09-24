@@ -3319,6 +3319,22 @@ const en: Record<string, string> = {
   "mapPreview.controlsHint": "Right-drag: orbit · Wheel: zoom · Middle-drag: pan",
   "errors.meetingMapInvalid":
     "The meeting room map could not be validated. Check that the map has an entrance and a path to the meeting room.",
+  "errors.meetingMapInvalidReason": "Invalid meeting map: {reason}",
+  "meetingMap.reason.tiled_layers_invalid": "Tiled size or layers are invalid",
+  "meetingMap.reason.tile_layer_size_mismatch": "A tile layer does not match the map size",
+  "meetingMap.reason.unsupported_map_data": "Unsupported map data",
+  "meetingMap.reason.no_entrance": "No walkable entrance",
+  "meetingMap.reason.meeting_space_property_invalid":
+    "The meeting room area property is not valid JSON",
+  "meetingMap.reason.spawn_unreachable": "No path from the spawn point",
+  "meetingMap.reason.meeting_space_invalid":
+    "The assigned meeting room's entrance, seats or waiting spots are invalid",
+  "meetingMap.reason.edge_corridor_unavailable":
+    "Cannot add an edge corridor without changing the existing layout",
+  "meetingMap.reason.extended_map_too_large": "The extended map exceeds the supported size",
+  "meetingMap.reason.corridor_collision_blocked":
+    "Cannot safely open collision objects at the corridor edge",
+  "meetingMap.reason.extension_unreachable": "The extended meeting room is not reachable",
   // --- /content-i18n:D ---
 };
 

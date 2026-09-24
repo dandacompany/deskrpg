@@ -3180,6 +3180,18 @@ const zh: Record<string, string> = {
   "mapPreview.webglUnavailable": "WebGL 不可用，无法显示 3D 预览。",
   "mapPreview.controlsHint": "右键拖动: 旋转 · 滚轮: 缩放 · 中键拖动: 平移",
   "errors.meetingMapInvalid": "无法验证会议室地图。请确认地图有入口以及通往会议室的通道。",
+  "errors.meetingMapInvalidReason": "会议室地图错误: {reason}",
+  "meetingMap.reason.tiled_layers_invalid": "Tiled 尺寸或图层无效",
+  "meetingMap.reason.tile_layer_size_mismatch": "图块图层尺寸与地图不一致",
+  "meetingMap.reason.unsupported_map_data": "不支持的地图数据",
+  "meetingMap.reason.no_entrance": "没有可通行的入口",
+  "meetingMap.reason.meeting_space_property_invalid": "会议室区域属性不是有效的 JSON",
+  "meetingMap.reason.spawn_unreachable": "从出生点找不到可走的路径",
+  "meetingMap.reason.meeting_space_invalid": "指定会议室的入口、座位或等候位置无效",
+  "meetingMap.reason.edge_corridor_unavailable": "无法在保留现有布局的情况下添加边缘连接通道",
+  "meetingMap.reason.extended_map_too_large": "扩建后的地图尺寸超出支持范围",
+  "meetingMap.reason.corridor_collision_blocked": "无法安全地打开通道边界处的碰撞对象",
+  "meetingMap.reason.extension_unreachable": "扩建会议室的访问路径验证失败",
   // --- /content-i18n:D ---
 };
 

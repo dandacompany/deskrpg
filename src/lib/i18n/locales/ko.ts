@@ -3297,6 +3297,21 @@ const ko: Record<string, string> = {
   "mapPreview.controlsHint": "우클릭 드래그: 회전 · 휠: 확대/축소 · 가운데 버튼: 이동",
   "errors.meetingMapInvalid":
     "회의실 맵을 확인할 수 없습니다. 입구와 회의실로 가는 길이 있는 맵인지 확인해 주세요.",
+  "errors.meetingMapInvalidReason": "회의실 맵 오류: {reason}",
+  "meetingMap.reason.tiled_layers_invalid": "Tiled 크기 또는 레이어가 잘못되었습니다",
+  "meetingMap.reason.tile_layer_size_mismatch": "타일 레이어 크기가 맵과 다릅니다",
+  "meetingMap.reason.unsupported_map_data": "지원하지 않는 맵 데이터입니다",
+  "meetingMap.reason.no_entrance": "이동 가능한 입구가 없습니다",
+  "meetingMap.reason.meeting_space_property_invalid": "회의실 영역 속성이 올바른 JSON이 아닙니다",
+  "meetingMap.reason.spawn_unreachable": "스폰에서 이동 경로를 찾을 수 없습니다",
+  "meetingMap.reason.meeting_space_invalid":
+    "지정된 회의실의 입구·좌석·대기 위치가 유효하지 않습니다",
+  "meetingMap.reason.edge_corridor_unavailable":
+    "기존 배치를 보존하며 가장자리 연결 통로를 만들 수 없습니다",
+  "meetingMap.reason.extended_map_too_large": "증축 후 맵 크기가 지원 범위를 넘습니다",
+  "meetingMap.reason.corridor_collision_blocked":
+    "통로 경계의 충돌 객체를 안전하게 개방할 수 없습니다",
+  "meetingMap.reason.extension_unreachable": "증축 회의실의 접근 경로 검증에 실패했습니다",
   // --- /content-i18n:D ---
 };
 

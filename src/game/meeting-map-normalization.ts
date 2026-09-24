@@ -40,7 +40,7 @@ const grid = (v: unknown): v is number[][] =>
   );
 const key = (x: number, y: number) => `${x},${y}`;
 const wall = (o: MapObject) => o.type.includes("wall");
-const MEETING_MAP_ERROR_REASONS = {
+export const MEETING_MAP_ERROR_REASONS = {
   tiled_layers_invalid: "Tiled size or layers are invalid",
   tile_layer_size_mismatch: "a tile layer does not match the map size",
   unsupported_map_data: "unsupported map data",
@@ -53,21 +53,23 @@ const MEETING_MAP_ERROR_REASONS = {
   corridor_collision_blocked: "cannot safely open collision objects at the corridor edge",
   extension_unreachable: "the extended meeting room is not reachable",
 } as const;
-export type MeetingMapErrorCode = keyof typeof MEETING_MAP_ERROR_REASONS;
+export type MeetingMapErrorReason = keyof typeof MEETING_MAP_ERROR_REASONS;
 
-/** A map the meeting runtime cannot use. `code` is stable; the message is English for logs and API bodies. */
+/** A map the meeting runtime cannot use. `reason` is stable and translated on screen; the message is English for logs. */
 export class MeetingMapError extends Error {
   constructor(
-    readonly code: MeetingMapErrorCode,
+    readonly reason: MeetingMapErrorReason,
     readonly detail?: string,
   ) {
-    super(`Invalid meeting map: ${MEETING_MAP_ERROR_REASONS[code]}${detail ? ` (${detail})` : ""}`);
+    super(
+      `Invalid meeting map: ${MEETING_MAP_ERROR_REASONS[reason]}${detail ? ` (${detail})` : ""}`,
+    );
     this.name = "MeetingMapError";
   }
 }
 
-function invalid(code: MeetingMapErrorCode): never {
-  throw new MeetingMapError(code);
+function invalid(reason: MeetingMapErrorReason): never {
+  throw new MeetingMapError(reason);
 }
 
 /** Merge only the floor and furniture the renderer edited. Tiled collisions and unknown layers are saved as is. */
