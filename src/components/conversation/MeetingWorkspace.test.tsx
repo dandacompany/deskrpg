@@ -41,7 +41,7 @@ test("meeting workspace keeps the existing meeting controls inside a labelled su
   assert.ok(surface);
   assert.equal(surface.getAttribute("aria-label"), "회의실");
   assert.match(surface.textContent ?? "", /회의/);
-  // 패널의 출구는 맵 우상단 버튼과 같은 동작이라 이름도 같다.
+  // The panel's exit acts the same as the map's top-right button, so it shares the same name.
   assert.equal(element.querySelector("[data-meeting-leave]")?.textContent, "오피스로");
   await act(async () => root.unmount());
 });
@@ -109,7 +109,7 @@ const initialState = {
   discussion: null,
 };
 
-test("NPC 없이 참가한 두 사람은 준비 화면에서 채팅하고 AI 시작은 비활성이다", async (context) => {
+test("two participants without an NPC can chat on the prep screen while AI start stays disabled", async (context) => {
   const socket = new MeetingSocket();
   const view = await mountMeeting(socket, []);
   context.after(() => view.close());
@@ -163,7 +163,7 @@ test("NPC 없이 참가한 두 사람은 준비 화면에서 채팅하고 AI 시
   assert.equal(input.readOnly, true, "끊긴 동안 입력 불가");
 });
 
-test("참가 성공 전에는 확정하지 않고 재연결/패널 접기로 토론을 자동 시작하지 않는다", async () => {
+test("does not auto-start a discussion via reconnect/panel collapse before join succeeds", async () => {
   const socket = new MeetingSocket();
   const view = await mountMeeting(socket);
   assert.equal(socket.calls.filter((call) => call.event === "meeting:join").length, 1);
@@ -219,7 +219,7 @@ test("참가 성공 전에는 확정하지 않고 재연결/패널 접기로 토
   );
 });
 
-test("실제 스트림은 발언 한 번으로 전달하고 userId를 매칭한다", async () => {
+test("a real stream delivers as a single utterance and matches userId", async () => {
   const socket = new MeetingSocket();
   const view = await mountMeeting(socket);
   const speakers: unknown[] = [];
@@ -252,7 +252,7 @@ test("실제 스트림은 발언 한 번으로 전달하고 userId를 매칭한�
   await view.close();
 });
 
-test("사용자가 시작한 집결은 성공 전 준비 상태를 보이고 blocked에서 명시 재시도한다", async (context) => {
+test("a user-initiated assembly shows a prep state before success and requires explicit retry on blocked", async (context) => {
   const socket = new MeetingSocket();
   const view = await mountMeeting(socket);
   context.after(() => view.close());

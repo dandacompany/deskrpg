@@ -11,11 +11,11 @@ import { quickStartGamePath } from "@/lib/quick-start";
 import { CopyCommand } from "../CopyCommand";
 
 /**
- * 게이트웨이가 **하나도 없는** 사용자에게 보여주는 온보딩 안내.
+ * The onboarding guide shown to a user with **zero** gateways.
  *
- * 가입 직후 `/gateways` 로 떨어진 사람은 Hermes 를 설치한 적도, 모델 제공자에 로그인한
- * 적도 없다. 그 사람에게 빈 등록 폼만 주면 막다른 길이다 — DeskRPG 는 에이전트 런타임을
- * 내장하지 않는다는 사실부터 말해 주어야 한다.
+ * Someone who lands on `/gateways` right after signing up hasn't installed Hermes or
+ * logged into a model provider yet. Giving that person just an empty registration form
+ * is a dead end — they need to be told first that DeskRPG doesn't bundle an agent runtime.
  */
 const TOAST_MS = 3000;
 
@@ -35,8 +35,8 @@ export default function GatewayOnboardingGuide() {
   }, []);
 
   /**
-   * 게이트웨이가 없어도 사무실은 만들 수 있다 — 서버가 캐릭터·채널을 기본값으로
-   * 만들고(이미 있으면 그것을 그대로 쓰고) 식별자 둘만 돌려준다.
+   * The office can be created even without a gateway — the server creates default
+   * character/channel (or reuses them if they already exist) and returns just the two ids.
    */
   const quickStart = useCallback(async () => {
     if (running) return;
@@ -105,7 +105,7 @@ export default function GatewayOnboardingGuide() {
           <li>
             <p className="text-sm font-semibold">{t("gateways.onboarding.step1Title")}</p>
             <p className="mt-1 text-sm text-text-muted">{t("gateways.onboarding.step1Body")}</p>
-            {/* 저장소 링크만 주고 끝내지 않는다 — 같은 호스트라면 마법사가 설치할 수 있다. */}
+            {/* Don't stop at just a repo link — the wizard can install it if it's the same host. */}
             <p className="mt-1 text-sm text-text-muted">
               {t("gateways.onboarding.step1WizardHint")}
             </p>

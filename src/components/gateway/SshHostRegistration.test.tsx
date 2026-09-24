@@ -15,7 +15,7 @@ function setValue(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-test("공개키를 authorized_keys 에 붙이는 명령은 키를 작은따옴표로 감싼다", () => {
+test("the command that appends the public key to authorized_keys wraps the key in single quotes", () => {
   assert.equal(
     authorizeCommand("ssh-ed25519 AAAA deskrpg@x"),
     "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo 'ssh-ed25519 AAAA deskrpg@x' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys",
@@ -23,7 +23,7 @@ test("공개키를 authorized_keys 에 붙이는 명령은 키를 작은따옴�
   assert.match(authorizeCommand("a'b"), /'a'\\''b'/);
 });
 
-test("스캔한 지문을 확인해야만 등록하고, 확인한 지문을 그대로 보낸다", async () => {
+test("registers only after confirming the scanned fingerprint, and sends that same confirmed fingerprint", async () => {
   const original = globalThis.fetch;
   const bodies: Record<string, unknown>[] = [];
   globalThis.fetch = (async (_url: string, init?: RequestInit) => {
@@ -77,7 +77,7 @@ test("스캔한 지문을 확인해야만 등록하고, 확인한 지문을 그�
   }
 });
 
-test("서버에 닿지 못하면 무엇을 확인할지 말한다", async () => {
+test("when the server is unreachable, tells you what to check", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = (async (_url: string, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));

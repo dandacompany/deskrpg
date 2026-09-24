@@ -174,7 +174,7 @@ test("seat number shows in the roster detail, standing when unseated, resting hi
   assert.ok(!dormantSection.slice(danaIndex, danaIndex + 40).includes("번 자리"));
 });
 
-test("the owner menu keeps 자리 이동 and drops the removed place action", async () => {
+test("the owner menu keeps the move-seat action and drops the removed place action", async () => {
   const owner = await mount(true);
   await act(async () => button(owner.element, "소피 관리").click());
   assert.ok(button(owner.element, "자리 이동"));
@@ -187,8 +187,9 @@ test("the owner menu keeps 자리 이동 and drops the removed place action", as
   );
 });
 
-// 이 카드의 결함: 기록은 남는데 **목록에 입구가 없어서** 이어서 말하려면 맵에서 그 직원을
-// 다시 찾아 눌러야 했다. 목록에 줄이 생기고, 그 줄이 DM 을 여는 경로여야 한다.
+// This card's flaw: the history stays, but **without an entry point in the list**, continuing
+// the conversation required finding and clicking that staff member on the map again. The list
+// should get a row, and that row should be the path to opening the DM.
 const dmThreads: DmThreadEntry[] = [
   {
     npcId: "sophie",
@@ -206,18 +207,18 @@ const dmThreads: DmThreadEntry[] = [
   },
 ];
 
-test("직원과의 DM 이 대화 목록에 줄로 남고, 그 줄로 다시 열 수 있다", async () => {
+test("a DM with a staff member stays as a row in the conversation list, and that row reopens it", async () => {
   const { element, selected } = await mount(true, npcs, dmThreads);
   const text = element.textContent ?? "";
   assert.match(text, /소피[\s\S]*표지 시안 올렸어요/);
-  // 보낸 쪽이 나면 미리보기도 "나:" 로 보인다 — 방 목록과 같은 규칙이다.
+  // When I'm the sender, the preview also shows "나:" — the same rule as the room list.
   assert.match(text, /나: 내일 이야기해요/);
 
   await act(async () => button(element, "소피 대화").click());
   assert.deepEqual(selected, ["dm:sophie"]);
 });
 
-test("퇴근한 직원의 대화도 목록에 남는다 — 쉬는 중이라고 알리기만 한다", async () => {
+test("a clocked-out staff member's conversation also stays in the list — it just shows resting", async () => {
   const { element } = await mount(true, npcs, dmThreads);
   const row = [...element.querySelectorAll("button")].find((node) =>
     (node.getAttribute("aria-label") ?? "").includes("레오 대화"),
@@ -226,7 +227,7 @@ test("퇴근한 직원의 대화도 목록에 남는다 — 쉬는 중이라고 
   assert.match(row.textContent ?? "", /쉬는 중/);
 });
 
-test("대화 이력이 없으면 DM 줄도 없다", async () => {
+test("no conversation history means no DM row", async () => {
   const { element } = await mount(true, npcs, []);
   const rows = [...element.querySelectorAll("button")].filter((node) =>
     /\S 대화$/.test(node.getAttribute("aria-label") ?? ""),

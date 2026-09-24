@@ -31,7 +31,7 @@ function editor(el: HTMLElement): HTMLElement {
   return e as HTMLElement;
 }
 
-/** 사용자가 타이핑한 것처럼: 텍스트 노드를 붙이고 input 이벤트를 쏜다(캐럿은 끝으로 간주). */
+/** As if the user typed it: append a text node and fire an input event (the caret is assumed to be at the end). */
 async function typeText(ed: HTMLElement, text: string) {
   await act(async () => {
     ed.appendChild(document.createTextNode(text));
@@ -49,7 +49,7 @@ function items(el: HTMLElement): string[] {
   return [...el.querySelectorAll('[role="option"]')].map((o) => o.textContent?.trim() ?? "");
 }
 
-test("@ 뒤 글자로 후보를 걸러 드롭다운에 보여 준다", async () => {
+test("filters candidates by the characters after @ and shows them in the dropdown", async () => {
   const { el } = await mount(
     <I18nProvider>
       <MentionEditor candidates={candidates} value="" onChange={() => {}} onSubmit={() => {}} />
@@ -59,7 +59,7 @@ test("@ 뒤 글자로 후보를 걸러 드롭다운에 보여 준다", async () 
   assert.deepEqual(items(el), ["소피", "소라"]);
 });
 
-test("후보를 클릭하면 @쿼리가 칩으로 바뀌고 직렬화 값이 @[이름] 이 된다", async () => {
+test("clicking a candidate turns the @query into a chip and serializes to @[name]", async () => {
   let value = "";
   const { el } = await mount(
     <I18nProvider>
@@ -89,7 +89,7 @@ test("후보를 클릭하면 @쿼리가 칩으로 바뀌고 직렬화 값이 @[�
   assert.equal(items(el).length, 0, "선택 후 드롭다운이 닫혀야 한다");
 });
 
-test("드롭다운이 닫혀 있을 때 Enter 는 제출, 열려 있을 때 Enter 는 선택", async () => {
+test("Enter submits when the dropdown is closed, and selects when it's open", async () => {
   const sent: string[] = [];
   const { el } = await mount(
     <I18nProvider>
@@ -110,7 +110,7 @@ test("드롭다운이 닫혀 있을 때 Enter 는 제출, 열려 있을 때 Ente
   assert.equal(sent.length, 1);
 });
 
-test("clear() 는 편집기를 비운다", async () => {
+test("clear() empties the editor", async () => {
   const ref = createRef<MentionEditorHandle>();
   const { el } = await mount(
     <I18nProvider>
@@ -129,7 +129,7 @@ test("clear() 는 편집기를 비운다", async () => {
   assert.equal(ed.textContent, "");
 });
 
-test("선택된 후보는 하드코딩 흰 글자가 아니라 브랜드 토큰으로 칠해진다", async () => {
+test("a selected candidate is colored with a brand token, not hardcoded white text", async () => {
   const { el } = await mount(
     <I18nProvider>
       <MentionEditor
@@ -150,7 +150,7 @@ test("선택된 후보는 하드코딩 흰 글자가 아니라 브랜드 토큰�
   assert.equal(/-\$\{|undefined/.test(cls), false, `조립 클래스 흔적이 있다: ${cls}`);
 });
 
-test("멘션 칩은 조립 클래스 없이 브랜드 토큰으로 칠해진다", async () => {
+test("a mention chip is colored with a brand token, with no assembled classes", async () => {
   const { el } = await mount(
     <I18nProvider>
       <MentionEditor candidates={candidates} value="" onChange={() => {}} onSubmit={() => {}} />

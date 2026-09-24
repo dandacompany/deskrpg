@@ -1,13 +1,15 @@
 "use client";
 
 /**
- * SSH 호스트 등록 — DeskRPG 전용 키의 공개키를 보여 주고, 호스트 키 지문을 확인받아 고정한다.
+ * SSH host registration — shows the public key of DeskRPG's dedicated key, and pins the
+ * host key only after its fingerprint is confirmed.
  *
- * 1. 공개키 복사 → 관리자가 대상 서버 `~/.ssh/authorized_keys` 에 붙인다(개인키는 서버 밖으로 나가지 않는다).
- * 2. 호스트·포트·사용자 입력 → 서버가 `ssh-keyscan` 으로 받은 지문을 보여 준다.
- * 3. "지문이 맞습니다" 확인 → 서버가 다시 스캔해 같을 때만 등록한다.
+ * 1. Copy the public key → an admin appends it to the target server's `~/.ssh/authorized_keys`
+ *    (the private key never leaves the server).
+ * 2. Enter host/port/user → the server shows the fingerprint it got from `ssh-keyscan`.
+ * 3. Confirm "the fingerprint matches" → the server scans again and registers only if it matches.
  *
- * 관리자 전용이다(서버가 판정). 비밀번호는 받지 않는다.
+ * Admin-only (the server decides). No password is accepted.
  */
 import { useEffect, useState, type JSX } from "react";
 
@@ -26,7 +28,7 @@ const input =
 
 type ScannedKey = { type: string; fingerprint: string };
 
-/** 등록 단계에서 자주 나는 코드는 무엇을 하면 되는지까지 말한다. 나머지는 마법사 공통 문구. */
+/** Codes commonly seen during registration spell out what to do about them. Everything else uses the wizard's common text. */
 const SSH_ERROR_KEYS: Record<string, string> = {
   ssh_connection_failed: "hermes.wizard.ssh.errors.unreachable",
   ssh_unavailable: "hermes.wizard.ssh.errors.noTools",
@@ -50,7 +52,7 @@ async function post<T>(body: object): Promise<T> {
   return data as T;
 }
 
-/** 대상 서버에서 한 번 실행할 명령 — 공개키를 authorized_keys 에 붙인다. */
+/** The command to run once on the target server — appends the public key to authorized_keys. */
 export function authorizeCommand(publicKey: string): string {
   const quoted = `'${publicKey.replace(/'/g, "'\\''")}'`;
   return `mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo ${quoted} >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`;
@@ -62,9 +64,11 @@ type RegistrationProps = {
 };
 
 /**
- * 두 방식을 모두 받는다(2026-09-19 단테 결정).
- * - 내 SSH 설정: Hermes Desktop 과 같다. 서버 사용자 `~/.ssh/config`·agent·키 파일을 쓴다. `~/.ssh` 가 있을 때만.
- * - DeskRPG 전용 키: 공개키를 대상 서버에 심는다. 컨테이너처럼 `~/.ssh` 가 없어도 된다.
+ * Accepts both methods (Dante's decision, 2026-09-19).
+ * - My SSH config: same as Hermes Desktop. Uses the server user's `~/.ssh/config`/agent/key
+ *   files. Only when `~/.ssh` exists.
+ * - DeskRPG's dedicated key: plants the public key on the target server. Works even without
+ *   `~/.ssh`, like in a container.
  */
 export default function SshHostRegistration(props: RegistrationProps): JSX.Element {
   const t = useT();
@@ -119,7 +123,7 @@ const SYSTEM_ERROR_KEYS: Record<string, string> = {
   setup_invalid_request: "hermes.wizard.ssh.errors.systemInvalid",
 };
 
-/** Desktop 방식 — 별칭(추천)·호스트, 선택 사용자·포트·키 경로. 한 번 접속해 본 뒤에만 저장된다. */
+/** The Desktop method — alias (recommended)/host, optional user/port/key path. Saved only after a successful test connection. */
 function SystemSshRegistration({
   aliases,
   onRegistered,

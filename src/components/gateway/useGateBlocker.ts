@@ -5,8 +5,8 @@ import { useCallback, useState } from "react";
 import { classifyGateFailure, type GateBlocker, type GateFailure } from "@/lib/gate-failure";
 
 /**
- * 게이트 실패 하나를 화면 상태로 들고 있는다. 호출부가 흩어진 칸반·아티팩트용이다 —
- * 크론은 `cron-api.ts` 한 통로에서 잡으므로 이 훅을 쓰지 않는다.
+ * Holds a single gate failure as screen state. For Kanban/artifacts, where callers are
+ * scattered — cron catches it through a single channel (`cron-api.ts`), so it doesn't use this hook.
  */
 export function useGateBlocker() {
   const [blocker, setBlocker] = useState<GateBlocker | null>(null);
@@ -15,7 +15,7 @@ export function useGateBlocker() {
     setBlocker(classifyGateFailure(failure));
   }, []);
 
-  /** status·code 를 가진 오류 객체를 그대로 받는다. 모양이 다르면 `other` 로 떨어진다. */
+  /** Accepts an error object with status/code as-is. Falls through to `other` if the shape differs. */
   const showFromError = useCallback((err: unknown) => {
     const shape = err as {
       status?: unknown;

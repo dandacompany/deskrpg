@@ -30,8 +30,10 @@ type Props = {
   rooms: RoomSummary[];
   currentRoomId: string | null;
   /**
-   * 직원과의 1:1 대화. 방이 아니라 `chat_messages` 의 (캐릭터, 직원) 쌍이라 `rooms` 에 없고,
-   * 목록에 입구가 없으면 맵에서 그 직원을 다시 찾아야만 이어 말할 수 있었다.
+   * A 1:1 conversation with a staff member. It's a (character, staff) pair in
+   * `chat_messages` rather than a room, so it isn't in `rooms`; without an entry point
+   * in this list, continuing the conversation required finding that staff member on
+   * the map again.
    */
   dmThreads?: DmThreadEntry[];
   players: NavigatorPlayer[];
@@ -39,7 +41,7 @@ type Props = {
   selectedNpcId?: string | null;
   isOwner: boolean;
   onSelectRoom: (roomId: string) => void;
-  /** 목록에서 DM 을 연다. **여는 것만으로 직원을 호출하지 않는다** — 호출은 보낼 때다. */
+  /** Opens the DM from the list. **Opening it alone does not call the staff member** — sending a message does. */
   onSelectDm?: (npcId: string, npcName: string) => void;
   onSelectNpc: (npcId: string, npcName: string) => void;
   onSelectPlayer: (playerId: string) => void;

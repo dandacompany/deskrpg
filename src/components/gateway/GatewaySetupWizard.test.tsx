@@ -24,7 +24,7 @@ const candidate: SetupCandidate = {
   pluginVersion: null as string | null,
   port: 8642,
   hasToken: false,
-  // 시간대가 이미 있는 호스트가 기본값이다 — 시간대 제안은 비어 있을 때만 나온다.
+  // The default is a host that already has a timezone — a timezone suggestion only appears when it's empty.
   timezone: "Asia/Seoul" as string | null,
 };
 async function fixture(
@@ -186,7 +186,7 @@ test("URL success with absent plugin offers installation and never claims ready"
   }
 });
 
-test("URL 연결이 저장되면 플러그인이 없어도 onSaved 로 알린다 — 목록이 비어 보이면 사용자가 다시 등록한다", async () => {
+test("a saved URL connection notifies onSaved even without a plugin — if the list looks empty, the user registers again", async () => {
   const saved: string[] = [];
   const f = await fixture(
     async (_url, init) =>
@@ -212,14 +212,14 @@ test("URL 연결이 저장되면 플러그인이 없어도 onSaved 로 알린다
         .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
     );
     assert.deepEqual(saved, ["gw-saved"]);
-    // 안내는 그대로 남는다 — 저장 알림이 화면을 게이트웨이 상세로 넘기지 않는다.
+    // The guidance stays as-is — the save notification does not navigate the screen to gateway detail.
     assert.match(f.host.textContent!, /API 연결은 저장되었지만/);
   } finally {
     await f.cleanup();
   }
 });
 
-test("URL 인증 실패는 저장되지 않았으므로 onSaved 를 부르지 않는다", async () => {
+test("a URL auth failure was not saved, so onSaved is not called", async () => {
   const saved: string[] = [];
   const f = await fixture(
     async (_url, init) =>
@@ -446,7 +446,7 @@ test("review defaults credentialed profiles on and sends only checked profiles",
         .click(),
     );
     await f.click("연결하기");
-    // 프로필 체크박스만 센다 — 워커 적용 체크박스는 따로 있다.
+    // Count only the profile checkboxes — the worker propagation checkbox is separate.
     const boxes = Array.from(
       f.host.querySelectorAll<HTMLInputElement>(
         'input[type="checkbox"]:not([name="worker-propagation"])',
@@ -573,7 +573,7 @@ async function reachReview(
   return f;
 }
 
-test("시간대가 비어 있는 호스트에만 브라우저 시간대를 제안하고 동의하면 prepare 에 싣는다", async () => {
+test("suggests the browser timezone only for a host with no timezone, and carries it on prepare if accepted", async () => {
   let prepared: Record<string, unknown> | undefined;
   const f = await reachReview(
     { pluginStatus: "plugin_absent", changes: ["installing_plugin"] },
@@ -592,7 +592,7 @@ test("시간대가 비어 있는 호스트에만 브라우저 시간대를 제�
   }
 });
 
-test("시간대 동의를 끄면 prepare 본문에 timezone 을 넣지 않는다", async () => {
+test("turning off timezone consent excludes timezone from the prepare body", async () => {
   let prepared: Record<string, unknown> | undefined;
   const f = await reachReview(
     { pluginStatus: "plugin_absent", changes: [], profiles: [] },
@@ -601,7 +601,7 @@ test("시간대 동의를 끄면 prepare 본문에 timezone 을 넣지 않는다
     },
   );
   try {
-    // 워커 적용 체크박스도 같은 화면에 있다 — 시간대 체크박스만 고른다.
+    // The worker propagation checkbox is also on the same screen — pick only the timezone checkbox.
     const boxes = Array.from(
       f.host.querySelectorAll<HTMLInputElement>(
         'input[type="checkbox"]:not([name="worker-propagation"])',
@@ -617,7 +617,7 @@ test("시간대 동의를 끄면 prepare 본문에 timezone 을 넣지 않는다
   }
 });
 
-test("워커 적용은 공개 문구와 함께 기본 켬으로 보이고 prepare 에 workerPropagation: true 를 싣는다", async () => {
+test("worker propagation appears on by default with its public copy and carries workerPropagation: true on prepare", async () => {
   let prepared: Record<string, unknown> | undefined;
   const f = await reachReview(
     { pluginStatus: "plugin_absent", changes: ["installing_plugin"] },
@@ -629,7 +629,7 @@ test("워커 적용은 공개 문구와 함께 기본 켬으로 보이고 prepar
   try {
     const text = f.host.textContent!;
     assert.match(text, /워커 적용 — 칸반·크론 결과물 모으기 \(권장\)/);
-    // 무엇을 바꾸는지와 어디에 저장되는지를 숨기지 않는다.
+    // Does not hide what's changing or where it's saved.
     assert.match(text, /plugins\/deskrpg 링크/);
     assert.match(text, /plugins\.enabled/);
     assert.match(text, /plugins\.entries\.deskrpg\.worker_propagation/);
@@ -642,7 +642,7 @@ test("워커 적용은 공개 문구와 함께 기본 켬으로 보이고 prepar
   }
 });
 
-test("워커 적용을 끄면 prepare 에 workerPropagation: false 를 싣는다", async () => {
+test("turning off worker propagation carries workerPropagation: false on prepare", async () => {
   let prepared: Record<string, unknown> | undefined;
   const f = await reachReview(
     { pluginStatus: "plugin_absent", changes: ["installing_plugin"] },
@@ -661,7 +661,7 @@ test("워커 적용을 끄면 prepare 에 workerPropagation: false 를 싣는다
   }
 });
 
-test("워커 적용 상태가 바뀌면 다른 변경이 없어도 버튼이 설치 및 연결이다", async () => {
+test("changing the worker propagation state makes the button say install-and-connect even with no other changes", async () => {
   const f = await reachReview(
     { pluginStatus: "plugin_ready", changes: [], profiles: [] },
     undefined,
@@ -675,7 +675,7 @@ test("워커 적용 상태가 바뀌면 다른 변경이 없어도 버튼이 설
   );
   try {
     const labels = () => Array.from(f.host.querySelectorAll("button")).map((b) => b.textContent);
-    // 이미 켜져 있고 켬을 고른 상태 — 바뀌는 것이 없다.
+    // Already on, and "on" was chosen — nothing changes.
     assert.ok(labels().includes("검증 및 연결"));
     const box = f.host.querySelector<HTMLInputElement>('input[name="worker-propagation"]')!;
     await act(async () => box.click());
@@ -685,7 +685,7 @@ test("워커 적용 상태가 바뀌면 다른 변경이 없어도 버튼이 설
   }
 });
 
-test("이미 시간대가 있는 호스트에는 시간대 항목을 보여주지 않는다", async () => {
+test("does not show the timezone item for a host that already has one", async () => {
   const f = await reachReview(
     { pluginStatus: "plugin_absent", changes: ["installing_plugin"] },
     undefined,
@@ -698,9 +698,9 @@ test("이미 시간대가 있는 호스트에는 시간대 항목을 보여주�
   }
 });
 
-test("브라우저가 시간대를 알려주지 못하면 시간대 항목 자체가 없다", async () => {
+test("when the browser can't report a timezone, the timezone item doesn't exist at all", async () => {
   const original = Intl.DateTimeFormat;
-  // 일부 브라우저·잠긴 환경은 빈 시간대를 돌려준다 — 그때는 제안하지 않는다.
+  // Some browsers/locked-down environments return an empty timezone — don't suggest one then.
   Object.defineProperty(Intl, "DateTimeFormat", {
     configurable: true,
     writable: true,
@@ -723,7 +723,7 @@ test("브라우저가 시간대를 알려주지 못하면 시간대 항목 자�
   }
 });
 
-test("서비스 등록과 플러그인 갱신 변경을 결과가 보이는 한국어로 설명한다", async () => {
+test("explains the service-registration and plugin-update changes in Korean text with visible results", async () => {
   const f = await reachReview({
     pluginStatus: "plugin_ready",
     changes: ["installing_service", "updating_plugin"],
@@ -740,7 +740,7 @@ test("서비스 등록과 플러그인 갱신 변경을 결과가 보이는 한�
   }
 });
 
-test("플러그인 버전이 있으면 후보 목록과 검토 화면이 커밋과 함께 보여준다", async () => {
+test("when a plugin version exists, the candidate list and review screen show it alongside the commit", async () => {
   const f = await reachReview({ pluginStatus: "plugin_ready", changes: [] }, undefined, {
     ...candidate,
     pluginInstalled: true,
@@ -759,7 +759,7 @@ test("플러그인 버전이 있으면 후보 목록과 검토 화면이 커밋�
   }
 });
 
-test("새 잡 단계는 한국어 라벨로 나오고 원시 코드가 새지 않는다", async () => {
+test("new job steps show as Korean labels and never leak the raw code", async () => {
   const f = await fixture(async (url, init) => {
     if (String(url).includes("?job="))
       return response({
@@ -833,7 +833,7 @@ for (const [code, expected] of [
   });
 }
 
-// ── 계약 2: 프로필 생성·키 발급, 로컬 Hermes 설치 ─────────────────────────────
+// ── Contract 2: profile creation/key issuance, local Hermes install ─────────────────────────────
 
 function typeInto(node: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -863,10 +863,10 @@ async function reachEmptyDiscovery(
   return f;
 }
 
-test("설치 게이트가 꺼져 있으면 설치 제안 대신 켜는 명령을 보여준다", async () => {
+test("when the install gate is off, shows the enable command instead of an install offer", async () => {
   const f = await reachEmptyDiscovery({ canInstallHermes: false });
   try {
-    // 설정 파일을 손으로 고치라고 하지 않는다 — 붙여넣을 명령을 그대로 보여준다.
+    // Doesn't ask the user to hand-edit a config file — shows the exact command to paste.
     assert.match(f.host.textContent!, /deskrpg host-setup on --with-install/);
     assert.doesNotMatch(f.host.textContent!, /이 서버에 Hermes 를 설치할까요\?/);
     assert.equal(f.host.querySelector('input[name="install-consent"]'), null);
@@ -875,7 +875,7 @@ test("설치 게이트가 꺼져 있으면 설치 제안 대신 켜는 명령을
   }
 });
 
-test("설치 게이트가 켜지면 동의 체크박스가 기본 꺼짐으로 나온다", async () => {
+test("when the install gate is on, the consent checkbox appears unchecked by default", async () => {
   const f = await reachEmptyDiscovery({ canInstallHermes: true });
   try {
     assert.match(f.host.textContent!, /이 서버에 Hermes 를 설치할까요\?/);
@@ -887,7 +887,7 @@ test("설치 게이트가 켜지면 동의 체크박스가 기본 꺼짐으로 �
   }
 });
 
-test("동의하지 않으면 설치가 시작되지 않고, 동의해야 설치 요청이 나간다", async () => {
+test("installation does not start without consent, and the install request only goes out once consented", async () => {
   const sent: string[] = [];
   const bodies: Record<string, unknown>[] = [];
   const f = await reachEmptyDiscovery({ canInstallHermes: true }, sent, bodies);
@@ -906,8 +906,8 @@ test("동의하지 않으면 설치가 시작되지 않고, 동의해야 설치 
         .find((b) => b.textContent === "Hermes 설치 시작")!
         .click(),
     );
-    // 라우트가 아는 액션이어야 한다. 예전에는 install-hermes 를 보내 setup_invalid_request 로
-    // 떨어졌고, 그래서 설치 버튼이 아무 일도 하지 않았다(실측).
+    // Must be an action the route knows. It used to send install-hermes and fall through to
+    // setup_invalid_request, so the install button did nothing (observed in practice).
     assert.equal(sent.at(-1), "prepare");
     assert.equal(bodies.at(-1)?.installHermes, true);
     assert.match(f.host.textContent!, /Hermes 설치/);
@@ -916,7 +916,7 @@ test("동의하지 않으면 설치가 시작되지 않고, 동의해야 설치 
   }
 });
 
-test("설치 스크립트 지문이 오면 감사용으로 화면에 남는다", async () => {
+test("when an install script digest arrives, it stays on screen for auditing", async () => {
   const digest = "a".repeat(64);
   const f = await fixture(async (url, init) => {
     if (String(url).includes("?job="))
@@ -958,7 +958,7 @@ const provisionInspection = {
   ],
 };
 
-test("키 발급 체크는 가져오기와 따로 움직이고 prepare 본문의 provisionKeys 로 나간다", async () => {
+test("the key-issuance check moves independently from import and goes out as provisionKeys in the prepare body", async () => {
   let prepared: Record<string, unknown> | undefined;
   const f = await reachReview(
     provisionInspection,
@@ -983,7 +983,7 @@ test("키 발급 체크는 가져오기와 따로 움직이고 prepare 본문의
   }
 });
 
-test("키 발급을 켜지 않으면 prepare 본문에 provisionKeys 자체가 없다", async () => {
+test("without enabling key issuance, provisionKeys itself is absent from the prepare body", async () => {
   let prepared: Record<string, unknown> | undefined;
   const f = await reachReview(
     provisionInspection,
@@ -1000,7 +1000,7 @@ test("키 발급을 켜지 않으면 prepare 본문에 provisionKeys 자체가 �
   }
 });
 
-test("프로필 이름이 비어 있으면 createProfile 을 보내지 않는다", async () => {
+test("does not send createProfile when the profile name is empty", async () => {
   let prepared: Record<string, unknown> | undefined;
   const f = await reachReview(
     provisionInspection,
@@ -1020,7 +1020,7 @@ test("프로필 이름이 비어 있으면 createProfile 을 보내지 않는다
   }
 });
 
-test("프로필 이름과 설명을 채우면 createProfile 로 실린다", async () => {
+test("filling in a profile name and description carries them as createProfile", async () => {
   let prepared: Record<string, unknown> | undefined;
   const f = await reachReview(
     provisionInspection,
@@ -1044,7 +1044,7 @@ test("프로필 이름과 설명을 채우면 createProfile 로 실린다", asyn
   }
 });
 
-test("규칙에 어긋난 프로필 이름은 안내를 띄우고 prepare 를 막는다", async () => {
+test("a profile name that breaks the rule shows guidance and blocks prepare", async () => {
   let prepares = 0;
   const f = await reachReview(
     provisionInspection,
@@ -1069,7 +1069,7 @@ test("규칙에 어긋난 프로필 이름은 안내를 띄우고 prepare 를 �
   }
 });
 
-test("profile_not_served 와 model_provider_required 는 실패가 아니라 경고로 그린다", async () => {
+test("profile_not_served and model_provider_required render as warnings, not failures", async () => {
   const f = await fixture(async (url, init) => {
     if (String(url).includes("?job="))
       return response({
@@ -1108,7 +1108,7 @@ test("profile_not_served 와 model_provider_required 는 실패가 아니라 경
   }
 });
 
-test("새 진행 단계 세 가지는 한국어 라벨로 나오고 원시 코드가 새지 않는다", async () => {
+test("the three new progress steps show as Korean labels and never leak the raw code", async () => {
   const f = await fixture(async (url, init) => {
     if (String(url).includes("?job="))
       return response({
@@ -1187,7 +1187,7 @@ for (const [code, expected] of [
   });
 }
 
-test("설치만 끝난 잡은 실패로 그리지 않고 다시 찾기로 이어 간다", async () => {
+test("a job that only finished installing does not render as a failure and continues via rediscovery", async () => {
   const sent: string[] = [];
   const f = await fixture(async (url, init) => {
     if (String(url).includes("?job="))
@@ -1222,7 +1222,7 @@ test("설치만 끝난 잡은 실패로 그리지 않고 다시 찾기로 이어
   }
 });
 
-/** 후보 검색 → 검토 → "설치 및 연결" 까지 한 번에 가는 공통 경로. */
+/** The common path all the way from candidate discovery → review → "install and connect" in one go. */
 async function prepareFlow(
   handler: (action: string, body: Record<string, unknown>) => Response | undefined,
 ) {
@@ -1252,7 +1252,7 @@ async function prepareFlow(
   return f;
 }
 
-test("모델 다시 확인이 ready 면 모델 경고를 지운다", async () => {
+test("clears the model warning when a model recheck is ready", async () => {
   const f = await prepareFlow((action) => {
     if (action === "prepare")
       return response({
@@ -1277,7 +1277,7 @@ test("모델 다시 확인이 ready 면 모델 경고를 지운다", async () =>
   }
 });
 
-test("모델 다시 확인이 missing 이면 모델 경고를 유지한다", async () => {
+test("keeps the model warning when a model recheck is missing", async () => {
   const f = await prepareFlow((action) => {
     if (action === "prepare")
       return response({
@@ -1295,7 +1295,7 @@ test("모델 다시 확인이 missing 이면 모델 경고를 유지한다", asy
   }
 });
 
-test("모델 확인 unknown 은 실패로 그리지 않고 중립적으로 알린다", async () => {
+test("a model check of unknown does not render as a failure and reports neutrally", async () => {
   const f = await prepareFlow((action) => {
     if (action === "prepare")
       return response({
@@ -1314,7 +1314,7 @@ test("모델 확인 unknown 은 실패로 그리지 않고 중립적으로 알�
   }
 });
 
-test("모르는 설치 진행 코드는 아무것도 그리지 않고 아는 코드만 문구로 그린다", async () => {
+test("an unknown install-progress code renders nothing, and only known codes render as text", async () => {
   const f = await prepareFlow((action) => {
     if (action === "prepare")
       return response({
@@ -1353,7 +1353,7 @@ test("모르는 설치 진행 코드는 아무것도 그리지 않고 아는 코
   }
 });
 
-test("설치가 도는 동안 경과 시간이 올라간다", async () => {
+test("elapsed time ticks up while installation is running", async () => {
   const running = { id: "j", status: "running", steps: ["installing_hermes"] };
   const f = await fixture(async (url, init) => {
     if (String(url).includes("?job=")) return response({ job: running });
@@ -1384,7 +1384,7 @@ test("설치가 도는 동안 경과 시간이 올라간다", async () => {
   }
 });
 
-test("실패한 잡에 이어서 실행 버튼이 뜨고 resumeFrom 이 실려 나간다", async () => {
+test("a resume button appears on a failed job and sends resumeFrom", async () => {
   const bodies: Record<string, unknown>[] = [];
   const f = await prepareFlow((action, body) => {
     if (action !== "prepare") return undefined;
@@ -1415,14 +1415,14 @@ test("실패한 잡에 이어서 실행 버튼이 뜨고 resumeFrom 이 실려 �
     assert.equal(bodies.length, 2);
     assert.equal(bodies[1].resumeFrom, "failed-job");
     assert.equal(bodies[1].candidateId, bodies[0].candidateId);
-    // 이미 끝난 단계는 다시 돌지 않았다는 사실을 화면에 남긴다.
+    // Leaves on screen the fact that an already-completed step wasn't rerun.
     assert.match(f.host.textContent!, /DeskRPG 플러그인 설치 \(건너뜀\)/);
   } finally {
     await f.cleanup();
   }
 });
 
-test("성공한 잡에는 이어서 실행 버튼이 뜨지 않는다", async () => {
+test("no resume button appears on a succeeded job", async () => {
   const f = await prepareFlow((action) =>
     action === "prepare"
       ? response({
@@ -1443,7 +1443,7 @@ test("성공한 잡에는 이어서 실행 버튼이 뜨지 않는다", async ()
   }
 });
 
-test("resume_unavailable 은 다시 시작 경로를 알려 주는 안내로 바뀐다", async () => {
+test("resume_unavailable becomes guidance pointing to the restart path", async () => {
   const f = await prepareFlow((action) =>
     action === "prepare"
       ? response({ job: { id: "j", status: "failed", steps: [], error: "resume_unavailable" } })
@@ -1460,7 +1460,7 @@ test("resume_unavailable 은 다시 시작 경로를 알려 주는 안내로 바
   }
 });
 
-/** 카드 버튼은 라벨과 설명을 함께 담는다 — 포함으로 찾는다. */
+/** A card button holds both a label and a description together — find it by substring match. */
 async function clickIncluding(host: HTMLElement, text: string) {
   const button = Array.from(host.querySelectorAll("button")).find((item) =>
     item.textContent?.includes(text),
@@ -1469,7 +1469,7 @@ async function clickIncluding(host: HTMLElement, text: string) {
   await act(async () => button.click());
 }
 
-test("포트 충돌 제안은 동의 버튼을 눌러야 setPort 로 올라간다", async () => {
+test("a port-conflict suggestion is only sent as setPort once the accept button is clicked", async () => {
   const sent: Record<string, unknown>[] = [];
   const f = await fixture(async (_url, init) => {
     if (!init?.body) return response(capabilities);
@@ -1490,7 +1490,7 @@ test("포트 충돌 제안은 동의 버튼을 눌러야 setPort 로 올라간�
   try {
     await clickIncluding(f.host, "로컬 연결");
     await clickIncluding(f.host, "연결하기");
-    // 제안은 보이지만 아직 아무것도 보내지 않았다.
+    // The suggestion is visible, but nothing has been sent yet.
     assert.match(f.host.textContent!, /8643/);
     assert.deepEqual(
       sent.map((body) => body.action),
@@ -1505,7 +1505,7 @@ test("포트 충돌 제안은 동의 버튼을 눌러야 setPort 로 올라간�
     await f.cleanup();
   }
 });
-test("제안이 없는 포트 충돌은 오류만 보여 주고 흐름을 막지 않는다", async () => {
+test("a port conflict with no suggestion shows only the error and does not block the flow", async () => {
   const f = await fixture(async (_url, init) => {
     if (!init?.body) return response(capabilities);
     const body = JSON.parse(String(init.body));
@@ -1528,7 +1528,7 @@ test("제안이 없는 포트 충돌은 오류만 보여 주고 흐름을 막지
     await f.cleanup();
   }
 });
-test("범위 밖 제안 포트는 화면이 버린다", async () => {
+test("the screen discards a suggested port outside the range", async () => {
   const f = await fixture(async (_url, init) => {
     if (!init?.body) return response(capabilities);
     const body = JSON.parse(String(init.body));
@@ -1546,7 +1546,7 @@ test("범위 밖 제안 포트는 화면이 버린다", async () => {
     await f.cleanup();
   }
 });
-test("포트 쓰기 실패는 안전한 안내로만 나온다", async () => {
+test("a failed port write only produces safe guidance", async () => {
   const f = await fixture(async (_url, init) => {
     if (!init?.body) return response(capabilities);
     const body = JSON.parse(String(init.body));
@@ -1576,7 +1576,7 @@ test("포트 쓰기 실패는 안전한 안내로만 나온다", async () => {
   }
 });
 
-/** 카드 버튼은 제목과 설명을 함께 담는다 — 제목이 들어 있는 버튼을 누른다. */
+/** A card button holds both a title and a description together — click the button containing the title. */
 async function clickContaining(host: HTMLElement, label: string) {
   const button = Array.from(host.querySelectorAll("button")).find((b) =>
     b.textContent?.includes(label),
@@ -1585,7 +1585,7 @@ async function clickContaining(host: HTMLElement, label: string) {
   await act(async () => button.click());
 }
 
-test("로컬을 못 쓰면 막힌 이유를 그대로 보여 준다 — 컨테이너 안 Hermes 없음", async () => {
+test("shows the block reason as-is when local is unavailable — no Hermes inside the container", async () => {
   const f = await fixture(async () =>
     response({
       ...capabilities,
@@ -1605,7 +1605,7 @@ test("로컬을 못 쓰면 막힌 이유를 그대로 보여 준다 — 컨테�
   }
 });
 
-test("SSH 를 못 쓰면 원격 화면에 그 이유를 보여 준다", async () => {
+test("shows the reason on the remote screen when SSH is unavailable", async () => {
   const f = await fixture(async () =>
     response({ ...capabilities, ssh: false, sshHosts: [], sshReason: "ssh_missing" }),
   );
@@ -1617,7 +1617,7 @@ test("SSH 를 못 쓰면 원격 화면에 그 이유를 보여 준다", async ()
   }
 });
 
-test("등록한 SSH 호스트가 없으면 SSH 화면이 곧바로 등록 패널을 연다", async () => {
+test("the SSH screen opens the registration panel immediately when there are no registered SSH hosts", async () => {
   const f = await fixture(async (_url, init) => {
     const body = init?.body ? JSON.parse(String(init.body)) : null;
     if (body?.action === "ssh-public-key")
@@ -1635,7 +1635,7 @@ test("등록한 SSH 호스트가 없으면 SSH 화면이 곧바로 등록 패널
   }
 });
 
-test("SSH 탐색이 인증 실패로 끝나면 설치를 권하지 않고 공개키 등록을 확인하라고 말한다", async () => {
+test("when SSH discovery ends in an auth failure, it does not offer to install and tells you to check the public key registration", async () => {
   const f = await fixture(async (_url, init) => {
     const body = init?.body ? JSON.parse(String(init.body)) : null;
     if (body?.action === "discover")
@@ -1660,7 +1660,7 @@ test("SSH 탐색이 인증 실패로 끝나면 설치를 권하지 않고 공개
   }
 });
 
-test("컨테이너 이유는 한 줄로 보이고, 자세한 사정은 ? 버튼을 눌러야 나온다", async () => {
+test("the container reason shows as one line, and the detailed circumstances appear only via the ? button", async () => {
   const f = await fixture(async () =>
     response({ ...capabilities, local: false, localReason: "container_without_hermes" }),
   );
