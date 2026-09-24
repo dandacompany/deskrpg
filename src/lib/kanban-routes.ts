@@ -58,6 +58,7 @@ import {
 } from "@/lib/kanban-access";
 import { channelBoardSlug, getChannelBoard } from "@/lib/kanban-boards";
 import { getMyCharacter } from "@/lib/my-character";
+import { readLocaleCookie } from "@/lib/i18n/server";
 import { appendRequesterLine } from "@/lib/user-context";
 
 export type ChannelParams = { params: Promise<{ id: string }> };
@@ -310,7 +311,11 @@ export async function createTask(req: NextRequest, channelId: string) {
   };
   // Note who requested it at the end of the card body. If there's no character, leave it as-is.
   const mine = await getMyCharacter(ctx.userId);
-  if (mine) task.body = appendRequesterLine(task.body, { name: mine.name, bio: mine.bio });
+  // Written in the requester's language; no language cookie falls back to English.
+  if (mine) {
+    const locale = readLocaleCookie(req.headers.get("cookie"));
+    task.body = appendRequesterLine(task.body, { name: mine.name, bio: mine.bio }, locale);
+  }
   const res = await ctx.client.kanban.createTask(ctx.boardSlug, task);
   if (!res.ok) return pluginFailureResponse(res);
 
