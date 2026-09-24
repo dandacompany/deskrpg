@@ -4,13 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-// 싱글턴이 이 임시 홈을 잡도록 import 전에 둔다(파일마다 프로세스가 따로다).
+// Set before import so the singleton picks up this temp home (each file runs in its own process).
 const home = mkdtempSync(path.join(os.tmpdir(), "deskrpg-exec-sys-"));
 process.env.DESKRPG_HOME = home;
 delete process.env.DESKRPG_SETUP_SSH_HOSTS;
 test.after(() => rmSync(home, { recursive: true, force: true }));
 
-test("시스템 호스트는 -F 없이 목적지를 별칭으로, 호스트 키는 accept-new 로 부른다", async () => {
+test("a system host is called with the destination as an alias, without -F, and host key accept-new", async () => {
   const { systemSsh } = await import("./system-ssh");
   const { getSshHosts, sshExecutor } = await import("./executor");
   const host = await systemSsh().add({ target: "my-server", user: "deploy" });
@@ -27,7 +27,7 @@ test("시스템 호스트는 -F 없이 목적지를 별칭으로, 호스트 키�
   assert.equal(recorded[recorded.indexOf("--") + 1], "my-server");
 });
 
-test("시스템 호스트의 키 거절은 ssh_auth_failed 로 올라간다", async () => {
+test("a key rejection from a system host surfaces as ssh_auth_failed", async () => {
   const { systemSsh } = await import("./system-ssh");
   const { sshExecutor } = await import("./executor");
   const host = await systemSsh().add({ target: "nas" });

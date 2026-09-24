@@ -1,13 +1,15 @@
 /**
- * Hermes 설치에 필요한데 sudo 없이는 깔 수 없는 시스템 패키지 — curl·git·C++ 컴파일러.
+ * System packages Hermes install needs but that can't be installed without sudo — curl, git, C++ compiler.
  *
- * Hermes 설치 스크립트(install.sh)는 Python·uv·Node 는 사용자 홈에 스스로 받지만, git 과 C++ 컴파일러는
- * 패키지 관리자로 깔려 한다(`check_git`·`check_cxx_compiler`, `set -e` 라 없으면 멈춘다). root 이거나
- * 비밀번호 없는 sudo 가 있으면 스스로 깔고, 아니면 여기서 미리 멈추고 관리자에게 명령 한 줄을 보여 준다.
- * DeskRPG 는 sudo 비밀번호를 받지 않는다.
+ * The Hermes install script (install.sh) fetches Python, uv and Node into the user's home itself, but tries to
+ * install git and a C++ compiler via the package manager (`check_git`, `check_cxx_compiler`; with `set -e` it stops
+ * if they're missing). As root or with passwordless sudo it installs them itself; otherwise we stop early here and
+ * show the admin a one-line command.
+ * DeskRPG does not take sudo passwords.
  *
- * 잡에는 코드(`curl`·`git`·`cxx`)와 패키지 관리자 이름만 남는다. 명령 문자열은 화면이 이 표로 만든다.
- * 클라이언트도 import 한다 — node 모듈을 쓰지 않는다.
+ * The job keeps only codes (`curl`, `git`, `cxx`) and the package manager name. The command string is built by the
+ * screen from this table.
+ * The client imports this too — no node modules are used.
  */
 export const SYSTEM_PACKAGES = ["curl", "git", "cxx"] as const;
 export type SystemPackage = (typeof SYSTEM_PACKAGES)[number];
@@ -31,7 +33,7 @@ const MANAGERS: Record<string, PackageManager> = {
   macos: "macos",
 };
 
-/** `/etc/os-release` 의 ID(macOS 는 "macos") → 패키지 관리자. 모르는 배포판은 null. */
+/** ID from `/etc/os-release` ("macos" for macOS) → package manager. null for unknown distros. */
 export function packageManagerFor(distro: unknown): PackageManager | null {
   return typeof distro === "string" ? (MANAGERS[distro] ?? null) : null;
 }
@@ -47,13 +49,14 @@ const NAMES: Record<Exclude<PackageManager, "macos">, Record<SystemPackage, stri
   pacman: { curl: "curl", git: "git", cxx: "base-devel" },
 };
 
-/** 관리자가 대상 서버에서 한 번 실행할 명령. 모르는 배포판이면 null(화면은 패키지 이름만 보인다). */
+/** Command the admin runs once on the target server. null for unknown distros (the screen shows only package
+ * names). */
 export function systemPackagesCommand(
   manager: PackageManager | null,
   packages: readonly SystemPackage[],
 ): string | null {
   if (!manager || !packages.length) return null;
-  // macOS 는 Command Line Tools 가 git 과 clang 을 함께 준다. curl 은 기본으로 있다.
+  // On macOS the Command Line Tools provide both git and clang. curl is there by default.
   if (manager === "macos") return "xcode-select --install";
   const names = packages.map((p) => NAMES[manager][p]).join(" ");
   if (manager === "apt") return `sudo apt-get update && sudo apt-get install -y ${names}`;

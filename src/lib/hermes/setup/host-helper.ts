@@ -2,10 +2,10 @@ import { isWindows } from "./platform";
 
 /** Kept in a TS constant so Next standalone output includes the helper. No filesystem asset lookup. */
 /**
- * 호스트에서 가장 먼저 도는 파이썬. **ASCII 만 쓴다** — 이 문자열만은 stdin 이 아니라
- * `python3 -c <코드>` 의 argv 로 넘어가고, 파이썬은 argv 를 로케일 인코딩으로 해석한다.
- * 한글 주석 한 줄이면 C/POSIX 로케일 호스트에서 시작조차 못 한다(`host.test.ts` 가 막는다).
- * 설명이 필요하면 이 TS 주석에 한글로 적고, 파이썬 안의 주석은 영문으로 둔다.
+ * The Python that runs first on the host. **ASCII only** — this string alone is passed not via stdin but as
+ * argv of `python3 -c <code>`, and Python decodes argv with the locale encoding.
+ * A single Korean comment line keeps it from even starting on a C/POSIX-locale host (`host.test.ts` guards this).
+ * If explanation is needed, write it in Korean in this TS comment, and keep comments inside the Python in English.
  */
 export const HOST_BOOTSTRAP = String.raw`
 import json, os, pathlib, signal, subprocess, sys
@@ -59,19 +59,20 @@ except Exception:
 `;
 
 /**
- * 파이썬 구동기 앞의 sh 런처. 시스템 python3 가 없어도 Hermes 를 찾고 설치할 수 있게 한다(2026-09-19 단테 결정).
+ * sh launcher in front of the Python driver. Lets us find and install Hermes even without a system python3
+ * (2026-09-19 Dante decision).
  *
- * 인자: $1 = run | install, $2 = 파이썬 코드, $3 = (run) 파이썬이 하나도 없을 때 그대로 찍을 JSON.
- * 고르는 순서: Hermes venv 파이썬 → 시스템 python3 → (install 만) uv 로 사용자 홈에 파이썬을 받는다.
- * uv 는 Hermes 설치 스크립트가 스스로 쓰는 자리(`~/.hermes/bin/uv`)에 둔다 — 설치 스크립트가 그 uv 를 재사용한다.
- * sudo 는 쓰지 않는다. 받은 설치 스크립트의 출력은 버리고 미리 정한 코드로만 실패를 알린다.
- * Hermes 설치 스크립트가 curl 을 요구하므로 여기서도 curl 만 쓴다.
+ * Args: $1 = run | install, $2 = Python code, $3 = (run) JSON to print verbatim when there's no Python at all.
+ * Selection order: Hermes venv Python → system python3 → (install only) fetch a Python into the user's home with uv.
+ * uv goes where the Hermes install script itself uses it (`~/.hermes/bin/uv`) — the install script reuses that uv.
+ * No sudo. The downloaded install script's output is discarded, and failures are reported only via predefined codes.
+ * The Hermes install script requires curl, so only curl is used here too.
  */
 export const HOST_LAUNCHER = String.raw`
 mode=$1
 code=$2
-# 설치 전에 sudo 가 필요한 시스템 패키지를 본다. root 이거나 비밀번호 없는 sudo 면 설치 스크립트가 스스로 깐다.
-# 아니면 여기서 멈춘다 — 몇 분 받다가 중간에 실패하는 대신 관리자에게 명령 한 줄을 보여 준다(system-packages.ts).
+# Before installing, check system packages that need sudo. If root or passwordless sudo, the install script installs them itself.
+# Otherwise stop here — rather than failing midway after minutes of downloading, show the admin a one-line command (system-packages.ts).
 if [ "$mode" = install ]; then
   miss=""
   command -v curl >/dev/null 2>&1 || miss="$miss curl"
@@ -110,20 +111,21 @@ exec "$py" -c "$code"
 `;
 
 /**
- * `HOST_LAUNCHER` 의 Windows 짝. 하는 일은 같다 — 파이썬을 골라 본문을 `-c` 로 넘긴다.
+ * Windows counterpart of `HOST_LAUNCHER`. Does the same thing — picks a Python and passes the body via `-c`.
  *
- * 인자는 argv 가 아니라 **환경변수**로 받는다: `DESKRPG_HOST_MODE` = run | install,
- * `DESKRPG_HOST_CODE` = 파이썬 코드, `DESKRPG_HOST_NONE` = (run) 파이썬이 하나도 없을 때 찍을 JSON.
- * `powershell -Command <텍스트> a b c` 는 `a b c` 를 `$args` 에 바인딩하지 않는다 — 남는 토큰이
- * 명령 텍스트 뒤에 이어 붙어 그대로 PowerShell 소스로 파싱된다(WinServer 실측, 2026-09-20).
- * `-File` 스크립트라면 `$args` 가 채워지지만, 임시 `.ps1` 파일은 정리·권한·경합을 새로 만든다 —
- * 그래서 `hostLaunch` 가 `execute()` 의 spawn 환경으로 값을 실어 보낸다.
- * 읽자마자 프로세스 환경에서 지운다 — 이 다음에 뜨는 파이썬 자식이 코드 본문을 물려받을 이유가 없다.
+ * Args come in as **environment variables**, not argv: `DESKRPG_HOST_MODE` = run | install,
+ * `DESKRPG_HOST_CODE` = Python code, `DESKRPG_HOST_NONE` = (run) JSON to print when there's no Python at all.
+ * `powershell -Command <text> a b c` does not bind `a b c` to `$args` — the leftover tokens are
+ * appended after the command text and parsed as PowerShell source as-is (measured on WinServer, 2026-09-20).
+ * A `-File` script would fill `$args`, but a temporary `.ps1` file introduces new cleanup, permission, and race
+ * issues — so `hostLaunch` carries the values in `execute()`'s spawn environment.
+ * They are deleted from the process environment as soon as they're read — the Python child launched next has no
+ * reason to inherit the code body.
  *
- * 고르는 순서: Hermes venv 파이썬 → PATH 의 python → (install 만) uv 로 받은 파이썬.
- * POSIX 판과 달리 시스템 패키지 사전 점검이 없다 — install.ps1 이 PortableGit·uv·Python·Node 를
- * 스스로 받으므로 sudo 도 패키지 관리자도 필요 없다(상류 scripts/install.ps1 확인).
- * Windows venv 의 파이썬은 `Scripts\python.exe` 다(상류 gateway_windows.py:1457,1475).
+ * Selection order: Hermes venv Python → python on PATH → (install only) Python fetched with uv.
+ * Unlike the POSIX version there's no system package pre-check — install.ps1 fetches PortableGit, uv, Python, and Node
+ * itself, so neither sudo nor a package manager is needed (confirmed in upstream scripts/install.ps1).
+ * The Windows venv Python is `Scripts\python.exe` (upstream gateway_windows.py:1457,1475).
  */
 export const HOST_LAUNCHER_PS = String.raw`
 $ErrorActionPreference = 'Stop'
@@ -137,7 +139,7 @@ function Fail($c) { [Console]::Out.Write('{"error": "' + $c + '"}'); exit 0 }
 function Run($exe) { & $exe -c $code; exit $LASTEXITCODE }
 $home2 = $env:USERPROFILE
 if (-not $home2 -or -not (Test-Path -LiteralPath $home2 -PathType Container)) { Fail 'unsafe_host_path' }
-# 상류 hermes_constants.py:51-57 과 같은 판정이다. Windows 기본 홈은 ~/.hermes 가 아니다.
+# Same rule as upstream hermes_constants.py:51-57. The default Windows home is not ~/.hermes.
 $base = $env:LOCALAPPDATA
 if (-not $base) { $base = Join-Path (Join-Path $home2 'AppData') 'Local' }
 $root = Join-Path $base 'hermes'
@@ -171,7 +173,7 @@ if ($LASTEXITCODE -ne 0 -or -not $py -or -not (Test-Path -LiteralPath $py -PathT
 Run $py
 `;
 
-/** 호스트에서 파이썬 런처를 띄울 명령. 셸은 플랫폼마다 다르고 인자 순서는 같다. */
+/** Command to launch the Python launcher on the host. The shell differs per platform; argument order is the same. */
 export function hostLaunch(
   platform: string,
   mode: "run" | "install",
@@ -181,8 +183,8 @@ export function hostLaunch(
   if (isWindows(platform))
     return {
       command: "powershell",
-      // `-Command <텍스트> a b c` 는 a·b·c 를 $args 로 바인딩하지 않는다(위 HOST_LAUNCHER_PS 주석).
-      // 그래서 payload 는 argv 가 아니라 execute() 의 spawn 환경으로 보낸다.
+      // `-Command <text> a b c` doesn't bind a, b, c to $args (see the HOST_LAUNCHER_PS comment above).
+      // So the payload is sent via execute()'s spawn environment, not argv.
       args: [
         "-NoProfile",
         "-NonInteractive",
@@ -197,10 +199,11 @@ export function hostLaunch(
 }
 
 /**
- * Hermes 설치 전용 스크립트. 설치가 없을 때 돌아야 하므로 HOST_BOOTSTRAP(=Hermes venv 파이썬)을
- * 거치지 않고 HOST_LAUNCHER 가 고른 파이썬(시스템 python3, 없으면 uv 로 받은 파이썬)에서 실행된다. 표준 라이브러리만 쓴다.
- * 설치 스크립트는 파이프가 아니라 임시 파일로 내려받아 sha256 지문을 남기고 `bash <파일>` 로 실행한다.
- * 설치 출력은 저장도 반환도 하지 않는다 — 실패 분류용 마지막 8KiB 만 메모리에 둔다.
+ * Hermes install-only script. It must run when there's no install, so instead of going through HOST_BOOTSTRAP
+ * (= the Hermes venv Python) it runs on the Python HOST_LAUNCHER picked (system python3, else a uv-fetched Python).
+ * Stdlib only. The install script is downloaded to a temp file rather than piped, its sha256 fingerprint is kept,
+ * and it runs as `bash <file>`.
+ * Install output is neither stored nor returned — only the last 8KiB is kept in memory for failure classification.
  */
 export const HOST_INSTALLER = String.raw`
 import hashlib, json, os, pathlib, stat, subprocess, sys, tempfile, threading, urllib.request
@@ -211,9 +214,9 @@ MAX_INSTALLER_BYTES = 1048576
 INSTALL_TIMEOUT = 580
 TAIL = 8192
 MAX_LINE = 4096
-# 표에 적힌 표시만 본다. 순서가 곧 우선순위이고, 한 줄은 첫 일치 하나로만 접힌다.
-# 표시 문자열은 설치 스크립트의 실제 출력에서 골랐다(install.sh 의 log_info 원문 대조).
-# 처음엔 'clone' 을 literal 로 봤는데 git 은 'Cloning into ...' 을 찍어 한 번도 걸리지 않았다.
+# Only the markers in the table are considered. Order is priority, and a line folds into its first match only.
+# Marker strings were picked from the install script's actual output (checked against install.sh's log_info text).
+# At first 'clone' was treated as a literal, but git prints 'Cloning into ...', so it never matched.
 MILESTONE_RULES = (
     ('deps', lambda text: 'installing managed uv' in text or 'installing dependencies' in text or 'installing git' in text),
     ('clone', lambda text: 'clon' in text or 'fetching repository' in text),
@@ -224,7 +227,7 @@ MILESTONE_RULES = (
 )
 milestones = []
 def note(line):
-    # 줄 내용은 어디에도 남기지 않는다 — 미리 정한 코드로만 접어 올린다.
+    # The line content is never kept anywhere — it's folded up only into predefined codes.
     if not line: return
     text = line.decode('utf-8', errors='replace').lower()
     for code, matches in MILESTONE_RULES:
@@ -238,13 +241,13 @@ try:
     ROOT = (pathlib.Path(os.environ.get('LOCALAPPDATA') or (pathlib.Path.home() / 'AppData' / 'Local')) / 'hermes') if WINDOWS else (pathlib.Path.home() / '.hermes')
     INSTALL = ROOT / 'hermes-agent'
     if ROOT.is_symlink() or (ROOT.exists() and not ROOT.is_dir()): out({'error': 'unsafe_host_path'})
-    # 업그레이드·재설치는 이 경로의 범위가 아니다. 이미 있으면 절대 손대지 않는다.
+    # Upgrade/reinstall is out of scope for this path. If it already exists, never touch it.
     if INSTALL.exists() or INSTALL.is_symlink(): out({'error': 'hermes_already_installed'})
     ROOT.mkdir(parents=True, exist_ok=True)
     lock_path = ROOT / '.deskrpg-setup.lock'
     if WINDOWS:
-        # O_NOFOLLOW 가 없다. Path.is_symlink() 는 Windows 정션을 못 잡는다(CPython 의 os.stat 이
-        # 정션을 심링크로 보고하지 않는다) — 재해석 지점 비트를 직접 본다. 파일이 아직 없으면 통과시킨다.
+        # No O_NOFOLLOW. Path.is_symlink() doesn't catch Windows junctions (CPython's os.stat doesn't
+        # report junctions as symlinks) — check the reparse point bit directly. Pass if the file doesn't exist yet.
         try:
             attrs = getattr(os.stat(lock_path, follow_symlinks=False), 'st_file_attributes', 0)
         except FileNotFoundError:
@@ -252,10 +255,10 @@ try:
         if attrs & stat.FILE_ATTRIBUTE_REPARSE_POINT: out({'error': 'unsafe_host_path'})
         import msvcrt
         fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
-        # os.open 은 재해석 지점(심링크·정션)을 따라가 대상 파일의 핸들을 연다 — 그 핸들의 fstat 은
-        # 재해석 비트를 보고하지 않으므로, 227행 검사와 이 open 사이에 경로가 바꿔치기됐어도 이
-        # 재확인으로는 잡지 못한다. TOCTOU 창을 닫는 게 아니라, 드물게 남는 경로(핸들이 여전히
-        # 재해석 지점 자체를 가리키는 경우)만 방어한다.
+        # os.open follows reparse points (symlinks/junctions) and opens a handle to the target file — that handle's fstat
+        # doesn't report the reparse bit, so if the path was swapped between the line-227 check and this open, this
+        # recheck can't catch it. It doesn't close the TOCTOU window; it only defends the rare remaining case (where the
+        # handle still points at the reparse point itself).
         if getattr(os.fstat(fd), 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
             os.close(fd)
             out({'error': 'unsafe_host_path'})
@@ -271,7 +274,7 @@ try:
             os.close(fd)
             out({'error': 'host_busy'})
     lock = os.fdopen(fd, 'w')
-    # 잠금을 잡은 뒤 한 번 더 본다 — 경쟁하던 다른 설치가 방금 끝났을 수 있다.
+    # Check once more after taking the lock — a competing install may have just finished.
     if INSTALL.exists() or INSTALL.is_symlink(): out({'error': 'hermes_already_installed'})
     try:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -287,8 +290,8 @@ try:
             stream.write(body); stream.flush(); os.fsync(stream.fileno())
         env = {**os.environ, 'HERMES_HOME': str(ROOT), 'PYTHONDONTWRITEBYTECODE': '1'}
         if WINDOWS:
-            # 스위치 이름은 상류 scripts/install.ps1:15-60 실측이다. POSIX 의 --skip-browser 에
-            # 대응하는 이름은 -SkipBrowser 가 아니라 -SkipComputerUse 다.
+            # Switch names are measured from upstream scripts/install.ps1:15-60. The counterpart of POSIX's --skip-browser
+            # is -SkipComputerUse, not -SkipBrowser.
             argv = ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-SkipComputerUse', '-SkipSetup', '-NonInteractive']
             extra = {}
         else:
@@ -303,10 +306,10 @@ try:
             while True:
                 chunk = child.stdout.read(65536)
                 if not chunk: break
-                # 읽고 버린다. 정상 설치의 출력은 256KiB 를 넘기므로 상한을 두지 않고 꼬리만 남긴다.
+                # Read and discard. A normal install's output exceeds 256KiB, so no cap — keep only the tail.
                 tail = (tail + chunk)[-TAIL:]
                 pieces = (buffered + chunk).split(b'\n')
-                # 개행이 없는 출력이 메모리를 밀어내지 않도록 남는 조각도 잘라 둔다.
+                # Also truncate the leftover fragment so output without newlines can't crowd memory.
                 buffered = pieces.pop()[-MAX_LINE:]
                 for piece in pieces: note(piece[-MAX_LINE:])
             note(buffered)
@@ -321,7 +324,7 @@ try:
         diagnostic = tail.decode('utf-8', errors='replace').lower()
         if 'could not resolve host' in diagnostic or 'failed to connect' in diagnostic or 'connection refused' in diagnostic:
             out({'error': 'hermes_installer_unavailable'})
-        # git 은 설치 스크립트가 sudo 로 깔아 보려다 실패하면 이 문장을 남긴다(install.sh check_git 원문).
+        # git leaves this sentence when the install script tries to install it with sudo and fails (install.sh check_git text).
         if 'could not install git automatically' in diagnostic: out({'error': 'git_missing'})
         out({'error': 'hermes_install_failed'})
     folder_name, exe = ('Scripts', 'python.exe') if WINDOWS else ('bin', 'python')
@@ -341,7 +344,7 @@ export const HOST_HELPER = String.raw`
 import hashlib, json, os, pathlib, plistlib, re, secrets, shlex, socket, stat, subprocess, sys, tempfile, time, urllib.request, urllib.error
 import yaml
 WINDOWS = sys.platform == 'win32'
-# 상류 hermes_constants.py:51-57 과 같은 판정. Windows 는 %LOCALAPPDATA%\hermes 다.
+# Same rule as upstream hermes_constants.py:51-57. On Windows it's %LOCALAPPDATA%\hermes.
 ROOT = (pathlib.Path(os.environ.get('LOCALAPPDATA') or (pathlib.Path.home() / 'AppData' / 'Local')) / 'hermes') if WINDOWS else (pathlib.Path.home() / '.hermes')
 INSTALL = ROOT / 'hermes-agent'
 sys.dont_write_bytecode = True
@@ -349,10 +352,10 @@ sys.path.insert(0, str(INSTALL))
 os.environ['HERMES_HOME'] = str(ROOT)
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 NAME = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
-# 모델 제공자 이름의 모양만 본다(실측 값: 'openai-codex'). 모양이 아니면 판정하지 않고 unknown 이다.
+# Only check the shape of the model provider name (measured value: 'openai-codex'). If it's not the shape, don't judge — unknown.
 PROVIDER = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$')
 RESERVED = {'hermes','test','tmp','root','sudo'}
-# 마법사가 새로 만들거나 키를 발급할 수 있는 이름에서 제외한다. 'default' 는 configure 가 다룬다.
+# Excluded from names the wizard can newly create or issue keys for. 'default' is handled by configure.
 RESERVED_PROFILE = RESERVED | {'default'}
 PIN = '1e9914a614f17186b6749916031da69ed6b61aa0'
 PLUGIN_VERSION = '0.16.0'
@@ -362,12 +365,12 @@ TIMEZONE = re.compile(r'^[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-.]+)*$')
 LOCK = None
 PORT_MIN = 8642
 PORT_MAX = 8699
-# 재시작은 게이트웨이의 정상 종료(드레인)를 기다린다. 서비스 정지 한도 + 기동 여유, 90초(Hermes 자신이
-# systemctl restart·launchctl kickstart -k 에 쓰는 값) 아래로는 내리지 않고 300초 위로는 올리지 않는다.
+# Restart waits for the gateway's graceful shutdown (drain). Service stop limit + startup slack; never below 90s (the value
+# Hermes itself uses for systemctl restart / launchctl kickstart -k) and never above 300s.
 RESTART_MIN = 90
 RESTART_MAX = 300
 RESTART_START_MARGIN = 30
-# 플러그인 0.16.0 워커 전파 옵트인. 플러그인은 이 값을 읽기만 한다 — 켜는 것은 운영자(와 이 마법사)다.
+# Plugin 0.16.0 worker propagation opt-in. The plugin only reads this value — the operator (and this wizard) turns it on.
 WORKER_ENV = 'DESKRPG_WORKER_PROPAGATION'
 WORKER_TRUTHY = ('1', 'true', 'yes', 'on')
 class Failure(Exception): pass
@@ -428,21 +431,21 @@ def settings(home):
     return cfg, env, token, port, external
 
 def run(argv, timeout=8, env=None):
-    # errors='replace': 한글 Windows 의 schtasks 는 코드 페이지 949 로 찍는다. 디코딩 예외로 판정을 잃지 않는다.
+    # errors='replace': schtasks on Korean Windows prints in code page 949. Don't lose the verdict to a decode exception.
     return subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, errors='replace', timeout=timeout, env=env)
 def same_path(left, right):
-    # Windows 는 대소문자를 가리지 않고, 런처는 HERMES_HOME 철자를 그대로 보존한다(상류 _preserve_hermes_home_path).
+    # Windows is case-insensitive, and the launcher preserves HERMES_HOME's spelling as-is (upstream _preserve_hermes_home_path).
     try: return os.path.normcase(str(pathlib.Path(left).resolve())) == os.path.normcase(str(pathlib.Path(right).resolve()))
     except OSError: return False
 def unxml(value):
-    # 상류 작업 XML 은 xml.sax.saxutils.escape 를 쓴다 — & < > 만 바뀌므로 되돌릴 것도 그 셋뿐이다.
+    # Upstream task XML uses xml.sax.saxutils.escape — only & < > change, so only those three need reverting.
     return value.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
 def unit_stop_seconds(definition):
-    # Hermes 가 쓰는 systemd 유닛은 TimeoutStopSec=<정수> 다(gateway_service_unit.py). 다른 모양은 모른다.
+    # The systemd unit Hermes writes has TimeoutStopSec=<int> (gateway_service_unit.py). Other shapes are unknown.
     match = re.search(r'^TimeoutStopSec=(\d+)\s*$', definition, re.M)
     return int(match.group(1)) if match else None
 def plist_stop_seconds(data):
-    # launchd 의 ExitTimeOut(Hermes 는 60 — 사용자 도메인이 60초로 누른다). bool 은 int 의 하위형이라 따로 막는다.
+    # launchd's ExitTimeOut (Hermes uses 60 — the user domain caps it at 60s). bool is a subtype of int, so block it separately.
     value = data.get('ExitTimeOut')
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 def restart_timeout(owner):
@@ -450,8 +453,8 @@ def restart_timeout(owner):
     wait = (stop if isinstance(stop, int) and stop > 0 else 0) + RESTART_START_MARGIN
     return min(RESTART_MAX, max(RESTART_MIN, wait))
 def launches(arguments, target):
-    # wscript.exe 는 스위치(//B, //Nologo)가 아닌 '첫' 인자를 실행한다. 진짜 실행되는 그 하나만 본다 —
-    # 뒤에 우리 런처 경로를 덧붙여 놓은 남의 작업이 통과하면 안 된다.
+    # wscript.exe runs the 'first' argument that isn't a switch (//B, //Nologo). Look only at that one actually executed —
+    # someone else's task that appends our launcher path after it must not pass.
     for token in re.finditer(r'"([^"]*)"|(\S+)', arguments):
         value = unxml(token.group(1) or token.group(2) or '')
         if value.startswith('//'): continue
@@ -470,7 +473,7 @@ def homes():
 def identity(name, home):
     suffix = '' if name == 'default' else '-' + name
     definition, service, command, pid, warning = '', 'manual', None, 0, 'managed_service_required'
-    # 서비스가 정상 종료에 쓸 수 있는 시간(초). 모르면 None — 재시작 제한은 하한을 쓴다.
+    # Time (seconds) the service can use for graceful shutdown. None if unknown — the restart limit uses the lower bound.
     stop = None
     python = str(pathlib.Path(sys.executable))
     if sys.platform == 'darwin':
@@ -548,9 +551,9 @@ def identity(name, home):
                 warning = None
             else: warning = 'service_identity_mismatch'
     elif WINDOWS:
-        # 상류 gateway_windows.py 의 이름 규약이다. 작업 이름은 프로필 이름을 접미사로 달고,
-        # 작업과 시작 프로그램 폴더 폴백은 둘 다 <HERMES_HOME>/gateway-service/<작업이름>.vbs 를 띄운다.
-        # 같은 자리의 .cmd 는 상류가 남기는 호환 잔재라 실제로 실행되는 물건이 아니다 — .vbs 를 본다.
+        # Upstream gateway_windows.py naming convention. The task name has the profile name as a suffix, and
+        # both the task and the Startup folder fallback launch <HERMES_HOME>/gateway-service/<task name>.vbs.
+        # The .cmd in the same place is a compatibility leftover from upstream, not what actually runs — look at the .vbs.
         task = 'Hermes_Gateway' + ('_' + name if name != 'default' else '')
         service = task
         stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', task)
@@ -564,26 +567,26 @@ def identity(name, home):
             pinned = re.search(r'^env\.Item\("HERMES_HOME"\) = "(.*)"$', body, re.M)
             launched = re.search(r'^sh\.Run "(.*)", 0, False$', body, re.M)
             cmdline = launched.group(1).replace('""', '"') if launched else ''
-            # list2cmdline 이 만든 인자열이다. 공백 없는 인자는 따옴표가 붙지 않는다.
+            # An argument string built by list2cmdline. Arguments without spaces aren't quoted.
             head = re.match(r'"([^"]*)"|(\S+)', cmdline)
             exe = pathlib.Path(head.group(1) or head.group(2)) if head else None
             tail = ['-m', 'hermes_cli.main'] + (['--profile', name] if name != 'default' else []) + ['gateway', 'run']
             valid = bool(pinned) and same_path(pinned.group(1).replace('""', '"'), str(home))
-            # 꼬리를 '포함' 이 아니라 '일치' 로 본다. 남는 인자가 하나라도 있으면 우리 게이트웨이가 아니다.
+            # Check the tail for a 'match', not 'contains'. If even one argument is left over, it's not our gateway.
             valid = valid and bool(head) and cmdline[head.end():].strip() == ' '.join(tail)
             valid = valid and exe is not None and same_path(exe.parent, pathlib.Path(python).parent) and exe.name.lower() in ('python.exe', 'pythonw.exe', pathlib.Path(python).name.lower())
             valid = valid and not re.search(r'API_SERVER_|GATEWAY_MULTIPLEX', body)
-            # 등록된 정의가 바로 이 런처를 wscript 로 띄우는가. 아니면 남의 작업이다.
+            # Does the registered definition launch exactly this launcher with wscript? Otherwise it's someone else's task.
             if registered.returncode == 0:
-                # 작업 XML 은 실행 요소만 본다 — 상류 _build_scheduled_task_xml 의 <Actions><Exec>.
-                # <Description>·<Author> 처럼 실행과 무관한 자리에 우리 경로를 적어 둔 남의 작업은 통과하면 안 된다.
+                # For task XML, look only at the exec element — upstream _build_scheduled_task_xml's <Actions><Exec>.
+                # Someone else's task that writes our path in a place unrelated to execution, like <Description> or <Author>, must not pass.
                 executable = re.search(r'<Command>\s*(.*?)\s*</Command>', definition, re.S | re.I)
                 arguments = re.search(r'<Arguments>\s*(.*?)\s*</Arguments>', definition, re.S | re.I)
                 valid = valid and executable is not None and pathlib.Path(unxml(executable.group(1))).name.lower() == 'wscript.exe'
                 valid = valid and arguments is not None and launches(arguments.group(1), launcher)
             else:
-                # 시작 프로그램 폴더 폴백은 XML 이 아니다. 상류 _build_startup_launcher 가 적는
-                # target = "<런처>" 한 줄과, 그 줄을 실제로 넘기는 sh.Run 의 wscript 호출을 묶어서 본다.
+                # The Startup folder fallback isn't XML. Check together the single target = "<launcher>" line written by upstream
+                # _build_startup_launcher and the sh.Run wscript call that actually passes that line.
                 chained = re.search(r'^target = "(.*)"$', definition, re.M)
                 chain = re.search(r'^sh\.Run "(.*)", 0, False$', definition, re.M)
                 chain = chain.group(1).replace('""', '"') if chain else ''
@@ -593,12 +596,12 @@ def identity(name, home):
                 valid = valid and runner is not None and launches(chain[runner.end():], launcher)
             if valid:
                 try:
-                    # get_running_pid 는 gateway.status 에 있다. hermes_cli.gateway 는 모듈 수준에서 재노출하지 않는다.
+                    # get_running_pid lives in gateway.status. hermes_cli.gateway doesn't re-export it at module level.
                     from gateway.status import get_running_pid
                     pid = int(get_running_pid(home / 'gateway.pid', cleanup_stale=False) or 0)
                 except Exception: pid = 0
-                # 스케줄 작업이 있을 때만 재시작 경로가 있다. /End 뒤 /Run 이라야 바뀐 설정을 다시 읽는다.
-                # 시작 프로그램 폴더 폴백뿐이면 멈추는 방법이 없어 관리되는 서비스를 요구한다.
+                # A restart path exists only when there's a scheduled task. It must be /End then /Run to reread changed settings.
+                # With only the Startup folder fallback there's no way to stop it, so a managed service is required.
                 if registered.returncode == 0 and re.fullmatch(r'[A-Za-z0-9_-]+', task):
                     command = ['cmd', '/c', 'schtasks /End /TN ' + task + ' & schtasks /Run /TN ' + task]
                     warning = None
@@ -631,22 +634,22 @@ def plugin(home, cfg):
     return bool(manifests), bool(names.intersection(enabled)) and not bool(names.intersection(disabled)), manifests[0] if manifests else 'deskrpg', versions.get(manifests[0]) if manifests else None
 
 def worker_entry(cfg):
-    # plugins.entries.deskrpg 를 읽기만 한다. 모양이 어긋나면 None — 점검을 막지 않는다.
+    # Only reads plugins.entries.deskrpg. None if the shape is off — doesn't block the check.
     block = cfg.get('plugins')
     entries = block.get('entries') if isinstance(block, dict) else None
     entry = entries.get('deskrpg') if isinstance(entries, dict) else None
     return entry if isinstance(entry, dict) else None
 def worker_propagation(cfg, env):
-    # 플러그인의 propagation_enabled 와 같은 판정: 설정 값 true, 또는 환경변수 1|true|yes|on.
-    # 루트 .env 는 게이트웨이가 뜰 때 환경으로 올라가므로 함께 본다.
+    # Same rule as the plugin's propagation_enabled: config value true, or env var 1|true|yes|on.
+    # The root .env is loaded into the environment when the gateway starts, so check it too.
     entry = worker_entry(cfg)
     if entry is not None and entry.get('worker_propagation') is True: return 'enabled'
     flag = env.get(WORKER_ENV)
     if isinstance(flag, str) and flag.strip().lower() in WORKER_TRUTHY: return 'enabled'
     return 'disabled'
 def worker_linked():
-    # 플러그인이 전파할 때 만드는 프로필별 plugins/deskrpg 링크가 하나라도 있는가. 운영자가 프로필에
-    # 직접 설치한 폴더는 전파의 흔적이 아니므로 세지 않는다.
+    # Is there at least one per-profile plugins/deskrpg link made by the plugin when propagating? Folders the operator
+    # installed directly in a profile aren't traces of propagation, so they're not counted.
     for child, childhome in homes():
         if child == 'default': continue
         if (childhome / 'plugins' / 'deskrpg').is_symlink(): return True
@@ -666,20 +669,20 @@ def candidate(name, home):
     return public, owner, cfg, token, plugin_name
 
 def select(candidate_id):
-    # 게이트웨이는 default 하나다. 프로필은 그 게이트웨이가 /p/<이름>/ 으로 싣는다 —
-    # 프로필 폴더를 따로 게이트웨이로 고르는 길은 두지 않는다(유닛도 포트도 없는 후보가 된다).
+    # The only gateway is default. Profiles are served by that gateway under /p/<name>/ —
+    # there's no path to pick a profile folder as a separate gateway (it would become a candidate with no unit or port).
     item = candidate('default', ROOT)
     if item[0]['id'] == candidate_id: return 'default', ROOT, item
     fail('candidate_changed')
 
 def port_listening(port):
-    # 여는지만 본다. 키는 보내지 않는다 — 누가 여는지는 연결 단계의 assert_port_owned 가 가린다.
+    # Only check whether it opens. No key is sent — who opens it is decided by assert_port_owned in the connect step.
     try:
         with socket.create_connection(('127.0.0.1', port), timeout=0.5): return True
     except OSError: return False
 
 def gateway_state(public, owner, cfg):
-    """running / stopped / profile_gateways(따로 떠 있는 프로필 게이트웨이 이름들)."""
+    """running / stopped / profile_gateways (names of separately running profile gateways)."""
     if owner['pid'] or port_listening(public['port']): return 'running', []
     others = []
     for child, childhome in profile_names(cfg):
@@ -754,7 +757,7 @@ def assert_port_owned(public, owner):
     return True
 
 def port_free(port):
-    # 남의 리스너는 절대 건드리지 않는다. 바인드가 되는지만 보고 곧바로 닫는다.
+    # Never touch someone else's listener. Only check whether it binds, then close immediately.
     sock = socket.socket()
     try:
         sock.bind(('127.0.0.1', port))
@@ -762,8 +765,8 @@ def port_free(port):
     except OSError: return False
     finally: sock.close()
 def suggest_port(current):
-    # 이 홈의 다른 프로필이 쓰는 포트와 지금 열려 있는 포트를 피해 가장 작은 빈 포트를 고른다.
-    # 하나도 못 고르면 None 이다 — 제안 없이 오류만 나가고 흐름은 그대로다.
+    # Pick the smallest free port, avoiding ports used by other profiles in this home and ports currently open.
+    # None if none can be picked — only the error goes out, without a suggestion, and the flow is unchanged.
     used = {current}
     for unused_name, childhome in homes():
         try: used.add(settings(childhome)[3])
@@ -782,10 +785,10 @@ def profile_names(cfg):
     return [(name,home) for name,home in homes() if name == 'default' or allow is None or name in allow]
 
 def needs_service(owner):
-    # 유닛이 없는 호스트를 알아보는 유일한 규칙이다. service 이름으로 판정하면 안 된다 —
-    # 리눅스 분기는 유닛 파일이 없어도 'hermes-gateway.service' 라는 이름을 먼저 채우므로
-    # service == 'manual' 은 macOS 에서만 참이 된다(실측: 새 설치에서 등록 단계가 통째로 빠졌다).
-    # identity_mismatch/ambiguous 는 남의 유닛이거나 손댄 유닛이라는 뜻이므로 덮어쓰지 않는다.
+    # This is the only rule for recognizing a host without a unit. Don't decide by service name —
+    # the Linux branch fills in the name 'hermes-gateway.service' first even without a unit file,
+    # so service == 'manual' is true only on macOS (measured: the register step was skipped entirely on a fresh install).
+    # identity_mismatch/ambiguous means someone else's unit or a hand-edited unit, so don't overwrite it.
     return not owner['command'] and owner['warning'] == 'managed_service_required'
 
 def preflight(name, home, item):
@@ -830,9 +833,9 @@ def atomic(path, content):
 
 def bounded(argv, env):
     # Keep diagnostics in bounded memory only. Never return them or persist them in jobs.
-    # Windows 는 pass_fds 를 지원하지 않는다. 잠금은 부모가 쥔 채로 두고 물려주지 않는다.
-    # 정상 경로에서는 보호 범위가 같다 — 부모가 항상 자식보다 오래 산다. 부모가 비정상
-    # 종료하면 Windows 는 핸들이 닫히며 잠금이 즉시 풀린다(POSIX 는 자식이 fd 를 쥐고 유지한다).
+    # Windows doesn't support pass_fds. The parent keeps holding the lock and doesn't hand it down.
+    # On the normal path the protection scope is the same — the parent always outlives the child. If the parent exits
+    # abnormally, Windows closes the handle and the lock is released immediately (on POSIX the child keeps holding the fd).
     extra = {} if WINDOWS else {'pass_fds': (LOCK.fileno(),)}
     child = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(INSTALL), **extra)
     try:
@@ -854,8 +857,8 @@ def main(action, candidate_id=None, option=None):
         # Keep it inherited by the installer until the entire bounded action exits.
         lock_path = ROOT / '.deskrpg-setup.lock'
         if WINDOWS:
-            # O_NOFOLLOW 가 없다. Path.is_symlink() 는 Windows 정션을 못 잡는다(CPython 의 os.stat 이
-            # 정션을 심링크로 보고하지 않는다) — 재해석 지점 비트를 직접 본다. 파일이 아직 없으면 통과시킨다.
+            # No O_NOFOLLOW. Path.is_symlink() doesn't catch Windows junctions (CPython's os.stat doesn't
+            # report junctions as symlinks) — check the reparse point bit directly. Pass if the file doesn't exist yet.
             try:
                 attrs = getattr(os.stat(lock_path, follow_symlinks=False), 'st_file_attributes', 0)
             except FileNotFoundError:
@@ -863,10 +866,10 @@ def main(action, candidate_id=None, option=None):
             if attrs & stat.FILE_ATTRIBUTE_REPARSE_POINT: fail('unsafe_host_path')
             import msvcrt
             fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
-            # os.open 은 재해석 지점(심링크·정션)을 따라가 대상 파일의 핸들을 연다 — 그 핸들의 fstat 은
-            # 재해석 비트를 보고하지 않으므로, 위 검사와 이 open 사이에 경로가 바꿔치기됐어도 이
-            # 재확인으로는 잡지 못한다. TOCTOU 창을 닫는 게 아니라, 드물게 남는 경로(핸들이 여전히
-            # 재해석 지점 자체를 가리키는 경우)만 방어한다.
+            # os.open follows reparse points (symlinks/junctions) and opens a handle to the target file — that handle's fstat
+            # doesn't report the reparse bit, so if the path was swapped between the check above and this open, this
+            # recheck can't catch it. It doesn't close the TOCTOU window; it only defends the rare remaining case (where the
+            # handle still points at the reparse point itself).
             if getattr(os.fstat(fd), 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
                 os.close(fd)
                 fail('unsafe_host_path')
@@ -888,7 +891,7 @@ def main(action, candidate_id=None, option=None):
     name, home, item = select(candidate_id)
     public, owner, cfg, token, plugin_name = item
     if action == 'check-model':
-        # 자격 증명이 있는지만 본다. 어떤 결과도 설정을 실패시키지 않는다 — 애매하면 unknown 이다.
+        # Only check whether credentials exist. No result fails the setup — if ambiguous, it's unknown.
         block = cfg.get('model')
         provider = block.get('provider') if isinstance(block, dict) else None
         if not isinstance(provider, str) or not provider.strip(): provider = cfg.get('provider')
@@ -898,14 +901,14 @@ def main(action, candidate_id=None, option=None):
             auth = run([sys.executable, '-m', 'hermes_cli.main', 'auth', 'status', provider], timeout=45, env={**os.environ, 'HERMES_HOME': str(home)})
         except Exception:
             return {'ok': True, 'model': 'unknown'}
-        # 실측 출력은 한 줄이다: 'openai-codex: logged in'. 원문은 저장도 반환도 하지 않는다.
-        # 이름을 probe 로 두면 모듈 함수 probe() 가 main 안에서 지역 변수로 가려진다(실측: 테스트 6건 실패).
+        # Measured output is one line: 'openai-codex: logged in'. The raw text is neither stored nor returned.
+        # Naming it probe would shadow the module function probe() as a local inside main (measured: 6 tests failed).
         if auth.returncode == 0 and 'logged in' in (auth.stdout or '').lower():
             return {'ok': True, 'model': 'ready'}
         return {'ok': True, 'model': 'missing'}
     if action == 'set-port':
-        # 운영자가 화면에서 명시적으로 수락한 포트만 여기까지 온다. 소유권 판정은 건드리지 않는다 —
-        # 이 프로필의 .env 만 고치고, 실제 적용은 이어지는 restart 단계가 한다.
+        # Only ports the operator explicitly accepted on screen get here. Ownership judgment is left alone —
+        # only this profile's .env is edited, and the following restart step actually applies it.
         try: value = int(option) if isinstance(option, str) and option.strip() else 0
         except (ValueError, TypeError): fail('invalid_host_operation')
         if not 1024 <= value <= 65535: fail('invalid_host_operation')
@@ -920,7 +923,7 @@ def main(action, candidate_id=None, option=None):
     if action == 'inspect':
         try: listening = assert_port_owned(public, owner)
         except Failure as conflict:
-            # 충돌일 때만 대안을 하나 얹는다. 못 고르면 그대로 오류만 나간다.
+            # Add one alternative only on conflict. If none can be picked, only the error goes out.
             if str(conflict) == 'port_conflict':
                 suggestion = suggest_port(public['port'])
                 if suggestion is not None: conflict.suggestion = suggestion
@@ -949,7 +952,7 @@ def main(action, candidate_id=None, option=None):
         for child,childhome in available:
             child_settings = settings(childhome)
             metadata = {'name':child, 'hasToken':bool(child_settings[2])}
-            # 형제 프로필도 채운다: 키가 없고 외부 비밀 제공자를 쓰지 않으면 발급할 수 있다.
+            # Also fill sibling profiles: they can be issued a key if they have none and don't use an external secret provider.
             if preparation_safe and not child_settings[2] and not child_settings[4]:
                 metadata['canProvision'] = True
             profiles.append(metadata)
@@ -966,11 +969,11 @@ def main(action, candidate_id=None, option=None):
             fail('service_install_failed')
         fresh = identity(name, home)
         if needs_service(fresh): fail('service_install_failed')
-        # 후보 id 는 서비스 정의의 해시를 포함한다. 유닛을 막 만들었으므로 id 가 바뀌었다 —
-        # 새 id 를 돌려주지 않으면 이어지는 모든 단계가 candidate_changed 로 죽는다(실측).
+        # The candidate id includes a hash of the service definition. We just created the unit, so the id changed —
+        # without returning the new id, every following step dies with candidate_changed (measured).
         return {'ok': True, 'candidateId': fresh['id']}
     if action == 'create-profile':
-        # 프로필을 늘리는 것은 리스너 소유자(default)만 한다.
+        # Only the listener owner (default) adds profiles.
         if name != 'default': fail('profile_provision_forbidden')
         if version_below(public['version'], HERMES_MIN): fail('hermes_version_unsupported')
         try: request_body = json.loads(option) if isinstance(option, str) and option else None
@@ -985,11 +988,11 @@ def main(action, candidate_id=None, option=None):
         if target.exists() or target.is_symlink() or any(child == new_name for child,_ in homes()): fail('profile_exists')
         if bounded([sys.executable, '-m', 'hermes_cli.main', 'profile', 'create', new_name] + (['--description', description] if description else []), {**os.environ, 'HERMES_HOME': str(ROOT)})[0]:
             fail('profile_create_failed')
-        # 명령이 0 으로 끝나도 디스크에 생겼는지 직접 본다.
+        # Even if the command exits 0, check directly that it appeared on disk.
         if not target.is_dir() or target.is_symlink(): fail('profile_create_failed')
         allowed = allowlist(config(home))
         result = {'ok': True, 'profile': new_name}
-        # 허용 목록은 운영자의 것이다 — 고치지 않고 서빙되지 않는다는 사실만 알린다.
+        # The allowlist belongs to the operator — don't fix it, only report that it isn't served.
         if isinstance(allowed, list) and new_name not in allowed: result['warning'] = 'profile_not_served'
         return result
     if action == 'provision-key':
@@ -999,11 +1002,11 @@ def main(action, candidate_id=None, option=None):
         target_home = next((h for child,h in homes() if child == target_name), None)
         if target_home is None: fail('candidate_changed')
         child_token, child_external = settings(target_home)[2], settings(target_home)[4]
-        # 외부 비밀 제공자를 쓰는 프로필은 제공자 설정을 건드리지 않고 그대로 둔다.
+        # Profiles using an external secret provider keep their provider settings untouched.
         if child_external: fail('profile_provision_forbidden')
         if child_token:
             if len(child_token) < 16 or '\n' in child_token or '\r' in child_token: fail('api_key_invalid')
-            # 이미 있으면 회전하지 않는다. 아무것도 하지 않고 성공이다.
+            # If it already exists, don't rotate. Do nothing and succeed.
             return {'ok': True, 'provisioned': False, 'profile': target_name}
         old = read(target_home / '.env')
         try: atomic(target_home / '.env', old.rstrip('\n') + '\nAPI_SERVER_KEY=' + secrets.token_hex(32) + '\n')
@@ -1039,7 +1042,7 @@ def main(action, candidate_id=None, option=None):
     elif action == 'set-timezone':
         value = option if isinstance(option, str) else ''
         if not value or len(value) > 64 or not TIMEZONE.fullmatch(value): fail('timezone_invalid')
-        # 모양만 보면 'Asia/../Seoul' 이 통과한다 — zoneinfo 가 거부할 값을 설정에 남기지 않는다.
+        # By shape alone 'Asia/../Seoul' passes — don't leave a value zoneinfo would reject in the config.
         if any(part in ('.','..') for part in value.split('/')): fail('timezone_invalid')
         fresh = config(home)
         existing = fresh.get('timezone')
@@ -1052,11 +1055,11 @@ def main(action, candidate_id=None, option=None):
         except Exception: fail('timezone_write_failed')
         if config(home).get('timezone') != value: fail('timezone_write_failed')
     elif action == 'set-worker-propagation':
-        # 운영자가 화면에서 고른 값만 여기까지 온다. 루트 설정의 이 한 키만 바꾸고 나머지는 그대로 둔다.
+        # Only values the operator picked on screen get here. Change only this one key in the root config and leave the rest.
         if option not in ('true', 'false'): fail('invalid_host_operation')
         desired = option == 'true'
         fresh = config(home)
-        # 어긋난 모양(목록·문자열)은 운영자의 것이다 — 덮어쓰지 않고 거절한다.
+        # A mismatched shape (list/string) belongs to the operator — reject rather than overwrite.
         block = mapping(fresh.get('plugins'))
         entries = mapping(block.get('entries'))
         entry = mapping(entries.get('deskrpg'))
@@ -1070,12 +1073,12 @@ def main(action, candidate_id=None, option=None):
             except Exception: fail('worker_propagation_write_failed')
             stored = worker_entry(config(home))
             if stored is None or stored.get('worker_propagation') is not desired: fail('worker_propagation_write_failed')
-        # 실제 상태를 돌려준다 — 끄기를 써도 .env 변수가 켜 두면 여전히 enabled 다.
+        # Return the actual state — even after writing off, it's still enabled if the .env variable turns it on.
         return {'ok': True, 'propagation': worker_propagation(config(home), envfile(home))}
     elif action == 'configure':
         # Preserve existing config shapes while setting the effective merged API block.
-        # gateway 키가 있으나 값이 비어 있으면 setdefault 는 None 을 돌려준다 — 새로 설치한
-        # Hermes 의 config.yaml 이 정확히 그 모양이라 여기서 TypeError 로 죽었다(실측).
+        # If the gateway key exists but its value is empty, setdefault returns None — a freshly installed
+        # Hermes's config.yaml has exactly that shape, so it died here with a TypeError (measured).
         gateway_block = mapping(cfg.get('gateway'))
         cfg['gateway'] = gateway_block
         if name == 'default':
@@ -1090,7 +1093,7 @@ def main(action, candidate_id=None, option=None):
             # Empty assignment is absent; append wins in Hermes's canonical parser.
             atomic(home / '.env', old.rstrip('\n') + '\nAPI_SERVER_KEY=' + secrets.token_hex(32) + '\n')
     elif action == 'restart':
-        # 제한을 넘기면 원인 있는 코드로 알린다 — 잡지 않으면 최상위 except 가 host_operation_failed 로 뭉갠다.
+        # Past the limit, report with a code that carries the cause — if not caught, the top-level except mashes it into host_operation_failed.
         try: code = run(owner['command'], timeout=restart_timeout(owner)).returncode
         except subprocess.TimeoutExpired: fail('gateway_restart_failed')
         if code: fail('gateway_restart_failed')
@@ -1116,7 +1119,7 @@ def main(action, candidate_id=None, option=None):
             code, models = request(public['port'],childtoken,path)
             if code == 200 and isinstance(models,dict) and isinstance(models.get('data'),list):
                 profiles.append({'name':child,'token':childtoken})
-                # 설치는 모델 자격 증명을 만들지 않는다. 빈 목록은 실패가 아니라 사람이 할 일이다.
+                # Install doesn't create model credentials. An empty list isn't a failure but something for a person to do.
                 if child == name and not models['data'] and 'model_provider_required' not in warnings: warnings.append('model_provider_required')
         return {'prepared': {'baseUrl':'http://127.0.0.1:' + str(public['port']), 'token':token, 'profiles':profiles}, 'warnings': warnings}
     else: fail('invalid_host_operation')
@@ -1127,7 +1130,7 @@ def entry(action, candidate_id, option=None):
     except Failure as error:
         body = {'error': str(error)}
         suggestion = getattr(error, 'suggestion', None)
-        # 코드 하나와 숫자 하나뿐이다. 호스트의 어떤 원문도 여기에 실리지 않는다.
+        # Only one code and one number. None of the host's raw text goes in here.
         if isinstance(suggestion, int) and not isinstance(suggestion, bool): body['suggestedPort'] = suggestion
         print(json.dumps(body))
     except Exception: print(json.dumps({'error':'host_operation_failed'}))

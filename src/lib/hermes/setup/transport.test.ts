@@ -98,7 +98,7 @@ test("owned tunnel deduplicates concurrent requests, reconnects after exit, fail
   await closeSshTunnels();
 });
 
-test("win32 은 제어 소켓 없이 로컬 포트 프로브로 준비를 확인한다", async () => {
+test("win32 checks readiness with a local port probe instead of a control socket", async () => {
   const { EventEmitter } = await import("node:events");
   const { PassThrough } = await import("node:stream");
   const { createServer } = await import("node:net");

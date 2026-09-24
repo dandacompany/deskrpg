@@ -1,12 +1,12 @@
 /**
- * 마법사가 설치하는 `deskrpg-hermes-plugin` 의 고정 좌표.
+ * Pinned coordinates of the `deskrpg-hermes-plugin` that the wizard installs.
  *
- * 값 자체는 호스트에서 도는 Python(`host-helper.ts` 의 `PIN`/`PLUGIN_VERSION`)이 쓰고,
- * 화면은 사람에게 보여 주기만 한다. 예전에는 화면이 앞 12자를 손으로 베껴 두어
- * 플러그인을 올릴 때마다 한쪽만 고치면 화면이 거짓말을 했다 — 이제 두 곳이 같은 상수를
- * 읽고, `pin.test.ts` 가 Python 쪽 리터럴과 대조해 어긋남을 막는다.
+ * The value itself is used by the Python running on the host (`PIN`/`PLUGIN_VERSION` in `host-helper.ts`),
+ * and the screen only shows it to people. The screen used to hand-copy the first 12 characters, so
+ * whenever the plugin was bumped and only one side was updated, the screen lied — now both places read
+ * the same constant, and `pin.test.ts` checks it against the Python-side literal to prevent drift.
  */
 export const PLUGIN_PIN = "1e9914a614f17186b6749916031da69ed6b61aa0";
 export const PLUGIN_VERSION = "0.16.0";
-/** 화면에 쓰는 짧은 표기. 커밋 전체를 보여 줄 자리가 없다. */
+/** Short form for the screen. There is no room to show the full commit. */
 export const PLUGIN_PIN_SHORT = PLUGIN_PIN.slice(0, 12);

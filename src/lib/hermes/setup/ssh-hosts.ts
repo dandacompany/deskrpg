@@ -1,16 +1,18 @@
 /**
- * DeskRPG 가 관리하는 SSH — 전용 키, 관리자가 확인한 호스트 키, 등록한 호스트.
+ * SSH managed by DeskRPG — a dedicated key, host keys confirmed by the admin, registered hosts.
  *
- * 2026-09-19 단테 결정(A안): DeskRPG 가 `DESKRPG_HOME/ssh/id_ed25519` 를 한 번 만들고 **공개키만** 보여 준다.
- * 관리자는 대상 서버 `authorized_keys` 에 한 줄 붙인다. 개인키는 서버 밖으로 나가지 않고 DB 에도 없다.
- * 비밀번호는 받지 않는다(Hermes Desktop 과 같다).
+ * 2026-09-19 Dante decision (option A): DeskRPG creates `DESKRPG_HOME/ssh/id_ed25519` once and shows **only the
+ * public key**. The admin appends one line to the target server's `authorized_keys`. The private key never leaves the
+ * server and is not in the DB.
+ * No passwords are accepted (same as Hermes Desktop).
  *
- * 호스트 키는 **확인 후 고정**한다. Desktop 은 `StrictHostKeyChecking=accept-new`(처음 보는 키 자동 수락)이지만
- * 웹 서버에는 그 순간 확인할 사람이 앞에 없다 — 등록 화면에서 지문을 보여 주고, 관리자가 확인한 지문과
- * 등록 순간 다시 스캔한 지문이 같을 때만 `known_hosts` 에 쓴다. 이후 연결은 `StrictHostKeyChecking yes`.
+ * Host keys are **pinned after confirmation**. Desktop uses `StrictHostKeyChecking=accept-new` (auto-accept unseen
+ * keys), but a web server has nobody in front of it to confirm at that moment — the registration screen shows the
+ * fingerprint, and only when the admin-confirmed fingerprint matches a re-scan at registration time is it written to
+ * `known_hosts`. Later connections use `StrictHostKeyChecking yes`.
  *
- * 컨테이너의 HOME 이 `/nonexistent` 라서 ssh 가 쓰는 파일은 전부 이 디렉터리에 두고 설정으로 가리킨다.
- * 모든 ssh 호출은 `-F <config>` 로 이 설정만 읽는다 — 서버 사용자의 `~/.ssh/config` 를 섞지 않는다.
+ * The container's HOME is `/nonexistent`, so every file ssh uses lives in this directory and the config points to it.
+ * Every ssh call reads only this config via `-F <config>` — it never mixes in the server user's `~/.ssh/config`.
  */
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -21,7 +23,7 @@ import path from "node:path";
 
 import { nullDevicePath } from "./platform";
 
-/** 관리형 config 의 전역 known_hosts 줄. Windows 에 `/dev/null` 은 없다. */
+/** The global known_hosts line of the managed config. Windows has no `/dev/null`. */
 export function globalKnownHostsLine(platform: string): string {
   return `  GlobalKnownHostsFile ${nullDevicePath(platform)}`;
 }
@@ -50,7 +52,10 @@ const KEY_TYPES = new Set([
   "sk-ecdsa-sha2-nistp256@openssh.com",
 ]);
 
-/** 사용자가 적은 대상을 검증한다. ssh 인자로 넘어가는 값이라 옵션 주입이 될 수 있는 모든 모양을 거부한다. */
+/**
+ * Validates the user-entered target. It is passed as an ssh argument, so every shape that could inject an option
+ * is rejected.
+ */
 export function validateSshTarget(input: {
   host?: unknown;
   port?: unknown;
@@ -66,7 +71,7 @@ export function validateSshTarget(input: {
         ? Number(input.port.trim())
         : NaN;
   if (!(HOST_RE.test(host) || (host.includes(":") && IPV6_RE.test(host)))) throw bad();
-  // 링크 로컬·클라우드 메타데이터 주소는 설정 대상이 될 이유가 없다(게이트웨이 주소 검증과 같다).
+  // Link-local and cloud metadata addresses have no reason to be setup targets (same as gateway address validation).
   if (host.startsWith("169.254.") || host === "metadata.google.internal" || /^fe[89ab]/.test(host))
     throw bad();
   if (!USER_RE.test(user)) throw bad();
@@ -74,13 +79,13 @@ export function validateSshTarget(input: {
   return { host, port, user };
 }
 
-/** OpenSSH 와 같은 형식의 지문: `SHA256:` + base64(sha256(키 blob)), 패딩 없음. */
+/** Fingerprint in OpenSSH format: `SHA256:` + base64(sha256(key blob)), no padding. */
 export function fingerprintOf(blob: string): string {
   const digest = createHash("sha256").update(Buffer.from(blob, "base64")).digest("base64");
   return `SHA256:${digest.replace(/=+$/, "")}`;
 }
 
-/** `ssh-keyscan` 출력 → 키 목록. 주석(`#`)·모르는 유형·깨진 줄은 버린다. 같은 키는 한 번만. */
+/** `ssh-keyscan` output → key list. Drops comments (`#`), unknown types and broken lines. Each key only once. */
 export function parseKeyscan(output: string): ScannedKey[] {
   const seen = new Set<string>();
   const rows: ScannedKey[] = [];
@@ -118,7 +123,7 @@ function run(command: string, args: string[], timeoutMs: number): Promise<string
 }
 
 const defaultScan: ScanFn = async (target) => {
-  // keyscan 은 `--` 를 받지 않는다 — 호스트는 위에서 `-` 로 시작할 수 없게 검증했다.
+  // keyscan does not accept `--` — the host was validated above so it cannot start with `-`.
   const out = await run("ssh-keyscan", ["-T", "5", "-p", String(target.port), target.host], 15_000);
   return out;
 };
@@ -160,7 +165,7 @@ export function createManagedSsh(
     }
   }
 
-  /** hosts.json 이 정본이다. config·known_hosts 는 검증된 값으로 매번 다시 만든다. */
+  /** hosts.json is the source of truth. config and known_hosts are rebuilt from validated values every time. */
   async function writeAll(hosts: ManagedHost[], keys: Map<string, ScannedKey[]>) {
     await ensureDir();
     await writePrivate(hostsPath, `${JSON.stringify(hosts, null, 2)}\n`);
@@ -210,13 +215,13 @@ export function createManagedSsh(
   return {
     configPath,
     list,
-    /** 관리 호스트면 `-F <관리 설정>` — 호환용 환경변수 별칭은 서버 ssh 설정을 그대로 쓴다. */
+    /** For a managed host, `-F <managed config>` — the legacy env-var alias uses the server's ssh config as-is. */
     configArgs(hostId: string): string[] {
       return existsSync(configPath) && list().some((h) => h.id === hostId)
         ? ["-F", configPath]
         : [];
     },
-    /** 전용 키의 공개키. 없으면 만든다. 개인키는 돌려주지 않는다. */
+    /** The dedicated key's public key. Created if missing. The private key is never returned. */
     async publicKey(): Promise<string> {
       await ensureDir();
       if (!existsSync(keyPath)) await keygen(keyPath, `deskrpg@${os.hostname()}`);
@@ -230,8 +235,8 @@ export function createManagedSsh(
       return rows;
     },
     /**
-     * 확인한 지문으로 등록한다. 등록 순간 다시 스캔해, 확인한 지문 집합과 같지 않으면 거절한다 —
-     * 화면을 보는 사이에 키가 바뀌었다면 관리자가 확인한 것이 아니다.
+     * Registers with the confirmed fingerprints. Re-scans at registration time and rejects if it differs from the
+     * confirmed set — if the key changed while the screen was being viewed, it is not what the admin confirmed.
      */
     async register(input: SshTarget, confirmed: string[]): Promise<ManagedHost> {
       const target = validateSshTarget(input);
@@ -268,7 +273,7 @@ export function createManagedSsh(
 }
 
 let singleton: ReturnType<typeof createManagedSsh> | null = null;
-/** 서버가 쓰는 관리 SSH. `DESKRPG_HOME`(Docker 에서는 볼륨)에 둬 재배포 뒤에도 키가 남는다. */
+/** The managed SSH the server uses. Kept in `DESKRPG_HOME` (a volume in Docker) so the key survives redeploys. */
 export function managedSsh() {
   singleton ??= createManagedSsh(process.env.DESKRPG_HOME || path.join(os.homedir(), ".deskrpg"));
   return singleton;

@@ -1,26 +1,27 @@
 /**
- * 플랫폼에 따라 달라지는 질의를 한곳에 모은다. 전부 순수 함수이고 `platform` 을 인자로 받는다 —
- * 맥에서 돌리는 테스트가 win32 경로를 그대로 지나갈 수 있어야 한다.
+ * Gathers platform-dependent queries in one place. All are pure functions that take `platform` as an argument —
+ * tests running on a Mac must be able to walk the win32 paths as-is.
  */
 import path from "node:path";
 
-/** PATHEXT 가 비어 있는 Windows 에서 쓸 기본 확장자. cmd.exe 의 기본값 중 실행 파일만 남겼다. */
+/** Default extensions for Windows when PATHEXT is empty. Only the executable ones of cmd.exe's defaults are kept. */
 export const DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD";
 
 export function isWindows(platform: string): boolean {
   return platform === "win32";
 }
 
-/** ssh 설정에서 "아무것도 읽지 않는다" 를 뜻하는 경로. Windows 에 `/dev/null` 은 없다. */
+/** The path meaning "read nothing" in ssh config. Windows has no `/dev/null`. */
 export function nullDevicePath(platform: string): string {
   return isWindows(platform) ? "NUL" : "/dev/null";
 }
 
 /**
- * PATH 위에 그 명령이 있는가.
+ * Is the command on PATH.
  *
- * Windows 실측(WinServer, 2026-09-20): 바이너리는 `ssh.exe` 라 확장자 없이 찾으면 언제나 실패한다.
- * `hasCommand(ssh)=false` / `hasCommand(ssh.exe)=true` 였고, 그래서 SSH 모드가 화면에서 사라졌다.
+ * Measured on Windows (WinServer, 2026-09-20): the binary is `ssh.exe`, so looking it up without an extension always
+ * fails.
+ * `hasCommand(ssh)=false` / `hasCommand(ssh.exe)=true`, and that is why SSH mode disappeared from the screen.
  */
 export function hasCommandIn(
   command: string,
@@ -31,15 +32,15 @@ export function hasCommandIn(
   const pathDelimiter = isWindows(platform) ? ";" : ":";
   const separator = isWindows(platform) ? "\\" : "/";
   const directories = (env.PATH ?? "").split(pathDelimiter).filter(Boolean);
-  // 확장자 없는 이름을 먼저 본다 — 비 win32 는 이 하나가 전부다.
+  // Check the extensionless name first — for non-win32 this is all there is.
   const suffixes = [""];
   if (isWindows(platform)) {
     for (const raw of (env.PATHEXT || DEFAULT_PATHEXT).split(";")) {
       const suffix = raw.trim();
       if (suffix) {
-        // 소문자 버전을 먼저 시도한다
+        // Try the lowercase version first
         suffixes.push(suffix.toLowerCase());
-        // 원본과 다른 대소문자는 추가로 시도한다
+        // Additionally try the casing that differs from the original
         if (suffix !== suffix.toLowerCase()) {
           suffixes.push(suffix);
         }
@@ -60,10 +61,10 @@ export function hasCommandIn(
 }
 
 /**
- * Hermes 홈. 상류 `hermes_constants.py` 의 `_get_platform_default_hermes_home()` 과 같은 판정이다.
- * Windows 는 `%LOCALAPPDATA%\hermes`, 그 밖은 `~/.hermes` 다. 이 규칙은 호스트에서 도는
- * Python 본문(HOST_BOOTSTRAP·HOST_INSTALLER·HOST_HELPER)과 PowerShell 런처에도 같은 모양으로
- * 들어 있다 — 한 곳을 고치면 나머지도 함께 고친다.
+ * Hermes home. Same decision as upstream `_get_platform_default_hermes_home()` in `hermes_constants.py`.
+ * Windows is `%LOCALAPPDATA%\hermes`, everything else is `~/.hermes`. This rule also appears in the same shape in the
+ * Python bodies running on the host (HOST_BOOTSTRAP·HOST_INSTALLER·HOST_HELPER) and the PowerShell launcher
+ * — fix one place and fix the rest along with it.
  */
 export function hermesRootPath(
   platform: string,
@@ -75,7 +76,7 @@ export function hermesRootPath(
   return path.join(base, "hermes");
 }
 
-/** venv 안에서 파이썬이 있는 자리. Windows 는 `Scripts\python.exe` (상류 gateway_windows.py:1457,1475). */
+/** Where python lives inside a venv. On Windows it is `Scripts\python.exe` (upstream gateway_windows.py:1457,1475). */
 export function venvPythonPath(platform: string, venvDir: string): string {
   return isWindows(platform)
     ? path.join(venvDir, "Scripts", "python.exe")

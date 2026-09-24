@@ -2,8 +2,8 @@ import type { PluginInfo } from "../deskrpg-plugin-types";
 import { classifyPluginProbeWithInfo, type PluginCapability } from "../plugin-capability";
 
 /**
- * 판정에 자동화 계약 블록(info)을 얹는다. `PluginCapability` 를 넓히기만 하므로 `status`/`version`
- * 을 읽던 호출부는 그대로다 — 설정 마법사가 `plugin_info_json` 도 같이 캐시할 수 있게 한다(T4).
+ * Layers the automation contract block (info) on top of the verdict. It only widens `PluginCapability`, so callers
+ * that read `status`/`version` are unchanged — this lets the setup wizard also cache `plugin_info_json` (T4).
  */
 export type SetupGatewayVerdict = PluginCapability & { info: PluginInfo | null };
 

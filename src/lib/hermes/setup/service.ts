@@ -86,9 +86,9 @@ const STEPS = new Set([
   "saving_gateway",
 ]);
 /**
- * 재개에서도 언제나 다시 도는 단계. 앞선 잡 이후 호스트 상태가 바뀌었을 수 있고,
- * 둘 다 읽기 전용 확인이라 다시 해도 잃는 것이 없다.
- * `inspecting` 도 같은 이유로 건너뛰지 않는다 — 이어지는 모든 판단이 그 결과 위에 선다.
+ * Steps that always rerun, even on resume. Host state may have changed since the previous job,
+ * and both are read-only checks, so redoing them loses nothing.
+ * `inspecting` is not skipped for the same reason — every later decision stands on its result.
  */
 const ALWAYS_RERUN = new Set(["inspecting", "verifying_gateway", "checking_model"]);
 
@@ -111,7 +111,7 @@ function hasCommand(command: string) {
     },
   );
 }
-/** 이 프로세스가 컨테이너 안에서 도는가. 판정 실패는 "아니다" — 막는 쪽으로 틀리지 않게. */
+/** Is this process running inside a container? A failed check means "no" — so we never err on the blocking side. */
 function inContainer() {
   if (existsSync("/.dockerenv") || existsSync("/run/.containerenv")) return true;
   try {
@@ -120,7 +120,10 @@ function inContainer() {
     return false;
   }
 }
-/** 호스트 도우미(HOST_BOOTSTRAP)와 같은 기준 — Hermes 홈 아래 `hermes-agent/{venv,.venv}` 의 venv 파이썬. */
+/**
+ * Same criterion as the host helper (HOST_BOOTSTRAP) — the venv python under `hermes-agent/{venv,.venv}` in the
+ * Hermes home.
+ */
 function localHermesFound() {
   const root = path.join(
     hermesRootPath(process.platform, process.env as Record<string, string | undefined>, homedir()),
@@ -146,7 +149,7 @@ export async function setupCapabilities(userId: string): Promise<SetupCapabiliti
     sshHosts: enabled ? getSshHosts() : [],
   });
 }
-/** SSH 호스트 관리 — 관리자 전용(호스트 게이트와 같다). 개인키는 어느 응답에도 실리지 않는다. */
+/** SSH host management — admin only (same as the host gate). The private key is never included in any response. */
 async function requireHostAdmin(userId: string) {
   if (!hostSetupAllowed(process.env, await role(userId))) throw new Error("setup_forbidden");
   return managedSsh();
@@ -178,15 +181,15 @@ export async function sshRemoveHost(userId: string, hostId: unknown) {
   else await managed.remove(hostId);
   return { removed: hostId };
 }
-/** Desktop 방식을 쓸 수 있는지와 `~/.ssh/config` 별칭(추천용). 관리자 전용. */
+/** Whether the Desktop method is available, plus `~/.ssh/config` aliases (for suggestions). Admin only. */
 export async function sshSystemInfo(userId: string) {
   await requireHostAdmin(userId);
   const available = systemSshAvailable();
   return { available, aliases: available ? readSshConfigHosts() : [] };
 }
 /**
- * Desktop 방식 호스트 추가 — 한 번 접속해 본 뒤에만 저장한다. 서버 사용자 설정·agent 를 그대로 쓰고,
- * 처음 보는 호스트 키는 서버 사용자 known_hosts 에 기록된다(accept-new).
+ * Add a host the Desktop way — saved only after one successful connection. Uses the server user's config and agent as-is,
+ * and an unseen host key is recorded in the server user's known_hosts (accept-new).
  */
 export async function sshSystemAdd(userId: string, input: Record<string, unknown>) {
   await requireHostAdmin(userId);
@@ -215,7 +218,7 @@ async function requireHost(userId: string, target: HostTarget) {
   if (target.mode === "ssh" && target.hostId) return sshExecutor(target.hostId);
   throw new Error("setup_invalid_request");
 }
-/** SSH 대상은 언제나 리눅스다 — 로컬 실행에서만 이 서버가 도는 실제 플랫폼을 쓴다. */
+/** An SSH target is always Linux — only local execution uses the actual platform this server runs on. */
 function hostPlatform(target: HostTarget): string {
   return target.mode === "ssh" ? "linux" : process.platform;
 }
@@ -226,8 +229,8 @@ export async function inspectSetupHost(userId: string, target: HostTarget, candi
   return inspectHost(await requireHost(userId, target), candidateId, hostPlatform(target));
 }
 /**
- * 모델 자격 증명만 확인한다. 잡을 만들지 않고 즉시 답한다.
- * 기존 호스트 게이트는 그대로 통과해야 하지만, 확인 자체는 어떤 이유로도 실패가 되지 않는다.
+ * Checks only the model credentials. Creates no job and answers immediately.
+ * The existing host gate must still pass, but the check itself never turns into a failure for any reason.
  */
 export async function checkSetupModel(
   userId: string,
@@ -286,18 +289,19 @@ export async function startSetup(
   provision?: SetupProvisionRequest,
   installHermes?: boolean,
   resumeFrom?: string,
-  /** 화면이 대안 포트 제안을 명시적으로 수락했을 때만 온다. */
+  /** Present only when the screen explicitly accepted the alternative-port suggestion. */
   setPort?: number,
-  /** 워커 전파 체크박스(플러그인 0.16.0). undefined 면 호스트 설정을 건드리지 않는다. */
+  /** Worker propagation checkbox (plugin 0.16.0). If undefined, host settings are left untouched. */
   workerPropagation?: boolean,
 ) {
   const executor = await requireHost(userId, target);
-  // 호스트 게이트 + 설치 스위치 + 대상(local·ssh). 대상별 조건은 hermesInstallAllowed 가 판정한다.
+  // Host gate + install switch + target (local·ssh). Per-target conditions are decided by hermesInstallAllowed.
   if (installHermes && !hermesInstallAllowed(process.env, await role(userId), target.mode))
     throw new Error("hermes_install_forbidden");
   const jobs = store();
   const targetKey = JSON.stringify(target);
-  // 같은 사용자·같은 대상·실패한 잡만 이어받는다. 잠금을 잡기 전에 판정해 남의 잡으로 호스트를 묶지 않는다.
+  // Only resume a failed job of the same user and same target. Decided before taking the lock so we never tie up a
+  // host with someone else's job.
   const inherited = resumeFrom
     ? (jobs.resumable(userId, resumeFrom, targetKey).completed ?? [])
     : [];
@@ -317,7 +321,7 @@ export async function startSetup(
     if (jobs.cancelled(userId, job.id) || controller.signal.aborted)
       throw new Error("setup_cancelled");
   };
-  // 다음 단계가 시작됐다는 것은 앞 단계가 던지지 않고 끝났다는 뜻이다 — 그때 `completed` 에 올린다.
+  // The next step starting means the previous step finished without throwing — that is when it goes into `completed`.
   let pending: string | null = null;
   const complete = (name: string) => {
     const prior = jobs.get(userId, job.id);
@@ -341,7 +345,8 @@ export async function startSetup(
     try {
       let selectedCandidateId = candidateId;
       if (installHermes) {
-        // 이미 설치를 끝낸 재개는 다시 깔지 않는다. 설치를 되돌리지도 않는다 — 후보만 다시 찾는다.
+        // A resume that already finished installing does not reinstall. Nor does it roll back the install — it only
+        // rediscovers candidates.
         if (!done("installing_hermes")) {
           step("installing_hermes");
           const { installerDigest, milestones } = await installHermesHost(
@@ -351,12 +356,12 @@ export async function startSetup(
           );
           jobs.update(userId, job.id, {
             installerDigest,
-            // 마지막 이정표 하나만 남긴다. 코드이지 줄 내용이 아니다.
+            // Keep only the last milestone. It is a code, not the line content.
             ...(milestones.length ? { progress: milestones[milestones.length - 1] } : {}),
           });
           checkCancelled();
         }
-        // 설치 뒤에는 후보가 새로 생긴다 — 클라이언트가 알 수 없으므로 서버가 다시 찾는다.
+        // New candidates appear after installing — the client cannot know, so the server rediscovers them.
         const candidates = await discoverHost(executor, hostPlatform(target));
         const fresh = candidates.find((item) => item.label === "Hermes default");
         if (!fresh) throw new Error("hermes_install_failed");
@@ -401,7 +406,7 @@ export async function startSetup(
             : "plugin_verify_failed",
         );
       checkCancelled();
-      // 확인은 게이트웨이를 저장하기 전에, 그리고 어떤 결과여도 설정을 멈추지 않고 한다.
+      // The check runs before saving the gateway, and whatever the result, it never stops setup.
       step("checking_model");
       const modelState = await checkModelHost(
         boundedExecutor,
@@ -409,8 +414,8 @@ export async function startSetup(
         controller.signal,
         hostPlatform(target),
       );
-      // SSH 대상은 로그아웃·재부팅 뒤에도 게이트웨이가 살아야 한다 — Linger 가 꺼져 있으면 안내만 한다.
-      // Windows 로컬은 의미가 다르다: 스케줄 작업은 다음 로그온에 뜬다.
+      // An SSH target's gateway must survive logout and reboot — if Linger is off we only show guidance.
+      // Windows local means something different: a scheduled task starts at the next logon.
       const windowsLocal = target.mode === "local" && process.platform === "win32";
       const lingerOff =
         target.mode === "ssh" && (await checkLingerHost(boundedExecutor)) === "disabled";
@@ -448,7 +453,8 @@ export async function startSetup(
           pluginStatus: capability.status,
           pluginVersion: capability.version,
           pluginCheckedAt: nowForDb(),
-          // 보드 확보(kanban-boards.ts)가 계약 판정에 쓴다 — 없으면 캐시가 신선해도 재프로브한다.
+          // Board provisioning (kanban-boards.ts) uses it for the contract check — without it, it re-probes even
+          // with a fresh cache.
           ...buildPluginInfoCacheUpdate(capability.info),
         })
         .where(eq(gatewayResources.id, gateway.id));
@@ -464,8 +470,8 @@ export async function startSetup(
         if ("error" in result) throw new Error("profile_import_failed");
       }
       checkCancelled();
-      // 켜기를 골랐으면 이미 있는 직원에게도 적용한다. 실패해도 연결은 끝난 것이다 — 경고만 남기고,
-      // 게이트웨이 화면의 적용 버튼으로 다시 할 수 있다.
+      // If enabling was chosen, apply it to existing employees too. Even if that fails the connection is done — leave
+      // only a warning; it can be redone with the apply button on the gateway screen.
       if (
         setupWorkerPluginApplies(workerPropagation, prepared.workerPropagation, capability.info)
       ) {
@@ -507,8 +513,8 @@ export async function startSetup(
 type GatewayRow = typeof gatewayResources.$inferSelect;
 
 /**
- * 등록된 게이트웨이의 호스트를 찾는다(소유자만). 주소가 로컬이면 이 서버, SSH 터널이면 그 호스트다.
- * 컨테이너에서 본 `host.docker.internal` 처럼 명령을 돌릴 방법이 없는 주소는 전용 코드로 던진다.
+ * Finds the host of a registered gateway (owner only). A local address means this server; an SSH tunnel means that host.
+ * An address with no way to run commands, like `host.docker.internal` seen from a container, throws a dedicated code.
  */
 async function resolveGatewayHost(
   userId: string,
@@ -519,7 +525,7 @@ async function resolveGatewayHost(
     .from(gatewayResources)
     .where(eq(gatewayResources.id, gatewayId))
     .limit(1);
-  // 남의 게이트웨이 호스트에서 명령을 돌리게 할 수는 없다 — 공유받은 사용자도 안 된다.
+  // We cannot let anyone run commands on someone else's gateway host — not even a user it was shared with.
   if (!gateway || gateway.ownerUserId !== userId) throw new Error("setup_not_found");
   const kind = classifyGatewayHost(gateway.baseUrl);
   if (kind.mode === "local") return { gateway, target: { mode: "local" }, port: kind.port };
@@ -532,11 +538,11 @@ async function resolveGatewayHost(
 }
 
 /**
- * 기존 적용(`POST /deskrpg/worker-plugin`, 소유자 키)과 그 뒤의 플러그인 정보 캐시 갱신.
- * 게이트웨이 화면의 적용 버튼·마법사·"설정에서 켜기" 가 같은 것을 쓴다.
+ * The existing apply (`POST /deskrpg/worker-plugin`, owner key) followed by the plugin info cache refresh.
+ * The gateway screen's apply button, the wizard and "설정에서 켜기" all use this.
  */
 export function gatewayWorkerPluginDeps(gateway: GatewayRow): ApplyWorkerPluginDeps {
-  // deskrpg-allow-token-arg: 응답이 아니라 서버가 Hermes 를 부를 때 쓰는 인자다.
+  // deskrpg-allow-token-arg: an argument the server uses to call Hermes, not a response.
   const token = decryptGatewayToken(gateway.tokenEncrypted);
   const client = createPluginClient({ baseUrl: gateway.baseUrl, defaultToken: token });
   return {
@@ -545,7 +551,7 @@ export function gatewayWorkerPluginDeps(gateway: GatewayRow): ApplyWorkerPluginD
       const probed = await probeDeskrpgPluginWithInfo({
         fetchImpl: transportFetch,
         baseUrl: gateway.baseUrl,
-        // deskrpg-allow-token-arg: 응답이 아니라 서버가 Hermes 를 부를 때 쓰는 인자다.
+        // deskrpg-allow-token-arg: an argument the server uses to call Hermes, not a response.
         token,
       });
       await db
@@ -559,7 +565,7 @@ export function gatewayWorkerPluginDeps(gateway: GatewayRow): ApplyWorkerPluginD
   };
 }
 
-/** 마법사 끝의 적용. 성공이면 true — 결과 목록은 게이트웨이 화면이 캐시에서 다시 읽는다. */
+/** Apply at the end of the wizard. true on success — the result list is re-read from the cache by the gateway screen. */
 async function runWorkerPropagationApply(gateway: GatewayRow): Promise<boolean> {
   try {
     return (await applyWorkerPlugin(gatewayWorkerPluginDeps(gateway))).ok;
@@ -569,9 +575,10 @@ async function runWorkerPropagationApply(gateway: GatewayRow): Promise<boolean> 
 }
 
 /**
- * "설정에서 켜기"(게이트웨이 화면)와 이어받기의 [끄기]. 호스트 루트 설정을 쓰고, 켜면 기존 적용까지 한다.
- * 짧은 동작이라 잡으로 돌리지 않지만, 같은 호스트의 설치·갱신과 겹치지 않게 호스트 잠금을 잡는다.
- * 게이트웨이를 재시작하지 않는다 — 플러그인은 호출마다 설정을 읽는다(0.16.0 계약).
+ * "설정에서 켜기" (gateway screen) and [끄기] on resume. Writes the host root config, and when enabling also runs the
+ * existing apply. It is short, so it does not run as a job, but it takes the host lock so it never overlaps an
+ * install/update on the same host.
+ * Does not restart the gateway — the plugin reads the config on every call (0.16.0 contract).
  */
 export async function setGatewayWorkerPropagation(
   userId: string,
@@ -595,24 +602,25 @@ export async function setGatewayWorkerPropagation(
 }
 
 /**
- * 이미 등록해 쓰고 있는 게이트웨이의 **플러그인만** 고정 버전으로 올린다.
+ * Upgrades **only the plugin** of an already registered, in-use gateway to the pinned version.
  *
- * 마법사(`startSetup`)를 그대로 쓸 수 없다: 그 흐름은 끝에서 게이트웨이를 upsert 하며
- * 표시 이름을 `Hermes · <host>` 로 덮어쓰고(`gateway-resources.ts:133`) 프로필을 다시
- * 들여온다. 사용자가 붙인 이름과 공유 설정을 건드리지 않는 것이 이 경로의 계약이다.
+ * The wizard (`startSetup`) cannot be reused as-is: that flow upserts the gateway at the end,
+ * overwriting the display name with `Hermes · <host>` (`gateway-resources.ts:133`) and re-importing
+ * the profiles. Not touching the user-given name and sharing settings is this path's contract.
  *
- * 그래서 파이프라인은 그대로 쓰되(`prepareHost`), 갱신에 필요 없는 단계는 `skipStep` 으로
- * 닫고, 끝나면 **플러그인 캐시만** 새로 쓴다 — 토큰·주소·이름은 그대로 둔다.
+ * So it reuses the pipeline (`prepareHost`), closes the steps an update does not need with `skipStep`,
+ * and when done writes **only the plugin cache** — token, address and name stay as they are.
  */
 export async function startPluginUpdate(userId: string, gatewayId: string) {
   const { gateway, target, port } = await resolveGatewayHost(userId, gatewayId);
   const executor = await requireHost(userId, target);
   const platform = hostPlatform(target);
   const candidates = await discoverHost(executor, platform);
-  // 주소의 포트가 이 게이트웨이의 정체다 — 이름표(label)는 호스트마다 다를 수 있다.
+  // The port in the address is this gateway's identity — the label can differ per host.
   const candidate = candidates.find((item) => item.port === port);
   if (!candidate) throw new Error("plugin_update_candidate_not_found");
-  // 옛 플러그인이 전파해 둔 링크가 있으면 켠 채로 이어받는다. 화면은 잡의 표시를 보고 한 번 알리고 [끄기]를 준다.
+  // If the old plugin had propagated links, carry them over enabled. The screen sees the job's marker, notifies
+  // once and offers [끄기].
   const inherit = inheritedWorkerPropagation(candidate);
 
   const jobs = store();
@@ -637,8 +645,8 @@ export async function startPluginUpdate(userId: string, gatewayId: string) {
 
   void (async () => {
     try {
-      // 갱신에 없어야 할 단계를 닫는다. 프로필·키·포트·시간대는 이미 운영 중인 설정이고,
-      // 서비스 등록은 돌고 있는 게이트웨이에 다시 할 일이 아니다.
+      // Close the steps that must not run in an update. Profiles, keys, port and timezone are settings already in
+      // operation, and service registration is not something to redo on a running gateway.
       const skipStep = (name: string) =>
         name === "setting_port" ||
         name === "creating_profile" ||
@@ -659,11 +667,11 @@ export async function startPluginUpdate(userId: string, gatewayId: string) {
         inherit ? true : undefined,
       );
       if (inherit) jobs.update(userId, job.id, { workerPropagationInherited: true });
-      // 새 버전이 실제로 서빙되는지 우리 주소로 확인한다(ssh 는 transportFetch 가 터널을 연다).
+      // Verify via our address that the new version is actually served (for ssh, transportFetch opens the tunnel).
       const probed = await probeDeskrpgPluginWithInfo({
         fetchImpl: transportFetch,
         baseUrl: gateway.baseUrl,
-        // deskrpg-allow-token-arg: 응답이 아니라 서버가 Hermes 를 부를 때 쓰는 인자다.
+        // deskrpg-allow-token-arg: an argument the server uses to call Hermes, not a response.
         token: decryptGatewayToken(gateway.tokenEncrypted),
       });
       await db
@@ -689,7 +697,7 @@ export async function startPluginUpdate(userId: string, gatewayId: string) {
       release();
     }
   })().catch(() => {
-    /* 잡에 실패를 남기지 못한 경우까지 여기서 삼킨다 — 호스트 출력은 절대 로그에 남기지 않는다. */
+    /* Also swallows the case where the failure could not be recorded on the job — host output is never logged. */
   });
 
   return job;

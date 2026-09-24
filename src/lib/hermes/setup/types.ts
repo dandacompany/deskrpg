@@ -8,25 +8,25 @@ export type SetupCandidate = {
   service: string;
   pluginInstalled: boolean;
   pluginEnabled: boolean;
-  /** plugin.yaml 의 version. 설치돼 있지 않거나 매니페스트가 버전을 적지 않으면 null. */
+  /** plugin.yaml's version. null if not installed or the manifest does not state a version. */
   pluginVersion: string | null;
   port: number;
   hasToken: boolean;
-  /** config.yaml 의 최상위 timezone. 비어 있으면 null — 그때만 마법사가 채워 준다. */
+  /** Top-level timezone in config.yaml. null if empty — only then does the wizard fill it in. */
   timezone: string | null;
   warning?: string;
-  /** 탐색 시점의 게이트웨이 상태. 중지돼 있으면 연결이 시작시킨다. */
+  /** Gateway state at discovery time. If stopped, connecting starts it. */
   gatewayState?: "running" | "stopped" | "profile_gateways";
-  /** 이 게이트웨이가 /p/<이름>/ 으로 싣는 프로필(default 제외). */
+  /** Profiles this gateway serves under /p/<name>/ (excluding default). */
   profiles?: string[];
-  /** default 가 멈춘 채 따로 떠 있는 프로필 게이트웨이 — 먼저 멈춰야 연결할 수 있다. */
+  /** Profile gateways running separately while default is stopped — they must be stopped first to connect. */
   profileGateways?: string[];
   /**
-   * 워커 전파(플러그인 0.16.0) 운영자 설정 — 루트 config 의 `plugins.entries.deskrpg.worker_propagation`
-   * 또는 루트 .env 의 `DESKRPG_WORKER_PROPAGATION`. 모양이 어긋난 값을 받으면 없음.
+   * Worker propagation (plugin 0.16.0) operator setting — root config's `plugins.entries.deskrpg.worker_propagation`
+   * or `DESKRPG_WORKER_PROPAGATION` in the root .env. Absent if a malformed value is received.
    */
   workerPropagation?: WorkerPropagation;
-  /** 프로필 중 하나라도 플러그인이 전파한 `plugins/deskrpg` 링크를 가졌는가 — 옛 플러그인이 켜 두었던 흔적. */
+  /** Whether any profile has a `plugins/deskrpg` link propagated by the plugin — a trace an old plugin left enabled. */
   workerLinked?: boolean;
 };
 export type SetupInspection = {
@@ -41,48 +41,48 @@ export type SetupJob = {
   steps: string[];
   error?: string;
   gatewayId?: string;
-  /** 실패가 아닌 경고 코드. 잡이 성공해도 남는다(profile_not_served, model_provider_required). */
+  /** Warning codes that are not failures. Remain even if the job succeeds (profile_not_served, model_provider_required). */
   warnings?: string[];
-  /** install-hermes 가 실행한 설치 스크립트의 sha256(소문자 hex 64자). 비밀이 아니라 감사 기록이다. */
+  /** sha256 (lowercase hex, 64 chars) of the install script install-hermes ran. Not a secret — an audit record. */
   installerDigest?: string;
   /**
-   * 마지막으로 관측한 설치 이정표 코드(`deps`·`clone`·`venv`·`node_modules`·`skills`·`done`).
-   * 설치 출력의 원문이 아니라 미리 정한 코드 하나다.
+   * The last observed install milestone code (`deps`·`clone`·`venv`·`node_modules`·`skills`·`done`).
+   * A single predefined code, not raw install output.
    */
   progress?: string;
-  /** 설치 전 검사에서 빠진 시스템 패키지 코드(curl·git·cxx). 화면이 설치 명령을 만든다. */
+  /** System package codes missing in the pre-install check (curl·git·cxx). The UI builds the install command. */
   missingPackages?: string[];
-  /** 그 서버의 패키지 관리자(apt·dnf·pacman·macos). 모르면 없음. */
+  /** That server's package manager (apt·dnf·pacman·macos). Absent if unknown. */
   packageManager?: string;
   /**
-   * 성공한 단계 이름. `steps` 는 "시도한 것" 이라 성공 여부를 모른다 — 재개가 이 목록을 읽는다.
-   * 재개 잡은 앞선 잡의 목록을 그대로 물려받고 시작한다.
-   * 화면이 보는 "건너뜀" 은 `completed` 에 있으면서 `steps` 에 없는 단계다.
+   * Names of steps that succeeded. `steps` is "what was attempted" and does not know success — resume reads this list.
+   * A resume job starts by inheriting the previous job's list as-is.
+   * "Skipped" as the UI sees it is a step that is in `completed` but not in `steps`.
    */
   completed?: string[];
   /**
-   * 플러그인 갱신이 옛 버전의 워커 전파(프로필마다 링크)를 보고 운영자 설정을 켠 채로 이어받았다.
-   * 화면은 이것을 보고 "계속 켭니다 [끄기]" 를 한 번 알린다.
+   * The plugin update saw the old version's worker propagation (a link per profile) and carried it over with the
+   * operator setting on. The UI sees this and announces "계속 켭니다 [끄기]" once.
    */
   workerPropagationInherited?: boolean;
 };
-/** 모델 자격 증명 확인 결과. 판정이 애매하면 언제나 `unknown` 이고 설정을 실패시키지 않는다. */
+/** Model credential check result. Always `unknown` when the verdict is ambiguous, and never fails the setup. */
 export type SetupModelState = "ready" | "missing" | "unknown";
 export type SetupCapabilities = {
   local: boolean;
   ssh: boolean;
   hostLabel: string;
   sshHosts: { id: string; label: string }[];
-  /** 로컬이 열려 있고, 여기 Hermes 가 없고, 설치 스위치가 꺼지지 않았는가. */
+  /** Is local open, is Hermes absent here, and is the install switch not turned off? */
   canInstallHermes: boolean;
-  /** SSH 대상에 설치해도 되는가(호스트별 Hermes 유무는 탐색이 알려 준다). */
+  /** May we install on the SSH target? (Discovery reports whether each host has Hermes.) */
   canInstallHermesSsh?: boolean;
-  /** 이 서버 사용자 홈에 Hermes 가 설치돼 있는가. */
+  /** Is Hermes installed in this server user's home? */
   localHermesFound?: boolean;
-  /** 로컬을 못 여는 이유. 열려 있으면 null. */
+  /** Why local cannot be opened. null if open. */
   localReason?:
     "not_admin" | "disabled" | "unsupported_platform" | "container_without_hermes" | null;
-  /** SSH 를 못 여는 이유. 열려 있으면 null(등록된 호스트가 없어도 열린다 — 화면에서 등록한다). */
+  /** Why SSH cannot be opened. null if open (it opens even with no registered host — registration happens in the UI). */
   sshReason?: "not_admin" | "disabled" | "ssh_missing" | null;
 };
 /** Server-only secrets must never be serialized into setup responses. */
@@ -90,9 +90,9 @@ export type PreparedHost = {
   baseUrl: string;
   token: string;
   profiles: { name: string; token: string }[];
-  /** 실패가 아닌 경고 코드. 서버가 잡에 그대로 싣는다. */
+  /** Warning codes that are not failures. The server puts them on the job as-is. */
   warnings?: string[];
-  /** 준비가 끝난 뒤의 워커 전파 상태. 호스트가 알려 주지 않았으면 없음. */
+  /** Worker propagation state after setup finishes. Absent if the host did not report it. */
   workerPropagation?: WorkerPropagation;
 };
 export type SetupProvisionRequest = {
@@ -104,7 +104,7 @@ export type CommandResult = { stdout: string; stderr: string; code: number };
 export type HostExecutor = (
   command: string,
   args: string[],
-  /** `env` 는 argv 로 보낼 수 없는 값(Windows PowerShell 런처의 페이로드)을 자식 프로세스 환경에 얹는다. */
+  /** `env` puts values that cannot be sent via argv (the Windows PowerShell launcher's payload) into the child process environment. */
   options?: {
     input?: string;
     timeoutMs?: number;

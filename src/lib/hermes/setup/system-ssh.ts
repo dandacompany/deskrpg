@@ -1,15 +1,17 @@
 /**
- * 시스템 SSH 호스트 — Hermes Desktop 과 같은 방식.
+ * System SSH hosts — the same approach as Hermes Desktop.
  *
- * DeskRPG 서버를 돌리는 사용자의 `~/.ssh/config`·ssh-agent·키 파일을 그대로 쓴다. 전용 키를 만들지
- * 않고, 호스트 키는 Desktop 처럼 `StrictHostKeyChecking=accept-new`(처음 보는 키는 기록, 바뀐 키는 거절)다.
- * 대상은 config 별칭이나 호스트명이고 사용자·포트·키 경로는 선택이다. `BatchMode=yes` 라 비밀번호나
- * 패스프레이즈를 묻지 않는다 — 그런 키는 ssh-agent 에 먼저 올려야 한다.
+ * Uses the `~/.ssh/config`, ssh-agent and key files of the user running the DeskRPG server as-is. No dedicated key
+ * is created, and host keys use `StrictHostKeyChecking=accept-new` like Desktop (unseen keys are recorded, changed
+ * keys are rejected).
+ * The target is a config alias or hostname; user, port and key path are optional. With `BatchMode=yes` it never
+ * asks for a password or passphrase — such keys must be loaded into ssh-agent first.
  *
- * 쓸 수 있는 조건도 Desktop 과 같다: `ssh` 가 있고 서버 사용자에게 `~/.ssh` 가 있을 때.
- * 컨테이너처럼 그것이 없으면 이 방식은 숨고 DeskRPG 전용 키 등록(ssh-hosts.ts)만 남는다.
+ * The availability condition is also the same as Desktop: when `ssh` exists and the server user has `~/.ssh`.
+ * Where that's missing, like in a container, this approach hides and only DeskRPG's own key registration
+ * (ssh-hosts.ts) remains.
  *
- * 등록 목록은 `DESKRPG_HOME/ssh/system-hosts.json`(0600)에 둔다. 키 내용은 어디에도 저장하지 않는다.
+ * The registration list lives in `DESKRPG_HOME/ssh/system-hosts.json` (0600). Key contents are stored nowhere.
  */
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -32,7 +34,9 @@ const IPV6_RE = /^[0-9A-Fa-f:]{2,39}$/;
 const USER_RE = /^[a-z_][a-z0-9_.-]{0,31}$/;
 const CONTROL = /[\x00-\x1f\x7f]/;
 
-/** `~/.ssh/config` 의 `Host` 별칭 — 와일드카드·부정 패턴은 뺀다(Desktop 의 ssh-config.ts 와 같다). */
+/**
+ * `Host` aliases in `~/.ssh/config` — wildcard and negated patterns are excluded (same as Desktop's ssh-config.ts).
+ */
 export function parseSshConfigHosts(text: string): string[] {
   const hosts: string[] = [];
   for (const raw of text.split(/\r?\n/)) {
@@ -46,7 +50,8 @@ export function parseSshConfigHosts(text: string): string[] {
   return hosts;
 }
 
-/** `Include` 가 가리키는 파일들. 상대 경로는 `~/.ssh` 기준, 마지막 조각의 `*` 만 푼다. 읽기 전용이다. */
+/** Files referenced by `Include`. Relative paths are based on `~/.ssh`; only `*` in the last segment is expanded.
+ * Read-only. */
 function includeTargets(text: string, sshDir: string, home: string): string[] {
   const out: string[] = [];
   for (const raw of text.split(/\r?\n/)) {
@@ -68,7 +73,7 @@ function includeTargets(text: string, sshDir: string, home: string): string[] {
         for (const name of readdirSync(dir).sort())
           if (re.test(name)) out.push(path.join(dir, name));
       } catch {
-        /* 없는 Include 는 ssh 도 건너뛴다 */
+        /* ssh also skips a missing Include */
       }
     }
   }
@@ -96,7 +101,7 @@ export function readSshConfigHosts(home = os.homedir()): string[] {
   return hosts.slice(0, 256);
 }
 
-/** Desktop 방식을 쓸 수 있는가 — 서버 사용자에게 `~/.ssh` 가 있어야 agent·키·known_hosts 가 있다. */
+/** Whether the Desktop approach is usable — the server user needs `~/.ssh` for agent, keys and known_hosts. */
 export function systemSshAvailable(home = os.homedir()): boolean {
   try {
     return statSync(path.join(home, ".ssh")).isDirectory();
@@ -131,7 +136,7 @@ export function validateSystemTarget(
     if (keyRaw.length > 512 || CONTROL.test(keyRaw) || keyRaw.startsWith("-")) throw bad();
     const expanded = keyRaw.startsWith("~/") ? path.join(home, keyRaw.slice(2)) : keyRaw;
     if (!path.isAbsolute(expanded)) throw bad();
-    // 내용은 읽지 않는다. 파일이 있는지만 본다 — 오타를 "인증 실패" 로 헤매지 않게.
+    // Contents aren't read; only whether the file exists — so a typo isn't chased as an "auth failure".
     try {
       if (!statSync(expanded).isFile()) throw new Error("ssh_key_not_found");
     } catch {
@@ -146,7 +151,7 @@ export function labelOf(host: Omit<SystemHost, "id" | "label" | "addedAt">): str
   return `${host.user ? `${host.user}@` : ""}${host.target}${host.port ? `:${host.port}` : ""}`;
 }
 
-/** 시스템 SSH 로 부를 때의 인자 — `-F` 없이 서버 사용자 설정을 그대로 읽는다. */
+/** Arguments when calling via system SSH — reads the server user's config as-is, without `-F`. */
 export function systemSshArgs(host: SystemHost): string[] {
   return [
     ...(host.port ? ["-p", String(host.port)] : []),

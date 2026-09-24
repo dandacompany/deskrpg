@@ -22,16 +22,17 @@ const base = {
   remotePort: 8642,
 };
 
-test("win32 은 멀티플렉싱을 쓰지 않는다", () => {
+test("win32 does not use multiplexing", () => {
   assert.equal(usesControlMaster("win32"), false);
   assert.equal(usesControlMaster("darwin"), true);
   assert.equal(usesControlMaster("linux"), true);
 });
 
-test("win32 터널은 멀티플렉싱을 켜지 않는다", () => {
-  // 실제 SSH_OPTIONS 로 본다. 그 배열은 `ControlMaster=no`·`ControlPath=none` 을 포함하고,
-  // POSIX 갈래의 slice(0, -4) 는 바로 그 둘을 떼어 마스터를 켜는 장치다(executor.ts:6-21).
-  // 따라서 win32 가 전체 옵션을 쓰는 것이 곧 "mux 가 명시적으로 꺼진다" 는 뜻이다.
+test("win32 tunnels do not enable multiplexing", () => {
+  // Checked with the real SSH_OPTIONS. That array contains `ControlMaster=no`·`ControlPath=none`,
+  // and the POSIX branch's slice(0, -4) is exactly the device that strips those two to enable the master
+  // (executor.ts:6-21).
+  // So win32 using the full options is what "mux is explicitly off" means.
   const args = tunnelArgs({ ...base, routeOptions: [...SSH_OPTIONS], platform: "win32" });
   const joined = args.join(" ");
   assert.ok(joined.includes("ControlMaster=no"), "mux 는 명시적으로 꺼져야 한다");
@@ -45,12 +46,12 @@ test("win32 터널은 멀티플렉싱을 켜지 않는다", () => {
   assert.equal(args[args.length - 2], "--");
 });
 
-test("win32 터널은 로컬을 127.0.0.1 에만 묶는다", () => {
+test("win32 tunnels bind the local side only to 127.0.0.1", () => {
   const args = tunnelArgs({ ...base, platform: "win32" });
   assert.ok(!args.join(" ").includes("0.0.0.0"));
 });
 
-test("POSIX 터널 인자는 현행과 같다", () => {
+test("POSIX tunnel args are unchanged from current behavior", () => {
   const args = tunnelArgs({ ...base, platform: "linux" });
   assert.deepEqual(args, [
     "-F",
@@ -73,7 +74,7 @@ test("POSIX 터널 인자는 현행과 같다", () => {
   ]);
 });
 
-test("POSIX forward 인자는 제어 소켓을 쓴다", () => {
+test("POSIX forward args use the control socket", () => {
   const args = forwardArgs({
     platform: "linux",
     socket: "/tmp/s/master",
@@ -99,7 +100,7 @@ test("POSIX forward 인자는 제어 소켓을 쓴다", () => {
   ]);
 });
 
-test("win32 에서 forward 인자를 요구하면 거부한다", () => {
+test("rejects a request for forward args on win32", () => {
   assert.throws(
     () =>
       forwardArgs({

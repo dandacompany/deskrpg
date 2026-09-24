@@ -62,7 +62,7 @@ test("SSH identity failures redact raw stderr", async () => {
       !error.message.includes("SECRET"),
   );
 });
-test("키가 거절되면 연결 실패가 아니라 인증 실패로 알린다 — stderr 는 싣지 않는다", async () => {
+test("a rejected key is reported as an auth failure, not a connection failure — stderr is not included", async () => {
   process.env.DESKRPG_SETUP_SSH_HOSTS = "test-host";
   const executor = sshExecutor("test-host", async () => ({
     stdout: "",
@@ -106,7 +106,7 @@ test("oversized output is rejected and normal output stays internal", async () =
   assert.deepEqual(await normal, { stdout: "answer", stderr: "", code: 0 });
 });
 
-test("win32는 taskkill로 트리를 끊는다", () => {
+test("win32 cuts the tree with taskkill", () => {
   const runs: [string, string[]][] = [];
   killProcessTree(
     4242,
@@ -117,7 +117,7 @@ test("win32는 taskkill로 트리를 끊는다", () => {
   assert.deepEqual(runs, [["taskkill", ["/PID", "4242", "/T", "/F"]]]);
 });
 
-test("win32에서 taskkill이 실패하면 직계라도 죽인다", () => {
+test("if taskkill fails on win32, at least the direct child is killed", () => {
   const killed: number[] = [];
   killProcessTree(
     7,
@@ -130,7 +130,7 @@ test("win32에서 taskkill이 실패하면 직계라도 죽인다", () => {
   assert.deepEqual(killed, [7]);
 });
 
-test("비 win32는 프로세스 그룹을 죽인다", () => {
+test("non-win32 kills the process group", () => {
   const killed: [number, string][] = [];
   killProcessTree(
     9,
@@ -141,16 +141,17 @@ test("비 win32는 프로세스 그룹을 죽인다", () => {
   assert.deepEqual(killed, [[-9, "SIGKILL"]]);
 });
 
-test("executor 소스: win32 ssh 는 stdin/stdout 을 파일 fd 로 받고, 타입이 null 을 숨기지 않는다", () => {
-  // process.platform 을 바꿀 수 없어 이 갈래는 macOS 에서 실행되지 않는다. 구조로 고정한다.
-  // 실기 동작은 WinServer 에서 확인했다(stdin/stdout 파일, SSH discover 849ms).
+test("executor source: win32 ssh takes stdin/stdout as file fds, and the types don't hide null", () => {
+  // process.platform can't be changed, so this branch doesn't run on macOS. We pin it by structure.
+  // Real behavior was confirmed on WinServer (stdin/stdout files, SSH discover 849ms).
   const source = readFileSync(new URL("./executor.ts", import.meta.url), "utf-8");
   assert.match(
     source,
     /const stdio: StdioOptions = \[\s*stdinFd !== undefined \? stdinFd : "pipe",\s*stdoutFd,/,
     "파일 갈래의 stdio 는 파이프가 아니라 파일 fd 여야 한다",
   );
-  // 캐스트로 null 가능성을 지우면 타입 검사가 역참조를 놓친다 — 실제로 결함 하나가 그렇게 통과했다.
+  // Erasing the null possibility with a cast makes type checking miss the dereference — one defect actually got
+  // through that way.
   assert.equal(
     source.includes("as ChildProcessWithoutNullStreams"),
     false,
@@ -161,9 +162,9 @@ test("executor 소스: win32 ssh 는 stdin/stdout 을 파일 fd 로 받고, 타�
   assert.match(source, /child\.stderr\?\.on\(/, "stderr 은 null 일 수 있다");
 });
 
-// --- 임시 stdio 는 파일 단위가 아니라 전용 디렉터리 단위로 보호한다 ---
+// --- Temporary stdio is protected per dedicated directory, not per file ---
 
-test("secureStdioDir: win32 는 빈 디렉터리에 ACL 을 한 번 건다", () => {
+test("secureStdioDir: win32 applies the ACL once to an empty directory", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "deskrpg-acl-test-"));
   const calls: string[] = [];
   const result = secureStdioDir(
@@ -171,7 +172,7 @@ test("secureStdioDir: win32 는 빈 디렉터리에 ACL 을 한 번 건다", () 
     () => dir,
     (d) => {
       calls.push(d);
-      // 권한을 좁히는 시점에 디렉터리는 비어 있어야 한다 — 토큰 파일이 먼저 생기면 안 된다.
+      // The directory must be empty when permissions are narrowed — a token file must not exist first.
       assert.deepEqual(readdirSync(d), []);
     },
   );
@@ -180,7 +181,7 @@ test("secureStdioDir: win32 는 빈 디렉터리에 ACL 을 한 번 건다", () 
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("secureStdioDir: ACL 실패는 fail-closed — 던지고 디렉터리를 남기지 않는다", () => {
+test("secureStdioDir: ACL failure is fail-closed — throws and leaves no directory", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "deskrpg-acl-fail-"));
   assert.throws(() =>
     secureStdioDir(
@@ -194,7 +195,7 @@ test("secureStdioDir: ACL 실패는 fail-closed — 던지고 디렉터리를 �
   assert.equal(existsSync(dir), false, "실패하면 디렉터리를 지운다");
 });
 
-test("secureStdioDir: posix 는 icacls 를 부르지 않고 0700 으로 좁힌다", () => {
+test("secureStdioDir: posix doesn't call icacls and narrows to 0700", () => {
   let hardened = false;
   const dir = secureStdioDir(
     "linux",
@@ -208,12 +209,12 @@ test("secureStdioDir: posix 는 icacls 를 부르지 않고 0700 으로 좁힌�
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("executor 소스: 파일 단위 icacls 도, 파일 단위 삭제도 남아 있지 않다", () => {
+test("executor source: neither per-file icacls nor per-file deletion remains", () => {
   const source = readFileSync(new URL("./executor.ts", import.meta.url), "utf-8");
   const icacls = source.match(/execFileSync\(\s*"icacls",\s*\[[^\]]*\]/g) ?? [];
   assert.equal(icacls.length, 1, "icacls 호출은 디렉터리용 하나뿐이어야 한다");
   assert.match(icacls[0], /\[dir,/, "icacls 대상은 디렉터리여야 한다");
-  // (OI)(CI) 가 없으면 디렉터리만 좁혀지고 그 안의 토큰 파일은 SYSTEM·Administrators 를 상속받는다.
+  // Without (OI)(CI) only the directory is narrowed, and token files inside inherit SYSTEM/Administrators.
   assert.match(icacls[0], /:\(OI\)\(CI\)F/, "파일로 상속되려면 (OI)(CI) 를 명시해야 한다");
   assert.ok(
     !/stdinFile|stdoutFile/.test(icacls[0]),
@@ -222,7 +223,7 @@ test("executor 소스: 파일 단위 icacls 도, 파일 단위 삭제도 남아 
   assert.equal(source.includes("unlinkSync"), false, "파일 단위 삭제가 남아 있으면 안 된다");
 });
 
-test("executor 소스: 정리는 removeStdioDir 로 디렉터리째 한 번만 한다", () => {
+test("executor source: cleanup is done once, for the whole directory, via removeStdioDir", () => {
   const source = readFileSync(new URL("./executor.ts", import.meta.url), "utf-8");
   const body = source.slice(source.indexOf("export function createExecutor"));
   const removals = body.match(/rmSync\(/g) ?? [];
@@ -231,14 +232,15 @@ test("executor 소스: 정리는 removeStdioDir 로 디렉터리째 한 번만 �
     body,
     /const removeStdioDir = \(\): boolean => \{[\s\S]*?rmSync\(stdioDir, \{ recursive: true, force: true \}\)/,
   );
-  // finish() 가 유일한 종결 경로이고, 그 안에서 지운다 — 리스너 등록 순서와 무관하다.
+  // finish() is the only termination path, and deletion happens inside it — independent of listener
+  // registration order.
   const finish = body.slice(body.indexOf("const finish ="), body.indexOf("const abort ="));
   assert.ok(finish.includes("removeStdioDir()"), "finish() 안에서 정리해야 한다");
 });
 
-test("executor 소스: 오류 경로는 자식을 죽인 뒤에 임시 파일을 지운다", () => {
-  // 타임아웃·취소·output_limit 에서는 ssh.exe 가 살아서 stdin.in·stdout.out 핸들을 쥐고 있다.
-  // 먼저 지우려 들면 Windows 에서 공유 위반으로 실패하고, 토큰이 실린 payload 가 %TEMP% 에 남는다.
+test("executor source: the error path deletes temp files after killing the child", () => {
+  // On timeout, cancel, or output_limit, ssh.exe is still alive holding the stdin.in and stdout.out handles.
+  // Trying to delete first fails with a sharing violation on Windows, leaving the token-bearing payload in %TEMP%.
   const source = readFileSync(new URL("./executor.ts", import.meta.url), "utf-8");
   const body = source.slice(source.indexOf("export function createExecutor"));
   const finish = body.slice(body.indexOf("const finish ="), body.indexOf("const abort ="));
@@ -248,12 +250,12 @@ test("executor 소스: 오류 경로는 자식을 죽인 뒤에 임시 파일을
   assert.ok(kill >= 0 && cleanup >= 0, "오류 경로에 kill 과 정리가 둘 다 있어야 한다");
   assert.ok(kill < cleanup, "정리는 killProcessTree 뒤여야 한다");
   assert.ok(cleanup < errorBranch.indexOf("reject("), "정리는 reject 전에 시도해야 한다");
-  // 자식이 죽는 데 시간이 걸리므로 첫 시도가 실패하면 한 틱 뒤에 다시 시도한다.
+  // The child takes time to die, so if the first attempt fails it retries one tick later.
   assert.match(
     errorBranch,
     /if \(!removeStdioDir\(\)\) setTimeout\(removeStdioDir, 0\)\.unref\(\)/,
   );
-  // 성공 경로는 자식이 이미 죽어 있으므로 그대로 한 번만 지운다.
+  // On the success path the child is already dead, so it just deletes once.
   const successBranch = finish.slice(finish.indexOf("} else {"));
   assert.match(successBranch, /removeStdioDir\(\);\s*resolve\(/);
 });

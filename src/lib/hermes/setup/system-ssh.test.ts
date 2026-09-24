@@ -17,14 +17,14 @@ function tempHome() {
   return mkdtempSync(path.join(os.tmpdir(), "deskrpg-sysssh-"));
 }
 
-test("config 별칭 — 와일드카드·부정 패턴은 빼고 순서를 지킨다", () => {
+test("config aliases — drops wildcard/negated patterns and keeps order", () => {
   assert.deepEqual(
     parseSshConfigHosts("Host my-server nas\n  User deploy\nHost *\nhost !bad web-1 *.x\n"),
     ["my-server", "nas", "web-1"],
   );
 });
 
-test("Include 를 따라 별칭을 모은다(상대 경로·마지막 조각 *)", () => {
+test("follows Include to collect aliases (relative paths, trailing *)", () => {
   const home = tempHome();
   try {
     mkdirSync(path.join(home, ".ssh", "conf.d"), { recursive: true });
@@ -38,7 +38,7 @@ test("Include 를 따라 별칭을 모은다(상대 경로·마지막 조각 *)"
   }
 });
 
-test("~/.ssh 가 없으면 Desktop 방식은 숨는다(컨테이너)", () => {
+test("the Desktop method hides when ~/.ssh is missing (container)", () => {
   const home = tempHome();
   try {
     assert.equal(systemSshAvailable(home), false);
@@ -48,7 +48,7 @@ test("~/.ssh 가 없으면 Desktop 방식은 숨는다(컨테이너)", () => {
   }
 });
 
-test("대상 검증 — 옵션 주입·제어문자·메타데이터 주소를 거절하고 키 파일은 있어야 한다", () => {
+test("target validation — rejects option injection, control characters and metadata addresses; key file must exist", () => {
   const home = tempHome();
   try {
     mkdirSync(path.join(home, ".ssh"));
@@ -88,7 +88,7 @@ test("대상 검증 — 옵션 주입·제어문자·메타데이터 주소를 �
   }
 });
 
-test("시스템 호스트 인자는 -F 없이 선택값만 싣고, 목록은 0600 파일에 남는다", async () => {
+test("system host args carry only the selection without -F, and the list stays in a 0600 file", async () => {
   const home = tempHome();
   try {
     const store = createSystemSsh(home);

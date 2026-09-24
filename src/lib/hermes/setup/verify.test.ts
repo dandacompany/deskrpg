@@ -36,7 +36,7 @@ test("reject bad API credential before calling plugin route", async () => {
   );
   assert.equal(responses.length, 0);
 });
-test("plugin_ready 판정에는 자동화 계약 블록(info)이 함께 온다 — 설정 마법사가 캐시한다 (T4)", async () => {
+test("the plugin_ready verdict comes with the automation contract block (info) — the setup wizard caches it (T4)", async () => {
   const responses = [
     json({ platform: "hermes-agent" }),
     json({ data: [] }),

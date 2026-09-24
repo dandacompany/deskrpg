@@ -1,26 +1,26 @@
 import type { SetupModelState } from "./types";
 
 const OFF = new Set(["0", "false", "no", "off"]);
-/** 운영자가 끈 스위치인가. 비어 있으면 켜짐이다 — 이 스위치들은 거절용이다. */
+/** Whether the operator turned the switch off. Empty means on — these switches exist for refusing. */
 function switchedOff(value: string | undefined) {
   return OFF.has((value ?? "").trim().toLowerCase());
 }
 
 /**
- * 호스트(로컬·SSH)에서 명령을 실행하는 설정 마법사를 열어도 되는가.
+ * Whether the setup wizard that runs commands on the host (local/SSH) may be opened.
  *
- * 2026-09-19 단테 결정: `system_admin` 이면 환경변수 없이 연다. 호스트 설정은 서버 프로세스 권한으로
- * 명령을 실행하므로 여전히 관리자만이다 — 게이트웨이 레코드 소유자는 "이 머신의 주인" 이 아니다.
- * 운영자는 `DESKRPG_HOST_SETUP_ENABLED=0` 으로 끌 수 있다(예전에는 `1` 로 켜야 했다).
+ * 2026-09-19 Dante's decision: `system_admin` opens it without an env var. Host setup runs commands with the server
+ * process's privileges, so it's still admin-only — the gateway record owner is not "the owner of this machine".
+ * Operators can turn it off with `DESKRPG_HOST_SETUP_ENABLED=0` (previously it had to be turned on with `1`).
  */
 export function hostSetupAllowed(env: Record<string, string | undefined>, role?: string) {
   return role === "system_admin" && !switchedOff(env.DESKRPG_HOST_SETUP_ENABLED);
 }
 
 /**
- * Hermes 설치 — DeskRPG 가 호스트에서 외부 설치 스크립트를 실행하는 유일한 경로다.
- * 호스트 게이트에 더해 `DESKRPG_HERMES_INSTALL_ENABLED=0` 으로 따로 끌 수 있다. 로컬과 SSH 에서 연다
- * (SSH 는 관리자가 등록하고 지문을 확인한 호스트에만 닿는다).
+ * Hermes install — the only path by which DeskRPG runs an external install script on the host.
+ * Besides the host gate it can be turned off separately with `DESKRPG_HERMES_INSTALL_ENABLED=0`. Opened for local
+ * and SSH (SSH only reaches hosts the admin registered and whose fingerprint was confirmed).
  */
 export function hermesInstallAllowed(
   env: Record<string, string | undefined>,
@@ -99,7 +99,8 @@ const SAFE_CODES = new Set([
   "hermes_version_unsupported",
   "plugin_install_failed",
   "plugin_update_failed",
-  // 갱신 전용 — 주소는 닿지만 그 호스트에서 명령을 돌릴 수 없다(컨테이너에서 본 호스트 주소 등).
+  // Update-only — the address is reachable but commands can't run on that host (e.g. a host address seen from a
+  // container).
   "plugin_update_unsupported_host",
   "plugin_update_candidate_not_found",
   "plugin_verify_failed",
@@ -168,16 +169,16 @@ const SAFE_CODES = new Set([
   "hermes_installer_unavailable",
   "resume_unavailable",
 ]);
-/** 실패가 아닌 알림. 잡의 `warnings` 로만 나가고 오류 경로에는 절대 오르지 않는다. */
+/** A notice, not a failure. Goes out only in the job's `warnings` and never onto the error path. */
 export const SETUP_WARNING_CODES = new Set([
   "profile_not_served",
   "model_provider_required",
   "linger_required",
-  // Windows 스케줄 작업은 로그아웃 뒤 계속 도는 것이 아니라 다음 로그온에 뜬다.
+  // A Windows scheduled task doesn't keep running after logout; it starts at the next logon.
   "logon_required",
 ]);
 const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
-/** 호스트와 같은 규칙. 예약어에는 `default` 가 포함된다 — 소유자 키는 configure 가 다룬다. */
+/** Same rules as the host. Reserved words include `default` — the owner key is handled by configure. */
 export const RESERVED_PROFILE_NAMES = new Set(["hermes", "test", "tmp", "root", "sudo", "default"]);
 export function validateProfileName(value: unknown): string {
   if (typeof value !== "string") throw new Error("profile_name_invalid");
@@ -195,36 +196,37 @@ export function validateProfileDescription(value: unknown): string | undefined {
   return trimmed;
 }
 /**
- * 마법사가 대안 포트를 고르는 범위. 호스트도 같은 범위를 쓴다.
- * 수락된 값은 화면이 명시적 동의를 받은 뒤에만 올라온다.
+ * The range the wizard picks alternative ports from. The host uses the same range.
+ * An accepted value is only submitted after the screen has obtained explicit consent.
  */
 export const SETUP_PORT_SUGGEST_MIN = 8642;
 export const SETUP_PORT_SUGGEST_MAX = 8699;
-/** `set-port` 가 받는 값. 제안 범위보다 넓게 허용하되 예약 포트와 범위 밖은 거부한다. */
+/** Values accepted by `set-port`. Allows wider than the suggestion range but rejects reserved and out-of-range
+ * ports. */
 export function validateSetupPort(value: unknown): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 1024 || value > 65535)
     throw new Error("setup_invalid_request");
   return value;
 }
 const TIMEZONE = /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+\-.]+)*$/;
-/** IANA 이름 모양만 통과시킨다. 실제 존재 여부는 호스트가 판정한다. */
+/** Only lets IANA-name shapes through. Actual existence is decided by the host. */
 export function validateTimezone(value: unknown): string {
   if (typeof value !== "string") throw new Error("timezone_invalid");
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > 64 || !TIMEZONE.test(trimmed))
     throw new Error("timezone_invalid");
-  // 모양 검사만으로는 `Asia/../Seoul` 이 통과한다. Python 의 zoneinfo 는 그런 이름을 거부하므로
-  // 위험하진 않지만, 운영자의 config.yaml 에 해석 불가능한 값을 남기게 된다 — 여기서 자른다.
+  // A shape check alone lets `Asia/../Seoul` through. Python's zoneinfo rejects such names, so
+  // it isn't dangerous, but it would leave an unresolvable value in the operator's config.yaml — cut it here.
   if (trimmed.split("/").some((segment) => segment === "." || segment === ".."))
     throw new Error("timezone_invalid");
   return trimmed;
 }
 /**
- * 잡에 남길 경고 목록을 만든다.
+ * Builds the list of warnings to leave on the job.
  *
- * 방금 설치한 Hermes 에는 모델 자격 증명이 있을 수 없다. 원래는 모델 목록이 비었는지로
- * 판정하려 했는데, 제공자가 하나도 없어도 `/v1/models` 가 200 과 모델 하나를 돌려준다(실측:
- * MiniPC 신규 계정). 그래서 "설치를 했다" 는 사실 자체를 신호로 쓴다.
+ * A freshly installed Hermes can't have model credentials. Originally this was to be judged by whether the model
+ * list was empty, but `/v1/models` returns 200 and one model even with no providers (measured: new MiniPC account).
+ * So the fact "we installed it" is itself used as the signal.
  */
 export function collectSetupWarnings(
   hostWarnings: string[] | undefined,
@@ -232,7 +234,7 @@ export function collectSetupWarnings(
   modelState?: SetupModelState,
 ) {
   const warnings = [...new Set(hostWarnings ?? [])];
-  // 확인이 가능하면 확인이 이긴다. `ready` 는 "방금 설치했다" 는 추정을 덮는다.
+  // If confirmation is possible, confirmation wins. `ready` overrides the "just installed" assumption.
   if (modelState === "ready")
     return warnings.filter((warning) => warning !== "model_provider_required");
   const required = modelState === "missing" || installedHermes;

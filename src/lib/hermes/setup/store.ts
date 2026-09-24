@@ -6,7 +6,7 @@ import type { SetupJob } from "./types";
 
 type StoredJob = {
   userId: string;
-  /** 잡이 어느 대상(local / ssh:<host>)의 것인지. 재개는 같은 대상에만 허용된다. 화면에 나가지 않는다. */
+  /** Which target (local / ssh:<host>) the job belongs to. Resume is allowed only for the same target. Not exposed to the UI. */
   target?: string;
   pid: number;
   createdAt: number;
@@ -60,7 +60,7 @@ export class SetupJobStore {
       id: randomUUID(),
       status: "running",
       steps: [],
-      // 재개 잡은 앞선 잡이 끝낸 단계를 물려받고 시작한다 — 되돌리지 않고 다시 하지도 않는다.
+      // A resume job starts by inheriting the steps the previous job finished — neither reverting nor redoing them.
       ...(seed?.completed?.length ? { completed: [...new Set(seed.completed)] } : {}),
     };
     this.write({
@@ -74,8 +74,8 @@ export class SetupJobStore {
     return job;
   }
   /**
-   * 재개할 수 있는 잡만 돌려준다: 같은 사용자·같은 대상·상태 `failed`.
-   * 하나라도 어긋나면 `setup_not_found` 다 — 남의 잡의 존재 여부조차 알려 주지 않는다.
+   * Returns only resumable jobs: same user, same target, status `failed`.
+   * If anything differs it is `setup_not_found` — not even revealing whether someone else's job exists.
    */
   resumable(userId: string, id: string, target: string): SetupJob {
     const record = this.read(userId, id);

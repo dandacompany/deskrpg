@@ -15,7 +15,7 @@ import test from "node:test";
 
 import { HOST_LAUNCHER } from "./host-helper";
 
-/** 격리된 HOME·PATH 에서 런처를 실제 /bin/sh 로 돌린다. 시스템 python3 는 PATH 에 없다. */
+/** Runs the launcher on a real /bin/sh with an isolated HOME/PATH. The system python3 is not on PATH. */
 function sandbox() {
   const root = mkdtempSync(path.join(os.tmpdir(), "deskrpg-launcher-"));
   const home = path.join(root, "home");
@@ -37,7 +37,7 @@ function sandbox() {
       encoding: "utf8",
       timeout: 10000,
     }).stdout;
-  /** curl·git·C++ 컴파일러가 있는 서버 — 설치 전 검사를 통과한다. */
+  /** A server with curl, git and a C++ compiler — passes the pre-install check. */
   const tools = () => {
     script(path.join(bin, "git"), "echo git version 2.0");
     script(path.join(bin, "g++"), "exit 0");
@@ -54,7 +54,7 @@ function sandbox() {
   };
 }
 
-test("Hermes venv 파이썬이 있으면 그것으로 돈다", () => {
+test("runs with the Hermes venv python when present", () => {
   const s = sandbox();
   try {
     s.script(path.join(s.home, ".hermes/hermes-agent/venv/bin/python"), 'echo "venv:$2"');
@@ -65,7 +65,7 @@ test("Hermes venv 파이썬이 있으면 그것으로 돈다", () => {
   }
 });
 
-test("venv 가 없으면 시스템 python3 를 쓴다", () => {
+test("uses the system python3 when there is no venv", () => {
   const s = sandbox();
   try {
     s.tools();
@@ -76,7 +76,7 @@ test("venv 가 없으면 시스템 python3 를 쓴다", () => {
   }
 });
 
-test("파이썬이 하나도 없으면 탐색은 정해 준 JSON 을 그대로 돌려준다(→ 설치 제안)", () => {
+test("with no python at all, discovery returns the given JSON as-is (-> install offer)", () => {
   const s = sandbox();
   try {
     assert.equal(s.run("run"), '{"candidates": []}');
@@ -85,7 +85,7 @@ test("파이썬이 하나도 없으면 탐색은 정해 준 JSON 을 그대로 �
   }
 });
 
-test("sudo 없이 못 까는 패키지가 빠졌으면 설치 전에 목록과 배포판을 돌려준다", () => {
+test("when packages that can't be installed without sudo are missing, returns the list and distro before install", () => {
   const s = sandbox();
   try {
     s.script(path.join(s.bin, "sudo"), "exit 1");
@@ -101,13 +101,13 @@ test("sudo 없이 못 까는 패키지가 빠졌으면 설치 전에 목록과 �
   }
 });
 
-test("설치인데 python3 가 없으면 uv 를 ~/.hermes/bin 에 받고, uv 파이썬으로 구동기를 돌린다", () => {
+test("install without python3 downloads uv into ~/.hermes/bin and runs the driver with uv python", () => {
   const s = sandbox();
   try {
     s.tools();
     const py = path.join(s.root, "uvpython", "python3.12");
     s.script(py, 'echo "uv-python:$2"');
-    // 가짜 curl: -o 대상에 "uv 설치 스크립트" 를 쓴다. 그 스크립트는 UV_UNMANAGED_INSTALL 에 uv 를 만든다.
+    // Fake curl: writes a "uv install script" to the -o target. That script creates uv in UV_UNMANAGED_INSTALL.
     s.script(
       path.join(s.bin, "curl"),
       `out=""; while [ $# -gt 0 ]; do [ "$1" = "-o" ] && out=$2; shift; done
@@ -128,7 +128,7 @@ UV`,
   }
 });
 
-test("~/.hermes 가 심볼릭 링크면 아무것도 받지 않는다", () => {
+test("downloads nothing when ~/.hermes is a symlink", () => {
   const s = sandbox();
   try {
     mkdirSync(path.join(s.root, "elsewhere"));
@@ -141,7 +141,7 @@ test("~/.hermes 가 심볼릭 링크면 아무것도 받지 않는다", () => {
   }
 });
 
-test("패키지 명령 — 배포판별로 만들고, 모르는 배포판은 null", async () => {
+test("package commands — built per distro, null for an unknown distro", async () => {
   const { packageManagerFor, parseSystemPackages, systemPackagesCommand } =
     await import("./system-packages");
   const pkgs = parseSystemPackages(" git cxx evil;rm ");

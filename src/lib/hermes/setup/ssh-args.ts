@@ -1,10 +1,10 @@
 /**
- * SSH 인자 조립. 순수 함수라 맥에서 win32 경로를 그대로 테스트한다 — 상류 Hermes Desktop 의
- * `ssh-connection.ts` 도 같은 이유로 "Command construction (pure)" 를 따로 뽑아 두었다.
+ * SSH argument assembly. It is a pure function, so win32 paths are tested as-is on a Mac — upstream Hermes Desktop's
+ * `ssh-connection.ts` also split out "Command construction (pure)" for the same reason.
  *
- * Windows OpenSSH 는 ControlMaster mux 소켓을 구현한 적이 없다. 그래서 win32 에서는 제어 소켓을
- * 쓰지 않고 터널마다 `ssh -N -L` 자식 하나를 띄운다. 인증 핸드셰이크 재사용을 잃지만 우리는
- * 게이트웨이당 터널 하나라 영향이 작다.
+ * Windows OpenSSH has never implemented ControlMaster mux sockets. So on win32 we do not use a control socket
+ * and instead spawn one `ssh -N -L` child per tunnel. We lose auth-handshake reuse, but we have
+ * one tunnel per gateway, so the impact is small.
  */
 import { isWindows, nullDevicePath } from "./platform";
 
@@ -12,7 +12,7 @@ export function usesControlMaster(platform: string): boolean {
   return !isWindows(platform);
 }
 
-/** 포워드 명세. 로컬은 언제나 127.0.0.1 이다 — 터널이 바깥에 열리면 안 된다. */
+/** Forward spec. The local side is always 127.0.0.1 — the tunnel must not be exposed externally. */
 function forwardSpec(localPort: number, remotePort: number): string {
   return `127.0.0.1:${localPort}:127.0.0.1:${remotePort}`;
 }
@@ -28,7 +28,7 @@ export function tunnelArgs(input: {
 }): string[] {
   const common = ["-o", "ExitOnForwardFailure=yes", "-N", "-T", "--", input.dest];
   if (!usesControlMaster(input.platform)) {
-    // 제어 소켓이 없다. 포워드를 이 자식이 직접 연다.
+    // No control socket. This child opens the forward itself.
     return [
       ...input.routeArgs,
       ...input.routeOptions,
@@ -39,7 +39,7 @@ export function tunnelArgs(input: {
   }
   return [
     ...input.routeArgs,
-    // 현행과 같다 — 마지막 옵션 쌍 두 개를 떼고 마스터 옵션을 붙인다.
+    // Same as current behavior — drop the last two option pairs and append the master options.
     ...input.routeOptions.slice(0, -4),
     "-M",
     "-S",

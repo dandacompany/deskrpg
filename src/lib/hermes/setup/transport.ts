@@ -62,8 +62,8 @@ async function forwardThroughMaster(
 }
 
 /**
- * no-mux(win32) 준비 확인. 제어 소켓이 성사를 알려 주지 않으므로 로컬 포트에 실제로 연결해 본다.
- * `ExitOnForwardFailure=yes` 라 포워드가 실패하면 자식이 스스로 죽고, 그건 호출부가 본다.
+ * no-mux (win32) readiness check. The control socket does not report success, so we actually connect to the local port.
+ * With `ExitOnForwardFailure=yes`, the child dies on its own if the forward fails, and the caller sees that.
  */
 async function probeLocalPort(port: number) {
   await new Promise<void>((resolve, reject) => {
@@ -127,9 +127,10 @@ export async function ensureSshTunnel(
       const text = chunk.toString();
       if (/REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed/i.test(text))
         failure = "ssh_host_key_failed";
-      // no-mux 에서는 `-O forward` 의 stderr 가 아니라 이 자식이 포트 충돌 문장을 낸다. POSIX 마스터도
-      // 같은 문장을 낼 수 있지만(예: 사용자 ssh_config 의 LocalForward 충돌) 거긴 forwardThroughMaster
-      // 가 이미 그 판정을 하므로 이 자식에서는 no-mux 에만 좁힌다 — 아니면 무해한 문장에도 즉시 실패한다.
+      // With no-mux, this child (not the stderr of `-O forward`) emits the port-conflict message. A POSIX master can
+      // emit the same message too (e.g. a LocalForward conflict in the user's ssh_config), but there
+      // forwardThroughMaster already makes that call, so this child narrows it to no-mux only — otherwise it fails
+      // immediately on harmless messages.
       if (
         !usesControlMaster(process.platform) &&
         /cannot listen|Address already in use|cannot bind/i.test(text)
@@ -160,8 +161,8 @@ export async function ensureSshTunnel(
         try {
           await ready();
           if (!usesControlMaster(process.platform)) {
-            // 프로브 성공은 다른 로컬 프로세스가 이 포트를 이미 잡았을 가능성을 배제하지 못한다
-            // (TOCTOU). 자식의 bind 실패가 stderr 로 드러날 시간을 짧게 준다.
+            // A successful probe does not rule out another local process already holding this port
+            // (TOCTOU). Give the child's bind failure a short time to surface on stderr.
             await new Promise((r) => setTimeout(r, 75));
           }
           if (exited || failure) throw new Error(failure || "ssh_connection_failed");
@@ -243,9 +244,9 @@ function registry() {
   );
 }
 /**
- * 등록된 ssh 주소에서 **어느 호스트의 몇 번 포트인지**를 되찾는다. 터널을 열지 않는다 —
- * 갱신처럼 "이 게이트웨이의 호스트에서 명령을 돌려야 하는" 동작이 대상을 정할 때 쓴다.
- * 우리 주소가 아니거나 레지스트리에 없으면 null 이다.
+ * Recovers **which host and which port** from a registered ssh address. Does not open a tunnel —
+ * used when an action like update, which "must run a command on this gateway's host", picks its target.
+ * null if it is not our address or not in the registry.
  */
 export async function readSshTransportTarget(
   url: string,

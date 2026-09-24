@@ -240,14 +240,14 @@ print(json.dumps(main('discover')))
 `,
     { env: "API_SERVER_KEY=private-default-valid-key\n" },
   );
-  // 게이트웨이는 default 하나다 — 프로필은 후보가 아니라 그 후보의 내용이다.
+  // There is only one gateway, default — profiles are not candidates but the content of that candidate.
   assert.equal(result.body.candidates.length, 1);
   assert.equal(result.body.candidates[0].label, "Hermes default");
   assert.deepEqual(result.body.candidates[0].profiles, ["sophie"]);
   assert.equal(result.body.candidates[0].gatewayState, "stopped");
   assert.ok(!JSON.stringify(result.body).includes("private"));
 });
-test("프로필 폴더를 게이트웨이로 고르는 후보 ID 는 받지 않는다", () => {
+test("does not accept a candidate ID that picks a profile folder as the gateway", () => {
   const result = fixture(String.raw`
 child = ROOT / 'profiles' / 'sophie'
 child.mkdir(parents=True)
@@ -256,7 +256,7 @@ entry('configure', hashlib.sha256(str(child).encode()).hexdigest())
   assert.equal(result.body.error, "candidate_changed");
   assert.equal(result.config, "{}");
 });
-test("게이트웨이 상태 — 실행 중·중지·프로필 게이트웨이 따로 실행", () => {
+test("gateway status — running, stopped, profile gateway running separately", () => {
   const result = fixture(String.raw`
 (ROOT / 'profiles' / 'sophie').mkdir(parents=True)
 (ROOT / 'profiles' / 'mia').mkdir(parents=True)
@@ -407,10 +407,10 @@ print(json.dumps(calls))
   );
   assert.deepEqual(result.body, [["systemctl", "--user", "restart", "hermes-gateway.service"]]);
 });
-// --- 재시작 제한: 게이트웨이의 정상 종료(드레인)를 기다린다 ------------------------------------
-// Hermes 유닛은 TimeoutStopSec(기본 70초, cron 드레인 설정에 따라 더 길다), launchd 는 ExitTimeOut 60초다.
-// 예전 25초 제한은 성공한 재시작을 host_operation_failed 로 보고했다(실측 종료 31초).
-test("재시작은 서비스 정지 한도에 기동 여유를 더한 만큼 기다린다(하한 90·상한 300초)", () => {
+// --- Restart limit: wait for the gateway's graceful shutdown (drain) ------------------------------------
+// Hermes units have TimeoutStopSec (default 70s, longer depending on cron drain settings); launchd has ExitTimeOut 60s.
+// The old 25s limit reported successful restarts as host_operation_failed (observed shutdown: 31s).
+test("restart waits for the service stop limit plus startup slack (floor 90, cap 300s)", () => {
   const result = fixture(
     String.raw`
 seen = []
@@ -432,7 +432,7 @@ print(json.dumps(seen))
   );
   assert.deepEqual(result.body, [100, 90, 300, 90]);
 });
-test("제한 안에 끝나는 느린 재시작은 성공이다", () => {
+test("a slow restart that finishes within the limit is a success", () => {
   const result = fixture(
     String.raw`
 def slow(name, home):
@@ -447,7 +447,7 @@ entry('restart', id)
   );
   assert.deepEqual(result.body, { ok: true });
 });
-test("제한을 넘긴 재시작은 원인 없는 host_operation_failed 가 아니라 gateway_restart_failed 다", () => {
+test("a restart exceeding the limit is gateway_restart_failed, not a causeless host_operation_failed", () => {
   const result = fixture(
     String.raw`
 RESTART_MIN = 1
@@ -465,7 +465,7 @@ entry('restart', id)
   );
   assert.deepEqual(result.body, { error: "gateway_restart_failed" });
 });
-test("정지 한도는 Hermes 가 쓴 유닛의 TimeoutStopSec 과 plist 의 ExitTimeOut 에서 읽는다", () => {
+test("stop limit is read from TimeoutStopSec in the Hermes-written unit and ExitTimeOut in the plist", () => {
   const result = fixture(
     String.raw`
 print(json.dumps([
@@ -481,7 +481,7 @@ print(json.dumps([
   );
   assert.deepEqual(result.body, [70, 190, null, null, 60, null, null]);
 });
-test("재시작 호출의 바깥 제한은 헬퍼의 최대 재시작 제한보다 넉넉하다", async () => {
+test("the outer limit of the restart call is more generous than the helper's maximum restart limit", async () => {
   const seen: (number | undefined)[] = [];
   const execute: HostExecutor = async (_command, _args, options) => {
     seen.push(options?.timeoutMs);
@@ -508,7 +508,8 @@ test("재시작 호출의 바깥 제한은 헬퍼의 최대 재시작 제한보�
   await prepareHost(execute, candidate.id, (s) => steps.push(s));
   const restartIndex = steps.indexOf("restarting_gateway");
   assert.ok(restartIndex > 0);
-  // 헬퍼 상한 300초 + 파이썬 기동·잠금 여유. 이보다 짧으면 바깥이 먼저 끊겨 원인이 command_timeout 으로 바뀐다.
+  // Helper cap of 300s + python startup/lock slack. Anything shorter cuts off outside first and the cause turns into
+  // command_timeout.
   assert.ok((seen[restartIndex] ?? 0) >= 330_000, String(seen[restartIndex]));
 });
 test("SSH host-key failures retain an actionable sanitized code", async () => {
@@ -685,7 +686,7 @@ print(json.dumps(main('inspect',id)))
 `,
     { config: { gateway: { multiplex_profiles: true } } },
   );
-  // 계약 2: 형제 프로필도 키가 없고 외부 제공자를 쓰지 않으면 발급 대상이다.
+  // Contract 2: a sibling profile is also an issuance target if it has no key and doesn't use an external provider.
   assert.deepEqual(result.body.profiles, [
     { name: "default", hasToken: false, canProvision: true },
     { name: "sophie", hasToken: false, canProvision: true },
@@ -761,7 +762,7 @@ entry('install',id)
   assert.deepEqual(result.body, { error: "output_limit" });
 });
 
-test("Hermes 버전이 하한보다 낮으면 준비 단계에서 거부한다", () => {
+test("rejects a Hermes version below the floor in the prepare step", () => {
   const result = fixture(
     String.raw`
 id = main('discover')['candidates'][0]['id']
@@ -772,7 +773,7 @@ entry('configure',id)
   assert.equal(result.body.error, "hermes_version_unsupported");
   assert.equal(result.env, "");
 });
-test("Hermes 버전의 숫자가 아닌 꼬리는 비교에서 무시한다", () => {
+test("ignores a non-numeric tail of the Hermes version in comparison", () => {
   const result = fixture(
     String.raw`
 print(json.dumps({'candidate': main('discover')['candidates'][0], 'configure': main('configure',main('discover')['candidates'][0]['id'])}))
@@ -782,7 +783,7 @@ print(json.dumps({'candidate': main('discover')['candidates'][0], 'configure': m
   assert.deepEqual(result.body.configure, { ok: true });
   assert.equal(result.body.candidate.warning, undefined);
 });
-test("Hermes 버전을 읽지 못하면 막지 않고 경고만 남긴다", () => {
+test("does not block when the Hermes version can't be read, only leaves a warning", () => {
   const result = fixture(
     String.raw`
 id = main('discover')['candidates'][0]['id']
@@ -794,7 +795,7 @@ print(json.dumps({'candidate': main('discover')['candidates'][0], 'configure': m
   assert.equal(result.body.candidate.warning, "hermes_version_unknown");
   assert.deepEqual(result.body.configure, { ok: true });
 });
-test("플러그인이 구버전이면 updating_plugin 이 changes 에 들어간다", () => {
+test("an outdated plugin puts updating_plugin into changes", () => {
   const result = fixture(
     String.raw`
 print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])))
@@ -809,7 +810,7 @@ print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])))
   assert.ok(!result.body.changes.includes("installing_plugin"));
   assert.ok(result.body.changes.includes("restarting_gateway"));
 });
-test("플러그인 버전이 같거나 높으면 갱신 단계가 들어가지 않는다", () => {
+test("no update step when the plugin version is equal or higher", () => {
   for (const version of [PLUGIN_VERSION, "99.0.0"]) {
     const result = fixture(
       String.raw`
@@ -825,7 +826,7 @@ print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])))
     assert.ok(!result.body.changes.includes("installing_plugin"));
   }
 });
-test("구버전 갱신은 고정 커밋을 --force 로 다시 설치하고 버전을 되읽어 확인한다", () => {
+test("updating an outdated plugin reinstalls the pinned commit with --force and re-reads the version to confirm", () => {
   const result = fixture(
     String.raw`
 id = main('discover')['candidates'][0]['id']
@@ -855,7 +856,7 @@ print(json.dumps({'result':result,'argv':calls[0][-6:]}))
     "--enable",
   ]);
 });
-test("갱신이 실패하면 plugin_update_failed 로만 알리고 --force 가 보안 스캔을 우회하지 않는다", () => {
+test("a failed update reports only plugin_update_failed and --force does not bypass the security scan", () => {
   for (const [diagnostic, expected] of [
     ["unexpected secret=private", "plugin_update_failed"],
     ["Security scan: BLOCKED. secret=private", "plugin_security_review_required"],
@@ -878,7 +879,7 @@ entry('install',id)
     assert.deepEqual(result.body, { error: expected });
   }
 });
-test("갱신 명령이 성공해도 버전이 그대로면 갱신 실패로 처리한다", () => {
+test("treats it as an update failure when the update command succeeds but the version is unchanged", () => {
   const result = fixture(
     String.raw`
 id = main('discover')['candidates'][0]['id']
@@ -904,7 +905,7 @@ def manual_identity(name,home):
     return result
 identity = manual_identity
 `;
-test("서비스 유닛이 없으면 installing_service 가 changes 에 들어간다", () => {
+test("installing_service goes into changes when there is no service unit", () => {
   const result = fixture(
     MANUAL +
       String.raw`
@@ -915,7 +916,7 @@ print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])))
   assert.deepEqual(result.body.changes.slice(0, 2), ["installing_service", "installing_plugin"]);
   assert.ok(result.body.changes.includes("restarting_gateway"));
 });
-test("서비스 설치는 Hermes CLI 만 부르고 유닛 파일을 직접 쓰지 않는다", () => {
+test("service install calls only the Hermes CLI and never writes the unit file directly", () => {
   const result = fixture(
     MANUAL +
       String.raw`
@@ -934,7 +935,8 @@ print(json.dumps({'result':result,'argv':calls[0][1:],'written':written}))
     { config: { gateway: { multiplex_profiles: true } } },
   );
   assert.equal(result.body.result.ok, true);
-  // 유닛을 만들면 후보 id(정의의 해시)가 바뀐다 — 새 id 를 돌려줘야 이어지는 단계가 산다.
+  // Creating the unit changes the candidate id (a hash of the definition) — the new id must be returned for the
+  // following steps to work.
   assert.match(result.body.result.candidateId, /^[0-9a-f]{64}$/);
   assert.deepEqual(result.body.argv, [
     "-m",
@@ -946,7 +948,7 @@ print(json.dumps({'result':result,'argv':calls[0][1:],'written':written}))
   ]);
   assert.ok(!result.body.written.some((p: string) => /LaunchAgents|systemd/.test(p)));
 });
-test("서비스 설치 뒤에도 유닛이 없으면 service_install_failed 로 멈춘다", () => {
+test("stops with service_install_failed when there is still no unit after service install", () => {
   const result = fixture(
     MANUAL +
       String.raw`
@@ -959,7 +961,7 @@ entry('install-service',id)
   );
   assert.deepEqual(result.body, { error: "service_install_failed" });
 });
-test("시간대가 이미 있으면 덮어쓰지 않는다", () => {
+test("does not overwrite an existing timezone", () => {
   const result = fixture(
     String.raw`
 id = main('discover')['candidates'][0]['id']
@@ -972,7 +974,7 @@ print(json.dumps({'candidate': main('discover')['candidates'][0], 'result': main
   assert.match(result.config, /Europe\/Paris/);
   assert.ok(!result.config.includes("Asia/Seoul"));
 });
-test("시간대가 비어 있으면 요청한 IANA 이름을 넣는다", () => {
+test("puts in the requested IANA name when the timezone is empty", () => {
   const result = fixture(
     String.raw`
 id = main('discover')['candidates'][0]['id']
@@ -985,7 +987,7 @@ print(json.dumps({'candidate': main('discover')['candidates'][0], 'result': main
   assert.equal(result.body.stored, "Asia/Seoul");
   assert.match(result.config, /keep-me/);
 });
-test("호스트도 잘못된 시간대를 timezone_invalid 로 거부한다", () => {
+test("the host also rejects an invalid timezone as timezone_invalid", () => {
   for (const value of ["Asia Seoul", "/Asia/Seoul", "", "9Asia/Seoul", "A" + "b".repeat(70)]) {
     const result = fixture(
       String.raw`
@@ -998,7 +1000,7 @@ entry('set-timezone',id,${JSON.stringify(value)})
     assert.ok(!result.config.includes("timezone"));
   }
 });
-test("갱신·서비스 설치·시간대 단계는 계약 순서대로 실행된다", async () => {
+test("update, service install and timezone steps run in contract order", async () => {
   const stale = {
     ...candidate,
     pluginInstalled: true,
@@ -1044,7 +1046,7 @@ test("갱신·서비스 설치·시간대 단계는 계약 순서대로 실행�
   ]);
   assert.ok(f.calls[4].input!.includes("Asia/Seoul"));
 });
-test("후보에 시간대가 이미 있으면 설정 단계를 건너뛴다", async () => {
+test("skips the configure step when the candidate already has a timezone", async () => {
   const f = fake([
     {
       candidate: {
@@ -1066,10 +1068,10 @@ test("후보에 시간대가 이미 있으면 설정 단계를 건너뛴다", as
   await prepareHost(f.execute, candidate.id, (s) => steps.push(s), undefined, "Asia/Seoul");
   assert.deepEqual(steps, ["inspecting", "verifying_gateway"]);
 });
-// --- 워커 전파 옵트인(플러그인 0.16.0) ------------------------------------------------
-// 운영자 설정 `plugins.entries.deskrpg.worker_propagation`(또는 루트 .env 의 DESKRPG_WORKER_PROPAGATION)을
-// 마법사가 켜고 끈다. 플러그인은 읽기만 한다. 점검은 "이미 링크된 프로필이 있는가" 를 알려 이어받기를 판단한다.
-test("점검은 워커 전파 상태와 링크된 프로필 유무를 싣는다", () => {
+// --- Worker propagation opt-in (plugin 0.16.0) ------------------------------------------------
+// The wizard turns the operator setting `plugins.entries.deskrpg.worker_propagation` (or DESKRPG_WORKER_PROPAGATION
+// in the root .env) on and off. The plugin only reads it. Inspection reports "is there an already-linked profile" to decide carry-over.
+test("inspection carries the worker propagation state and whether linked profiles exist", () => {
   const result = fixture(
     String.raw`
 before = main('discover')['candidates'][0]
@@ -1086,7 +1088,7 @@ print(json.dumps({'before': [before['workerPropagation'], before['workerLinked']
   assert.deepEqual(result.body.before, ["disabled", false]);
   assert.deepEqual(result.body.after, ["disabled", true]);
 });
-test("프로필에 직접 설치한 플러그인 폴더는 링크로 세지 않는다", () => {
+test("a plugin folder installed directly in a profile does not count as a link", () => {
   const result = fixture(
     String.raw`
 (ROOT / 'profiles' / 'sophie' / 'plugins' / 'deskrpg').mkdir(parents=True)
@@ -1096,7 +1098,7 @@ print(json.dumps(main('discover')['candidates'][0]['workerLinked']))
   );
   assert.equal(result.body, false);
 });
-test("루트 설정 값이나 .env 변수가 켜져 있으면 전파는 enabled 다", () => {
+test("propagation is enabled when the root config value or the .env variable is on", () => {
   const byConfig = fixture(
     String.raw`print(json.dumps(main('discover')['candidates'][0]['workerPropagation']))`,
     {
@@ -1122,14 +1124,14 @@ test("루트 설정 값이나 .env 변수가 켜져 있으면 전파는 enabled 
     assert.equal(byEnv.body, expected, value);
   }
 });
-test("모양이 어긋난 plugins.entries 는 점검을 막지 않고 disabled 로 읽는다", () => {
+test("malformed plugins.entries does not block inspection and reads as disabled", () => {
   const result = fixture(
     String.raw`print(json.dumps(main('discover')['candidates'][0]['workerPropagation']))`,
     { config: { gateway: { multiplex_profiles: true }, plugins: { entries: "oops" } } },
   );
   assert.equal(result.body, "disabled");
 });
-test("set-worker-propagation 은 루트 설정에 켜기를 쓰고 기존 키를 보존한다", () => {
+test("set-worker-propagation writes on to the root config and preserves existing keys", () => {
   const result = fixture(
     String.raw`
 id = main('discover')['candidates'][0]['id']
@@ -1152,7 +1154,7 @@ print(json.dumps({'out': out, 'plugins': stored.get('plugins'), 'model': stored.
   });
   assert.deepEqual(result.body.model, { default: "keep-me" });
 });
-test("set-worker-propagation false 는 끄기를 쓰고, 이미 같은 값이면 쓰지 않는다", () => {
+test("set-worker-propagation false writes off, and doesn't write when the value is already the same", () => {
   const result = fixture(
     String.raw`
 id = main('discover')['candidates'][0]['id']
@@ -1174,7 +1176,7 @@ print(json.dumps({'off': off, 'stored': stored, 'again': again, 'untouched': mti
   assert.deepEqual(result.body.again, { ok: true, propagation: "disabled" });
   assert.equal(result.body.untouched, true);
 });
-test("끄기를 써도 .env 변수가 켜 두면 실제 상태 enabled 를 그대로 알린다", () => {
+test("reports the actual enabled state as-is when writing off but the .env variable keeps it on", () => {
   const result = fixture(
     String.raw`
 id = main('discover')['candidates'][0]['id']
@@ -1184,7 +1186,7 @@ print(json.dumps(main('set-worker-propagation', id, 'false')))
   );
   assert.deepEqual(result.body, { ok: true, propagation: "enabled" });
 });
-test("set-worker-propagation 은 잘못된 값과 어긋난 설정 모양을 거절하고 아무것도 쓰지 않는다", () => {
+test("set-worker-propagation rejects invalid values and malformed config shapes and writes nothing", () => {
   for (const option of ["yes", "", "True", "1"]) {
     const result = fixture(
       String.raw`
@@ -1206,7 +1208,7 @@ entry('set-worker-propagation', id, 'true')
   assert.deepEqual(shaped.body, { error: "invalid_host_config" });
   assert.ok(!shaped.config.includes("worker_propagation"));
 });
-test("워커 전파를 켜면 설정 단계 뒤 재시작 한 번으로 반영한다", async () => {
+test("enabling worker propagation applies it with one restart after the configure step", async () => {
   const ready = {
     ...candidate,
     pluginInstalled: true,
@@ -1251,7 +1253,7 @@ test("워커 전파를 켜면 설정 단계 뒤 재시작 한 번으로 반영�
   assert.match(inputs[1].script, /entry\("set-worker-propagation", "a{64}", "true"\)/);
   assert.equal(prepared.workerPropagation, "enabled");
 });
-test("워커 전파가 이미 원하는 상태면 단계도 재시작도 없다", async () => {
+test("no step and no restart when worker propagation is already in the desired state", async () => {
   const f = fake([
     {
       candidate: {
@@ -1285,7 +1287,7 @@ test("워커 전파가 이미 원하는 상태면 단계도 재시작도 없다"
   assert.deepEqual(steps, ["inspecting", "verifying_gateway"]);
   assert.equal(prepared.workerPropagation, "enabled");
 });
-test("후보는 워커 전파 상태와 링크 유무를 모양 검사 뒤에만 싣는다", async () => {
+test("the candidate carries worker propagation state and link presence only after the shape check", async () => {
   const f = fake([
     {
       candidates: [
@@ -1300,7 +1302,7 @@ test("후보는 워커 전파 상태와 링크 유무를 모양 검사 뒤에만
   assert.equal(odd.workerPropagation, undefined);
   assert.equal(odd.workerLinked, undefined);
 });
-test("setWorkerPropagationHost 는 true/false 만 보내고 결과 상태를 돌려준다", async () => {
+test("setWorkerPropagationHost sends only true/false and returns the resulting state", async () => {
   const f = fake([{ ok: true, propagation: "disabled" }]);
   assert.equal(await setWorkerPropagationHost(f.execute, candidate.id, false), "disabled");
   assert.match(JSON.parse(f.calls[0].input!).script, /"set-worker-propagation", "a{64}", "false"/);
@@ -1315,7 +1317,7 @@ test("setWorkerPropagationHost 는 true/false 만 보내고 결과 상태를 돌
     /^Error: worker_propagation_write_failed$/,
   );
 });
-test("잘못된 시간대는 호스트를 실행하기 전에 거부한다", async () => {
+test("rejects an invalid timezone before running the host", async () => {
   const f = fake([
     {
       candidate: { ...candidate, pluginInstalled: true, pluginEnabled: true, hasToken: true },
@@ -1330,8 +1332,8 @@ test("잘못된 시간대는 호스트를 실행하기 전에 거부한다", asy
   assert.equal(f.calls.length, 1);
 });
 
-// --- 계약 2: 프로필 생성·키 발급 -------------------------------------------------
-test("호스트는 잘못된 이름과 예약어를 실행 전에 거부한다", () => {
+// --- Contract 2: profile creation and key issuance -------------------------------------------------
+test("the host rejects invalid names and reserved words before running", () => {
   for (const name of ["Sophie", "-bad", "so phie", "a".repeat(65), "", "default", "root"]) {
     const result = fixture(
       String.raw`
@@ -1343,7 +1345,7 @@ entry('create-profile',main('discover')['candidates'][0]['id'],${JSON.stringify(
     assert.deepEqual(result.body, { error: "profile_name_invalid" });
   }
 });
-test("설명이 200자를 넘거나 개행을 담으면 프로필을 만들지 않는다", () => {
+test("does not create the profile when the description exceeds 200 characters or contains a newline", () => {
   for (const description of ["x".repeat(201), "두\n줄"]) {
     const result = fixture(
       String.raw`
@@ -1355,7 +1357,7 @@ entry('create-profile',main('discover')['candidates'][0]['id'],OPTION)
     assert.deepEqual(result.body, { error: "profile_name_invalid" });
   }
 });
-test("이미 있는 프로필 이름은 profile_exists 로 거부한다", () => {
+test("rejects an existing profile name as profile_exists", () => {
   const result = fixture(
     String.raw`
 (ROOT / 'profiles' / 'sophie').mkdir(parents=True)
@@ -1366,7 +1368,7 @@ entry('create-profile',main('discover')['candidates'][0]['id'],${JSON.stringify(
   );
   assert.deepEqual(result.body, { error: "profile_exists" });
 });
-test("프로필 생성은 Hermes CLI 만 부르고 디스크에 생겼는지 되읽어 확인한다", () => {
+test("profile creation calls only the Hermes CLI and re-reads the disk to confirm it was created", () => {
   const result = fixture(
     String.raw`
 import io
@@ -1392,7 +1394,7 @@ print(json.dumps({'created':created,'argv':calls[0][1:]}))
     "리서치",
   ]);
 });
-test("명령이 성공해도 프로필 디렉터리가 없으면 profile_create_failed 다", () => {
+test("profile_create_failed when the profile directory is missing even though the command succeeded", () => {
   const result = fixture(
     String.raw`
 import io
@@ -1403,7 +1405,7 @@ entry('create-profile',main('discover')['candidates'][0]['id'],${JSON.stringify(
   );
   assert.deepEqual(result.body, { error: "profile_create_failed" });
 });
-test("허용 목록 밖의 새 프로필은 실패가 아니라 profile_not_served 경고다", () => {
+test("a new profile outside the allowlist is a profile_not_served warning, not a failure", () => {
   const result = fixture(
     String.raw`
 import io
@@ -1422,7 +1424,7 @@ print(json.dumps(main('create-profile',main('discover')['candidates'][0]['id'],$
   assert.deepEqual(result.body, { ok: true, profile: "sophie", warning: "profile_not_served" });
   assert.ok(!result.config.includes("sophie"));
 });
-test("키가 이미 있는 프로필은 회전하지 않고 그대로 성공한다", () => {
+test("a profile that already has a key is not rotated and succeeds as-is", () => {
   const result = fixture(
     String.raw`
 child = ROOT / 'profiles' / 'sophie'
@@ -1436,7 +1438,7 @@ print(json.dumps({'result':result,'env':(child / '.env').read_text()}))
   assert.deepEqual(result.body.result, { ok: true, provisioned: false, profile: "sophie" });
   assert.equal(result.body.env, "API_SERVER_KEY=sophie-private-valid-key\n");
 });
-test("키가 없는 형제 프로필에만 키를 새로 발급한다", () => {
+test("issues new keys only to sibling profiles without a key", () => {
   const result = fixture(
     String.raw`
 child = ROOT / 'profiles' / 'sophie'
@@ -1450,10 +1452,10 @@ print(json.dumps({'result':result,'length':len(envfile(child)['API_SERVER_KEY'])
   assert.deepEqual(result.body.result, { ok: true, provisioned: true, profile: "sophie" });
   assert.equal(result.body.length, 64);
   assert.match(result.body.env, /^OTHER=keep-me\nAPI_SERVER_KEY=[a-f0-9]{64}\n$/);
-  // 소유자의 키는 configure 가 다룬다 — 이 액션이 건드리지 않는다.
+  // The owner's key is handled by configure — this action doesn't touch it.
   assert.equal(result.env, "");
 });
-test("외부 비밀 제공자를 쓰는 프로필에는 키를 발급하지 않는다", () => {
+test("does not issue keys to profiles using an external secret provider", () => {
   const result = fixture(
     String.raw`
 child = ROOT / 'profiles' / 'sophie'
@@ -1465,7 +1467,7 @@ entry('provision-key',main('discover')['candidates'][0]['id'],'sophie')
   );
   assert.deepEqual(result.body, { error: "profile_provision_forbidden" });
 });
-test("프로필 폴더를 후보로 삼아 형제 프로필 키를 발급할 수 없다", () => {
+test("cannot issue sibling profile keys by using a profile folder as the candidate", () => {
   const result = fixture(
     String.raw`
 for name in ('sophie','oliver'):
@@ -1476,7 +1478,7 @@ entry('provision-key',hashlib.sha256(str(ROOT / 'profiles' / 'sophie').encode())
   );
   assert.deepEqual(result.body, { error: "candidate_changed" });
 });
-test("provision-key 도 예약어와 잘못된 이름을 거부한다", () => {
+test("provision-key also rejects reserved words and invalid names", () => {
   for (const name of ["default", "root", "Sophie", ""]) {
     const result = fixture(
       String.raw`
@@ -1487,7 +1489,7 @@ entry('provision-key',main('discover')['candidates'][0]['id'],${JSON.stringify(n
     assert.deepEqual(result.body, { error: "profile_name_invalid" });
   }
 });
-test("점검은 키가 없는 형제 프로필에도 canProvision 을 채운다", () => {
+test("inspection fills canProvision for sibling profiles without a key too", () => {
   const result = fixture(
     String.raw`
 for name, token in (('sophie',''),('oliver','oliver-private-valid-key')):
@@ -1504,7 +1506,7 @@ print(json.dumps(main('inspect',main('discover')['candidates'][0]['id'])['profil
     { name: "sophie", hasToken: false, canProvision: true },
   ]);
 });
-test("검증에서 모델 목록이 비면 실패가 아니라 model_provider_required 경고다", () => {
+test("an empty model list in verification is a model_provider_required warning, not a failure", () => {
   const result = fixture(
     String.raw`
 assert_port_owned = lambda public, owner: True
@@ -1526,7 +1528,7 @@ print(json.dumps(main('verify',main('discover')['candidates'][0]['id'])))
     { name: "default", token: "default-own-valid-token" },
   ]);
 });
-test("모델이 하나라도 있으면 경고를 남기지 않는다", () => {
+test("leaves no warning when there is at least one model", () => {
   const result = fixture(
     String.raw`
 assert_port_owned = lambda public, owner: True
@@ -1545,7 +1547,7 @@ print(json.dumps(main('verify',main('discover')['candidates'][0]['id'])))
   );
   assert.deepEqual(result.body.warnings, []);
 });
-test("프로필 생성·키 발급 단계는 플러그인 작업보다 앞에서 계약 순서대로 돈다", async () => {
+test("profile creation and key issuance steps run in contract order before plugin work", async () => {
   const f = fake([
     { candidate, pluginStatus: "plugin_absent", changes: ["installing_plugin"] },
     { ok: true, profile: "sophie" },
@@ -1588,7 +1590,7 @@ test("프로필 생성·키 발급 단계는 플러그인 작업보다 앞에서
   );
   assert.deepEqual(result.warnings, ["model_provider_required"]);
 });
-test("허용 목록 밖으로 만들어진 프로필에는 키를 발급하지 않고 경고만 전달한다", async () => {
+test("does not issue a key to a profile created outside the allowlist, only passes on the warning", async () => {
   const f = fake([
     {
       candidate: {
@@ -1620,7 +1622,7 @@ test("허용 목록 밖으로 만들어진 프로필에는 키를 발급하지 �
   assert.deepEqual(steps, ["inspecting", "creating_profile", "verifying_gateway"]);
   assert.deepEqual(result.warnings, ["profile_not_served"]);
 });
-test("발급한 키가 실제로 서빙되지 않으면 profile_verify_failed 로 멈춘다", async () => {
+test("stops with profile_verify_failed when an issued key is not actually served", async () => {
   const f = fake([
     {
       candidate: {
@@ -1645,7 +1647,7 @@ test("발급한 키가 실제로 서빙되지 않으면 profile_verify_failed �
     /^Error: profile_verify_failed$/,
   );
 });
-test("서버는 호스트에 넘기기 전에 이름·개수를 다시 본다", async () => {
+test("the server re-checks name and count before handing off to the host", async () => {
   const f = fake([]);
   for (const provision of [
     { createProfile: { name: "Sophie" } },
@@ -1667,9 +1669,9 @@ test("서버는 호스트에 넘기기 전에 이름·개수를 다시 본다", 
   assert.equal(f.calls.length, 0);
 });
 
-// --- 계약 2: 로컬 Hermes 설치 ----------------------------------------------------
+// --- Contract 2: local Hermes install ----------------------------------------------------
 import { HOST_INSTALLER } from "./host-helper";
-/** 설치 스크립트를 실제 네트워크·bash 없이 돌린다. 관찰 결과는 HOME 아래 파일로만 받는다. */
+/** Runs the install script without a real network or bash. Observations come back only as files under HOME. */
 function installer(prelude: string, prepared = false) {
   const temp = mkdtempSync(join(tmpdir(), "deskrpg-install-test-"));
   if (prepared) mkdirSync(join(temp, ".hermes/hermes-agent"), { recursive: true });
@@ -1741,7 +1743,7 @@ function stubs(
     .replace(/\bOUTPUT\b/g, JSON.stringify(options.output ?? "installing\n") + ".encode()")
     .replace(/\bPROBE\b/g, String(options.probe ?? 0));
 }
-test("설치 스크립트는 파이프가 아니라 파일로 실행되고 지문이 결과에 실린다", () => {
+test("the install script runs as a file, not a pipe, and its fingerprint lands in the result", () => {
   const result = installer(stubs());
   assert.equal(result.body.ok, true);
   assert.match(result.body.installerDigest, /^[a-f0-9]{64}$/);
@@ -1753,39 +1755,39 @@ test("설치 스크립트는 파이프가 아니라 파일로 실행되고 지�
   assert.equal(result.observed.argv[0], "bash");
   assert.ok(result.observed.argv[1].endsWith(".sh"));
   assert.deepEqual(result.observed.argv.slice(2), ["--skip-browser", "--skip-setup"]);
-  // 파이프(`curl | bash`)가 아니라 실재하는 파일을 실행한다.
+  // Runs a real file, not a pipe (`curl | bash`).
   assert.equal(result.observed.script_exists, true);
   assert.equal(result.observed.script_body, INSTALL_SCRIPT);
   assert.deepEqual(result.observed.probe, ["-m", "hermes_cli.main", "--version"]);
 });
-test("이미 설치돼 있으면 내려받지도 실행하지도 않는다", () => {
+test("neither downloads nor runs anything when already installed", () => {
   const result = installer(stubs(), true);
   assert.deepEqual(result.body, { error: "hermes_already_installed" });
   assert.equal(result.observed, null);
 });
-test("설치 스크립트를 받지 못하면 hermes_installer_unavailable 이다", () => {
+test("hermes_installer_unavailable when the install script can't be downloaded", () => {
   const result = installer(stubs({ body: null }));
   assert.deepEqual(result.body, { error: "hermes_installer_unavailable" });
   assert.equal(result.observed.argv, null);
 });
-test("설치 실패는 고정 코드로만 알리고 출력을 돌려주지 않는다", () => {
+test("install failure is reported only with a fixed code and returns no output", () => {
   const result = installer(stubs({ exit: 3, output: "token=super-secret\n" }));
   assert.deepEqual(result.body, { error: "hermes_install_failed" });
   assert.ok(!JSON.stringify(result.body).includes("super-secret"));
 });
-test("설치 안에서 네트워크가 끊기면 installer_unavailable 로 분류한다", () => {
+test("classifies a network drop during install as installer_unavailable", () => {
   const result = installer(stubs({ exit: 1, output: "curl: (6) Could not resolve host: x\n" }));
   assert.deepEqual(result.body, { error: "hermes_installer_unavailable" });
 });
-test("설치 후 CLI 가 0 으로 끝나지 않으면 hermes_install_failed 다", () => {
+test("hermes_install_failed when the CLI doesn't exit 0 after install", () => {
   const result = installer(stubs({ probe: 2 }));
   assert.deepEqual(result.body, { error: "hermes_install_failed" });
 });
-test("정상 설치의 큰 출력은 상한에 걸리지 않고 읽고 버린다", () => {
+test("large output from a normal install is read and discarded without hitting the cap", () => {
   const result = installer(stubs({ output: "x".repeat(600_000) }));
   assert.equal(result.body.ok, true);
 });
-test("설치가 끝나면 임시 스크립트를 남기지 않는다", () => {
+test("leaves no temporary script behind once install finishes", () => {
   const temp = mkdtempSync(join(tmpdir(), "deskrpg-install-residue-"));
   try {
     const result = spawnSync("python3", ["-"], {
@@ -1801,7 +1803,7 @@ test("설치가 끝나면 임시 스크립트를 남기지 않는다", () => {
     rmSync(temp, { recursive: true, force: true });
   }
 });
-test("설치 잠금은 동시 설치를 막는다", () => {
+test("the install lock prevents concurrent installs", () => {
   const result = installer(
     String.raw`
 import fcntl, os, pathlib
@@ -1813,7 +1815,7 @@ fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
   );
   assert.deepEqual(result.body, { error: "host_busy" });
 });
-test("설치 결과의 지문은 소문자 16진수 64자만 통과한다", async () => {
+test("the install result fingerprint passes only as 64 lowercase hex characters", async () => {
   const digest = "b".repeat(64);
   const good = await installHermesHost(fake([{ ok: true, installerDigest: digest }]).execute);
   assert.deepEqual(good, { installerDigest: digest, milestones: [] });
@@ -1823,7 +1825,7 @@ test("설치 결과의 지문은 소문자 16진수 64자만 통과한다", asyn
       /^Error: (hermes_install_failed|host_operation_failed)$/,
     );
 });
-test("설치 오류 코드는 화이트리스트 밖이면 원문을 흘리지 않는다", async () => {
+test("install error codes outside the whitelist don't leak the original text", async () => {
   await assert.rejects(
     installHermesHost(fake([{ error: "hermes_already_installed" }]).execute),
     /^Error: hermes_already_installed$/,
@@ -1834,8 +1836,9 @@ test("설치 오류 코드는 화이트리스트 밖이면 원문을 흘리지 �
   );
 });
 
-// 리눅스는 유닛 파일이 없어도 service 이름('hermes-gateway.service')을 먼저 채운다.
-// 이름으로 판정하던 때 새 설치에서 등록 단계가 통째로 빠졌다(실측: MiniPC 신규 계정).
+// On Linux the service name ('hermes-gateway.service') is filled in first even without a unit file.
+// Back when this was decided by name, the registration step was dropped entirely on fresh installs (observed: new
+// account on MiniPC).
 const UNIT_MISSING_LINUX = String.raw`
 state = {'installed': False}
 def linux_identity(name,home):
@@ -1846,7 +1849,7 @@ def linux_identity(name,home):
     return result
 identity = linux_identity
 `;
-test("서비스 이름이 채워져 있어도 유닛이 없으면 installing_service 가 계획에 들어간다", () => {
+test("installing_service goes into the plan when there is no unit even if the service name is filled", () => {
   const result = fixture(
     UNIT_MISSING_LINUX +
       String.raw`
@@ -1857,7 +1860,7 @@ print(json.dumps(main('inspect', id)))
   );
   assert.ok(result.body.changes.includes("installing_service"));
 });
-test("유닛이 이미 멀쩡하면 등록 단계를 넣지 않는다", () => {
+test("no registration step when the unit is already healthy", () => {
   const result = fixture(
     String.raw`
 id = main('discover')['candidates'][0]['id']
@@ -1867,8 +1870,8 @@ print(json.dumps(main('inspect', id)))
   );
   assert.ok(!result.body.changes.includes("installing_service"));
 });
-test("남의 유닛(identity_mismatch)은 등록 대상으로 보지 않는다", () => {
-  // 손댄 유닛·남의 유닛을 gateway install 로 덮어쓰면 안 된다.
+test("someone else's unit (identity_mismatch) is not treated as a registration target", () => {
+  // A modified unit or someone else's unit must not be overwritten by gateway install.
   const result = fixture(
     String.raw`
 def mismatched(name,home):
@@ -1884,8 +1887,8 @@ print(json.dumps(main('inspect', id)))
   );
   assert.ok(!result.body.changes.includes("installing_service"));
 });
-test("gateway 값이 비어 있는 설정에서도 configure 가 죽지 않는다", () => {
-  // 새로 설치한 Hermes 의 config.yaml 은 `gateway:` 키가 값 없이 들어 있다(실측).
+test("configure doesn't die even on a config whose gateway value is empty", () => {
+  // A freshly installed Hermes config.yaml has the `gateway:` key with no value (observed).
   const result = fixture(
     String.raw`
 id = main('discover')['candidates'][0]['id']
@@ -1902,7 +1905,7 @@ def run(argv, timeout=8, env=None):
     if 'auth' not in argv: return original_run(argv, timeout=timeout, env=env)
     OUTCOME
 `;
-/** `hermes auth status <provider>` 만 가로채는 스텁. 나머지 호출은 원래 경로를 그대로 탄다. */
+/** Stub that intercepts only `hermes auth status <provider>`. Other calls take the original path as-is. */
 function authStub(outcome: string) {
   return AUTH_STUB.replace("OUTCOME", outcome);
 }
@@ -1910,15 +1913,15 @@ const CHECK_MODEL = String.raw`
 id = main('discover')['candidates'][0]['id']
 print(json.dumps(main('check-model', id)))
 `;
-test("모델 제공자가 설정에 없으면 확인 결과는 unknown 이다", () => {
-  // 판정할 근거가 없으면 판정하지 않는다. 명령을 아예 부르지 않는다.
+test("the check result is unknown when the model provider is not in the config", () => {
+  // No basis to decide means no decision. The command isn't even called.
   const result = fixture(authStub("raise AssertionError('must not run')") + CHECK_MODEL, {
     config: { gateway: {} },
   });
   assert.deepEqual(result.body, { ok: true, model: "unknown" });
 });
-test("출력에 logged in 이 있고 종료 코드가 0 이면 ready 다", () => {
-  // 실측 출력은 한 줄이다: 'openai-codex: logged in'.
+test("ready when the output contains logged in and the exit code is 0", () => {
+  // The observed output is one line: 'openai-codex: logged in'.
   const result = fixture(
     authStub(
       "return type('R',(),{'returncode':0,'stdout':'openai-codex: logged in','stderr':''})()",
@@ -1927,7 +1930,7 @@ test("출력에 logged in 이 있고 종료 코드가 0 이면 ready 다", () =>
   );
   assert.deepEqual(result.body, { ok: true, model: "ready" });
 });
-test("그 밖의 출력은 missing 이다", () => {
+test("any other output is missing", () => {
   const result = fixture(
     authStub(
       "return type('R',(),{'returncode':1,'stdout':'openai-codex: not logged in','stderr':''})()",
@@ -1936,13 +1939,13 @@ test("그 밖의 출력은 missing 이다", () => {
   );
   assert.deepEqual(result.body, { ok: true, model: "missing" });
 });
-test("확인 명령이 죽어도 설정을 실패시키지 않고 unknown 을 돌려준다", () => {
+test("a crashing check command doesn't fail setup and returns unknown", () => {
   const result = fixture(authStub("raise OSError('boom')") + CHECK_MODEL, {
     config: { model: { provider: "openai-codex" } },
   });
   assert.deepEqual(result.body, { ok: true, model: "unknown" });
 });
-test("확인 결과에는 명령 출력의 원문이 실리지 않는다", () => {
+test("the check result carries no raw command output", () => {
   const result = fixture(
     authStub(
       "return type('R',(),{'returncode':0,'stdout':'openai-codex: logged in as sk-secret-token','stderr':''})()",
@@ -1952,7 +1955,7 @@ test("확인 결과에는 명령 출력의 원문이 실리지 않는다", () =>
   assert.deepEqual(result.body, { ok: true, model: "ready" });
   assert.ok(!JSON.stringify(result.body).includes("sk-secret-token"));
 });
-test("호스트가 판정하지 못해도 모델 확인은 던지지 않는다", async () => {
+test("the model check doesn't throw even when the host can't decide", async () => {
   assert.equal(
     await checkModelHost(fake([{ ok: true, model: "ready" }]).execute, candidate.id),
     "ready",
@@ -1967,10 +1970,10 @@ test("호스트가 판정하지 못해도 모델 확인은 던지지 않는다",
     { ok: true },
   ])
     assert.equal(await checkModelHost(fake([reply]).execute, candidate.id), "unknown");
-  // 후보 id 가 어긋나도 오류가 아니라 판정 불가다 — 설정을 멈추게 할 수 없다.
+  // Even a mismatched candidate id is not an error but undecidable — it can't stop setup.
   assert.equal(await checkModelHost(fake([]).execute, "../profile"), "unknown");
 });
-test("설치 이정표는 정해진 코드만 순서대로 올라온다", async () => {
+test("install milestones come up only as defined codes, in order", async () => {
   const digest = "c".repeat(64);
   const result = await installHermesHost(
     fake([
@@ -1981,10 +1984,10 @@ test("설치 이정표는 정해진 코드만 순서대로 올라온다", async 
       },
     ]).execute,
   );
-  // 목록 밖의 값은 버린다 — 줄 내용이 코드를 가장해 잡에 실릴 수 없다.
+  // Values outside the list are dropped — line content can't pose as a code and land on the job.
   assert.deepEqual(result, { installerDigest: digest, milestones: ["deps", "venv", "done"] });
 });
-test("설치 출력의 줄은 이정표 코드로만 접히고 원문은 결과에 없다", () => {
+test("install output lines fold only into milestone codes and the original text is not in the result", () => {
   const output = [
     "Installing dependencies...",
     "Creating virtual environment with Python 3.11...",
@@ -1998,9 +2001,9 @@ test("설치 출력의 줄은 이정표 코드로만 접히고 원문은 결과�
   assert.ok(!JSON.stringify(result.body).includes("sk-do-not-leak"));
   assert.ok(!JSON.stringify(result.body).includes("Installing dependencies"));
 });
-test("실제 설치 스크립트가 찍는 문장으로 여섯 이정표가 모두 걸린다", () => {
-  // 문장은 install.sh 의 log_info 원문에서 골랐다. 처음 표는 'clone' 을 literal 로 봤는데
-  // git 은 "Cloning into ..." 을 찍어 그 이정표가 한 번도 걸리지 않았다(실측).
+test("all six milestones are hit by the sentences the real install script prints", () => {
+  // The sentences were taken from install.sh's log_info originals. The first table treated 'clone' as literal, but
+  // git prints "Cloning into ...", so that milestone was never hit (observed).
   const output = [
     "Installing managed uv into /home/x/.hermes/bin ...",
     "Cloning into '/home/x/.hermes/hermes-agent'...",
@@ -2019,7 +2022,7 @@ test("실제 설치 스크립트가 찍는 문장으로 여섯 이정표가 모�
     "done",
   ]);
 });
-test("재개는 끝난 단계를 건너뛰고 verify 는 언제나 다시 돈다", async () => {
+test("resume skips finished steps and verify always runs again", async () => {
   const f = fake([
     {
       candidate: { ...candidate, pluginInstalled: true, pluginEnabled: true },
@@ -2049,7 +2052,7 @@ test("재개는 끝난 단계를 건너뛰고 verify 는 언제나 다시 돈다
     { createProfile: { name: "oliver" } },
     (step) => completed.has(step) && step !== "inspecting" && step !== "verifying_gateway",
   );
-  // 이미 만든 프로필을 다시 만들지 않는다(다시 만들면 profile_exists 다). 키 발급은 그대로 돈다.
+  // Don't recreate an already-created profile (recreating is profile_exists). Key issuance still runs.
   assert.deepEqual(steps, ["inspecting", "provisioning_keys", "verifying_gateway"]);
   assert.ok(
     !f.calls.some((call) => JSON.parse(String(call.input)).action === "create-profile"),
@@ -2057,7 +2060,7 @@ test("재개는 끝난 단계를 건너뛰고 verify 는 언제나 다시 돈다
   );
   assert.equal(result.profiles.length, 2);
 });
-test("건너뛰기를 주지 않으면 모든 단계가 그대로 돈다", async () => {
+test("every step runs as-is when no skip is given", async () => {
   const f = fake([
     {
       candidate,
@@ -2088,7 +2091,7 @@ test("건너뛰기를 주지 않으면 모든 단계가 그대로 돈다", async
   ]);
 });
 
-test("포트 충돌에 대안 포트가 있으면 오류에 함께 실린다", async () => {
+test("an alternative port is attached to the error on a port conflict when available", async () => {
   const f = fake([{ error: "port_conflict", suggestedPort: 8643 }]);
   await assert.rejects(inspectHost(f.execute, candidate.id), (error: unknown) => {
     assert.ok(error instanceof SetupPortConflictError);
@@ -2097,7 +2100,7 @@ test("포트 충돌에 대안 포트가 있으면 오류에 함께 실린다", a
     return true;
   });
 });
-test("제안 범위 밖이거나 숫자가 아닌 포트 제안은 버린다", async () => {
+test("drops port suggestions outside the suggestion range or that aren't numbers", async () => {
   for (const suggestedPort of [8641, 8700, 0, "8643", 8643.5, null]) {
     const f = fake([{ error: "port_conflict", suggestedPort }]);
     await assert.rejects(inspectHost(f.execute, candidate.id), (error: unknown) => {
@@ -2107,7 +2110,7 @@ test("제안 범위 밖이거나 숫자가 아닌 포트 제안은 버린다", a
     });
   }
 });
-test("제안이 없으면 포트 충돌은 지금처럼 코드만 남는다", async () => {
+test("without a suggestion a port conflict leaves only the code as it does now", async () => {
   const f = fake([{ error: "port_conflict" }]);
   await assert.rejects(inspectHost(f.execute, candidate.id), (error: unknown) => {
     assert.ok(error instanceof SetupPortConflictError);
@@ -2115,14 +2118,14 @@ test("제안이 없으면 포트 충돌은 지금처럼 코드만 남는다", as
     return true;
   });
 });
-/** 플러그인이 이미 준비된 후보 — 포트 단계만 남겨 단계 순서를 또렷하게 본다. */
+/** A candidate whose plugin is already ready — leaves only the port step so the step order is clear. */
 const readyCandidate: SetupCandidate = {
   ...candidate,
   pluginInstalled: true,
   pluginEnabled: true,
   pluginVersion: "0.6.0",
 };
-test("수락한 포트는 inspect 직전에 set-port 로 한 번만 쓰인다", async () => {
+test("an accepted port is written once via set-port right before inspect", async () => {
   const f = fake([
     { ok: true, port: 8643 },
     { candidate: readyCandidate, pluginStatus: "plugin_ready", changes: [] },
@@ -2149,7 +2152,7 @@ test("수락한 포트는 inspect 직전에 set-port 로 한 번만 쓰인다", 
   const sent = JSON.parse(String(f.calls[0].input)).script as string;
   assert.match(sent, /entry\("set-port", "[a-f0-9]{64}", "8643"\)/);
 });
-test("동의가 없으면 set-port 는 호출되지 않는다", async () => {
+test("set-port is not called without consent", async () => {
   const f = fake([
     { candidate: readyCandidate, pluginStatus: "plugin_ready", changes: [] },
     {
@@ -2163,12 +2166,12 @@ test("동의가 없으면 set-port 는 호출되지 않는다", async () => {
   const steps: string[] = [];
   await prepareHost(f.execute, candidate.id, (s) => steps.push(s));
   assert.deepEqual(steps, ["inspecting", "verifying_gateway"]);
-  // 호스트 스크립트 본문에는 'set-port' 문자열이 늘 들어 있다 — 실제 호출인 entry() 로만 본다.
+  // The host script body always contains the 'set-port' string — look only at the actual call, entry().
   assert.ok(
     f.calls.every((call) => !/entry\("set-port"/.test(JSON.parse(String(call.input)).script)),
   );
 });
-test("set-port 는 범위 밖 값을 호스트에 보내기 전에 거부한다", async () => {
+test("set-port rejects out-of-range values before sending them to the host", async () => {
   for (const port of [1023, 65536, 0]) {
     const f = fake([]);
     await assert.rejects(
@@ -2187,7 +2190,7 @@ test("set-port 는 범위 밖 값을 호스트에 보내기 전에 거부한다"
     assert.equal(f.calls.length, 0);
   }
 });
-test("포트 쓰기 실패는 port_write_failed 로 나가고 뒤 단계는 돌지 않는다", async () => {
+test("a port write failure goes out as port_write_failed and later steps don't run", async () => {
   const f = fake([{ error: "port_write_failed", detail: "/home/op/.env" }]);
   await assert.rejects(
     prepareHost(
@@ -2205,7 +2208,7 @@ test("포트 쓰기 실패는 port_write_failed 로 나가고 뒤 단계는 돌�
   assert.equal(f.calls.length, 1);
 });
 
-test("Linger 판정 — yes/no 를 읽고, 모르면 unknown 이며 던지지 않는다", async () => {
+test("Linger check — reads yes/no, unknown if it can't tell, and never throws", async () => {
   const { checkLingerHost } = await import("./host");
   const exec = (linger: string, code = 0) =>
     (async (command: string) =>
@@ -2223,7 +2226,7 @@ test("Linger 판정 — yes/no 를 읽고, 모르면 unknown 이며 던지지 �
   );
 });
 
-test("SSH 키 거절은 탐색에서도 ssh_auth_failed 로 올라간다 — host_operation_failed 로 뭉개지지 않는다", async () => {
+test("SSH key rejection surfaces as ssh_auth_failed in discovery too — not flattened into host_operation_failed", async () => {
   const { discoverHost } = await import("./host");
   await assert.rejects(
     discoverHost(async () => {
@@ -2233,7 +2236,7 @@ test("SSH 키 거절은 탐색에서도 ssh_auth_failed 로 올라간다 — hos
   );
 });
 
-test("POSIX 는 sh -c 로 런처를 띄운다", () => {
+test("POSIX launches the launcher with sh -c", () => {
   const launch = hostLaunch("linux", "run", "CODE", '{"candidates": []}');
   assert.equal(launch.command, "sh");
   assert.deepEqual(launch.args, [
@@ -2246,7 +2249,7 @@ test("POSIX 는 sh -c 로 런처를 띄운다", () => {
   ]);
 });
 
-test("win32 는 powershell 로 런처를 띄운다 — payload 는 argv 가 아니라 env 로 간다", () => {
+test("win32 launches the launcher with powershell — the payload goes via env, not argv", () => {
   const launch = hostLaunch("win32", "install", "CODE", "NONE");
   assert.equal(launch.command, "powershell");
   assert.deepEqual(launch.args, [
@@ -2257,8 +2260,8 @@ test("win32 는 powershell 로 런처를 띄운다 — payload 는 argv 가 아�
     "-Command",
     HOST_LAUNCHER_PS,
   ]);
-  // 회귀 방지: `powershell -Command <텍스트> a b c` 는 a·b·c 를 $args 에 바인딩하지 않는다
-  // (WinServer 실측, 2026-09-20) — mode·code·none 을 다시 argv 뒤에 붙이면 이 단언이 깨진다.
+  // Regression guard: `powershell -Command <text> a b c` does not bind a, b, c to $args
+  // (observed on WinServer, 2026-09-20) — appending mode/code/none back after argv breaks this assertion.
   assert.deepEqual(launch.env, {
     DESKRPG_HOST_MODE: "install",
     DESKRPG_HOST_CODE: "CODE",
@@ -2266,30 +2269,30 @@ test("win32 는 powershell 로 런처를 띄운다 — payload 는 argv 가 아�
   });
 });
 
-test("win32 런처 본문은 $args 가 아니라 환경변수를 읽는다", () => {
-  // -Command 로는 $args 가 채워지지 않으므로, 이 셋을 다시 $args[...] 로 되돌리면 조용히 죽는다.
+test("the win32 launcher body reads environment variables, not $args", () => {
+  // -Command doesn't populate $args, so reverting these three back to $args[...] makes it die silently.
   assert.ok(!/\$args\[/.test(HOST_LAUNCHER_PS));
   assert.ok(HOST_LAUNCHER_PS.includes("$env:DESKRPG_HOST_MODE"));
   assert.ok(HOST_LAUNCHER_PS.includes("$env:DESKRPG_HOST_CODE"));
   assert.ok(HOST_LAUNCHER_PS.includes("$env:DESKRPG_HOST_NONE"));
 });
 
-test("win32 런처는 읽은 뒤 자기 환경에서 페이로드 변수를 지운다 — 자식 파이썬에 물려주지 않는다", () => {
+test("the win32 launcher clears the payload variables from its own environment after reading — not passed to the child python", () => {
   assert.ok(HOST_LAUNCHER_PS.includes("Remove-Item Env:\\DESKRPG_HOST_MODE"));
   assert.ok(HOST_LAUNCHER_PS.includes("Remove-Item Env:\\DESKRPG_HOST_CODE"));
   assert.ok(HOST_LAUNCHER_PS.includes("Remove-Item Env:\\DESKRPG_HOST_NONE"));
 });
 
-test("win32 런처 본문은 Scripts\\python.exe 를 본다", () => {
+test("the win32 launcher body looks for Scripts\\python.exe", () => {
   assert.ok(HOST_LAUNCHER_PS.includes("Scripts\\python.exe"));
   assert.ok(!HOST_LAUNCHER_PS.includes("bin/python"));
 });
 
-test("win32 런처는 시스템 패키지 사전 점검을 하지 않는다", () => {
+test("the win32 launcher does no system package pre-check", () => {
   assert.ok(!HOST_LAUNCHER_PS.includes("system_packages_missing"));
 });
 
-test("invoke·installHermesHost 는 launch.env 를 execute() 로 그대로 넘긴다", async () => {
+test("invoke and installHermesHost pass launch.env to execute() as-is", async () => {
   let seenOptions: { env?: Record<string, string> } | undefined;
   const execute: HostExecutor = async (_command, _args, options) => {
     seenOptions = options;
@@ -2301,12 +2304,12 @@ test("invoke·installHermesHost 는 launch.env 를 execute() 로 그대로 넘�
     DESKRPG_HOST_CODE: HOST_BOOTSTRAP,
     DESKRPG_HOST_NONE: '{"candidates": []}',
   });
-  // POSIX 는 지금처럼 env 를 전혀 쓰지 않는다 — argv 로만 넘긴다.
+  // POSIX still uses no env at all, as now — passes only via argv.
   await discoverHost(execute, "linux");
   assert.equal(seenOptions?.env, undefined);
 });
 
-test("installHermesHost 도 win32 에서 launch.env 를 execute() 로 넘긴다", async () => {
+test("installHermesHost also passes launch.env to execute() on win32", async () => {
   let seenOptions: { env?: Record<string, string> } | undefined;
   const execute: HostExecutor = async (_command, _args, options) => {
     seenOptions = options;
@@ -2324,38 +2327,38 @@ test("installHermesHost 도 win32 에서 launch.env 를 execute() 로 넘긴다"
   });
 });
 
-test("HOST_BOOTSTRAP 은 win32 를 한 곳에서 가른다", () => {
+test("HOST_BOOTSTRAP branches on win32 in one place", () => {
   assert.equal((HOST_BOOTSTRAP.match(/sys\.platform == 'win32'/g) ?? []).length, 1);
 });
 
-test("HOST_BOOTSTRAP 은 SIGHUP 을 조건 없이 등록하지 않는다", () => {
+test("HOST_BOOTSTRAP does not register SIGHUP unconditionally", () => {
   assert.ok(!/signal\.SIGHUP, signal\.SIGTERM/.test(HOST_BOOTSTRAP));
   assert.ok(HOST_BOOTSTRAP.includes("taskkill"));
   assert.ok(HOST_BOOTSTRAP.includes("CREATE_NEW_PROCESS_GROUP"));
 });
 
-test("HOST_INSTALLER 는 두 설치 스크립트 URL 을 모두 안다", () => {
+test("HOST_INSTALLER knows both install script URLs", () => {
   assert.ok(HOST_INSTALLER.includes("https://hermes-agent.nousresearch.com/install.sh"));
   assert.ok(HOST_INSTALLER.includes("https://hermes-agent.nousresearch.com/install.ps1"));
 });
 
-test("HOST_INSTALLER 는 fcntl 을 조건 없이 import 하지 않는다", () => {
+test("HOST_INSTALLER does not import fcntl unconditionally", () => {
   assert.ok(!/^\s*import fcntl\s*$/m.test(HOST_INSTALLER));
   assert.ok(HOST_INSTALLER.includes("msvcrt"));
 });
 
-test("HOST_INSTALLER 는 win32 에서 pass_fds 를 쓰지 않는다", () => {
+test("HOST_INSTALLER does not use pass_fds on win32", () => {
   assert.ok(HOST_INSTALLER.includes("pass_fds"));
   assert.ok(/if WINDOWS/.test(HOST_INSTALLER));
 });
 
-test("HOST_HELPER 는 Windows 서비스 갈래를 갖는다", () => {
+test("HOST_HELPER has a Windows service branch", () => {
   assert.ok(HOST_HELPER.includes("Hermes_Gateway"));
   assert.ok(HOST_HELPER.includes("schtasks"));
   assert.ok(HOST_HELPER.includes("gateway-service"));
 });
 
-test("Windows 갈래도 같은 소유권 경고 코드만 쓴다", () => {
+test("the Windows branch uses only the same ownership warning codes", () => {
   const codes = HOST_HELPER.match(/'(service_identity_\w+|managed_service_required)'/g) ?? [];
   assert.ok(codes.length > 0);
   for (const code of new Set(codes))
@@ -2369,12 +2372,12 @@ test("Windows 갈래도 같은 소유권 경고 코드만 쓴다", () => {
     );
 });
 
-test("HOST_BOOTSTRAP 은 ASCII 만 담는다 — 명령줄 인자로 넘어가는 유일한 호스트 스크립트다", () => {
-  // 다른 호스트 스크립트(HELPER·INSTALLER)는 stdin 의 JSON payload 로 가지만, 부트스트랩만은
-  // `python3 -c <코드>` 의 **argv** 로 간다. 파이썬은 argv 를 로케일 인코딩으로 해석하므로,
-  // 한글 주석 한 줄만 있어도 C/POSIX 로케일 + UTF-8 모드 꺼짐인 호스트에서
-  // "Unable to decode the command from the command line" 으로 **시작조차 못 한다.**
-  // macOS 는 argv 를 늘 UTF-8 로 읽어 로컬에서는 드러나지 않는다 — 리눅스 CI 가 잡았다(2026-09-20).
+test("HOST_BOOTSTRAP contains only ASCII — it is the only host script passed as a command-line argument", () => {
+  // Other host scripts (HELPER, INSTALLER) go as a JSON payload on stdin, but the bootstrap alone
+  // goes as the **argv** of `python3 -c <code>`. Python decodes argv with the locale encoding, so
+  // even a single Korean comment line makes it, on a host with a C/POSIX locale + UTF-8 mode off,
+  // **fail to even start** with "Unable to decode the command from the command line".
+  // macOS always reads argv as UTF-8, so it doesn't show up locally — Linux CI caught it (2026-09-20).
   const offenders = HOST_BOOTSTRAP.split("\n")
     .map((line, index) => ({ line, number: index + 1 }))
     .filter(({ line }) => /[^\x00-\x7f]/.test(line));
@@ -2385,13 +2388,13 @@ test("HOST_BOOTSTRAP 은 ASCII 만 담는다 — 명령줄 인자로 넘어가�
   );
 });
 
-test("HOST_BOOTSTRAP 은 UTF-8 이 아닌 로케일에서도 한글 payload 를 왕복한다", () => {
-  // Windows 의 기본 파이프 인코딩(예: cp949)을 POSIX 에서 재현한다: PYTHONUTF8=0 + LC_ALL/LANG=C 는
-  // 파이썬의 stdin/stdout 기본 인코딩을 ascii 로 강제한다(PEP 538/540 의 UTF-8 모드를 끈다).
+test("HOST_BOOTSTRAP round-trips a Korean payload even under a non-UTF-8 locale", () => {
+  // Reproduces Windows' default pipe encoding (e.g. cp949) on POSIX: PYTHONUTF8=0 + LC_ALL/LANG=C
+  // forces python's default stdin/stdout encoding to ascii (turns off the UTF-8 mode of PEP 538/540).
   //
-  // 부트스트랩은 `~/.hermes/hermes-agent/venv` 의 파이썬으로 스크립트를 돌린다. 개발자 머신의
-  // 실제 Hermes 에 기대면 Hermes 가 없는 CI 에서 `hermes_not_found` 로 떨어지므로, 임시 HOME 에
-  // stdlib 만 든 venv 를 세워 어디서 돌든 같은 조건을 만든다.
+  // The bootstrap runs scripts with the python in `~/.hermes/hermes-agent/venv`. Relying on the developer machine's
+  // real Hermes would fall to `hermes_not_found` in CI without Hermes, so a venv with only the stdlib is set up
+  // in a temporary HOME to create the same conditions wherever it runs.
   const temp = mkdtempSync(join(tmpdir(), "deskrpg-bootstrap-locale-test-"));
   try {
     const venv = spawnSync(
@@ -2414,10 +2417,10 @@ test("HOST_BOOTSTRAP 은 UTF-8 이 아닌 로케일에서도 한글 payload 를 
   }
 });
 
-test("플러그인만 갱신해도 게이트웨이를 재시작한다 — 새 코드는 재시작해야 서빙된다", async () => {
-  // 호스트는 이미 `restarting_gateway` 를 changes 에 넣어 준다(위 inspect 테스트). 그런데
-  // prepareHost 는 configure·timezone 이 돌 때만 재시작해서, 플러그인만 뒤처진 흔한 경우에
-  // 옛 코드가 계속 서빙됐다(Hermes CLI 도 설치 후 "Restart the gateway" 라고 말한다).
+test("restarts the gateway even when only the plugin was updated — new code is served only after a restart", async () => {
+  // The host already puts `restarting_gateway` into changes (the inspect test above). But
+  // prepareHost only restarted when configure/timezone ran, so in the common case where only the plugin lagged
+  // the old code kept being served (the Hermes CLI also says "Restart the gateway" after install).
   const stale = {
     ...candidate,
     pluginInstalled: true,
@@ -2451,8 +2454,8 @@ test("플러그인만 갱신해도 게이트웨이를 재시작한다 — 새 �
   );
 });
 
-test("재시작 조건이 여럿 참이어도 재시작은 한 번이다", async () => {
-  // 첫 설치 경로에서는 configure 와 호스트의 restarting_gateway 가 함께 참이 된다.
+test("restarts only once even when several restart conditions are true", async () => {
+  // On the first-install path, configure and the host's restarting_gateway are both true.
   const stale = {
     ...candidate,
     pluginInstalled: true,

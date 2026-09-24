@@ -13,7 +13,7 @@ import {
   type ScanFn,
 } from "./ssh-hosts";
 
-// 공개 호스트 키 모양의 고정 값(실제 키가 아니다 — base64 blob 이면 지문 계산에는 충분하다).
+// A fixed value shaped like a public host key (not a real key — a base64 blob is enough for fingerprinting).
 const ED = "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
 const RSA = "AAAAB3NzaC1yc2EAAAADAQABAAABAQC7";
 
@@ -25,7 +25,7 @@ function scanOf(lines: string): ScanFn {
   return async () => lines;
 }
 
-test("keyscan 출력에서 키 유형과 SHA256 지문을 뽑는다 — 주석 줄은 버린다", () => {
+test("extracts key type and SHA256 fingerprint from keyscan output — drops comment lines", () => {
   const rows = parseKeyscan(
     `# box:22 SSH-2.0-OpenSSH\nbox ssh-ed25519 ${ED}\nbox ssh-rsa ${RSA}\n`,
   );
@@ -37,7 +37,7 @@ test("keyscan 출력에서 키 유형과 SHA256 지문을 뽑는다 — 주석 �
   assert.match(rows[0].fingerprint, /^SHA256:[A-Za-z0-9+/]{43}$/);
 });
 
-test("대상 입력을 검증한다 — 옵션 주입·공백·메타데이터 주소를 거부한다", () => {
+test("validates target input — rejects option injection, whitespace and metadata addresses", () => {
   assert.deepEqual(validateSshTarget({ host: "minipc.local", port: 22, user: "dante" }), {
     host: "minipc.local",
     port: 22,
@@ -64,7 +64,7 @@ test("대상 입력을 검증한다 — 옵션 주입·공백·메타데이터 �
   }
 });
 
-test("전용 키를 한 번 만들고, 다시 부르면 같은 공개키를 준다", async () => {
+test("creates the dedicated key once and returns the same public key on later calls", async () => {
   const home = dir();
   let generated = 0;
   const ssh = createManagedSsh(home, {
@@ -81,7 +81,7 @@ test("전용 키를 한 번 만들고, 다시 부르면 같은 공개키를 준�
   assert.equal(statSync(path.join(home, "ssh")).mode & 0o777, 0o700);
 });
 
-test("확인한 지문과 다시 스캔한 지문이 같을 때만 등록하고, config·known_hosts 를 만든다", async () => {
+test("registers only when the confirmed and re-scanned fingerprints match, creating config and known_hosts", async () => {
   const home = dir();
   const ssh = createManagedSsh(home, {
     keygen: async (keyPath) => writeFileSync(keyPath, "K", { mode: 0o600 }),
@@ -113,7 +113,7 @@ test("확인한 지문과 다시 스캔한 지문이 같을 때만 등록하고,
   assert.equal(statSync(ssh.configPath).mode & 0o777, 0o600);
 });
 
-test("스캔과 등록 사이에 호스트 키가 바뀌면 거절한다", async () => {
+test("rejects when the host key changes between scan and registration", async () => {
   const home = dir();
   let lines = `box ssh-ed25519 ${ED}\n`;
   const ssh = createManagedSsh(home, {
@@ -127,7 +127,7 @@ test("스캔과 등록 사이에 호스트 키가 바뀌면 거절한다", async
   assert.deepEqual(ssh.list(), []);
 });
 
-test("호스트를 지우면 그 줄만 사라진다", async () => {
+test("removing a host removes only its line", async () => {
   const home = dir();
   const ssh = createManagedSsh(home, {
     keygen: async (keyPath) => writeFileSync(keyPath, "K"),
@@ -146,7 +146,7 @@ test("호스트를 지우면 그 줄만 사라진다", async () => {
   assert.equal(readFileSync(ssh.configPath, "utf8").includes(a.id), false);
 });
 
-test("관리 호스트면 -F 로 관리 설정을 가리키고, 모르는 별칭이면 인자가 없다", async () => {
+test("a managed host points -F at the managed config; an unknown alias gets no arguments", async () => {
   const home = dir();
   const ssh = createManagedSsh(home, {
     keygen: async (keyPath) => writeFileSync(keyPath, "K"),
@@ -157,7 +157,7 @@ test("관리 호스트면 -F 로 관리 설정을 가리키고, 모르는 별칭
   assert.deepEqual(ssh.configArgs("legacy-alias"), []);
 });
 
-test("관리형 config 의 널 장치는 플랫폼을 따른다", () => {
+test("the null device in the managed config follows the platform", () => {
   assert.equal(globalKnownHostsLine("win32"), "  GlobalKnownHostsFile NUL");
   assert.equal(globalKnownHostsLine("linux"), "  GlobalKnownHostsFile /dev/null");
 });
