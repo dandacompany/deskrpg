@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 
 import { db, gatewayResources, getDefaultSqlitePath, users } from "@/db";
 import { hermesInstallAllowed, hostSetupAllowed } from "@/lib/hermes/setup/policy";
+import { readLocaleCookie } from "@/lib/i18n/server";
 import { getUserId } from "@/lib/internal-rpc";
 import startupCheck from "@/lib/startup-check.js";
 
@@ -84,7 +85,13 @@ export async function GET(req: NextRequest) {
   }
   if (systemRole !== "system_admin") return notFound();
 
-  const inspected = startupCheck.inspectEnvironment(process.env);
+  // startup-check picks its language from the locale variables. Korean viewers get Korean, everyone else English
+  // (the CLI only has those two). Only a copy is changed — process.env stays as it is.
+  const viewerEnv = {
+    ...process.env,
+    LC_ALL: readLocaleCookie(req.headers.get("cookie")) === "ko" ? "ko_KR.UTF-8" : "C",
+  };
+  const inspected = startupCheck.inspectEnvironment(viewerEnv);
   // startup-check.js is CommonJS, so dbTarget is inferred as string — narrow it here with the same
   // rule that file uses (only one of the two comes out).
   const dbTarget: "postgresql" | "sqlite" =
@@ -95,6 +102,7 @@ export async function GET(req: NextRequest) {
     databaseUrl: process.env.DATABASE_URL,
     sqlitePath: getDefaultSqlitePath(),
     target: dbTarget,
+    env: viewerEnv,
   });
 
   const report: DiagnosticsReport = {
