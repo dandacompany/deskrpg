@@ -8,6 +8,7 @@ import {
   sameOriginMutation,
   validateGatewayUrl,
   safeSetupError,
+  setupFailureLogEntry,
   validateTimezone,
   validateSetupPort,
   collectSetupWarnings,
@@ -187,4 +188,23 @@ test("port write failures go out as-is with a whitelisted code", () => {
 test("logon_required is a warning, not a failure", () => {
   assert.ok(SETUP_WARNING_CODES.has("logon_required"));
   assert.equal(safeSetupError(new Error("logon_required")), "setup_failed");
+});
+
+test("setupFailureLogEntry keeps only the error name and call-site frames, never the message", () => {
+  const error = new Error("ssh failed token=secret-value\nsecond line api_key=also-secret");
+  const entry = setupFailureLogEntry("setup_failed", error);
+  assert.ok(entry);
+  assert.equal(entry.code, "setup_failed");
+  assert.equal(entry.errorName, "Error");
+  assert.ok(entry.stackFrames.length > 0 && entry.stackFrames.length <= 5);
+  assert.ok(entry.stackFrames.every((frame) => frame.startsWith("at ")));
+  const serialized = JSON.stringify(entry);
+  assert.equal(serialized.includes("secret-value"), false);
+  assert.equal(serialized.includes("also-secret"), false);
+});
+
+test("setupFailureLogEntry logs only the opaque setup_failed code", () => {
+  assert.equal(setupFailureLogEntry("setup_forbidden", new Error("setup_forbidden")), null);
+  const entry = setupFailureLogEntry("setup_failed", "a string, not an Error");
+  assert.deepEqual(entry, { code: "setup_failed", errorName: "string", stackFrames: [] });
 });

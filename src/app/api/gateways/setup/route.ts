@@ -3,6 +3,7 @@ import { getUserId } from "@/lib/internal-rpc";
 import {
   sameOriginMutation,
   safeSetupError,
+  setupFailureLogEntry,
   validateProfileDescription,
   validateProfileName,
   validateSetupPort,
@@ -52,6 +53,8 @@ const response = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 function failure(error: unknown) {
   const code = safeSetupError(error);
+  const logEntry = setupFailureLogEntry(code, error);
+  if (logEntry) console.error("[gateway-setup] request failed", logEntry);
   const status =
     code === "setup_forbidden" ||
     code === "setup_bad_origin" ||

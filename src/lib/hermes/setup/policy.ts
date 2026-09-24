@@ -246,3 +246,31 @@ export function safeSetupError(error: unknown): string {
   const code = error instanceof Error ? error.message : "";
   return SAFE_CODES.has(code) ? code : "setup_failed";
 }
+
+export type SetupFailureLogEntry = {
+  code: "setup_failed";
+  errorName: string;
+  stackFrames: string[];
+};
+
+/**
+ * What the setup route may log for an opaque `setup_failed`, so operators can find where it happened.
+ * The wizard handles tokens, so the error message is never included — and since a message can span
+ * several lines of `stack`, only lines that are call-site frames ("at …") are kept.
+ */
+export function setupFailureLogEntry(code: string, error: unknown): SetupFailureLogEntry | null {
+  if (code !== "setup_failed") return null;
+  const stackFrames =
+    error instanceof Error && typeof error.stack === "string"
+      ? error.stack
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.startsWith("at "))
+          .slice(0, 5)
+      : [];
+  return {
+    code,
+    errorName: error instanceof Error ? error.name : typeof error,
+    stackFrames,
+  };
+}
