@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { NpcSmalltalk } from "./npc-smalltalk";
+import { NpcSmalltalk, SMALLTALK_LINES } from "./npc-smalltalk";
 const actors = () => [
   { id: "a", name: "노아", x: 1, y: 1, walking: true, available: true },
   { id: "b", name: "미나 · 기획", x: 2, y: 1, walking: false, available: true },
 ];
 test("named exchange is staggered, expires, and avoids immediate template repetition", () => {
-  const talk = new NpcSmalltalk();
+  const talk = new NpcSmalltalk("ko");
   talk.update(
     actors(),
     0,
@@ -35,7 +35,7 @@ test("named exchange is staggered, expires, and avoids immediate template repeti
 });
 test("busy staff, stationary pairs, distant staff and walls do not trigger greetings", () => {
   for (const condition of ["busy", "still", "far", "wall"]) {
-    const talk = new NpcSmalltalk(),
+    const talk = new NpcSmalltalk("ko"),
       people = actors();
     if (condition === "busy") people[1].available = false;
     if (condition === "still") people[0].walking = false;
@@ -45,7 +45,7 @@ test("busy staff, stationary pairs, distant staff and walls do not trigger greet
   }
 });
 test("real conversations cancel pending replies", () => {
-  const talk = new NpcSmalltalk(),
+  const talk = new NpcSmalltalk("ko"),
     people = actors();
   talk.update(people, 0, () => true);
   people[1].available = false;
@@ -53,7 +53,7 @@ test("real conversations cancel pending replies", () => {
   assert.equal(talk.text("b", 2000), undefined);
 });
 test("both participants stay through the reply and resume together after 7.5 seconds", () => {
-  const talk = new NpcSmalltalk(),
+  const talk = new NpcSmalltalk("ko"),
     people = actors();
   talk.update(people, 0, () => true);
   assert.equal(talk.partner("a", 0), "b");
@@ -69,7 +69,7 @@ test("both participants stay through the reply and resume together after 7.5 sec
 });
 test("a call or removal releases both participants immediately, including delayed reply", () => {
   for (const removed of [false, true]) {
-    const talk = new NpcSmalltalk(),
+    const talk = new NpcSmalltalk("ko"),
       people = actors();
     talk.update(people, 0, () => true);
     if (removed) people.pop();
@@ -80,4 +80,80 @@ test("a call or removal releases both participants immediately, including delaye
     assert.equal(talk.text("a", 1000), undefined);
     assert.equal(talk.text("b", 2000), undefined);
   }
+});
+
+// Pin the Korean lines exactly (order included) before they move into a per-locale table.
+const KO_LINES_BEFORE_I18N = [
+  ["{name}님, 좋은 하루예요!", "{name}님도 좋은 하루 보내세요!"],
+  ["{name}님, 잠깐 스트레칭 어때요?", "좋아요, {name}님! 어깨 좀 풀어야겠어요."],
+  ["{name}님, 커피 한 잔 하셨어요?", "아직요! {name}님 덕분에 생각났네요."],
+  ["{name}님, 오늘도 반가워요!", "저도요, {name}님. 오늘도 힘내요!"],
+  ["{name}님, 점심 맛있게 드셨어요?", "네! {name}님도 식사 잘 챙기세요."],
+  ["{name}님, 잠깐 바람 쐬러 가세요?", "네, {name}님. 잠깐 걸으니 좋네요."],
+  ["{name}님, 오늘 컨디션 어떠세요?", "좋아요! {name}님은 어떠세요?"],
+  ["{name}님, 오늘도 수고 많으세요.", "고마워요, {name}님. 같이 힘내요!"],
+  ["{name}님, 물 한 잔 챙기세요!", "감사해요, {name}님도요!"],
+  ["{name}님, 잠깐 쉬어 가요.", "좋은 생각이에요, {name}님!"],
+  ["{name}님, 창가 쪽이 참 좋네요.", "맞아요, {name}님. 눈도 잠깐 쉬어 가요."],
+  ["{name}님, 오후도 파이팅이에요!", "{name}님도요! 천천히 하나씩 해봐요."],
+  ["{name}님, 오늘 옷 멋지네요!", "고마워요, {name}님! 기분 좋네요."],
+  ["{name}님, 간식 생각 안 나세요?", "마침 생각했어요, {name}님!"],
+  ["{name}님, 산책하니 머리가 맑아져요.", "그러게요, {name}님. 좋은 휴식이네요."],
+  ["{name}님, 반가워요. 잘 지내시죠?", "네, {name}님! 안부 고마워요."],
+];
+
+test("the Korean smalltalk lines stay exactly as they were", () => {
+  assert.deepEqual(SMALLTALK_LINES.ko, KO_LINES_BEFORE_I18N);
+});
+
+test("every locale has the same number of exchanges and each line names the partner once", () => {
+  for (const [locale, lines] of Object.entries(SMALLTALK_LINES)) {
+    assert.equal(lines.length, SMALLTALK_LINES.ko.length, locale);
+    for (const pair of lines)
+      for (const line of pair)
+        assert.equal(line.split("{name}").length - 1, 1, `${locale}: ${line}`);
+  }
+});
+
+test("an instance created for ja speaks Japanese, and an unknown locale falls back to English", () => {
+  const ja = new NpcSmalltalk("ja");
+  ja.update(
+    actors(),
+    0,
+    () => true,
+    () => 0,
+  );
+  assert.equal(ja.text("a", 0), SMALLTALK_LINES.ja[0][0].replace("{name}", "미나"));
+  const unknown = new NpcSmalltalk("fr");
+  unknown.update(
+    actors(),
+    0,
+    () => true,
+    () => 0,
+  );
+  assert.equal(unknown.text("a", 0), SMALLTALK_LINES.en[0][0].replace("{name}", "미나"));
+});
+
+test("changing the locale applies from the next exchange", () => {
+  const talk = new NpcSmalltalk("ko");
+  talk.update(
+    actors(),
+    0,
+    () => true,
+    () => 0,
+  );
+  const korean = talk.text("a", 0);
+  talk.setLocale("zh");
+  assert.equal(talk.text("a", 0), korean);
+  talk.update(
+    actors(),
+    200_000,
+    () => true,
+    () => 0.99,
+  );
+  assert.ok(
+    SMALLTALK_LINES.zh.some(
+      ([first]) => first.replace("{name}", "미나") === talk.text("a", 200_000),
+    ),
+  );
 });

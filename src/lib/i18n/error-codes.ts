@@ -30,6 +30,7 @@ export type ErrorCode =
   | "environment_required"
   | "environment_unknown"
   | "map_template_removed"
+  | "meeting_map_invalid"
   | "template_not_found"
   | "private_channel_password_required"
   | "channel_creation_forbidden"
@@ -256,6 +257,7 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   environment_required: "errors.missingRequiredFields",
   environment_unknown: "errors.environmentUnknown",
   map_template_removed: "errors.mapTemplateRemoved",
+  meeting_map_invalid: "errors.meetingMapInvalid",
   template_not_found: "errors.mapTemplateNotFound",
   private_channel_password_required: "errors.privateChannelPasswordRequired",
   channel_creation_forbidden: "errors.forbidden",
@@ -515,6 +517,7 @@ export function getLocalizedErrorMessage(
 
   const data = payload as {
     errorCode?: unknown;
+    reason?: unknown;
     messageCode?: unknown;
     error?: unknown;
     message?: unknown;
@@ -522,6 +525,13 @@ export function getLocalizedErrorMessage(
 
   if (typeof data.messageCode === "string") {
     return getLocalizedMessage(t, data.messageCode, fallbackKey);
+  }
+
+  if (data.errorCode === "meeting_map_invalid" && typeof data.reason === "string") {
+    const reasonKey = `meetingMap.reason.${data.reason}`;
+    const reason = t(reasonKey);
+    // An unknown reason comes back as its own key; show the general message instead.
+    if (reason !== reasonKey) return t("errors.meetingMapInvalidReason", { reason });
   }
 
   if (typeof data.errorCode === "string") {

@@ -12,6 +12,7 @@ import {
   ERROR_CODE_HEADER,
   ERROR_MESSAGE_KEYS,
   getErrorMessageKey,
+  getLocalizedErrorMessage,
   withHeaderErrorCode,
   type ErrorCode,
 } from "./error-codes";
@@ -488,4 +489,36 @@ test("handoff errors resolve to a user-facing sentence in all four locales", () 
     assert.ok(key, code);
     for (const locale of [ko, en, ja, zh]) assert.ok(locale[key], `${code}: ${key}`);
   }
+});
+
+test("a meeting map error shows its reason in the viewer's language", async () => {
+  const { translateServer } = await import("./server");
+  const { MEETING_MAP_ERROR_REASONS } = await import("@/game/meeting-map-normalization");
+  const t = (locale: string) => (key: string, params?: Record<string, string | number>) =>
+    translateServer(locale, key, params);
+  const payload = {
+    errorCode: "meeting_map_invalid",
+    reason: "no_entrance",
+    error: "Invalid meeting map: …",
+  };
+  assert.equal(
+    getLocalizedErrorMessage(t("ko"), payload),
+    "회의실 맵 오류: 이동 가능한 입구가 없습니다",
+  );
+  assert.equal(
+    getLocalizedErrorMessage(t("ja"), payload),
+    "会議室マップのエラー: 歩いて入れる入口がありません",
+  );
+  // Unknown or missing reasons fall back to the general message.
+  const general = getLocalizedErrorMessage(t("ko"), { errorCode: "meeting_map_invalid" });
+  assert.equal(getLocalizedErrorMessage(t("ko"), { ...payload, reason: "nope" }), general);
+  assert.match(general, /회의실 맵을 확인할 수 없습니다/);
+  // Every reason has a translation in every locale.
+  for (const locale of ["ko", "en", "ja", "zh"])
+    for (const reason of Object.keys(MEETING_MAP_ERROR_REASONS))
+      assert.notEqual(
+        getLocalizedErrorMessage(t(locale), { ...payload, reason }),
+        getLocalizedErrorMessage(t(locale), { errorCode: "meeting_map_invalid" }),
+        `${locale} ${reason}`,
+      );
 });

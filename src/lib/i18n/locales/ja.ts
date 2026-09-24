@@ -3302,6 +3302,52 @@ const ja: Record<string, string> = {
   "skills.template.check": "確認",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
+  "game.camera.controls": "カメラ操作",
+  "game.camera.overview": "全体表示",
+  "game.camera.rotateLeft": "左に回転",
+  "game.camera.rotateRight": "右に回転",
+  "game.camera.isometric": "立体ビュー",
+  "game.camera.top": "真上から見る",
+  "game.camera.follow": "自分のキャラクターを追う",
+  "game.camera.zoomIn": "拡大",
+  "game.camera.zoomOut": "縮小",
+  "game.camera.movementHint":
+    "クリック: 歩く · ドラッグ: 画面移動 · 右ドラッグ: 回転 · ホイール: 拡大/縮小",
+  "lookbook.collectionLabel": "オフィスキャラクターコレクション",
+  "lookbook.title": "一緒に働きたい顔ぶれ",
+  "lookbook.intro": "それぞれの好み、それぞれの物語。あなたのオフィスに合う一人を選んでください。",
+  "lookbook.searchLabel": "キャラクター検索",
+  "lookbook.searchPlaceholder": "名前やスタイルで検索",
+  "lookbook.filters": "スタイルフィルター",
+  "lookbook.selected": "選択中",
+  "lookbook.empty": "一致するキャラクターがいません。別の名前やスタイルで検索してください。",
+  "officeEnv.choose": "オフィス環境の選択",
+  "officeEnv.title": "どのオフィスで働きますか？",
+  "officeEnv.count": "すぐ使える空間 5 種",
+  "officeEnv.thumbnailAlt": "{name} の実際の 3D シーン",
+  "officeEnv.previewLabel": "選択したオフィスの 3D プレビュー",
+  "appearanceEditor.officeCharacter": "オフィスキャラクター",
+  "appearanceEditor.keepCurrent": "現在の外見のまま",
+  "characterPreview.unavailable":
+    "3D プレビューを利用できません。キャラクターの選択と保存はできます。",
+  "mapPreview.webglUnavailable": "WebGL を利用できないため、3D プレビューを表示できません。",
+  "mapPreview.controlsHint": "右ドラッグ: 回転 · ホイール: 拡大/縮小 · 中ボタン: 移動",
+  "errors.meetingMapInvalid":
+    "会議室マップを確認できません。入口と会議室への通路があるマップか確認してください。",
+  "errors.meetingMapInvalidReason": "会議室マップのエラー: {reason}",
+  "meetingMap.reason.tiled_layers_invalid": "Tiled のサイズまたはレイヤーが正しくありません",
+  "meetingMap.reason.tile_layer_size_mismatch": "タイルレイヤーのサイズがマップと異なります",
+  "meetingMap.reason.unsupported_map_data": "対応していないマップデータです",
+  "meetingMap.reason.no_entrance": "歩いて入れる入口がありません",
+  "meetingMap.reason.meeting_space_property_invalid":
+    "会議室エリアのプロパティが正しい JSON ではありません",
+  "meetingMap.reason.spawn_unreachable": "スポーン地点から移動経路が見つかりません",
+  "meetingMap.reason.meeting_space_invalid": "指定された会議室の入口・座席・待機位置が無効です",
+  "meetingMap.reason.edge_corridor_unavailable": "既存の配置を保ったまま端の連絡通路を作れません",
+  "meetingMap.reason.extended_map_too_large": "増築後のマップサイズが対応範囲を超えています",
+  "meetingMap.reason.corridor_collision_blocked":
+    "通路境界の衝突オブジェクトを安全に開放できません",
+  "meetingMap.reason.extension_unreachable": "増築した会議室への経路の検証に失敗しました",
   // --- /content-i18n:D ---
 };
 

@@ -98,10 +98,10 @@ const entry =
     const report = { viewport: { width: 1748, height: 900 }, dpr: 1, errors, metrics: {} };
     await page.goto(base);
     if (reviewUI) {
-      await page.getByRole("button", { name: "크리에이티브 스튜디오 레퍼런스 1748×900" }).click();
+      await page.getByRole("button", { name: "Creative studio reference 1748×900" }).click();
       await page.waitForFunction(
         () => {
-          const e = document.querySelector('[aria-label="실시간 계측"]');
+          const e = document.querySelector('[aria-label="Live metrics"]');
           if (!e) return false;
           const m = JSON.parse(e.textContent);
           return (
@@ -114,18 +114,18 @@ const entry =
         null,
         { timeout: 120000 },
       );
-      const metrics = JSON.parse(await page.locator('[aria-label="실시간 계측"]').innerText());
-      const rooms = await page.locator('[aria-label="공간 시각 점검"] option').allTextContents();
+      const metrics = JSON.parse(await page.locator('[aria-label="Live metrics"]').innerText());
+      const rooms = await page.locator('[aria-label="Room inspection"] option').allTextContents();
       assert.equal(rooms.length, 9);
-      await page.getByRole("button", { name: "이름·말풍선 숨기기" }).click();
+      await page.getByRole("button", { name: "Hide names and bubbles" }).click();
       await page
-        .locator('[aria-label="렌더러 검증 영역"]')
+        .locator('[aria-label="Renderer check area"]')
         .screenshot({ path: path.join(out, "review-ui-reference.png") });
-      await page.getByLabel("공간 시각 점검", { exact: true }).selectOption("pantry");
+      await page.getByLabel("Room inspection", { exact: true }).selectOption("pantry");
       await page
-        .locator('[aria-label="렌더러 검증 영역"]')
+        .locator('[aria-label="Renderer check area"]')
         .screenshot({ path: path.join(out, "review-ui-pantry.png") });
-      await page.getByLabel("공간 시각 점검", { exact: true }).selectOption("");
+      await page.getByLabel("Room inspection", { exact: true }).selectOption("");
       await page.waitForTimeout(250);
       const player = page.locator('.office-actor-label[data-kind="player"]');
       const state = () =>
@@ -145,10 +145,10 @@ const entry =
       assert.equal(departed.walking, "true");
       assert.ok(Math.hypot(departed.x - initial.x, departed.z - initial.z) > 0.1);
       await page
-        .locator('[aria-label="렌더러 검증 영역"]')
+        .locator('[aria-label="Renderer check area"]')
         .screenshot({ path: path.join(out, "review-ui-floor-departure.png") });
-      await page.getByLabel("공간 시각 점검", { exact: true }).selectOption("pantry");
-      await page.getByLabel("공간 시각 점검", { exact: true }).selectOption("");
+      await page.getByLabel("Room inspection", { exact: true }).selectOption("pantry");
+      await page.getByLabel("Room inspection", { exact: true }).selectOption("");
       await page.waitForTimeout(200);
       const beforeRetarget = await state();
       assert.equal(beforeRetarget.walking, "true");
@@ -175,7 +175,7 @@ const entry =
       const arrived = await state();
       assert.equal(arrived.seated, "false");
       await page
-        .locator('[aria-label="렌더러 검증 영역"]')
+        .locator('[aria-label="Renderer check area"]')
         .screenshot({ path: path.join(out, "review-ui-floor-retarget-arrival.png") });
       assert.deepEqual(errors, []);
       await fs.writeFile(

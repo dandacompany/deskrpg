@@ -40,8 +40,36 @@ const grid = (v: unknown): v is number[][] =>
   );
 const key = (x: number, y: number) => `${x},${y}`;
 const wall = (o: MapObject) => o.type.includes("wall");
-function invalid(reason: string): never {
-  throw new Error(`회의실 맵 오류: ${reason}`);
+export const MEETING_MAP_ERROR_REASONS = {
+  tiled_layers_invalid: "Tiled size or layers are invalid",
+  tile_layer_size_mismatch: "a tile layer does not match the map size",
+  unsupported_map_data: "unsupported map data",
+  no_entrance: "no walkable entrance",
+  meeting_space_property_invalid: "the meeting room area property is not valid JSON",
+  spawn_unreachable: "no path from the spawn point",
+  meeting_space_invalid: "the assigned meeting room's entrance, seats or waiting spots are invalid",
+  edge_corridor_unavailable: "cannot add an edge corridor without changing the existing layout",
+  extended_map_too_large: "the extended map exceeds the supported size",
+  corridor_collision_blocked: "cannot safely open collision objects at the corridor edge",
+  extension_unreachable: "the extended meeting room is not reachable",
+} as const;
+export type MeetingMapErrorReason = keyof typeof MEETING_MAP_ERROR_REASONS;
+
+/** A map the meeting runtime cannot use. `reason` is stable and translated on screen; the message is English for logs. */
+export class MeetingMapError extends Error {
+  constructor(
+    readonly reason: MeetingMapErrorReason,
+    readonly detail?: string,
+  ) {
+    super(
+      `Invalid meeting map: ${MEETING_MAP_ERROR_REASONS[reason]}${detail ? ` (${detail})` : ""}`,
+    );
+    this.name = "MeetingMapError";
+  }
+}
+
+function invalid(reason: MeetingMapErrorReason): never {
+  throw new MeetingMapError(reason);
 }
 
 /** Merge only the floor and furniture the renderer edited. Tiled collisions and unknown layers are saved as is. */
@@ -129,14 +157,14 @@ export function projectMeetingMap(input: unknown): Geometry {
       Number(input.height) > 4096 ||
       !Array.isArray(input.layers)
     )
-      invalid("Tiled 크기 또는 레이어가 잘못되었습니다");
+      invalid("tiled_layers_invalid");
     const map = input as unknown as TiledGeometryMap;
     for (const layer of map.layers)
       if (
         layer.type === "tilelayer" &&
         (!Array.isArray(layer.data) || layer.data.length !== map.width * map.height)
       )
-        invalid("타일 레이어 크기가 맵과 다릅니다");
+        invalid("tile_layer_size_mismatch");
     const g = projectTiledGeometry(map);
     const blocked = new Set(g.blocked);
     if (!map.layers.some((l) => l.name.toLowerCase() === "collision" && l.type === "tilelayer"))
@@ -156,7 +184,7 @@ export function projectMeetingMap(input: unknown): Geometry {
         Array.isArray(input.objects)) ||
         (grid(input.floor) && grid(input.walls) && grid(input.furniture))))
   ))
-    invalid("지원하지 않는 맵 데이터입니다");
+    invalid("unsupported_map_data");
   const legacy = detectAndConvertMapData(input, 40, 30);
   const cols = Math.max(40, legacy.layers.floor[0].length),
     rows = Math.max(30, legacy.layers.floor.length);
@@ -248,7 +276,7 @@ function origin(g: Geometry, config?: unknown, map?: JsonMap) {
   }
   const can = walkable(g);
   for (let y = 0; y < g.rows; y++) for (let x = 0; x < g.cols; x++) if (can(x, y)) return { x, y };
-  return invalid("이동 가능한 입구가 없습니다");
+  return invalid("no_entrance");
 }
 function spaceFor(
   g: Geometry,
@@ -412,7 +440,7 @@ function candidates(map: JsonMap, g: Geometry): Array<{ id: string; bounds: Meet
     try {
       zones = typeof ambient === "string" ? JSON.parse(ambient) : ambient;
     } catch {
-      invalid("회의실 영역 속성이 올바른 JSON이 아닙니다");
+      invalid("meeting_space_property_invalid");
     }
     if (Array.isArray(zones))
       for (const z of zones)
@@ -491,7 +519,7 @@ export function normalizeMeetingMap(
       };
   const start = origin(g, config, map),
     reach = component(g, start);
-  if (!reach.size) invalid("스폰에서 이동 경로를 찾을 수 없습니다");
+  if (!reach.size) invalid("spawn_unreachable");
   const choices = candidates(map, g);
   if (choices.length === 1) {
     const space = spaceFor(g, choices[0].bounds, choices[0].id, reach);
@@ -532,10 +560,9 @@ export function normalizeMeetingMap(
         Array.isArray(l.properties) &&
         l.properties.some((p) => record(p) && p.name === "ambientZones"),
     );
-    if (explicitRoom || explicitZones)
-      invalid("지정된 회의실의 입구·좌석·대기 위치가 유효하지 않습니다");
+    if (explicitRoom || explicitZones) invalid("meeting_space_invalid");
   }
-  if (record(map.meetingSpace)) invalid("지정된 회의실의 입구·좌석·대기 위치가 유효하지 않습니다");
+  if (record(map.meetingSpace)) invalid("meeting_space_invalid");
   // Connect by opening just one wall on the right or bottom boundary. Interior obstacles are not touched.
   let edge: { x: number; y: number; side: "right" | "bottom" } | undefined;
   const occupied = computeOccupiedTiles(g.objects.filter((o) => !wall(o)));
@@ -545,7 +572,7 @@ export function normalizeMeetingMap(
   for (let x = 1; x < g.cols - 1 && !edge; x++)
     if (reach.has(key(x, g.rows - 2)) && !occupied.has(key(x, g.rows - 1)))
       edge = { x, y: g.rows - 1, side: "bottom" };
-  if (!edge) invalid("기존 배치를 보존하며 가장자리 연결 통로를 만들 수 없습니다");
+  if (!edge) invalid("edge_corridor_unavailable");
   const oldCols = g.cols,
     oldRows = g.rows;
   const b: MeetingBounds =
@@ -554,7 +581,7 @@ export function normalizeMeetingMap(
       : { x: edge.x, y: oldRows + 2, width: 10, height: 9 };
   const cols = Math.max(oldCols, b.x + b.width + 1),
     rows = Math.max(oldRows, b.y + b.height + 1);
-  if (cols > 4096 || rows > 4096) invalid("증축 후 맵 크기가 지원 범위를 넘습니다");
+  if (cols > 4096 || rows > 4096) invalid("extended_map_too_large");
   const corridor = new Set<string>();
   if (edge.side === "right") for (let x = edge.x; x <= b.x; x++) corridor.add(key(x, edge.y));
   else for (let y = edge.y; y <= b.y; y++) corridor.add(key(edge.x, y));
@@ -614,7 +641,7 @@ export function normalizeMeetingMap(
           if (key(Math.floor(o.x / 32), Math.floor(o.y / 32)) === open) {
             if (o.type.includes("wall")) o.type = "meeting_door";
             else if (layer.name.toLowerCase() === "collision")
-              invalid("통로 경계의 충돌 객체를 안전하게 개방할 수 없습니다");
+              invalid("corridor_collision_blocked");
           }
     }
     const layerId = Math.max(0, ...tiled.layers.map((l) => l.id)) + 1;
@@ -659,7 +686,7 @@ export function normalizeMeetingMap(
   }
   g = projectMeetingMap(map);
   const space = spaceFor(g, b, "meeting-annex-v1", component(g, start));
-  if (!space) invalid("증축 회의실의 접근 경로 검증에 실패했습니다");
+  if (!space) invalid("extension_unreachable");
   const openAnnex = (x: number, y: number) =>
     insideMeetingSpace(b, x, y) || corridor.has(key(x, y));
   space.generatedAnnexWalls = additions

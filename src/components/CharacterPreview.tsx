@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { CharacterAppearance } from "@/game/three/office-appearance";
-import { useLocale } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import { resolveOfficeLook } from "@/game/three/office-looks";
 import CharacterModelView from "./CharacterModelView";
 
@@ -27,7 +27,7 @@ export default function CharacterPreview({
 }: CharacterPreviewProps) {
   const look = resolveOfficeLook(appearance);
   const [unavailable, setUnavailable] = useState(false);
-  const { locale } = useLocale();
+  const t = useT();
   const size = PREVIEW_UNIT * scale;
   return (
     <div className="flex flex-col items-center gap-2">
@@ -42,9 +42,7 @@ export default function CharacterPreview({
           </div>
         ) : unavailable ? (
           <p className="p-5 text-sm text-text-muted" role="status">
-            {locale === "ko"
-              ? "3D 미리보기를 사용할 수 없습니다. 캐릭터 선택과 저장은 가능합니다."
-              : "3D preview unavailable. You can still select and save a character."}
+            {t("characterPreview.unavailable")}
           </p>
         ) : (
           <CharacterModelView

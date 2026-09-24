@@ -3266,6 +3266,53 @@ const ko: Record<string, string> = {
   "skills.template.check": "확인",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
+  "game.camera.controls": "카메라 조작",
+  "game.camera.overview": "전체 보기",
+  "game.camera.rotateLeft": "왼쪽으로 회전",
+  "game.camera.rotateRight": "오른쪽으로 회전",
+  "game.camera.isometric": "입체 시점",
+  "game.camera.top": "위에서 보기",
+  "game.camera.follow": "내 캐릭터 따라가기",
+  "game.camera.zoomIn": "확대",
+  "game.camera.zoomOut": "축소",
+  "game.camera.movementHint":
+    "클릭: 걷기 · 드래그: 화면 이동 · 우클릭 드래그: 회전 · 휠: 확대/축소",
+  "lookbook.collectionLabel": "오피스 캐릭터 컬렉션",
+  "lookbook.title": "함께 일하고 싶은 얼굴들",
+  "lookbook.intro": "각자의 취향, 각자의 이야기. 당신의 오피스에 어울리는 한 사람을 골라보세요.",
+  "lookbook.searchLabel": "캐릭터 검색",
+  "lookbook.searchPlaceholder": "이름이나 스타일 검색",
+  "lookbook.filters": "스타일 필터",
+  "lookbook.selected": "선택됨",
+  "lookbook.empty": "일치하는 캐릭터가 없습니다. 다른 이름이나 스타일로 검색해보세요.",
+  "officeEnv.choose": "사무환경 선택",
+  "officeEnv.title": "어떤 오피스에서 일할까요?",
+  "officeEnv.count": "완성형 공간 5종",
+  "officeEnv.thumbnailAlt": "{name} 실제 3D 장면",
+  "officeEnv.previewLabel": "선택한 사무환경 3D 미리보기",
+  "appearanceEditor.officeCharacter": "오피스 캐릭터",
+  "appearanceEditor.keepCurrent": "기존 외형 유지",
+  "characterPreview.unavailable":
+    "3D 미리보기를 사용할 수 없습니다. 캐릭터 선택과 저장은 가능합니다.",
+  "mapPreview.webglUnavailable": "WebGL을 사용할 수 없어 3D 미리보기를 표시할 수 없습니다.",
+  "mapPreview.controlsHint": "우클릭 드래그: 회전 · 휠: 확대/축소 · 가운데 버튼: 이동",
+  "errors.meetingMapInvalid":
+    "회의실 맵을 확인할 수 없습니다. 입구와 회의실로 가는 길이 있는 맵인지 확인해 주세요.",
+  "errors.meetingMapInvalidReason": "회의실 맵 오류: {reason}",
+  "meetingMap.reason.tiled_layers_invalid": "Tiled 크기 또는 레이어가 잘못되었습니다",
+  "meetingMap.reason.tile_layer_size_mismatch": "타일 레이어 크기가 맵과 다릅니다",
+  "meetingMap.reason.unsupported_map_data": "지원하지 않는 맵 데이터입니다",
+  "meetingMap.reason.no_entrance": "이동 가능한 입구가 없습니다",
+  "meetingMap.reason.meeting_space_property_invalid": "회의실 영역 속성이 올바른 JSON이 아닙니다",
+  "meetingMap.reason.spawn_unreachable": "스폰에서 이동 경로를 찾을 수 없습니다",
+  "meetingMap.reason.meeting_space_invalid":
+    "지정된 회의실의 입구·좌석·대기 위치가 유효하지 않습니다",
+  "meetingMap.reason.edge_corridor_unavailable":
+    "기존 배치를 보존하며 가장자리 연결 통로를 만들 수 없습니다",
+  "meetingMap.reason.extended_map_too_large": "증축 후 맵 크기가 지원 범위를 넘습니다",
+  "meetingMap.reason.corridor_collision_blocked":
+    "통로 경계의 충돌 객체를 안전하게 개방할 수 없습니다",
+  "meetingMap.reason.extension_unreachable": "증축 회의실의 접근 경로 검증에 실패했습니다",
   // --- /content-i18n:D ---
 };
 

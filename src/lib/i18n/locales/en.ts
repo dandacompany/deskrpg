@@ -3289,6 +3289,53 @@ const en: Record<string, string> = {
   "skills.template.check": "Check",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
+  "game.camera.controls": "Camera controls",
+  "game.camera.overview": "Overview",
+  "game.camera.rotateLeft": "Rotate left",
+  "game.camera.rotateRight": "Rotate right",
+  "game.camera.isometric": "Isometric view",
+  "game.camera.top": "Top view",
+  "game.camera.follow": "Follow my character",
+  "game.camera.zoomIn": "Zoom in",
+  "game.camera.zoomOut": "Zoom out",
+  "game.camera.movementHint": "Click: walk · Drag: pan · Right-drag: orbit · Scroll: zoom",
+  "lookbook.collectionLabel": "Office character collection",
+  "lookbook.title": "Meet your office cast",
+  "lookbook.intro": "Distinct styles, individual stories. Choose someone for your office.",
+  "lookbook.searchLabel": "Search characters",
+  "lookbook.searchPlaceholder": "Search name or style",
+  "lookbook.filters": "Style filters",
+  "lookbook.selected": "Selected",
+  "lookbook.empty": "No matching characters. Try another name or style.",
+  "officeEnv.choose": "Choose your office",
+  "officeEnv.title": "Where will your team work?",
+  "officeEnv.count": "5 ready-to-use offices",
+  "officeEnv.thumbnailAlt": "{name} rendered scene",
+  "officeEnv.previewLabel": "Selected office 3D preview",
+  "appearanceEditor.officeCharacter": "Office character",
+  "appearanceEditor.keepCurrent": "Keep current appearance",
+  "characterPreview.unavailable":
+    "3D preview unavailable. You can still select and save a character.",
+  "mapPreview.webglUnavailable": "WebGL is unavailable. The 3D preview cannot be displayed.",
+  "mapPreview.controlsHint": "Right-drag: orbit · Wheel: zoom · Middle-drag: pan",
+  "errors.meetingMapInvalid":
+    "The meeting room map could not be validated. Check that the map has an entrance and a path to the meeting room.",
+  "errors.meetingMapInvalidReason": "Invalid meeting map: {reason}",
+  "meetingMap.reason.tiled_layers_invalid": "Tiled size or layers are invalid",
+  "meetingMap.reason.tile_layer_size_mismatch": "A tile layer does not match the map size",
+  "meetingMap.reason.unsupported_map_data": "Unsupported map data",
+  "meetingMap.reason.no_entrance": "No walkable entrance",
+  "meetingMap.reason.meeting_space_property_invalid":
+    "The meeting room area property is not valid JSON",
+  "meetingMap.reason.spawn_unreachable": "No path from the spawn point",
+  "meetingMap.reason.meeting_space_invalid":
+    "The assigned meeting room's entrance, seats or waiting spots are invalid",
+  "meetingMap.reason.edge_corridor_unavailable":
+    "Cannot add an edge corridor without changing the existing layout",
+  "meetingMap.reason.extended_map_too_large": "The extended map exceeds the supported size",
+  "meetingMap.reason.corridor_collision_blocked":
+    "Cannot safely open collision objects at the corridor edge",
+  "meetingMap.reason.extension_unreachable": "The extended meeting room is not reachable",
   // --- /content-i18n:D ---
 };
 

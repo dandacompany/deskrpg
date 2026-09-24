@@ -2,6 +2,7 @@ import * as T from "three";
 import { round } from "./primitives";
 import { officeRoomsForSurface, type OfficeRoomSurfaceContext } from "./office-room-layout";
 import { batchStaticFurniture } from "./static-batching";
+import { roomLabel } from "./room-labels";
 export function addRoomPartition(parent: T.Group, vertical: boolean, length = 1): T.Group {
   const width = vertical ? 0.14 : length,
     depth = vertical ? length : 0.14;
@@ -132,7 +133,7 @@ export function addOfficeRoomSurfaces(
         ctx.font = "600 48px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(room.label, 256, 64);
+        ctx.fillText(roomLabel(room.label, document.documentElement.lang), 256, 64);
         const texture = new T.CanvasTexture(canvas);
         texture.colorSpace = T.SRGBColorSpace;
         const label = new T.Mesh(

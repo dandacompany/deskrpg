@@ -3,7 +3,13 @@ import { useEffect, useState } from "react";
 import * as T from "three";
 import { OFFICE_LOOKS, LOOK_CATEGORIES, type OfficeLook } from "@/game/three/office-looks";
 import { captureThumbnail } from "@/game/three/office-look-thumbnail";
-import { useLocale } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
+import {
+  lookCategoryLabel,
+  lookLabel,
+  lookOutfit,
+  lookSearchText,
+} from "@/game/three/office-look-labels";
 
 const cachedThumbnails: Record<string, string> = {};
 
@@ -71,8 +77,8 @@ export default function OfficeLookGallery({
   selectedId?: string;
   onSelect: (look: OfficeLook) => void;
 }) {
-  const { locale } = useLocale(),
-    ko = locale === "ko";
+  const { locale } = useLocale();
+  const t = useT();
   const [images, setImages] = useState<Record<string, string>>({});
   const [category, setCategory] = useState("all"),
     [query, setQuery] = useState("");
@@ -80,27 +86,18 @@ export default function OfficeLookGallery({
   const filtered = OFFICE_LOOKS.filter(
     (l) =>
       (category === "all" || l.category === category) &&
-      `${l.name} ${l.nameEn} ${l.subtitle} ${l.subtitleEn}`
-        .toLowerCase()
-        .includes(query.toLowerCase().trim()),
+      lookSearchText(l).includes(query.toLowerCase().trim()),
   );
   return (
-    <section
-      className="lookbook-catalog"
-      aria-label={ko ? "오피스 캐릭터 컬렉션" : "Office character collection"}
-    >
+    <section className="lookbook-catalog" aria-label={t("lookbook.collectionLabel")}>
       <div className="lookbook-eyebrow">THE OFFICE COLLECTION · {OFFICE_LOOKS.length} LOOKS</div>
-      <h1>{ko ? "함께 일하고 싶은 얼굴들" : "Meet your office cast"}</h1>
-      <p className="lookbook-intro">
-        {ko
-          ? "각자의 취향, 각자의 이야기. 당신의 오피스에 어울리는 한 사람을 골라보세요."
-          : "Distinct styles, individual stories. Choose someone for your office."}
-      </p>
+      <h1>{t("lookbook.title")}</h1>
+      <p className="lookbook-intro">{t("lookbook.intro")}</p>
       <div className="lookbook-toolbar">
         <input
           type="search"
-          aria-label={ko ? "캐릭터 검색" : "Search characters"}
-          placeholder={ko ? "이름이나 스타일 검색" : "Search name or style"}
+          aria-label={t("lookbook.searchLabel")}
+          placeholder={t("lookbook.searchPlaceholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -108,7 +105,7 @@ export default function OfficeLookGallery({
           {filtered.length} / {OFFICE_LOOKS.length}
         </span>
       </div>
-      <div className="lookbook-filters" aria-label={ko ? "스타일 필터" : "Style filters"}>
+      <div className="lookbook-filters" aria-label={t("lookbook.filters")}>
         {LOOK_CATEGORIES.map((c) => (
           <button
             key={c.id}
@@ -116,7 +113,7 @@ export default function OfficeLookGallery({
             aria-pressed={category === c.id}
             onClick={() => setCategory(c.id)}
           >
-            {ko ? c.ko : c.en}
+            {lookCategoryLabel(c.id, locale)}
           </button>
         ))}
       </div>
@@ -133,29 +130,23 @@ export default function OfficeLookGallery({
               {images[l.id] ? (
                 <img src={images[l.id]} alt="" width={240} height={280} />
               ) : (
-                <span className="lookbook-placeholder">{ko ? l.name : l.nameEn}</span>
+                <span className="lookbook-placeholder">{lookLabel(l, locale).name}</span>
               )}
               <span className="lookbook-number">
                 {String(OFFICE_LOOKS.indexOf(l) + 1).padStart(2, "0")}
               </span>
               {selectedId === l.id && (
-                <span className="lookbook-selected">{ko ? "선택됨" : "Selected"}</span>
+                <span className="lookbook-selected">{t("lookbook.selected")}</span>
               )}
             </div>
             <div className="lookbook-card-caption">
-              <strong>{ko ? l.name : l.nameEn}</strong>
-              <span>{ko ? l.subtitle.split(" · ")[1] : l.subtitleEn.split(" · ")[1]}</span>
+              <strong>{lookLabel(l, locale).name}</strong>
+              <span>{lookOutfit(l, locale)}</span>
             </div>
           </button>
         ))}
       </div>
-      {!filtered.length && (
-        <p className="lookbook-empty">
-          {ko
-            ? "일치하는 캐릭터가 없습니다. 다른 이름이나 스타일로 검색해보세요."
-            : "No matching characters. Try another name or style."}
-        </p>
-      )}
+      {!filtered.length && <p className="lookbook-empty">{t("lookbook.empty")}</p>}
     </section>
   );
 }
