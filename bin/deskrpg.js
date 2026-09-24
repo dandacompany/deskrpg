@@ -26,6 +26,15 @@ function loadCliPasswordModule() {
   return require(path.join(getPackageRoot(), "src", "lib", "cli-password.js"));
 }
 
+function loadCliMessagesModule() {
+  return require(path.join(getPackageRoot(), "src", "lib", "cli-messages.js"));
+}
+
+/** A terminal message in the terminal's language (`ko*` locale → Korean, otherwise English). */
+function msg(key, params) {
+  return loadCliMessagesModule().cliMessage(key, params);
+}
+
 function loadCliResetPasswordModule() {
   return require(path.join(getPackageRoot(), "src", "lib", "cli-reset-password.js"));
 }
@@ -316,7 +325,7 @@ function loadStartupCheckModule() {
 
 /** One line of doctor output. Makes OK / warning / failure visible per item. */
 function reportCheck(status, label, detail) {
-  const marker = status === "ok" ? "OK  " : status === "warn" ? "경고" : "실패";
+  const marker = msg(`doctor.marker.${status}`);
   const line = detail ? `[${marker}] ${label} — ${detail}` : `[${marker}] ${label}`;
   if (status === "fail") console.error(line);
   else console.log(line);
@@ -366,10 +375,10 @@ async function runHostSetup(argv) {
   if (action === "status") {
     const host = readSwitch(envText, HOST_SETUP_KEY);
     const install = readSwitch(envText, HERMES_INSTALL_KEY);
-    console.log(`연결 마법사의 호스트 설정: ${host ? "켜짐" : "꺼짐"}`);
-    console.log(`이 컴퓨터에 Hermes 설치: ${install ? "켜짐" : "꺼짐"}`);
-    if (!host)
-      console.log("\n켜려면: deskrpg host-setup on --with-install   (그 뒤 deskrpg 를 다시 시작)");
+    const state = (on) => msg(on ? "hostSetup.on" : "hostSetup.off");
+    console.log(msg("hostSetup.statusHost", { state: state(host) }));
+    console.log(msg("hostSetup.statusInstall", { state: state(install) }));
+    if (!host) console.log(msg("hostSetup.howToEnable"));
     return 0;
   }
 
@@ -387,12 +396,13 @@ async function runHostSetup(argv) {
 
   console.log(
     enabled
-      ? `연결 마법사의 호스트 설정을 켰습니다${withInstall ? " (Hermes 설치 포함)" : ""}.`
-      : "호스트 설정과 Hermes 설치를 모두 껐습니다.",
+      ? msg("hostSetup.enabled", {
+          install: withInstall ? msg("hostSetup.enabledWithInstall") : "",
+        })
+      : msg("hostSetup.disabled"),
   );
-  console.log("적용하려면 deskrpg 를 다시 시작하세요 — 이 값은 켤 때 한 번만 읽습니다.");
-  if (enabled && !withInstall)
-    console.log("이 컴퓨터에 Hermes 까지 설치하려면: deskrpg host-setup on --with-install");
+  console.log(msg("hostSetup.restartToApply"));
+  if (enabled && !withInstall) console.log(msg("hostSetup.howToInstall"));
   return 0;
 }
 
@@ -411,14 +421,14 @@ async function runDoctor() {
     );
     process.exit(1);
   }
-  reportCheck("ok", "런타임 초기화", envPath);
+  reportCheck("ok", msg("doctor.runtimeInit"), envPath);
 
   const missingDirs = [dataDir, uploadsDir, logsDir].filter((dirPath) => !fs.existsSync(dirPath));
   if (missingDirs.length > 0) {
     console.error(`DeskRPG runtime is incomplete. Missing: ${missingDirs.join(", ")}`);
     process.exit(1);
   }
-  reportCheck("ok", "런타임 디렉터리", "data · uploads · logs 모두 있음");
+  reportCheck("ok", msg("doctor.runtimeDirs"), msg("doctor.runtimeDirsOk"));
 
   if (process.env.DESKRPG_SKIP_BUILD_CHECK !== "1") {
     const requiredBuildPaths = standaloneAppRoot
@@ -443,7 +453,7 @@ async function runDoctor() {
       );
       process.exit(1);
     }
-    reportCheck("ok", "빌드 산출물", "필요한 런타임 파일이 모두 있음");
+    reportCheck("ok", msg("doctor.build"), msg("doctor.buildOk"));
   }
 
   // From here on we check "can it actually work", not whether files exist.
@@ -453,10 +463,15 @@ async function runDoctor() {
     loadStartupCheckModule();
   const inspection = inspectEnvironment(process.env);
 
-  for (const warning of inspection.warnings) reportCheck("warn", "환경변수", warning);
-  for (const error of inspection.errors) reportCheck("fail", "환경변수", error);
+  const environmentLabel = msg("doctor.environment");
+  for (const warning of inspection.warnings) reportCheck("warn", environmentLabel, warning);
+  for (const error of inspection.errors) reportCheck("fail", environmentLabel, error);
   if (inspection.warnings.length === 0 && inspection.errors.length === 0) {
-    reportCheck("ok", "환경변수", `문제 없음 (DB 대상: ${inspection.dbTarget})`);
+    reportCheck(
+      "ok",
+      environmentLabel,
+      msg("doctor.environmentOk", { target: inspection.dbTarget }),
+    );
   }
 
   // Whether the connection wizard may touch the host. Off is the default and normal, so it is not a failure.
@@ -465,10 +480,12 @@ async function runDoctor() {
   const hermesInstallOn = !offValue(process.env.DESKRPG_HERMES_INSTALL_ENABLED);
   reportCheck(
     "ok",
-    "호스트 설정",
+    msg("doctor.hostSetup"),
     hostSetupOn
-      ? `관리자에게 켜짐${hermesInstallOn ? " · Hermes 설치 켜짐" : " · Hermes 설치는 꺼짐"}`
-      : "운영자가 꺼 둠 — 다시 켜려면 deskrpg host-setup on --with-install",
+      ? msg("doctor.hostSetupOn", {
+          install: msg(hermesInstallOn ? "doctor.hermesInstallOn" : "doctor.hermesInstallOff"),
+        })
+      : msg("doctor.hostSetupOff"),
   );
 
   // Probe what the app actually uses (inspection.dbTarget). Deciding by whether a URL exists gives a false
@@ -478,14 +495,18 @@ async function runDoctor() {
     sqlitePath: process.env.SQLITE_PATH || runtimePaths.getDeskRpgSqlitePath(),
     target: inspection.dbTarget,
   });
-  reportCheck(dbProbe.ok ? "ok" : "fail", `데이터베이스(${dbProbe.target})`, dbProbe.message);
+  reportCheck(
+    dbProbe.ok ? "ok" : "fail",
+    msg("doctor.database", { target: dbProbe.target }),
+    dbProbe.message,
+  );
 
   const port = parseDoctorPort();
   const portProbe = await checkPortAvailable(port);
-  reportCheck(portProbe.free ? "ok" : "warn", `포트 ${port}`, portProbe.message);
+  reportCheck(portProbe.free ? "ok" : "warn", msg("doctor.port", { port }), portProbe.message);
 
   if (inspection.errors.length > 0 || !dbProbe.ok) {
-    console.error("DeskRPG 진단에서 문제를 찾았습니다. 위의 [실패] 항목을 먼저 해결하세요.");
+    console.error(msg("doctor.problemsFound"));
     process.exit(1);
   }
 

@@ -75,7 +75,7 @@ test("the warning text never includes the secret value itself, only its length",
   const result = inspectEnvironment({ JWT_SECRET: secret });
   const joined = [...result.errors, ...result.warnings].join("\n");
   assert.ok(!joined.includes(secret));
-  assert.ok(joined.includes(`${secret.length}자`));
+  assert.ok(joined.includes(`${secret.length} chars`));
 });
 
 test("warns that internal RPC is fully rejected when both secrets are empty", () => {
@@ -126,7 +126,7 @@ test("with a PostgreSQL target and no URL, reports failure without probing", asy
 
 test("when Hermes is missing, says the connection wizard can install it (on by default)", () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-hint-"));
-  assert.match(String(startupCheck.hostSetupHint({ PATH: "" }, home)), /로컬 연결에서 설치/);
+  assert.match(String(startupCheck.hostSetupHint({ PATH: "" }, home)), /Local connection/);
 });
 
 test("when the operator has turned the switch off, tells them the command to turn it on", () => {
@@ -176,7 +176,7 @@ test("shows the install hint when Hermes is found nowhere", () => {
   const missing = path.join(emptyHome, "nope");
   try {
     const hint = hostSetupHint({ HERMES_HOME: missing, PATH: missing }, emptyHome);
-    assert.match(String(hint), /Hermes 가 없습니다/);
+    assert.match(String(hint), /Hermes is not installed/);
   } finally {
     fs.rmSync(emptyHome, { recursive: true, force: true });
   }
@@ -187,7 +187,19 @@ test("a placeholder JWT_SECRET blocks startup in production", () => {
     baseEnv({ NODE_ENV: "production", JWT_SECRET: "change-me-to-a-random-64-char-string" }),
   );
   assert.ok(
-    result.errors.some((line) => line.includes("자리표시자")),
+    result.errors.some((line) => line.includes("placeholder")),
     `errors: ${JSON.stringify(result.errors)}`,
+  );
+});
+
+test("a non-Korean terminal gets English startup messages", async () => {
+  const env = { LANG: "ja_JP.UTF-8" };
+  const inspection = inspectEnvironment({ ...env, DATABASE_URL: "postgres://x" });
+  for (const line of [...inspection.warnings, ...inspection.errors])
+    assert.doesNotMatch(line, /[가-힣]/);
+  const probe = await checkDatabaseReachable({ target: "postgresql", env });
+  assert.equal(
+    probe.message,
+    "DB_TYPE=postgresql but DATABASE_URL is missing, so there is nothing to connect to — set DATABASE_URL.",
   );
 });

@@ -3,6 +3,8 @@
 //
 // Principle: never put a secret value itself in a message. Only say whether it exists and how long it is.
 
+const { cliMessage } = require("./cli-messages.js");
+
 const POSTGRES_DB_TYPES = new Set(["postgresql", "postgres"]);
 const DEFAULT_DB_PROBE_TIMEOUT_MS = 5000;
 
@@ -48,8 +50,8 @@ function hostSetupHint(env = process.env, homeDir = require("node:os").homedir()
     return null;
   }
   if (off("DESKRPG_HOST_SETUP_ENABLED") || off("DESKRPG_HERMES_INSTALL_ENABLED"))
-    return "이 컴퓨터에 Hermes 가 없습니다 — 연결 마법사로 함께 설치하려면 `deskrpg host-setup on --with-install` 을 실행한 뒤 다시 시작하세요.";
-  return "이 컴퓨터에 Hermes 가 없습니다 — 관리자 계정으로 연결 → 새 게이트웨이 → 로컬 연결에서 설치할 수 있습니다.";
+    return cliMessage("hint.hermesMissingSwitchOff", {}, env);
+  return cliMessage("hint.hermesMissing", {}, env);
 }
 
 const { isPlaceholderSecret } = require("./runtime-paths.js");
@@ -74,42 +76,28 @@ function inspectEnvironment(env = process.env) {
   // so this is blocked exactly like an empty value.
   const jwtIsPlaceholder = Boolean(jwtSecret) && isPlaceholderSecret(jwtSecret);
   if (!jwtSecret || jwtIsPlaceholder) {
-    const what = jwtIsPlaceholder
-      ? "JWT_SECRET 이 `.env.example` 의 자리표시자 그대로입니다"
-      : "JWT_SECRET 이 비어 있습니다";
+    const what = cliMessage(jwtIsPlaceholder ? "env.jwtPlaceholder" : "env.jwtEmpty", {}, env);
     if (isProduction) {
-      errors.push(
-        `${what} — 프로덕션에서 로그인 토큰을 서명할 수 없습니다. .env.local 에 충분히 긴 임의 문자열로 JWT_SECRET 을 설정한 뒤 다시 기동하세요(\`openssl rand -hex 32\`).`,
-      );
+      errors.push(cliMessage("env.jwtProduction", { what }, env));
     } else {
-      warnings.push(
-        `${what} — 개발 모드에서만 넘어갑니다. 배포 전에 .env.local 에 JWT_SECRET 을 설정하세요.`,
-      );
+      warnings.push(cliMessage("env.jwtDevelopment", { what }, env));
     }
   }
 
   if (POSTGRES_DB_TYPES.has(dbTypeRaw) && !databaseUrl) {
-    errors.push(
-      `DB_TYPE=${dbTypeRaw} 로 지정됐는데 DATABASE_URL 이 없어 접속할 곳이 없습니다 — DATABASE_URL 을 채우거나 DB_TYPE 을 지우고 SQLite 로 동작시키세요.`,
-    );
+    errors.push(cliMessage("env.postgresWithoutUrl", { dbType: dbTypeRaw }, env));
   }
 
   if (!databaseUrl && !dbTypeRaw) {
-    warnings.push(
-      "DATABASE_URL 도 DB_TYPE 도 없어 PostgreSQL 이 아니라 SQLite 로 동작합니다 — PostgreSQL 을 쓸 생각이었다면 DATABASE_URL 을 설정하세요.",
-    );
+    warnings.push(cliMessage("env.sqliteFallback", {}, env));
   }
 
   if (!internalRpcSecret && jwtSecret) {
-    warnings.push(
-      `INTERNAL_RPC_SECRET 이 없어 내부 RPC 인증이 JWT_SECRET(${jwtSecret.length}자) 으로 대체됩니다 — 두 비밀을 분리하려면 INTERNAL_RPC_SECRET 을 따로 설정하세요.`,
-    );
+    warnings.push(cliMessage("env.rpcFallsBackToJwt", { length: jwtSecret.length }, env));
   }
 
   if (!internalRpcSecret && !jwtSecret) {
-    warnings.push(
-      "INTERNAL_RPC_SECRET 과 JWT_SECRET 이 모두 비어 내부 RPC 요청이 전부 403 으로 거부됩니다 — 둘 중 하나는 반드시 설정하세요.",
-    );
+    warnings.push(cliMessage("env.rpcBothEmpty", {}, env));
   }
 
   return { errors, warnings, dbTarget };
@@ -120,17 +108,18 @@ function inspectEnvironment(env = process.env) {
  * error with an empty message (confirmed: on connection failure only `(  )` was printed),
  * so this also checks code/name to avoid producing empty parentheses.
  */
-function describeError(error) {
-  if (!error) return "원인 불명";
-  if (typeof error === "string") return error || "원인 불명";
+function describeError(error, env = process.env) {
+  const unknown = cliMessage("error.unknown", {}, env);
+  if (!error) return unknown;
+  if (typeof error === "string") return error || unknown;
   const message = typeof error.message === "string" ? error.message.trim() : "";
   if (message) return message;
   const code = typeof error.code === "string" ? error.code : "";
   const name = typeof error.name === "string" ? error.name : "";
-  return code || name || "원인 불명";
+  return code || name || unknown;
 }
 
-async function probePostgres(databaseUrl, timeoutMs) {
+async function probePostgres(databaseUrl, timeoutMs, env) {
   const { Client } = require("pg");
   const client = new Client({
     connectionString: databaseUrl,
@@ -148,7 +137,7 @@ async function probePostgres(databaseUrl, timeoutMs) {
       })(),
       new Promise((_, reject) => {
         timer = setTimeout(
-          () => reject(new Error(`${timeoutMs}ms 안에 응답이 없었습니다`)),
+          () => reject(new Error(cliMessage("db.postgresTimeout", { ms: timeoutMs }, env))),
           timeoutMs,
         );
       }),
@@ -156,13 +145,13 @@ async function probePostgres(databaseUrl, timeoutMs) {
     return {
       ok: true,
       target: "postgresql",
-      message: "PostgreSQL 에 접속해 SELECT 1 을 확인했습니다.",
+      message: cliMessage("db.postgresOk", {}, env),
     };
   } catch (error) {
     return {
       ok: false,
       target: "postgresql",
-      message: `PostgreSQL 에 접속하지 못했습니다(${describeError(error)}) — DATABASE_URL 의 호스트·포트·계정과 DB 기동 상태를 확인하세요.`,
+      message: cliMessage("db.postgresFailed", { reason: describeError(error, env) }, env),
     };
   } finally {
     if (timer) clearTimeout(timer);
@@ -174,7 +163,7 @@ async function probePostgres(databaseUrl, timeoutMs) {
   }
 }
 
-async function probeSqlite(sqlitePath) {
+async function probeSqlite(sqlitePath, env) {
   const fs = require("node:fs");
   const path = require("node:path");
 
@@ -182,8 +171,7 @@ async function probeSqlite(sqlitePath) {
     return {
       ok: false,
       target: "sqlite",
-      message:
-        "SQLite 파일 경로를 알 수 없습니다 — SQLITE_PATH 를 설정하거나 deskrpg init 를 먼저 실행하세요.",
+      message: cliMessage("db.sqliteNoPath", {}, env),
     };
   }
 
@@ -192,7 +180,7 @@ async function probeSqlite(sqlitePath) {
     return {
       ok: true,
       target: "sqlite",
-      message: `SQLite 파일을 읽고 쓸 수 있습니다: ${sqlitePath}`,
+      message: cliMessage("db.sqliteOk", { path: sqlitePath }, env),
     };
   } catch {
     // The file not existing yet can be normal — if the parent directory is writable, it's created at boot.
@@ -201,13 +189,13 @@ async function probeSqlite(sqlitePath) {
       return {
         ok: true,
         target: "sqlite",
-        message: `SQLite 파일이 아직 없지만 기동 시 생성됩니다: ${sqlitePath}`,
+        message: cliMessage("db.sqliteCreatedAtBoot", { path: sqlitePath }, env),
       };
     } catch {
       return {
         ok: false,
         target: "sqlite",
-        message: `SQLite 파일과 그 디렉터리에 접근할 수 없습니다: ${sqlitePath} — 경로와 권한을 확인하거나 deskrpg init 를 실행하세요.`,
+        message: cliMessage("db.sqliteInaccessible", { path: sqlitePath }, env),
       };
     }
   }
@@ -216,11 +204,17 @@ async function probeSqlite(sqlitePath) {
 /**
  * Confirms the DB is actually reachable. Never throws — always returns a result object.
  *
- * @param {{ databaseUrl?: string, sqlitePath?: string, target?: "postgresql" | "sqlite", timeoutMs?: number }} options
+ * @param {{ databaseUrl?: string, sqlitePath?: string, target?: "postgresql" | "sqlite", timeoutMs?: number, env?: Record<string, string | undefined> }} options
  * @returns {Promise<{ ok: boolean, target: "postgresql" | "sqlite", message: string }>}
  */
 async function checkDatabaseReachable(options = {}) {
-  const { databaseUrl, sqlitePath, target, timeoutMs = DEFAULT_DB_PROBE_TIMEOUT_MS } = options;
+  const {
+    databaseUrl,
+    sqlitePath,
+    target,
+    timeoutMs = DEFAULT_DB_PROBE_TIMEOUT_MS,
+    env = process.env,
+  } = options;
 
   // Which DB to probe must match what the app actually uses. `deskrpg init` copies
   // .env.example, so a leftover PostgreSQL DATABASE_URL line stays even in a SQLite
@@ -234,18 +228,17 @@ async function checkDatabaseReachable(options = {}) {
         return {
           ok: false,
           target: "postgresql",
-          message:
-            "DB_TYPE=postgresql 인데 DATABASE_URL 이 없어 접속할 곳이 없습니다 — DATABASE_URL 을 채우세요.",
+          message: cliMessage("db.postgresWithoutUrl", {}, env),
         };
       }
-      return await probePostgres(databaseUrl, timeoutMs);
+      return await probePostgres(databaseUrl, timeoutMs, env);
     }
-    return await probeSqlite(sqlitePath);
+    return await probeSqlite(sqlitePath, env);
   } catch (error) {
     return {
       ok: false,
       target: resolved,
-      message: `데이터베이스 확인 중 예상치 못한 오류가 났습니다(${describeError(error)}) — 드라이버 설치 상태를 확인하세요.`,
+      message: cliMessage("db.unexpected", { reason: describeError(error, env) }, env),
     };
   }
 }
@@ -255,9 +248,10 @@ async function checkDatabaseReachable(options = {}) {
  *
  * @param {number} port
  * @param {string} [host]
+ * @param {Record<string, string | undefined>} [env]
  * @returns {Promise<{ free: boolean, message: string }>}
  */
-function checkPortAvailable(port, host = "0.0.0.0") {
+function checkPortAvailable(port, host = "0.0.0.0", env = process.env) {
   const net = require("node:net");
 
   return new Promise((resolve) => {
@@ -266,15 +260,15 @@ function checkPortAvailable(port, host = "0.0.0.0") {
       if (error && error.code === "EADDRINUSE") {
         resolve({
           free: false,
-          message: `포트 ${port} 을 이미 다른 프로세스가 쓰고 있습니다 — deskrpg stop 으로 멈추거나 deskrpg start -p 다른포트 로 띄우세요.`,
+          message: cliMessage("port.inUse", { port }, env),
         });
         return;
       }
       const reason = error instanceof Error ? error.message : String(error);
-      resolve({ free: true, message: `포트 ${port} 점유 여부를 확인하지 못했습니다(${reason}).` });
+      resolve({ free: true, message: cliMessage("port.unknown", { port, reason }, env) });
     });
     server.once("listening", () => {
-      server.close(() => resolve({ free: true, message: `포트 ${port} 가 비어 있습니다.` }));
+      server.close(() => resolve({ free: true, message: cliMessage("port.free", { port }, env) }));
     });
     server.listen(port, host);
   });
@@ -285,12 +279,12 @@ function checkPortAvailable(port, host = "0.0.0.0") {
  *
  * @returns {boolean} false if there's even one error
  */
-function reportEnvironmentInspection(inspection, logger = console) {
+function reportEnvironmentInspection(inspection, logger = console, env = process.env) {
   for (const warning of inspection.warnings) {
-    logger.warn(`[startup] 경고: ${warning}`);
+    logger.warn(cliMessage("report.warning", { message: warning }, env));
   }
   for (const error of inspection.errors) {
-    logger.error(`[startup] 실패: ${error}`);
+    logger.error(cliMessage("report.failure", { message: error }, env));
   }
   return inspection.errors.length === 0;
 }
