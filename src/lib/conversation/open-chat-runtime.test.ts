@@ -452,3 +452,65 @@ test("a human-called turn's prompt carries [대화 상대] on the second line, b
   assert.ok(chained, "단비의 지목으로 하늘이 불렸다");
   assert.ok(!chained.includes("[대화 상대]"), chained.slice(0, 200));
 });
+
+test("the caller's locale picks the script language for the called NPC and the NPCs it chains to", async () => {
+  const prompts = new Map<string, string[]>();
+  const capturing = (npcId: string, reply: string): NpcAdapter =>
+    ({
+      type: "mock",
+      async execute(o: AdapterExecuteOptions) {
+        prompts.set(npcId, [...(prompts.get(npcId) ?? []), o.prompt]);
+        return { response: reply, session: { sessionRef: o.sessionKey } };
+      },
+      async testConnection() {
+        return { status: "ok" as const };
+      },
+    }) as NpcAdapter;
+  const rt = new OpenChatRuntime(
+    {
+      participants: [
+        { ...p("n1", "Danbi", capturing("n1", "@[Haneul] please")), role: "" },
+        { ...p("n2", "Haneul", capturing("n2", "sure")), role: "" },
+      ],
+      recent: () => [],
+      turnTimeout: TIMEOUT,
+    },
+    {},
+  );
+
+  await rt.handleHumanMessage("Dante", "@[Danbi] hi", "socket-1", "source-1", null, "ja");
+
+  const human = prompts.get("n1")?.[0] ?? "";
+  const chained = prompts.get("n2")?.[0] ?? "";
+  assert.ok(chained, "Danbi's mention called Haneul");
+  for (const prompt of [human, chained]) {
+    assert.doesNotMatch(prompt, /[가-힣]/, prompt.slice(0, 300));
+    assert.ok(prompt.includes("[Recent conversation]"));
+  }
+  // An empty role falls back to the localized "colleague" label.
+  assert.ok(human.includes("- Haneul(Colleague)"), human);
+});
+
+test("a cookie-less caller (null locale) gets the English script; an omitted locale keeps Korean", async () => {
+  const prompts: string[] = [];
+  const adapter = {
+    type: "mock",
+    async execute(o: AdapterExecuteOptions) {
+      prompts.push(o.prompt);
+      return { response: "ok", session: { sessionRef: o.sessionKey } };
+    },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
+  } as NpcAdapter;
+  const rt = new OpenChatRuntime(
+    { participants: [p("n1", "단비", adapter)], recent: () => [], turnTimeout: TIMEOUT },
+    {},
+  );
+
+  await rt.handleHumanMessage("Dante", "@[단비] hi", null, "s-1", null, null);
+  await rt.handleHumanMessage("Dante", "@[단비] hi", null, "s-2", null);
+
+  assert.ok(prompts[0].startsWith("You are 단비."), prompts[0]);
+  assert.ok(prompts[1].startsWith("당신은 단비 입니다."), prompts[1]);
+});

@@ -11,6 +11,7 @@ import { getRoomResponseSnapshot } from "./room-runtime";
 import type { Server } from "socket.io";
 import { resolveRoomAccessDecision, type RoomAccess } from "@/lib/chat-rooms-policy";
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
+import { readLocaleCookie } from "@/lib/i18n/server";
 import type { UserContext } from "@/lib/user-context";
 import type * as chatRooms from "@/lib/chat-rooms";
 import type { PlayerState } from "./socket-handlers";
@@ -28,6 +29,8 @@ type RoomSocket = {
   id: string;
   /** Set by player:join. `userContext` is the caller's name and bio (goes into the transcript preamble). */
   data?: { userContext?: UserContext | null };
+  /** The language cookie rides on the handshake — it decides the language of what the server writes for this user. */
+  handshake?: { headers?: { cookie?: string } };
   on(event: string, handler: (payload: unknown) => unknown): void;
   emit(event: string, payload: unknown): void;
   join(room: string): void;
@@ -290,6 +293,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
               socket.id,
               saved.id,
               socket.data?.userContext ?? null,
+              readLocaleCookie(socket.handshake?.headers?.cookie),
             )
             .catch((err) => console.error("[room] turn failed:", err));
         }
@@ -333,6 +337,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
         createdBy: user.userId,
         npcIds,
         userIds,
+        locale: readLocaleCookie(socket.handshake?.headers?.cookie),
       });
       const summary = await summaryFor(id, room.id);
       if (!summary) return fail(room.id, "not_found");

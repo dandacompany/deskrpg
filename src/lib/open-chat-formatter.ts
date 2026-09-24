@@ -16,6 +16,8 @@ export type ChatLine = { sender: string; content: string };
 type Words = {
   intro: (self: string, calledBy: string) => string;
   colleagues: string;
+  /** Shown in place of an empty role. */
+  defaultRole: string;
   recent: string;
   nothingYet: string;
   howToReply: string;
@@ -33,6 +35,7 @@ const WORDS: Record<PromptLocale, Words> = {
     intro: (self, calledBy) =>
       `당신은 ${self} 입니다. 사무실에서 오가는 대화 중 ${calledBy} 님이 당신을 불렀습니다.`,
     colleagues: "[같은 공간에 있는 동료]",
+    defaultRole: "동료",
     recent: "[최근 대화]",
     nothingYet: "(아직 오간 말이 없습니다)",
     howToReply: "[답하는 법]",
@@ -47,6 +50,7 @@ const WORDS: Record<PromptLocale, Words> = {
     intro: (self, calledBy) =>
       `You are ${self}. During a conversation in the office, ${calledBy} called on you.`,
     colleagues: "[Colleagues in the same space]",
+    defaultRole: "Colleague",
     recent: "[Recent conversation]",
     nothingYet: "(Nothing has been said yet)",
     howToReply: "[How to reply]",
@@ -78,7 +82,7 @@ export function formatOpenChatMessage(
 
   if (others.length > 0) {
     lines.push(w.colleagues);
-    for (const o of others) lines.push(`- ${o.displayName}(${o.role})`);
+    for (const o of others) lines.push(`- ${o.displayName}(${o.role || w.defaultRole})`);
     lines.push("");
   }
 
