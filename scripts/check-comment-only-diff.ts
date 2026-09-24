@@ -49,6 +49,18 @@ function isTitleCall(node: ts.CallExpression): boolean {
   }
 }
 
+/** A string literal, or string literals joined with `+` (no interpolation, no identifiers). */
+function isPlainTitle(node: ts.Expression): boolean {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return true;
+  if (ts.isParenthesizedExpression(node)) return isPlainTitle(node.expression);
+  return (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.PlusToken &&
+    isPlainTitle(node.left) &&
+    isPlainTitle(node.right)
+  );
+}
+
 /** Reprint without comments, with plain test titles blanked. */
 export function normalizeSource(text: string, fileName: string): string {
   const source = parse(text, fileName);
@@ -56,7 +68,7 @@ export function normalizeSource(text: string, fileName: string): string {
     const visit = (node: ts.Node): ts.Node => {
       if (ts.isCallExpression(node) && isTitleCall(node) && node.arguments.length > 0) {
         const [first, ...rest] = node.arguments;
-        if (ts.isStringLiteral(first) || ts.isNoSubstitutionTemplateLiteral(first)) {
+        if (isPlainTitle(first)) {
           const visited = ts.visitEachChild(node, visit, context) as ts.CallExpression;
           return context.factory.updateCallExpression(
             visited,

@@ -21,6 +21,12 @@ test("test and describe titles may change, including modifiers and subtests", ()
   assert.equal(normalizeSource(before, "x.test.ts"), normalizeSource(after, "x.test.ts"));
 });
 
+test("a title built only from concatenated string literals may change", () => {
+  const before = `test("첫 부분 " + "둘째 부분", () => {});\n`;
+  const after = `test("first part " + "second part", () => {});\n`;
+  assert.equal(normalizeSource(before, "x.test.ts"), normalizeSource(after, "x.test.ts"));
+});
+
 test("changes to code, string literals or assertion messages are detected", () => {
   const base = `const s = "화면 문구";\nassert.equal(x, 1, "메시지");\nfoo("인자");\n`;
   for (const changed of [
