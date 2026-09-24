@@ -18,7 +18,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.923.1` — New tasks default to human approval, with explicit delegation to a different AI employee. Approvals record the reviewer and the submitted result. Requires plugin 0.13.1 and the policy-aware Hermes core described below.
+- Version: `v2026.924.1` — Manage each employee's skills: install from the official list, Skills Hub or a URL, edit, turn on or off, delete, and run the curator. Product text, NPC small talk, meeting summaries and CLI output follow your language (English, Korean, Japanese, Chinese). Linking the plugin into every employee is opt-in and disclosed in the setup wizard. Requires plugin 0.16.0 and the policy-aware Hermes core described below.
 
 ## What You Can Do
 
