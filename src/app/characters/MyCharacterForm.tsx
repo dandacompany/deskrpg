@@ -29,8 +29,7 @@ type MyCharacter = {
  */
 export default function MyCharacterForm({ onSaved }: { onSaved?: () => void } = {}) {
   const t = useT(),
-    { locale } = useLocale(),
-    ko = locale === "ko";
+    { locale } = useLocale();
   const [character, setCharacter] = useState<MyCharacter | null | undefined>(undefined);
   const isEditMode = !!character;
 
