@@ -1,8 +1,9 @@
-// 맵 에디터 폐기(0013)의 SQLite 쪽 검증.
+// SQLite-side verification for the map editor retirement (0013).
 //
-// 빈 DB 에는 맵 에디터 표가 애초에 만들어지지 않고, 표와 옛 외형이 남은 기존 DB 를 열면
-// 두 부트스트랩 모두 표를 지우고 외형을 오피스 룩으로 접는다. 사용자가 데이터 손실까지
-// 알고 승인한 삭제이므로 맵 에디터 데이터는 복구되지 않는다.
+// An empty DB never gets the map editor tables created in the first place, and opening an
+// existing DB that still has the tables and old appearances makes both bootstrap paths drop
+// the tables and fold the appearance into an office look. This is a deletion the user approved
+// knowing it would lose data, so map editor data is not recovered.
 import assert from "node:assert/strict";
 import test from "node:test";
 import Database from "better-sqlite3";
@@ -21,7 +22,7 @@ const { MAP_EDITOR_TABLES, OFFICE_LOOK_IDS, normalizeAppearanceJson, retireMapEd
     retireMapEditor: (sqlite: Database.Database) => void;
   };
 
-// 0012 까지의 기본 스키마에 들어 있던 정의 그대로(FK 관계 포함).
+// Exact copy of the definition that was in the base schema through 0012 (including FK relations).
 const MAP_EDITOR_DDL = `
   CREATE TABLE IF NOT EXISTS maps (
     id TEXT PRIMARY KEY NOT NULL,
@@ -93,7 +94,7 @@ const MAP_EDITOR_DDL = `
   );
 `;
 
-/** 옛 레이어 방식 외형 한 벌 — 룩 ID 가 없고 레이어 키만 있다. */
+/** One old-style layered appearance — no look ID, just layer keys. */
 function legacyLayers(bodyType?: string): string {
   const value: Record<string, unknown> = {
     layers: {
@@ -119,8 +120,8 @@ function appearanceOf(db: Database.Database, table: string, id: string): string 
 }
 
 /**
- * 외형이 든 세 표에 변환 시나리오를 한 벌씩 심는다. id 는 표 이름과 시나리오를 합쳐
- * 만들므로 어느 표에서 어긋났는지 실패 메시지로 바로 보인다.
+ * Seeds one conversion scenario each into the three tables that hold an appearance. The id
+ * combines the table name and scenario, so a failure message immediately shows which table diverged.
  */
 const APPEARANCE_CASES: Array<{ key: string; value: string | null; expected: string | null }> = [
   {
@@ -144,14 +145,14 @@ const APPEARANCE_CASES: Array<{ key: string; value: string | null; expected: str
     expected: JSON.stringify({ officeLookId: "office-nari", bodyType: "female" }),
   },
   {
-    // 이미 정본인 행은 손대지 않는다.
+    // Rows that are already canonical are left untouched.
     key: "valid-look",
     value: JSON.stringify({ officeLookId: "office-seo", bodyType: "female" }),
     expected: JSON.stringify({ officeLookId: "office-seo", bodyType: "female" }),
   },
   { key: "null", value: null, expected: null },
   {
-    // JSON 이긴 한데 객체가 아닌 값(문자열 JSON). 옛 외형과 같이 기본 룩으로 접는다.
+    // Valid JSON but not an object (a JSON string). Folded into the default look, same as an old appearance.
     key: "string-json",
     value: JSON.stringify("office-seo"),
     expected: JSON.stringify({ officeLookId: "office-jun", bodyType: "male" }),
@@ -168,7 +169,7 @@ function seedAppearances(db: Database.Database): void {
   ).run("g1", "u1", "gw", "http://localhost:1", "enc", "2026-01-01", "2026-01-01");
 
   for (const c of APPEARANCE_CASES) {
-    // characters.appearance 는 NOT NULL 이라 NULL 시나리오가 없다 — 그 행만 건너뛴다.
+    // characters.appearance is NOT NULL, so there's no null scenario for it — just skip that row.
     if (c.value !== null) {
       db.prepare("INSERT INTO characters (id, user_id, name, appearance) VALUES (?,?,?,?)").run(
         `char-${c.key}`,
@@ -206,13 +207,13 @@ function assertAppearances(db: Database.Database, label: string): void {
   }
 }
 
-test("빈 DB 의 기본 스키마에는 맵 에디터 표가 없다", () => {
+test("an empty DB's base schema has no map editor tables", () => {
   const db = new Database(":memory:");
   db.exec(SQLITE_BASE_SCHEMA);
   ensureSqliteCompatibility(db);
 
   for (const t of MAP_EDITOR_TABLES) assert.equal(tableExists(db, t), false, t);
-  // 다른 표는 정상이다.
+  // Other tables are fine.
   for (const t of [
     "users",
     "channels",
@@ -229,7 +230,7 @@ test("빈 DB 의 기본 스키마에는 맵 에디터 표가 없다", () => {
   db.close();
 });
 
-test("맵 에디터 표와 옛 외형이 남은 기존 DB 를 열면 표는 사라지고 외형이 변환된다 — 두 번 열어도 같다", () => {
+test("opening an existing DB with map editor tables and old appearances drops the tables and converts the appearances — same result opened twice", () => {
   const db = new Database(":memory:");
   db.exec(SQLITE_BASE_SCHEMA);
   db.exec(MAP_EDITOR_DDL);
@@ -240,12 +241,12 @@ test("맵 에디터 표와 옛 외형이 남은 기존 DB 를 열면 표는 사�
   for (const t of MAP_EDITOR_TABLES) assert.equal(tableExists(db, t), false, `${t} 는 지워진다`);
   assertAppearances(db, "1회차");
 
-  // 멱등 — 다시 열어도 결과가 같다.
+  // Idempotent — running it again gives the same result.
   ensureSqliteCompatibility(db);
   for (const t of MAP_EDITOR_TABLES) assert.equal(tableExists(db, t), false, `${t} 는 지워진다`);
   assertAppearances(db, "2회차");
 
-  // 채널·NPC 는 그대로다.
+  // Channels and NPCs are untouched.
   assert.equal(
     (db.prepare("SELECT COUNT(*) AS n FROM npcs").get() as { n: number }).n,
     APPEARANCE_CASES.length,
@@ -253,7 +254,7 @@ test("맵 에디터 표와 옛 외형이 남은 기존 DB 를 열면 표는 사�
   db.close();
 });
 
-test("공용 모듈 단독으로도 멱등이고, 표가 없어도 오류가 없다", () => {
+test("the shared module is idempotent on its own too, and doesn't error when the tables are missing", () => {
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
   db.exec(`CREATE TABLE users (id TEXT PRIMARY KEY NOT NULL);`);
@@ -264,13 +265,13 @@ test("공용 모듈 단독으로도 멱등이고, 표가 없어도 오류가 없
   db.close();
 });
 
-test("NULL 외형과 유효한 룩은 변환 대상이 아니다", () => {
+test("a NULL appearance and a valid look are not converted", () => {
   assert.equal(normalizeAppearanceJson(null), null);
   assert.equal(
     normalizeAppearanceJson(JSON.stringify({ officeLookId: "office-yun", bodyType: "female" })),
     null,
   );
-  // 깨진 JSON 은 옛 외형과 같이 기본 룩으로 접는다.
+  // Broken JSON is folded into the default look, same as an old appearance.
   assert.equal(
     normalizeAppearanceJson("{not json"),
     JSON.stringify({ officeLookId: "office-jun", bodyType: "male" }),
@@ -278,12 +279,12 @@ test("NULL 외형과 유효한 룩은 변환 대상이 아니다", () => {
 });
 
 /**
- * SQLite 모듈과 `drizzle/0013_drop_map_editor_tables.sql` 은 OFFICE_LOOKS 목록을 리터럴로
- * 박아 둔다(CJS 모듈은 TS 를 require 할 수 없고, SQL 은 아무것도 import 하지 않는다).
- * 룩이 늘거나 줄면 이 테스트가 먼저 빨개진다 — 목록이 낡으면 이미 정본인 행을 다시
- * 기본 룩으로 접어 버린다.
+ * The SQLite module and `drizzle/0013_drop_map_editor_tables.sql` both hardcode the OFFICE_LOOKS
+ * list as a literal (a CJS module can't require TS, and the SQL doesn't import anything). If a
+ * look is added or removed, this test goes red first — otherwise a stale list would fold an
+ * already-canonical row back into the default look.
  */
-test("박아 둔 룩 ID 목록이 OFFICE_LOOKS 와 같다 (JS 모듈·SQL 양쪽)", async () => {
+test("the hardcoded look ID list matches OFFICE_LOOKS (both the JS module and the SQL)", async () => {
   const expected = OFFICE_LOOKS.map((look) => look.id);
   assert.deepEqual(OFFICE_LOOK_IDS, expected, "sqlite-map-editor-drop.js 의 목록이 낡았습니다");
 
@@ -296,7 +297,7 @@ test("박아 둔 룩 ID 목록이 OFFICE_LOOKS 와 같다 (JS 모듈·SQL 양쪽
   );
   const sql = readFileSync(sqlPath, "utf8");
   const declared = [...sql.matchAll(/'(office-[a-z]+)'/g)].map((m) => m[1]);
-  // office-nari / office-jun 은 변환 규칙에도 나오므로 중복을 접고 집합으로 비교한다.
+  // office-nari / office-jun also appear in the conversion rules, so dedupe and compare as sets.
   assert.deepEqual(
     [...new Set(declared)].sort(),
     [...expected].sort(),

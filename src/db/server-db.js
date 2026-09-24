@@ -365,26 +365,27 @@ function ensureSqliteCompatibility(sqlite) {
     "ALTER TABLE npcs ADD COLUMN hermes_profile_id TEXT REFERENCES hermes_profiles(id) ON DELETE SET NULL",
     "ALTER TABLE npcs ADD COLUMN agent_config TEXT",
   ]);
-  // 컬럼이 갖춰진 다음에 은퇴 마이그레이션을 돌린다(이관 대상 열이 둘 다 있어야 한다).
+  // Run the retirement migration only after the columns are in place (both migration-source columns must exist).
   retireOpenclawConfig(sqlite);
-  // hermes_profiles.appearance 는 ALTER 로 되지만 npcs 의 NOT NULL·FK·유니크는 재생성이 필요하다.
-  // src/db/index.ts 의 ensureSqliteCompatibility 와 같은 순서 — 두 부트 경로가 갈리지 않게 한다.
+  // hermes_profiles.appearance can be added with ALTER, but npcs' NOT NULL/FK/unique constraints require a rebuild.
+  // Same order as ensureSqliteCompatibility in src/db/index.ts — keeps the two boot paths from diverging.
   applySqliteAlterStatements(sqlite, "hermes_profiles", [
     "ALTER TABLE hermes_profiles ADD COLUMN appearance TEXT",
   ]);
   migrateNpcsToProfileOwnership(sqlite);
   ensureChatRoomTables(sqlite);
-  // chat_room_messages 가 있어야 notice_json 을 더할 수 있으니 방 테이블 다음이다.
+  // Comes after the room tables, since chat_room_messages must exist before notice_json can be added.
   ensureKanbanCronBookkeeping(sqlite);
-  // npcs 가 갖춰진 다음이어야 FK 가 걸린다. index.ts 와 같은 순서.
+  // Must come after npcs is set up so the FK can attach. Same order as index.ts.
   ensureNpcPanelReads(sqlite);
-  // 보드 표의 PK 를 대리 키로 옮기고(기존 DB 만) 프로젝트·서브프로젝트 메타 표를 만든다.
-  // 반드시 보드 표가 선 다음이고, 메타 표의 FK 가 가리킬 대상이라 재구축이 먼저다.
+  // Moves the board table's PK to a surrogate key (existing DBs only) and creates the
+  // project/subproject metadata tables. Must come after the board table, since the
+  // rebuild has to happen first for the metadata tables' FKs to have a target.
   ensureProjectRegistry(sqlite);
-  // 2026-04 태스크 시스템 폐기 — 옛 태스크·보고 테이블은 데이터째 지운다.
+  // 2026-04 task system retirement — drop the old task/report tables along with their data.
   dropLegacyTaskTables(sqlite);
-  // 맵 에디터 폐기 — 옛 외형을 오피스 룩으로 접고 맵 에디터 표 8개를 지운다.
-  // index.ts 의 동명 함수와 **같은 순서**를 지킨다.
+  // Map editor retirement — fold the old appearance into the office look and drop the 8 map editor tables.
+  // Keeps **the same order** as the same-named function in index.ts.
   retireMapEditor(sqlite);
 
   applySqliteAlterStatements(sqlite, "characters", ["ALTER TABLE characters ADD COLUMN bio TEXT"]);

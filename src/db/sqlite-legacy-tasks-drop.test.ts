@@ -1,6 +1,7 @@
-// 2026-04 태스크 시스템 폐기(0012)의 SQLite 쪽 검증.
-// 옛 tasks / npc_reports 가 남아 있는 기존 DB 를 열면 두 부트스트랩 모두 테이블을 지우고,
-// 빈 DB 에는 애초에 만들지 않는다. 사용자가 이관 없이 폐기하기로 했으므로 데이터는 복구되지 않는다.
+// SQLite-side verification for the 2026-04 task system retirement (0012).
+// Opening an existing DB with the old tasks / npc_reports still in it makes both bootstrap
+// paths drop the tables, and an empty DB never gets them created in the first place. The user
+// decided to retire it without migrating the data, so the data is not recovered.
 import assert from "node:assert/strict";
 import test from "node:test";
 import Database from "better-sqlite3";
@@ -10,7 +11,7 @@ const { SQLITE_BASE_SCHEMA } = require("./sqlite-base-schema.js");
 const { LEGACY_TASK_TABLES, dropLegacyTaskTables } = require("./sqlite-legacy-tasks-drop.js");
 const { ensureSqliteCompatibility } = require("./server-db.js");
 
-// 0011 까지의 기본 스키마에 들어 있던 정의 그대로(npc_reports → tasks FK 포함).
+// Exact copy of the definition that was in the base schema through 0011 (including the npc_reports → tasks FK).
 const LEGACY_TASK_DDL = `
   CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY NOT NULL,
@@ -41,13 +42,13 @@ function tableExists(db: Database.Database, name: string): boolean {
   );
 }
 
-test("빈 DB 의 기본 스키마에는 tasks / npc_reports 가 없다", () => {
+test("an empty DB's base schema has no tasks / npc_reports", () => {
   const db = new Database(":memory:");
   db.exec(SQLITE_BASE_SCHEMA);
   for (const t of LEGACY_TASK_TABLES) assert.equal(tableExists(db, t), false, t);
 });
 
-test("옛 테이블이 남은 기존 DB 는 ensureSqliteCompatibility 가 지운다 — 두 번 돌려도 같다", () => {
+test("an existing DB with the old tables still around gets them dropped by ensureSqliteCompatibility — same result run twice", () => {
   const db = new Database(":memory:");
   db.exec(SQLITE_BASE_SCHEMA);
   db.exec(LEGACY_TASK_DDL);
@@ -58,13 +59,13 @@ test("옛 테이블이 남은 기존 DB 는 ensureSqliteCompatibility 가 지운
 
   for (const t of LEGACY_TASK_TABLES)
     assert.equal(tableExists(db, t), false, `${t} 는 지워져야 한다`);
-  // 다른 테이블은 건드리지 않는다.
+  // Other tables are left untouched.
   for (const t of ["npcs", "channels", "channel_kanban_boards", "meeting_minutes"]) {
     assert.ok(tableExists(db, t), t);
   }
 });
 
-test("공용 모듈 단독으로도 멱등이고, 테이블이 없어도 오류가 없다", () => {
+test("the shared module is idempotent on its own too, and doesn't error when the tables are missing", () => {
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
   db.exec(`CREATE TABLE users (id TEXT PRIMARY KEY NOT NULL);`);

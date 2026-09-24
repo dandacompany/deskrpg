@@ -105,9 +105,9 @@ export const approvalTargets = activeSchema.approvalTargets;
 export const chatRooms = activeSchema.chatRooms;
 export const chatRoomMembers = activeSchema.chatRoomMembers;
 export const chatRoomMessages = activeSchema.chatRoomMessages;
-// 직원 패널의 탭별 열람 상태(src/lib/npc-panel-reads.ts 가 읽고 쓴다).
+// Per-tab read state for the staff panel (read/written by src/lib/npc-panel-reads.ts).
 export const npcPanelReads = activeSchema.npcPanelReads;
-// DeskRPG 가 만든 Hermes cron 작업의 출처 장부(src/lib/cron-origins.ts 가 읽고 쓴다).
+// Origin ledger for Hermes cron jobs created by DeskRPG (read/written by src/lib/cron-origins.ts).
 export const cronJobOrigins = activeSchema.cronJobOrigins;
 
 // Use PG type for all API routes — Drizzle's runtime API is identical across dialects.
@@ -456,39 +456,43 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
   applySqliteAlterStatements(sqlite, "npcs", [
     "ALTER TABLE npcs ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'hermes'",
     "ALTER TABLE npcs ADD COLUMN adapter_config TEXT",
-    // P1 이 server-db.js 쪽에만 더해서 API 경로에는 없었다. 이 컬럼이 없으면 Hermes
-    // 프로필 바인딩이 저장되지 않고, 프로필을 읽는 쿼리는 "no such column" 으로 죽는다.
+    // P1 only added this on the server-db.js side, so it was missing from the API path. Without
+    // this column, Hermes profile bindings don't get saved, and queries that read the profile
+    // die with "no such column".
     "ALTER TABLE npcs ADD COLUMN hermes_profile_id TEXT REFERENCES hermes_profiles(id) ON DELETE SET NULL",
     "ALTER TABLE npcs ADD COLUMN agent_config TEXT",
   ]);
-  // 컬럼이 갖춰진 다음에 은퇴 마이그레이션을 돌린다(이관 대상 열이 둘 다 있어야 한다).
+  // Run the retirement migration only after the columns are in place (both migration-source columns must exist).
   retireOpenclawConfig(sqlite);
-  // hermes_profiles.appearance 는 ALTER 로 되지만 npcs 의 NOT NULL·FK·유니크는 재생성이 필요하다.
+  // hermes_profiles.appearance can be added with ALTER, but npcs' NOT NULL/FK/unique constraints require a rebuild.
   applySqliteAlterStatements(sqlite, "hermes_profiles", [
     "ALTER TABLE hermes_profiles ADD COLUMN appearance TEXT",
   ]);
   migrateNpcsToProfileOwnership(sqlite);
   ensureChatRoomTables(sqlite);
-  // chat_room_messages 가 있어야 notice_json 을 더할 수 있으니 방 테이블 다음이다.
+  // Comes after the room tables, since chat_room_messages must exist before notice_json can be added.
   ensureKanbanCronBookkeeping(sqlite);
-  // npcs 가 갖춰진 다음이어야 FK 가 걸린다. server-db.js 와 같은 순서.
+  // Must come after npcs is set up so the FK can attach. Same order as server-db.js.
   ensureNpcPanelReads(sqlite);
-  // 보드 표의 PK 를 대리 키로 옮기고(기존 DB 만) 프로젝트·서브프로젝트 메타 표를 만든다.
-  // 반드시 보드 표가 선 다음이고, 메타 표의 FK 가 가리킬 대상이라 재구축이 먼저다.
+  // Moves the board table's PK to a surrogate key (existing DBs only) and creates the
+  // project/subproject metadata tables. Must come after the board table, since the
+  // rebuild has to happen first for the metadata tables' FKs to have a target.
   ensureProjectRegistry(sqlite);
-  // 2026-04 태스크 시스템 폐기 — 옛 태스크·보고 테이블은 데이터째 지운다.
+  // 2026-04 task system retirement — drop the old task/report tables along with their data.
   dropLegacyTaskTables(sqlite);
-  // 맵 에디터 폐기 — 옛 외형을 오피스 룩으로 접고 맵 에디터 표 8개를 지운다.
-  // hermes_profiles.appearance ALTER 뒤라야 그 표의 외형까지 변환된다.
+  // Map editor retirement — fold the old appearance into the office look and drop the 8 map editor tables.
+  // Must come after the hermes_profiles.appearance ALTER so that table's appearance also gets converted.
   retireMapEditor(sqlite);
-  // 이 함수와 server-db.js 의 동명 함수는 **서로 다른 경로**다 — API 라우트는 이쪽,
-  // 소켓 서버는 저쪽을 탄다. 한쪽에만 컬럼을 더하면 그 경로에서만 조용히
-  // "no such column" 이 난다(실제로 그렇게 났다). 새 컬럼은 양쪽에 넣을 것.
+  // This function and the same-named function in server-db.js are **separate paths** — API
+  // routes go through this one, the socket server through the other. Adding a column to only
+  // one side silently produces "no such column" on that path alone (this has actually happened).
+  // Add new columns to both.
   applySqliteAlterStatements(sqlite, "gateway_resources", [
     "ALTER TABLE gateway_resources ADD COLUMN local_discovery_opted_in_at TEXT",
     "ALTER TABLE gateway_resources ADD COLUMN local_discovery_opted_in_by TEXT REFERENCES users(id) ON DELETE SET NULL",
-    // `GET /deskrpg/info` 판정 캐시. src/lib/hermes/plugin-capability.ts 의 PluginStatus 문자열이
-    // plugin_status 에 들어간다 — 이 컬럼이 없으면 기존 DB 를 쓰는 사용자에게서만 조용히 깨진다.
+    // Cache for the `GET /deskrpg/info` verdict. The PluginStatus string from
+    // src/lib/hermes/plugin-capability.ts goes into plugin_status — without this column,
+    // it silently breaks only for users on an existing DB.
     "ALTER TABLE gateway_resources ADD COLUMN plugin_status TEXT",
     "ALTER TABLE gateway_resources ADD COLUMN plugin_version TEXT",
     "ALTER TABLE gateway_resources ADD COLUMN plugin_checked_at TEXT",

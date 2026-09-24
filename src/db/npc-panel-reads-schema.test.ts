@@ -1,6 +1,7 @@
-// npc_panel_reads(0019)의 SQLite 부트스트랩 검증.
-// 빈 DB 는 기본 스키마만으로 갖춰지고, 0019 이전에 만들어진 DB 는 ensureSqliteCompatibility 가
-// 테이블을 더한다. 두 경로가 갈리면 한쪽 사용자만 "no such table" 을 본다.
+// SQLite bootstrap verification for npc_panel_reads (0019).
+// An empty DB gets it from the base schema alone, and a DB created before 0019 gets the table
+// added by ensureSqliteCompatibility. If the two paths diverge, only one side of users sees
+// "no such table".
 import assert from "node:assert/strict";
 import test from "node:test";
 import Database from "better-sqlite3";
@@ -47,7 +48,7 @@ function seedFixture(db: Database.Database) {
   ).run();
 }
 
-/** 0019 이전 기본 스키마 — npc_panel_reads 블록을 걷어낸 모양. */
+/** The base schema before 0019 — with the npc_panel_reads block stripped out. */
 function legacyBaseSchema(): string {
   const start = SQLITE_BASE_SCHEMA.indexOf("    CREATE TABLE IF NOT EXISTS npc_panel_reads");
   const end = SQLITE_BASE_SCHEMA.indexOf("    CREATE TABLE IF NOT EXISTS meeting_minutes");
@@ -55,7 +56,7 @@ function legacyBaseSchema(): string {
   return SQLITE_BASE_SCHEMA.slice(0, start) + SQLITE_BASE_SCHEMA.slice(end);
 }
 
-test("빈 DB 는 기본 스키마만으로 npc_panel_reads 를 갖춘다", () => {
+test("an empty DB gets npc_panel_reads from the base schema alone", () => {
   const db = new Database(":memory:");
   db.exec(SQLITE_BASE_SCHEMA);
   assert.ok(tableExists(db, "npc_panel_reads"));
@@ -63,7 +64,7 @@ test("빈 DB 는 기본 스키마만으로 npc_panel_reads 를 갖춘다", () =>
   assert.deepEqual(primaryKeyColumns(db, "npc_panel_reads"), ["user_id", "npc_id", "tab"]);
 });
 
-test("0019 이전 DB 는 ensureSqliteCompatibility 가 테이블을 더한다 — 두 번 돌려도 같다", () => {
+test("a DB from before 0019 gets the table added by ensureSqliteCompatibility — same result run twice", () => {
   const db = new Database(":memory:");
   db.exec(legacyBaseSchema());
   assert.equal(tableExists(db, "npc_panel_reads"), false, "npc_panel_reads 가 미리 있으면 안 된다");
@@ -76,7 +77,7 @@ test("0019 이전 DB 는 ensureSqliteCompatibility 가 테이블을 더한다 �
   assert.deepEqual(primaryKeyColumns(db, "npc_panel_reads"), ["user_id", "npc_id", "tab"]);
 });
 
-test("공용 모듈 단독으로도 멱등이다", () => {
+test("the shared module is idempotent on its own too", () => {
   const db = new Database(":memory:");
   db.exec(`
     CREATE TABLE users (id TEXT PRIMARY KEY NOT NULL);
@@ -87,7 +88,7 @@ test("공용 모듈 단독으로도 멱등이다", () => {
   assert.ok(tableExists(db, "npc_panel_reads"));
 });
 
-test("(user_id, npc_id, tab) 가 복합 기본키다", () => {
+test("(user_id, npc_id, tab) is the composite primary key", () => {
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
   db.exec(SQLITE_BASE_SCHEMA);
@@ -95,8 +96,8 @@ test("(user_id, npc_id, tab) 가 복합 기본키다", () => {
   const insert = db.prepare(
     `INSERT INTO npc_panel_reads (user_id, npc_id, tab, seen_at, seen_ids) VALUES ('u1','n1',?,datetime('now'),?)`,
   );
-  insert.run("cron", null); // cron 행은 seen_ids 가 NULL
-  insert.run("cards", '["t1"]'); // 탭이 다르면 된다
+  insert.run("cron", null); // the cron row has seen_ids as NULL
+  insert.run("cards", '["t1"]'); // fine as long as the tab differs
   assert.throws(
     () => insert.run("cron", null),
     /UNIQUE constraint failed/,
@@ -104,8 +105,8 @@ test("(user_id, npc_id, tab) 가 복합 기본키다", () => {
   );
 });
 
-test("사용자·직원을 지우면 열람 상태가 cascade 로 사라진다", () => {
-  // u1 은 채널 소유자라 지울 수 없다(channels.owner_id 가 막는다) — 열람만 남긴 u2 로 확인한다.
+test("deleting a user or an NPC cascades the read state away", () => {
+  // u1 is the channel owner and can't be deleted (channels.owner_id blocks it) — verify with u2, who only has a read state.
   for (const [what, sql] of [
     ["users", `DELETE FROM users WHERE id='u2'`],
     ["npcs", `DELETE FROM npcs WHERE id='n1'`],

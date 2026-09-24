@@ -15,7 +15,7 @@ function columns(db: Database.Database, table: string) {
   }[];
 }
 
-test("빈 SQLite 부팅에 회의 결과 컬럼이 있다", () => {
+test("an empty SQLite boot has the meeting outcome columns", () => {
   const db = new Database(":memory:");
   db.exec(SQLITE_BASE_SCHEMA);
   ensureSqliteCompatibility(db);
@@ -27,7 +27,7 @@ test("빈 SQLite 부팅에 회의 결과 컬럼이 있다", () => {
   assert.equal(status?.dflt_value, "'ok'");
 });
 
-test("컬럼이 없는 기존 회의록도 부팅하면 생기고, 옛 행은 ok 로 읽힌다", () => {
+test("an existing meeting record without the columns also gets them on boot, and old rows read as ok", () => {
   const db = new Database(":memory:");
   db.exec(`CREATE TABLE meeting_minutes (id TEXT PRIMARY KEY NOT NULL, channel_id TEXT NOT NULL,
       topic TEXT NOT NULL, transcript TEXT NOT NULL, participants TEXT NOT NULL DEFAULT '[]',
@@ -40,6 +40,6 @@ test("컬럼이 없는 기존 회의록도 부팅하면 생기고, 옛 행은 ok
     .prepare("SELECT outcome_json, summary_status FROM meeting_minutes WHERE id = 'm1'")
     .get() as { outcome_json: string | null; summary_status: string };
   assert.deepEqual(row, { outcome_json: null, summary_status: "ok" });
-  // 두 번 불러도 깨지지 않는다(멱등).
+  // Calling it twice doesn't break anything (idempotent).
   ensureSqliteCompatibility(db);
 });

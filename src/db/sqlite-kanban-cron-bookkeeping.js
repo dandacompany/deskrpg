@@ -1,6 +1,7 @@
-// 칸반 보드·cron 작업 장부 테이블과 그에 딸린 컬럼 두 개. 두 부트스트랩(src/db/index.ts,
-// server-db.js)이 같이 부른다 — 한쪽에만 넣으면 그 경로가 여는 DB 에서만 조용히
-// "no such table/column" 이 난다(chat_rooms 와 같은 이유로 공용 모듈에 둔다).
+// The kanban board/cron job ledger tables plus their two extra columns. Called by both
+// bootstrap paths (src/db/index.ts, server-db.js) — adding it to only one silently produces
+// "no such table/column" only on the DB that path opens (kept as a shared module for the same
+// reason as chat_rooms).
 "use strict";
 
 const KANBAN_CRON_TABLES = `
@@ -35,11 +36,11 @@ const KANBAN_CRON_TABLES = `
   CREATE UNIQUE INDEX IF NOT EXISTS cron_job_origins_gateway_profile_job_idx ON cron_job_origins(gateway_id, profile_name, job_id);
 `;
 
-/** 기존 DB 에 더할 컬럼. 테이블별로 묶어 두고, 테이블이 없으면 그 묶음은 건너뛴다. */
+/** Columns to add to an existing DB. Grouped by table, and the group is skipped if the table doesn't exist. */
 const KANBAN_CRON_COLUMNS = {
-  // `GET /deskrpg/info` 응답 원문 캐시 — 칸반·cron 지원 여부를 여기서 읽는다.
+  // Cache of the raw `GET /deskrpg/info` response — kanban/cron support is read from here.
   gateway_resources: ["ALTER TABLE gateway_resources ADD COLUMN plugin_info_json TEXT"],
-  // 시스템 메시지의 구조화 페이로드. 일반 메시지는 NULL.
+  // Structured payload for a system message. NULL for ordinary messages.
   chat_room_messages: ["ALTER TABLE chat_room_messages ADD COLUMN notice_json TEXT"],
 };
 
@@ -50,8 +51,8 @@ function tableExists(sqlite, table) {
 }
 
 /**
- * 테이블 두 개를 만들고 컬럼 두 개를 더한다. 멱등 — 매 부팅마다 돌아도 된다.
- * ALTER 는 "duplicate column name" 만 삼키고 나머지 오류는 그대로 올린다.
+ * Creates the two tables and adds the two columns. Idempotent — fine to run on every boot.
+ * The ALTER only swallows "duplicate column name" and rethrows any other error.
  */
 function ensureKanbanCronBookkeeping(sqlite) {
   sqlite.exec(KANBAN_CRON_TABLES);

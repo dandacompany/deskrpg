@@ -1,7 +1,8 @@
-// OpenClaw 은퇴 마이그레이션 — 데이터를 옮기고 지우는 작업이라 계약을 고정해 둔다.
+// OpenClaw retirement migration — this moves and deletes data, so its contract is pinned down here.
 //
-// 특히 두 가지: (1) 페르소나가 한 글자도 잃지 않고 옮겨질 것, (2) 여러 번 돌아도 안전할 것.
-// 이 함수는 서버가 뜰 때마다 두 경로(API·소켓)에서 각각 불린다.
+// Two things in particular: (1) the persona must migrate without losing a single character,
+// (2) it must be safe to run multiple times. This function is called from both paths (API,
+// socket) every time the server boots.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -12,7 +13,7 @@ const Database = require("better-sqlite3");
 
 const { retireOpenclawConfig } = require("./sqlite-openclaw-retirement.js");
 
-/** 은퇴 전 모습의 npcs 테이블을 만든다. */
+/** Creates an npcs table in its pre-retirement shape. */
 function legacyDb() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-retire-"));
   const db = new Database(path.join(dir, "t.db"));
@@ -35,7 +36,7 @@ function cleanup(db) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-test("페르소나를 agent_config 로 그대로 옮긴다", () => {
+test("moves the persona to agent_config as-is", () => {
   const db = legacyDb();
   const persona = JSON.stringify({ personaConfig: { identity: "긴 정체성 문서".repeat(50) } });
   db.prepare("INSERT INTO npcs VALUES (?,?,?,?,?)").run("n1", "단비", persona, "hermes", null);
@@ -48,7 +49,7 @@ test("페르소나를 agent_config 로 그대로 옮긴다", () => {
   cleanup(db);
 });
 
-test("openclaw NPC 는 백업 테이블로 옮긴 뒤 지운다", () => {
+test("moves an openclaw NPC to the backup table before deleting it", () => {
   const db = legacyDb();
   db.prepare("INSERT INTO npcs VALUES (?,?,?,?,?)").run("n1", "레거시", "{}", "openclaw", null);
   db.prepare("INSERT INTO npcs VALUES (?,?,?,?,?)").run("n2", "단비", "{}", "hermes", null);
@@ -69,7 +70,7 @@ test("openclaw NPC 는 백업 테이블로 옮긴 뒤 지운다", () => {
   cleanup(db);
 });
 
-test("openclaw_config 열을 없앤다", () => {
+test("drops the openclaw_config column", () => {
   const db = legacyDb();
   db.prepare("INSERT INTO npcs VALUES (?,?,?,?,?)").run("n1", "단비", "{}", "hermes", null);
 
@@ -83,7 +84,7 @@ test("openclaw_config 열을 없앤다", () => {
   cleanup(db);
 });
 
-test("이미 채워진 agent_config 는 덮어쓰지 않는다", () => {
+test("doesn't overwrite an already-filled agent_config", () => {
   const db = legacyDb();
   db.prepare("INSERT INTO npcs VALUES (?,?,?,?,?)").run(
     "n1",
@@ -100,7 +101,7 @@ test("이미 채워진 agent_config 는 덮어쓰지 않는다", () => {
   cleanup(db);
 });
 
-test("여러 번 돌려도 안전하다 — 서버가 뜰 때마다 불린다", () => {
+test("is safe to run multiple times — called every time the server boots", () => {
   const db = legacyDb();
   db.prepare("INSERT INTO npcs VALUES (?,?,?,?,?)").run("n1", "단비", '{"a":1}', "hermes", null);
 
@@ -118,7 +119,7 @@ test("여러 번 돌려도 안전하다 — 서버가 뜰 때마다 불린다", 
   cleanup(db);
 });
 
-test("npcs 테이블이 없는 빈 DB 에서도 죽지 않는다", () => {
+test("doesn't crash on an empty DB with no npcs table", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-retire-empty-"));
   const db = new Database(path.join(dir, "t.db"));
   assert.equal(retireOpenclawConfig(db), null);

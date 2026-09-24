@@ -1,14 +1,16 @@
-// 맵 에디터 폐기 — SQLite 런타임 마이그레이션.
+// Map editor retirement — SQLite runtime migration.
 //
-// 두 부트스트랩(src/db/index.ts, src/db/server-db.js)이 같이 부른다. 한쪽에만 넣으면 그 경로가
-// 여는 DB 에는 죽은 표와 옛 외형이 남아, API 라우트와 소켓 서버가 서로 다른 데이터를 본다.
-// PostgreSQL 쪽 같은 작업은 drizzle/0013_drop_map_editor_tables.sql — 두 파일은 같은 두 단계를
-// 같은 순서로 밟는다(외형 변환 → 표 삭제).
+// Called by both bootstrap paths (src/db/index.ts, src/db/server-db.js). Adding it to only one
+// leaves the dead tables and old appearances behind on the DB that path opens, so the API
+// routes and the socket server end up seeing different data. The same work on the PostgreSQL
+// side is drizzle/0013_drop_map_editor_tables.sql — both files take the same two steps in the
+// same order (convert appearances → drop tables).
 //
-// 사용자가 설치본 데이터 손실까지 알고 승인한 삭제다. 보존 우회를 만들지 않는다.
+// This is a deletion the user approved knowing it would lose data in their install. No
+// preservation bypass is provided.
 "use strict";
 
-/** 지울 맵 에디터 표. 자식 → 부모 순서다(FK 가 켜져 있어도 걸리지 않는다). */
+/** Map editor tables to drop. Child → parent order (won't hit FK issues even with foreign_keys on). */
 const MAP_EDITOR_TABLES = [
   "map_portals",
   "maps",
@@ -21,9 +23,9 @@ const MAP_EDITOR_TABLES = [
 ];
 
 /**
- * src/game/three/office-looks.ts 의 OFFICE_LOOKS ID 전부(50개).
- * 이 모듈은 TS 빌드 없이 server.js 가 require 하므로 목록을 여기에 박아 둔다.
- * 신선도는 src/db/map-editor-retirement.test.ts 가 OFFICE_LOOKS 와 대조해 지킨다.
+ * All 50 OFFICE_LOOKS IDs from src/game/three/office-looks.ts.
+ * This module is required by server.js without a TS build, so the list is hardcoded here.
+ * src/db/map-editor-retirement.test.ts keeps it fresh by diffing against OFFICE_LOOKS.
  */
 const OFFICE_LOOK_IDS = [
   "office-jun",
@@ -78,12 +80,12 @@ const OFFICE_LOOK_IDS = [
   "office-garam",
 ];
 
-/** 옛 외형의 bodyType === "female" 이 접히는 룩. */
+/** The look an old appearance with bodyType === "female" folds into. */
 const FEMALE_LOOK_ID = "office-nari";
-/** 그 밖(male·없음·알 수 없는 값)이 접히는 기본 룩. */
+/** The default look everything else (male, missing, or unknown values) folds into. */
 const DEFAULT_LOOK_ID = "office-jun";
 
-/** 외형을 담은 표와 컬럼. npcs 는 값만 고치고 컬럼은 남긴다. */
+/** Tables and columns that hold an appearance. npcs only has its value fixed — the column stays. */
 const APPEARANCE_TABLES = ["characters", "hermes_profiles", "npcs"];
 
 const VALID_LOOK_IDS = new Set(OFFICE_LOOK_IDS);
@@ -101,24 +103,24 @@ function tableColumns(sqlite, table) {
 }
 
 /**
- * 저장된 외형 한 건을 정본 형태로 접는다. 이미 유효한 룩 ID 를 가졌으면 null 을 돌려
- * 호출부가 그 행을 건드리지 않게 한다(멱등).
+ * Folds one stored appearance into the canonical form. Returns null if it already has a valid
+ * look ID, so the caller leaves that row alone (idempotent).
  *
- * @param {string | null} raw SQLite 는 외형을 JSON 문자열(text)로 저장한다.
- * @returns {string | null} 새로 써야 할 JSON 문자열, 또는 그대로 두어야 하면 null
+ * @param {string | null} raw SQLite stores the appearance as a JSON string (text).
+ * @returns {string | null} the new JSON string to write, or null if it should be left as-is
  */
 function normalizeAppearanceJson(raw) {
-  if (raw === null || raw === undefined) return null; // NULL 은 그대로 둔다.
+  if (raw === null || raw === undefined) return null; // Leave NULL as-is.
 
   let parsed;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    parsed = null; // 깨진 값은 옛 외형과 같이 기본 룩으로 접는다.
+    parsed = null; // A broken value is folded into the default look, same as an old appearance.
   }
 
   const isObject = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed);
-  if (isObject && VALID_LOOK_IDS.has(parsed.officeLookId)) return null; // 이미 정본.
+  if (isObject && VALID_LOOK_IDS.has(parsed.officeLookId)) return null; // Already canonical.
 
   const female = isObject && parsed.bodyType === "female";
   return JSON.stringify({
@@ -128,10 +130,10 @@ function normalizeAppearanceJson(raw) {
 }
 
 /**
- * 옛 레이어 방식 외형을 오피스 룩으로 바꾼다. 여러 번 불러도 결과가 같다.
+ * Converts old-style layered appearances into office looks. Gives the same result no matter how many times it's called.
  *
  * @param {import('better-sqlite3').Database} sqlite
- * @returns {Record<string, number>} 표별 변환 건수
+ * @returns {Record<string, number>} number of conversions per table
  */
 function normalizeLegacyAppearances(sqlite) {
   /** @type {Record<string, number>} */
@@ -170,7 +172,7 @@ function normalizeLegacyAppearances(sqlite) {
   return converted;
 }
 
-/** 맵 에디터 표를 지운다. 멱등 — 매 부팅마다 돌아도 된다. */
+/** Drops the map editor tables. Idempotent — fine to run on every boot. */
 function dropMapEditorTables(sqlite) {
   for (const table of MAP_EDITOR_TABLES) {
     sqlite.exec(`DROP TABLE IF EXISTS ${table}`);
@@ -178,8 +180,9 @@ function dropMapEditorTables(sqlite) {
 }
 
 /**
- * 맵 에디터 폐기 한 묶음. 외형 변환이 먼저다 — 표 삭제가 먼저 돌아도 결과는 같지만,
- * PG 마이그레이션과 순서를 맞춰 두어야 두 방언을 나란히 읽을 수 있다.
+ * The full map editor retirement bundle. Appearance conversion comes first — the result would
+ * be the same if the table drop ran first, but keeping the order aligned with the PG migration
+ * lets both dialects be read side by side.
  *
  * @param {import('better-sqlite3').Database} sqlite
  */

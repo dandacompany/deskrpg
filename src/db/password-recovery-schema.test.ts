@@ -12,14 +12,14 @@ function columns(db: Database.Database, table: string): string[] {
   return (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
 }
 
-test("빈 SQLite 부팅에 users.must_change_password 가 있다", () => {
+test("an empty SQLite boot has users.must_change_password", () => {
   const db = new Database(":memory:");
   db.exec(SQLITE_BASE_SCHEMA);
   ensureSqliteCompatibility(db);
   assert.ok(columns(db, "users").includes("must_change_password"));
 });
 
-test("컬럼이 없는 기존 SQLite 도 부팅하면 must_change_password 가 0 으로 생긴다", () => {
+test("an existing SQLite DB without the column also gets must_change_password created as 0", () => {
   const db = new Database(":memory:");
   db.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, login_id TEXT NOT NULL UNIQUE,
       nickname TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at TEXT, updated_at TEXT);`);
@@ -36,6 +36,6 @@ test("컬럼이 없는 기존 SQLite 도 부팅하면 must_change_password 가 0
     flag: number;
   };
   assert.equal(row.flag, 0);
-  // 두 번 불러도 깨지지 않는다(멱등).
+  // Calling it twice doesn't break anything (idempotent).
   ensureSqliteCompatibility(db);
 });

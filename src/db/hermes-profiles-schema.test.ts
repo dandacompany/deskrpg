@@ -33,10 +33,11 @@ test("hermes_profiles enforces one profile name per gateway", () => {
   assert.ok(unique.length > 0, "expected a unique constraint on (gateway_id, profile_name)");
 });
 
-test("npcs 는 agent_config 로 살고 openclaw_config 는 남아 있지 않다", () => {
-  // P1 에서는 롤백을 위해 openclaw_config 를 남겨 뒀지만, 그 열은 이름만 OpenClaw 였고
-  // 실제로는 페르소나 저장소였다. 은퇴 마이그레이션이 내용을 agent_config 로 옮기고
-  // 열을 없앴다 — 두 열이 공존하면 어느 쪽이 정본인지 알 수 없어진다.
+test("npcs lives on agent_config, and openclaw_config no longer remains", () => {
+  // P1 kept openclaw_config around for rollback, but that column was OpenClaw in name
+  // only — it was actually the persona store. The retirement migration moved its
+  // contents to agent_config and dropped the column — if both columns coexisted,
+  // there'd be no way to tell which one is the source of truth.
   const cols = getTableColumns(npcs);
   assert.ok("hermesProfileId" in cols);
   assert.ok("agentConfig" in cols);
@@ -46,9 +47,9 @@ test("npcs 는 agent_config 로 살고 openclaw_config 는 남아 있지 않다"
   );
 });
 
-test("새 NPC 의 기본 엔진은 hermes 다", () => {
-  // 예전 기본값은 'openclaw' 였다. adapterType 을 넣지 않고 만든 NPC 가 존재하지 않는
-  // 백엔드로 저장돼, 사용자는 대화를 걸어야 비로소 그 사실을 알았다.
+test("a new NPC's default engine is hermes", () => {
+  // The old default was 'openclaw'. An NPC created without an adapterType was saved
+  // pointing at a nonexistent backend, and the user only found out once they tried to chat.
   const cols = getTableColumns(npcs);
   assert.equal((cols.adapterType as { default?: unknown }).default, "hermes");
 });

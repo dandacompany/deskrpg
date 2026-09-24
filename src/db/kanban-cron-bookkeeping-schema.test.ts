@@ -1,6 +1,7 @@
-// 칸반·cron 장부(0011)의 SQLite 부트스트랩 검증.
-// 빈 DB 는 기본 스키마만으로 갖춰지고, 0011 이전에 만들어진 DB 는 ensureSqliteCompatibility 가
-// 테이블·컬럼을 더한다. 두 경로가 갈리면 한쪽 사용자만 "no such column" 을 본다.
+// SQLite bootstrap verification for the kanban/cron ledger (0011).
+// An empty DB gets it from the base schema alone, and a DB created before 0011 gets the
+// table/columns added by ensureSqliteCompatibility. If the two paths diverge, only one
+// side of users sees "no such column".
 import assert from "node:assert/strict";
 import test from "node:test";
 import Database from "better-sqlite3";
@@ -34,27 +35,27 @@ function seedFixture(db: Database.Database) {
   ).run();
 }
 
-/** 0011 이전 기본 스키마 — 새 테이블 두 개와 컬럼 두 개를 걷어낸 모양. */
+/** The base schema before 0011 — with the two new tables and two columns stripped out. */
 function legacyBaseSchema(): string {
   const stripped = SQLITE_BASE_SCHEMA.replace(/\n\s*plugin_info_json TEXT,/, "").replace(
     /\n\s*notice_json TEXT,/,
     "",
   );
-  // 새 테이블 블록은 chat_room_messages 인덱스 뒤 ~ meeting_minutes 앞에 있다.
+  // The new table block sits after the chat_room_messages index and before meeting_minutes.
   const start = stripped.indexOf("    CREATE TABLE IF NOT EXISTS channel_kanban_boards");
   const end = stripped.indexOf("    CREATE TABLE IF NOT EXISTS meeting_minutes");
   assert.ok(start > 0 && end > start, "기본 스키마의 칸반·cron 블록 위치를 찾지 못했습니다");
   return stripped.slice(0, start) + stripped.slice(end);
 }
 
-test("빈 DB 는 기본 스키마만으로 새 테이블·컬럼을 갖춘다", () => {
+test("an empty DB gets the new tables/columns from the base schema alone", () => {
   const db = new Database(":memory:");
   db.exec(SQLITE_BASE_SCHEMA);
   for (const t of NEW_TABLES) assert.ok(tableExists(db, t), t);
   assert.ok(columnNames(db, "gateway_resources").includes("plugin_info_json"));
   assert.ok(columnNames(db, "chat_room_messages").includes("notice_json"));
   assert.deepEqual(columnNames(db, "channel_kanban_boards"), [
-    // 0017 에서 PK 가 대리 키로 옮겨지고 사건 수신 보드 표시가 더해졌다.
+    // 0017 moved the PK to a surrogate key and added the event-carrier board flag.
     "id",
     "channel_id",
     "gateway_id",
@@ -79,7 +80,7 @@ test("빈 DB 는 기본 스키마만으로 새 테이블·컬럼을 갖춘다", 
   ]);
 });
 
-test("0011 이전 DB 는 ensureSqliteCompatibility 가 테이블·컬럼을 더한다 — 두 번 돌려도 같다", () => {
+test("a DB from before 0011 gets the table/columns added by ensureSqliteCompatibility — same result run twice", () => {
   const legacy = legacyBaseSchema();
   const db = new Database(":memory:");
   db.exec(legacy);
@@ -96,7 +97,7 @@ test("0011 이전 DB 는 ensureSqliteCompatibility 가 테이블·컬럼을 더�
   assert.ok(columnNames(db, "chat_room_messages").includes("notice_json"));
 });
 
-test("공용 모듈 단독으로도 멱등이고, chat_room_messages 가 없으면 그 ALTER 만 건너뛴다", () => {
+test("the shared module is idempotent on its own too, and skips only that ALTER when chat_room_messages is missing", () => {
   const db = new Database(":memory:");
   db.exec(`
     CREATE TABLE users (id TEXT PRIMARY KEY NOT NULL);
@@ -110,7 +111,7 @@ test("공용 모듈 단독으로도 멱등이고, chat_room_messages 가 없으�
   assert.equal(tableExists(db, "chat_room_messages"), false);
 });
 
-test("cron_job_origins 는 (gateway_id, profile_name, job_id) 가 유니크다", () => {
+test("cron_job_origins is unique on (gateway_id, profile_name, job_id)", () => {
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
   db.exec(SQLITE_BASE_SCHEMA);
@@ -120,8 +121,8 @@ test("cron_job_origins 는 (gateway_id, profile_name, job_id) 가 유니크다",
      VALUES (?, 'g1', ?, ?, 'c1', 'u1', datetime('now'))`,
   );
   insert.run("o1", "sophie", "job-a");
-  insert.run("o2", "sophie", "job-b"); // job 이 다르면 된다
-  insert.run("o3", "other", "job-a"); // 프로필이 다르면 된다
+  insert.run("o2", "sophie", "job-b"); // fine as long as the job differs
+  insert.run("o3", "other", "job-a"); // fine as long as the profile differs
   assert.throws(
     () => insert.run("o4", "sophie", "job-a"),
     /UNIQUE constraint failed/,
@@ -129,7 +130,7 @@ test("cron_job_origins 는 (gateway_id, profile_name, job_id) 가 유니크다",
   );
 });
 
-test("채널을 지우면 보드 연결과 cron 출처가 cascade 로 사라진다", () => {
+test("deleting a channel cascades the board binding and cron origins away", () => {
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
   db.exec(SQLITE_BASE_SCHEMA);

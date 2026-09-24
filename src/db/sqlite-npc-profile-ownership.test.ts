@@ -48,7 +48,7 @@ function legacyDb() {
   return db;
 }
 
-test("외형을 프로필로 옮기고 npcs 를 새 정의로 재생성한다", () => {
+test("moves appearance to the profile and rebuilds npcs with the new definition", () => {
   const db = legacyDb();
   const r = migrateNpcsToProfileOwnership(db);
   assert.deepEqual(r, { moved: 1, removedUnprofiled: 1, removedDuplicates: 1 });
@@ -77,7 +77,7 @@ test("외형을 프로필로 옮기고 npcs 를 새 정의로 재생성한다", 
     1,
   );
 
-  // C1: CASCADE 로 함께 지워지는 자식 행이 백업된다 — 미연결 1 + 중복 1
+  // C1: child rows dropped along via CASCADE are backed up — unbound 1 + duplicate 1
   for (const table of ["npcs_removed_chat_messages_backup"]) {
     assert.equal(
       (db.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n,
@@ -86,16 +86,16 @@ test("외형을 프로필로 옮기고 npcs 를 새 정의로 재생성한다", 
     );
   }
 
-  // M2: 재생성 뒤 FK 가 다시 켜져 있고 무결성이 깨지지 않았다
+  // M2: after the rebuild, FK is back on and integrity wasn't broken
   assert.equal(db.pragma("foreign_keys", { simple: true }), 1, "FK 검사가 다시 켜져야 한다");
   assert.deepEqual(db.pragma("foreign_key_check"), []);
 
-  // 프로필을 지우면 배치도 사라진다
+  // Deleting the profile also removes its NPC deployment
   db.prepare("DELETE FROM hermes_profiles WHERE id='p1'").run();
   assert.equal((db.prepare("SELECT count(*) AS n FROM npcs").get() as { n: number }).n, 0);
 });
 
-test("I4: 이미 묶인 게이트웨이의 미고용 프로필을 출근시킨다", () => {
+test("I4: hires the unhired profiles of an already-bound gateway", () => {
   const db = legacyDb();
   db.exec(`
     INSERT INTO hermes_profiles(id,gateway_id,profile_name,token_encrypted) VALUES ('p2','g','p2','t');
@@ -111,16 +111,16 @@ test("I4: 이미 묶인 게이트웨이의 미고용 프로필을 출근시킨�
   assert.equal(added.position_x, null, "자리는 미정으로 만든다");
 });
 
-test("M2: npcs_new 가 남아 있어도 다시 돌릴 수 있다", () => {
+test("M2: can be run again even if npcs_new was left behind", () => {
   const db = legacyDb();
-  // 앞선 실행이 CREATE 직후에 죽은 모양
+  // Simulates a previous run that died right after CREATE
   db.exec("CREATE TABLE npcs_new(id TEXT PRIMARY KEY)");
   migrateNpcsToProfileOwnership(db);
   const cols = db.prepare("PRAGMA table_info(npcs)").all() as { name: string }[];
   assert.ok(cols.some((c) => c.name === "active"));
 });
 
-test("두 번 실행해도 안전하다", () => {
+test("is safe to run twice", () => {
   const db = legacyDb();
   migrateNpcsToProfileOwnership(db);
   assert.equal(migrateNpcsToProfileOwnership(db), null);
