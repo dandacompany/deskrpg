@@ -5,15 +5,16 @@ import { Badge, Card } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 
 /**
- * 게이트웨이 연결 상태 카드.
+ * The gateway connection status card.
  *
- * OpenClawPairingStatusCard 를 이어받되 `pairing-required` 상태를 걷어낸 것이다. 그 상태는
- * OpenClaw 의 디바이스 승인 절차(`openclaw devices approve <id>`) 전용이었고, Hermes 는
- * 프로필별 API 키로 인증하므로 승인시켜야 할 디바이스라는 개념 자체가 없다.
+ * Inherited from OpenClawPairingStatusCard, with the `pairing-required` state removed. That
+ * state was specific to OpenClaw's device-approval flow (`openclaw devices approve <id>`), and
+ * Hermes authenticates with a per-profile API key, so there's no concept of a device to approve.
  *
- * 카드를 통째로 지우지 않은 이유: 이 카드가 그리던 상태에는 페어링뿐 아니라 **연결 테스트
- * 성공/실패 결과**가 함께 실려 있었다. 카드만 지우면 화면에서 그 정보가 사라지고, 그 상태를
- * 쓰는 쪽은 남은 채 읽는 쪽만 끊긴다.
+ * Why the card wasn't deleted outright: the state this card rendered carried not just pairing
+ * but also the **connection test's success/failure result**. Deleting just the card would make
+ * that information disappear from the screen, leaving the writer side intact while cutting off
+ * the reader side.
  */
 export type GatewayStatus = "idle" | "connected" | "error";
 

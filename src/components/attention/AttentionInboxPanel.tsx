@@ -1,9 +1,10 @@
 "use client";
 /**
- * 판단 모음 — 사람이 답해야 하는 것만 보이는 화면.
+ * The attention inbox — a screen showing only the things a human needs to answer.
  *
- * 승인 버튼은 방 알림의 것과 **같은 결정을 같은 라우트로** 보낸다. 두 곳의 상태가 어긋나지
- * 않게, 누른 뒤에는 목록을 다시 불러 서버가 정본이 되게 한다(낙관적 갱신을 쓰지 않는다).
+ * The approve button sends **the same decision to the same route** as the room notice's
+ * button. To keep the two in sync, we reload the list after clicking so the server stays
+ * the source of truth (no optimistic update).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -17,7 +18,7 @@ export interface AttentionInboxPanelProps {
   channelId: string;
   onOpenCard?: (taskId: string) => void;
   onOpenCronJob?: (jobId: string) => void;
-  /** 테스트·스토리에서 실제 fetch 를 대신한다. */
+  /** Stands in for the real fetch in tests/stories. */
   api?: ReturnType<typeof createAttentionApi>;
 }
 
@@ -56,7 +57,7 @@ export default function AttentionInboxPanel({
       setBusy(row.id);
       try {
         await client.current.decide(row.id, { decision, ...(note ? { note } : {}) });
-        // 서버가 정본이다 — 누른 결과를 화면이 추측하지 않는다.
+        // The server is the source of truth — the screen doesn't guess the result of the click.
         await load();
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));

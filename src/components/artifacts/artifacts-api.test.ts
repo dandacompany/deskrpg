@@ -24,7 +24,7 @@ function fakeResponse(opts: {
   } as unknown as Response;
 }
 
-test("fetchText: 206 총량이 maxBytes 보다 크면 truncated true", async () => {
+test("fetchText: truncated is true when the 206 total exceeds maxBytes", async () => {
   const calls: FetchCall[] = [];
   const fetchImpl = (async (input: unknown, init?: RequestInit) => {
     calls.push({ input, init });
@@ -46,7 +46,7 @@ test("fetchText: 206 총량이 maxBytes 보다 크면 truncated true", async () 
   assert.equal(headers.range, "bytes=0-524287");
 });
 
-test("fetchText: 206 이지만 총량이 maxBytes 이하면 truncated false", async () => {
+test("fetchText: truncated is false when it's 206 but the total is within maxBytes", async () => {
   const fetchImpl = (async () =>
     fakeResponse({
       ok: true,
@@ -61,7 +61,7 @@ test("fetchText: 206 이지만 총량이 maxBytes 이하면 truncated false", as
   assert.equal(result.truncated, false);
 });
 
-test("fetchText: 200 전체 응답이면 truncated false", async () => {
+test("fetchText: truncated is false for a full 200 response", async () => {
   const fetchImpl = (async () =>
     fakeResponse({ ok: true, status: 200, text: "hello world" })) as typeof fetch;
 
@@ -72,7 +72,7 @@ test("fetchText: 200 전체 응답이면 truncated false", async () => {
   assert.equal(result.text, "hello world");
 });
 
-test("fetchText: range 헤더는 bytes=0-<maxBytes-1> 로 보낸다", async () => {
+test("fetchText: sends the range header as bytes=0-<maxBytes-1>", async () => {
   const calls: FetchCall[] = [];
   const fetchImpl = (async (input: unknown, init?: RequestInit) => {
     calls.push({ input, init });
@@ -87,7 +87,7 @@ test("fetchText: range 헤더는 bytes=0-<maxBytes-1> 로 보낸다", async () =
   assert.equal(headers.range, `bytes=0-${512 * 1024 - 1}`);
 });
 
-test("fetchText: 오류 본문 {code, message, minVersion} 을 ArtifactsApiError 에 싣는다", async () => {
+test("fetchText: carries the error body {code, message, minVersion} into ArtifactsApiError", async () => {
   const fetchImpl = (async () =>
     fakeResponse({
       ok: false,
@@ -110,7 +110,7 @@ test("fetchText: 오류 본문 {code, message, minVersion} 을 ArtifactsApiError
   );
 });
 
-test("remove: Promise<void> 를 반환한다 (ok:true 를 그대로 넘기지 않는다)", async () => {
+test("remove: returns Promise<void> (doesn't pass ok:true through as-is)", async () => {
   const fetchImpl = (async () =>
     fakeResponse({ ok: true, status: 200, json: { ok: true } })) as typeof fetch;
 

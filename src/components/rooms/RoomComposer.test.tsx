@@ -30,7 +30,7 @@ const submitBtn = (el: HTMLElement) =>
     (b) => b.textContent?.trim() === "만들기",
   ) as HTMLButtonElement;
 
-test("NPC 를 하나도 안 고르면 만들기가 비활성이고 안내가 보인다", async () => {
+test("Create button is disabled and a hint is shown when no NPC is picked", async () => {
   const { el } = await mount(
     <I18nProvider initialLocale="ko">
       <RoomComposer
@@ -47,7 +47,7 @@ test("NPC 를 하나도 안 고르면 만들기가 비활성이고 안내가 보
   assert.match(el.textContent ?? "", /직원을 한 명 이상 고르세요/);
 });
 
-test("presetNpcIds 는 미리 체크되고, 제출은 {name, npcIds, userIds} 를 준다", async () => {
+test("presetNpcIds are pre-checked, and submitting gives {name, npcIds, userIds}", async () => {
   const got: unknown[] = [];
   const { el } = await mount(
     <I18nProvider initialLocale="ko">

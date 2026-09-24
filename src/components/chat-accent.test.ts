@@ -7,7 +7,7 @@ import { CHAT_ACCENT, accentClasses } from "./chat-accent";
 
 const SRC = path.join(process.cwd(), "src");
 
-/** Tailwind 팔레트를 문자열로 조립한 모양: `bg-${x}-500`, `text-${x}-200` … */
+/** Shape of a string-assembled Tailwind palette class: `bg-${x}-500`, `text-${x}-200` … */
 const ASSEMBLED =
   /\b(bg|text|border|ring|from|via|to|fill|stroke|shadow|outline|divide|decoration|caret|placeholder)-\$\{[^}]+\}-/;
 
@@ -19,14 +19,14 @@ function* walk(dir: string): Generator<string> {
   }
 }
 
-test("Tailwind 클래스를 문자열로 조립한 곳이 없다", () => {
+test("no place assembles a Tailwind class via string concatenation", () => {
   const offenders: string[] = [];
   for (const file of walk(SRC)) {
     readFileSync(file, "utf8")
       .split("\n")
       .forEach((line, i) => {
         const bare = line.trim();
-        // 주석은 규칙을 설명하려고 그 모양을 인용한다 — 검사 대상이 아니다.
+        // Comments quote this shape to explain the rule — they aren't a check target.
         if (bare.startsWith("*") || bare.startsWith("//") || bare.startsWith("/*")) return;
         if (ASSEMBLED.test(line)) offenders.push(`${path.relative(SRC, file)}:${i + 1} ${bare}`);
       });
@@ -38,8 +38,8 @@ test("Tailwind 클래스를 문자열로 조립한 곳이 없다", () => {
   );
 });
 
-test("강조색은 크림 배경 위 흰 글자나 팔레트 이름을 쓰지 않는다", () => {
-  // 채도 높은 accent 면(버튼) 위의 흰 글자는 옳다. 금지 대상은 크림 surface 위에 얹히는 슬롯이다.
+test("accent colors don't use white text or palette names on a cream background", () => {
+  // White text on a saturated accent surface (button) is fine. The forbidden case is a slot laid over the cream surface.
   const onSurface = new Set(["option", "chip"]);
   for (const [name, classes] of Object.entries(CHAT_ACCENT)) {
     for (const [slot, value] of Object.entries(classes)) {
@@ -60,27 +60,28 @@ test("강조색은 크림 배경 위 흰 글자나 팔레트 이름을 쓰지 �
   }
 });
 
-test("모르는 강조색은 기본값으로 떨어진다", () => {
+test("an unknown accent color falls back to the default", () => {
   assert.equal(accentClasses(), CHAT_ACCENT.npc);
   assert.equal(accentClasses("meeting"), CHAT_ACCENT.meeting);
-  // 런타임에 엉뚱한 값이 와도 클래스가 undefined 가 되지 않는다.
+  // Even if a bogus value arrives at runtime, the class must not become undefined.
   assert.equal(accentClasses("nope" as never), CHAT_ACCENT.npc);
 });
 
 /**
- * 크림 surface(#fcfcf8) 위에서 600 이하 음영의 팔레트 글자색은 AA(4.5:1)를 넘지 못한다.
- * 실측: text-amber-300 1.40:1, text-emerald-300 1.48:1, text-red-400 2.69:1,
- * text-amber-600 3.10:1, text-red-500 3.71:1, text-red-600 4.63:1(경계).
- * 자기 배경을 옅게 깐 배지도 마찬가지다 — bg-amber-500/15 위 text-amber-700 은 4.38:1.
- * 의미색 토큰(text-danger·text-success·text-info·text-npc-dark)을 쓴다.
+ * On the cream surface (#fcfcf8), palette text-color shades of 600 or lighter fail AA (4.5:1).
+ * Measured: text-amber-300 1.40:1, text-emerald-300 1.48:1, text-red-400 2.69:1,
+ * text-amber-600 3.10:1, text-red-500 3.71:1, text-red-600 4.63:1 (borderline).
+ * The same goes for a badge with its own pale background — text-amber-700 on bg-amber-500/15 is 4.38:1.
+ * Use the semantic-color tokens (text-danger/text-success/text-info/text-npc-dark) instead.
  *
- * 700 이상은 대비로는 통과하므로(4.55~8.77:1) 이 검사가 막지 않는다. 다만 제품 고유색
- * 하나 원칙(docs/standards.md)에는 여전히 어긋나서 10곳이 남아 있고, 별 카드로 다룬다.
+ * 700 and above pass on contrast (4.55-8.77:1), so this check doesn't block them. They still
+ * violate the one-product-brand-color rule (docs/standards.md) though — 10 spots remain, tracked
+ * in a separate card.
  */
 const PALE_PALETTE_TEXT =
   /\btext-(amber|indigo|emerald|sky|rose|violet|teal|red|blue|green|yellow|slate|gray|zinc|stone|neutral|orange|lime|cyan|fuchsia|pink|purple)-(50|100|200|300|400|500|600)\b/;
 
-test("옅은 팔레트 글자색을 쓰지 않는다 — 의미색 토큰을 쓴다", () => {
+test("doesn't use pale palette text colors — uses semantic-color tokens instead", () => {
   const offenders: string[] = [];
   for (const file of walk(SRC)) {
     if (file.endsWith("chat-accent.test.ts")) continue;
@@ -101,13 +102,14 @@ test("옅은 팔레트 글자색을 쓰지 않는다 — 의미색 토큰을 쓴
 });
 
 /**
- * 뜻으로 읽히는 색 이름은 **정의돼 있을 때만** 쓴다. Tailwind 는 모르는 색 이름의 유틸리티를 조용히 버리므로
- * `text-warning` 은 빌드도 타입도 lint 도 통과하면서 아무 색도 내지 않는다 — 2026-09-21 에 "사용자가 조치해야
- * 한다" 를 말하려던 세 자리가 그렇게 죽어 있었다(경고는 `npc-dark` 토큰을 쓴다).
+ * A meaning-bearing color name is used **only when it's defined**. Tailwind silently drops
+ * utilities for unknown color names, so `text-warning` passes build, types, and lint while
+ * producing no color at all — on 2026-09-21, three spots meant to say "the user must act" were
+ * dead exactly this way (warnings use the `npc-dark` token).
  */
 const SEMANTIC_COLOR_NAMES = ["warning", "error", "caution", "alert", "positive", "negative"];
 
-test("정의되지 않은 의미색 이름으로 유틸리티 클래스를 쓰지 않는다", () => {
+test("doesn't use a utility class with an undefined semantic-color name", () => {
   const css = ["styles/tokens.css", "app/globals.css"]
     .map((file) => readFileSync(path.join(SRC, file), "utf8"))
     .join("\n");

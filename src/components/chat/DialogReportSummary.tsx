@@ -4,8 +4,9 @@ import type { ReportItem } from "@/game/report-queue";
 import { useT } from "@/lib/i18n";
 
 /**
- * 직원이 보고하러 와서 열린 대화창 맨 위의 보고 요약. 대화창은 이전 대화만 보여 줘서
- * "무엇을 보고하러 왔는지" 가 화면에 없었다. 문구는 방 알림 카드와 같은 키를 쓴다.
+ * The report summary at the top of the dialog opened when a staff member comes to report.
+ * The dialog only showed prior conversation, so "what are they reporting" was missing from
+ * the screen. The wording uses the same keys as the room notice card.
  */
 export default function DialogReportSummary({
   report,

@@ -1,9 +1,10 @@
 /**
- * 멘션 입력창의 순수 모델. DOM·React 를 모르므로 node:test 가 바로 붙는다.
+ * The pure model for the mention input. It doesn't know DOM/React, so node:test can attach directly.
  *
- * 입력창 안의 내용은 텍스트 조각과 멘션 칩의 나열이다. 서버(`mention.ts` `parseAllMentions`)는
- * `@[이름]` 문자열만 이해하므로, 칩은 전송 순간에만 그 문자열로 바뀐다 — 사용자가 손으로
- * `@[소피]` 를 치던 시절과 와이어 포맷이 같다.
+ * The content inside the input box is a sequence of text fragments and mention chips. The
+ * server (`mention.ts`'s `parseAllMentions`) only understands the `@[name]` string, so a chip
+ * only turns into that string at the moment of sending — the wire format is the same as when
+ * users used to type `@[Sophie]` by hand.
  */
 
 export type MentionCandidate = { id: string; name: string };
@@ -16,8 +17,9 @@ export function serializeSegments(segments: Segment[]): string {
 }
 
 /**
- * 캐럿 바로 앞의 텍스트에서 "열린 @쿼리" 를 찾는다. `@` 는 줄 처음이거나 공백 뒤에만
- * 멘션 시작이다(`a@b` 같은 이메일은 아니다). 쿼리 안에 공백이 들어오면 닫힌 것으로 본다.
+ * Finds an "open @query" in the text right before the caret. `@` only starts a mention at the
+ * beginning of the line or right after whitespace (not an email like `a@b`). A space inside the
+ * query is treated as closing it.
  */
 export function findMentionQuery(textBeforeCaret: string): { start: number; query: string } | null {
   const at = textBeforeCaret.lastIndexOf("@");
@@ -39,7 +41,7 @@ export function filterCandidates(
 
 export type DropdownState = { open: boolean; index: number; count: number; select?: number };
 
-/** 드롭다운이 열린 상태에서의 키 처리. `select` 가 있으면 그 인덱스를 고른다. */
+/** Key handling while the dropdown is open. If `select` is present, that index is chosen. */
 export function reduceDropdown(state: DropdownState, key: string): DropdownState {
   const { index, count } = state;
   const base = { open: state.open, index, count };

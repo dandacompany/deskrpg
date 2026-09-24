@@ -19,7 +19,7 @@ async function mount(node: React.ReactElement): Promise<HTMLElement> {
   return el;
 }
 
-test("후보가 없으면 지금처럼 textarea 다", async () => {
+test("with no candidates, it's still a textarea as before", async () => {
   const el = await mount(
     <I18nProvider>
       <ChatInput onSend={() => {}} />
@@ -29,7 +29,7 @@ test("후보가 없으면 지금처럼 textarea 다", async () => {
   assert.equal(el.querySelector('[contenteditable="true"]'), null);
 });
 
-test("후보가 있으면 멘션 편집기를 쓰고, 전송값은 @[이름] 으로 직렬화된다", async () => {
+test("with candidates present, it uses the mention editor and serializes the send value as @[name]", async () => {
   const sent: string[] = [];
   const el = await mount(
     <I18nProvider>

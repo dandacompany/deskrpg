@@ -1,6 +1,6 @@
 /**
- * 스킬 화면 테스트의 공용 틀 — `ArtifactsModal.test.tsx` 의 `mockFetch`·`render`·`flush` 와 같은 방식.
- * 테스트 파일이 아니므로 `npm run test` 가 따로 돌리지 않는다.
+ * Shared scaffolding for skills-screen tests — the same pattern as `ArtifactsModal.test.tsx`'s
+ * `mockFetch`·`render`·`flush`. Not a test file, so `npm run test` does not run it separately.
  */
 import "../../test-setup/dom";
 import assert from "node:assert/strict";
@@ -29,8 +29,9 @@ type Reply = Record<string, unknown>;
 export type FetchLog = { calls: string[]; bodies: Record<string, unknown> };
 
 /**
- * `"METHOD path"` → 응답. `{status, json}` 은 그 상태로, 나머지는 JSON 200. 모르는 경로는 404.
- * `delayMs` 가 있으면 그만큼 늦게 답한다(본문에는 싣지 않는다). `routes` 는 참조로 읽으므로 테스트 중에 바꿀 수 있다.
+ * `"METHOD path"` → response. `{status, json}` responds with that status; anything else is JSON 200.
+ * An unknown path is 404. `delayMs`, if present, delays the reply that long (it is not included in
+ * the body). `routes` is read by reference, so it can be changed mid-test.
  */
 export function mockFetch(routes: Record<string, Reply>): FetchLog {
   const log: FetchLog = { calls: [], bodies: {} };
@@ -103,7 +104,7 @@ export async function click(sel: string) {
   await flush();
 }
 
-/** React 가 듣는 input 이벤트로 값을 바꾼다(제어 컴포넌트는 value setter 를 우회해야 한다). */
+/** Changes the value via an input event React listens for (a controlled component needs the value setter bypassed). */
 export async function type(sel: string, value: string) {
   const el = $(sel) as HTMLInputElement | HTMLTextAreaElement;
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement : HTMLInputElement;

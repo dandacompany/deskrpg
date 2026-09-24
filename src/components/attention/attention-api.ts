@@ -1,8 +1,8 @@
 /**
- * 판단 모음 REST(`/api/channels/:id/attention`)의 브라우저 쪽 호출.
+ * Browser-side calls for the attention inbox REST endpoint (`/api/channels/:id/attention`).
  *
- * 칸반과 같은 규약이다 — 같은 출처의 DeskRPG 라우트, 세션 쿠키, 실패는 서버가 내려 준
- * `{code, message}` 를 그대로 실어 던진다. 여기서 번역하거나 접지 않는다.
+ * Same convention as Kanban — a same-origin DeskRPG route, session cookies, and on failure
+ * we throw the server's `{code, message}` as-is. No translating or folding happens here.
  */
 import type { AttentionRow } from "@/lib/attention-inbox";
 import type { AttentionCounts } from "@/lib/needs-attention";

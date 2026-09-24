@@ -15,17 +15,18 @@ export interface KanbanViewToolbarProps {
   onUpdate: (patch: Partial<ProjectViewState>) => void;
   onFilter: (patch: Partial<ProjectViewState["filter"]>) => void;
   /**
-   * 플러그인에 `kanban_views` 가 있는가. 없으면 타임라인 버튼을 아예 두지 않는다 —
-   * 눌러도 안 되는 버튼은 고장으로 읽힌다.
+   * Whether the plugin has `kanban_views`. If not, the timeline button isn't shown at all — a
+   * button that does nothing when pressed reads as broken.
    */
   timelineSupported: boolean;
 }
 
 /**
- * 보기 방식·묶기·정렬·필터.
+ * View mode, grouping, sorting, filters.
  *
- * 보관함 토글이 여기 있다 — 예전에는 헤더에 따로 있었는데, 같은 뜻의 스위치가 두 곳에 있으면
- * 어느 쪽이 참인지 알 수 없다. 좁은 화면에서는 컨트롤이 줄바꿈으로 흐른다.
+ * The archive toggle lives here — it used to be separate in the header, but having two switches
+ * with the same meaning in two places makes it unclear which one is true. On narrow screens the
+ * controls wrap.
  */
 export default function KanbanViewToolbar({
   state,
@@ -170,8 +171,9 @@ function ModeButton({
   onClick: () => void;
   icon: React.ReactNode;
   /**
-   * 더 긴 설명. `title` 로만 쓰고 `aria-label` 은 짧은 이름을 유지한다 — 보조 기술이 읽는
-   * 이름은 화면에 보이는 글자와 같아야 한다. 간트를 찾는 사람이 이 설명에서 멈추게 하는 용도다.
+   * A longer description. Used only as `title`, while `aria-label` keeps the short name — the
+   * name assistive tech reads should match the text visible on screen. This is meant to catch
+   * someone looking for a Gantt chart.
    */
   hint?: string;
 }) {

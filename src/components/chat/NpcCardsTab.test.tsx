@@ -52,7 +52,7 @@ const props: NpcCardsTabProps = {
   onOpenCard: () => {},
 };
 
-test("담당 카드가 목록으로 보인다", () => {
+test("assigned cards show as a list", () => {
   const { container, cleanup } = render(<NpcCardsTab {...props} board={boardWithTwoMine} />);
   try {
     assert.equal(container.querySelectorAll("[data-card-id]").length, 2);
@@ -61,7 +61,7 @@ test("담당 카드가 목록으로 보인다", () => {
   }
 });
 
-test("카드를 누르면 그 id 로 onOpenCard 가 불린다", () => {
+test("clicking a card calls onOpenCard with that id", () => {
   const seen: string[] = [];
   const { container, cleanup } = render(
     <NpcCardsTab {...props} board={boardWithTwoMine} onOpenCard={(id) => seen.push(id)} />,
@@ -74,7 +74,7 @@ test("카드를 누르면 그 id 로 onOpenCard 가 불린다", () => {
   }
 });
 
-test("담당 카드가 없으면 빈 상태 문구", () => {
+test("shows the empty-state message when there are no assigned cards", () => {
   const emptyBoard: KanbanBoard = {
     columns: [],
     tenants: [],
@@ -91,7 +91,7 @@ test("담당 카드가 없으면 빈 상태 문구", () => {
   }
 });
 
-test("게이트에 막히면 이유를 보인다 — 빈 목록으로 위장하지 않는다", () => {
+test("when blocked by a gate, shows the reason — not disguised as an empty list", () => {
   const { container, cleanup } = render(
     <NpcCardsTab {...props} board={null} error="plugin_required" />,
   );
@@ -103,7 +103,7 @@ test("게이트에 막히면 이유를 보인다 — 빈 목록으로 위장하�
   }
 });
 
-test("보드 미준비(board_unavailable)는 칸반이 쓰는 보드 미확보 문구를 재사용한다 — 알 수 없는 오류로 뭉개지 않는다", () => {
+test("board not ready (board_unavailable) reuses Kanban's board-unavailable message — not collapsed into an unknown error", () => {
   const { container, cleanup } = render(
     <NpcCardsTab {...props} board={null} error="board_unavailable" />,
   );
@@ -111,7 +111,7 @@ test("보드 미준비(board_unavailable)는 칸반이 쓰는 보드 미확보 �
     const notice = container.querySelector("[data-testid='cards-error']");
     assert.ok(notice);
     assert.equal(container.querySelector("[data-testid='cards-empty']"), null);
-    // 칸반 보드 미확보 배너와 같은 제목 — wizard-error-codes 의 일반 "알 수 없는 오류" 폴백이 아니다.
+    // Same title as the Kanban board-unavailable banner — not the generic "unknown error" fallback from wizard-error-codes.
     assert.match(notice!.textContent ?? "", /보드를 확보하지 못했습니다/);
     assert.doesNotMatch(notice!.textContent ?? "", /알 수 없는 오류/);
   } finally {
@@ -119,7 +119,7 @@ test("보드 미준비(board_unavailable)는 칸반이 쓰는 보드 미확보 �
   }
 });
 
-test("조회가 끝나기 전에는 빈 상태도 오류도 그리지 않는다 — 확정 안 된 것을 단정하지 않는다", () => {
+test("renders neither empty nor error before the fetch finishes — doesn't assume the unconfirmed", () => {
   const { container, cleanup } = render(<NpcCardsTab {...props} board={null} error={null} />);
   try {
     assert.equal(container.querySelector("[data-testid='cards-empty']"), null);
@@ -130,7 +130,7 @@ test("조회가 끝나기 전에는 빈 상태도 오류도 그리지 않는다 
   }
 });
 
-test("프로필을 모르면 담당 없는 카드를 이 직원 것으로 잡지 않는다 — 스켈레톤도 끝난다", () => {
+test("without a known profile, unassigned cards aren't attributed to this staff member — and the skeleton ends", () => {
   const board: KanbanBoard = {
     ...boardWithTwoMine,
     columns: [
@@ -145,7 +145,7 @@ test("프로필을 모르면 담당 없는 카드를 이 직원 것으로 잡지
   );
   try {
     assert.equal(container.querySelectorAll("[data-card-id]").length, 0);
-    // 보드가 도착했으면 로딩은 끝난 것이다 — 무한 스켈레톤이 아니라 확정된 상태를 보인다.
+    // Once the board has arrived, loading is over — it shows a settled state, not an infinite skeleton.
     assert.equal(container.querySelector("[data-testid='cards-loading']"), null);
     assert.ok(container.querySelector("[data-testid='cards-empty']"));
   } finally {
@@ -153,8 +153,8 @@ test("프로필을 모르면 담당 없는 카드를 이 직원 것으로 잡지
   }
 });
 
-// `classifyGateFailure` 가 내는 kind 마다 전용 문구가 있어야 한다 — 하나씩 때우면 같은 결함이
-// 다음 코드에서 되살아난다(`plugin_absent` 가 "알 수 없는 오류" 로 떨어졌던 일).
+// Every kind `classifyGateFailure` can emit needs its own message — patching them one at a
+// time lets the same defect resurface in the next code (`plugin_absent` once fell back to "unknown error").
 const GATE_CODES = [
   "gateway_not_bound",
   "plugin_absent",
@@ -166,20 +166,20 @@ const GATE_CODES = [
   "board_unavailable",
 ] as const;
 
-test("게이트 코드마다 폴백이 아닌 전용 문구가 나온다 — 원시 코드를 노출하지 않는다", () => {
+test("every gate code gets its own message, not a fallback — no raw code exposed", () => {
   const fallback = renderErrorText("some_code_that_does_not_exist");
   for (const code of GATE_CODES) {
     const text = renderErrorText(code);
     assert.notEqual(text, fallback, `${code} 가 폴백 문구와 같다`);
-    // `board_unavailable` 은 칸반 보드와 같이 제목 아래 기술 정보(`failureLine`)를 덧붙인다 —
-    // 그건 폴백이 아니라 의도된 상세다.
+    // `board_unavailable`, like the Kanban board, appends technical detail (`failureLine`)
+    // below the title — that's intentional detail, not a fallback.
     if (code !== "board_unavailable") {
       assert.doesNotMatch(text, new RegExp(code), `${code} 원시 코드가 화면에 보인다`);
     }
   }
 });
 
-test("플러그인이 없으면 설치 안내가 나온다 — 알 수 없는 오류가 아니다", () => {
+test("when the plugin is missing, install instructions show — not an unknown error", () => {
   const text = renderErrorText("plugin_absent");
   assert.doesNotMatch(text, /알 수 없는 오류/);
   assert.match(text, /hermes/i, "설치 명령이 보이지 않는다");

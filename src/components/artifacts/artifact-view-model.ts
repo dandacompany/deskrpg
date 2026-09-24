@@ -177,7 +177,7 @@ const KIND_TO_CATEGORY = new Map<ArtifactKind, ArtifactCategory>(
   ).flatMap(([category, kinds]) => kinds.map((kind) => [kind, category] as const)),
 );
 
-/** `kind` 를 탭 카테고리(미디어·파일·링크)로 묶는다. `ARTIFACT_KINDS` 는 전부 셋 중 하나에 있다. */
+/** Groups `kind` into a tab category (media/file/link). Every `ARTIFACT_KINDS` value falls into one of the three. */
 export function categoryOf(kind: ArtifactKind): ArtifactCategory {
   return KIND_TO_CATEGORY.get(kind) ?? "file";
 }

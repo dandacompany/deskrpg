@@ -91,9 +91,9 @@ type GroupAccessPanelProps = {
   canManageMembers: boolean;
   canManagePermissions: boolean;
   canApproveJoinRequests: boolean;
-  /** 시스템 관리자만 참이다 — 비밀번호 재설정은 그룹 관리자 권한으로는 못 한다. */
+  /** True only for a system admin — resetting passwords is not a group admin privilege. */
   canResetPasswords?: boolean;
-  /** 관리할 그룹이 여럿일 때 page 가 넘기는 그룹 전환 셀렉트. */
+  /** Group-switching select the page passes in when there are multiple groups to manage. */
   groupSwitcher?: ReactNode;
 };
 
@@ -108,7 +108,7 @@ export default function GroupAccessPanel({
 }: GroupAccessPanelProps) {
   const t = useT();
 
-  /** 발급된 임시 비밀번호는 화면에만 잠깐 머문다 — 새로 고치면 사라진다. */
+  /** The issued temporary password only lingers on screen briefly — a refresh clears it. */
   const [issuedPassword, setIssuedPassword] = useState<{
     nickname: string;
     password: string;
@@ -321,7 +321,7 @@ export default function GroupAccessPanel({
     }
   };
 
-  // 처음 불러오는 동안에는 섹션마다 같은 문장을 반복하지 않는다 — 화면에 다섯 번 찍혔다(2026-09-20).
+  // Don't repeat the same sentence for every section during the initial load — it printed five times on screen (2026-09-20).
   const initialLoading =
     members.loading && invites.loading && joinRequests.loading && permissions.loading;
   return (

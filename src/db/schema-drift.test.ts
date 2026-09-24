@@ -275,15 +275,16 @@ test("each dialect exports exactly the expected 30 tables", () => {
 });
 
 /**
- * PG ↔ SQLite 방언 간 패리티. 두 방언은 타입이 달라 구조를 통째로 비교하진 않지만,
- * 테이블과 컬럼 *집합* 은 같아야 한다 — 한 방언에만 테이블·컬럼을 더하면 그 방언을 쓰는
- * 배포에서만 "no such column" 이 난다. 칸반·cron 장부(0011)가 이 규칙의 첫 적용 대상이다.
+ * PG ↔ SQLite cross-dialect parity. The two dialects have different types, so this doesn't
+ * compare the whole structure, but the table and column *sets* must match — adding a table or
+ * column to only one dialect produces "no such column" only on deployments using that dialect.
+ * The kanban/cron ledger (0011) is the first thing this rule applies to.
  */
 function columnNames(table: unknown): string[] {
   return Object.keys(getTableColumns(table as never)).sort();
 }
 
-test("칸반·cron 장부 테이블은 PG 와 SQLite 양쪽에 같은 컬럼 집합으로 있다", () => {
+test("the kanban/cron ledger tables have the same column set on both PG and SQLite", () => {
   for (const tableName of ["channelKanbanBoards", "cronJobOrigins"] as const) {
     for (const [dialect, mod] of [
       ["schema.ts", pgTs],
@@ -329,7 +330,7 @@ test("칸반·cron 장부 테이블은 PG 와 SQLite 양쪽에 같은 컬럼 집
   }
 });
 
-test("cron_job_origins 는 (gateway_id, profile_name, job_id) 가 양쪽 방언에서 유니크다", () => {
+test("cron_job_origins is unique on (gateway_id, profile_name, job_id) in both dialects", () => {
   const pgCfg = pgGetTableConfig(pgTs.cronJobOrigins);
   const sqliteCfg = sqliteGetTableConfig(sqliteTs.cronJobOrigins);
   for (const [dialect, indexes] of [
@@ -348,7 +349,7 @@ test("cron_job_origins 는 (gateway_id, profile_name, job_id) 가 양쪽 방언�
   }
 });
 
-test("notice_json·plugin_info_json 컬럼은 네 스키마 파일 모두에 있다", () => {
+test("notice_json/plugin_info_json columns exist in all four schema files", () => {
   for (const [dialect, mod] of [
     ["schema.ts", pgTs],
     ["schema.pg.cjs", pgCjs],

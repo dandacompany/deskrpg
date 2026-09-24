@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * 회의 결과(결정·후속 업무)와 "프로젝트로 등록할까요?" 제안.
+ * Meeting outcome (decisions / follow-ups) and the "register as a project?" suggestion.
  *
- * 여기서 보이는 후속 업무는 **초안**이다 — 등록을 누르기 전에는 Hermes 에 아무것도 없다.
- * 해소 여부는 이 컴포넌트가 숨기는 것이 아니라 `registered` 를 읽어 그린다. 새로고침해도,
- * 회의록에서 다시 열어도 같은 모습이다.
+ * The follow-ups shown here are a **draft** — nothing exists in Hermes until Register is pressed.
+ * This component doesn't hide whether it has resolved; it renders based on reading `registered`.
+ * The view looks the same on refresh, or reopened from the meeting log.
  */
 import { useState } from "react";
 
@@ -27,19 +27,20 @@ export type MeetingOutcomeRegistered = {
 export type MeetingOutcomePanelProps = {
   outcome: MeetingOutcome | null;
   summaryStatus: MeetingSummaryStatus;
-  /** 담당으로 고를 수 있는 채널 직원. */
+  /** Channel staff that can be picked as assignee. */
   npcs: Array<{ id: string; name: string }>;
-  /** 회의 주재자·채널 소유자만 등록하고 요약을 다시 시킬 수 있다. */
+  /** Only the meeting host or channel owner can register and retry the summary. */
   canRegister: boolean;
   /**
-   * 연결된 플러그인이 카드를 승인 대기로 만들 수 있는가(`initial_status` capability).
-   * 못 하면 등록은 늘 실패한다 — 눌렀다가 오류를 보는 것보다 버튼을 그리지 않고 이유를 말한다.
+   * Whether the connected plugin can create cards in a pending-approval state (`initial_status` capability).
+   * If it can't, registration always fails — rather than clicking and seeing an error, we don't render the
+   * button and explain why instead.
    */
   registerSupported: boolean;
   registered: MeetingOutcomeRegistered | null;
   onRegister: (body: OutcomeRegistration) => Promise<void>;
   onRetrySummary: () => Promise<void>;
-  /** "등록하지 않음" — 회의 종료 화면만 넘긴다(누르면 오피스로 돌아갈 준비를 한다). 보관함에서는 없다. */
+  /** "Don't register" — just advances the meeting-end screen (pressing it prepares to return to the office). Not present in the archive. */
   onDecline?: () => void;
 };
 
@@ -67,7 +68,7 @@ export default function MeetingOutcomePanel({
     try {
       await work();
     } catch (cause) {
-      // 거절을 조용히 삼키지 않는다 — 이유를 보이고 버튼을 남긴다.
+      // Don't silently swallow a rejection — show the reason and keep the button.
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
@@ -197,7 +198,7 @@ export default function MeetingOutcomePanel({
                   {source.summary && (
                     <p className="text-micro text-text-muted pl-6">{source.summary}</p>
                   )}
-                  {/* 모델이 쓴 담당이 참석자로 풀리지 않았으면 그 이름을 그대로 보여 준다 — 사람이 고른다. */}
+                  {/* If the assignee the model wrote didn't resolve to a participant, show that name as-is — a human picks. */}
                   {!source.assigneeNpcId && source.assigneeName && (
                     <p className="text-micro text-text-dim pl-6">
                       {t("meeting.outcome.suggestedAssignee", { name: source.assigneeName })}

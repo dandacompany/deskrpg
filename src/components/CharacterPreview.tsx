@@ -6,7 +6,7 @@ import { useLocale } from "@/lib/i18n";
 import { resolveOfficeLook } from "@/game/three/office-looks";
 import CharacterModelView from "./CharacterModelView";
 
-/** 룩 썸네일의 기준 크기 — `scale` 을 곱해 미리보기 한 변이 된다. */
+/** The look thumbnail's base size — multiplied by `scale` to get one preview side. */
 const PREVIEW_UNIT = 64;
 
 interface CharacterPreviewProps {
@@ -17,7 +17,7 @@ interface CharacterPreviewProps {
   walking?: boolean;
 }
 
-/** 선택한 룩의 3D 미리보기. 룩이 없는 외형은 "?" 로 접는다(서버가 저장 시 정규화한다). */
+/** 3D preview of the selected look. An appearance with no look collapses to "?" (the server normalizes it on save). */
 export default function CharacterPreview({
   appearance,
   scale = 3,

@@ -10,16 +10,16 @@ import type { LearningGraph, LearningNode } from "@/lib/hermes/plugin-client-typ
 
 type Sim = LearningNode & SimulationNodeDatum;
 
-/** 캔버스 가장자리 여백(px) — 원과 라벨 윗부분이 잘리지 않게. */
+/** Canvas edge padding (px) — keeps circles and label tops from being clipped. */
 export const GRAPH_PADDING = 16;
-/** 라벨(최대 24자, 10px)이 차지하는 대략의 폭. 이보다 오른쪽 끝에 가까우면 라벨을 왼쪽에 둔다. */
+/** Rough width a label (max 24 chars, 10px) takes up. Flip the label to the left once a node gets this close to the right edge. */
 const LABEL_WIDTH = 160;
 
-/** 오른쪽 끝에 가까운 노드는 라벨을 원 왼쪽으로 뒤집는다 — 여백만으로는 긴 라벨이 잘린다. */
+/** Nodes near the right edge flip their label to the left of the circle — padding alone isn't enough for a long label. */
 export const labelOnLeft = (x: number, width: number) => x > width - LABEL_WIDTH;
 export type PlacedNode = LearningNode & { x: number; y: number };
 
-/** FNV-1a 로 id 를 [0,1) 에 흩는다 — 초기 위치를 난수 대신 이것으로 두어 배치가 매번 같다. */
+/** Spreads an id over [0,1) with FNV-1a — used instead of randomness for the initial position so layout is deterministic. */
 function seed(id: string): number {
   let h = 2166136261;
   for (let i = 0; i < id.length; i += 1) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
@@ -27,8 +27,10 @@ function seed(id: string): number {
 }
 
 /**
- * 학습 관계도를 2D force 로 배치한다. 결정적이다(초기 위치를 id 해시로, 시뮬레이션은 멈춘 채 `ticks` 번만 돈다).
- * 끝점이 없는 간선은 버리고, 좌표는 캔버스 안쪽(`GRAPH_PADDING` 여백)으로 자른다. d3 가 간선 객체를 덮어쓰므로 입력은 복사해 넘긴다.
+ * Lays out the learning graph with a 2D force simulation. Deterministic (initial positions come
+ * from an id hash, and the simulation stays stopped, only ticking `ticks` times).
+ * Edges with a missing endpoint are dropped, and coordinates are clamped inside the canvas
+ * (`GRAPH_PADDING` margin). d3 overwrites edge objects, so the input is passed in as a copy.
  */
 export function layoutGraph(
   graph: LearningGraph,
@@ -70,7 +72,7 @@ export function layoutGraph(
   };
 }
 
-/** 시간 슬라이더 — `t` 이하의 시각을 가진 노드만. 시각이 없는 노드(메모리 등)는 늘 보인다. `t=null` 이면 전부. */
+/** Time slider — only nodes with a timestamp at or before `t`. Nodes without one (e.g. memory) always show. `t=null` shows all. */
 export function visibleAt<T extends { timestamp?: number | null }>(
   nodes: T[],
   t: number | null,
@@ -78,7 +80,7 @@ export function visibleAt<T extends { timestamp?: number | null }>(
   return t === null ? nodes : nodes.filter((n) => n.timestamp == null || n.timestamp <= t);
 }
 
-/** 슬라이더의 양 끝. 시각이 있는 노드가 없으면 `null`(슬라이더를 그리지 않는다). */
+/** Both ends of the slider. `null` if no node has a timestamp (the slider then isn't drawn). */
 export function timeRange(
   nodes: { timestamp?: number | null }[],
 ): { min: number; max: number } | null {

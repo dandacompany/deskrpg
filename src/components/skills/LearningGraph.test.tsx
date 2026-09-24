@@ -48,7 +48,7 @@ async function clickNode(id: string) {
 
 test.afterEach(cleanup);
 
-test("노드 수만큼 원, 간선 설명, 메모리 노드가 있으면 파일 메모리만 안내", async () => {
+test("one circle per node, an edge-meaning caption, and a file-memory note when a memory node exists", async () => {
   mockFetch({ [GRAPH]: graph() });
   await render(view(true));
   assert.equal(container.querySelectorAll("circle[data-node]").length, 3);
@@ -57,14 +57,14 @@ test("노드 수만큼 원, 간선 설명, 메모리 노드가 있으면 파일 
   assert.ok(text().includes("파일 메모리"));
 });
 
-test("메모리가 없으면(멤버 응답) 파일 메모리 안내도 없다", async () => {
+test("no memory (member response) means no file-memory note either", async () => {
   mockFetch({ [GRAPH]: graph(false) });
   await render(view(false));
   assert.equal(container.querySelectorAll("circle[data-node]").length, 2);
   assert.ok(!text().includes("파일 메모리"));
 });
 
-test("메모리 노드 삭제는 되돌릴 수 없다는 확인과 내용 앞부분을 거쳐 {id, baseHash} 로 DELETE", async () => {
+test("deleting a memory node goes through an irreversible-action confirmation showing the content start, then DELETEs with {id, baseHash}", async () => {
   const log = mockFetch({
     [GRAPH]: graph(),
     [NODE]: memDetail,
@@ -81,7 +81,7 @@ test("메모리 노드 삭제는 되돌릴 수 없다는 확인과 내용 앞부
   assert.equal(log.calls.filter((c) => c === GRAPH).length, 2);
 });
 
-test("스킬 노드 삭제 안내는 보관이다", async () => {
+test("the delete notice for a skill node is really an archive", async () => {
   mockFetch({
     [GRAPH]: graph(),
     [`GET ${ROOT}/learning/node?id=weekly`]: {
@@ -97,7 +97,7 @@ test("스킬 노드 삭제 안내는 보관이다", async () => {
   assert.ok(text().includes("보관함에서 복원"));
 });
 
-test("편집 저장은 {id, content, baseHash}, 409 node_changed 면 편집 내용을 두고 다시 불러오기", async () => {
+test("saving an edit sends {id, content, baseHash}; a 409 node_changed keeps the edit and reloads", async () => {
   const log = mockFetch({
     [GRAPH]: graph(),
     [NODE]: memDetail,
@@ -119,7 +119,7 @@ test("편집 저장은 {id, content, baseHash}, 409 node_changed 면 편집 내�
   assert.equal(log.calls.filter((c) => c === GRAPH).length, 2);
 });
 
-test("멤버에게는 편집·삭제 버튼이 없다", async () => {
+test("members have no edit/delete buttons", async () => {
   mockFetch({
     [GRAPH]: graph(false),
     [`GET ${ROOT}/learning/node?id=weekly`]: {
@@ -136,7 +136,7 @@ test("멤버에게는 편집·삭제 버튼이 없다", async () => {
   assert.equal(container.querySelector('[data-action="node-delete"]'), null);
 });
 
-test("시간 슬라이더를 앞으로 당기면 나중 노드가 사라진다", async () => {
+test("pulling the time slider earlier hides later nodes", async () => {
   mockFetch({ [GRAPH]: graph() });
   await render(view(true));
   const slider = $('input[type="range"]') as HTMLInputElement;
@@ -153,7 +153,7 @@ test("시간 슬라이더를 앞으로 당기면 나중 노드가 사라진다",
   assert.ok(container.querySelector(`[data-node="${MEM_ID}"]`));
 });
 
-test("스킬 노드 삭제가 409 skill_pinned 면 고정 해제 안내", async () => {
+test("deleting a skill node with a 409 skill_pinned shows an unpin-first notice", async () => {
   mockFetch({
     [GRAPH]: graph(),
     [`GET ${ROOT}/learning/node?id=weekly`]: {
@@ -174,7 +174,7 @@ test("스킬 노드 삭제가 409 skill_pinned 면 고정 해제 안내", async 
   assert.ok(text().includes("먼저 고정을 해제하세요"));
 });
 
-test("라벨은 원 옆에 그리고, 오른쪽 끝 노드는 왼쪽으로 뒤집는다", async () => {
+test("labels draw beside the circle, and right-edge nodes flip to the left", async () => {
   mockFetch({ [GRAPH]: graph() });
   await render(view(true));
   for (const el of Array.from(container.querySelectorAll("g[role=button]"))) {

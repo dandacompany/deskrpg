@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { MeetingSpeakerTracker } from "./speaker-tracker";
 
-test("생각 시작은 발언이 아니고 스트림 조각마다 발언 ID를 바꾸지 않는다", () => {
+test("A turn start is not speech, and each stream chunk doesn't change the utterance ID", () => {
   const changes: unknown[] = [];
   const tracker = new MeetingSpeakerTracker((speaker) => changes.push(speaker));
   tracker.turn("a");
@@ -17,7 +17,7 @@ test("생각 시작은 발언이 아니고 스트림 조각마다 발언 ID를 �
   assert.deepEqual(changes.at(-1), { kind: "npc", id: "a", utteranceId: "npc:a:2" });
 });
 
-test("사용자 발언은 4초 뒤 전체 시점으로 복귀하며 이전 타이머는 새 발언을 지우지 않는다", () => {
+test("User speech returns to the overall view after 4 seconds, and an earlier timer doesn't clear a newer utterance", () => {
   const changes: unknown[] = [];
   const timers: Array<{ callback: () => void; delay: number; cancelled: boolean }> = [];
   const tracker = new MeetingSpeakerTracker(
@@ -57,7 +57,7 @@ test("사용자 발언은 4초 뒤 전체 시점으로 복귀하며 이전 타�
   assert.equal(changes.length, count);
 });
 
-test("사용자는 서버 userId로만 매핑하며 이름이나 socketId를 actorId로 대체하지 않는다", () => {
+test("A user maps only via the server userId, never substituting a name or socketId as actorId", () => {
   const changes: unknown[] = [];
   const tracker = new MeetingSpeakerTracker((speaker) => changes.push(speaker));
   tracker.user("socket-a", "m1", [{ id: "socket-a", userId: "user-a" }]);

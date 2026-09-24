@@ -17,7 +17,7 @@ function memoryStorage(): Storage {
   };
 }
 
-test("저장한 확인 버전과 Star 누름을 다시 읽는다", () => {
+test("reads back the stored seen version and Star click", () => {
   const s = memoryStorage();
   assert.deepEqual(readGrowthState(s), { ok: true, seenVersion: null, starClicked: false });
   writeGrowthFlag(s, "seenVersion", "2026.922.0");
@@ -25,7 +25,7 @@ test("저장한 확인 버전과 Star 누름을 다시 읽는다", () => {
   assert.deepEqual(readGrowthState(s), { ok: true, seenVersion: "2026.922.0", starClicked: true });
 });
 
-test("저장소를 읽을 수 없으면 ok 가 false 다", () => {
+test("ok is false when storage can't be read", () => {
   const broken = {
     getItem() {
       throw new Error("SecurityError");
@@ -36,7 +36,7 @@ test("저장소를 읽을 수 없으면 ok 가 false 다", () => {
   assert.doesNotThrow(() => writeGrowthFlag(broken, "starClicked", "1"));
 });
 
-test("설문 상태를 저장하고 다시 읽으며, 망가진 값은 초기값으로 되돌린다", async () => {
+test("stores and reads back survey state, and resets a corrupted value to the initial state", async () => {
   const { readSurveyState, writeSurveyState } = await import("./growth-storage");
   const s = memoryStorage();
   assert.deepEqual(readSurveyState(s), { consent: "unknown", usageMs: 0, nextAt: null });

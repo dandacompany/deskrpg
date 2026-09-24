@@ -11,15 +11,16 @@ import { useSkillJob } from "./use-skill-job";
 export type CuratorBarProps = {
   api: SkillsApi;
   canManage: boolean;
-  /** 실행 작업이 끝났다 — 보관·통합으로 목록이 바뀌었을 수 있다. */
+  /** The run job finished — the list may have changed via archive/merge. */
   onRunFinished?(): void;
-  /** 작업 폴링 간격(ms). 테스트에서 줄인다. */
+  /** Job polling interval (ms). Shortened in tests. */
   pollIntervalMs?: number;
 };
 
 /**
- * 모달 머리의 자동 정리(curator) 줄 — 상태·마지막 실행·기준 일수. 소유자는 일시정지/재개와 지금 실행을 쓴다.
- * 실행은 자동 정리 대상 스킬을 보관·통합할 수 있어 확인을 먼저 받는다. 조회에 실패하면 줄을 그리지 않는다.
+ * The auto-curation (curator) line at the top of the modal — status, last run, threshold days.
+ * The owner gets pause/resume and run now. Running it can archive/merge curation-target skills,
+ * so it asks for confirmation first. If the status fetch fails, the line renders nothing.
  */
 export default function CuratorBar({
   api,
@@ -50,7 +51,7 @@ export default function CuratorBar({
     if (!finished) return;
     void load();
     onRunFinished?.();
-    // onRunFinished 는 부모가 매번 새로 만든다 — 작업이 끝날 때 한 번만 부른다.
+    // The parent recreates onRunFinished on every render — call it only once, when the job finishes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished, load]);
 

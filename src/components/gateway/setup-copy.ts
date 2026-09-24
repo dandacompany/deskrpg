@@ -703,8 +703,8 @@ export function setupHostError(locale: Locale, code: unknown): string | undefine
   return typeof code === "string" ? hostRemediation[locale][hostErrorGroups[code]] : undefined;
 }
 /**
- * 잡이 성공해도 남는 경고다 — 실패가 아니므로 오류 안내와 섞지 않는다.
- * 여기 없는 코드는 화면에 그리지 않는다(원시 코드 유출 방지).
+ * A warning that persists even when the job succeeds — not mixed with error guidance since it isn't a failure.
+ * A code not listed here is never rendered (prevents leaking a raw code).
  */
 const warningKeys: Record<string, string> = {
   profile_not_served: "hermes.wizard.warn.profileNotServed",
@@ -722,8 +722,8 @@ export function setupWarning(locale: Locale, code: unknown): string | undefined 
 }
 
 /**
- * 설치 이정표 코드 → 문구. 호스트가 미리 정한 코드만 올린다는 계약이므로,
- * 모르는 코드는 undefined 로 돌려 화면에 아무것도 그리지 않는다(원시 출력 유출 방지).
+ * Install milestone code → text. Per the contract, the host only sends codes agreed on in
+ * advance, so an unknown code returns undefined and renders nothing (prevents leaking raw output).
  */
 const progressKeys: Record<string, string> = {
   deps: "hermes.wizard.progress.deps",

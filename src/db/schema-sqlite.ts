@@ -18,7 +18,7 @@ export const users = sqliteTable("users", {
   nickname: text("nickname").unique().notNull(),
   passwordHash: text("password_hash").notNull(),
   systemRole: text("system_role").notNull().default("user"),
-  /** 관리자·CLI 가 임시 비밀번호를 발급하면 참이 된다. 본인이 바꾸면 거짓으로 돌아간다. */
+  /** True once an admin/CLI issues a temporary password. Reverts to false once the user changes it. */
   mustChangePassword: integer("must_change_password", { mode: "boolean" }).notNull().default(false),
   lastActiveAt: text("last_active_at"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -73,7 +73,7 @@ export const channels = sqliteTable("channels", {
   maxPlayers: integer("max_players").default(50),
   password: text("password"),
   gatewayConfig: text("gateway_config"),
-  /** NPC 걸음 속도(`npc-motion-config`). 비어 있으면 기본값 — 채널 공유 설정이다. */
+  /** NPC walk speed (`npc-motion-config`). Empty means default — a channel-shared setting. */
   motionConfig: text("motion_config"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -99,14 +99,14 @@ export const gatewayResources = sqliteTable(
     localDiscoveryOptedInBy: text("local_discovery_opted_in_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    // `GET /deskrpg/info` 판정 캐시. 매 화면 진입마다 원격을 찌르지 않기 위한 것이고,
-    // 게이트웨이 테스트·편집 때 갱신된다. `plugin_status` 값은
-    // src/lib/hermes/plugin-capability.ts 의 PluginStatus 와 같은 문자열이다.
+    // Cache of the `GET /deskrpg/info` verdict. This exists so we don't hit the remote on every
+    // screen visit; it's refreshed when the gateway is tested/edited. The `plugin_status` value
+    // is the same string as PluginStatus in src/lib/hermes/plugin-capability.ts.
     pluginStatus: text("plugin_status"),
     pluginVersion: text("plugin_version"),
     pluginCheckedAt: text("plugin_checked_at"),
-    // `GET /deskrpg/info` 응답 본문 캐시(JSON 문자열). plugin_status·plugin_version 은 판정 요약이고,
-    // 칸반·cron 같은 세부 기능 지원 여부는 이 원문에서 읽는다.
+    // Cache of the `GET /deskrpg/info` response body (JSON string). plugin_status/plugin_version
+    // are the verdict summary; support for detail features like kanban/cron is read from this raw text.
     pluginInfoJson: text("plugin_info_json"),
     createdAt: text("created_at")
       .$defaultFn(() => new Date().toISOString())
@@ -155,7 +155,7 @@ export const hermesProfiles = sqliteTable(
     tokenEncrypted: text("token_encrypted").notNull(),
     displayName: text("display_name"),
     description: text("description"),
-    /** 캐릭터 외형. NPC 의 정본이다 — npcs.appearance 는 이번 릴리스에 남기지만 쓰지 않는다. */
+    /** Character appearance. Source of truth for the NPC — npcs.appearance is kept this release but unused. */
     appearance: text("appearance"),
     provisionedByDeskrpg: integer("provisioned_by_deskrpg", { mode: "boolean" })
       .notNull()
@@ -250,9 +250,10 @@ export const channelGatewayBindings = sqliteTable(
   ],
 );
 
-// 채널 ↔ Hermes 칸반 보드 연결 장부. 채널마다 보드 하나라 channel_id 가 곧 PK 다.
-// event_cursor 는 마지막으로 소비한 보드 이벤트 위치, last_error 는 마지막 폴링 실패 사유.
-// 보드 이름은 Hermes 쪽이 정본이고 board_name_synced_at 은 그것을 마지막으로 맞춘 시각이다.
+// Channel ↔ Hermes kanban board binding ledger. One board per channel, so channel_id is
+// effectively the PK. event_cursor is the last consumed board event position, last_error is
+// the reason the last poll failed. Hermes is the source of truth for the board name, and
+// board_name_synced_at is when it was last synced from there.
 export const channelKanbanBoards = sqliteTable(
   "channel_kanban_boards",
   {
@@ -282,7 +283,7 @@ export const channelKanbanBoards = sqliteTable(
   (table) => [
     index("idx_channel_kanban_boards_gateway_id").on(table.gatewayId),
     uniqueIndex("channel_kanban_boards_channel_slug_idx").on(table.channelId, table.boardSlug),
-    // 채널마다 사건 수신 보드(크론·아티팩트를 받는 행)는 정확히 하나다 — 사무실 방 불변식과 같은 수법.
+    // Exactly one event-carrier board (the row that receives cron/artifacts) per channel — same trick as the office room invariant.
     uniqueIndex("channel_kanban_boards_carrier_idx")
       .on(table.channelId)
       .where(sql`${table.isEventCarrier}`),
@@ -292,9 +293,10 @@ export const channelKanbanBoards = sqliteTable(
   ],
 );
 
-// DeskRPG 가 만든 Hermes cron 작업의 출처 장부. Hermes 쪽 작업은 (게이트웨이, 프로필, job id)
-// 세 값으로 유일하게 정해지므로 그 조합이 유니크다. 채널이 사라지면 장부도 같이 사라지고,
-// 만든 사용자가 탈퇴해도 작업 자체는 남아야 하니 created_by 는 set null 이다.
+// Origin ledger for Hermes cron jobs created by DeskRPG. A Hermes-side job is uniquely
+// determined by (gateway, profile, job id), so that combination is unique. The ledger
+// disappears with the channel, but the job itself must survive if the creating user leaves,
+// so created_by is set null.
 export const cronJobOrigins = sqliteTable(
   "cron_job_origins",
   {
@@ -494,7 +496,7 @@ export const npcs = sqliteTable(
       .notNull()
       .references(() => hermesProfiles.id, { onDelete: "cascade" }),
     agentConfig: text("agent_config"),
-    /** 이 채널에 출근 중인가. false 면 자리는 기억한 채 맵에서 빠진다. */
+    /** Whether it's clocked in for this channel. If false, the seat is remembered but it's off the map. */
     active: integer("active", { mode: "boolean" }).notNull().default(true),
     createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
     updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -614,8 +616,9 @@ export const chatRoomMessages = sqliteTable(
     senderId: text("sender_id"),
     senderName: text("sender_name").notNull(),
     content: text("content").notNull(),
-    // 시스템 메시지의 구조화 페이로드(JSON 문자열). 칸반 카드 이동·cron 결과 같은 알림이
-    // 본문(content) 과 별도로 카드 렌더링에 쓸 데이터를 여기 담는다. 일반 메시지는 NULL.
+    // Structured payload for a system message (JSON string). A notice such as a kanban card move
+    // or a cron result puts data here for card rendering, separate from the body (content).
+    // NULL for ordinary messages.
     noticeJson: text("notice_json"),
     createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   },
@@ -639,7 +642,7 @@ export const meetingMinutes = sqliteTable(
     initiatorId: text("initiator_id").references(() => users.id, { onDelete: "set null" }),
     keyTopics: text("key_topics").notNull().default("[]"),
     conclusions: text("conclusions"),
-    // 구조화된 회의 결과(결정·후속 업무·프로젝트 권고). 초안이지 카드 사본이 아니다.
+    // Structured meeting outcome (decisions, follow-ups, project recommendations). A draft, not a card copy.
     outcomeJson: text("outcome_json"),
     summaryStatus: text("summary_status").notNull().default("ok"),
     createdAt: text("created_at")
@@ -653,12 +656,13 @@ export const meetingMinutes = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
-// 프로젝트 목록표 (설계 2026-09-21 project-registry)
+// Project registry table (design 2026-09-21 project-registry)
 //
-// 보드 = 프로젝트, 테넌트 = 서브프로젝트다. **이름·설명·진행률은 여기 두지 않는다** —
-// Hermes 보드 메타와 `GET /kanban/boards` 의 `counts` 가 정본이고, 사본을 두면 하드 게이트 1을
-// 어기며 언젠가 어긋난다. 여기 남는 것은 Hermes 가 담을 자리가 없는 사람 쪽 정보뿐이다:
-// 상태·리드 직원·목표일·색·아이콘·일시정지 사유, 그리고 "왜 이 일을 하는가" 에 답하는 출처 회의.
+// Board = project, tenant = subproject. **Name, description, and progress do not live here** —
+// Hermes board metadata and `GET /kanban/boards`'s `counts` are the source of truth, and a copy
+// would violate hard gate 1 and eventually drift. What stays here is only the human-side
+// information Hermes has no place for: status, lead NPC, target date, color, icon, pause
+// reason, and the origin meeting that answers "why are we doing this".
 // ---------------------------------------------------------------------------
 
 export const channelProjects = sqliteTable(
@@ -671,7 +675,7 @@ export const channelProjects = sqliteTable(
       .notNull()
       .unique()
       .references(() => channelKanbanBoards.id, { onDelete: "cascade" }),
-    // 채널별 목록 질의를 조인 없이 하려고 둔 비정규화. 연결 행의 채널과 늘 같다.
+    // Denormalized to allow per-channel listing queries without a join. Always matches the linked row's channel.
     channelId: text("channel_id")
       .notNull()
       .references(() => channels.id, { onDelete: "cascade" }),
@@ -680,12 +684,12 @@ export const channelProjects = sqliteTable(
     targetDate: text("target_date"),
     color: text("color"),
     icon: text("icon"),
-    // 일시정지는 상태가 아니라 이 칸이 채워진 in_progress 다(Paperclip 과 같은 취급).
+    // A pause is not a status — it's in_progress with this field filled in (same treatment as Paperclip).
     pauseReason: text("pause_reason"),
     originMeetingId: text("origin_meeting_id").references(() => meetingMinutes.id, {
       onDelete: "set null",
     }),
-    /** 결정 C-1 — 자리만 열어 둔다. 이 설계는 읽지도 쓰지도 않는다. */
+    /** Decision C-1 — reserves the slot only. This design neither reads nor writes it. */
     hermesProjectId: text("hermes_project_id"),
     createdByUserId: text("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
@@ -710,9 +714,10 @@ export const channelSubprojects = sqliteTable(
       .notNull()
       .references(() => channelProjects.id, { onDelete: "cascade" }),
     /**
-     * Hermes `tasks.tenant` 에 그대로 들어가는 값. **만든 뒤 절대 바꾸지 않는다** — 디스패처가
-     * 작업자에게 `HERMES_TENANT` 를 넘기고 자식 카드가 그것을 상속하므로, 값이 바뀌면 이미
-     * 만들어진 카드들이 고아가 된다. 표시 이름을 바꾸고 싶으면 `name` 만 바꾼다.
+     * The value that goes straight into Hermes `tasks.tenant`. **Never change it after creation**
+     * — the dispatcher passes `HERMES_TENANT` to the worker and child cards inherit it, so
+     * changing the value orphans cards that already exist. To change the display name, change
+     * only `name`.
      */
     tenantSlug: text("tenant_slug").notNull(),
     name: text("name").notNull(),
@@ -739,8 +744,8 @@ export const channelSubprojects = sqliteTable(
 );
 
 /**
- * 실행 전 승인 관문의 레코드. PG 쪽 approvals·approvalTargets 와 컬럼 집합이 같아야 한다.
- * 시각은 SQLite 관례대로 ISO 문자열이다.
+ * Records for the pre-execution approval gate. Must have the same column set as approvals/approvalTargets
+ * on the PG side. Timestamps are ISO strings per SQLite convention.
  */
 export const approvals = sqliteTable(
   "approvals",
@@ -782,7 +787,7 @@ export const approvalTargets = sqliteTable(
   ],
 );
 
-// 직원 패널의 탭별 열람 상태. PG 쪽 npcPanelReads 와 컬럼 집합이 같아야 한다.
+// Per-tab read state for the staff panel. Must have the same column set as npcPanelReads on the PG side.
 export const npcPanelReads = sqliteTable(
   "npc_panel_reads",
   {
@@ -796,7 +801,7 @@ export const npcPanelReads = sqliteTable(
     seenAt: text("seen_at")
       .notNull()
       .$defaultFn(() => new Date().toISOString()),
-    // 카드 탭용. KanbanTask 에 updated_at 이 없어 시각 워터마크를 쓸 수 없다.
+    // For the cards tab. KanbanTask has no updated_at, so a time watermark can't be used.
     seenIds: text("seen_ids"),
   },
   (t) => [primaryKey({ columns: [t.userId, t.npcId, t.tab] })],

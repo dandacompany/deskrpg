@@ -7,7 +7,7 @@ import { I18nProvider } from "@/lib/i18n";
 import TaskEditorDialog from "./TaskEditorDialog";
 import { EMPTY_TASK_FORM } from "./kanban-view-model";
 
-test("대화 등록은 완료 조건과 담당 확인 후 원문을 보존해 제출한다", async () => {
+test("registering from a conversation preserves the original text and submits after confirming completion criteria and assignee", async () => {
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
@@ -62,7 +62,7 @@ test("대화 등록은 완료 조건과 담당 확인 후 원문을 보존해 �
   }
 });
 
-test("새 카드 승인 기본은 사람이며 같은 프로필은 AI 검토자 목록에서 제외된다", async () => {
+test("a new card's approval defaults to human, and the same profile is excluded from the AI reviewer list", async () => {
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);

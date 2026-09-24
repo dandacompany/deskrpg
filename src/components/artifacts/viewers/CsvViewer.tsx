@@ -5,7 +5,7 @@ import { useT } from "@/lib/i18n";
 
 import { CSV_MAX_ROWS, parseCsv } from "../artifact-view-model";
 
-/** CSV 를 표로 — 첫 행을 머리로 쓰고 `CSV_MAX_ROWS` 행에서 자른다. */
+/** Renders CSV as a table — uses the first row as the header and truncates at `CSV_MAX_ROWS` rows. */
 export default function CsvViewer({ text }: { text: string }) {
   const t = useT();
   const { rows, truncated } = useMemo(() => parseCsv(text), [text]);

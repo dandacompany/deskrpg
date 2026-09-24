@@ -1,5 +1,6 @@
-// 그룹 대화방 테이블. 두 부트스트랩(src/db/index.ts, server-db.js)이 같이 부른다 — 한쪽에만
-// 넣으면 소켓 서버가 여는 DB 에 테이블이 없어 채팅이 통째로 죽는다(2026-09 의 T2 사고와 같은 유형).
+// Group chat room tables. Called by both bootstrap paths (src/db/index.ts, server-db.js) —
+// adding it to only one leaves the table missing from the DB the socket server opens, killing
+// chat outright (same failure type as the 2026-09 T2 incident).
 "use strict";
 
 const CHAT_ROOM_TABLES = `
@@ -49,9 +50,10 @@ function hasColumn(sqlite, table, column) {
 }
 
 /**
- * 테이블 생성 + 채널마다 office 방 백필. 멱등 — 매 부팅마다 돌아도 된다.
- * 백필은 `channels` 테이블이 있고 `owner_id` 컬럼을 갖췄을 때만 돈다 — RBAC 등이 쓰는
- * 최소 픽스처(id 뿐인 channels, 또는 channels 자체가 없는 DB)는 아직 그 모양이 아니다.
+ * Creates the tables and backfills an office room per channel. Idempotent — fine to run on
+ * every boot. The backfill only runs when the `channels` table exists and has an `owner_id`
+ * column — a minimal fixture used by things like RBAC (channels with just an id, or no
+ * channels table at all) doesn't have that shape yet.
  */
 function ensureChatRoomTables(sqlite) {
   sqlite.exec(CHAT_ROOM_TABLES);

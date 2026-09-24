@@ -5,7 +5,7 @@ import en from "@/lib/i18n/locales/en";
 import ja from "@/lib/i18n/locales/ja";
 import zh from "@/lib/i18n/locales/zh";
 
-test("방 안의 비활성 회의 CTA는 네 로케일에서 회의 시작을 표시한다", () => {
+test("the inactive meeting CTA in the room shows 'start meeting' in all four locales", () => {
   for (const [locale, expected] of [
     [ko, "회의 시작"],
     [en, "Start meeting"],

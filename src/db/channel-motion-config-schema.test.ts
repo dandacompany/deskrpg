@@ -14,20 +14,20 @@ function columns(db: Database.Database, table: string): string[] {
   return (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
 }
 
-test("빈 SQLite 부팅에 channels.motion_config 가 있다", () => {
+test("an empty SQLite boot has channels.motion_config", () => {
   const db = new Database(":memory:");
   db.exec(SQLITE_BASE_SCHEMA);
   ensureSqliteCompatibility(db);
   assert.ok(columns(db, "channels").includes("motion_config"));
 });
 
-test("컬럼이 없는 기존 SQLite 도 부팅하면 motion_config 가 비어 있는 채로 생긴다 — 두 부팅 경로 모두", () => {
+test("an existing SQLite DB without the column gets motion_config created empty on boot — both boot paths", () => {
   for (const ensure of [ensureSqliteCompatibility, serverDb.ensureSqliteCompatibility]) {
     if (!ensure) continue;
     const db = new Database(":memory:");
     db.exec(SQLITE_BASE_SCHEMA.replace(/\s*motion_config TEXT,/, ""));
     assert.ok(!columns(db, "channels").includes("motion_config"), "사전 조건: 옛 스키마");
-    db.pragma("foreign_keys = OFF"); // 채널 행 하나만 두려는 것 — 주인 사용자까지 만들 필요는 없다.
+    db.pragma("foreign_keys = OFF"); // We just need one channel row — no need to also create an owning user.
     db.prepare("INSERT INTO channels (id, name, owner_id) VALUES ('c1','채널','u1')").run();
     ensure(db);
     assert.ok(columns(db, "channels").includes("motion_config"));
@@ -35,11 +35,11 @@ test("컬럼이 없는 기존 SQLite 도 부팅하면 motion_config 가 비어 �
       m: string | null;
     };
     assert.equal(row.m, null, "기존 채널은 비어 있어야 한다 — 비어 있으면 기본값이다");
-    ensure(db); // 두 번 불러도 깨지지 않는다(멱등).
+    ensure(db); // Calling it twice doesn't break anything (idempotent).
   }
 });
 
-test("PG 마이그레이션은 다시 돌려도 깨지지 않는다(IF NOT EXISTS)", () => {
+test("the PG migration doesn't break when run again (IF NOT EXISTS)", () => {
   const sql = readFileSync(
     new URL("../../drizzle/0020_channel_motion_config.sql", import.meta.url),
     "utf8",

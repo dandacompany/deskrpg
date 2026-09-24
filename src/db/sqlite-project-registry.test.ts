@@ -1,7 +1,8 @@
-// 프로젝트 목록표(0017)의 SQLite 쪽 검증.
+// SQLite-side verification for the project registry table (0017).
 //
-// 가장 중요한 것은 **이관에서 행과 커서가 살아남는가**다. `event_cursor` 를 잃으면 그 채널이
-// 사건을 한 구간 통째로 놓치고, 그것은 조용한 실패로 나타난다(화면은 멀쩡하고 카드만 안 움직인다).
+// The most important thing is **whether rows and the cursor survive the migration**. Losing
+// `event_cursor` makes that channel miss an entire stretch of events, and it shows up as a
+// silent failure (the screen looks fine, cards just stop moving).
 import assert from "node:assert/strict";
 import test from "node:test";
 import Database from "better-sqlite3";
@@ -9,8 +10,8 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { ensureProjectRegistry } = require("./sqlite-project-registry.js");
 
-// better-sqlite3 는 외래 키를 켠 채로 연다. 참조 대상이 없으면 INSERT 가 FK 오류로 막혀
-// 정작 보려던 유니크 제약을 못 본다 — 그래서 최소한의 스텁을 세운다.
+// better-sqlite3 opens with foreign keys on. Without a referenced target, the INSERT would fail
+// on an FK error before we even get to see the unique constraint we're testing — hence these minimal stubs.
 const REFERENCED_STUBS = `
   CREATE TABLE users (id TEXT PRIMARY KEY NOT NULL);
   CREATE TABLE channels (id TEXT PRIMARY KEY NOT NULL);
@@ -21,7 +22,7 @@ const REFERENCED_STUBS = `
   INSERT INTO gateway_resources (id) VALUES ('gw-1'), ('gw-2');
 `;
 
-/** 0016 까지의 모양 — channel_id 가 PK 이고 id·is_event_carrier 가 없다. */
+/** The shape through 0016 — channel_id is the PK, and id/is_event_carrier don't exist. */
 const LEGACY_BOARDS_DDL = `
   CREATE TABLE channel_kanban_boards (
     channel_id TEXT PRIMARY KEY NOT NULL,
@@ -76,7 +77,7 @@ function legacyDb(): Database.Database {
   return db;
 }
 
-test("이관은 행과 event_cursor 를 그대로 옮긴다", () => {
+test("the migration carries rows and event_cursor over as-is", () => {
   const db = legacyDb();
   ensureProjectRegistry(db);
 
@@ -94,7 +95,7 @@ test("이관은 행과 event_cursor 를 그대로 옮긴다", () => {
   assert.equal(rows[1].last_error, "plugin_absent");
 });
 
-test("이관된 행은 전부 사건 수신 보드다", () => {
+test("every migrated row is an event-carrier board", () => {
   const db = legacyDb();
   ensureProjectRegistry(db);
   const rows = db.prepare("SELECT id, is_event_carrier FROM channel_kanban_boards").all() as Row[];
@@ -104,7 +105,7 @@ test("이관된 행은 전부 사건 수신 보드다", () => {
   }
 });
 
-test("채널마다 사건 수신 보드는 하나뿐이다", () => {
+test("each channel has exactly one event-carrier board", () => {
   const db = legacyDb();
   ensureProjectRegistry(db);
   assert.throws(
@@ -121,7 +122,7 @@ test("채널마다 사건 수신 보드는 하나뿐이다", () => {
   );
 });
 
-test("같은 채널에 다른 보드는 여러 개 붙는다", () => {
+test("multiple different boards can attach to the same channel", () => {
   const db = legacyDb();
   ensureProjectRegistry(db);
   db.prepare(
@@ -135,7 +136,7 @@ test("같은 채널에 다른 보드는 여러 개 붙는다", () => {
   assert.equal(count.n, 2);
 });
 
-test("같은 채널에 같은 슬러그는 두 번 붙지 않는다", () => {
+test("the same slug can't attach twice to the same channel", () => {
   const db = legacyDb();
   ensureProjectRegistry(db);
   assert.throws(
@@ -151,7 +152,7 @@ test("같은 채널에 같은 슬러그는 두 번 붙지 않는다", () => {
   );
 });
 
-test("멱등 — 두 번 돌려도 행이 그대로다", () => {
+test("idempotent — rows stay the same after running twice", () => {
   const db = legacyDb();
   ensureProjectRegistry(db);
   const first = db.prepare("SELECT id FROM channel_kanban_boards ORDER BY channel_id").all();
@@ -160,7 +161,7 @@ test("멱등 — 두 번 돌려도 행이 그대로다", () => {
   assert.deepEqual(second, first, "두 번째 실행이 표를 다시 만들었습니다");
 });
 
-test("메타 표가 생기고 서브프로젝트 슬러그는 프로젝트 안에서 유일하다", () => {
+test("the metadata tables get created, and a subproject slug is unique within its project", () => {
   const db = legacyDb();
   ensureProjectRegistry(db);
   assert.ok(columns(db, "channel_projects").includes("origin_meeting_id"));
@@ -188,7 +189,7 @@ test("메타 표가 생기고 서브프로젝트 슬러그는 프로젝트 안�
   );
 });
 
-test("빈 DB 는 재구축 없이 새 모양으로 선다", () => {
+test("an empty DB boots straight into the new shape without a rebuild", () => {
   const db = new Database(":memory:");
   db.exec(REFERENCED_STUBS);
   db.exec(`

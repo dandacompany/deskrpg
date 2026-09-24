@@ -8,10 +8,11 @@ import { useT } from "@/lib/i18n";
 import { isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
 /**
- * 게이트에 막혔을 때 "무엇이 준비되지 않았는지"를 단계로 보여 준다.
+ * Shows "what isn't ready yet" as steps when blocked by a gate.
  *
- * 고치지는 않는다 — 안내와 이동뿐이다(설계 2026-09-20). 팝업 안에서 키를 받거나 마법사를
- * 중첩해 띄우면, 실패 경로가 화면마다 갈라지고 되돌리기 어려운 상태가 생긴다.
+ * It does not fix anything — only guidance and navigation (design, 2026-09-20). Accepting a
+ * key inside the popup or nesting a wizard inside it would split the failure path across
+ * screens and create a state that's hard to back out of.
  */
 type StepKind =
   "gateway_not_bound" | "plugin_unauthorized" | "plugin_absent" | "plugin_upgrade_required";

@@ -7,8 +7,8 @@ import { safeHttpUrl } from "../artifact-view-model";
 import { LinkIcon } from "./link-icon";
 
 /**
- * 링크 결과물. 첫 줄을 http(s) 로 **다시** 검증한다 — 저장된 값이 `javascript:` 같은 것이면
- * 열기 링크를 만들지 않는다. 페이지 제목은 가져오지 않는다(SSRF).
+ * A link artifact. Re-validates the first line as http(s) — if the stored value is something
+ * like `javascript:`, no open link is created. The page title is not fetched (SSRF).
  */
 export default function LinkViewer({
   text,

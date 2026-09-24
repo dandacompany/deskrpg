@@ -10,8 +10,9 @@ import { I18nProvider } from "@/lib/i18n";
 import NpcRoster, { type RosterNpc } from "./NpcRoster";
 
 /**
- * 출근부는 "맵에 있는 NPC" 가 아니라 **채널이 고용한 프로필 전부** 를 그린다.
- * 출근한 직원은 항상 자리가 있다(좌석 번호 또는 "서 있음") — "자리 미정" 은 없다.
+ * The roster draws not "NPCs on the map" but **every profile the channel employs**.
+ * A clocked-in employee always has a spot (a seat number or "standing") — there is no
+ * "unassigned seat".
  */
 const roster: RosterNpc[] = [
   {
@@ -56,7 +57,7 @@ function buttonByText(el: HTMLElement, text: string): HTMLButtonElement {
   return found as HTMLButtonElement;
 }
 
-test("출근한 직원은 좌석 번호 또는 '서 있음' 버튼을 보이고, '자리 미정' 은 없다", async () => {
+test("a clocked-in employee shows a seat number or a 'standing' button, and there is no 'unassigned seat'", async () => {
   const { el } = await mount(
     <I18nProvider initialLocale="ko">
       <NpcRoster
@@ -77,7 +78,7 @@ test("출근한 직원은 좌석 번호 또는 '서 있음' 버튼을 보이고,
   assert.doesNotMatch(text, /자리 미정/);
 });
 
-test("좌석 버튼을 누르면 onPlace, 회의 중이면 토글이 비활성이다", async () => {
+test("clicking the seat button calls onPlace, and the toggle is disabled while in a meeting", async () => {
   const placed: string[] = [];
   const { el } = await mount(
     <I18nProvider initialLocale="ko">
@@ -101,7 +102,7 @@ test("좌석 버튼을 누르면 onPlace, 회의 중이면 토글이 비활성�
   assert.equal(toggleB.disabled, false);
 });
 
-test("여러 명 선택 모드에서 체크한 출근 NPC 로 그룹 대화를 시작한다", async () => {
+test("in multi-select mode, starts a group chat with the checked clocked-in NPCs", async () => {
   const started: string[][] = [];
   const { el } = await mount(
     <I18nProvider>
@@ -135,7 +136,7 @@ test("여러 명 선택 모드에서 체크한 출근 NPC 로 그룹 대화를 �
   assert.deepEqual(started, [["a", "b"]]);
 });
 
-test("남의 프로필은 소유자를 표시한다", async () => {
+test("shows the owner for someone else's profile", async () => {
   const { el } = await mount(
     <I18nProvider initialLocale="ko">
       <NpcRoster

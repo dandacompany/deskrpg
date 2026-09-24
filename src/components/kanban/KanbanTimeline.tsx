@@ -22,16 +22,17 @@ import {
 import { formatElapsed } from "./kanban-view-model";
 
 /**
- * 실적 타임라인 — "누가 언제 실제로 일했는가".
+ * Performance timeline — "who actually worked, and when."
  *
- * 계획이 아니라 실적이다. 행은 카드가 아니라 작업자이고 막대 하나가 실행 기록 한 건이다.
- * 라이브러리 없이 인라인 SVG 로 그린다.
+ * This is actuals, not a plan. Rows are workers, not cards, and each bar is one run record.
+ * Drawn as inline SVG with no library.
  *
- * **표 대체본을 반드시 함께 낸다.** SVG 는 스크린리더에 통째로 안 읽히고 키보드로 훑을 수도
- * 없다. 같은 사실에 다른 길로 닿게 하는 것은 선택이 아니다.
+ * **A table fallback must always ship alongside it.** SVG doesn't get read as a whole by screen
+ * readers and can't be scanned by keyboard. Reaching the same facts through a different path is
+ * not optional.
  *
- * 줌·미니맵·위임 커넥터는 넣지 않는다. 고정 창(오늘/이번 주)과 호버 설명까지다 — 요구가
- * 생기면 그때 붙인다.
+ * No zoom, minimap, or delegation connectors. Just fixed windows (today/this week) and hover
+ * descriptions for now — those get added when the need arises.
  */
 
 const ROW_LABEL_WIDTH = 96;
@@ -39,12 +40,13 @@ const LANE_HEIGHT = 14;
 const LANE_GAP = 2;
 const ROW_GAP = 8;
 const AXIS_HEIGHT = 18;
-const PLOT_WIDTH = 1000; // viewBox 좌표. 실제 폭은 CSS 가 정한다.
+const PLOT_WIDTH = 1000; // viewBox coordinates. CSS decides the actual width.
 
-// `actionable` 은 실패색이 아니라 주의색이다 — 한도·차단·변경요청은 사용자가 할 일이 있는
-// 상태이고, 빨강으로 칠하면 "고장" 으로 읽혀 그 할 일을 놓친다. `npc`(앰버)를 쓰는 이유는
-// **`warning` 토큰이 없기 때문이다** — `tokens.css` 에 `--color-warning` 이 정의돼 있지 않아
-// `fill-warning` 은 아무 색도 내지 않는다(실측).
+// `actionable` is a caution color, not a failure color — limits, blocks, and change requests are
+// states where the user has something to do, and painting them red would read as "broken,"
+// causing that task to be missed. `npc` (amber) is used **because there is no `warning` token** —
+// `--color-warning` isn't defined in `tokens.css`, so `fill-warning` renders no color at all
+// (confirmed empirically).
 const TONE_CLASS: Record<RunTone, string> = {
   running: "fill-primary",
   done: "fill-success",
@@ -54,7 +56,7 @@ const TONE_CLASS: Record<RunTone, string> = {
   unknown: "fill-text-muted",
 };
 
-/** 범례 점은 막대와 **같은** 색을 써야 한다 — 다르면 범례가 거짓말을 한다. */
+/** The legend dot must use **the same** color as the bar — otherwise the legend lies. */
 const TONE_DOT: Record<RunTone, string> = {
   running: "bg-primary",
   done: "bg-success",
@@ -70,24 +72,26 @@ export interface KanbanTimelineProps {
   preset: WindowPreset;
   onPresetChange: (preset: WindowPreset) => void;
   now: number;
-  /** 플러그인이 상한에서 잘라 보냈는가. 잘린 창을 그대로 그리면 사실을 숨긴다. */
+  /** Whether the plugin truncated at its cap. Drawing a truncated window as-is hides that fact. */
   truncated: boolean;
   loading: boolean;
-  /** 조회 실패 메시지. 있으면 그림 대신 이것을 보인다. */
+  /** Fetch failure message. If present, shows this instead of the drawing. */
   error: string | null;
   onOpenTask: (taskId: string) => void;
-  /** 그림 위에 얹는 것(운영 지표 요약). 타임라인이 내용을 모른 채 자리만 준다. */
+  /** What sits above the drawing (the operational metrics summary). The timeline only reserves the slot without knowing its content. */
   header?: React.ReactNode;
   /**
-   * 이 보드가 속한 프로젝트의 목표일(`YYYY-MM-DD`). `null` 이면 세로선을 그리지 않는다 —
-   * 지금은 프로젝트를 만드는 화면이 없어 값이 없는 것이 기본이다.
+   * The target date (`YYYY-MM-DD`) of the project this board belongs to. If `null`, the vertical
+   * line is not drawn — there's no screen for creating a project yet, so having no value is the
+   * default.
    *
-   * **선택 prop 이 아니다.** 처음에는 `?` 를 붙였는데, 모달이 값을 계산만 하고 넘기지 않아도
-   * 타입 검사가 조용했다 — 실제 화면에는 목표일도 화살표도 안 나오는데 컴포넌트 테스트는
-   * prop 을 직접 주니 초록이었다. 빠뜨리면 컴파일러가 잡게 필수로 둔다.
+   * **Not an optional prop.** It started with a `?`, and type checking stayed quiet even when the
+   * modal only computed the value without passing it through — the actual screen showed neither
+   * target date nor arrow, yet the component test passed green because it supplied the prop
+   * directly. Kept required so the compiler catches an omission.
    */
   targetDate: string | null;
-  /** 부모·자식 쌍. 양쪽이 다 보일 때만 화살표가 된다. 같은 이유로 필수다. */
+  /** Parent/child pairs. Only becomes an arrow when both sides are visible. Required for the same reason. */
   links: readonly { parent_id: string; child_id: string }[];
 }
 
@@ -113,9 +117,10 @@ export default function KanbanTimeline({
   const edges = useMemo(() => dependencyEdges(layout.rows, links ?? []), [layout.rows, links]);
   const legend = useMemo(() => outcomeLegend(layout.rows), [layout.rows]);
 
-  // 창이 하루를 넘으면 시:분만으로는 눈금을 구분할 수 없다 — 주 단위 창에서 라벨 일곱 개가
-  // 모두 "오전 09:00" 이던 실측 결함이 이것이다. 날짜 라벨에 요일을 붙이는 것은 주 단위 창에서
-  // "언제가 월요일인가" 가 곧 읽는 사람이 찾는 것이기 때문이다.
+  // Once the window spans more than a day, hour:minute alone can't distinguish the ticks — this is
+  // the bug we actually saw, where a week-long window showed all seven labels as "9:00 AM." Adding
+  // the weekday to date labels is because, in a week-long window, "which one is Monday" is exactly
+  // what the reader is looking for.
   const labelKind = axisLabelKind(win);
   const clock = (ms: number) =>
     labelKind === "time"
@@ -259,8 +264,8 @@ export default function KanbanTimeline({
           </svg>
 
           {/*
-            표 대체본. SVG 는 스크린리더에 통째로 안 읽히고 키보드로 훑을 수도 없다.
-            같은 데이터를 같은 순서로 낸다 — 요약이 아니라 대체본이다.
+            Table fallback. SVG doesn't get read as a whole by screen readers and can't be
+            scanned by keyboard. Emits the same data in the same order — a substitute, not a summary.
           */}
           <details className="mt-3">
             <summary className="cursor-pointer text-xs text-text-secondary">
@@ -323,14 +328,15 @@ export default function KanbanTimeline({
 }
 
 /**
- * 목표일 칩. 창 안이면 세로선이 이미 있으니 날짜만, 창 밖이면 **남은 일수와 방향**을 쓴다 —
- * 선을 창 경계에 붙이면 목표일이 그 시각인 것처럼 보인다.
+ * Target-date chip. If it's inside the window, just the date, since the vertical line already
+ * shows it; if outside the window, shows **days remaining and direction** instead — pinning the
+ * line to the window edge would make the target date look like it falls at that instant.
  */
 function TargetChip({ target }: { target: ReturnType<typeof targetMarker> }) {
   const t = useT();
   const { locale } = useLocale();
   if (target.kind === "none") {
-    // 프로젝트를 만드는 화면이 아직 없어 목표일이 비는 것이 기본이다. 조용히 말한다.
+    // There's no screen for creating a project yet, so an empty target date is the default. State it quietly.
     return <span className="text-text-dim">{t("kanban.timeline.noTarget")}</span>;
   }
   const date = new Date(target.atMs).toLocaleDateString(locale);
@@ -348,8 +354,9 @@ function TargetChip({ target }: { target: ReturnType<typeof targetMarker> }) {
 }
 
 /**
- * 의존 화살표. 부모 링크가 곧 실행 순서라(Hermes 는 부모가 끝나야 자식을 집는다) 부모의 끝에서
- * 자식의 시작으로 그린다. 순서가 뒤집힌 것은 점선으로 드러낸다 — 정상적으로는 생기지 않는다.
+ * Dependency arrow. Since a parent link is also execution order (Hermes only picks up a child
+ * after its parent is done), this is drawn from the parent's end to the child's start. A reversed
+ * order is shown with a dashed line — it shouldn't normally happen.
  */
 function Arrow({
   edge,
@@ -378,11 +385,13 @@ function Arrow({
 }
 
 /**
- * 범례 — 화면에 **실제로 있는** 결과만. 항목 이름은 `outcome` 문자열 그대로다.
+ * Legend — only outcomes that **actually appear** on screen. Entry names are the raw `outcome`
+ * string.
  *
- * tone 고정 목록을 쓰면 모르는 값이 "기타" 한 칸에 뭉개져 이름을 잃는다. 실측에서 실행 178건
- * 중 177건이 `rate_limited` 였는데 색 매핑에 없어 회색으로 그려졌고, 화면에는 그 이름을 설명할
- * 곳이 없었다. 값을 항목으로 쓰면 코어가 어휘를 늘려도 이름은 잃지 않는다.
+ * Using a fixed tone list would flatten unknown values into a single "other" cell and lose the
+ * name. In one observed case, 177 of 178 runs were `rate_limited`, which wasn't in the color
+ * mapping, so it rendered gray with nowhere on screen to explain that name. Using the value itself
+ * as the entry means the name is never lost even as the core adds new vocabulary.
  */
 function OutcomeLegend({
   entries,
@@ -424,7 +433,7 @@ function Bar({
   title: string;
   onOpen: () => void;
 }) {
-  // 폭이 0에 가까운 실행도 보여야 한다 — 1초짜리 실패가 눈에 안 보이면 없는 것과 같다.
+  // A run with near-zero width still needs to be visible — an invisible one-second failure is as good as not existing.
   const width = Math.max(bar.width * PLOT_WIDTH, 2);
   return (
     <g onClick={onOpen} className="cursor-pointer">

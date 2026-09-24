@@ -199,7 +199,7 @@ const bb = (key: string, value: unknown, author = "swarm-orchestrator") => ({
   created_at: "2026-09-16T00:00:00Z",
 });
 
-test("블랙보드 코멘트는 스레드에서 빠지고 표로 병합된다", () => {
+test("blackboard comments are dropped from the thread and merged into a table", () => {
   const out = splitBlackboardComments([
     { id: "c1", author: "nova", body: "사람 코멘트", created_at: "2026-09-16T00:00:00Z" },
     bb("topology", { goal: "g" }),
@@ -213,7 +213,7 @@ test("블랙보드 코멘트는 스레드에서 빠지고 표로 병합된다", 
   assert.equal(out.authors.topology, "swarm-orchestrator");
 });
 
-test("같은 key 는 나중 값이 이긴다", () => {
+test("for the same key, the later value wins", () => {
   const out = splitBlackboardComments([
     bb("progress", { done: 1 }, "nova"),
     bb("progress", { done: 2 }, "luna"),
@@ -222,8 +222,8 @@ test("같은 key 는 나중 값이 이긴다", () => {
   assert.equal(out.authors.progress, "luna");
 });
 
-test("깨진 JSON 은 조용히 무시하되 스레드에도 안 남긴다", () => {
-  // Hermes `latest_blackboard` 와 같은 동작. 접두사가 붙은 이상 사람에게 보일 것은 아니다.
+test("broken JSON is silently ignored and also dropped from the thread", () => {
+  // Same behavior as Hermes `latest_blackboard`. Once the prefix is there, it isn't meant to be shown to a person.
   const out = splitBlackboardComments([
     { id: "bad", author: "nova", body: `${BLACKBOARD_PREFIX}{깨짐`, created_at: "x" },
   ] as KanbanComment[]);
@@ -231,7 +231,7 @@ test("깨진 JSON 은 조용히 무시하되 스레드에도 안 남긴다", () 
   assert.deepEqual(out.blackboard, {});
 });
 
-test("key 가 문자열이 아니면 병합하지 않는다", () => {
+test("does not merge when key is not a string", () => {
   const out = splitBlackboardComments([
     {
       id: "n",
@@ -243,7 +243,7 @@ test("key 가 문자열이 아니면 병합하지 않는다", () => {
   assert.deepEqual(out.blackboard, {});
 });
 
-test("블랙보드가 없으면 빈 객체다", () => {
+test("returns an empty object when there is no blackboard", () => {
   const out = splitBlackboardComments([
     { id: "c1", author: "nova", body: "보통 코멘트", created_at: "x" },
   ] as KanbanComment[]);
@@ -251,20 +251,20 @@ test("블랙보드가 없으면 빈 객체다", () => {
   assert.equal(out.comments.length, 1);
 });
 
-test("BLACKBOARD_PREFIX 는 Hermes kanban_swarm.BLACKBOARD_PREFIX 와 같아야 한다", () => {
-  // 하드코딩한 기대값과 비교한다(이 파일을 읽지 않는다) — 누가 상수를 바꾸면 이 테스트 하나만
-  // 실패해서 의도적 변경인지 드러낸다.
+test("BLACKBOARD_PREFIX must match Hermes kanban_swarm.BLACKBOARD_PREFIX", () => {
+  // Compared against a hardcoded expected value (does not read that file) — if anyone changes the
+  // constant, only this one test fails, surfacing whether the change was intentional.
   assert.equal(BLACKBOARD_PREFIX, "[swarm:blackboard] ");
 });
 
-test("실행 경과는 플러그인이 보내는 epoch 초에서도 계산된다", () => {
-  // 화면이 `Date.parse` 를 직접 부르던 때 이 값은 NaN 이 되어 경과 배지가 통째로 사라졌다.
+test("run elapsed time is also computed from the epoch seconds the plugin sends", () => {
+  // Back when the screen called `Date.parse` directly, this value became NaN and the elapsed badge disappeared entirely.
   const startedEpoch = 1758412800;
   const nowMs = (startedEpoch + 90) * 1000;
   assert.equal(elapsedSeconds({ started_at: startedEpoch }, nowMs), 90);
 });
 
-test("실행 경과는 ISO 문자열에서도 계산된다 — 두 모양을 다 받는다", () => {
+test("run elapsed time is also computed from an ISO string — both shapes are accepted", () => {
   const startedMs = Date.parse("2025-09-21T00:00:00.000Z");
   assert.equal(elapsedSeconds({ started_at: "2025-09-21T00:00:00.000Z" }, startedMs + 90_000), 90);
 });

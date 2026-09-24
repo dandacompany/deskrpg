@@ -11,7 +11,7 @@ const UPDATE_COMMANDS: { key: string; command: string }[] = [
   { key: "growth.updateDocker", command: "docker compose pull && docker compose up -d" },
 ];
 
-/** 새 버전 안내. 열리는 순간 그 버전을 확인한 것으로 기록해 빨간 점을 끈다. */
+/** New version notice. The moment it opens, records that version as seen and turns off the red dot. */
 export function UpdateNoticeModal({
   version,
   latestVersion,

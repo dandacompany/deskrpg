@@ -50,30 +50,31 @@ import { CopyCommand } from "../CopyCommand";
 
 interface KanbanBoardModalProps {
   channelId: string;
-  /** 대화에서 가져온 초안. 확인 전에는 서버에 등록하지 않는다. */
+  /** A draft brought in from a conversation. Not registered on the server until confirmed. */
   initialCreateDraft?: Pick<TaskFormValues, "title" | "body" | "assigneeNpcId">;
   onConnectGateway?: () => void;
   onClose: () => void;
-  /** `kanban:event` 가 올 때마다 1 씩 오른다(GamePageClient 가 소켓을 든다). 디바운스해 재조회. */
+  /** Bumps by 1 every time a `kanban:event` arrives (GamePageClient holds the socket). Debounced before refetching. */
   refreshTick?: number;
-  /** 사건 → 재조회 디바운스(ms). 기본 `KANBAN_EVENT_DEBOUNCE_MS`. */
+  /** Debounce (ms) from event to refetch. Defaults to `KANBAN_EVENT_DEBOUNCE_MS`. */
   debounceMs?: number;
-  /** 열자마자 이 카드의 상세를 편다 — 방 알림의 "카드 열기"(R29). 마운트 시에만 읽는다. */
+  /** Opens this card's detail as soon as the modal opens — "open card" from a room notification (R29). Read only on mount. */
   initialTaskId?: string | null;
-  /** 카드 드로어의 결과물 섹션 — 그대로 `TaskDrawer` 에 넘긴다. 없으면 섹션이 없다. */
+  /** The card drawer's artifacts section — passed through to `TaskDrawer` as-is. No section if absent. */
   artifacts?: TaskDrawerArtifacts | null;
-  /** 채널 `artifact:event` 수 — 드로어의 결과물 섹션이 디바운스해 다시 읽는다. */
+  /** Count of channel `artifact:event`s — the drawer's artifacts section debounces and refetches on this. */
   artifactsRefreshTick?: number;
   /**
-   * 이미 열린 보드에 "이 카드를 펴라" — 결과물의 "출처로 이동". `seq` 가 바뀔 때마다 선택을 옮긴다
-   * (`initialTaskId` 는 마운트 때만 읽으므로 열린 보드에는 닿지 않는다).
+   * "Open this card" on an already-open board — artifacts' "go to source." The selection moves
+   * every time `seq` changes (`initialTaskId` is only read on mount, so it never reaches an
+   * already-open board).
    */
   focusRequest?: { taskId: string; seq: number } | null;
-  /** 다른 모달(결과물)이 보드를 덮고 있다 — Escape 는 위 모달 몫이라 보드는 닫지 않는다. */
+  /** Another modal (artifacts) is covering the board — Escape belongs to that modal, so the board doesn't close. */
   covered?: boolean;
 }
 
-/** `kanban:event` 연타를 한 번의 재조회로 접는 간격. */
+/** Interval that folds a burst of `kanban:event`s into a single refetch. */
 export const KANBAN_EVENT_DEBOUNCE_MS = 400;
 
 type Editor =
@@ -123,9 +124,10 @@ function formFromTask(task: KanbanTask & Record<string, unknown>, npcs: BoardRes
 }
 
 /**
- * 칸반 보드 모달. 상태(`automation/status`)와 보드를 읽고 고정 순서의 열로 그린다(R6).
- * 조작은 전부 드로어·편집 폼이 서버에 보내고, 성공하면 여기의 `reload` 로 다시 읽는다(R26).
- * 보드를 못 열면(428·409·503) 열 대신 안내를 그린다(R31/R32/E6).
+ * The kanban board modal. Reads status (`automation/status`) and the board, rendering fixed-order
+ * columns (R6). All mutations are sent by the drawer/edit form, and on success this refetches via
+ * `reload` (R26). If the board can't be opened (428/409/503), a message is shown instead of the
+ * columns (R31/R32/E6).
  */
 export default function KanbanBoardModal({
   channelId,
@@ -143,7 +145,7 @@ export default function KanbanBoardModal({
   const t = useT();
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const { selected: selectedBoard, select: selectBoard } = useSelectedBoard(channelId, projects);
-  // 보드가 바뀌면 api 가 새로 만들어지고, 아래 로딩 효과가 그 보드로 다시 읽는다.
+  // When the board changes, a new api is created, and the loading effect below refetches for that board.
   const api = useMemo(
     () => createKanbanApi(channelId, undefined, selectedBoard ?? undefined),
     [channelId, selectedBoard],
@@ -178,13 +180,14 @@ export default function KanbanBoardModal({
   } = useProjectViewState(channelId);
   const includeArchived = viewState.filter.includeArchived;
   /**
-   * 묶음 조회가 되는가. capability 가 정본이다 — 버전으로 판단하면 "새 플러그인인데 404" 를
-   * 진단할 수 없다(`plugin-capability.ts` 의 스웜 게이트와 같은 이유).
+   * Whether bulk link lookup is available. The capability is the source of truth — judging by
+   * version would make "new plugin but still 404" impossible to diagnose (same reason as the
+   * swarm gate in `plugin-capability.ts`).
    */
   const viewsSupported = status?.capabilities?.includes("kanban_views") ?? false;
   const [expandedTasks, setExpandedTasks] = useState<ReadonlySet<string>>(() => new Set());
   const [loadingChildren, setLoadingChildren] = useState<ReadonlySet<string>>(() => new Set());
-  /** 펼친 카드의 링크. id 만 담는다 — 카드 본문은 언제나 보드 응답이 정본이다. */
+  /** Links for expanded cards. Holds only ids — the board response is always the source of truth for card content. */
   const [links, setLinks] = useState<
     ReadonlyMap<string, { parents: string[]; children: string[] }>
   >(() => new Map());
@@ -211,14 +214,14 @@ export default function KanbanBoardModal({
   selectedTaskIdRef.current = selectedTaskId;
   const getBoardRoot = useCallback(() => boardRootRef.current, []);
 
-  // 서버 정본이 화면에 반영된 뒤 새 카드 DOM으로 포커스를 옮긴다.
+  // Move focus to the new card's DOM after the server's source of truth is reflected on screen.
   useEffect(() => {
     if (move.phase === "success") {
       restoreKanbanMoveResultFocus(boardRootRef.current, move.taskId);
     }
   }, [move]);
 
-  // 출처로 이동 — 열린 보드에서도 요청된 카드로 드로어를 옮긴다(보드 상태는 그대로 둔다).
+  // "Go to source" — moves the drawer to the requested card even on an already-open board (board state is left as-is).
   const focusSeq = focusRequest?.seq ?? null;
   const focusTaskId = focusRequest?.taskId ?? null;
   useEffect(() => {
@@ -236,16 +239,17 @@ export default function KanbanBoardModal({
     };
   }, [channelId]);
 
-  // 프로젝트 목록은 채널에만 달렸다 — `api` 에 매달면 보드를 고를 때마다 다시 읽고,
-  // 그 결과가 다시 선택을 건드려 되돌이가 된다. 실패해도 조용히 넘긴다: 보드가 하나뿐인
-  // 채널에서는 선택기가 어차피 그려지지 않고, 목록이 없다고 칸반을 막을 이유는 없다.
+  // The project list depends only on the channel — tying it to `api` would refetch every time a
+  // board is chosen, and that result touching the selection again would create a loop. Failures
+  // are silently ignored: in a channel with only one board the picker wouldn't render anyway, and
+  // a missing list is no reason to block kanban.
   useEffect(() => {
     let alive = true;
     const listApi = createKanbanApi(channelId);
     void listApi
       .projects()
       .then((data) => {
-        // 모양이 예상과 다르면 빈 목록으로 본다 — 선택기 하나 때문에 칸반이 멈추면 안 된다.
+        // If the shape doesn't match expectations, treat it as an empty list — kanban must not stall over a single picker.
         if (alive) setProjects(Array.isArray(data?.projects) ? data.projects : []);
       })
       .catch(() => {
@@ -274,7 +278,7 @@ export default function KanbanBoardModal({
           setLoading(false);
           return { kind: "failed" };
         }
-        // 상태 요약이 없어도 보드는 열 수 있다 — 경고 배지만 비운다.
+        // The board can still open without a status summary — only the warning badge is left empty.
         if (current()) setStatus(null);
       }
       try {
@@ -311,7 +315,7 @@ export default function KanbanBoardModal({
     void reload();
   }, [reload]);
 
-  // `kanban:event` — 디바운스 후 보드·상세 재조회(R26).
+  // `kanban:event` — refetch the board/detail after debouncing (R26).
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (refreshTick === 0) return;
@@ -338,14 +342,15 @@ export default function KanbanBoardModal({
   });
 
   /**
-   * 보드 열에 **목록과 같은 필터**를 먹인다.
+   * Applies **the same filter as the list** to the board columns.
    *
-   * 필터가 목록에만 걸리면 같은 보드의 두 표현이 서로 다른 카드 수를 보인다. 서브프로젝트를
-   * 골랐는데 보드는 그대로인 것은 조용한 실패다 — 화면은 "필터 1개" 라고 말하면서 아무것도
-   * 하지 않는다.
+   * If the filter only applied to the list, the same board's two views would show different card
+   * counts. Choosing a subproject while the board stays the same is a silent failure — the screen
+   * says "1 filter" while doing nothing.
    *
-   * 열 자체는 아홉 개 그대로 두고 카드만 뺀다. 빈 열을 없애면 상태 집합이 필터에 따라
-   * 달라지는데, 열을 발명하지도 없애지도 않는 것이 이 화면의 규칙이다.
+   * The nine columns themselves are kept as-is; only cards are removed. Removing empty columns
+   * would make the status set vary with the filter, and never inventing or removing columns is
+   * this screen's rule.
    */
   const visibleColumns = useMemo(
     () =>
@@ -354,11 +359,12 @@ export default function KanbanBoardModal({
   );
 
   /**
-   * 트리를 한 단 펼친다 — 펼친 카드만 상세를 부른다(설계 D1(a)).
+   * Expands the tree one level — only an expanded card has its detail fetched (design D1(a)).
    *
-   * 보드 응답은 링크를 주지 않고 `link_counts` 만 준다. 전체 트리를 미리 받으려면 카드 수만큼
-   * 호출해야 하므로, 사용자가 실제로 연 가지만 불러온다. 받은 링크는 id 로만 들고 있고 카드
-   * 본문은 보드 응답에서 찾는다 — 사본을 두면 재조회 뒤 낡은 제목이 남는다.
+   * The board response gives no links, only `link_counts`. Pre-fetching the whole tree would need
+   * one call per card, so only the branch the user actually opens gets loaded. The links received
+   * are held only as ids, and card content is looked up from the board response — keeping a copy
+   * would leave a stale title behind after a refetch.
    */
   const toggleExpand = useCallback(
     (taskId: string) => {
@@ -379,8 +385,9 @@ export default function KanbanBoardModal({
           setLinks((prev) => new Map(prev).set(taskId, detail.links));
         })
         .catch(() => {
-          // 링크를 못 받으면 가지가 비어 보인다. 카드 본문은 이미 목록에 있으므로 화면을
-          // 막지 않고, 다음 펼침에서 다시 시도된다(캐시에 넣지 않았다).
+          // If the links can't be fetched, the branch just looks empty. Since card content is
+          // already in the list, this doesn't block the screen and is retried on the next expand
+          // (nothing was cached).
         })
         .finally(() => {
           setLoadingChildren((prev) => {
@@ -394,12 +401,13 @@ export default function KanbanBoardModal({
   );
 
   /**
-   * 타임라인 창. **매 렌더마다 `Date.now()` 를 다시 읽지 않는다** — 그러면 막대가 미세하게
-   * 계속 흔들리고 `useMemo` 도 매번 깨진다. 뷰를 열거나 기간을 바꿀 때만 다시 잡는다.
+   * The timeline window. **`Date.now()` is not re-read on every render** — doing so would cause
+   * the bars to keep jittering slightly and break `useMemo` every time. It's re-captured only when
+   * the view is opened or the period is changed.
    */
   const timelineWindow = useMemo(
     () => presetWindow(timelinePreset, Date.now()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 창을 고정하려면 열 때의 시각만 쓴다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keeping the window fixed means using only the time it was opened.
     [timelinePreset, viewState.viewMode],
   );
 
@@ -418,7 +426,7 @@ export default function KanbanBoardModal({
       })
       .catch((err: unknown) => {
         if (!alive) return;
-        // 실패를 빈 타임라인으로 덮지 않는다 — "일한 적 없음" 과 "물어볼 수 없음" 은 다르다.
+        // A failure is not papered over by an empty timeline — "nobody has worked" and "can't be asked" are different things.
         setRunsPage(null);
         setRunsError(toFailure(err).message);
       })
@@ -431,11 +439,12 @@ export default function KanbanBoardModal({
   }, [api, blocker, timelineWindow, viewState.viewMode, viewsSupported, detailTick]);
 
   /**
-   * 타임라인과 지표가 보는 실행 기록. 필터가 걸려 있으면 **보이는 카드의 것만** 남긴다 —
-   * 필터가 보드·목록에만 먹고 타임라인에는 안 먹으면 조용한 실패가 된다(보드에서 한 번 겪었다).
+   * The run history the timeline and metrics see. When a filter is active, keeps **only the ones
+   * for visible cards** — a filter that applies to the board/list but not the timeline is a silent
+   * failure (this happened once on the board).
    *
-   * 필터가 없으면 거르지 않는다. 카드가 지워진 실행도 기록에 남는데(플러그인이 일부러 남긴다),
-   * 교집합을 잡으면 그것들이 사라진다.
+   * With no filter, nothing is dropped. Runs for a deleted card still remain in the history (the
+   * plugin keeps them deliberately), and intersecting them out would make those disappear.
    */
   const visibleRuns = useMemo(() => {
     const runs = runsPage?.runs ?? [];
@@ -445,19 +454,20 @@ export default function KanbanBoardModal({
   }, [runsPage, allTasks, viewState.filter]);
 
   /**
-   * 운영 지표. 타임라인과 **같은 실행 기록·같은 창**에서 계산한다 — 두 화면이 다른 수를
-   * 말하면 둘 다 신뢰를 잃는다.
+   * Operational metrics. Computed from **the same run history and the same window** as the
+   * timeline — if the two views state different numbers, both lose trust.
    *
-   * 승인 대기 카드 집합은 아직 비어 있다. 승인 관문(dev2)이 붙으면 그 집합을 넘긴다. 그때까지
-   * `blocked` 는 전부 오류 차단으로 읽히는데, 그게 안전한 쪽으로 틀리는 선택이다 — 승인을
-   * 두 번 요구하는 것보다 낫다.
+   * The set of cards awaiting approval is still empty. Once the approval gate (dev2) lands, that
+   * set gets passed through. Until then, every `blocked` reads as an error block, which is the
+   * choice that errs on the safe side — better than requiring approval twice.
    */
   /**
-   * 이 보드가 속한 프로젝트의 목표일. `boardSlug` 로 맞춘다 — 채널에 보드가 여러 개일 수 있고,
-   * 프로젝트 하나가 보드 하나를 갖는다.
+   * The target date of the project this board belongs to. Matched by `boardSlug` — a channel can
+   * have multiple boards, and one project has one board.
    *
-   * 지금은 프로젝트를 만드는 화면이 없어 **값이 없는 것이 기본**이다. 그때 타임라인은 세로선을
-   * 그리지 않고 "목표일 미정" 만 쓴다 — 없는 기한을 그려 넣지 않는다.
+   * There's no screen for creating a project yet, so **having no value is the default**. In that
+   * case the timeline draws no vertical line and just writes "target date unset" — a nonexistent
+   * deadline is never drawn in.
    */
   const targetDate = useMemo(() => {
     const slug = status?.boardSlug;
@@ -485,7 +495,7 @@ export default function KanbanBoardModal({
         if (alive) setBoardLinks(page.links);
       })
       .catch(() => {
-        // 링크를 못 받으면 화살표만 없다. 막대는 그대로 그려지므로 화면을 막지 않는다.
+        // If the links can't be fetched, only the arrows are missing. The bars still render, so this doesn't block the screen.
         if (alive) setBoardLinks([]);
       });
     return () => {
@@ -497,11 +507,11 @@ export default function KanbanBoardModal({
   const childrenOf = useMemo(() => resolveLinks(links, byId, "children"), [links, byId]);
   const parentsOf = useMemo(() => resolveLinks(links, byId, "parents"), [links, byId]);
   const npcs = useMemo(() => currentBoard?.npcs ?? [], [currentBoard]);
-  // 스웜 워커는 출근 중인 NPC 중에서만 고른다 — 서버가 잠든 NPC 를 400 으로 거절한다.
+  // Swarm workers are chosen only from NPCs who are active (checked in) — the server rejects sleeping NPCs with 400.
   const npcOptions = useMemo(() => activeAssigneeOptions(npcs), [npcs]);
-  // 플러그인이 스웜을 못 하면 버튼을 아예 숨긴다 — 눌렀다가 428 을 보는 것보다 낫다.
+  // If the plugin can't do swarm, the button is hidden entirely — better than clicking it and seeing a 428.
   const reviewSupported = status?.capabilities?.includes("kanban_review_policy_v1") ?? false;
-  const swarmSupported = false; // 정책을 보장하는 native 스웜 생성 계약이 아직 없다.
+  const swarmSupported = false; // There's no native swarm-creation contract yet that guarantees the policy.
   const anyRunning = allTasks.some(isRunning);
   const movePending = move.phase === "pending";
   const moveBlocked =
@@ -631,7 +641,7 @@ export default function KanbanBoardModal({
     }
   }, [includeArchived, move, reconcileReload, reload]);
 
-  // 실행 중 카드가 있을 때만 1초 시계를 돌린다(경과 시간 표시).
+  // Only run a 1-second clock when there's a running card (for the elapsed time display).
   useEffect(() => {
     if (!anyRunning) return;
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -670,7 +680,7 @@ export default function KanbanBoardModal({
       setEditor(null);
       await reload();
     } catch (err) {
-      // 서버 400 메시지 그대로(R8).
+      // The server's 400 message as-is (R8).
       setEditorError(failureLine(toFailure(err)));
     } finally {
       setSubmitting(false);
@@ -691,16 +701,16 @@ export default function KanbanBoardModal({
 
   const handleSwarm = async (values: SwarmSubmit) => {
     setSwarmSubmitting(true);
-    setSwarmError(null); // 새 제출은 이전 오류를 지운다.
+    setSwarmError(null); // A new submit clears the previous error.
     try {
       const created = await api.createSwarm(values);
       setShowSwarm(false);
       await reload();
-      setSelectedTaskId(created.root_id); // 루트 카드를 연다 — 블랙보드가 거기 있다.
+      setSelectedTaskId(created.root_id); // Open the root card — that's where the blackboard is.
     } catch (err) {
       const failure = toFailure(err);
-      // `SwarmDialog` 는 `fixed inset-0` 로 보드 배너 위를 덮으므로, 오류는 다이얼로그
-      // 안에서 보여야 사용자가 본다(boardWarning 만으로는 안 보인다).
+      // `SwarmDialog` covers the board banner with `fixed inset-0`, so the error must be shown
+      // inside the dialog for the user to see it (boardWarning alone won't be visible).
       const line =
         failure.code === "plugin_upgrade_required"
           ? t("kanban.swarm.unsupported")
@@ -1033,13 +1043,14 @@ export default function KanbanBoardModal({
   );
 }
 
-/** 보드 배너가 들고 있는 실패를 체크리스트가 아는 모양으로 옮긴다. 판정을 다시 하지 않는다 — */
-/** `board_unavailable` 이 들고 있던 code·message 를 `classifyGateFailure` 로 되돌릴 뿐이다. */
+/** Moves the failure held by the board banner into the shape the checklist knows. Never re-judges — */
+/** it just runs `board_unavailable`'s code/message back through `classifyGateFailure`. */
 /**
- * 링크 id 를 보드 응답의 카드로 바꾼다.
+ * Turns a link id into a card from the board response.
  *
- * 지금 보이지 않는 카드(보관함을 접었을 때의 부모·자식)는 결과에서 빠진다 — 없는 카드를
- * 그리려고 지어내지 않는다. 그렇게 부모를 잃은 자식은 목록에서 루트로 남는다.
+ * A card not currently visible (a parent/child while the archive is collapsed) is dropped from
+ * the result — a missing card is never invented just to draw it. A child that loses its parent
+ * this way stays at the root in the list.
  */
 function resolveLinks(
   links: ReadonlyMap<string, { parents: string[]; children: string[] }>,
@@ -1057,8 +1068,9 @@ function resolveLinks(
 }
 
 /**
- * 승인 관문이 붙기 전의 빈 집합. dev2 의 `approval_targets` 조회가 자리 잡으면 그 결과로
- * 바꾼다. 비어 있는 동안 `blocked` 는 오류 차단으로 읽힌다 — 같은 결정을 두 번 묻지 않는 쪽이다.
+ * An empty set until the approval gate lands. Once dev2's `approval_targets` lookup is in place,
+ * this gets swapped for that result. While empty, `blocked` reads as an error block — the choice
+ * that avoids asking the same decision twice.
  */
 const PENDING_APPROVALS_UNAVAILABLE: ReadonlySet<string> = new Set();
 

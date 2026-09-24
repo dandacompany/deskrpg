@@ -6,9 +6,9 @@ export type Consent = "unknown" | "granted" | "denied";
 
 export interface SurveyState {
   consent: Consent;
-  /** 맵 화면이 보이는 동안 쌓인 사용 시간 */
+  /** Usage time accumulated while the map screen is visible */
   usageMs: number;
-  /** 다음 설문을 띄워도 되는 시각. null 이면 아직 첫 설문 전 */
+  /** The time at which the next survey may be shown. null means before the first survey */
   nextAt: number | null;
 }
 

@@ -22,7 +22,7 @@ const baseDetail: KanbanTaskDetail = {
 
 let detail: KanbanTaskDetail = baseDetail;
 
-// 드로어가 첫 렌더에 부르는 것은 taskDetail 뿐이다 — 나머지는 이 테스트에서 닿지 않는다.
+// The only thing the drawer calls on first render is taskDetail — nothing else is exercised by this test.
 const api = {
   taskDetail: async () => detail,
   attachmentUrl: (id: string) => `/api/att/${id}`,
@@ -101,7 +101,7 @@ async function renderDrawer(props: {
       Array.from(host.querySelectorAll("*")).some(
         (el) => el.children.length === 0 && el.textContent?.trim() === text,
       ),
-    /** 제목이 `title` 인 섹션 — 첨부 섹션과 결과물 섹션이 같은 파일을 그리므로 범위를 좁힌다. */
+    /** The section whose title is `title` — narrows scope since the attachments and artifacts sections render in the same file. */
     section: (title: string) =>
       Array.from(host.querySelectorAll("section")).find(
         (el) => el.firstElementChild?.textContent?.trim() === title,
@@ -113,7 +113,7 @@ async function renderDrawer(props: {
   };
 }
 
-test("카드의 결과물을 나열하고 누르면 open 을 부른다", async () => {
+test("lists a card's artifacts and calls open when clicked", async () => {
   const opened: string[] = [];
   const listed: string[] = [];
   const artifacts: TaskDrawerArtifacts = {
@@ -136,7 +136,7 @@ test("카드의 결과물을 나열하고 누르면 open 을 부른다", async (
   }
 });
 
-test("artifacts 가 null 이면 섹션이 없다", async () => {
+test("there's no section when artifacts is null", async () => {
   const view = await renderDrawer({ artifacts: null });
   try {
     assert.equal(view.hasText("결과물"), false);
@@ -145,7 +145,7 @@ test("artifacts 가 null 이면 섹션이 없다", async () => {
   }
 });
 
-test("결과물이 없으면 빈 안내를 그린다", async () => {
+test("renders an empty-state message when there are no artifacts", async () => {
   const view = await renderDrawer({ artifacts: { list: async () => [], open: () => {} } });
   try {
     assert.ok(view.hasText("결과물"));
@@ -155,7 +155,7 @@ test("결과물이 없으면 빈 안내를 그린다", async () => {
   }
 });
 
-test("플러그인이 taskId 필터를 모르면(428) 섹션을 숨긴다", async () => {
+test("hides the section when the plugin doesn't know the taskId filter (428)", async () => {
   const view = await renderDrawer({
     artifacts: {
       list: async () => {
@@ -171,7 +171,7 @@ test("플러그인이 taskId 필터를 모르면(428) 섹션을 숨긴다", asyn
   }
 });
 
-test("refreshTick 이 오르면 결과물을 다시 읽는다", async () => {
+test("refetches artifacts when refreshTick rises", async () => {
   let calls = 0;
   const artifacts: TaskDrawerArtifacts = {
     list: async () => {
@@ -191,11 +191,11 @@ test("refreshTick 이 오르면 결과물을 다시 읽는다", async () => {
   }
 });
 
-test("결과물이 없어도 첨부가 있으면 결과물 목록에 함께 나열한다", async () => {
-  // 한 화면에서 첨부는 파일을 보여 주는데 결과물은 "없습니다" 라고 말하던 문제
-  // (2026-09-20 실측: 첨부 deskrpg_도입검토.md 12,929 B · 결과물 없음).
-  // 첨부는 인라인 base64 로 들어오므로(kanban_attach) 자동 승격 훅의 시야에
-  // 구조적으로 들어올 수 없다 — 화면에서 함께 보여 주는 것이 유일한 연결 고리다.
+test("even with no artifacts, an attachment is listed alongside them in the artifacts list", async () => {
+  // The bug where one screen showed an attachment file while artifacts said "none"
+  // (observed 2026-09-20: attachment deskrpg_도입검토.md 12,929 B · no artifacts).
+  // Since attachments arrive as inline base64 (kanban_attach), they structurally can't be seen by
+  // an auto-promotion hook — showing them together on screen is the only link between the two.
   withAttachments([{ id: "f1", filename: "deskrpg_도입검토.md", size: 12929 }]);
   const view = await renderDrawer({
     artifacts: { list: async () => [], open: () => {} },
@@ -217,7 +217,7 @@ test("결과물이 없어도 첨부가 있으면 결과물 목록에 함께 나�
   }
 });
 
-test("결과물과 첨부가 함께 있으면 둘 다 나열한다", async () => {
+test("lists both when artifacts and attachments are present together", async () => {
   withAttachments([{ id: "f1", filename: "첨부.md" }]);
   const view = await renderDrawer({
     artifacts: { list: async () => [summary({ id: "a1", title: "카드 보고서" })], open: () => {} },
@@ -242,7 +242,7 @@ test("결과물과 첨부가 함께 있으면 둘 다 나열한다", async () =>
   }
 });
 
-test("결과물도 첨부도 없으면 빈 안내를 그린다", async () => {
+test("renders an empty-state message when there are neither artifacts nor attachments", async () => {
   withAttachments([]);
   const view = await renderDrawer({
     artifacts: { list: async () => [], open: () => {} },
@@ -256,8 +256,8 @@ test("결과물도 첨부도 없으면 빈 안내를 그린다", async () => {
   }
 });
 
-test("첨부 기능을 모르는 게이트웨이에서는 첨부를 결과물에 섞지 않는다", async () => {
-  // attachmentsSupported=false 면 detail.attachments 를 신뢰할 수 없다(R12).
+test("does not mix attachments into artifacts on a gateway that doesn't support attachments", async () => {
+  // If attachmentsSupported=false, detail.attachments cannot be trusted (R12).
   withAttachments([{ id: "f1", filename: "첨부.md" }]);
   const view = await renderDrawer({
     artifacts: { list: async () => [], open: () => {} },

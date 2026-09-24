@@ -17,14 +17,15 @@ interface ChatInputProps {
   maxLength?: number;
   autoFocus?: boolean;
   showFileUpload?: boolean;
-  /** 강조색. 미리 정의된 브랜드 토큰 클래스만 고를 수 있다 — `chat-accent.ts` 참조. */
+  /** Accent color. Only pre-defined brand-token classes can be chosen — see `chat-accent.ts`. */
   accent?: ChatAccent;
   /**
-   * 있으면 textarea 대신 `@` 멘션 편집기를 쓴다. 후보는 서버가 응답하는 집합과 같아야 한다
-   * (채널 채팅: 출근 중 NPC, 회의: 참가 NPC). 전송값은 `@[이름]` 으로 직렬화된다.
+   * When present, uses the `@` mention editor instead of a textarea. The candidates must match
+   * the set the server responds with (channel chat: NPCs on duty; meeting: participating NPCs).
+   * The sent value is serialized as `@[name]`.
    */
   mentionCandidates?: MentionCandidate[];
-  /** 어느 대화의 입력인지. 화면에는 보이지 않고 `data-chat-scope` 로만 나간다(캡처·e2e 가 집는다). */
+  /** Which conversation this input belongs to. Not shown on screen, only exposed via `data-chat-scope` (picked up by captures/e2e). */
   scope?: "room" | "npc" | "meeting";
 }
 
@@ -102,7 +103,7 @@ export default function ChatInput({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // 포커스가 있는 동안 시뮬레이션이 키를 가로채지 않게 한다
+      // Prevent the simulation from intercepting keys while this has focus
       e.stopPropagation();
 
       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

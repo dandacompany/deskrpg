@@ -16,7 +16,7 @@ function EntryHarness() {
   );
 }
 
-test("도보/방 안 진입은 도착과 서버확인 뒤 동일한 카메라 경로로 연결된다", async (context) => {
+test("Both walk-in and already-in-room entry connect to the same camera path after arrival and server confirmation", async (context) => {
   const element = document.createElement("div");
   document.body.appendChild(element);
   const root = createRoot(element);
@@ -58,7 +58,7 @@ test("도보/방 안 진입은 도착과 서버확인 뒤 동일한 카메라 �
   assert.equal(element.firstElementChild?.getAttribute("data-state"), "failed");
 });
 
-test("WebGL 렌더러가 없으면 성공을 가장하지 않고 참가 UI를 되돌린다", async () => {
+test("Without a WebGL renderer, it reverts the join UI instead of pretending success", async () => {
   const element = document.createElement("div");
   const root = createRoot(element);
   await act(async () => root.render(<EntryHarness />));
@@ -69,7 +69,7 @@ test("WebGL 렌더러가 없으면 성공을 가장하지 않고 참가 UI를 �
   await act(async () => root.unmount());
 });
 
-test("맵 위 '오피스로' 버튼의 exit-intent 는 참가 중인 회의 화면을 닫는다", async (context) => {
+test("The exit-intent from the map's '오피스로' (Back to office) button closes the in-progress meeting screen", async (context) => {
   const element = document.createElement("div");
   document.body.appendChild(element);
   const root = createRoot(element);
@@ -85,7 +85,7 @@ test("맵 위 '오피스로' 버튼의 exit-intent 는 참가 중인 회의 화�
   await act(async () => EventBus.emit("meeting:entry-state", { status: "arrived" }));
   await act(async () => EventBus.emit("meeting:joined"));
   assert.equal(element.firstElementChild?.getAttribute("data-state"), "joined");
-  // 상단 네비에는 나가는 버튼이 없다 — 이 이벤트가 회의 화면을 떠나는 유일한 상단 밖 경로다.
+  // The top nav has no exit button — this event is the only way to leave the meeting screen outside the top nav.
   await act(async () => EventBus.emit("meeting:exit-intent"));
   assert.equal(element.firstElementChild?.getAttribute("data-state"), "idle");
 });

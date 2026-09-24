@@ -18,7 +18,7 @@ function freshDb() {
   return db;
 }
 
-test("테이블 3개를 만들고 채널마다 office 방을 하나 백필한다 — 두 번 돌려도 하나", () => {
+test("creates the 3 tables and backfills one office room per channel — still one after running twice", () => {
   const db = freshDb();
   ensureChatRoomTables(db);
   ensureChatRoomTables(db);
@@ -33,7 +33,7 @@ test("테이블 3개를 만들고 채널마다 office 방을 하나 백필한다
   }
 });
 
-test("office 는 채널당 하나 — 부분 유니크 인덱스", () => {
+test("one office room per channel — partial unique index", () => {
   const db = freshDb();
   ensureChatRoomTables(db);
   assert.throws(() =>
@@ -45,7 +45,7 @@ test("office 는 채널당 하나 — 부분 유니크 인덱스", () => {
   );
 });
 
-test("방을 지우면 메시지·멤버가 cascade 로 사라진다", () => {
+test("deleting a room cascades away its messages and members", () => {
   const db = freshDb();
   db.pragma("foreign_keys = ON");
   ensureChatRoomTables(db);
@@ -69,7 +69,7 @@ test("방을 지우면 메시지·멤버가 cascade 로 사라진다", () => {
   );
 });
 
-test("channels.owner_id 가 없으면 백필을 건너뛰고 경고한다", () => {
+test("without channels.owner_id, the backfill is skipped and a warning is logged", () => {
   const db = new Database(":memory:");
   db.exec(`
     CREATE TABLE users (id TEXT PRIMARY KEY NOT NULL);

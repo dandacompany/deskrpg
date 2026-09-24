@@ -12,7 +12,7 @@ interface RoomComposerProps {
   onCancel: () => void;
 }
 
-/** 후보 순서대로 고른 것만 남긴다 — 제출값이 화면 순서와 어긋나지 않게. */
+/** Keeps only picked ones in candidate order — so the submitted value matches on-screen order. */
 function ordered(candidates: { id: string }[], picked: Set<string>): string[] {
   return candidates
     .filter((candidate) => picked.has(candidate.id))
@@ -39,7 +39,7 @@ export default function RoomComposer({
     return next;
   };
 
-  // 초대는 이미 있는 방에 사람을 더하는 것이라 NPC 0명도 뜻이 있다(사람만 초대).
+  // Inviting means adding people to an existing room, so 0 NPCs is still valid (people-only invite).
   const needNpc = mode === "create" && npcIds.size === 0;
   const canSubmit = mode === "create" ? !needNpc : npcIds.size + userIds.size > 0;
 

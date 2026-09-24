@@ -1,10 +1,11 @@
 "use client";
 /**
- * 크론 생성·수정 폼 (R17/R18).
+ * Cron create/edit form (R17/R18).
  *
- * 항목: 담당 NPC(생성 때만 고를 수 있다) · 이름 · 프롬프트 · 주기 프리셋(+직접 입력) ·
- * 배달처(체크박스 → 콤마 문자열) · 모델(`provider:model`). 저장은 부모가 한다 —
- * 이 컴포넌트는 본문만 만들어 `onSubmit` 으로 넘기고, 낙관적 갱신은 없다(R26).
+ * Fields: assigned NPC (choosable only when creating) · name · prompt · schedule preset
+ * (+ custom input) · delivery targets (checkboxes -> comma string) · model (`provider:model`).
+ * Saving is done by the parent — this component only builds the body and passes it to
+ * `onSubmit`; there's no optimistic update (R26).
  */
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
@@ -30,7 +31,7 @@ import { CronErrorNotice, TimezoneLabel } from "./cron-notices";
 
 export type CronEditorNpc = { npcId: string; npcName: string };
 
-/** 저장 본문 — `npcId` 는 생성에만 실린다(수정은 담당 NPC 를 못 바꾼다). */
+/** The save body — `npcId` is only carried on create (editing can't change the assigned NPC). */
 export type CronEditorSubmit = {
   npcId: string;
   name: string;
@@ -43,9 +44,9 @@ export type CronEditorSubmit = {
 
 interface CronEditorDialogProps {
   channelId: string;
-  /** 담당 NPC 후보. 수정 모드에서는 `job.npcId` 로 고정된다. */
+  /** Candidate NPCs. In edit mode this is fixed to `job.npcId`. */
   npcs: CronEditorNpc[];
-  /** 생성 시 미리 고를 NPC(단일 NPC 모드). */
+  /** The NPC pre-selected on creation (single-NPC mode). */
   defaultNpcId?: string | null;
   job?: CronJobView | null;
   timezone: string | null;
@@ -83,7 +84,7 @@ export default function CronEditorDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
-  // 배달처 목록은 담당 NPC 의 프로필 것이다 — NPC 가 바뀌면 다시 받는다.
+  // The delivery-target list belongs to the assigned NPC's profile — refetch when the NPC changes.
   useEffect(() => {
     if (!npcId) return;
     let cancelled = false;
@@ -97,13 +98,14 @@ export default function CronEditorDialog({
         }
       })
       .catch((err: unknown) => {
-        // 목록을 못 받아도 local 은 항상 고를 수 있다 — 폼을 막지 않는다.
+        // Even if the list fails to load, local can always be chosen — this doesn't block the form.
         if (cancelled) return;
         setTargets([]);
-        // 다만 "배달처가 없다"와 "게이트에 막혔다"는 다른 일이다. 전에는 구분 없이 삼켰다.
-        // 평범한 500·네트워크 오류까지 "설정이 더 필요하다"고 말하면 거짓 신호다 —
-        // `isSetupBlocker` 로 걸러진 넷(gateway_not_bound·plugin_absent·plugin_unauthorized·
-        // plugin_upgrade_required)만 체크리스트로 띄운다.
+        // But "no delivery targets" and "blocked by the gate" are different things. This used
+        // to be swallowed without distinction. Saying "more setup needed" even for a plain
+        // 500/network error would be a false signal — only the net filtered by `isSetupBlocker`
+        // (gateway_not_bound/plugin_absent/plugin_unauthorized/plugin_upgrade_required) shows
+        // the checklist.
         if (isCronApiError(err)) {
           const blocker = classifyGateFailure({
             status: err.status,
@@ -120,7 +122,7 @@ export default function CronEditorDialog({
     };
   }, [channelId, npcId]);
 
-  // 서버 목록에 없는 id(저장된 값, local) 도 체크박스로 남긴다 — 편집 중 사라지면 안 된다.
+  // Keep ids not in the server list (a stored value, local) as checkboxes too — they must not disappear mid-edit.
   const targetRows = useMemo(() => {
     const known = new Map(targets.map((target) => [target.id, target]));
     const ids = new Set<string>(["local", ...known.keys(), ...deliverIds]);

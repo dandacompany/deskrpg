@@ -1,9 +1,10 @@
 /**
- * "이 카드를 펴라" 를 칸반 모달의 두 prop 중 맞는 쪽으로 보낸다.
+ * Routes "open this card" to whichever of the kanban modal's two props applies.
  *
- * `initialTaskId` 는 마운트 때만 읽히므로(`KanbanBoardModal.tsx:45`) 이미 열린 보드에는
- * 닿지 않는다 — 그때는 `focusRequest` 의 `seq` 를 올려야 선택이 옮겨진다(같은 파일 52줄 주석).
- * 그래서 누를 당시 보드가 열려 있었는지로 갈라 둔다.
+ * `initialTaskId` is only read on mount (`KanbanBoardModal.tsx:45`), so it never reaches an
+ * already-open board — in that case bumping `focusRequest`'s `seq` is what moves the selection
+ * (see the comment on line 52 of the same file). So this splits on whether the board was already
+ * open at the moment of the click.
  */
 
 import { nextKanbanFocus, type KanbanFocusRequest } from "@/app/game/artifact-entry";

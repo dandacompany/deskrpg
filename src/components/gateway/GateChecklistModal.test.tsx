@@ -29,16 +29,16 @@ async function cleanup(root: ReturnType<typeof createRoot>, el: HTMLElement) {
   el.remove();
 }
 
-test("blocker 가 없으면 아무것도 그리지 않는다", async () => {
+test("renders nothing when there is no blocker", async () => {
   const { el, root } = await render(null);
   assert.equal(el.textContent, "");
   await cleanup(root, el);
 });
 
-test("막힌 단계에만 조치가 붙는다 — 플러그인 미설치", async () => {
+test("only the blocked step gets a remedy — plugin not installed", async () => {
   const { el, root } = await render({ kind: "plugin_absent", command: "install me" });
   const text = el.textContent ?? "";
-  // 네 단계가 모두 보인다.
+  // All four steps are visible.
   for (const step of [
     "게이트웨이 연결",
     "리스너 소유자 키",
@@ -47,15 +47,15 @@ test("막힌 단계에만 조치가 붙는다 — 플러그인 미설치", async
   ]) {
     assert.ok(text.includes(step), `${step} 가 없다`);
   }
-  // 막힌 단계의 안내와 명령만 보인다.
+  // Only the blocked step's guidance and command are visible.
   assert.ok(text.includes("Hermes API 서버를 다시 시작"));
   assert.ok(text.includes("install me"));
-  // 다른 단계의 안내는 보이지 않는다.
+  // Other steps' guidance is not visible.
   assert.ok(!text.includes("리스너 소유자 키(API_SERVER_KEY)여야"));
   await cleanup(root, el);
 });
 
-test("업그레이드는 최소 버전을 문구에 넣는다", async () => {
+test("upgrade includes the minimum version in its message", async () => {
   const { el, root } = await render({
     kind: "plugin_upgrade_required",
     minVersion: "0.9.0",
@@ -65,7 +65,7 @@ test("업그레이드는 최소 버전을 문구에 넣는다", async () => {
   await cleanup(root, el);
 });
 
-test("게이트웨이 미연결은 연결 화면 링크를 준다", async () => {
+test("gateway not bound gives a link to the connection screen", async () => {
   const { el, root } = await render({ kind: "gateway_not_bound" });
   const link = Array.from(el.querySelectorAll("a")).find((a) =>
     (a.textContent ?? "").includes("연결 화면 열기"),
@@ -75,7 +75,7 @@ test("게이트웨이 미연결은 연결 화면 링크를 준다", async () => 
   await cleanup(root, el);
 });
 
-test("연결·서버 문제는 체크리스트를 그리지 않는다", async () => {
+test("connection/server issues do not render the checklist", async () => {
   for (const blocker of [{ kind: "unreachable" } as const, { kind: "timeout" } as const]) {
     const { el, root } = await render(blocker);
     const text = el.textContent ?? "";
@@ -85,7 +85,7 @@ test("연결·서버 문제는 체크리스트를 그리지 않는다", async ()
   }
 });
 
-test("그 외 실패는 코드와 메시지를 그대로 보여 준다", async () => {
+test("other failures show the code and message as-is", async () => {
   const { el, root } = await render({
     kind: "other",
     status: 500,

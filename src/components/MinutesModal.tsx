@@ -33,10 +33,10 @@ interface MeetingMinutesDetail extends MeetingMinutesItem {
 
 interface MinutesModalProps {
   channelId: string;
-  /** 후속 업무의 담당으로 고를 수 있는 채널 직원. */
+  /** Channel employees that can be picked as the owner of a follow-up task. */
   npcs: Array<{ id: string; name: string }>;
   onClose: () => void;
-  /** 방 알림에서 열었을 때 — 목록이 아니라 그 회의록을 바로 편다. */
+  /** When opened from a room notice — open that minutes item directly instead of the list. */
   initialMinutesId?: string | null;
 }
 
@@ -85,7 +85,7 @@ export default function MinutesModal({
       .catch(() => setDetailLoading(false));
   }, []);
 
-  // 마운트 때 한 번. 이후 사용자가 다른 회의록을 고르면 그 선택을 따른다.
+  // Once on mount. After that, follow whatever minutes item the user picks.
   useEffect(() => {
     if (initialMinutesId) loadDetail(initialMinutesId);
   }, [initialMinutesId, loadDetail]);
@@ -280,7 +280,7 @@ export default function MinutesModal({
                   </div>
                 )}
 
-                {/* 결정·후속 업무와 등록 제안. 종료 화면을 닫았어도 여기서 다시 열린다. */}
+                {/* Decisions/follow-ups and the registration proposal. Reopens here even after the end screen was closed. */}
                 <div className="mb-3">
                   <MeetingOutcomeSection
                     minutesId={detail.id}

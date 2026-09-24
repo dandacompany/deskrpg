@@ -6,7 +6,7 @@ import { gatewayResources as sqliteTable } from "./schema-sqlite";
 
 const NEW_COLUMNS = ["local_discovery_opted_in_at", "local_discovery_opted_in_by"];
 
-test("옵인 컬럼이 두 dialect 모두에 있다", () => {
+test("the opt-in columns exist in both dialects", () => {
   for (const [label, table] of [
     ["pg", pgTable],
     ["sqlite", sqliteTable],
@@ -20,9 +20,9 @@ test("옵인 컬럼이 두 dialect 모두에 있다", () => {
   }
 });
 
-test("빈 SQLite DB를 부트스트랩해도 옵인 컬럼이 생긴다", async () => {
-  // 런타임 부트스트랩 경로(sqlite-base-schema.js)는 drizzle 정의와 별개다.
-  // 여기가 어긋나면 새 DB로 뜬 서버에서만 'no such column' 이 난다.
+test("bootstrapping an empty SQLite DB also creates the opt-in columns", async () => {
+  // The runtime bootstrap path (sqlite-base-schema.js) is separate from the drizzle definitions.
+  // If this drifts, "no such column" only shows up on servers that booted from a new DB.
   const Database = (await import("better-sqlite3")).default;
   const { ensureSqliteBaseSchema } = await import("./server-db.js");
   const db = new Database(":memory:");
@@ -35,7 +35,7 @@ test("빈 SQLite DB를 부트스트랩해도 옵인 컬럼이 생긴다", async 
   db.close();
 });
 
-test("컬럼이 없는 기존 DB도 호환 경로가 채워준다", async () => {
+test("an existing DB without the columns also gets filled in by the compatibility path", async () => {
   const Database = (await import("better-sqlite3")).default;
   const { ensureSqliteCompatibility } = await import("./server-db.js");
   const db = new Database(":memory:");

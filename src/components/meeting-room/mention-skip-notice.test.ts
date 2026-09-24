@@ -7,22 +7,22 @@ import { MENTION_SKIP_I18N_KEY, mentionSkipI18nKey } from "./mention-skip-notice
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
-/** 로케일 파일을 소스 텍스트로 읽는다 — import 하면 next/ 런타임 의존이 딸려 온다. */
+/** Reads the locale file as source text — importing it would drag in a next/ runtime dependency. */
 function localeSource(lang: string): string {
   return readFileSync(path.join(repoRoot, `src/lib/i18n/locales/${lang}.ts`), "utf8");
 }
 
 const LANGS = ["ko", "ja", "zh", "en"];
 
-describe("건너뛴 지목 안내 — 사유별 i18n 키", () => {
-  test("사유마다 서로 다른 키를 고른다", () => {
+describe("skipped-mention notice — i18n key per reason", () => {
+  test("picks a different key for each reason", () => {
     assert.equal(mentionSkipI18nKey("quota_exhausted"), "meeting.mentionSkipped.quotaExhausted");
     assert.equal(mentionSkipI18nKey("backend_failing"), "meeting.mentionSkipped.backendFailing");
   });
 
-  test("두 사유가 같은 키로 뭉개지지 않는다", () => {
-    // 엔진이 "백엔드가 죽었다"와 "할당량을 다 썼다"를 구분해 보내는데 마지막 한 칸에서
-    // 같은 문구가 나가면 그 구분이 사용자에게 도달하지 않는다.
+  test("two reasons are not flattened into the same key", () => {
+    // The engine sends "backend died" and "ran out of quota" as distinct reasons, but if the
+    // last step emits the same message for both, that distinction never reaches the user.
     const keys = Object.values(MENTION_SKIP_I18N_KEY);
     assert.equal(new Set(keys).size, keys.length, `키가 중복됩니다: ${JSON.stringify(keys)}`);
   });
@@ -39,12 +39,13 @@ describe("건너뛴 지목 안내 — 사유별 i18n 키", () => {
     });
 
     test(`${lang} 문구가 {name} 자리표시자를 쓴다`, () => {
-      // 클라이언트는 t(key, { name }) 로 부른다. 자리표시자가 빠지면 "누가" 건너뛰어졌는지가
-      // 사라져, 참가자가 여럿인 회의에서 안내가 쓸모없어진다.
+      // The client calls t(key, { name }). If the placeholder is missing, "who" was skipped
+      // disappears, making the notice useless in a meeting with multiple participants.
       const src = localeSource(lang);
       for (const key of Object.values(MENTION_SKIP_I18N_KEY)) {
-        // 줄 단위로 찾지 않는다 — 포매터가 긴 항목을 키와 값 두 줄로 쪼개면
-        // 값이 다음 줄로 내려가 "줄을 못 찾았다"가 아니라 "{name} 이 없다"로 잘못 실패한다.
+        // Don't search line by line — if the formatter splits a long entry across a key line
+        // and a value line, the value moves to the next line and this would wrongly fail with
+        // "{name} is missing" instead of "line not found".
         const m = src.match(
           new RegExp(
             `"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*:\\s*("(?:[^"\\\\]|\\\\.)*")`,

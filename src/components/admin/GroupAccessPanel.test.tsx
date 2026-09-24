@@ -42,7 +42,7 @@ const responses: Record<string, unknown> = {
   },
 };
 
-test("권한 행은 원시 키 대신 사람이 읽는 이름과 번역된 값을 보인다", async () => {
+test("permission rows show human-readable names and translated values instead of raw keys", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
@@ -125,7 +125,7 @@ const sectionFetch = (async (input: RequestInfo | URL) => {
   return new Response(JSON.stringify(responses[section] ?? {}), { status: 200 });
 }) as typeof fetch;
 
-test("시스템 관리자가 아니면 비밀번호 재설정 버튼이 없다", async () => {
+test("without system admin rights, there is no reset password button", async () => {
   const originalFetch = globalThis.fetch;
   const { el, root } = await renderPanel(false, sectionFetch);
   try {
@@ -137,7 +137,7 @@ test("시스템 관리자가 아니면 비밀번호 재설정 버튼이 없다",
   }
 });
 
-test("시스템 관리자가 재설정하면 임시 비밀번호가 화면에 한 번 드러난다", async () => {
+test("when a system admin resets it, the temporary password is shown once on screen", async () => {
   const originalFetch = globalThis.fetch;
   const originalConfirm = globalThis.confirm;
   globalThis.confirm = () => true;

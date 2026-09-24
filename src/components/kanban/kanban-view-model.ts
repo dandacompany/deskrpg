@@ -2,11 +2,12 @@ import { classifyGateFailure } from "@/lib/gate-failure";
 import { taskTimeMs } from "@/lib/plugin-time";
 import { PLUGIN_INSTALL_COMMAND as SHARED_PLUGIN_INSTALL_COMMAND } from "@/lib/hermes/plugin-install-command";
 /**
- * 칸반 화면의 순수 뷰모델 — React·fetch 를 모른다.
+ * Pure view-model for the kanban screen — knows nothing about React or fetch.
  *
- * 열 순서(R6), 담당자 ↔ NPC 매핑(R7), 카드 요약(진행률·경과·경고 배지), 그리고 서버 오류를
- * 화면 분기(428·409·503·그 외, R31/R32)로 접는 규칙을 여기에 고정한다. 컴포넌트는 이 함수들의
- * 결과만 그린다 — 상태를 재해석하거나 열을 발명하지 않는다.
+ * This pins down column order (R6), assignee ↔ NPC mapping (R7), card summaries (progress /
+ * elapsed / warning badges), and the rule for folding server errors into screen branches (428 /
+ * 409 / 503 / other, R31/R32). Components only render these functions' results — they never
+ * reinterpret state or invent columns.
  */
 
 import {
@@ -18,17 +19,18 @@ import {
 } from "@/lib/hermes/deskrpg-plugin-types";
 
 // ---------------------------------------------------------------------------
-// 열 (R6)
+// Columns (R6)
 // ---------------------------------------------------------------------------
 
-/** 보드 열의 고정 순서. 서버 응답의 열 순서와 무관하게 이 순서로 그린다. */
+/** Fixed order of board columns. Rendered in this order regardless of the server response's column order. */
 export const KANBAN_COLUMN_ORDER: readonly KanbanTaskStatus[] = KANBAN_TASK_STATUSES;
 
 export type OrderedColumn = { name: KanbanTaskStatus; tasks: KanbanTask[] };
 
 /**
- * 응답의 열을 고정 순서로 정렬한다. 응답에 없는 열은 빈 열로 채우고, 모르는 이름의 열은
- * 버린다(상태를 발명하지 않는다). `archived` 열은 `includeArchived` 일 때만 남긴다.
+ * Sorts the response's columns into the fixed order. Columns missing from the response are filled
+ * in empty, and columns with unknown names are dropped (never invent a status). The `archived`
+ * column is kept only when `includeArchived` is set.
  */
 export function orderColumns(
   columns: KanbanBoard["columns"] | undefined,
@@ -42,19 +44,20 @@ export function orderColumns(
 }
 
 // ---------------------------------------------------------------------------
-// 담당자 ↔ NPC (R7)
+// Assignee ↔ NPC (R7)
 // ---------------------------------------------------------------------------
 
 export type BoardNpc = { npcId: string; npcName: string; profileName: string; active: boolean };
 
-/** 생성·재배정 선택지 — 출근 중(active)인 NPC 만. */
+/** Options for creation/reassignment — only NPCs who are active (checked in). */
 export function activeAssigneeOptions(npcs: readonly BoardNpc[]): BoardNpc[] {
   return npcs.filter((npc) => npc.active);
 }
 
 /**
- * 카드에 실린 `assignee`(프로필 이름)를 화면 이름으로. 이 채널의 NPC 면 NPC 이름, 아니면
- * 프로필 이름 그대로(밖에서 만든 카드). 담당이 없으면 null.
+ * Turns the card's `assignee` (a profile name) into a display name. If it's this channel's NPC,
+ * use the NPC name; otherwise use the profile name as-is (a card created from outside). Returns
+ * null if there is no assignee.
  */
 export function assigneeLabel(
   assignee: string | undefined | null,
@@ -65,7 +68,7 @@ export function assigneeLabel(
   return npc ? npc.npcName : assignee;
 }
 
-/** 프로필 이름 → npcId (재배정 select 의 초기값용). 채널 NPC 가 아니면 null. */
+/** Profile name → npcId (for the reassignment select's initial value). Null if not a channel NPC. */
 export function npcIdForAssignee(
   assignee: string | undefined | null,
   npcs: readonly BoardNpc[],
@@ -75,10 +78,10 @@ export function npcIdForAssignee(
 }
 
 // ---------------------------------------------------------------------------
-// 카드 요약
+// Card summaries
 // ---------------------------------------------------------------------------
 
-/** `done/total` 문자열. 진행률이 없거나 total 이 0 이면 null. */
+/** `done/total` string. Null if there's no progress or total is 0. */
 export function progressLabel(task: Pick<KanbanTask, "progress">): string | null {
   const p = task.progress;
   if (!p || typeof p.total !== "number" || p.total <= 0) return null;
@@ -86,8 +89,9 @@ export function progressLabel(task: Pick<KanbanTask, "progress">): string | null
 }
 
 /**
- * 실행 중 카드의 경과 초. `started_at` 이 없으면 null. 마지막 heartbeat 가 시작보다 뒤이고
- * 현재 시각을 모르면(now 미지정) heartbeat 까지의 경과를 쓴다.
+ * Elapsed seconds for a running card. Null if there's no `started_at`. If the last heartbeat is
+ * after the start and the current time is unknown (`now` omitted), uses the elapsed time up to
+ * the heartbeat.
  */
 export function elapsedSeconds(
   task: Pick<KanbanTask, "started_at" | "last_heartbeat_at">,
@@ -115,7 +119,7 @@ export function formatElapsed(seconds: number): string {
 
 export type WarningBadge = { count: number; severity: "critical" | "error" | "warning" };
 
-/** 경고 배지. `warnings.count` 가 0 이하이면 null. 모르는 severity 는 `warning` 으로 접는다. */
+/** Warning badge. Null if `warnings.count` is 0 or less. Unknown severities fold into `warning`. */
 export function warningBadge(task: Pick<KanbanTask, "warnings">): WarningBadge | null {
   const w = task.warnings;
   if (!w || typeof w.count !== "number" || w.count <= 0) return null;
@@ -126,26 +130,26 @@ export function warningBadge(task: Pick<KanbanTask, "warnings">): WarningBadge |
   return { count: w.count, severity };
 }
 
-/** 카드가 실행 중인가 — 열 이름이 아니라 `started_at` 이 있고 `running` 인 경우. */
+/** Whether a card is running — not by column name, but `status === "running"` with `started_at` present. */
 export function isRunning(task: Pick<KanbanTask, "status" | "started_at">): boolean {
   return task.status === "running" && Boolean(task.started_at);
 }
 
-/** 보드 전체 카드(열 순서대로). 선행 카드 선택지·링크 이름 찾기에 쓴다. */
+/** All board cards, in column order. Used for prerequisite-card options and link name lookups. */
 export function flattenTasks(columns: readonly OrderedColumn[]): KanbanTask[] {
   return columns.flatMap((column) => column.tasks);
 }
 
-/** id → 제목. 링크 목록에서 id 만 오는 경우에 붙인다. 못 찾으면 id 그대로. */
+/** id → title. Used when the link list only gives an id. Falls back to the id itself if not found. */
 export function taskTitleById(tasks: readonly KanbanTask[], id: string): string {
   return tasks.find((task) => task.id === id)?.title ?? id;
 }
 
 // ---------------------------------------------------------------------------
-// 서버 오류 → 화면 분기 (R31/R32/E6)
+// Server error → screen branch (R31/R32/E6)
 // ---------------------------------------------------------------------------
 
-/** 정본은 `@/lib/hermes/plugin-install-command` 다 — 여기서는 기존 import 경로를 지킨다. */
+/** The source of truth is `@/lib/hermes/plugin-install-command` — this just preserves the existing import path. */
 export const PLUGIN_INSTALL_COMMAND = SHARED_PLUGIN_INSTALL_COMMAND;
 
 export type KanbanFailure = { status: number; code: string; message: string; minVersion?: string };
@@ -156,12 +160,12 @@ export type BoardBlocker =
   | { kind: "board_unavailable"; code: string; reason: string }
   | { kind: "other"; status: number; code: string; message: string };
 
-/** 보드를 못 여는 오류를 화면 분기로. 그 외 오류는 코드·메시지를 그대로 싣는다. */
+/** Turns an error that blocks opening the board into a screen branch. Other errors carry their code/message as-is. */
 export function classifyBoardFailure(
   failure: KanbanFailure,
   fallbackMinVersion = "0.6.0",
 ): BoardBlocker {
-  // 판정은 `@/lib/gate-failure` 하나다 — 여기서는 보드 화면의 이름으로 옮기기만 한다.
+  // The single source of judgment is `@/lib/gate-failure` — this just renames it into the board screen's terms.
   const blocker = classifyGateFailure({
     status: failure.status,
     code: failure.code,
@@ -177,7 +181,7 @@ export function classifyBoardFailure(
     };
   }
   if (blocker.kind === "gateway_not_bound") return { kind: "gateway_not_bound" };
-  // 428 은 위에서 잡혔다. 503 은 보드가 열리지 않는 상태라 화면이 따로 다룬다.
+  // 428 was already caught above. 503 means the board can't open, so the screen handles it separately.
   if (failure.status === 503) {
     return { kind: "board_unavailable", code: failure.code, reason: failure.message };
   }
@@ -189,7 +193,7 @@ export function classifyBoardFailure(
   };
 }
 
-/** 오류를 한 줄로. 메시지가 코드와 같으면 코드만 — `code: code` 로 두 번 찍지 않는다. */
+/** Renders an error as one line. If the message equals the code, shows only the code — never prints `code: code` twice. */
 export function failureLine(failure: Pick<KanbanFailure, "code" | "message">): string {
   return failure.message && failure.message !== failure.code
     ? `${failure.code}: ${failure.message}`
@@ -197,7 +201,7 @@ export function failureLine(failure: Pick<KanbanFailure, "code" | "message">): s
 }
 
 // ---------------------------------------------------------------------------
-// 폼 (R8) — 화면 값 → 서버 본문
+// Form (R8) — screen values → server body
 // ---------------------------------------------------------------------------
 
 export type TaskFormValues = {
@@ -241,7 +245,7 @@ export const EMPTY_TASK_FORM: TaskFormValues = {
   goalMaxTurns: "",
 };
 
-/** 쉼표·줄바꿈으로 나눈 스킬 목록. 빈 항목은 버린다. */
+/** Skill list split on commas/newlines. Empty entries are dropped. */
 export function parseSkills(raw: string): string[] {
   return raw
     .split(/[,\n]/)
@@ -250,9 +254,9 @@ export function parseSkills(raw: string): string[] {
 }
 
 /**
- * 폼 값 → `POST/PATCH /kanban/tasks` 본문. 비어 있는 필드는 싣지 않는다 — 서버가 모르는 키를
- * 버리긴 하지만, 빈 문자열을 보내면 Hermes 가 "빈 값으로 덮어쓰기" 로 받을 수 있다.
- * 담당은 npcId 로 보낸다(서버가 프로필 이름으로 바꾼다).
+ * Form values → `POST/PATCH /kanban/tasks` body. Empty fields are omitted — the server does drop
+ * unknown keys, but sending an empty string could be read by Hermes as "overwrite with an empty
+ * value." The assignee is sent as npcId (the server converts it to a profile name).
  */
 export function taskFormToBody(values: TaskFormValues): Record<string, unknown> {
   const body: Record<string, unknown> = { title: values.title.trim() };
@@ -289,21 +293,21 @@ export function taskFormToBody(values: TaskFormValues): Record<string, unknown> 
 }
 
 // ---------------------------------------------------------------------------
-// 블랙보드 필터 (스웜)
+// Blackboard filter (swarm)
 // ---------------------------------------------------------------------------
 
-/** Hermes `kanban_swarm.BLACKBOARD_PREFIX` 와 **같은 문자열이어야 한다.** */
+/** Must be **the same string** as Hermes `kanban_swarm.BLACKBOARD_PREFIX`. */
 export const BLACKBOARD_PREFIX = "[swarm:blackboard] ";
 
 /**
- * 블랙보드 코멘트를 스레드에서 걸러내고 key 별 최신값으로 병합한다.
+ * Filters blackboard comments out of the thread and merges them into the latest value per key.
  *
- * `create_swarm` 이 루트 카드에 `topology` 코멘트를 스스로 남기므로, 이 처리가 없으면
- * **모든** 스웜 루트 카드에서 사용자가 날 JSON 을 보게 된다(`TaskDrawer` 는 본문을
- * `whitespace-pre-wrap` 평문으로 그린다).
+ * `create_swarm` leaves a `topology` comment on the root card itself, so without this processing
+ * the user would see raw JSON on **every** swarm root card (`TaskDrawer` renders the body as plain
+ * `whitespace-pre-wrap` text).
  *
- * 병합 규칙은 Hermes `latest_blackboard` 를 따른다 — 나중 코멘트가 같은 key 를 덮고,
- * 깨진 JSON 과 문자열 아닌 key 는 건너뛴다.
+ * The merge rule follows Hermes `latest_blackboard` — a later comment overwrites the same key, and
+ * broken JSON or a non-string key is skipped.
  */
 export function splitBlackboardComments(comments: KanbanComment[]): {
   comments: KanbanComment[];
@@ -323,7 +327,7 @@ export function splitBlackboardComments(comments: KanbanComment[]): {
     try {
       parsed = JSON.parse(body.slice(BLACKBOARD_PREFIX.length));
     } catch {
-      continue; // 깨진 것도 스레드로 되돌리지 않는다 — 사람에게 보일 내용이 아니다.
+      continue; // A broken one isn't put back in the thread either — it's not meant to be shown to a person.
     }
     if (typeof parsed !== "object" || parsed === null) continue;
     const { key, value } = parsed as { key?: unknown; value?: unknown };

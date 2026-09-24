@@ -40,7 +40,7 @@ async function mount(node: React.ReactElement): Promise<{ root: Root; el: HTMLEl
   return { root, el };
 }
 
-test("office 가 맨 위에 '사무실 전체' 로, 나머지는 이름·마지막 메시지와 함께", async () => {
+test("office is shown first as 'the whole office', the rest by name and last message", async () => {
   const { el } = await mount(
     <I18nProvider initialLocale="ko">
       <RoomList rooms={[g1, office]} currentRoomId="o" onOpen={() => {}} onNew={() => {}} />
@@ -53,7 +53,7 @@ test("office 가 맨 위에 '사무실 전체' 로, 나머지는 이름·마지�
   assert.match(items[1], /네, 단테 님/);
 });
 
-test("항목 클릭은 onOpen(roomId), [새 방] 은 onNew", async () => {
+test("Clicking an item calls onOpen(roomId), [New Room] calls onNew", async () => {
   const opened: string[] = [];
   let created = 0;
   const { el } = await mount(

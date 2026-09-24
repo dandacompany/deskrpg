@@ -25,10 +25,10 @@ export type MentionEditorHandle = { clear(): void; focus(): void };
 
 type Props = {
   candidates: MentionCandidate[];
-  /** 직렬화된 값(`@[이름]` 포맷). 편집기는 DOM 이 정본이고 이 값은 부모가 글자 수 등에 쓴다. */
+  /** The serialized value (`@[name]` format). The DOM is the editor's source of truth; the parent uses this value for things like character counts. */
   value: string;
   onChange: (serialized: string) => void;
-  /** 드롭다운이 닫힌 상태의 Enter. */
+  /** Enter while the dropdown is closed. */
   onSubmit: () => void;
   placeholder?: string;
   disabled?: boolean;
@@ -38,7 +38,7 @@ type Props = {
 
 const CHIP_ATTR = "data-mention-id";
 
-/** 편집기 DOM → 세그먼트. 칩은 `[data-mention-id]` 요소, 나머지는 텍스트다. */
+/** Editor DOM → segments. A chip is a `[data-mention-id]` element; everything else is text. */
 function readSegments(root: HTMLElement): Segment[] {
   const out: Segment[] = [];
   root.childNodes.forEach((n) => {
@@ -51,7 +51,7 @@ function readSegments(root: HTMLElement): Segment[] {
         name: n.getAttribute("data-mention-name") ?? "",
       });
     } else if (n instanceof HTMLElement && n.tagName === "BR") {
-      // contenteditable 이 빈 줄에 넣는 <br> — 무시
+      // The <br> contenteditable inserts on an empty line — ignore it
     } else {
       out.push({ kind: "text", text: n.textContent ?? "" });
     }
@@ -60,8 +60,9 @@ function readSegments(root: HTMLElement): Segment[] {
 }
 
 /**
- * 캐럿 앞 텍스트. 선택 영역이 편집기 안의 텍스트 노드에 있으면 그 노드의 캐럿까지, 아니면
- * (테스트 환경·포커스 없음) 마지막 텍스트 노드 전체를 "캐럿 앞" 으로 본다.
+ * The text before the caret. If the selection is on a text node inside the editor, this is up
+ * to that node's caret; otherwise (test environment, no focus) the entire last text node is
+ * treated as "before the caret".
  */
 function textBeforeCaret(root: HTMLElement): { node: Text; offset: number; before: string } | null {
   const sel = typeof window !== "undefined" ? window.getSelection?.() : null;
@@ -94,7 +95,7 @@ function makeChip(c: MentionCandidate, chipClass: string): HTMLElement {
   return chip;
 }
 
-/** 캐럿을 텍스트 노드 안 offset 에 둔다 — 칩 뒤 공백 "다음" 이어야 이어 치는 글자가 공백 뒤에 붙는다. */
+/** Places the caret at an offset inside a text node — it must be "after" the space following a chip, so continued typing lands after that space. */
 function placeCaretIn(node: Text, offset: number) {
   const sel = typeof window !== "undefined" ? window.getSelection?.() : null;
   if (!sel || typeof document.createRange !== "function") return;
@@ -105,17 +106,17 @@ function placeCaretIn(node: Text, offset: number) {
     sel.removeAllRanges();
     sel.addRange(range);
   } catch {
-    /* 선택 API 가 없는 환경 — 캐럿 위치는 브라우저에 맡긴다 */
+    /* An environment without the selection API — leave the caret position to the browser */
   }
 }
 
 /**
- * `@` 로 NPC 를 지명하는 한 줄 편집기.
+ * A single-line editor that names an NPC with `@`.
  *
- * `<textarea>` 는 글자만 담을 수 있어 "칩" 을 그릴 수 없다. contenteditable 안에
- * `contenteditable="false"` 인 span 을 두면 브라우저가 그것을 한 글자처럼 다룬다 —
- * 백스페이스 한 번에 통째로 지워지고 화살표는 건너뛴다. 전송 시에만 `@[이름]` 으로
- * 직렬화하므로 서버의 `parseAllMentions` 는 손대지 않는다.
+ * A `<textarea>` can only hold characters, so it can't render a "chip". Putting a
+ * `contenteditable="false"` span inside a contenteditable makes the browser treat it like a
+ * single character — one backspace deletes it whole, and arrow keys skip over it. It's only
+ * serialized to `@[name]` at send time, so the server's `parseAllMentions` needs no changes.
  */
 const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEditor(
   { candidates, onChange, onSubmit, placeholder, disabled, autoFocus, accent = "npc" },
@@ -125,7 +126,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
   const accentTheme = accentClasses(accent);
   const rootRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState<{ start: number; query: string } | null>(null);
-  // 쿼리가 든 텍스트 노드 — DOM 이라 React 상태가 아니라 ref 로 든다(칩 삽입 시 직접 고친다).
+  // The text node holding the query — kept as a ref instead of React state since it's DOM (mutated directly when inserting a chip).
   const queryNodeRef = useRef<Text | null>(null);
   const [index, setIndex] = useState(0);
   const [empty, setEmpty] = useState(true);
@@ -162,7 +163,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
       if (!root || !query || !node) return;
       const { start } = query;
       const text = node.textContent ?? "";
-      // 캐럿 앞 "@쿼리" 를 잘라내고 그 자리에 칩 + 공백을 넣는다.
+      // Cut out the "@query" before the caret and put a chip + space in its place.
       const caret = textBeforeCaret(root);
       const end = caret && caret.node === node ? caret.offset : text.length;
       const before = text.slice(0, start);
@@ -196,7 +197,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      e.stopPropagation(); // 시뮬레이션이 키를 먹지 않게
+      e.stopPropagation(); // so simulation doesn't swallow the key
       if (e.nativeEvent.isComposing || composingRef.current) return;
       if (open) {
         const next = reduceDropdown({ open: true, index, count: filtered.length }, e.key);
@@ -214,7 +215,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, Props>(function MentionEdi
         return;
       }
       if (e.key === "Backspace") {
-        // 캐럿 바로 앞이 칩이면 통째로 지운다(브라우저가 못 하는 환경 대비).
+        // If a chip sits right before the caret, delete it whole (for environments where the browser can't).
         const sel = window.getSelection?.();
         const r = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
         if (r && r.collapsed) {

@@ -29,7 +29,7 @@ export function useAppMeta() {
 
   useEffect(() => {
     let cancelled = false;
-    // 저장소 상태는 서버 렌더와 어긋나지 않도록 마운트 뒤, 응답과 함께 한 번에 반영한다.
+    // To avoid conflicting with server rendering, storage state is applied once, together with the response, after mount.
     fetch("/api/app-meta")
       .then((res) => (res.ok ? (res.json() as Promise<AppMeta>) : null))
       .catch(() => null)

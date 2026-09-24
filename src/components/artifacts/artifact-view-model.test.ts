@@ -14,7 +14,7 @@ import {
 
 const a = (kind: string, mime: string, filename: string) => ({ kind, mime, filename }) as never;
 
-test("뷰어는 kind·mime·확장자로 고른다", () => {
+test("viewer is picked by kind/mime/extension", () => {
   assert.equal(viewerFor(a("document", "text/markdown", "r.md")), "markdown");
   assert.equal(viewerFor(a("document", "text/plain", "r.txt")), "text");
   assert.equal(viewerFor(a("document", "application/pdf", "r.pdf")), "pdf");
@@ -41,7 +41,7 @@ test("뷰어는 kind·mime·확장자로 고른다", () => {
   assert.equal(viewerFor(a("file", "text/x-python", "a.py")), "code");
 });
 
-test("편집은 텍스트 계열만", () => {
+test("only text-family kinds are editable", () => {
   assert.equal(isEditable(a("document", "text/markdown", "r.md")), true);
   assert.equal(isEditable(a("link", "text/uri-list", "a.url")), true);
   assert.equal(isEditable(a("web", "text/html", "a.html")), true);
@@ -51,21 +51,21 @@ test("편집은 텍스트 계열만", () => {
   assert.equal(isEditable(a("file", "application/zip", "a.zip")), false);
 });
 
-test("렌더/소스 전환은 markdown·svg·html 만", () => {
+test("render/source toggle is only for markdown/svg/html", () => {
   assert.deepEqual(
     ["markdown", "svg", "html", "code", "pdf"].map((v) => hasRenderedMode(v as never)),
     [true, true, true, false, false],
   );
 });
 
-test("코드 언어", () => {
+test("code language", () => {
   assert.equal(codeLanguageFor("App.tsx"), "tsx");
   assert.equal(codeLanguageFor("a.py"), "python");
   assert.equal(codeLanguageFor("a.json"), "json");
   assert.equal(codeLanguageFor("a.unknownext"), "text");
 });
 
-test("링크 재검증은 첫 줄 http(s) 만", () => {
+test("link re-validation only accepts http(s) on the first line", () => {
   assert.equal(safeHttpUrl("https://x.io/a\n"), "https://x.io/a");
   assert.equal(safeHttpUrl("  http://x.io  "), "http://x.io/");
   assert.equal(safeHttpUrl("javascript:alert(1)"), null);
@@ -73,7 +73,7 @@ test("링크 재검증은 첫 줄 http(s) 만", () => {
   assert.equal(safeHttpUrl(""), null);
 });
 
-test("CSV 는 따옴표·이스케이프·줄바꿈을 처리하고 행 상한에서 자른다", () => {
+test("CSV handles quotes/escapes/newlines and truncates at the row cap", () => {
   const { rows } = parseCsv('a,b\n"x, y","he said ""hi"""\n"multi\nline",2\n');
   assert.deepEqual(rows, [
     ["a", "b"],
@@ -85,7 +85,7 @@ test("CSV 는 따옴표·이스케이프·줄바꿈을 처리하고 행 상한�
   assert.equal(big.truncated, true);
 });
 
-test("출처로 이동 대상", () => {
+test("go-to-source target", () => {
   assert.deepEqual(sourceTarget({ source_kind: "kanban", task_id: "t1", profile: "p" } as never), {
     type: "kanban",
     taskId: "t1",
@@ -101,13 +101,13 @@ test("출처로 이동 대상", () => {
   });
 });
 
-test("브랜드 아이콘은 호스트 이름으로만 고른다", () => {
+test("brand icon is picked only by hostname", () => {
   assert.equal(brandIconFor("https://github.com/a/b"), "github");
   assert.equal(brandIconFor("https://www.youtube.com/watch?v=1"), "youtube");
   assert.equal(brandIconFor("https://example.com"), null);
 });
 
-test("categoryOf 는 kind 를 미디어·파일·링크 세 카테고리로 묶는다", () => {
+test("categoryOf groups kind into three categories: media/file/link", () => {
   assert.equal(categoryOf("image"), "media");
   assert.equal(categoryOf("media"), "media");
   assert.equal(categoryOf("document"), "file");

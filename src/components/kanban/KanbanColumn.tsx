@@ -19,7 +19,7 @@ interface KanbanColumnProps {
   onMoveInteraction?: KanbanMoveInteractionHandler;
 }
 
-/** 열 하나. 이름은 서버 상태 그대로이고 라벨만 번역한다(R6). */
+/** A single column. The name is the server status as-is; only the label is translated (R6). */
 export default function KanbanColumn({
   name,
   tasks,

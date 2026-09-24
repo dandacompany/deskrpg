@@ -14,14 +14,17 @@ const H = 420;
 export type LearningGraphProps = {
   api: SkillsApi;
   canManage: boolean;
-  /** 스킬 노드 편집·보관으로 스킬 목록이 바뀌었을 수 있다. */
+  /** Editing/archiving a skill node may have changed the skill list. */
   onChanged(): void;
 };
 
 /**
- * 학습 관계도 — 스킬(소유자에게는 파일 메모리도) 노드를 force 배치 SVG 로 그린다. 선은 "어휘가 겹침" 일 뿐
- * 인과·숙련도가 아니다. 메모리 노드를 걸러내는 것은 서버 몫이고(멤버 응답에는 없다), 여기서는 받은 것을 그린다.
- * 노드 편집·삭제는 읽을 때 받은 해시를 `baseHash` 로 싣는다 — 메모리 id 는 순번이라 그사이 파일이 바뀌면 다른 조각을 가리킨다.
+ * The learning graph — draws skill nodes (and, for owners, file-memory nodes) with a
+ * force-layout SVG. Edges just mean "vocabulary overlaps", not causation or mastery. Filtering
+ * out memory nodes is the server's job (they're absent from member responses); here we just draw
+ * what we receive.
+ * Node edit/delete send the hash received on read as `baseHash` — a memory id is a sequence
+ * number, so if the file changes in the meantime it can point at a different chunk.
  */
 export default function LearningGraph({ api, canManage, onChanged }: LearningGraphProps) {
   const t = useT();
@@ -78,7 +81,7 @@ export default function LearningGraph({ api, canManage, onChanged }: LearningGra
       await action();
     } catch (e) {
       if (e instanceof SkillsApiError && e.code === "node_changed") {
-        // 편집 내용은 그대로 두고, 관계도만 다시 읽는다. 새 내용은 [다시 불러오기] 로.
+        // Leave the edited content as-is and just reload the graph. New content comes via [Reload].
         setConflict(true);
         setConfirmDelete(false);
         await load();

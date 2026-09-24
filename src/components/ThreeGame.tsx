@@ -27,16 +27,16 @@ export interface ThreeGameProps {
   socket: Socket | null;
   characterId: string;
   characterName: string;
-  /** 외형 원본(JSON). 맵은 `officeLookId` 만 읽고 서버에 그대로 넘긴다. */
+  /** The raw appearance (JSON). The map reads only `officeLookId` and passes the rest through to the server as-is. */
   appearance: unknown;
   channelInitData: Exclude<PendingChannelData, null>;
-  /** 3D 렌더러를 만들 수 없거나 WebGL 컨텍스트를 잃었다. 그 뒤 화면은 상위가 정한다. */
+  /** The 3D renderer couldn't be created, or lost its WebGL context. The parent decides what the screen does after that. */
   onFatal?: (error: unknown) => void;
 }
 
 /**
- * 화면 없는 시뮬레이션(`OfficeSimulation`)을 띄우고, three.js 렌더러가 `OfficeBridge` 로
- * 그것을 그린다. 렌더러가 없으면 아무것도 그리지 않는다 — 2D 폴백은 없다.
+ * Runs the headless simulation (`OfficeSimulation`), and the three.js renderer draws it
+ * via `OfficeBridge`. If there's no renderer, nothing is drawn — there is no 2D fallback.
  */
 export default function ThreeGame(props: ThreeGameProps) {
   const host = useRef<HTMLDivElement>(null),
@@ -104,7 +104,7 @@ export default function ThreeGame(props: ThreeGameProps) {
     };
   }, [insideMeeting, meetingCamera.active, props.socket, props.channelInitData.channelId]);
 
-  // 렌더러. 시뮬레이션보다 먼저 마운트해 `three:bridge-ready` 를 놓치지 않는다.
+  // The renderer. Mounted before the simulation so `three:bridge-ready` isn't missed.
   useLayoutEffect(() => {
     if (!host.current || !labels.current) return;
     let view: OfficeRenderer;
@@ -143,7 +143,7 @@ export default function ThreeGame(props: ThreeGameProps) {
       reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
       ...loadMeetingCameraPrefs(),
     });
-    // 보기 설정에서 바꾸면 저장 버튼 없이 바로 반영한다(보는 사람마다의 설정).
+    // Applies immediately when changed in view settings, no save button (per-viewer setting).
     const meetingCameraPrefs = (prefs: MeetingCameraPrefs) => view.configureMeetingCamera(prefs);
     const enterMeeting = () => {
       view.setMeetingViewport(0);
@@ -192,7 +192,7 @@ export default function ThreeGame(props: ThreeGameProps) {
     };
   }, []);
 
-  // 시뮬레이션. 소켓은 `player-spawned`/`request-socket` 때마다 다시 건넨다.
+  // The simulation. The socket is re-handed over on every `player-spawned`/`request-socket`.
   useLayoutEffect(() => {
     setPendingChannelData(channelInitDataRef.current);
     let cancelled = false;
@@ -209,7 +209,7 @@ export default function ThreeGame(props: ThreeGameProps) {
     };
     EventBus.on("player-spawned", emitSocketIfReady);
     EventBus.on("request-socket", emitSocketIfReady);
-    // 동적 import 로 마운트 효과들이 모두 등록된 뒤에 `scene-ready` 가 나가게 한다.
+    // The dynamic import makes `scene-ready` fire only after all mount effects are registered.
     import("@/game/simulation/office-simulation").then(({ OfficeSimulation }) => {
       if (cancelled) return;
       simulation = new OfficeSimulation();
@@ -219,7 +219,7 @@ export default function ThreeGame(props: ThreeGameProps) {
       cancelled = true;
       simulation?.dispose();
       simulation = null;
-      // 이 컴포넌트가 건 리스너만 뗀다. EventBus.removeAllListeners() 는 페이지 리스너까지 지운다.
+      // Only remove the listeners this component added. EventBus.removeAllListeners() would also wipe page listeners.
       EventBus.off("player-spawned", emitSocketIfReady);
       EventBus.off("request-socket", emitSocketIfReady);
     };
@@ -230,7 +230,7 @@ export default function ThreeGame(props: ThreeGameProps) {
     EventBus.emit("channel-data-ready", channelInitData);
   }, [channelInitData]);
 
-  // 소켓이 시뮬레이션 뒤에 준비되면 그때 건넨다
+  // If the socket becomes ready after the simulation, hand it over then
   useEffect(() => {
     if (!socket) return;
     const c = characterRef.current;

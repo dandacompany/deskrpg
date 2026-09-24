@@ -3,26 +3,26 @@ import assert from "node:assert/strict";
 
 import { isPersonaOwnedByProfile } from "./npc-persona-ownership";
 
-test("hermes NPC 의 인격은 프로필이 소유한다", () => {
-  // SOUL.md 를 HTTP 로 끌 수 없으므로 DeskRPG 가 인격을 소유할 수 없다.
+test("the persona of a hermes NPC is owned by the profile", () => {
+  // DeskRPG can't own the persona since SOUL.md can't be turned off over HTTP.
   assert.equal(isPersonaOwnedByProfile({ adapterType: "hermes" }), true);
 });
 
-test("게이트웨이의 기존 에이전트를 고르면 어댑터와 무관하게 프로필 소유다", () => {
+test("picking an existing agent in the gateway means the profile owns it, regardless of adapter", () => {
   assert.equal(
     isPersonaOwnedByProfile({ adapterType: "claude", existingAgentSelected: true }),
     true,
   );
 });
 
-test("CLI 어댑터는 DeskRPG 가 인격을 소유한다", () => {
-  // claude/codex 등 CLI 어댑터는 프로필 SOUL.md 개념이 없다 — 편집 칸을 연다.
+test("DeskRPG owns the persona for a CLI adapter", () => {
+  // CLI adapters like claude/codex have no notion of a profile SOUL.md — open the edit field.
   for (const t of ["claude", "codex", "gemini", "opencode"]) {
     assert.equal(isPersonaOwnedByProfile({ adapterType: t }), false, t);
   }
 });
 
-test("어댑터가 비어 있으면 편집을 막지 않는다", () => {
+test("an empty adapter does not block editing", () => {
   assert.equal(isPersonaOwnedByProfile({ adapterType: null }), false);
   assert.equal(isPersonaOwnedByProfile({ adapterType: undefined }), false);
 });

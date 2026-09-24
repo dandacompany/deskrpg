@@ -14,7 +14,7 @@ function Probe({ onReady }: { onReady: (api: ReturnType<typeof useGateBlocker>) 
   return <span>{api.blocker?.kind ?? "none"}</span>;
 }
 
-test("실패를 넘기면 분류해 담고, 지우면 비운다", async () => {
+test("passing a failure classifies and stores it, and clearing empties it", async () => {
   const el = document.createElement("div");
   document.body.appendChild(el);
   const root = createRoot(el);
@@ -35,7 +35,7 @@ test("실패를 넘기면 분류해 담고, 지우면 비운다", async () => {
   el.remove();
 });
 
-test("status·code 를 가진 오류 객체도 받는다", async () => {
+test("also accepts an error object with status/code", async () => {
   const el = document.createElement("div");
   document.body.appendChild(el);
   const root = createRoot(el);
@@ -48,7 +48,7 @@ test("status·code 를 가진 오류 객체도 받는다", async () => {
   await act(async () => api.showFromError({ status: 409, code: "gateway_not_bound" }));
   assert.equal(el.textContent, "gateway_not_bound");
 
-  // 모양이 다른 오류는 other 로 떨어지되 던지지 않는다.
+  // An error with a different shape falls through to other, without throwing.
   await act(async () => api.showFromError(new Error("그냥 오류")));
   assert.equal(el.textContent, "other");
 

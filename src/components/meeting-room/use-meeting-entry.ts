@@ -34,16 +34,17 @@ export function useMeetingEntry(socket: Socket | null, channelId: string | null)
         EventBus.emit("meeting:mode", { active: true });
       }
     };
-    // 사유 코드는 번역 키 조회와 화면 문구에 그대로 들어간다 — 문자열이 아니면 [object Object] 가 된다.
+    // The reason code goes straight into the translation-key lookup and the on-screen text —
+    // if it's not a string, it becomes [object Object].
     const failed = ({ reasonCode }: { reasonCode: unknown }) => {
       if (!["idle", "failed"].includes(entry.state.status))
         entry.fail(meetingErrorCode(reasonCode));
     };
-    // 맵 위 "오피스로" 버튼 — 회의 화면을 떠난다. 상단 네비에는 나가는 버튼을 두지 않는다.
+    // The "오피스로" (Back to office) button on the map — leaves the meeting screen. The top nav has no exit button.
     const exit = () => entry.cancel();
     const disconnect = () => {
       if (entry.state.status === "walking") entry.fail("driver_disconnected");
-      // 참가 화면은 유지해 재연결 snapshot을 수신하고, 조작은 회의 모드로 계속 잠근다.
+      // Keep the join screen up to receive the reconnect snapshot, and keep controls locked in meeting mode.
     };
     EventBus.on("meeting:entry-state", arrival);
     EventBus.on("meeting:entry-intent", request);

@@ -1,11 +1,13 @@
 "use client";
 /**
- * NPC 가 올린 업무 카드 제안 한 줄. 아직 카드가 아니다 — 사용자가 여기서
- * `이슈카드등록`·`여기서 처리` 중 하나를 고르고, 고른 결과가 `notice.resolved` 로 남는다.
+ * A single line for a task card proposal an NPC put up. It's not a card yet — the user
+ * picks either `register card` or `handle here` here, and the choice is kept in
+ * `notice.resolved`.
  *
- * 버튼 유무의 정본은 `notice.resolved` 하나다. 클라이언트가 눌린 것을 기억해 숨기는 것이
- * 아니라 알림 자체가 해소 상태를 들고 있어서, 새로고침해도 다른 탭에서도 같게 보인다.
- * `error` 는 버튼을 지우지 않는다 — 서버가 거절했으면 이유를 보이고 다시 고르게 둔다.
+ * The single source of truth for whether the buttons show is `notice.resolved`. It's not
+ * the client remembering a click and hiding — the notice itself carries its resolved
+ * state, so it looks the same after a refresh or in another tab.
+ * `error` never removes the buttons — if the server rejected, we show why and let the user pick again.
  */
 import type { RoomNotice } from "@/lib/chat-rooms-policy";
 import { useT } from "@/lib/i18n";
@@ -14,13 +16,13 @@ export type CardProposal = Extract<RoomNotice, { kind: "card_proposal" }>;
 
 export interface CardProposalNoticeProps {
   notice: CardProposal;
-  /** 사용자의 선택. 서버 호출·낙관 갱신은 호출자 몫이다. */
+  /** The user's choice. The server call and optimistic update are the caller's job. */
   onResolve: (choice: "card" | "inline") => void;
-  /** 호출이 도는 중 — 버튼은 남기되 비활성. 중복 방지의 정본은 서버의 409 다. */
+  /** A call is in flight — keep the buttons but disable them. The server's 409 is the source of truth for de-duping. */
   pending: boolean;
-  /** 이 화면에서 제안을 처리할 수 없다(핸들러 미배선). `pending`(요청 중)과 다른 상태다. */
+  /** This screen can't handle the proposal (no handler wired up). A different state from `pending` (in flight). */
   unavailable?: boolean;
-  /** 서버가 거절한 이유(코드). 있으면 보이고 버튼은 그대로 둔다. */
+  /** The reason (code) the server rejected. If present, show it and leave the buttons as-is. */
   error: string | null;
 }
 
@@ -55,7 +57,7 @@ export default function CardProposalNotice({
         </div>
       )}
       {notice.acceptance && (
-        // 완료 조건은 본문이 아니다 — 라벨을 붙여 가른다(카드 본문의 `## Acceptance` 절과 같은 구분).
+        // The acceptance condition is not the body — a label sets it apart (same distinction as the card body's `## Acceptance` section).
         <div className="text-caption text-text-muted mt-0.5" data-testid="card-proposal-acceptance">
           <span className="font-semibold">{t("notice.cardProposal.acceptanceLabel")}</span>{" "}
           <span className="whitespace-pre-wrap break-words">{notice.acceptance}</span>
@@ -80,15 +82,16 @@ export default function CardProposalNotice({
               className="text-caption text-danger bg-danger-bg rounded px-1.5 py-0.5 mt-1 break-words"
               data-testid="card-proposal-error"
             >
-              {/* 409 는 "왜" 가 중요하다 — 알림 쓰기가 실패해 미결로 남은 제안을 다시 누른
-                  경우다. 코드만 보이면 사용자는 무엇을 해야 할지 모른다. */}
+              {/* For a 409, "why" matters — this happens when the notice write failed and
+                  the still-unresolved proposal is clicked again. A bare code leaves the
+                  user unsure what to do. */}
               {error === "already_resolved"
                 ? t("notice.cardProposal.alreadyResolved")
                 : t("notice.cardProposal.failed", { reason: error })}
             </div>
           )}
           {unavailable && (
-            // 버튼을 비활성으로만 두면 로딩처럼 보여 사용자가 영영 기다린다 — 이유를 말한다.
+            // Leaving the buttons merely disabled looks like loading and the user waits forever — state the reason.
             <div
               className="text-caption text-text-muted mt-1"
               data-testid="card-proposal-unavailable"

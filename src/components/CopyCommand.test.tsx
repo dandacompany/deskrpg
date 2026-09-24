@@ -33,7 +33,7 @@ async function mount(clipboard?: { writeText: (text: string) => Promise<void> })
   };
 }
 
-test("명령은 언제나 화면에 그대로 보인다", async () => {
+test("the command is always shown as-is on screen", async () => {
   const f = await mount(undefined);
   try {
     assert.match(f.host.textContent!, /deskrpg host-setup on --with-install/);
@@ -42,8 +42,8 @@ test("명령은 언제나 화면에 그대로 보인다", async () => {
   }
 });
 
-test("클립보드를 쓸 수 없으면 복사 버튼을 두지 않는다", async () => {
-  // 평문 HTTP 인스턴스에서는 클립보드가 막힌다 — 눌러도 아무 일 없는 버튼을 만들지 않는다.
+test("does not add a copy button when the clipboard is unavailable", async () => {
+  // The clipboard is blocked on a plain-HTTP instance — don't create a button that does nothing when pressed.
   const f = await mount(undefined);
   try {
     assert.equal(f.host.querySelector("button"), null);
@@ -52,7 +52,7 @@ test("클립보드를 쓸 수 없으면 복사 버튼을 두지 않는다", asyn
   }
 });
 
-test("복사를 누르면 명령 전체가 클립보드로 가고 알림이 바뀐다", async () => {
+test("clicking copy sends the whole command to the clipboard and the notice changes", async () => {
   const copied: string[] = [];
   const f = await mount({
     writeText: async (text: string) => {
@@ -70,7 +70,7 @@ test("복사를 누르면 명령 전체가 클립보드로 가고 알림이 바�
   }
 });
 
-test("클립보드가 거부해도 화면이 깨지지 않는다", async () => {
+test("the screen does not break even if the clipboard rejects", async () => {
   const f = await mount({
     writeText: async () => {
       throw new Error("denied");

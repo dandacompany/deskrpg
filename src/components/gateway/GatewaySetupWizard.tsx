@@ -29,7 +29,7 @@ import SshHostRegistration from "./SshHostRegistration";
 import { CopyCommand } from "../CopyCommand";
 
 const API = "/api/gateways/setup";
-// 고정 커밋·버전은 손으로 베끼지 않는다 — pin.ts 가 정본이고 pin.test.ts 가 호스트 스크립트와 대조한다.
+// Don't hand-copy the pinned commit/version — pin.ts is the source of truth and pin.test.ts checks it against the host script.
 const PINNED_PLUGIN_COMMIT = PLUGIN_PIN_SHORT;
 const PINNED_PLUGIN_VERSION = PLUGIN_VERSION;
 const button =
@@ -39,22 +39,22 @@ const secondary =
 const input =
   "w-full rounded border border-border bg-bg px-3 py-2 text-text focus:outline-none focus:border-primary";
 type Screen = "choice" | "remote" | "ssh" | "discover" | "review" | "job" | "url" | "success";
-// 계약 2 가 더한 필드들. types.ts 는 호스트 담당이 소유하므로 여기서는 넓혀서만 읽는다.
-// 계약 3 이 더한 progress/completed 도 같은 이유로 여기서 넓혀 읽는다.
+// Fields added by contract 2. types.ts is owned by the host side, so here we only widen the read.
+// progress/completed added by contract 3 are widened the same way, for the same reason.
 type WizardJob = SetupJob & {
   warnings?: string[];
   installerDigest?: string;
   progress?: string;
   completed?: string[];
 };
-// 재개해도 상태가 바뀔 수 있어 언제나 다시 도는 단계다 — "건너뜀" 으로 그리지 않는다.
+// Steps that always rerun because state can change even on resume — never render them as "skipped".
 const ALWAYS_RERUN = new Set(["verifying_gateway", "checking_model"]);
 type ModelState = "ready" | "missing" | "unknown";
 type WizardCapabilities = SetupCapabilities & { canInstallHermes?: boolean };
-// 계약: ^[a-z0-9][a-z0-9_-]{0,63}$ — 서버가 다시 검증하지만 화면에서 먼저 안내한다.
+// Contract: ^[a-z0-9][a-z0-9_-]{0,63}$ — the server re-validates, but the screen guides first.
 const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const PROFILE_DESCRIPTION_MAX = 200;
-// 계약: 제안 포트는 8642~8699 에서만 나온다. 서버도 같은 범위로 거른다.
+// Contract: a suggested port only ever comes from 8642–8699. The server filters to the same range.
 const PORT_SUGGEST_MIN = 8642;
 const PORT_SUGGEST_MAX = 8699;
 const strings = (value: unknown): string[] =>
@@ -65,7 +65,7 @@ export default function GatewaySetupWizard({
   onSaved,
 }: {
   onConnected: (gatewayId: string) => void;
-  /** 주소 연결이 저장됐다 — 플러그인이 준비되지 않았어도 게이트웨이는 목록에 있다. */
+  /** The address connection was saved — the gateway is in the list even if the plugin isn't ready. */
   onSaved?: (gatewayId: string) => void;
 }) {
   const { locale } = useLocale();
@@ -76,36 +76,37 @@ export default function GatewaySetupWizard({
   const [screen, setScreen] = useState<Screen>("choice");
   const [mode, setMode] = useState<"local" | "ssh">("local");
   const [hostId, setHostId] = useState("");
-  // 탐색이 **성공**했는가. 실패(SSH 인증·연결 오류)는 "Hermes 가 없다" 가 아니다 — 설치를 제안하면 안 된다.
+  // Did discovery **succeed**? A failure (SSH auth/connection error) does not mean "no Hermes" —
+  // it must not offer to install.
   const [discovered, setDiscovered] = useState(false);
-  // SSH 호스트 등록 패널. 등록한 호스트가 하나도 없으면 처음부터 펼친다.
+  // SSH host registration panel. Expanded from the start if there are no registered hosts at all.
   const [registering, setRegistering] = useState(false);
   const [detailOpen, setDetailOpen] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<SetupCandidate[]>([]);
   const [inspection, setInspection] = useState<SetupInspection | null>(null);
   const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
   const [job, setJob] = useState<WizardJob | null>(null);
-  // 잡이 성공해도 남는 경고다 — 실패와 섞지 않고 성공 화면까지 들고 간다.
+  // A warning that persists even when the job succeeds — carried through to the success screen without mixing it up with failure.
   const [warnings, setWarnings] = useState<string[]>([]);
   const [newProfileName, setNewProfileName] = useState("");
   const [newProfileDescription, setNewProfileDescription] = useState("");
   const [provisionKeys, setProvisionKeys] = useState<string[]>([]);
-  // 서버에서 외부 스크립트를 돌리는 일이라 기본은 꺼짐이다(시간대 제안과 다르다).
+  // Off by default because it runs an external script on the server (unlike the timezone suggestion).
   const [installConsent, setInstallConsent] = useState(false);
   const [installerDigest, setInstallerDigest] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [errorCode, setErrorCode] = useState<unknown>(null);
-  // 명시적으로 확인한 모델 상태. null 이면 아직 확인하지 않았다는 뜻이라 기존 경고 규칙을 따른다.
+  // The model state that was explicitly checked. null means it hasn't been checked yet, so it follows the existing warning rule.
   const [modelState, setModelState] = useState<ModelState | null>(null);
   const [modelChecking, setModelChecking] = useState(false);
-  // 마지막으로 연결을 시도한 후보와 prepare 본문 — 다시 확인과 이어서 실행이 쓴다.
+  // The last candidate a connection was attempted on, and the prepare body — used by recheck and resume.
   const [lastCandidateId, setLastCandidateId] = useState<string | null>(null);
-  // 호스트가 고른 대안 포트. 사용자가 명시적으로 버튼을 눌러야만 서버로 올라간다.
+  // The alternate port the host picked. Only sent to the server when the user explicitly clicks the button.
   const [portSuggestion, setPortSuggestion] = useState<number | null>(null);
   const [portCandidateId, setPortCandidateId] = useState<string | null>(null);
   const [lastPrepare, setLastPrepare] = useState<Record<string, unknown> | null>(null);
-  // 이어서 실행할 때 건너뛰기로 한 단계들(요청 시점의 completed).
+  // Steps chosen to skip on resume (the `completed` list at request time).
   const [skippedSteps, setSkippedSteps] = useState<string[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [result, setResult] = useState<{ gatewayId: string; pluginStatus: string } | null>(null);
@@ -121,7 +122,7 @@ export default function GatewaySetupWizard({
     }
   });
   const [sendTimezone, setSendTimezone] = useState(true);
-  // 워커 적용(플러그인 0.16.0 워커 전파). 기본 켬 — 칸반·크론 결과물이 모이려면 필요하다(권장).
+  // Worker propagation (plugin 0.16.0 worker propagation). On by default — needed for Kanban/cron results to arrive (recommended).
   const [workerPropagation, setWorkerPropagation] = useState(true);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
@@ -142,7 +143,7 @@ export default function GatewaySetupWizard({
     if (!res.ok)
       throw {
         errorCode: data.errorCode ?? "setup_failed",
-        // 포트 충돌에만 실린다. 숫자가 아니면 제안이 없었던 것으로 본다.
+        // Only carried on a port conflict. Treated as no suggestion if it isn't a number.
         suggestedPort: typeof data.suggestedPort === "number" ? data.suggestedPort : undefined,
       };
     return data;
@@ -187,7 +188,7 @@ export default function GatewaySetupWizard({
       if (epoch === generation.current && !abort.signal.aborted) {
         const failed = error as { errorCode?: string; suggestedPort?: number };
         setErrorCode(failed?.errorCode ?? "setup_failed");
-        // 제안 범위 밖이거나 정수가 아니면 버린다 — 제안이 없어도 흐름은 그대로다.
+        // Discard if outside the suggestion range or not an integer — the flow continues even without a suggestion.
         setPortSuggestion(
           failed?.errorCode === "port_conflict" &&
             typeof failed.suggestedPort === "number" &&
@@ -231,7 +232,7 @@ export default function GatewaySetupWizard({
   }
   const target = { mode, ...(mode === "ssh" ? { hostId } : {}) };
   function inspect(candidateId: string) {
-    // 충돌이 나면 오류만 남으므로, 어느 후보였는지는 요청 시점에 기억해 둔다.
+    // On conflict only the error remains, so remember which candidate it was at request time.
     setPortCandidateId(candidateId);
     void run(
       (signal) =>
@@ -261,8 +262,8 @@ export default function GatewaySetupWizard({
       setScreen("success");
       return;
     }
-    // 게이트웨이 없이 끝난 잡은 설치만 한 잡이다. 잡 화면에 끝났다고 알리고,
-    // 이어 가는 것은 사용자가 "다시 확인" 으로 고른다(자동 재검색은 폴링 효과를 재생성한다).
+    // A job that finished without a gateway was an install-only job. The job screen shows it's done,
+    // and continuing is the user's choice via "recheck" (auto-rediscovery would recreate a polling effect).
     setInstallConsent(false);
   }
   useEffect(() => {
@@ -294,7 +295,7 @@ export default function GatewaySetupWizard({
     };
   }, [screen, job?.id, job?.status]);
 
-  // 설치는 3~6분 걸린다. 초를 세어 주지 않으면 화면이 멈춘 것처럼 보인다.
+  // Installation takes 3-6 minutes. Without a counting clock, the screen looks like it's frozen.
   const installingHermes =
     screen === "job" && job?.status === "running" && job.steps.at(-1) === "installing_hermes";
   useEffect(() => {
@@ -304,15 +305,15 @@ export default function GatewaySetupWizard({
     }
     const started = Date.now();
     setElapsed(0);
-    // 내림이 아니라 반올림이다. 틱은 거의 정수 초에 오는데, setInterval(단조 시계)과
-    // Date.now(벽시계)가 어긋나 1초째 틱에서 차이가 999.x ms 로 읽히면 내림은 0 을 낸다 —
-    // 화면이 한 박자 늦고, CI 에서 "1초 경과" 단언이 간헐적으로 깨졌다(2026-09-20).
+    // Rounding, not flooring. Ticks land close to whole seconds, but setInterval (monotonic clock)
+    // and Date.now (wall clock) can drift, so if the first tick reads as 999.x ms, flooring yields 0 —
+    // the screen lags by one beat, and CI's "1 second elapsed" assertion flaked intermittently (2026-09-20).
     const timer = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
-    // 단계가 끝나거나 화면을 떠나면 반드시 멈춘다 — 남으면 매초 리렌더가 샌다.
+    // Must stop when the step ends or the screen is left — otherwise it leaks a re-render every second.
     return () => clearInterval(timer);
   }, [installingHermes]);
 
-  // 잡을 만들지 않는 즉시 응답이다. 폴링하지 않고 판정만 받아 경고를 갱신한다.
+  // An immediate response that doesn't create a job. No polling — just fetch a verdict and update the warning.
   function checkModel(candidateId: string) {
     const epoch = generation.current;
     const abort = new AbortController();
@@ -338,7 +339,7 @@ export default function GatewaySetupWizard({
       });
   }
 
-  // prepare 본문을 들고 있어야 실패한 뒤 같은 요청에 resumeFrom 만 얹어 이어 갈 수 있다.
+  // We need to hold onto the prepare body so that after a failure we can resume by just adding resumeFrom to the same request.
   function submitPrepare(body: Record<string, unknown>, resumeFrom?: string) {
     if (!resumeFrom) {
       setLastPrepare(body);
@@ -376,7 +377,7 @@ export default function GatewaySetupWizard({
   // Offer a zone only when the host has none and the browser actually knows one; never overwrite.
   const timezoneOffer =
     inspection && !inspection.candidate.timezone && browserTimezone ? browserTimezone : null;
-  // 호스트가 지금 상태를 알려 줬고 고른 값과 다르면 바뀌는 것이다. 모르는 호스트면 늘 보낸다.
+  // It's a change if the host reported its current state and it differs from the chosen value. Always send it for an unknown host.
   const propagationChange =
     !!inspection &&
     inspection.candidate.workerPropagation !== (workerPropagation ? "enabled" : "disabled");
@@ -390,17 +391,18 @@ export default function GatewaySetupWizard({
               timezone: inspection?.candidate.timezone || browserTimezone,
             })
           : setupStep(c, change);
-  // Hermes 를 못 찾았을 때 설치를 제안한다 — 로컬·SSH 모두. 가능 여부는 서버 판정(capabilities)을 따른다.
+  // Offer to install when Hermes wasn't found — both local and SSH. Availability follows the server's verdict (capabilities).
   const installOffered =
     (mode === "local" || mode === "ssh") && discovered && !busy && !candidates.length;
   const canInstallHermes =
     mode === "ssh" ? cap?.canInstallHermesSsh === true : cap?.canInstallHermes === true;
-  // 막힌 이유별 문구. 이유가 오지 않는 구버전 서버 응답이면 예전 한 문장으로 떨어진다.
+  // A message per block reason. Falls back to the old single sentence for an older server response with no reason.
   const hostReasonText = (reason: string | null | undefined) =>
     reason ? t(`hermes.wizard.hostReason.${reason}`) : c.unavailable;
   /**
-   * 막힌 이유 한 줄 + 길게 설명할 것이 있으면 `?` 버튼. 본문은 짧게 두고 자세한 사정은 눌러야 보인다
-   * (2026-09-19 단테 결정). 상세 문구가 없는 이유는 버튼도 나오지 않는다.
+   * A one-line block reason plus a `?` button when there's more to explain at length. Keep the
+   * body short and only show the detailed circumstances on click (Dante's decision, 2026-09-19).
+   * A reason with no detail text gets no button either.
    */
   const hostReasonNote = (reason: string | null | undefined) => {
     const detailKey = reason ? `hermes.wizard.hostReason.${reason}Detail` : "";
@@ -427,7 +429,7 @@ export default function GatewaySetupWizard({
   };
   const trimmedProfileName = newProfileName.trim();
   const profileNameValid = !trimmedProfileName || PROFILE_NAME.test(trimmedProfileName);
-  // 확인이 경고를 이긴다: ready 면 지우고, missing 이면 (없더라도) 붙인다. unknown 은 기존 규칙 그대로.
+  // A check outranks the warning: clear it if ready, add it (even if absent) if missing. unknown keeps the existing rule.
   const effectiveWarnings =
     modelState === "ready"
       ? warnings.filter((code) => code !== "model_provider_required")
@@ -524,7 +526,7 @@ export default function GatewaySetupWizard({
           {errorMessage(errorCode)}
         </p>
       )}
-      {/* 제안은 보여 주기만 한다. 명시적으로 이 버튼을 눌러야 서버가 `.env` 를 고친다. */}
+      {/* The suggestion is display-only. The server only edits `.env` when this button is clicked explicitly. */}
       {portSuggestion !== null && portCandidateId && screen !== "job" && (
         <article className="mt-4 rounded-lg border border-primary/40 bg-bg p-4">
           <h3 className="font-semibold">{t("hermes.wizard.port.title")}</h3>
@@ -585,7 +587,7 @@ export default function GatewaySetupWizard({
           {registering || !cap?.sshHosts.length ? (
             <SshHostRegistration
               onRegistered={(host) => {
-                // 등록 목록을 서버에서 다시 받는다 — 판정·라벨은 서버가 정한다.
+                // Re-fetch the registration list from the server — the server decides the verdict/label.
                 void request<WizardCapabilities>().then((next) => {
                   setCap(next);
                   setHostId(host.id);
@@ -698,8 +700,8 @@ export default function GatewaySetupWizard({
                       onClick={() =>
                         void run(
                           (signal) =>
-                            // 라우트는 install-hermes 라는 액션을 모른다 — 설치는 prepare 의
-                            // installHermes 플래그다. 설치 전에는 후보가 없으므로 candidateId 는 비운다.
+                            // The route doesn't know an action called install-hermes — installation is
+                            // the installHermes flag on prepare. There's no candidate before installing, so candidateId is left empty.
                             request<{ job: WizardJob }>(
                               { action: "prepare", installHermes: true, profiles: [], ...target },
                               "",
@@ -827,7 +829,7 @@ export default function GatewaySetupWizard({
                     )}
                   </span>
                 </label>
-                {/* 가져오기와 역할이 다르다: 이 체크는 키가 없는 프로필에 키를 새로 발급한다. */}
+                {/* This has a different role from importing: this checkbox issues a new key for a profile that has none. */}
                 {profile.canProvision && (
                   <div className="ml-7">
                     <label className="flex items-start gap-2 text-sm">
@@ -1013,7 +1015,7 @@ export default function GatewaySetupWizard({
               </li>
             ))}
           </ol>
-          {/* 모르는 이정표 코드는 undefined 로 와서 아무것도 그리지 않는다. */}
+          {/* An unknown milestone code comes back as undefined, so nothing is rendered. */}
           {setupProgress(locale, job.progress) && (
             <p className="text-sm text-text-muted" aria-live="polite">
               {setupProgress(locale, job.progress)}

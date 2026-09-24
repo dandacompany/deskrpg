@@ -11,10 +11,10 @@ import { CronApiError } from "./cron-api";
 import CronEditorDialog from "./CronEditorDialog";
 
 /**
- * 배달처 목록을 못 받았을 때: local 폴백은 살아 있어야 하고(폼을 막지 않는다),
- * 게이트 실패였다면 사용자가 원인을 알 수 있어야 한다.
+ * When the delivery target list can't be fetched: the local fallback must stay alive (doesn't
+ * block the form), and if it was a gate failure the user must be able to see the cause.
  */
-test("배달처 프리로드가 게이트에 막히면 안내가 보인다", async () => {
+test("shows a notice when the delivery-target preload is blocked by the gate", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
@@ -48,7 +48,7 @@ test("배달처 프리로드가 게이트에 막히면 안내가 보인다", asy
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    // local 폴백은 여전히 고를 수 있어야 한다 — 게이트 실패가 폼을 막지 않는다.
+    // The local fallback must still be selectable — a gate failure doesn't block the form.
     const localCheckbox = el.querySelector('[data-testid="cron-deliver-local"]');
     assert.ok(localCheckbox, "local 배달처 체크박스가 남아 있어야 한다");
 
@@ -62,10 +62,10 @@ test("배달처 프리로드가 게이트에 막히면 안내가 보인다", asy
 });
 
 /**
- * 평범한 500·네트워크 오류는 게이트 실패가 아니다 — "설정이 더 필요하다"는 버튼을
- * 띄우면 거짓 신호다(`isSetupBlocker` 로 걸러지는 넷에 안 든다).
+ * A plain 500/network error is not a gate failure — showing a "setup needed" button would be
+ * a false signal (it's not in the net that `isSetupBlocker` filters for).
  */
-test("평범한 오류에는 체크리스트 버튼이 안 보인다", async () => {
+test("the checklist button doesn't show for a plain error", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
@@ -98,7 +98,7 @@ test("평범한 오류에는 체크리스트 버튼이 안 보인다", async () 
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    // local 폴백은 여전히 고를 수 있다.
+    // The local fallback is still selectable.
     const localCheckbox = el.querySelector('[data-testid="cron-deliver-local"]');
     assert.ok(localCheckbox, "local 배달처 체크박스가 남아 있어야 한다");
 
@@ -111,7 +111,7 @@ test("평범한 오류에는 체크리스트 버튼이 안 보인다", async () 
   }
 });
 
-test("CronApiError 는 status·code 를 그대로 들고 있다", () => {
+test("CronApiError carries status/code through as-is", () => {
   const err = new CronApiError(404, "plugin_absent", "nope", {});
   assert.equal(err.status, 404);
   assert.equal(err.code, "plugin_absent");

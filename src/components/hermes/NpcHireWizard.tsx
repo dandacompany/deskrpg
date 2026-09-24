@@ -1,14 +1,16 @@
 "use client";
 
 /**
- * NPC 고용 마법사 — ①프로필 ②인격 ③외형 ④AI 모델. ④ 에서 끝난다.
+ * NPC hire wizard — 1 profile, 2 identity, 3 appearance, 4 AI model. Ends at step 4.
  *
- * 능력에 따라 단계가 눈에 보이게 줄어든다(`availableSteps`) — 잠긴 단계도 회색으로
- * 남고 이유를 보여준다, 숨기지 않는다. ②③ 은 다룰 프로필이 생기기 전까지 잠긴다.
+ * Steps visibly shrink depending on capability (`availableSteps`) — a locked step still
+ * stays grayed out with a reason shown, never hidden. Steps 2/3 stay locked until there's
+ * a profile to work with.
  *
- * 예전의 ④ 배치는 없앴다. 할 일이 없는 링크 버튼("완성형 외형 선택하기"·"채널로 이동"·
- * "마법사 닫기")만 남은 단계였다. 외형은 등록 때 자동으로 배정되고(`registerHermesProfile`)
- * 직원 상세에서 바꾼다. 자리는 맵이 맡는다.
+ * The old step 4 (placement) was removed. It had degenerated into a step with nothing left
+ * but link buttons ("Choose a finished appearance," "Go to channel," "Close wizard").
+ * Appearance is auto-assigned on registration (`registerHermesProfile`) and changed from
+ * employee detail. The map owns placement.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -45,22 +47,24 @@ import type { CharacterAppearance } from "@/game/three/office-appearance";
 type ProvisionedProfile = {
   name: string;
   /**
-   * 이 프로필이 **실제로 출근한 채널 수**. 출근은 그 게이트웨이가 이미 붙어 있는 채널에만
-   * 일어나므로, 0 이면 ③ 의 결과 줄에서 "출근했습니다" 라고 말하면 안 된다. 이어서 편집하는
-   * 기존 프로필(`resumed`)은 알 수 없으므로 `undefined` 다.
+   * The **number of channels this profile actually attends**. Attendance only happens on
+   * channels the gateway is already attached to, so if it's 0, the result line in step 3
+   * must not say "attended." An existing profile continued from editing (`resumed`) has no
+   * way to know this, so it's `undefined`.
    */
   attendedChannels?: number;
   keyIssued: boolean;
   keyError?: string;
   keyStored: boolean;
   keyStoredError?: string;
-  /** 기본 프로필 복제가 실패했다(프로필은 만들어졌다). 복제를 요청했을 때만 온다. */
+  /** Cloning the default profile failed (the profile itself was created). Only present when cloning was requested. */
   cloneError?: string;
-  /** 복제로 물려받은 설정·키의 **이름**. 값은 오지 않는다. */
+  /** The **names** of the config/keys inherited via cloning. Values are never sent. */
   cloned?: { configKeys?: string[]; envKeys?: string[] };
   /**
-   * 플러그인 0.16.0 — 이 직원 홈에 워커용 플러그인을 둔 결과. 게이트웨이의 워커 전파가 꺼져 있으면
-   * `{skipped: "propagation_disabled"}` 이고, 그 직원의 칸반·크론 결과물은 모이지 않는다. 옛 플러그인은 없다.
+   * Plugin 0.16.0 — the result of placing the worker plugin in this employee's home. If the
+   * gateway's worker propagation is off, it's `{skipped: "propagation_disabled"}`, and that
+   * employee's Kanban/cron output won't collect. Absent on an old plugin.
    */
   workerPlugin?: WorkerPluginCreateResult;
 };
@@ -84,62 +88,67 @@ interface NpcHireWizardProps {
   pluginStatus: PluginStatus;
   localDiscovery: boolean;
   /**
-   * 이 게이트웨이에 **이미 등록된** 프로필 이름들.
+   * Profile names **already registered** on this gateway.
    *
-   * 없으면 마법사는 "이번에 만든 프로필" 로만 ②③ 을 진행할 수 있어, 중간에 닫으면
-   * 돌아갈 길이 사라진다(스테이징 실측 2026-09-03: `oliver` 를 만들고 닫았더니 인격을
-   * 편집할 방법이 없었다). 기존 프로필의 인격·설정을 나중에 고치는 것도 마법사의
-   * 정당한 용도다 — 스펙이 그 입구를 빠뜨렸다.
+   * Without this, the wizard could only carry steps 2/3 forward for "the profile just
+   * created" — closing partway through would leave no way back (observed in staging
+   * 2026-09-03: created `oliver`, closed, and had no way to edit the identity). Fixing an
+   * existing profile's identity/config later is also a legitimate use of the wizard — the
+   * spec just missed this entry point.
    */
   existingProfiles: string[];
   /**
-   * 이 프로필로 **곧바로 ②인격부터** 시작한다. 프로필 목록의 "인격" 버튼이 쓴다 —
-   * 마법사를 열고 ①에서 다시 고르게 하면 기능이 있어도 아무도 못 찾는다
-   * (스테이징에서 사용자가 실제로 "인격을 수정할 방법이 없어 보인다" 고 했다).
+   * Starts **directly at step 2 identity** with this profile. Used by the "Personality"
+   * button in the profile list — reopening the wizard and making the user pick again at
+   * step 1 means nobody finds the feature even though it exists (a user in staging actually
+   * said "there seems to be no way to edit the identity").
    */
   initialProfile?: string | null;
   /**
-   * 게이트웨이의 Hermes 대시보드 공개 주소(플러그인 `dashboard_url`, 소유자에게만 온다).
-   * ③ 설정에서 "이 직원으로 로그인" 링크를 만든다. 없으면 안내 문구만 보인다.
+   * The gateway's public Hermes dashboard URL (plugin `dashboard_url`, sent only to the
+   * owner). Used to build the "log in as this employee" link in step 3 config. Without it,
+   * only guidance text is shown.
    */
   dashboardUrl?: string | null;
   /**
-   * 화면 제목. 직원 상세에서 이 마법사를 **편집기로** 쓸 때 "직원 등록 마법사" 라는 제목이
-   * 맥락과 어긋나므로 호출부가 바꿔 준다.
+   * The screen title. When this wizard is used as an **editor** from employee detail, the
+   * title "Hire wizard" doesn't fit the context, so the caller overrides it.
    */
   title?: string;
   /**
-   * 새 프로필을 기본 프로필에서 복제해 모델 설정·프로바이더 키를 물려받는다. 플러그인이
-   * `profile_clone` 을 알릴 때만 켠다 — 구버전에는 모르는 필드를 보내지 않는다.
+   * Clones the new profile from the default profile to inherit model config/provider keys.
+   * Enabled only when the plugin advertises `profile_clone` — an old plugin isn't sent a
+   * field it doesn't know.
    */
   cloneDefaultProfile?: boolean;
   /**
-   * 이 사용자가 게이트웨이 소유자인가. 프로바이더 키 저장·로그인은 소유자만 할 수 있다
-   * (공유 사용자는 403). 모르면 false — 누를 수 없는 버튼을 보여주지 않는다.
+   * Whether this user is the gateway owner. Only the owner can save provider keys or log
+   * in (a shared user gets 403). Defaults to false when unknown — never show a button that
+   * can't be pressed.
    */
   canManageProviderAuth?: boolean;
-  /** ①에서 프로필이 실제로 만들어진 직후. 바깥 프로필 목록이 이것으로 곧바로 다시 읽는다. */
+  /** Right after a profile is actually created in step 1. The outer profile list refetches immediately using this. */
   onProfileCreated?: (profileName: string) => void;
   /**
-   * 마법사가 끝났다. ③ 의 "완료" 로 끝나면 그 직원 이름을 싣는다 — 호출부가 직원 상세로
-   * 보낼 수 있다. 닫기·삭제로 끝나면 인자가 없다.
+   * The wizard is done. Finishing via step 3's "Done" carries that employee's name — the
+   * caller can navigate to employee detail. Ending via close/delete carries no argument.
    */
   onDone: (result?: { profileName: string }) => void;
 }
 
 /**
- * 응답 본문을 파싱한다. **파싱 실패를 성공으로 자칭하지 않는다.**
+ * Parses the response body. **A parse failure is never claimed as success.**
  *
- * 예전에는 호출부마다 `await res.json().catch(() => ({}))` 였다. 그 `{}` 는
- * `errorCode` 가 없으므로 아래 오류 분기를 그대로 통과해 **성공한 payload** 로
- * 취급됐고, 필드가 전부 `undefined` 인 채 화면 판정에 들어갔다. 스테이징에서
- * 실제로 그 결과가 나왔다(2026-09-02): 플러그인이 `isDefaultTemplate: true` 를
- * 줬는데 화면은 "이미 작성된 인격이 있습니다" 를 물었다 — 파싱이 깨졌을 때의
- * 폴백이 하필 **위험한 쪽**이었다.
+ * Every call site used to do `await res.json().catch(() => ({}))`. That `{}` had no
+ * `errorCode`, so it passed straight through the error branch below and was treated as a
+ * **successful payload**, going into screen judgment with every field `undefined`. This
+ * actually happened in staging (2026-09-02): the plugin returned `isDefaultTemplate: true`,
+ * but the screen asked "an identity already exists" — the fallback for a broken parse
+ * happened to land on the **dangerous side**.
  *
- * 이제 파싱에 실패하면 `malformed_response` 코드를 실어 오류로 흐르게 한다.
- * 서버가 무엇을 보냈든(HTML 오류 페이지, 빈 본문, 잘린 JSON) 화면은 "성공"이라고
- * 말하지 않는다.
+ * Now a parse failure carries a `malformed_response` code and flows as an error. Whatever
+ * the server sent (an HTML error page, an empty body, truncated JSON), the screen never
+ * says "success."
  */
 async function parseJsonBody(res: Response): Promise<Record<string, unknown>> {
   try {
@@ -159,7 +168,7 @@ function extractErrorCode(payload: unknown): string | null {
   return typeof code === "string" ? code : null;
 }
 
-/** 프록시 4종이 실패 응답에 함께 싣는 원 업스트림 상태 코드. 없으면 null(예: 네트워크 실패). */
+/** The raw upstream status code the 4 proxy routes carry alongside a failure response. null if absent (e.g. a network failure). */
 function extractUpstreamStatus(payload: unknown): number | null {
   if (!payload || typeof payload !== "object") return null;
   const status = (payload as { upstreamStatus?: unknown }).upstreamStatus;
@@ -181,8 +190,9 @@ export default function NpcHireWizard({
 }: NpcHireWizardProps) {
   const t = useT();
 
-  // `initialProfile` 로 들어오면 ①(프로필 만들기)은 이미 끝난 일이다 — 곧바로 ②로 연다.
-  // 다만 ②가 잠겨 있으면(플러그인 없음) 그리 보낼 수 없으므로 ①로 떨어진다.
+  // Arriving with `initialProfile` means step 1 (create profile) is already done — open
+  // straight to step 2. But if step 2 is locked (no plugin) it can't be sent there, so it
+  // falls back to step 1.
   const [current, setCurrent] = useState<WizardStep>(() =>
     initialProfile &&
     availableSteps(pluginStatus, localDiscovery, true).find((s) => s.step === "identity")?.enabled
@@ -197,7 +207,7 @@ export default function NpcHireWizard({
   const [created, setCreated] = useState<ProvisionedProfile | null>(
     initialProfile ? { name: initialProfile, keyIssued: true, keyStored: true } : null,
   );
-  /** 이번 세션에서 만든 것이 아니라 기존 프로필로 들어왔는가 — 닫기 확인 문구가 갈린다. */
+  /** Whether this entered via an existing profile rather than being created this session — this changes the close-confirmation wording. */
   const [resumed, setResumed] = useState(Boolean(initialProfile));
   const [serving, setServing] = useState<
     "idle" | "checking" | "served" | "key_rejected" | "not_served" | "error"
@@ -217,8 +227,9 @@ export default function NpcHireWizard({
     [steps],
   );
 
-  // 복제 때 키를 어디까지 물려받을지. 끄면 기본 프로필이 실제로 쓰는 프로바이더 키만,
-  // 켜면 API 키형 프로바이더 키 전부(범용·OAuth 토큰 제외)를 복사한다(플러그인 cloneKeys).
+  // How far to inherit keys on clone. Off copies only the provider keys the default profile
+  // actually uses; on copies every API-key-type provider key (excluding generic/OAuth tokens)
+  // (plugin cloneKeys).
   const [copyAllApiKeys, setCopyAllApiKeys] = useState(false);
   const [copyKeysHint, setCopyKeysHint] = useState(false);
   const nameTrimmed = name.trim();
@@ -233,13 +244,13 @@ export default function NpcHireWizard({
   const [identitySaving, setIdentitySaving] = useState(false);
   const [identitySaved, setIdentitySaved] = useState(false);
   const [identityConflict, setIdentityConflict] = useState(false);
-  // I-1: 충돌 시 원격 본문을 여기 따로 담는다 — 사용자가 방금 쓴 초안(identityBody)은
-  // 절대 말없이 덮어쓰지 않는다. 사용자가 명시적으로 "이 내용으로 바꾸기" 를 눌러야만
-  // identityBody 로 옮겨간다.
+  // I-1: on conflict, the remote body is held here separately — the draft the user just
+  // wrote (identityBody) is never silently overwritten. It only moves into identityBody
+  // when the user explicitly clicks "Replace with this."
   const [conflictRemoteBody, setConflictRemoteBody] = useState<string | null>(null);
 
-  // --- Step ③ appearance ---
-  // 외형은 DeskRPG 의 hermes_profiles 행에 산다 — 그 행의 id 와 현재 값을 목록에서 찾는다.
+  // --- Step 3 appearance ---
+  // Appearance lives on DeskRPG's hermes_profiles row — find that row's id and current value from the list.
   const [appearanceTarget, setAppearanceTarget] = useState<{
     id: string;
     appearance: CharacterAppearance | null;
@@ -254,15 +265,17 @@ export default function NpcHireWizard({
   const [model, setModel] = useState("");
   const [provider, setProvider] = useState("");
   /**
-   * 그 프로필이 실제로 요청을 보내는 주소(`model.base_url`). 제공자를 바꿔도 이 값은 남아
-   * 이름표만 새 제공자이고 요청은 옛 엔드포인트로 간다(Hermes 런타임은 이 키만 읽는다).
-   * 말없이 지우지 않는다 — 커스텀 엔드포인트를 쓰는 사람에게는 그 주소가 정상이다.
+   * The endpoint that profile's requests actually go to (`model.base_url`). Changing the
+   * provider leaves this value in place, so only the label shows a new provider while
+   * requests still go to the old endpoint (the Hermes runtime only reads this key). Never
+   * silently cleared — for someone using a custom endpoint, that address is correct.
    */
   const [baseUrl, setBaseUrl] = useState("");
   const [clearBaseUrl, setClearBaseUrl] = useState(false);
   const [toolsetsText, setToolsetsText] = useState("");
-  // 툴셋·스킬 체크리스트(플러그인 0.9.0+). null 이면 서버의 현재 상태가 기본값이다.
-  // 사람이 건드렸을 때만 저장에 싣는다 — 안 건드린 채 저장해 현재 상태를 다시 쓰지 않는다.
+  // The toolset/skill checklist (plugin 0.9.0+). null means the server's current state is
+  // the default. Only carried into the save when a human touched it — saving untouched must
+  // not overwrite the current state.
   const [enabledToolsets, setEnabledToolsets] = useState<string[] | null>(null);
   const [disabledSkills, setDisabledSkills] = useState<string[] | null>(null);
   const [pickerDirty, setPickerDirty] = useState(false);
@@ -271,8 +284,9 @@ export default function NpcHireWizard({
   const [configSaved, setConfigSaved] = useState(false);
   const [effort, setEffort] = useState("");
   /**
-   * 모델·프로바이더·추론 강도 목록. 캐시하지 않는다 — Hermes 가 models.dev 를 20분
-   * TTL 로 캐시하고 있어서, 여기서 또 들고 있으면 "매번 최신" 이 두 배로 늦어진다.
+   * The model/provider/reasoning-effort list. Not cached here — Hermes already caches
+   * models.dev with a 20-minute TTL, so caching it again here would double the delay before
+   * "always fresh."
    */
   const [catalog, setCatalog] = useState<CatalogPayload | null>(null);
   const [catalogError, setCatalogError] = useState("");
@@ -312,11 +326,13 @@ export default function NpcHireWizard({
   }, [current, createdName, gatewayId, appearanceTarget, appearanceError, t]);
 
   /**
-   * 인격 응답 하나를 화면 상태로 옮긴다 — 저장과 **편집 모드 판정을 함께** 한다.
+   * Moves a single identity response into screen state — storing it **and deciding the
+   * edit mode together**.
    *
-   * ① 의 서빙 확인과 ② 의 조회가 같은 응답을 받는다. 예전에는 ① 쪽이 payload 만 저장하고
-   * 모드를 정하지 않아, ② 가 (이미 payload 가 있으니) 다시 읽지 않은 채 모드 null 로 떨어져
-   * 방금 만든 프로필에 "이미 작성된 인격이 있습니다" 를 물었다(2026-09-18 로컬 실측).
+   * Step 1's serving check and step 2's lookup receive the same response. This used to have
+   * step 1 store only the payload without deciding a mode, so step 2 (since a payload
+   * already existed) never re-read it, fell through to mode null, and asked a just-created
+   * profile "an identity already exists" (observed locally 2026-09-18).
    */
   const applyIdentityPayload = useCallback((payload: IdentityPayload) => {
     setIdentityPayload(payload);
@@ -328,21 +344,21 @@ export default function NpcHireWizard({
       setIdentityMode(null);
       setIdentityBody(payload.body ?? "");
     } else {
-      // blocked — 편집기를 열지 않는다.
+      // blocked — the editor doesn't open.
       setIdentityMode(null);
     }
   }, []);
 
-  // --- Step ① actions ---
+  // --- Step 1 actions ---
 
   /**
-   * 이미 등록된 프로필로 ②③ 을 진행한다.
+   * Carries steps 2/3 forward with an already-registered profile.
    *
-   * 새로 만들지 않으므로 키 발급·저장 관련 상태는 "이미 있는 것" 으로 채운다 —
-   * `keyIssued`/`keyStored` 를 true 로 두는 것은 거짓이 아니라 **사실**이다:
-   * 이 프로필은 `hermes_profiles` 에 토큰이 저장돼 있어야만 목록에 뜬다.
-   * 다만 `resumed` 를 세워, 닫을 때 "방금 만든 프로필이 남습니다" 를 묻지 않게 한다 —
-   * 우리가 만든 것이 아니므로 지울지 물으면 안 된다.
+   * Since nothing is newly created, key-issuance/storage state is filled in as "already
+   * there" — setting `keyIssued`/`keyStored` to true isn't a lie, it's a **fact**: this
+   * profile only shows up in the list because it already has a token stored in
+   * `hermes_profiles`. `resumed` is set, though, so closing doesn't ask "the just-created
+   * profile will be lost" — since we didn't create it, it must not be offered for deletion.
    */
   const handleResume = useCallback((profileName: string) => {
     setCreated({ name: profileName, keyIssued: true, keyStored: true });
@@ -376,12 +392,13 @@ export default function NpcHireWizard({
       }
       const profile = data as ProvisionedProfile;
       setCreated(profile);
-      // 바깥 목록은 마법사가 닫힐 때만 다시 읽었다 — 그동안 방금 만든 직원이 목록에서
-      // 빠져 있어 "등록된 프로필이 없습니다" 가 그대로 남았다(실측 2026-09-17).
+      // The outer list used to refetch only when the wizard closed — the just-created
+      // employee was missing from the list the whole time, leaving "no profiles registered"
+      // in place (observed 2026-09-17).
       onProfileCreated?.(profile.name);
 
-      // keyStored 가 false 면 어느 쪽이든 프로필 토큰이 DeskRPG 에 없다 —
-      // 인격·설정 단계는 그 토큰이 있어야 부를 수 있으므로 서빙 확인을 건너뛴다.
+      // If keyStored is false, the profile token isn't in DeskRPG either way — the
+      // identity/config steps need that token to be callable, so skip the serving check.
       if (!profile.keyStored) {
         setServing("idle");
         return;
@@ -394,10 +411,11 @@ export default function NpcHireWizard({
       );
       const idData = withHeaderErrorCode(await idRes.json().catch(() => ({})), idRes.headers);
       const idCode = extractErrorCode(idData);
-      // 판정 I: served_profiles 스냅샷을 쓰지 않는다 — 방금 만든 프로필을 실제로
-      // 호출해 판정한다. 수정 라운드 1: 프록시가 이제 `upstreamStatus` 를 함께
-      // 실어 보내므로, 401(키 문제)과 404(allowlist 로 서빙 안 함)를 가른다 —
-      // 둘 다 `plugin_error` 로 뭉쳐지던 문제(리뷰 지적)를 여기서 고친다.
+      // Verdict I: doesn't use the served_profiles snapshot — decides by actually calling
+      // the just-created profile. Fix round 1: since the proxy now also sends
+      // `upstreamStatus`, this distinguishes 401 (key problem) from 404 (not served, per
+      // allowlist) — fixing here the problem (flagged in review) where both collapsed into
+      // `plugin_error`.
       const verdict = classifyServingCheck({
         errorCode: idCode,
         upstreamStatus: extractUpstreamStatus(idData),
@@ -450,7 +468,7 @@ export default function NpcHireWizard({
         setDeleteError(getLocalizedErrorMessage(t, data, "common.error"));
         return;
       }
-      // 지웠으니 처음부터 다시 — 마법사를 닫는다.
+      // It's deleted, so start over — close the wizard.
       setCreated(null);
       setShowCloseConfirm(false);
       onDone();
@@ -461,7 +479,7 @@ export default function NpcHireWizard({
     }
   }, [created, gatewayId, onDone, t]);
 
-  // --- Step ② actions ---
+  // --- Step 2 actions ---
 
   const loadIdentity = useCallback(async () => {
     if (!profileBase) return;
@@ -493,12 +511,13 @@ export default function NpcHireWizard({
     }
   }, [current, identityPayload, identityLoading, loadIdentity]);
 
-  // I-1: `revision_conflict`/`revision_mismatch`(결함 8 — 플러그인이 실제로 내는 코드는
-  // 후자다) 를 맞았을 때 **전용** 재조회. `loadIdentity` 를 재사용하지 않는다 — 그 함수는
-  // 첫 줄에서 `identityConflict` 를 꺼버리고, `identityDecision` 결과에 따라
-  // `identityMode`/`identityBody` 를 초기화한다. 같은 틱에 배너가 켜졌다 꺼지고,
-  // 사용자가 방금 쓴 초안이 원격 본문으로 조용히 교체되는 사고가 여기서 났었다(리뷰
-  // Important-1). 이 함수는 revision 만 최신화하고 사용자 초안·현재 모드는 건드리지 않는다.
+  // I-1: a **dedicated** refetch for when `revision_conflict`/`revision_mismatch` is hit
+  // (defect 8 — the code the plugin actually emits is the latter). `loadIdentity` isn't
+  // reused — that function clears `identityConflict` on its first line and resets
+  // `identityMode`/`identityBody` based on the `identityDecision` result. That caused a bug
+  // where the banner turned on and off in the same tick, silently replacing the user's
+  // just-written draft with the remote body (review Important-1). This function only
+  // refreshes the revision and leaves the user's draft/current mode untouched.
   const refetchIdentityForConflict = useCallback(async () => {
     if (!profileBase) return;
     try {
@@ -506,7 +525,7 @@ export default function NpcHireWizard({
       const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
       const code = extractErrorCode(data);
       if (code) {
-        // 재조회 자체가 실패했다 — 충돌 배너는 유지하되 원격 본문은 보여줄 수 없다.
+        // The refetch itself failed — keep the conflict banner but can't show the remote body.
         setIdentityError(getWizardErrorMessage(t, code));
         return;
       }
@@ -531,8 +550,8 @@ export default function NpcHireWizard({
       });
       const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
       const code = extractErrorCode(data);
-      // 결함 8: 플러그인이 실제로 내는 코드는 `revision_mismatch` 다(스펙은
-      // `revision_conflict` 라고 적었지만 구현이 그렇게 안 됐다) — 둘 다 받는다.
+      // Defect 8: the code the plugin actually emits is `revision_mismatch` (the spec said
+      // `revision_conflict`, but the implementation didn't match it) — both are accepted.
       if (code === "revision_conflict" || code === "revision_mismatch") {
         setIdentityConflict(true);
         await refetchIdentityForConflict();
@@ -558,7 +577,7 @@ export default function NpcHireWizard({
     }
   }, [identityBody, identityPayload, profileBase, refetchIdentityForConflict, t]);
 
-  // --- Step ③ actions ---
+  // --- Step 3 actions ---
 
   const loadConfig = useCallback(async () => {
     if (!profileBase) return;
@@ -570,8 +589,8 @@ export default function NpcHireWizard({
       const data = withHeaderErrorCode(await parseJsonBody(res), res.headers);
       const code = extractErrorCode(data);
       if (code) {
-        // "unreadable"(200 분기)·"config_unreadable"(409) 둘 다 폼을 잠근다 — 빈
-        // 폼으로 저장하면 기존 설정을 지운다.
+        // Both "unreadable" (the 200 branch) and "config_unreadable" (409) lock the form —
+        // saving an empty form would erase the existing config.
         if (code === "unreadable" || code === "config_unreadable") {
           setConfigLocked(true);
         }
@@ -610,9 +629,9 @@ export default function NpcHireWizard({
   }, [current]);
 
   /**
-   * 모델·프로바이더 목록을 받아온다. 실패해도 ③단계를 막지 않는다 — 목록이 없으면
-   * 직접 입력으로 떨어질 뿐이고, 그게 예전 동작이다. 드롭다운을 못 채웠다고 설정
-   * 자체를 못 하게 하면 기능이 후퇴한다.
+   * Fetches the model/provider list. A failure doesn't block step 3 — with no list, it
+   * just falls back to free-text input, which is the old behavior. Blocking config entirely
+   * because a dropdown couldn't be filled would be a regression.
    */
   const loadCatalog = useCallback(async () => {
     if (!profileBase) return;
@@ -633,8 +652,8 @@ export default function NpcHireWizard({
     }
   }, [profileBase, t]);
 
-  // ③ 에 들어오면 카탈로그를 한 번 받는다. 설정 로딩과 독립이라 별도 effect 다 —
-  // 하나가 실패해도 다른 하나는 진행한다.
+  // Fetch the catalog once on entering step 3. This is a separate effect since it's
+  // independent of config loading — one failing doesn't block the other from proceeding.
   useEffect(() => {
     if (current === "config" && profileBase && !catalog && !catalogError) {
       void loadCatalog();
@@ -651,8 +670,9 @@ export default function NpcHireWizard({
       if (model.trim()) patch.model = model.trim();
       if (provider.trim()) patch.provider = provider.trim();
       if (!pickerUnsupported) {
-        // 체크리스트는 대화에 실제로 반영되는 플랫폼별 툴셋을 쓴다. 최상위 `toolsets` 는
-        // 대화에 반영되지 않으므로 함께 보내지 않는다(플러그인 0.9.0 계약).
+        // The checklist uses the platform-specific toolsets that actually take effect in
+        // conversation. The top-level `toolsets` field doesn't affect conversation, so it's
+        // never sent alongside it (plugin 0.9.0 contract).
         if (pickerDirty && enabledToolsets) patch.enabledToolsets = enabledToolsets;
         if (pickerDirty && disabledSkills) patch.disabledSkills = disabledSkills;
       } else {
@@ -662,10 +682,11 @@ export default function NpcHireWizard({
           .filter(Boolean);
         if (toolsets.length > 0) patch.toolsets = toolsets;
       }
-      // 빈 문자열도 보낸다 — "지정 안 함" 으로 되돌리는 유일한 방법이다.
-      // 조건을 걸면 한 번 고른 effort 를 화면에서 해제할 수 없어진다.
+      // An empty string is sent too — it's the only way to revert to "unspecified."
+      // Gating this on a condition would make an effort, once chosen, impossible to clear
+      // from the screen.
       if (catalog) patch.reasoning_effort = effort;
-      // 사용자가 확인한 경우에만 주소를 지운다(플러그인 0.10.1 의 신호).
+      // Clear the endpoint only when the user has confirmed it (a signal from plugin 0.10.1).
       if (clearBaseUrl && baseUrl) patch.clearBaseUrl = true;
 
       const res = await fetch(`${profileBase}/config`, {
@@ -722,9 +743,10 @@ export default function NpcHireWizard({
   }, [current, steps]);
 
   const requestClose = useCallback(() => {
-    // `resumed` 면 이 프로필은 **우리가 만든 것이 아니다** — 지울지 물으면 안 된다.
-    // 확인 패널의 문구가 "방금 만든 프로필이 남습니다, 지울까요?" 이므로, 남의
-    // 프로필에 그걸 띄우면 사용자를 실수로 유도한다.
+    // If `resumed`, this profile **wasn't created by us** — it must not be offered for
+    // deletion. The confirmation panel's wording is "the just-created profile will be lost,
+    // delete it?", and showing that for someone else's profile would nudge the user into a
+    // mistake.
     if (created && !resumed && !showCloseConfirm) {
       setShowCloseConfirm(true);
       return;
@@ -734,10 +756,11 @@ export default function NpcHireWizard({
 
   // ---------------------------------------------------------------------------
 
-  // I-2: 삭제 실패 표시를 한 조각으로 뽑아 두 자리(닫기-확인 패널 / ①의
-  // keyIssued:false 박스 "지우고 다시 시도")가 같이 쓴다. 예전엔 이 상태를 렌더하는
-  // 곳이 닫기-확인 패널뿐이라, keyIssued:false 쪽에서 `profile_has_service` 로
-  // 거절되면 셸 명령이 통째로 버려지고 화면엔 아무것도 안 떴다.
+  // I-2: the delete-failure display is factored into one piece shared by two places (the
+  // close-confirmation panel and step 1's keyIssued:false box "delete and retry"). This
+  // state used to render only in the close-confirmation panel, so on the keyIssued:false
+  // side a `profile_has_service` rejection would discard the shell command entirely and
+  // show nothing on screen.
   const deleteFailureBlock = (deleteError || deleteShellCommand) && (
     <div className="space-y-1">
       {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
@@ -752,14 +775,16 @@ export default function NpcHireWizard({
     </div>
   );
 
-  // 플러그인 0.9.0+ 는 카탈로그 행에 인증 방식(authType)을 싣는다 — 그러면 DeskRPG 안에서
-  // 키를 넣거나 로그인할 수 있으니, 인증 안 된 프로바이더도 고를 수 있게 하고 아래 패널로 인증한다.
+  // Plugin 0.9.0+ carries an auth method (authType) on catalog rows — that means keys can be
+  // entered or logins done right inside DeskRPG, so an unauthenticated provider can still be
+  // picked and authenticated via the panel below.
   const inAppAuth = Boolean(catalog?.providers.some((p) => p.authType));
   const selectedProviderRow = catalog?.providers.find((p) => p.id === provider) ?? null;
-  // 목록을 받았는데 고른 프로바이더가 인증 전이면 모델을 고를 수 없다(목록이 오지 않는다).
+  // If the list arrived but the picked provider isn't authenticated yet, models can't be
+  // chosen (the list won't come back).
   const providerAwaitingAuth = Boolean(selectedProviderRow && !selectedProviderRow.authenticated);
   const catalogModels = catalog?.models[provider] ?? [];
-  // 저장돼 있던 모델이 목록에 없더라도 드롭다운이 그 값을 말없이 비우지 않게 앞에 둔다.
+  // Put the stored model first even if it's not in the list, so the dropdown never silently clears it.
   const modelOptions =
     catalogModels.length > 0 && model && !catalogModels.includes(model)
       ? [model, ...catalogModels]
@@ -778,7 +803,7 @@ export default function NpcHireWizard({
         </button>
       </div>
 
-      {/* 잠긴 단계도 회색으로 남긴다 — 사라지면 사용자는 그런 기능이 있는 줄도 모른다. */}
+      {/* A locked step still stays visible grayed out — if it disappeared, the user wouldn't even know the feature exists. */}
       <div className="mb-5 flex flex-wrap gap-2">
         {steps.map((s) => (
           <button
@@ -876,7 +901,7 @@ export default function NpcHireWizard({
                   />
                   <span>
                     {t("hermes.wizard.profile.copyAllApiKeys")}
-                    {/* 자세한 사정은 눌러야 보인다 — 체크박스 밑의 두 줄이 화면을 길게 만들었다. */}
+                    {/* The details only show up when clicked — two lines under the checkbox made the screen too long. */}
                     <button
                       type="button"
                       aria-label={t("hermes.wizard.profile.copyAllApiKeysHint")}
@@ -920,7 +945,7 @@ export default function NpcHireWizard({
                 <p className="text-xs text-text-muted">{t("hermes.wizard.profile.cloned")}</p>
               )}
               {created.cloneError && (
-                // 프로필은 만들어졌다 — 모델을 ③ 에서 직접 고르면 된다. 막지 않고 알린다.
+                // The profile was still created — the model can be picked directly in step 3. This just notifies, it doesn't block.
                 <p className="text-xs text-npc-dark">{t("hermes.wizard.profile.cloneFailed")}</p>
               )}
 
@@ -959,8 +984,9 @@ export default function NpcHireWizard({
                     {t("hermes.wizard.profile.keyStoredFalseTitle")}
                   </p>
                   {created.keyStoredError && (
-                    // 최종 리뷰 M-3: 이 값은 이제 한국어 문장이 아니라 코드다 —
-                    // wizard-error-codes 사전으로 번역해야 en/ja/zh 사용자도 읽는다.
+                    // Final review M-3: this value is now a code, not a Korean sentence —
+                    // it must be translated through the wizard-error-codes dictionary so
+                    // en/ja/zh users can also read it.
                     <p className="text-xs text-text-muted">
                       {getWizardErrorMessage(t, created.keyStoredError)}
                     </p>
@@ -1008,8 +1034,9 @@ export default function NpcHireWizard({
           ) : identityError ? (
             <p className="text-sm text-danger">{identityError}</p>
           ) : !identityPayload ? (
-            // 조회 전 한 틱. 예전에는 여기서 null 을 "읽지 못함" 으로 접어, 조회가 시작되기도
-            // 전에 "인격 파일을 읽을 수 없어…" 가 떴다.
+            // The one tick before the lookup starts. This used to collapse null here into
+            // "unreadable," showing "can't read the identity file..." before the lookup had
+            // even begun.
             <p className="text-sm text-text-muted">{t("hermes.wizard.identity.loading")}</p>
           ) : identityPayload.unreadable || identityDecision(identityPayload) === "blocked" ? (
             <p className="text-sm text-danger">{t("hermes.wizard.identity.blocked")}</p>
@@ -1060,9 +1087,10 @@ export default function NpcHireWizard({
           ) : (
             <div className="space-y-2">
               {identityConflict && (
-                // I-1: 배너가 자기 자신을 지우거나 사용자 초안을 말없이 덮어쓰지 않는다.
-                // 아래 textarea 의 `identityBody` 는 이 블록과 무관하게 그대로 남는다 —
-                // 사용자가 명시적으로 "이 내용으로 바꾸기" 를 눌러야만 교체된다.
+                // I-1: the banner never dismisses itself or silently overwrites the user's
+                // draft. The `identityBody` in the textarea below stays exactly as-is,
+                // independent of this block — it's only replaced when the user explicitly
+                // clicks "Replace with this."
                 <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3">
                   <p className="text-sm font-semibold text-npc-dark">
                     {t("hermes.wizard.identity.conflict")}
@@ -1170,9 +1198,10 @@ export default function NpcHireWizard({
               {configError && !configLocked && <p className="text-sm text-danger">{configError}</p>}
               {catalogError && <p className="text-xs text-text-muted">{catalogError}</p>}
               {created && !inAppAuth && (
-                // Hermes 는 NPC(프로필)마다 로그인한다 — default 로 로그인한 구독을 새 직원이
-                // 물려받지 않는다(업스트림 #111724). 목록의 "인증 안 됨" 만으로는 어디서
-                // 로그인해야 하는지 알 수 없어, 그 직원 프로필의 로그인 화면으로 바로 보낸다.
+                // Hermes logs in per NPC (profile) — a subscription logged in as default
+                // isn't inherited by a new employee (upstream #111724). The list's "not
+                // authenticated" alone gives no clue where to log in, so this sends the
+                // user straight to that employee profile's login screen.
                 <div className="space-y-2 rounded border border-border bg-surface-raised/40 p-3 text-xs text-text-muted">
                   <p>{t("hermes.wizard.config.loginHint", { name: created.name })}</p>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1201,17 +1230,19 @@ export default function NpcHireWizard({
                 </div>
               )}
               <div className="grid gap-2 sm:grid-cols-2">
-                {/* 프로바이더를 먼저 고른다 — 모델 목록이 거기서 나온다. 인증되지 않은
-                    것도 목록에 남긴다(지우면 "왜 내 모델이 없지" 를 알 수 없다). 앱 안에서 인증할 수
-                    있으면(0.9.0+ 이고 소유자) 골라서 아래 패널로 인증하고, 아니면 고를 수 없다.
-                    목록을 못 받았으면 예전처럼 직접 입력으로 떨어진다. */}
+                {/* The provider is chosen first — the model list comes from it. An
+                    unauthenticated one stays in the list too (removing it would leave "why
+                    is my model missing" unanswerable). If in-app auth is available (0.9.0+
+                    and owner), it can be picked and authenticated via the panel below;
+                    otherwise it can't be picked. Falls back to free-text input as before if
+                    the list couldn't be fetched. */}
                 {catalog ? (
                   <select
                     value={provider}
                     onChange={(e) => {
                       setProvider(e.target.value);
-                      // 프로바이더가 바뀌면 이전 모델은 그 프로바이더의 것이 아니다.
-                      // 남겨 두면 저장 시점에야 실패한다.
+                      // When the provider changes, the previous model no longer belongs to
+                      // it. Leaving it in place would only fail at save time.
                       setModel("");
                     }}
                     className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
@@ -1239,8 +1270,10 @@ export default function NpcHireWizard({
                 )}
 
                 {providerAwaitingAuth ? (
-                  // 플러그인은 인증된 프로바이더의 모델만 준다. 인증 전에는 목록이 없어 예전엔
-                  // 자유 입력으로 떨어졌다 — 고를 수 없음을 보이고, 로그인하면 목록을 다시 받는다.
+                  // The plugin gives models only for an authenticated provider. With no
+                  // list before authentication, this used to fall back to free-text input
+                  // — instead it shows that it can't be picked, and refetches the list
+                  // after login.
                   <select
                     value={model}
                     disabled
@@ -1305,7 +1338,7 @@ export default function NpcHireWizard({
                   ))}
                 </select>
               )}
-              {/* 도구·스킬은 처음 쓰는 사람이 고를 것이 아니다 — 기본값으로 두고 접는다. */}
+              {/* Tools/skills aren't something a first-time user picks — leave them at default and collapse this section. */}
               <details className="rounded border border-border px-3 py-2">
                 <summary className="cursor-pointer text-sm font-semibold text-text">
                   {t("hermes.wizard.config.advanced")}
@@ -1333,7 +1366,7 @@ export default function NpcHireWizard({
                       disabled={configSaving}
                     />
                   ) : (
-                    // 구버전 플러그인(< 0.9.0)은 목록을 주지 않는다 — 예전처럼 이름을 적는다.
+                    // An old plugin (< 0.9.0) doesn't give a list — names are typed in as before.
                     <>
                       <input
                         type="text"
@@ -1352,8 +1385,9 @@ export default function NpcHireWizard({
               {configSaved && (
                 <p className="text-xs text-success">{t("hermes.wizard.config.saved")}</p>
               )}
-              {/* 출근 결과 한 줄 — 붙은 채널이 없으면 "출근했다" 고 말하지 않는다. 이어서
-                  편집하는 기존 직원(`attendedChannels` 없음)은 알 수 없으므로 말하지 않는다. */}
+              {/* One-line attendance result — never says "attended" without an attached
+                  channel. Says nothing for an existing employee continued from editing
+                  (no `attendedChannels`), since that can't be known. */}
               {typeof created?.attendedChannels === "number" && (
                 <p className="text-sm text-text-muted">
                   {created.attendedChannels === 0
@@ -1393,7 +1427,7 @@ export default function NpcHireWizard({
                   {t("hermes.wizard.result.createOffice")}
                 </Link>
               )}
-              {/* 경고는 버튼 줄 밖에 둔다 — 같은 flex 줄에 넣으면 버튼이 눌려 글자가 세로로 꺾인다. */}
+              {/* The warning stays outside the button row — in the same flex row it squeezes the buttons and wraps their text vertically. */}
               {baseUrl && provider.trim() !== "custom" && (
                 <div
                   className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs"
@@ -1436,8 +1470,9 @@ export default function NpcHireWizard({
         </div>
       )}
 
-      {/* 단계 이동은 아래 버튼으로 한다 — 잠긴 단계의 이유를 글로 늘어놓는 대신
-          "다음" 을 눌러 자연스럽게 순서를 밟는다(2026-09-20 단테 결정). */}
+      {/* Step navigation happens through the buttons below — instead of spelling out a
+          locked step's reason in text, clicking "Next" walks through the order naturally
+          (Dante's decision, 2026-09-20). */}
       {!showCloseConfirm && (
         <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
           <button

@@ -5,7 +5,7 @@ import { Star } from "lucide-react";
 import { formatStars, REPO_URL } from "@/lib/app-meta";
 import { useT } from "@/lib/i18n";
 
-/** 상단 바의 GitHub Star 유도 버튼. 한 번 누르면 강조를 거두고 조용한 버튼으로 남는다. */
+/** The GitHub Star prompt button in the top bar. Once clicked, it drops the highlight and stays a quiet button. */
 export function GrowthStarButton({
   stars,
   clicked,

@@ -74,7 +74,7 @@ async function mount(
   return el;
 }
 
-test("권한과 등록 여부는 회의록 조회가 돌려준 값을 쓴다", async () => {
+test("permission and registered status use the values returned by the minutes fetch", async () => {
   stubFetch({
     "GET /api/meetings/m1": () => ({
       status: 200,
@@ -86,7 +86,7 @@ test("권한과 등록 여부는 회의록 조회가 돌려준 값을 쓴다", a
   assert.equal(el.querySelector("[data-outcome-register]"), null);
 });
 
-test("등록이 성공하면 버튼이 결과로 바뀐다", async () => {
+test("when registration succeeds, the button turns into the result", async () => {
   const calls = stubFetch({
     "GET /api/meetings/m1": () => ({
       status: 200,
@@ -111,7 +111,7 @@ test("등록이 성공하면 버튼이 결과로 바뀐다", async () => {
   assert.equal(el.querySelector("[data-outcome-register]"), null);
 });
 
-test("등록이 거절되면 등록된 코드의 문구를 보이고 버튼을 남긴다", async () => {
+test("when registration is rejected, it shows the message for the returned code and keeps the button", async () => {
   stubFetch({
     "GET /api/meetings/m1": () => ({
       status: 200,
@@ -129,7 +129,7 @@ test("등록이 거절되면 등록된 코드의 문구를 보이고 버튼을 �
   assert.ok(el.querySelector("[data-outcome-register]"));
 });
 
-test("실패한 요약을 다시 시키면 새 결과로 패널이 바뀐다", async () => {
+test("retrying a failed summary swaps the panel for the new outcome", async () => {
   stubFetch({
     "GET /api/meetings/m1": () => ({
       status: 200,
@@ -147,7 +147,7 @@ test("실패한 요약을 다시 시키면 새 결과로 패널이 바뀐다", a
   assert.equal(el.querySelectorAll("[data-outcome-item]").length, 1);
 });
 
-test("칸반 관문이 {code} 모양으로 거절해도 HTTP 상태가 아니라 그 코드를 읽는다", async () => {
+test("even when the kanban gate rejects with a {code} shape, it reads that code rather than the HTTP status", async () => {
   stubFetch({
     "GET /api/meetings/m1": () => ({
       status: 200,
@@ -167,7 +167,7 @@ test("칸반 관문이 {code} 모양으로 거절해도 HTTP 상태가 아니라
   assert.ok(Boolean(el.querySelector("[data-outcome-register]")), "버튼은 남는다");
 });
 
-test("플러그인이 initial_status 를 광고하지 않으면 등록 버튼을 그리지 않는다", async () => {
+test("does not render the register button when the plugin doesn't advertise initial_status", async () => {
   stubFetch({
     "GET /api/meetings/m1": () => ({
       status: 200,
@@ -183,7 +183,7 @@ test("플러그인이 initial_status 를 광고하지 않으면 등록 버튼을
   assert.ok(Boolean(el.querySelector("[data-outcome-upgrade]")), "갱신 안내가 보여야 한다");
 });
 
-test("자동화 상태를 못 읽으면 못 하는 것으로 본다 — 실패하는 버튼을 그리지 않는다", async () => {
+test("treats it as unsupported when the automation status can't be read — does not render a button that would fail", async () => {
   stubFetch({
     "GET /api/meetings/m1": () => ({
       status: 200,
@@ -198,7 +198,7 @@ test("자동화 상태를 못 읽으면 못 하는 것으로 본다 — 실패�
   assert.equal(el.querySelector("[data-outcome-register]"), null);
 });
 
-test("종료 화면은 등록할 후속 업무가 남았는지 듣고, '등록하지 않음' 을 누를 수 있다", async () => {
+test("the end screen hears whether follow-ups remain to register, and can click 'don't register'", async () => {
   stubFetch({
     "GET /api/meetings/m1": () => ({
       status: 200,
@@ -216,7 +216,7 @@ test("종료 화면은 등록할 후속 업무가 남았는지 듣고, '등록�
   assert.equal(declined, 1);
 });
 
-test("후속 업무가 없거나 등록 권한이 없으면 남은 일이 없다고 알린다", async () => {
+test("reports nothing left when there are no follow-ups or no register permission", async () => {
   for (const [body, why] of [
     [{ minutes: { outcome: { ...outcome, followUps: [] } }, canManage: true }, "0건"],
     [{ minutes: { outcome }, canManage: false }, "권한 없음"],
@@ -232,7 +232,7 @@ test("후속 업무가 없거나 등록 권한이 없으면 남은 일이 없다
   }
 });
 
-test("회의록 보관함처럼 콜백을 넘기지 않으면 '등록하지 않음' 버튼이 없다", async () => {
+test("without a callback passed, as in the minutes archive, there is no 'don't register' button", async () => {
   stubFetch({
     "GET /api/meetings/m1": () => ({
       status: 200,

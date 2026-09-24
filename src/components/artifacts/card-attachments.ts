@@ -2,19 +2,21 @@ import type { ArtifactSummary, KanbanBoardAttachment } from "@/lib/hermes/deskrp
 
 import type { ArtifactFilter } from "./ArtifactList";
 
-/** 갤러리에 잇는 카드 첨부 한 건 — 어느 보드의 것인지 들고 다녀야 내려받을 수 있다. */
+/** One card attachment appended to the gallery — needs to carry which board it's from to be downloadable. */
 export type GalleryAttachment = KanbanBoardAttachment & { boardSlug: string };
 
 /**
- * 결과물 갤러리가 아티팩트 뒤에 보여 줄 카드 첨부를 고른다.
+ * Picks the card attachments the artifact gallery shows after the artifacts.
  *
- * - **같은 문서를 두 번 보여 주지 않는다.** 워커가 플러그인을 싣고 뜨면 같은 파일이 아티팩트로도,
- *   카드 첨부로도 잡힌다. 같은 카드(`task_id`)의 같은 파일명이면 아티팩트만 남긴다 — 아티팩트는
- *   버전·미리보기를 갖고 있어 더 많은 것을 보여 준다. 판정은 **지금 불러온** 아티팩트 쪽만 본다.
- * - 첨부에는 종류·출처·직원이 없다. 그 필터가 걸려 있으면 보여 주지 않는다 — 걸러 낼 근거가
- *   없는 것을 통과시키면 필터가 거짓말을 한다. 종류 탭은 "전체" 와 "파일" 에서만 보인다.
- * - 카드에서 열었으면(`taskId`) 그 카드의 첨부만.
- * - 검색어는 파일명과 카드 제목에서 찾는다.
+ * - **Never shows the same document twice.** Once the worker loads the plugin, the same file
+ *   gets caught both as an artifact and as a card attachment. If the same card (`task_id`) has
+ *   the same filename, keep only the artifact — an artifact carries versions/preview and shows
+ *   more. The check only looks at the **currently loaded** artifacts.
+ * - Attachments have no kind/source/employee. If those filters are set, hide them — passing
+ *   through something with no basis to filter on would make the filter lie. The kind tab only
+ *   shows them under "all" and "file".
+ * - If opened from a card (`taskId`), only that card's attachments.
+ * - The search term matches against filename and card title.
  */
 export function visibleCardAttachments(
   attachments: readonly GalleryAttachment[],

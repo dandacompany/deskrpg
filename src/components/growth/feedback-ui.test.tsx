@@ -44,7 +44,7 @@ function stubFetch(respond: (url: string, init?: RequestInit) => Response) {
   return { calls, restore: () => (globalThis.fetch = original) };
 }
 
-test("수집 서버가 꺼져 있으면 비공개 전송 버튼이 없고, GitHub 버튼은 제목·내용이 있어야 눌린다", async () => {
+test("when the collection server is off there is no private-send button, and the GitHub button only enables once title and body are filled in", async () => {
   const m = await mount(<BugReportModal feedbackUrl={null} onClose={() => {}} />);
   assert.equal(button(m.host, "비공개로 보내기"), undefined);
   const gh = button(m.host, "GitHub 이슈로 올리기")!;
@@ -59,7 +59,7 @@ test("수집 서버가 꺼져 있으면 비공개 전송 버튼이 없고, GitHu
   await m.cleanup();
 });
 
-test("첨부 체크를 해제한 항목은 GitHub 이슈 본문에서 빠진다", async () => {
+test("unchecking an attachment excludes it from the GitHub issue body", async () => {
   const opened: string[] = [];
   const originalOpen = window.open;
   window.open = ((url: string) => {
@@ -83,7 +83,7 @@ test("첨부 체크를 해제한 항목은 GitHub 이슈 본문에서 빠진다"
   await m.cleanup();
 });
 
-test("비공개 전송은 수집 서버로 보내고 완료 문구를 보인다", async () => {
+test("private sending posts to the collection server and shows the completion message", async () => {
   const f = stubFetch(() => new Response("{}", { status: 201 }));
   const m = await mount(<BugReportModal feedbackUrl="https://fb.test" onClose={() => {}} />);
   const [title] = m.host.querySelectorAll("input");
@@ -100,7 +100,7 @@ test("비공개 전송은 수집 서버로 보내고 완료 문구를 보인다"
   await m.cleanup();
 });
 
-test("설문을 보내면 답과 세트 버전을 전송하고 sent 로 끝난다, 실패하면 알린다", async () => {
+test("sending the survey posts the answers and set version and ends in sent, and shows an alert on failure", async () => {
   let outcome = "";
   const f = stubFetch(() => new Response("{}", { status: 201 }));
   const m = await mount(
@@ -146,7 +146,7 @@ test("설문을 보내면 답과 세트 버전을 전송하고 sent 로 끝난�
   await m2.cleanup();
 });
 
-test("설문·버그 창의 안내 글자는 흐린 글자색을 쓰지 않는다 — 크림 배경 위 3.8:1 로 AA 미달", async () => {
+test("the guidance text in the survey/bug modals does not use the dim text color — 3.8:1 on the cream background fails AA", async () => {
   const survey = await mount(
     <SurveyModal
       survey={FALLBACK_SURVEY}
@@ -170,7 +170,7 @@ test("설문·버그 창의 안내 글자는 흐린 글자색을 쓰지 않는�
   await bug.cleanup();
 });
 
-/** 실제 브라우저처럼 body 에서 올라가는 취소 가능한 Esc 하나. jsdom 의 리스너 순서에 기대지 않는다. */
+/** A single cancelable Esc bubbling up from body, like in a real browser. Does not rely on jsdom's listener order. */
 function pressEscape(consumedAbove = false) {
   const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
   if (consumedAbove) event.preventDefault();
@@ -180,7 +180,7 @@ function pressEscape(consumedAbove = false) {
   return event;
 }
 
-test("버그 신고 창은 Esc 로 닫히고 그 Esc 를 소비한다, 위 레이어가 소비한 Esc 는 무시한다", async () => {
+test("the bug report modal closes on Esc and consumes that Esc; it ignores an Esc already consumed by a layer above", async () => {
   let closed = 0;
   const m = await mount(<BugReportModal feedbackUrl={null} onClose={() => closed++} />);
   pressEscape(true);
@@ -191,7 +191,7 @@ test("버그 신고 창은 Esc 로 닫히고 그 Esc 를 소비한다, 위 레�
   await m.cleanup();
 });
 
-test("설문 창의 Esc 는 '나중에' 와 같다 — 다시 묻지 않음으로 기록하지 않는다", async () => {
+test("Esc in the survey modal is the same as 'later' — it is not recorded as never-ask-again", async () => {
   const outcomes: string[] = [];
   const m = await mount(
     <SurveyModal

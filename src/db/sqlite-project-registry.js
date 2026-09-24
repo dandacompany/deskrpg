@@ -1,18 +1,19 @@
-// 프로젝트 목록표의 SQLite 짝 (설계 2026-09-21 project-registry).
+// SQLite counterpart of the project registry table (design 2026-09-21 project-registry).
 //
-// 두 일을 한다.
-//   1. 기존 DB 의 `channel_kanban_boards` 를 **재구축**한다 — PK 를 channel_id 에서 대리 키
-//      id 로 옮기기 위해서다. SQLite 는 PK 를 ALTER 로 바꿀 수 없어 새 표로 복사하고 rename
-//      하는 길뿐이다. 빈 DB 는 `sqlite-kanban-cron-bookkeeping.js` 가 이미 새 모양으로
-//      만들므로 여기서 할 일이 없다(판정은 `id` 컬럼의 유무).
-//   2. 프로젝트·서브프로젝트 메타 표를 만든다.
+// Does two things:
+//   1. **Rebuilds** an existing DB's `channel_kanban_boards` — to move the PK from channel_id
+//      to a surrogate id key. SQLite can't change a PK via ALTER, so the only path is copying
+//      into a new table and renaming it. An empty DB already gets the new shape from
+//      `sqlite-kanban-cron-bookkeeping.js`, so there's nothing to do here (checked via whether
+//      the `id` column exists).
+//   2. Creates the project/subproject metadata tables.
 //
-// 두 부트스트랩(src/db/index.ts, server-db.js)이 같이 부른다 — 한쪽에만 넣으면 그 경로가
-// 여는 DB 에서만 조용히 "no such table/column" 이 난다.
+// Called by both bootstrap paths (src/db/index.ts, server-db.js) — adding it to only one
+// silently produces "no such table/column" only on the DB that path opens.
 //
-// **순서가 중요하다.** 재구축은 `channel_projects` 가 생기기 전에 끝나야 한다. 메타 표가
-// 먼저 생기면 그 FK 가 `channel_kanban_boards` 를 가리키는 채로 DROP 이 돌아, 외래 키가
-// 켜진 DB 에서 실패하거나 꺼진 DB 에서 조용히 끊어진 참조를 남긴다.
+// **Order matters.** The rebuild must finish before `channel_projects` exists. If the metadata
+// table is created first, its FK ends up pointing at `channel_kanban_boards` while the DROP
+// runs — this fails on a DB with foreign keys on, or silently leaves a broken reference on one with them off.
 "use strict";
 
 const { randomUUID } = require("node:crypto");
@@ -108,11 +109,11 @@ function hasColumn(sqlite, table, column) {
 }
 
 /**
- * 옛 모양(channel_id 가 PK)을 새 모양(id 가 PK, is_event_carrier 있음)으로 옮긴다.
+ * Moves the old shape (channel_id as PK) to the new shape (id as PK, has is_event_carrier).
  *
- * 행과 `event_cursor` 는 그대로 옮긴다 — 커서를 버리면 그 채널이 사건을 한 구간 통째로
- * 놓친다. 이관 전의 모든 행은 그 채널의 유일한 보드였고 크론·아티팩트 사건을 이미 받고
- * 있었으므로 전부 `is_event_carrier = 1` 이다.
+ * Rows and `event_cursor` are carried over as-is — dropping the cursor would make that channel
+ * miss an entire stretch of events. Every pre-migration row was its channel's only board and
+ * was already receiving cron/artifact events, so all of them get `is_event_carrier = 1`.
  */
 function rebuildBoardsTable(sqlite) {
   const rows = sqlite
@@ -135,10 +136,11 @@ function rebuildBoardsTable(sqlite) {
 }
 
 /**
- * 재구축과 메타 표 생성. 멱등 — 매 부팅마다 돌아도 된다.
+ * Rebuild plus metadata table creation. Idempotent — fine to run on every boot.
  *
- * 외래 키는 재구축 동안만 끈다. `DROP TABLE` 이 참조를 끊는 것을 막기 위해서이고,
- * 원래 값은 끝나고 되돌린다. PRAGMA 는 트랜잭션 안에서 바꿀 수 없어 밖에서 다룬다.
+ * Foreign keys are turned off only for the duration of the rebuild, to keep `DROP TABLE` from
+ * breaking references, and restored to their original value afterward. PRAGMA can't be changed
+ * inside a transaction, so it's handled outside one.
  */
 function ensureProjectRegistry(sqlite) {
   if (
@@ -153,14 +155,14 @@ function ensureProjectRegistry(sqlite) {
       if (fkWasOn) sqlite.pragma("foreign_keys = ON");
     }
   }
-  // 기존 DB 에는 컬럼을 먼저 보강해야 부분 인덱스를 만들 수 있다.
+  // On an existing DB, the column must be backfilled first before the partial index can be created.
   if (
     tableExists(sqlite, "channel_kanban_boards") &&
     !hasColumn(sqlite, "channel_kanban_boards", "event_carrier_handoff_json")
   ) {
     sqlite.exec("ALTER TABLE channel_kanban_boards ADD COLUMN event_carrier_handoff_json TEXT");
   }
-  // 재구축을 했든 안 했든(빈 DB 포함) 인덱스는 늘 보장한다.
+  // Always ensure the indexes, whether or not a rebuild happened (including on an empty DB).
   if (tableExists(sqlite, "channel_kanban_boards")) sqlite.exec(BOARD_INDEXES);
   sqlite.exec(PROJECT_TABLES);
 }

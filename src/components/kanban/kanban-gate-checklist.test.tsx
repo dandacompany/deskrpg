@@ -15,8 +15,9 @@ import KanbanBoardModal from "./KanbanBoardModal";
 import TaskDrawer, { type TaskDrawerArtifacts } from "./TaskDrawer";
 
 /**
- * 배선 테스트 — 판정 자체(classifyGateFailure/classifyBoardFailure)는 다른 파일이 이미
- * 덮는다. 여기서는 "화면이 그 판정을 살려서 체크리스트로 연다" 만 고정한다.
+ * Wiring test — the classification itself (classifyGateFailure/classifyBoardFailure) is already
+ * covered by another file. This only pins down that "the screen keeps that classification alive
+ * and opens the checklist with it."
  */
 
 const CHANNEL = "ch-1";
@@ -42,9 +43,9 @@ async function mountBoard(
   await act(async () =>
     root.render(
       <I18nProvider initialLocale="ko">
-        {/* onConnectGateway 를 준다 — gateway_not_bound 배너는 소유자에게만 버튼을 보여준다
-            (비소유자에겐 버튼 자체가 없다, `KanbanBoardModal.test.tsx` 의
-            "unbound gateway offers connection to owners and guidance to members" 참조). */}
+        {/* Provide onConnectGateway — the gateway_not_bound banner shows the button only to owners
+            (non-owners get no button at all; see "unbound gateway offers connection to owners and
+            guidance to members" in `KanbanBoardModal.test.tsx`). */}
         <KanbanBoardModal channelId={CHANNEL} onClose={() => {}} onConnectGateway={() => {}} />
       </I18nProvider>,
     ),
@@ -69,7 +70,7 @@ async function mountBoard(
   };
 }
 
-test("보드 차단 배너에서 체크리스트를 열면 원인이 살아 있다(gateway_not_bound)", async () => {
+test("opening the checklist from the board blocker banner keeps the cause alive (gateway_not_bound)", async () => {
   const f = await mountBoard((url) => {
     if (url.includes("/automation/status")) {
       return json({ code: "gateway_not_bound", message: "게이트웨이 미연결" }, { status: 409 });
@@ -86,7 +87,7 @@ test("보드 차단 배너에서 체크리스트를 열면 원인이 살아 있�
   }
 });
 
-test("보드 차단 배너의 board_unavailable(503+plugin_absent) 도 체크리스트에서 원인이 복원된다", async () => {
+test("board_unavailable (503+plugin_absent) from the board blocker banner also has its cause restored in the checklist", async () => {
   const f = await mountBoard((url) => {
     if (url.includes("/automation/status")) {
       return json({
@@ -112,15 +113,15 @@ test("보드 차단 배너의 board_unavailable(503+plugin_absent) 도 체크리
     const blocker = f.host.querySelector<HTMLElement>("[data-blocker]");
     assert.equal(blocker?.dataset.blocker, "board_unavailable");
     await f.click("무엇이 필요한가요?");
-    // 428 이 아닌 나머지는 이전에는 board_unavailable 로 뭉개져 한 줄 메시지만 보였다.
-    // 체크리스트는 plugin_absent 단계(플러그인 설치)를 짚어야 한다.
+    // Anything other than 428 used to be flattened into board_unavailable, showing only a
+    // one-line message. The checklist must point at the plugin_absent step (install the plugin).
     assert.match(f.host.textContent ?? "", /DeskRPG 플러그인 설치/);
   } finally {
     await f.cleanup();
   }
 });
 
-test("보드 차단 배너의 평범한 실패(403 not_a_member)는 체크리스트 버튼을 띄우지 않는다", async () => {
+test("an ordinary failure (403 not_a_member) from the board blocker banner does not show the checklist button", async () => {
   const f = await mountBoard((url) => {
     if (url.includes("/automation/status")) {
       return json({
@@ -155,7 +156,7 @@ test("보드 차단 배너의 평범한 실패(403 not_a_member)는 체크리스
 });
 
 // ---------------------------------------------------------------------------
-// TaskDrawer 결과물 섹션
+// TaskDrawer artifacts section
 // ---------------------------------------------------------------------------
 
 const detail: KanbanTaskDetail = {
@@ -212,7 +213,7 @@ async function mountDrawer(artifacts: TaskDrawerArtifacts) {
   };
 }
 
-test("결과물 섹션의 428 은 지금처럼 섹션을 숨긴다", async () => {
+test("428 on the artifacts section still hides the section, as before", async () => {
   const view = await mountDrawer({
     list: async () => {
       throw new ArtifactsApiError(428, "plugin_upgrade_required", "upgrade", "0.8.4");
@@ -226,7 +227,7 @@ test("결과물 섹션의 428 은 지금처럼 섹션을 숨긴다", async () =>
   }
 });
 
-test("결과물 섹션의 409(gateway_not_bound) 는 한 줄로 뭉개지지 않고 체크리스트를 연다", async () => {
+test("409 (gateway_not_bound) on the artifacts section opens the checklist instead of flattening to one line", async () => {
   const view = await mountDrawer({
     list: async () => {
       throw new ArtifactsApiError(409, "gateway_not_bound", "게이트웨이 미연결");
@@ -241,7 +242,7 @@ test("결과물 섹션의 409(gateway_not_bound) 는 한 줄로 뭉개지지 않
   }
 });
 
-test("결과물 섹션의 평범한 실패(500 internal_error)는 체크리스트 버튼을 띄우지 않는다", async () => {
+test("an ordinary failure (500 internal_error) on the artifacts section does not show the checklist button", async () => {
   const view = await mountDrawer({
     list: async () => {
       throw new ArtifactsApiError(500, "internal_error", "서버 오류");

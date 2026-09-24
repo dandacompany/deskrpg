@@ -1,14 +1,15 @@
 "use client";
 
 /**
- * 프로필의 Hermes 툴셋·스킬을 이름을 타이핑하는 대신 체크리스트로 고른다.
+ * Picks a profile's Hermes toolsets/skills through a checklist instead of typing names.
  *
- * 선택 상태는 호출부가 소유한다(제어 컴포넌트). `null` 을 넘기면 서버의 현재 상태가
- * 기본값이고, 불러온 직후 `onLoaded` 로 그 값을 알려 준다. 저장도 호출부 몫이다 —
- * config PUT 에 `{ enabledToolsets, disabledSkills }` 로 보낸다. 올리는 목록에는 불러온 행 이름만
- * 싣는다(필수 스킬 제외) — 플러그인이 모르는 이름을 400 으로 거절하므로, 시드는 `onLoaded` 로 한다.
- * 구버전 플러그인(`plugin_upgrade_required`)이면 아무것도 그리지 않고 `onUnsupported` 를
- * 불러 호출부가 텍스트 입력으로 폴백하게 한다.
+ * Selection state is owned by the caller (a controlled component). Passing `null` makes the
+ * server's current state the default, and the value is reported via `onLoaded` right after
+ * loading. Saving is also the caller's job — sent to config PUT as
+ * `{ enabledToolsets, disabledSkills }`. The list sent up carries only names from the loaded
+ * rows (excluding essential skills) — the plugin rejects an unknown name with a 400, so
+ * seeding happens through `onLoaded`. On an old plugin (`plugin_upgrade_required`), nothing
+ * is rendered and `onUnsupported` is called so the caller falls back to text input.
  */
 import { useEffect, useMemo, useRef, useState, type JSX } from "react";
 
@@ -29,16 +30,17 @@ import ToolProviderPanel from "./ToolProviderPanel";
 
 export type ToolsetSkillPickerProps = {
   profileBase: string; // `/api/gateways/${gatewayId}/plugin/profiles/${encodeURIComponent(name)}`
-  enabledToolsets: string[] | null; // null = 서버 현재 상태를 기본값으로
+  enabledToolsets: string[] | null; // null = use the server's current state as the default
   onEnabledToolsetsChange(next: string[]): void;
   disabledSkills: string[] | null;
   onDisabledSkillsChange(next: string[]): void;
   onLoaded?(initial: { enabledToolsets: string[]; disabledSkills: string[] }): void;
-  onUnsupported?(): void; // plugin_upgrade_required → 호출부가 텍스트 입력으로 폴백
+  onUnsupported?(): void; // plugin_upgrade_required -> the caller falls back to text input
   disabled?: boolean;
   /**
-   * 게이트웨이 소유자인가(플러그인 0.10.0 `profile_tool_providers`). 참이면 프로바이더를 고르는 도구에
-   * "설정" 을 붙이고, 설정이 필요한 도구를 체크하는 순간 설정 패널을 펼친다. 키 쓰기가 소유자 전용이다.
+   * Whether this is the gateway owner (plugin 0.10.0 `profile_tool_providers`). When true,
+   * a tool with a provider choice gets a "Configure" button, and checking a tool that needs
+   * configuration opens the config panel immediately. Key writes are owner-only.
    */
   canManageToolProviders?: boolean;
 };
@@ -55,8 +57,9 @@ type LoadResult = {
 
 const EMPTY = { toolsets: [] as ToolsetRow[], skills: [] as SkillRow[], errorBody: null };
 
-/** 본문이 JSON 객체가 아니면(HTML 오류 페이지·빈 본문·잘린 JSON) 오류로 흐르게 한다 —
- *  `NpcHireWizard` 의 `parseJsonBody` 와 같은 코드로, 이미 등록·번역된 코드다. */
+/** Flows as an error when the body isn't a JSON object (an HTML error page, empty body,
+ *  truncated JSON) — the same code as `NpcHireWizard`'s `parseJsonBody`, an already
+ *  registered and translated code. */
 async function readBody(response: Response): Promise<Body> {
   try {
     const body: unknown = await response.json();
@@ -73,17 +76,19 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
   const t = useT();
   const { profileBase } = props;
   const [query, setQuery] = useState("");
-  // 펼친 도구 설정 패널 하나. 저장이 끝난 도구는 목록을 다시 받지 않고 "키 필요" 만 걷는다 —
-  // 다시 받으면 onLoaded 가 체크 상태를 서버 값으로 되돌려, 아직 저장 안 한 체크를 잃는다.
+  // The one open tool-config panel. For a tool that finished saving, only "needs key" is
+  // cleared without refetching the list — refetching would let onLoaded reset the checked
+  // state back to the server value, losing checks that haven't been saved yet.
   const [openTool, setOpenTool] = useState<string | null>(null);
   const [configuredNow, setConfiguredNow] = useState<Record<string, boolean>>({});
   const [reloadSeq, setReloadSeq] = useState(0);
-  // 결과에 요청 키를 붙여 둔다 — 키가 지금 요청과 다르면 "불러오는 중" 이다. 효과 안에서
-  // 동기로 loading 을 되돌리지 않아도 profileBase 가 바뀌거나 다시 시도하면 곧바로 로딩이 된다.
+  // The requesting key is attached to the result — if the key differs from the current
+  // request, it's "loading." This makes loading happen right away when profileBase changes
+  // or a retry happens, without synchronously resetting loading inside the effect.
   const loadKey = `${profileBase}\n${reloadSeq}`;
   const [result, setResult] = useState<LoadResult | null>(null);
 
-  // 부모가 인라인 함수를 넘겨도 다시 불러오지 않도록 콜백은 ref 로 들고 있는다.
+  // Callbacks are kept in a ref so a refetch isn't triggered even if the parent passes a new inline function.
   const callbacks = useRef({ onLoaded: props.onLoaded, onUnsupported: props.onUnsupported });
   useEffect(() => {
     callbacks.current = { onLoaded: props.onLoaded, onUnsupported: props.onUnsupported };
@@ -101,13 +106,13 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
         ]);
         bodies = await Promise.all(responses.map(readBody));
       } catch {
-        // 네트워크 실패 — 보여 줄 코드가 없으니 일반 문구(loadFailed)로 떨어진다.
+        // A network failure — with no code to show, this falls back to the generic message (loadFailed).
         if (!cancelled) setResult({ key: loadKey, phase: "error", ...EMPTY });
         return;
       }
       if (cancelled) return;
-      // 게이트 실패(401·409·428 …)는 errorCode 를 싣지만, 싣지 않은 non-2xx 가 와도 빈 목록을
-      // "정상"으로 그리지 않는다 — 일반 문구로 떨어진다.
+      // A gate failure (401/409/428, ...) carries an errorCode, but even a non-2xx without
+      // one is never rendered as an "ok" empty list — it falls back to the generic message.
       const bare = responses.findIndex((r, i) => !r.ok && typeof bodies[i].errorCode !== "string");
       if (bare >= 0) {
         setResult({ key: loadKey, phase: "error", ...EMPTY });
@@ -194,7 +199,7 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
                       props.onEnabledToolsetsChange(
                         toggleToolset(enabledToolsets, ts.name, e.target.checked, toolsets),
                       );
-                      // `hermes tools` 처럼, 설정이 안 된 도구를 켜면 곧바로 프로바이더·키를 묻는다.
+                      // Like `hermes tools`, checking an unconfigured tool immediately asks for its provider/key.
                       if (e.target.checked && configurable && configured === false)
                         setOpenTool(ts.name);
                     }}
@@ -227,8 +232,9 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
         })}
       </fieldset>
 
-      {/* 도구별 제공자 설정은 목록 사이에 펼치지 않고 팝업으로 띄운다 — 제공자가 열 개 넘는 도구(TTS·웹)가
-          목록을 밀어내 어느 도구를 보던 중인지 잃게 했다. 한 번에 하나만 연다. */}
+      {/* Per-tool provider config is shown as a popup rather than expanded inline in the
+          list — a tool with 10+ providers (TTS, web) pushed the list around and lost track
+          of which tool was being viewed. Only one is open at a time. */}
       {openTool && (
         <Modal
           open
@@ -280,7 +286,7 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
                 </p>
                 {group.skills.map((skill) => (
                   <label key={skill.name} className="flex items-start gap-2 text-sm text-text">
-                    {/* 체크는 "켜짐" 을 뜻한다 — disabledSkills 의 반대. */}
+                    {/* Checked means "on" — the inverse of disabledSkills. */}
                     <input
                       type="checkbox"
                       className="mt-1"

@@ -1,14 +1,14 @@
 "use client";
 /**
- * 크론 화면 셋(목록·편집·갤러리)이 같이 쓰는 작은 조각 — 시간대 라벨(R18/E9)과
- * 오류 안내(R31/R32).
+ * Small pieces shared by the three cron screens (list/edit/gallery) — the timezone label
+ * (R18/E9) and error notice (R31/R32).
  */
 import { useT } from "@/lib/i18n";
 import { getWizardErrorMessage, isWizardErrorCode } from "@/components/hermes/wizard-error-codes";
 
 import type { CronErrorNotice as CronErrorNoticeValue } from "./cron-api";
 
-/** "Asia/Seoul 기준" — 없으면 "게이트웨이 시간대 미확인". */
+/** "Asia/Seoul (as of...)" — or "gateway timezone unknown" when there is none. */
 export function TimezoneLabel({ timezone }: { timezone: string | null | undefined }) {
   const t = useT();
   return (

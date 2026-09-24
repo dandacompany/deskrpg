@@ -37,9 +37,9 @@ function draftFrom(settings: BoardSettings): OrchestrationDraft {
 }
 
 /**
- * 보드 설정 — `board.default_workdir`(채널 소유자) 와 `orchestration`(게이트웨이 소유자).
- * `editable` 은 서버가 정한다 — 여기서는 그 값대로 입력을 잠글 뿐 권한을 다시 판단하지 않는다.
- * `orchestration` 이 null 이면 그 섹션 자체를 숨긴다.
+ * Board settings — `board.default_workdir` (channel owner) and `orchestration` (gateway owner).
+ * `editable` is decided by the server — this component just locks the inputs accordingly and
+ * does not re-judge permissions. If `orchestration` is null, that whole section is hidden.
  */
 export default function BoardSettingsPanel({ api, onClose }: BoardSettingsPanelProps) {
   const t = useT();

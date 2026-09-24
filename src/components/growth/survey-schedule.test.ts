@@ -9,13 +9,13 @@ import {
   shouldShowSurvey,
 } from "./survey-schedule";
 
-test("첫 설문은 맵 누적 사용 30분이 지나야 뜬다", () => {
+test("the first survey only shows up after 30 minutes of cumulative map usage", () => {
   const s = initialSurveyState();
   assert.equal(shouldShowSurvey({ ...s, usageMs: FIRST_SURVEY_AFTER_MS - 1 }, 0), false);
   assert.equal(shouldShowSurvey({ ...s, usageMs: FIRST_SURVEY_AFTER_MS }, 0), true);
 });
 
-test("보내면 설문 세트의 간격 뒤, 나중에는 7일 뒤, 다시 묻지 않기는 영영 뜨지 않는다", () => {
+test("sending waits for the survey set's interval, later waits 7 days, and never-ask-again never shows again", () => {
   const base = { ...initialSurveyState(), usageMs: FIRST_SURVEY_AFTER_MS };
   const sent = afterSurvey(base, "sent", 1000, 30);
   assert.equal(sent.consent, "granted");
@@ -31,7 +31,7 @@ test("보내면 설문 세트의 간격 뒤, 나중에는 7일 뒤, 다시 묻�
   assert.equal(shouldShowSurvey({ ...never, usageMs: 10 * FIRST_SURVEY_AFTER_MS }, 1e15), false);
 });
 
-test("한 번 동의한 뒤의 나중에는 동의를 유지한다", () => {
+test("choosing later after already granting consent keeps the consent", () => {
   const granted = {
     ...initialSurveyState(),
     consent: "granted" as const,

@@ -1,6 +1,7 @@
 /**
- * NPC 스킬 REST(`/api/channels/:id/npcs/:npcId/skills/**`)의 브라우저 쪽 호출. 실패는 서버의 `{code, message, …}` 를
- * 그대로 `SkillsApiError` 로 던진다 — 번역은 화면 몫이다.
+ * Browser-side calls to the NPC skills REST API (`/api/channels/:id/npcs/:npcId/skills/**`).
+ * Failures are thrown as-is as `SkillsApiError` from the server's `{code, message, …}` —
+ * translation is the UI's job.
  */
 import type {
   ArchivedSkill,
@@ -41,7 +42,7 @@ async function fail(res: Response): Promise<SkillsApiError> {
     const parsed: unknown = await res.json();
     if (parsed && typeof parsed === "object") body = parsed as Record<string, unknown>;
   } catch {
-    /* 본문 없음 */
+    /* no body */
   }
   return new SkillsApiError(
     res.status,

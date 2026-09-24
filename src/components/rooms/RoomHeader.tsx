@@ -7,7 +7,7 @@ import RosterAvatar from "../RosterAvatar";
 
 interface RoomHeaderProps {
   room: RoomSummary;
-  /** 내가 만든 방인가 — 이름 변경·삭제는 만든 사람만. */
+  /** Whether I created this room — only the creator can rename/delete it. */
   canManage: boolean;
   onBack: () => void;
   onClose: () => void;
@@ -15,15 +15,15 @@ interface RoomHeaderProps {
   onRename: (name: string) => void;
   onLeave: () => void;
   onDelete: () => void;
-  /** 참여자 외형 조회 — 있으면 방 이름 옆에 아바타를 겹쳐 쌓는다. */
+  /** Looks up a participant's appearance — if present, stacks avatars next to the room name. */
   avatarFor?: (who: { kind: "npc" | "user"; id?: string | null; name: string }) => unknown;
-  /** 방이 멤버를 따로 두지 않을 때(오피스 전체) 보여 줄 사람들 — 접속한 사람과 출근한 직원. */
+  /** People to show when the room has no separate member list (the whole office) — connected users and NPCs on shift. */
   fallbackParticipants?: Participant[];
 }
 
 type Participant = { kind: "npc" | "user"; id: string; name: string };
 
-/** 헤더에 그리는 아바타 수. 넘치면 `+N` 으로 접는다. */
+/** Number of avatars drawn in the header. Overflow collapses into `+N`. */
 const MAX_HEADER_AVATARS = 5;
 
 export default function RoomHeader({
@@ -43,7 +43,7 @@ export default function RoomHeader({
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(room.name);
 
-  // office 는 채널 그 자체다 — 초대·나가기·삭제가 성립하지 않는다.
+  // The office room is the channel itself — invite/leave/delete don't apply.
   const isOffice = room.kind === "office";
   const memberLine = room.members.map((member) => member.name).join(", ");
   const participants: Participant[] = room.members.length > 0 ? room.members : fallbackParticipants;

@@ -9,8 +9,9 @@ import { I18nProvider, type Locale } from "@/lib/i18n";
 import type { RoomMessage } from "@/lib/chat-rooms-policy";
 import RoomNoticeMessage from "./RoomNoticeMessage";
 
-// R29·R30: 알림 문장은 보는 사람의 로케일로 만든다. 네 로케일 모두 카드 제목·잡 이름이
-// 들어가고, 모르는 kind 는 content 폴백, notice 가 없으면 이 컴포넌트를 타지 않는다.
+// R29/R30: notice sentences are built in the viewer's locale. All four locales include the
+// card title/job name, an unknown kind falls back to content, and this component isn't
+// used when there's no notice.
 
 function message(overrides: Partial<RoomMessage>): RoomMessage {
   return {
@@ -47,7 +48,7 @@ async function render(
 
 const LOCALES: Locale[] = ["ko", "en", "ja", "zh"];
 
-// 로케일별로 문장이 실제로 달라야 한다 — 한 언어로 고정돼 있으면 잡는다.
+// The sentence must actually differ per locale — this catches it if it's stuck in one language.
 const CARD_DONE_HINT: Record<Locale, string> = {
   ko: "완료했습니다",
   en: "Finished",
@@ -61,7 +62,7 @@ const CARD_BLOCKED_HINT: Record<Locale, string> = {
   zh: "阻塞",
 };
 
-test("card_done — 네 로케일 모두 카드 제목이 든 문장 + 카드 열기 링크 (R29)", async () => {
+test("card_done — all four locales include the card title + an open-card link (R29)", async () => {
   for (const locale of LOCALES) {
     const opened: string[] = [];
     const { host, cleanup } = await render(
@@ -92,7 +93,7 @@ test("card_done — 네 로케일 모두 카드 제목이 든 문장 + 카드 �
   }
 });
 
-test("card_blocked — 네 로케일 모두 막힘 문장 (R29)", async () => {
+test("card_blocked — all four locales show a blocked sentence (R29)", async () => {
   for (const locale of LOCALES) {
     const { host, cleanup } = await render(
       <RoomNoticeMessage
@@ -130,7 +131,7 @@ const CARD_REVIEW_HINT: Record<string, string> = {
   zh: "确认",
 };
 
-test("card_review — 네 로케일 모두 검토 요청 문장 + 카드 열기 링크", async () => {
+test("card_review — all four locales show a review-request sentence + an open-card link", async () => {
   for (const locale of LOCALES) {
     const opened: string[] = [];
     const { host, cleanup } = await render(
@@ -163,7 +164,7 @@ test("card_review — 네 로케일 모두 검토 요청 문장 + 카드 열기 
   }
 });
 
-test("approval_requested — 결정 전에는 버튼, 결정 뒤에는 결과", async () => {
+test("approval_requested — a button before the decision, the result after", async () => {
   for (const locale of LOCALES) {
     const opened: string[] = [];
     const pending = await render(
@@ -217,7 +218,7 @@ test("approval_requested — 결정 전에는 버튼, 결정 뒤에는 결과", 
   }
 });
 
-test("meeting_outcome — 등록 전에는 '프로젝트로 등록' 버튼, 등록 뒤에는 결과", async () => {
+test("meeting_outcome — a 'register as project' button before registering, the result after", async () => {
   for (const locale of LOCALES) {
     const opened: string[] = [];
     const notice = {
@@ -262,14 +263,14 @@ test("meeting_outcome — 등록 전에는 '프로젝트로 등록' 버튼, 등�
       Boolean(resolved.host.querySelector("[data-meeting-outcome-resolved]")),
       `${locale}: 등록 결과 줄이 없다`,
     );
-    // 등록된 뒤에도 회의록은 열 수 있다 — 다만 "등록" 을 다시 권하지는 않는다.
+    // The minutes can still be opened after registering — it just no longer suggests "register" again.
     const after = resolved.host.querySelector("[data-meeting-outcome-open]");
     assert.equal(after?.getAttribute("data-meeting-outcome-open"), "view", `${locale}`);
     await resolved.cleanup();
   }
 });
 
-test("meeting_outcome — 열 길이 없으면 버튼을 그리지 않는다", async () => {
+test("meeting_outcome — renders no button when there is nothing to open", async () => {
   const view = await render(
     <RoomNoticeMessage
       message={message({
@@ -288,7 +289,7 @@ test("meeting_outcome — 열 길이 없으면 버튼을 그리지 않는다", a
   await view.cleanup();
 });
 
-test("cron_result — 헤더에 잡 이름, 본문은 content 그대로, error 면 실패 배지, 이력 열기 (R30)", async () => {
+test("cron_result — job name in the header, content as-is for the body, a failure badge on error, and an open-history link (R30)", async () => {
   for (const locale of LOCALES) {
     const opened: string[] = [];
     const { host, cleanup } = await render(
@@ -324,7 +325,7 @@ test("cron_result — 헤더에 잡 이름, 본문은 content 그대로, error �
   }
 });
 
-test("cron_result ok — 실패 배지가 없다", async () => {
+test("cron_result ok — no failure badge", async () => {
   const { host, cleanup } = await render(
     <RoomNoticeMessage
       message={message({
@@ -339,12 +340,12 @@ test("cron_result ok — 실패 배지가 없다", async () => {
   await cleanup();
 });
 
-test("알 수 없는 notice.kind — content 폴백, 링크 없음", async () => {
+test("an unknown notice.kind — falls back to content, no link", async () => {
   const { host, cleanup } = await render(
     <RoomNoticeMessage
       message={message({
         content: "raw fallback",
-        // 서버가 나중에 더한 kind 를 옛 클라이언트가 만나는 경우.
+        // The case of an old client encountering a kind the server added later.
         notice: { kind: "something_new" } as unknown as RoomMessage["notice"],
       })}
       onOpenCard={() => assert.fail("호출되면 안 된다")}

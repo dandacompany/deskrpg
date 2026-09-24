@@ -22,14 +22,14 @@ function sqlTags(): string[] {
 }
 
 /**
- * Drizzle 마이그레이터는 `drizzle/` 디렉토리를 스캔하지 않는다 — `meta/_journal.json`
- * 만 읽는다. 그래서 SQL 파일을 손으로 추가하면(drizzle-kit generate 없이) 그 파일은
- * **존재하는데도 실행되지 않고**, 마이그레이터는 자기가 아는 것을 다 했으므로
- * "applied successfully" 를 보고한다.
+ * The Drizzle migrator does not scan the `drizzle/` directory — it only reads
+ * `meta/_journal.json`. So if a SQL file is added by hand (without drizzle-kit generate), that
+ * file **exists but never runs**, and the migrator reports "applied successfully" because it
+ * already did everything it knows about.
  *
- * 실제로 0004·0005 가 그렇게 넉 달 가까이 누락됐고, 스테이징에서 앱이
- * `column "local_discovery_opted_in_at" does not exist` 로 500 을 냈다. 조용한 실패가
- * 아니라 **성공을 보고하는 실패**라 배포 로그로는 알 수 없었다.
+ * In practice, 0004/0005 went missing this way for close to four months, and staging started
+ * returning 500s with `column "local_discovery_opted_in_at" does not exist`. This isn't a silent
+ * failure — it's a **failure that reports success** — so the deploy logs couldn't reveal it.
  */
 test("every migration file is listed in the drizzle journal", () => {
   const missing = sqlTags().filter((t) => !journalTags().includes(t));
@@ -47,7 +47,7 @@ test("the journal never names a migration file that is missing", () => {
 });
 
 test("journal entries stay ordered by idx and by time", () => {
-  // 마이그레이터는 이 순서대로 적용한다. 어긋나면 나중 것이 먼저 돌아 스키마가 꼬인다.
+  // The migrator applies entries in this order. If it's out of order, a later one runs first and the schema gets tangled.
   const entries = JSON.parse(readFileSync(path.join(drizzleDir, "meta", "_journal.json"), "utf8"))
     .entries as { idx: number; when: number; tag: string }[];
 
@@ -70,19 +70,20 @@ function snapshotIdxs(): number[] {
 }
 
 /**
- * `drizzle-kit generate` 는 **마지막 스냅샷**과 현재 `schema.ts` 의 차분을 뱉는다.
- * 손으로 쓴 SQL 은 스냅샷을 남기지 않으므로, 그런 마이그레이션이 쌓이면 스냅샷이
- * 뒤처지고 다음 `generate` 가 **이미 적용된 변경을 통째로 다시** 만들어 낸다.
+ * `drizzle-kit generate` produces the diff between the **last snapshot** and the current
+ * `schema.ts`. Hand-written SQL doesn't leave a snapshot behind, so as those migrations pile up
+ * the snapshot falls behind, and the next `generate` **regenerates changes that were already
+ * applied**, in full.
  *
- * 실측(2026-09-07): 스냅샷이 0003 에서 멈춘 상태로 `generate` 를 돌렸더니
- * `ALTER TABLE "npcs" DROP COLUMN "openclaw_config";` 가 나왔다. 0005 는 같은 삭제를
- * 하되 **그 전에** 페르소나를 `agent_config` 로 옮기고 레거시 행을 백업한다.
- * 생성된 쪽에는 그 단계도 `IF EXISTS` 도 없다 — 읽지 않고 적용하면 페르소나가 사라진다.
+ * Live evidence (2026-09-07): with the snapshot stuck at 0003, running `generate` produced
+ * `ALTER TABLE "npcs" DROP COLUMN "openclaw_config";`. 0005 does the same drop, but **first**
+ * moves the persona to `agent_config` and backs up the legacy row. The generated version had
+ * neither that step nor `IF EXISTS` — applying it without reading it would wipe out the persona.
  *
- * 손으로 SQL 을 쓰는 것 자체는 막지 않는다. 다만 **마지막 마이그레이션에는 반드시
- * 짝이 되는 스냅샷이 있어야** `generate` 가 거기서부터 차분을 잡는다.
+ * This doesn't forbid writing SQL by hand. It just means **the last migration must always have
+ * a matching snapshot**, so `generate` picks up the diff from there.
  */
-test("마지막 마이그레이션에 짝이 되는 스냅샷이 있다", () => {
+test("the last migration has a matching snapshot", () => {
   const lastMigration = journalTags().length - 1;
   const snapshots = snapshotIdxs();
   assert.ok(
@@ -94,15 +95,17 @@ test("마지막 마이그레이션에 짝이 되는 스냅샷이 있다", () => 
 });
 
 /**
- * "마지막 마이그레이션에 짝이 되는 스냅샷이 있다" 는 스냅샷 *파일이 존재하는지* 만 본다 —
- * `drizzle-kit generate --custom` 은 새 SQL 은 손으로 쓰고 스냅샷만 자동 생성하게 해 주는데,
- * 그 스냅샷은 (custom 이므로 diff 할 스키마 변경이 없다고 보고) **직전 스냅샷을 그대로 복사**한다.
- * 즉 새 테이블을 스키마에 추가하고 SQL 도 손으로 잘 썼어도, `--custom` 으로 스냅샷을 만들면
- * 파일은 있지만 내용이 이전 것과 같아 이 시점부터 `drizzle-kit generate` 를 다시 돌리는 사람은
- * "아직 반영 안 된 변경"으로 오인해 이미 존재하는 테이블을 다시 만드는 SQL 을 뱉는다.
- * (2026-09-10 실측: 0010 스냅샷이 이 방식으로 만들어져 chat_rooms 3 테이블이 빠져 있었다.)
+ * "the last migration has a matching snapshot" only checks that the snapshot *file* exists —
+ * `drizzle-kit generate --custom` lets you write the new SQL by hand while it auto-generates
+ * only the snapshot, and that snapshot (since custom means it sees no schema change to diff)
+ * **just copies the previous snapshot as-is**. So even if you added a new table to the schema
+ * and wrote the SQL by hand correctly, generating the snapshot with `--custom` leaves a file
+ * whose contents match the old one — anyone who runs `drizzle-kit generate` again from this
+ * point mistakes it for an "unapplied change" and emits SQL that recreates a table that already
+ * exists. (Live evidence, 2026-09-10: the 0010 snapshot was made this way and was missing the
+ * 3 chat_rooms tables.)
  */
-test("최신 스냅샷의 테이블 이름이 schema.ts 가 export 하는 테이블과 같다", () => {
+test("the latest snapshot's table names match what schema.ts exports", () => {
   const snapshots = snapshotIdxs();
   const lastIdx = snapshots[snapshots.length - 1];
   const padded = String(lastIdx).padStart(4, "0");

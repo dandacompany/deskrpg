@@ -16,16 +16,17 @@ import {
 const STORAGE_PREFIX = "deskrpg.kanban.view.";
 
 /**
- * 뷰 상태를 들고, 카드 목록을 그 상태대로 접어 준다.
+ * Holds view state and folds the task list to match it.
  *
- * 저장은 채널별 `localStorage` 다 — 보는 방식은 그 사람의 취향이지 서버의 사실이 아니다.
- * 읽기는 언제나 실패할 수 있다고 보고(사생활 보호 창·차단된 저장소) 기본값으로 떨어진다.
+ * Persisted per-channel in `localStorage` — how a person views things is their preference, not a
+ * server fact. Reads are assumed to be able to fail at any time (private browsing, blocked
+ * storage) and fall back to defaults.
  */
 export function useProjectViewState(channelId: string) {
   const [state, setState] = useState<ProjectViewState>(DEFAULT_VIEW_STATE);
 
-  // 채널이 바뀌면 그 채널의 저장값을 읽는다. 첫 렌더에서 읽지 않는 것은 서버 렌더와
-  // 클라이언트 렌더가 어긋나지 않게 하기 위해서다.
+  // When the channel changes, read that channel's stored value. Not reading it on the first
+  // render keeps server rendering and client rendering from diverging.
   useEffect(() => {
     setState(readStored(channelId));
   }, [channelId]);
@@ -73,10 +74,11 @@ export function useProjectViewState(channelId: string) {
 }
 
 /**
- * 카드 목록을 뷰 상태대로 거르고·정렬하고·묶는다.
+ * Filters, sorts, and groups the task list according to view state.
  *
- * 상태 훅과 나눈 이유는 순서다 — `includeArchived` 는 보드를 **조회하기 전에** 필요하고,
- * 묶기는 응답이 온 **뒤에야** 할 수 있다. 한 훅에 묶으면 보드 조회가 자기 결과를 기다리게 된다.
+ * Split from the state hook because of ordering — `includeArchived` is needed **before** fetching
+ * the board, while grouping can only happen **after** the response arrives. Combining them into
+ * one hook would make the board fetch wait on its own result.
  */
 export function useTaskGroups(
   tasks: readonly KanbanTask[],
@@ -96,7 +98,7 @@ function readStored(channelId: string): ProjectViewState {
     const raw = globalThis.localStorage?.getItem(STORAGE_PREFIX + channelId);
     return normalizeViewState(raw ? JSON.parse(raw) : null);
   } catch {
-    // 저장소가 막혀 있거나 값이 깨졌다. 보는 방식일 뿐이므로 조용히 기본값으로 간다.
+    // Storage is blocked or the value is corrupted. It's only a view preference, so fall back to defaults silently.
     return DEFAULT_VIEW_STATE;
   }
 }
@@ -105,6 +107,6 @@ function writeStored(channelId: string, state: ProjectViewState): void {
   try {
     globalThis.localStorage?.setItem(STORAGE_PREFIX + channelId, JSON.stringify(state));
   } catch {
-    // 저장에 실패해도 이번 세션의 화면은 그대로 동작한다.
+    // Even if the write fails, this session's screen keeps working as-is.
   }
 }

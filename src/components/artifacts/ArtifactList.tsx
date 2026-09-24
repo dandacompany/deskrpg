@@ -37,7 +37,7 @@ export type ArtifactFilter = {
   q?: string;
 };
 
-/** 탭 순서 — 전체 다음 미디어·파일·링크(`ARTIFACT_CATEGORIES` 선언 순). */
+/** Tab order — media/file/link after "all" (following `ARTIFACT_CATEGORIES` declaration order). */
 const TAB_CATEGORIES = Object.keys(ARTIFACT_CATEGORIES) as ArtifactCategory[];
 
 export type ArtifactListNpc = { profileName: string; npcName: string; npcId: string };
@@ -52,10 +52,10 @@ const KIND_ICONS: Record<Exclude<ArtifactKind, "link">, LucideIcon> = {
   file: File,
 };
 
-/** 결과물 종류 아이콘 — 목록 행과 칸반 카드의 결과물 섹션이 같이 쓴다. */
+/** Artifact-kind icon — shared by list rows and the kanban card's artifacts section. */
 export function KindIcon({ artifact }: { artifact: ArtifactSummary }) {
   if (artifact.kind === "link") {
-    // 목록 요약에는 URL 이 없다 — 제목·요약이 URL 이면 그걸로 브랜드를 고르고, 아니면 Link2.
+    // The list summary has no URL — if the title/summary is a URL, use it to pick the brand; otherwise Link2.
     const url = safeHttpUrl(artifact.summary ?? "") ?? safeHttpUrl(artifact.title);
     return <LinkIcon url={url} className="w-4 h-4 flex-shrink-0 text-text-secondary" />;
   }
@@ -75,18 +75,19 @@ export type ArtifactListProps = {
   onLoadMore(): void;
   thumbnailUrl(artifact: ArtifactSummary): string;
   /**
-   * 아티팩트 뒤에 잇는 카드 첨부(이미 걸러진 것). 워커가 만든 파일은 카드가 끝나면 scratch 와
-   * 함께 지워지고 첨부만 남는다 — 이게 없으면 끝난 카드의 결과물이 어디에도 안 보인다.
+   * Card attachments (already filtered) appended after artifacts. Files the worker created are
+   * deleted along with scratch once the card finishes, leaving only the attachment — without
+   * this, a finished card's output would be invisible everywhere.
    */
   cardAttachments?: GalleryAttachment[];
-  /** 플러그인이 보드 첨부 목록을 모르면 false — 왜 첨부가 없는지 한 줄 알린다. */
+  /** False when the plugin doesn't know the board's attachment list — shows a one-line reason there are none. */
   cardAttachmentsSupported?: boolean | null;
   cardAttachmentsHasMore?: boolean;
   onLoadMoreCardAttachments?(): void;
   cardAttachmentUrl?(attachment: GalleryAttachment): string;
 };
 
-/** 종류 탭·출처·NPC·검색 + 행 목록(이미지 탭은 썸네일 격자와 확대 보기). */
+/** Kind tabs/source/NPC/search + row list (the image tab uses a thumbnail grid and zoom view). */
 export default function ArtifactList({
   items,
   filter,
@@ -108,8 +109,8 @@ export default function ArtifactList({
   const { locale } = useLocale();
   const [query, setQuery] = useState(filter.q ?? "");
   const [zoomed, setZoomed] = useState<ArtifactSummary | null>(null);
-  // 확대 보기의 ESC 는 모달을 닫지 않고 확대만 푼다 — document 가 window 보다 먼저 받으므로
-  // 여기서 preventDefault 하면 모달(window 리스너)이 건너뛴다.
+  // Escape in the zoom view only exits the zoom, not the modal — since document gets the event
+  // before window, calling preventDefault here makes the modal's (window listener) skip it.
   useEffect(() => {
     if (!zoomed) return;
     const onKey = (e: KeyboardEvent) => {
@@ -218,7 +219,7 @@ export default function ArtifactList({
                   />
                 </button>
               ) : (
-                // 오디오·비디오는 썸네일이 없다 — 아이콘 타일 + 제목.
+                // Audio/video have no thumbnail — icon tile + title.
                 <button
                   key={a.id}
                   type="button"

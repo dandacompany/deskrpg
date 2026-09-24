@@ -66,7 +66,7 @@ test("host_busy uses localized retry guidance", async () => {
   }
 });
 
-test("새 오류 코드는 네 언어 모두에서 원시 코드 없이 안내 문구를 돌려준다", async () => {
+test("a new error code returns guidance text in all four languages without the raw code", async () => {
   const { setupCopy, setupError } = await import("./setup-copy");
   for (const code of [
     "hermes_version_unsupported",
@@ -79,14 +79,14 @@ test("새 오류 코드는 네 언어 모두에서 원시 코드 없이 안내 �
       const message = setupHostError(locale, code);
       assert.ok(message && message.length > 20, `${locale}: ${code}`);
       assert.ok(!message.includes(code));
-      // 호스트 안내가 있으므로 일반 폴백보다 구체적이어야 한다.
+      // Must be more specific than the generic fallback, since host guidance exists.
       assert.notEqual(message, setupError(setupCopy[locale], code));
     }
   }
   assert.match(setupHostError("ko", "hermes_version_unsupported")!, /0\.21\.1/);
 });
 
-test("새 진행 단계는 네 언어 모두 고유한 라벨을 가진다", async () => {
+test("new progress steps have a unique label in all four languages", async () => {
   const { setupCopy, setupStep } = await import("./setup-copy");
   for (const locale of ["ko", "en", "ja", "zh"] as const) {
     const copy = setupCopy[locale];
@@ -102,7 +102,7 @@ test("새 진행 단계는 네 언어 모두 고유한 라벨을 가진다", asy
   }
 });
 
-test("계약 2 의 새 오류 코드도 네 언어 모두 원시 코드 없이 안내를 돌려준다", async () => {
+test("contract 2's new error codes also return guidance in all four languages without the raw code", async () => {
   const { setupCopy, setupError } = await import("./setup-copy");
   for (const code of [
     "profile_name_invalid",
@@ -125,7 +125,7 @@ test("계약 2 의 새 오류 코드도 네 언어 모두 원시 코드 없이 �
   }
 });
 
-test("경고는 네 언어에서 안내를 돌려주고, 모르는 코드는 화면에 그리지 않는다", async () => {
+test("warnings return guidance in all four languages, and an unknown code is not rendered", async () => {
   const { setupWarning } = await import("./setup-copy");
   for (const code of ["profile_not_served", "model_provider_required"]) {
     for (const locale of ["ko", "en", "ja", "zh"] as const) {
@@ -135,12 +135,12 @@ test("경고는 네 언어에서 안내를 돌려주고, 모르는 코드는 화
     }
   }
   assert.match(setupWarning("ko", "model_provider_required")!, /hermes model/);
-  // 화이트리스트 밖은 undefined — 원시 코드나 호스트 출력이 새면 안 된다.
+  // Anything off the whitelist is undefined — the raw code or host output must never leak.
   assert.equal(setupWarning("ko", "raw subprocess tail"), undefined);
   assert.equal(setupWarning("ko", undefined), undefined);
 });
 
-test("계약 2 의 새 진행 단계는 네 언어 모두 고유한 라벨을 가진다", async () => {
+test("contract 2's new progress steps have a unique label in all four languages", async () => {
   const { setupCopy, setupStep } = await import("./setup-copy");
   for (const locale of ["ko", "en", "ja", "zh"] as const) {
     const copy = setupCopy[locale];
@@ -152,7 +152,7 @@ test("계약 2 의 새 진행 단계는 네 언어 모두 고유한 라벨을 �
   }
 });
 
-test("설치 이정표는 네 로케일 모두에 있고 모르는 코드는 아무것도 돌려주지 않는다", () => {
+test("install milestones exist in all four locales, and an unknown code returns nothing", () => {
   for (const code of ["deps", "clone", "venv", "node_modules", "skills", "done"]) {
     for (const locale of ["ko", "en", "ja", "zh"] as const) {
       const message = setupProgress(locale, code);
@@ -162,7 +162,7 @@ test("설치 이정표는 네 로케일 모두에 있고 모르는 코드는 아
   for (const code of [undefined, null, 42, "", "raw output line", "installing python 3.12"])
     assert.equal(setupProgress("ko", code), undefined);
 });
-test("모델 확인 단계는 네 로케일 모두에서 원시 코드가 아닌 문구로 나온다", () => {
+test("the model-check step shows as text, not the raw code, in all four locales", () => {
   for (const locale of ["ko", "en", "ja", "zh"] as const) {
     const label = setupStep(setupCopy[locale], "checking_model");
     assert.ok(label && label.length > 2, locale);
@@ -171,7 +171,7 @@ test("모델 확인 단계는 네 로케일 모두에서 원시 코드가 아닌
   }
 });
 
-test("갱신 전용 오류도 네 언어에서 이유를 말한다 — 원시 코드를 화면에 내보내지 않는다", async () => {
+test("update-only errors also state a reason in all four languages — never exposing the raw code on screen", async () => {
   for (const code of ["plugin_update_unsupported_host", "plugin_update_candidate_not_found"]) {
     for (const locale of ["ko", "en", "ja", "zh"] as const) {
       const message = setupHostError(locale, code);

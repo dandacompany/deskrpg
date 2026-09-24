@@ -1,7 +1,7 @@
-// 승인 레코드(0016)의 SQLite 부트스트랩 검증.
-// 빈 DB 는 기본 스키마만으로 갖춰지고, 이 변경 이전에 만들어진 DB 는 같은 기본 스키마를 다시
-// 태워 테이블이 더해진다(`CREATE TABLE IF NOT EXISTS`). 두 경로가 갈리면 한쪽 사용자만
-// "no such table: approvals" 를 본다.
+// SQLite bootstrap verification for the approvals record (0016).
+// An empty DB gets it from the base schema alone, and a DB created before this change
+// gets the table added by re-running the same base schema (`CREATE TABLE IF NOT EXISTS`).
+// If the two paths diverge, only one side of users sees "no such table: approvals".
 import assert from "node:assert/strict";
 import test from "node:test";
 import Database from "better-sqlite3";
@@ -17,7 +17,7 @@ function tableExists(db: Database.Database, name: string): boolean {
   );
 }
 
-/** 이 변경 이전 기본 스키마 — 새 테이블 블록을 걷어낸 모양. */
+/** The base schema before this change — with the new table block stripped out. */
 function legacyBaseSchema(): string {
   const start = SQLITE_BASE_SCHEMA.indexOf("    CREATE TABLE IF NOT EXISTS approvals (");
   const end = SQLITE_BASE_SCHEMA.indexOf("    CREATE TABLE IF NOT EXISTS meeting_minutes");
@@ -25,14 +25,14 @@ function legacyBaseSchema(): string {
   return SQLITE_BASE_SCHEMA.slice(0, start) + SQLITE_BASE_SCHEMA.slice(end);
 }
 
-test("빈 DB 는 기본 스키마만으로 승인 테이블을 갖춘다", () => {
+test("an empty DB gets the approvals table from the base schema alone", () => {
   const db = new Database(":memory:");
   db.exec(SQLITE_BASE_SCHEMA);
   for (const t of NEW_TABLES) assert.ok(tableExists(db, t), t);
   db.close();
 });
 
-test("이 변경 이전 DB 도 기본 스키마를 다시 태우면 테이블이 더해진다", () => {
+test("a DB from before this change also gets the table added by re-running the base schema", () => {
   const db = new Database(":memory:");
   db.exec(legacyBaseSchema());
   for (const t of NEW_TABLES)
@@ -42,7 +42,7 @@ test("이 변경 이전 DB 도 기본 스키마를 다시 태우면 테이블이
   db.close();
 });
 
-test("기존 행이 있는 DB 에 다시 태워도 데이터가 남는다", () => {
+test("re-running against a DB with existing rows keeps the data", () => {
   const db = new Database(":memory:");
   db.exec(legacyBaseSchema());
   db.prepare(
@@ -62,8 +62,8 @@ test("기존 행이 있는 DB 에 다시 태워도 데이터가 남는다", () =
   db.close();
 });
 
-test("승인 1건에 카드 N개가 달리고, 대상 0행도 허용된다", () => {
-  // 덩어리 1 의 '프로젝트로 등록할까요?' 는 대상이 카드가 아니라 0행으로 들어온다.
+test("one approval can have N cards attached, and 0 target rows is also allowed", () => {
+  // Chunk 1's '프로젝트로 등록할까요?' has no card targets, so it comes in with 0 rows.
   const db = new Database(":memory:");
   db.exec(SQLITE_BASE_SCHEMA);
   db.prepare(
@@ -119,7 +119,7 @@ test("승인 1건에 카드 N개가 달리고, 대상 0행도 허용된다", () 
   db.close();
 });
 
-test("승인을 지우면 대상도 함께 지워진다", () => {
+test("deleting an approval also deletes its targets", () => {
   const db = new Database(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(SQLITE_BASE_SCHEMA);

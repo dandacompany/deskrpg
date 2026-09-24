@@ -14,23 +14,24 @@ export type SkillDetailPaneProps = {
   name: string;
   canManage: boolean;
   onChanged(): void;
-  /** 보관·삭제로 이 스킬이 목록에서 빠졌다 — 부모가 선택을 비운다. */
+  /** Archiving or deleting removed this skill from the list — the parent clears its selection. */
   onRemoved?(): void;
-  /** Hub 삭제 작업 폴링 간격(ms). 테스트에서 줄인다. */
+  /** Poll interval (ms) for the Hub uninstall job. Shortened in tests. */
   pollIntervalMs?: number;
 };
 
 type Confirm = "archive" | "uninstall" | null;
 
-/** 잠긴 파일의 사유 — 실행 코드(`scripts/`·`assets/`)인지, 원산지 때문에 읽기 전용인지. */
+/** Why a file is locked — executable code (`scripts/`·`assets/`), or read-only due to its origin. */
 const lockReason = (path: string) =>
   path.startsWith("scripts/") || path.startsWith("assets/")
     ? "skills.file.locked"
     : "skills.file.readOnly";
 
 /**
- * 스킬 한 개의 상세 — 원산지·자동 정리 여부, 파일 트리(잠금 표시), 편집기, 고정·보관·삭제.
- * 저장은 읽을 때 받은 해시를 `baseHash` 로 싣고, 409 `skill_changed` 면 편집 내용을 그대로 둔 채 다시 불러오기를 권한다.
+ * Detail view for a single skill — origin / curator-managed status, file tree (with lock marks),
+ * editor, and pin / archive / delete. Saving carries the hash received at read time as `baseHash`;
+ * on a 409 `skill_changed` it keeps the edited content as-is and offers a reload.
  */
 export default function SkillDetailPane({
   api,
@@ -50,16 +51,16 @@ export default function SkillDetailPane({
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<Confirm>(null);
-  // 파일을 빠르게 바꿔 누를 때 늦게 온 옛 파일이 편집기를 덮지 않게 한다.
+  // Prevents a stale, late-arriving file response from overwriting the editor when switching files fast.
   const fileSeq = useRef(0);
-  // Hub 삭제는 설치처럼 202 작업이다 — 끝나야 목록에서 빠진다.
+  // Hub uninstall is a 202 job like install — it must finish before it drops off the list.
   const uninstallJob = useSkillJob(api, { intervalMs: pollIntervalMs });
   const uninstallDone = uninstallJob.state === "succeeded" || uninstallJob.state === "unknown";
   useEffect(() => {
     if (!uninstallDone) return;
     onChanged();
     onRemoved?.();
-    // 부모 콜백은 매 렌더 새로 만들어진다 — 작업이 끝날 때 한 번만 부른다.
+    // The parent callback is recreated every render — call it only once, when the job finishes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uninstallDone]);
 

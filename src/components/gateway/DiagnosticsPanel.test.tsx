@@ -44,7 +44,7 @@ async function fixture(handler: typeof fetch) {
   };
 }
 
-test("404 를 받으면 진단 영역을 아예 그리지 않는다", async () => {
+test("renders nothing at all when it gets a 404", async () => {
   const { host, cleanup } = await fixture(
     async () => new Response(JSON.stringify({ errorCode: "not_found" }), { status: 404 }),
   );
@@ -56,7 +56,7 @@ test("404 를 받으면 진단 영역을 아예 그리지 않는다", async () =
   }
 });
 
-test("관리자에게는 환경·DB·호스트 스위치·게이트웨이가 접이식으로 보인다", async () => {
+test("an admin sees environment/DB/host switches/gateways as a collapsible section", async () => {
   const { host, cleanup } = await fixture(async () => new Response(JSON.stringify(report)));
   try {
     const panel = host.querySelector("[data-testid='diagnostics-panel']");
@@ -74,7 +74,7 @@ test("관리자에게는 환경·DB·호스트 스위치·게이트웨이가 접
   }
 });
 
-test("조회가 실패하면 실패 문구만 보여 준다", async () => {
+test("shows only the failure message when the fetch fails", async () => {
   const { host, cleanup } = await fixture(async () => {
     throw new Error("network down");
   });

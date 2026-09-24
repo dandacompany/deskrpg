@@ -25,7 +25,7 @@ export function BugReportModal({
 }) {
   const t = useT();
   useEscapeClose(onClose);
-  // 모달은 사용자가 연 뒤에만 그려지므로 여기서 설치 ID 를 만들어도 서버 렌더와 어긋나지 않는다.
+  // The modal only renders after the user opens it, so creating the install ID here does not conflict with server rendering.
   const [installId] = useState(() => getInstallId(browserStorage()));
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");

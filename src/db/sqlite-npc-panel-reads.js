@@ -1,6 +1,7 @@
-// 직원 패널의 탭별 열람 상태 테이블. 두 부트스트랩(src/db/index.ts, server-db.js)이 같이
-// 부른다 — 한쪽에만 넣으면 그 경로가 여는 DB 에서만 조용히 "no such table" 이 난다
-// (sqlite-kanban-cron-bookkeeping.js 와 같은 이유로 공용 모듈에 둔다).
+// Per-tab read state table for the staff panel. Called by both bootstrap paths
+// (src/db/index.ts, server-db.js) — adding it to only one silently produces "no such table"
+// only on the DB that path opens (kept as a shared module for the same reason as
+// sqlite-kanban-cron-bookkeeping.js).
 "use strict";
 
 const NPC_PANEL_READS_TABLE = `
@@ -14,7 +15,7 @@ const NPC_PANEL_READS_TABLE = `
   );
 `;
 
-/** 테이블을 만든다. 멱등 — 매 부팅마다 돌아도 된다. */
+/** Creates the table. Idempotent — fine to run on every boot. */
 function ensureNpcPanelReads(sqlite) {
   sqlite.exec(NPC_PANEL_READS_TABLE);
 }

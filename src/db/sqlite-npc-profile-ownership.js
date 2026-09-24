@@ -1,6 +1,6 @@
-// SQLite 는 ALTER 로 NOT NULL·FK 를 못 바꾼다. npcs 를 새 정의로 다시 만든다.
-// PostgreSQL 쪽 같은 작업은 drizzle/0008_npc_profile_ownership.sql 에 있다. 두 파일은
-// 같은 순서를 지킨다: 옮기고 → 백업하고 → 지우고 → 제약.
+// SQLite can't change NOT NULL/FK via ALTER, so npcs is rebuilt with the new definition.
+// The same work on the PostgreSQL side is in drizzle/0008_npc_profile_ownership.sql. Both
+// files keep the same order: move → back up → delete → constrain.
 "use strict";
 
 function columns(sqlite, table) {
@@ -16,9 +16,10 @@ function tableExists(sqlite, table) {
   );
 }
 
-// 이관 쿼리가 실제로 읽고 쓰는 열들. 이 중 하나라도 없으면 npcs 는 아직 "진짜 레거시"
-// 모양이 아니다 — RBAC 테스트 등이 쓰는 최소 픽스처(id, channel_id 뿐인 npcs)가 그렇다.
-// 그런 DB 는 sqlite-base-schema.js 가 새 정의로 만들 몫이라 여기서는 손대지 않는다.
+// Columns the migration query actually reads and writes. If even one is missing, npcs isn't
+// really in the "legacy" shape yet — a minimal fixture used by things like RBAC tests
+// (npcs with just id, channel_id) is like that. Such a DB is left untouched here; it's
+// sqlite-base-schema.js's job to create it with the new definition.
 const LEGACY_NPC_COLUMNS = [
   "appearance",
   "hermes_profile_id",
@@ -27,16 +28,16 @@ const LEGACY_NPC_COLUMNS = [
   "updated_at",
 ];
 
-// `npcs.id` 를 ON DELETE CASCADE 로 참조하는 테이블들. PostgreSQL 0008 의 4a·5a 단계와
-// 같은 이름의 백업 테이블에 담는다. 최소 픽스처에는 없을 수 있으니 존재하는 것만 훑는다.
-// (0008 이 백업하던 옛 태스크·보고 테이블은 2026-04 태스크 시스템 폐기와 함께 지워졌다 —
-// 0012 / sqlite-legacy-tasks-drop.js.)
+// Tables that reference `npcs.id` with ON DELETE CASCADE. Backed up into the same-named
+// backup tables as PostgreSQL 0008's steps 4a/5a. A minimal fixture may not have them, so
+// only existing tables are scanned. (The old task/report tables that 0008 used to back up
+// were dropped along with the 2026-04 task system retirement — 0012 / sqlite-legacy-tasks-drop.js.)
 const CASCADING_CHILD_TABLES = [
   ["chat_messages", "npcs_removed_chat_messages_backup"],
   ["npc_sessions", "npcs_removed_npc_sessions_backup"],
 ];
 
-/** 곧 지워질 NPC 집합(`sourceBackup` 의 id)에 매달린 자식 행을 백업 테이블로 옮긴다. */
+/** Moves child rows hanging off the soon-to-be-deleted NPC set (`sourceBackup`'s ids) into the backup table. */
 function backupCascadingChildren(sqlite, sourceBackup) {
   for (const [child, backup] of CASCADING_CHILD_TABLES) {
     if (!tableExists(sqlite, child)) continue;
@@ -50,21 +51,21 @@ function backupCascadingChildren(sqlite, sourceBackup) {
 }
 
 function migrateNpcsToProfileOwnership(sqlite) {
-  // npcs 나 hermes_profiles 가 아직 없는 DB(최소 픽스처, 신규 부트스트랩 이전 단계)에는
-  // 옮길 것도 재생성할 것도 없다 — sqlite-base-schema.js 가 새 정의로 만든다.
+  // A DB where npcs or hermes_profiles doesn't exist yet (minimal fixture, pre-bootstrap stage)
+  // has nothing to move or rebuild — sqlite-base-schema.js creates it with the new definition.
   if (!tableExists(sqlite, "npcs") || !tableExists(sqlite, "hermes_profiles")) return null;
   const npcCols = columns(sqlite, "npcs");
-  if (npcCols.includes("active")) return null; // 이미 적용됨
-  if (!LEGACY_NPC_COLUMNS.every((c) => npcCols.includes(c))) return null; // 진짜 레거시 모양이 아니다
+  if (npcCols.includes("active")) return null; // already applied
+  if (!LEGACY_NPC_COLUMNS.every((c) => npcCols.includes(c))) return null; // not really the legacy shape
 
-  // 1) 외형 이관 + 백업 + 삭제는 한 트랜잭션. SQLite 는 트랜잭션 안에서
-  // `PRAGMA foreign_keys` 변경을 무시하므로, 테이블 재생성은 별도 트랜잭션으로 뺀다.
+  // 1) Appearance migration + backup + deletion in one transaction. SQLite ignores
+  // `PRAGMA foreign_keys` changes inside a transaction, so the table rebuild is split out into its own transaction.
   const prepare = sqlite.transaction(() => {
     if (!columns(sqlite, "hermes_profiles").includes("appearance")) {
       sqlite.exec(`ALTER TABLE hermes_profiles ADD COLUMN appearance TEXT`);
     }
 
-    // 2) 외형 이관 — 프로필별 최신 NPC
+    // 2) Appearance migration — the most recent NPC per profile
     const moved = sqlite
       .prepare(
         `
@@ -84,7 +85,7 @@ function migrateNpcsToProfileOwnership(sqlite) {
         SELECT m.id FROM npcs m WHERE m.hermes_profile_id = n.hermes_profile_id
         ORDER BY m.updated_at DESC, m.created_at DESC LIMIT 1)`);
 
-    // 4) 미연결 백업·삭제
+    // 4) Back up and delete unbound NPCs
     sqlite.exec(
       `CREATE TABLE IF NOT EXISTS npcs_unprofiled_backup AS SELECT * FROM npcs WHERE hermes_profile_id IS NULL`,
     );
@@ -93,7 +94,7 @@ function migrateNpcsToProfileOwnership(sqlite) {
       .prepare(`DELETE FROM npcs WHERE hermes_profile_id IS NULL`)
       .run().changes;
 
-    // 5) 중복 백업·삭제
+    // 5) Back up and delete duplicates
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS npcs_duplicate_backup AS
       SELECT * FROM npcs n WHERE n.id <> (
@@ -109,11 +110,12 @@ function migrateNpcsToProfileOwnership(sqlite) {
 
   const result = prepare();
 
-  // 6~8) 새 정의로 재생성. FK 검사는 트랜잭션 밖에서 잠시 끈다(테이블 교체 중
-  // chat_messages.npc_id 등 참조가 잠깐 흔들린다) — 트랜잭션 안에서는 이 PRAGMA 가 무시된다.
+  // 6-8) Rebuild with the new definition. FK checks are turned off briefly outside the
+  // transaction (references like chat_messages.npc_id wobble momentarily while the table is
+  // swapped) — this PRAGMA is ignored inside a transaction.
   sqlite.pragma("foreign_keys = OFF");
   const rebuild = sqlite.transaction(() => {
-    // 앞선 실행이 CREATE 와 DROP 사이에서 죽었으면 npcs_new 가 남아 다음 부팅을 막는다.
+    // If a previous run died between CREATE and DROP, npcs_new is left behind and blocks the next boot.
     sqlite.exec(`DROP TABLE IF EXISTS npcs_new`);
     sqlite.exec(`
       CREATE TABLE npcs_new (
@@ -147,11 +149,11 @@ function migrateNpcsToProfileOwnership(sqlite) {
   try {
     rebuild();
   } finally {
-    // 던지더라도 이 커넥션이 FK 검사 없이 계속 사는 일은 없어야 한다.
+    // Even if this throws, this connection must never keep living without FK checks.
     sqlite.pragma("foreign_keys = ON");
   }
 
-  // npcs 로 좁힌다 — DB 전체를 훑으면 npcs 와 무관한 낡은 고아 행 하나에 기동이 막힌다.
+  // Scoped to npcs — scanning the whole DB would let one unrelated stale orphan row block startup.
   const broken = sqlite.pragma("foreign_key_check(npcs)");
   if (broken.length > 0) {
     throw new Error(
@@ -160,9 +162,9 @@ function migrateNpcsToProfileOwnership(sqlite) {
     );
   }
 
-  // I4) 이미 묶인 게이트웨이의 프로필을 출근시킨다 — 유니크 제약이 생긴 **뒤**라야
-  // OR IGNORE 가 먹는다. 한 번만 도는 이관의 일부라, 사용자가 나중에 재운 NPC 를
-  // 되살리지 않는다(PostgreSQL 은 drizzle/0009 가 같은 일을 한다).
+  // I4) Hires profiles of already-bound gateways — this only works with OR IGNORE **after**
+  // the unique constraint exists. As part of a one-time migration, it does not revive an NPC
+  // the user later put to sleep (PostgreSQL does the same thing via drizzle/0009).
   if (tableExists(sqlite, "channel_gateway_bindings")) {
     sqlite.exec(`
       INSERT OR IGNORE INTO npcs (id, channel_id, hermes_profile_id, active)

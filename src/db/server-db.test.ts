@@ -185,8 +185,8 @@ test("server-db sqlite bootstraps base tables for a fresh empty database", () =>
   require("./server-db.js");
 
   const sqlite = new Database(sqlitePath);
-  // better-sqlite3 의 all() 은 unknown[] 이다. 콜백 파라미터에 타입을 박으면
-  // 시그니처가 안 맞으므로, 쿼리가 무엇을 주는지 결과 쪽에서 좁힌다.
+  // better-sqlite3's all() returns unknown[]. Pinning a type on the callback parameter would
+  // mismatch the signature, so the result side narrows what the query actually gives back.
   const rows = sqlite
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
     .all() as Array<{ name: string }>;
@@ -220,14 +220,15 @@ test("server-db sqlite bootstraps base tables for a fresh empty database", () =>
 });
 
 test("server-db sqlite boot path migrates a legacy npcs table to profile ownership", () => {
-  // 소켓 서버(server-db.js)의 ensureSqliteCompatibility 와 API 라우트(src/db/index.ts)의
-  // 동명 함수는 서로 다른 부트 경로다. 한쪽만 migrateNpcsToProfileOwnership 을 부르면
-  // 그 경로에서만 npcs 가 낡은 정의로 남는다 — 이 테스트가 두 경로의 동등성을 고정한다.
+  // The socket server's (server-db.js) ensureSqliteCompatibility and the API route's
+  // (src/db/index.ts) same-named function are separate boot paths. If only one calls
+  // migrateNpcsToProfileOwnership, npcs stays on the old definition on that path alone —
+  // this test locks the two paths to the same behavior.
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-server-db-legacy-npcs-"));
   const sqlitePath = path.join(tempDir, "legacy-npcs.sqlite");
 
-  // 서버 부트를 태우기 전에 실 파일에 레거시 스키마를 미리 심는다 —
-  // sqlite-npc-profile-ownership.test.ts 의 legacyDb() 와 같은 모양.
+  // Seed the legacy schema into a real file before triggering the server boot —
+  // same shape as legacyDb() in sqlite-npc-profile-ownership.test.ts.
   const seed = new Database(sqlitePath);
   seed.pragma("foreign_keys = ON");
   seed.exec(`

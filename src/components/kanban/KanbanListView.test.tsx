@@ -11,7 +11,7 @@ import { groupTasks, type GroupBy } from "@/lib/kanban-view-state";
 
 import KanbanListView from "./KanbanListView";
 
-// `I18nProvider` 의 기본 로케일은 영어다 — 문구 단언은 en 로케일 값을 쓴다.
+// `I18nProvider`'s default locale is English — wording assertions use the en locale's values.
 
 function task(id: string, over: Partial<KanbanTask> = {}): KanbanTask {
   return { id, title: id, status: "todo", ...over };
@@ -55,14 +55,14 @@ async function mount(options: {
   return { host, root, expandCalls };
 }
 
-/** 카드 행의 제목만. 그룹 헤더 버튼은 제외한다. */
+/** Only card row titles. Excludes group header buttons. */
 function rowTitles(host: HTMLElement): string[] {
   return [...host.querySelectorAll("li > button[type=button]:not([aria-expanded])")].map(
     (el) => el.querySelector("span")?.textContent?.trim() ?? "",
   );
 }
 
-test("보드가 준 카드는 한 장도 빠지지 않고 목록에 나온다", async () => {
+test("every card the board gives shows up in the list, none missing", async () => {
   const tasks = [
     task("a", { status: "todo" }),
     task("b", { status: "running" }),
@@ -72,7 +72,7 @@ test("보드가 준 카드는 한 장도 빠지지 않고 목록에 나온다", 
   assert.deepEqual(rowTitles(host).sort(), ["a", "b", "c"]);
 });
 
-test("알 수 없는 상태 카드도 목록에서 사라지지 않는다", async () => {
+test("a card with an unknown status does not disappear from the list", async () => {
   const tasks = [task("a"), task("weird", { status: "not-a-status" as KanbanTaskStatus })];
   const { host } = await mount({ tasks });
   assert.ok(rowTitles(host).includes("weird"), "알 수 없는 상태 카드가 사라졌다");
@@ -82,20 +82,20 @@ test("알 수 없는 상태 카드도 목록에서 사라지지 않는다", asyn
   );
 });
 
-test("메타 없는 테넌트도 슬러그 그대로 그룹으로 보인다", async () => {
+test("a tenant with no metadata still shows up as a group with its raw slug", async () => {
   const tasks = [task("a", { tenant: "ghost-team" }), task("b", { tenant: "web" })];
   const { host } = await mount({ tasks, groupBy: "tenant", tenants: ["web"] });
   assert.ok(host.textContent?.includes("ghost-team"), "응답 목록에 없는 테넌트가 사라졌다");
   assert.deepEqual(rowTitles(host).sort(), ["a", "b"]);
 });
 
-test("테넌트가 빈 카드는 '서브프로젝트 없음' 그룹에 모인다", async () => {
+test("cards with an empty tenant collect into the 'No subproject' group", async () => {
   const tasks = [task("a"), task("b", { tenant: "web" })];
   const { host } = await mount({ tasks, groupBy: "tenant", tenants: ["web"] });
   assert.ok(host.textContent?.includes("No subproject"));
 });
 
-test("목록 행에는 이동 손잡이가 없다 (설계 D5)", async () => {
+test("list rows have no move handle (design D5)", async () => {
   const { host } = await mount({ tasks: [task("a")] });
   assert.equal(
     host.querySelector("[data-kanban-move-handle]"),
@@ -104,7 +104,7 @@ test("목록 행에는 이동 손잡이가 없다 (설계 D5)", async () => {
   );
 });
 
-test("직계 자식이 있는 카드만 펼침 버튼을 갖고, 누르면 그 카드 id 로 요청한다", async () => {
+test("only cards with direct children get an expand button, and clicking it requests that card's id", async () => {
   const tasks = [task("parent", { link_counts: { parents: 0, children: 2 } }), task("leaf")];
   const { host, expandCalls } = await mount({ tasks });
   const toggles = [...host.querySelectorAll("button[aria-expanded]")].filter((el) =>
@@ -117,7 +117,7 @@ test("직계 자식이 있는 카드만 펼침 버튼을 갖고, 누르면 그 �
   assert.deepEqual(expandCalls, ["parent"]);
 });
 
-test("펼치면 자식이 부모 아래에 들여쓰여 나오고, 최상위에서는 빠진다", async () => {
+test("expanding shows the child indented under the parent and drops it from the top level", async () => {
   const parent = task("parent", { link_counts: { parents: 0, children: 1 } });
   const child = task("child");
   const { host } = await mount({
@@ -134,13 +134,13 @@ test("펼치면 자식이 부모 아래에 들여쓰여 나오고, 최상위에�
   );
 });
 
-test("부모가 목록에 없는 자식은 최상위에 남는다 — 보관함을 접어도 사라지지 않는다", async () => {
+test("a child whose parent isn't in the list stays at the top level — it doesn't disappear when the archive collapses", async () => {
   const child = task("child", { link_counts: { parents: 1, children: 0 } });
   const { host } = await mount({ tasks: [child] });
   assert.deepEqual(rowTitles(host), ["child"]);
 });
 
-test("미완 부모를 둔 todo 카드에 '부모 대기' 가 붙는다", async () => {
+test("a todo card with an unfinished parent gets 'Waiting on parents'", async () => {
   const child = task("child", { status: "todo" });
   const { host } = await mount({
     tasks: [child],
@@ -152,7 +152,7 @@ test("미완 부모를 둔 todo 카드에 '부모 대기' 가 붙는다", async 
   );
 });
 
-test("부모가 끝났으면 '부모 대기' 를 붙이지 않는다", async () => {
+test("does not add 'Waiting on parents' once the parent is done", async () => {
   const child = task("child", { status: "todo" });
   const { host } = await mount({
     tasks: [child],
@@ -161,7 +161,7 @@ test("부모가 끝났으면 '부모 대기' 를 붙이지 않는다", async () 
   assert.equal(host.textContent?.includes("Waiting on parents"), false);
 });
 
-test("조건에 맞는 카드가 없으면 안내를 그린다", async () => {
+test("renders a hint when no cards match the filter", async () => {
   const { host } = await mount({ tasks: [] });
   assert.ok(host.textContent?.includes("No cards match"));
 });
