@@ -6,6 +6,7 @@
  * participants; if it can't be resolved, it's left unassigned. This blocks a profile
  * name that isn't in the channel from becoming a card's assignee.
  */
+import { languageName, promptLocale } from "./i18n/prompt-locale";
 
 export const MEETING_OUTCOME_LIMITS = {
   keyTopics: 10,
@@ -189,7 +190,10 @@ export function buildMeetingSummaryPrompt(
   topic: string,
   transcript: string,
   participants: OutcomeParticipant[],
+  locale: string | null = "ko",
 ): string {
+  if (promptLocale(locale) !== "ko")
+    return buildEnglishSummaryPrompt(topic, transcript, participants, locale);
   const names = participants.map((p) => p.name).join(", ") || "(없음)";
   return `다음 회의 내용을 분석하여 JSON으로 응답하세요.
 
@@ -223,4 +227,47 @@ ${transcript}
 - 회의에서 합의되지 않은 업무를 지어내지 않는다. 후속 업무가 없으면 "followUps": [] 로 둔다.
 - "assignee" 는 위 참석 직원 이름만 쓴다. 회의에서 담당이 정해지지 않았으면 null.
 - "project.recommended" 는 후속 업무가 여럿이고 서로 이어질 때만 true.`;
+}
+
+/** The same prompt for every non-Korean locale: English instructions, the same JSON keys, and the output language named at the end. */
+function buildEnglishSummaryPrompt(
+  topic: string,
+  transcript: string,
+  participants: OutcomeParticipant[],
+  locale: string | null,
+): string {
+  const names = participants.map((p) => p.name).join(", ") || "(none)";
+  return `Analyze the following meeting and respond in JSON.
+
+Meeting topic: ${topic}
+Attending employees: ${names}
+
+${transcript}
+
+Response format (JSON only, no other text):
+{
+  "keyTopics": ["Topic 1", "Topic 2", "Topic 3"],
+  "conclusions": "A 2-3 sentence summary of the conclusions",
+  "decisions": ["One line per thing actually decided in the meeting"],
+  "followUps": [
+    {
+      "title": "Follow-up task title",
+      "summary": "1-2 sentences on what the task is",
+      "acceptance": "What must be true for it to be done",
+      "assignee": "One of the attending employee names, or null",
+      "after": [0-based indexes of the followUps items that must finish first]
+    }
+  ],
+  "project": {
+    "recommended": true or false,
+    "name": "Project name for tracking the tasks together",
+    "reason": "Why the tasks should be tracked together as one project, or why that isn't needed"
+  }
+}
+
+Rules:
+- Don't invent tasks the meeting didn't agree on. If there are no follow-up tasks, use "followUps": [].
+- Use only the attending employee names above for "assignee". If the meeting didn't settle an owner, use null.
+- "project.recommended" is true only when there are several follow-up tasks that build on each other.
+Write every string value in ${languageName(locale)}.`;
 }
