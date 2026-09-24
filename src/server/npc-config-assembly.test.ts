@@ -123,3 +123,17 @@ test("the JSON registration instruction from old conversations is retired and po
     assert.match(out, /Hermes/);
   }
 });
+
+test("the task-registration layer follows the same language as the protocol, including for a user-written protocol", async () => {
+  const { resolveNpcInstructions } = await import("./socket-handlers");
+  const KO_TASK = /등록 지시는 폐기됐다/;
+  const EN_TASK = /registration instructions in past conversations are retired/;
+
+  assert.match(resolveNpcInstructions({}, "ko") ?? "", KO_TASK);
+  assert.match(resolveNpcInstructions({}, "ja") ?? "", EN_TASK);
+  assert.match(resolveNpcInstructions({ locale: "ko" }, null) ?? "", KO_TASK, "employee value");
+  assert.match(resolveNpcInstructions({}, null) ?? "", EN_TASK, "nothing known → en");
+  assert.match(resolveNpcInstructions({ meetingProtocol: "MY RULES" }, "ko") ?? "", KO_TASK);
+  assert.match(resolveNpcInstructions({ meetingProtocol: "MY RULES" }, "en") ?? "", EN_TASK);
+  assert.match(resolveNpcInstructions({ meetingProtocol: "MY RULES" }) ?? "", EN_TASK);
+});

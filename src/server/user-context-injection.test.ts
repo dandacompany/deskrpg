@@ -100,7 +100,8 @@ test("the body sent to the gateway from DM/meeting starts with [대화 상대]·
     .setExpirationTime("1h")
     .sign(new TextEncoder().encode(process.env.JWT_SECRET || DEV_JWT_SECRET));
   const client = connect(`http://127.0.0.1:${address.port}`, {
-    extraHeaders: { cookie: `token=${token}` },
+    // A Korean user — the Korean wording is pinned here; English is covered by the builders' own tests.
+    extraHeaders: { cookie: `token=${token}; deskrpg-locale=ko` },
     transports: ["websocket"],
     forceNew: true,
   });
