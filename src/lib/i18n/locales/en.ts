@@ -3317,6 +3317,8 @@ const en: Record<string, string> = {
     "3D preview unavailable. You can still select and save a character.",
   "mapPreview.webglUnavailable": "WebGL is unavailable. The 3D preview cannot be displayed.",
   "mapPreview.controlsHint": "Right-drag: orbit · Wheel: zoom · Middle-drag: pan",
+  "errors.meetingMapInvalid":
+    "The meeting room map could not be validated. Check that the map has an entrance and a path to the meeting room.",
   // --- /content-i18n:D ---
 };
 

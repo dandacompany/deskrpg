@@ -3295,6 +3295,8 @@ const ko: Record<string, string> = {
     "3D 미리보기를 사용할 수 없습니다. 캐릭터 선택과 저장은 가능합니다.",
   "mapPreview.webglUnavailable": "WebGL을 사용할 수 없어 3D 미리보기를 표시할 수 없습니다.",
   "mapPreview.controlsHint": "우클릭 드래그: 회전 · 휠: 확대/축소 · 가운데 버튼: 이동",
+  "errors.meetingMapInvalid":
+    "회의실 맵을 확인할 수 없습니다. 입구와 회의실로 가는 길이 있는 맵인지 확인해 주세요.",
   // --- /content-i18n:D ---
 };
 

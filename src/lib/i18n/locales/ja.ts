@@ -3331,6 +3331,8 @@ const ja: Record<string, string> = {
     "3D プレビューを利用できません。キャラクターの選択と保存はできます。",
   "mapPreview.webglUnavailable": "WebGL を利用できないため、3D プレビューを表示できません。",
   "mapPreview.controlsHint": "右ドラッグ: 回転 · ホイール: 拡大/縮小 · 中ボタン: 移動",
+  "errors.meetingMapInvalid":
+    "会議室マップを確認できません。入口と会議室への通路があるマップか確認してください。",
   // --- /content-i18n:D ---
 };
 

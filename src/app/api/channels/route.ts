@@ -1,6 +1,7 @@
 import { isManagedSshUrl } from "@/lib/hermes/setup/transport-id";
 import { db, jsonForDb } from "@/db";
 import { normalizeMeetingMap } from "@/game/meeting-map-normalization";
+import { meetingMapErrorResponse } from "./meeting-map-error-response";
 import {
   buildOfficeEnvironment,
   OFFICE_ENVIRONMENTS,
@@ -424,10 +425,7 @@ export async function POST(req: NextRequest) {
         spawnRow: mapConfig.spawnRow,
       });
     } catch (error) {
-      return NextResponse.json(
-        { error: error instanceof Error ? error.message : "회의실 맵을 확인할 수 없습니다" },
-        { status: 422 },
-      );
+      return meetingMapErrorResponse(error);
     }
 
     const [channel] = await db

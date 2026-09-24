@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  MeetingMapError,
   normalizeMeetingMap,
   projectMeetingMap,
   serializeMeetingMap,
@@ -203,7 +204,10 @@ test("the official map's meeting room uses the existing space instead of the lou
   }
 });
 test("an invalid map is not replaced with a separate space", () => {
-  assert.throws(() => normalizeMeetingMap({ nonsense: true }), /맵/);
+  assert.throws(
+    () => normalizeMeetingMap({ nonsense: true }),
+    (e: unknown) => e instanceof MeetingMapError && e.code === "unsupported_map_data",
+  );
 });
 
 function enclosed() {
@@ -341,14 +345,17 @@ test("unreachable maps and invalid explicit meeting rooms fail", () => {
   map.layers.walls = Array.from({ length: 30 }, () => Array(40).fill(2));
   map.layers.walls[3][3] = 0;
   map.objects = [];
-  assert.throws(() => normalizeMeetingMap(map), /연결 통로/);
+  assert.throws(
+    () => normalizeMeetingMap(map),
+    (e: unknown) => e instanceof MeetingMapError && e.code === "edge_corridor_unavailable",
+  );
   assert.throws(
     () =>
       normalizeMeetingMap({
         ...legacy(),
         meetingSpace: { id: "bad", bounds: { x: 1, y: 1, width: 3, height: 3 } },
       }),
-    /지정된 회의실/,
+    (e: unknown) => e instanceof MeetingMapError && e.code === "meeting_space_invalid",
   );
 });
 test("an invalid explicit Tiled meeting room property does not quietly extend", () => {
@@ -366,7 +373,10 @@ test("an invalid explicit Tiled meeting room property does not quietly extend", 
       height: 96,
       visible: true,
     });
-  assert.throws(() => normalizeMeetingMap(map), /지정된 회의실/);
+  assert.throws(
+    () => normalizeMeetingMap(map),
+    (e: unknown) => e instanceof MeetingMapError && e.code === "meeting_space_invalid",
+  );
 });
 test("Tiled saves preserve collision objects, layers and existing object IDs", () => {
   const source = buildOfficeEnvironment("tech");
@@ -422,4 +432,16 @@ test("across consecutive saves, deleting an earlier object does not change the s
       (o) => o.id === bId && o.col === 3 && o.row === 12,
     ),
   );
+});
+
+test("meeting map errors carry a code and an English message", () => {
+  try {
+    normalizeMeetingMap({ nonsense: true });
+    assert.fail("expected a MeetingMapError");
+  } catch (error) {
+    assert.ok(error instanceof MeetingMapError);
+    assert.equal(error.code, "unsupported_map_data");
+    assert.match(error.message, /^Invalid meeting map: /);
+    assert.doesNotMatch(error.message, /[가-힣]/);
+  }
 });

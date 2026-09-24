@@ -3179,6 +3179,7 @@ const zh: Record<string, string> = {
   "characterPreview.unavailable": "无法使用 3D 预览。仍可选择并保存角色。",
   "mapPreview.webglUnavailable": "WebGL 不可用，无法显示 3D 预览。",
   "mapPreview.controlsHint": "右键拖动: 旋转 · 滚轮: 缩放 · 中键拖动: 平移",
+  "errors.meetingMapInvalid": "无法验证会议室地图。请确认地图有入口以及通往会议室的通道。",
   // --- /content-i18n:D ---
 };
 
