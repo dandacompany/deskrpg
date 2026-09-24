@@ -2265,6 +2265,7 @@ const ko: Record<string, string> = {
   "gateways.employeesHint": "직원(Hermes 프로필) 등록·인격·외형·모델은 직원 화면에서 관리합니다.",
   "gateways.employeesOpen": "직원 관리 열기 →",
   "gateways.title": "연결",
+  "gateways.refreshing": "목록을 새로 읽는 중…",
   "gateways.subtitle":
     "Hermes 게이트웨이를 등록하고, 테스트하고, 다른 사용자에게 공유할 수 있습니다.",
   "gateways.backToChannels": "오피스 목록으로",

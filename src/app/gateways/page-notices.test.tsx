@@ -32,8 +32,14 @@ const gateway = (over: Json = {}) => ({
   ...over,
 });
 
-/** `"METHOD path"` → 응답. 함수면 그 경로의 몇 번째 호출인지(0부터)를 받아 답한다. */
-function mockFetch(routes: Record<string, Route>) {
+/**
+ * `"METHOD path"` → 응답. 함수면 그 경로의 몇 번째 호출인지(0부터)를 받아 답한다.
+ * `delays` 는 경로별 추가 지연 — 함수면 호출 순번을 받는다.
+ */
+function mockFetch(
+  routes: Record<string, Route>,
+  delays: Record<string, (call: number) => number> = {},
+) {
   const calls: string[] = [];
   const bodies: Record<string, unknown[]> = {};
   const counts: Record<string, number> = {};
@@ -45,6 +51,8 @@ function mockFetch(routes: Record<string, Route>) {
     const route = routes[key];
     const n = counts[key] ?? 0;
     counts[key] = n + 1;
+    const extra = delays[key]?.(n) ?? 0;
+    if (extra > 0) await new Promise((r) => setTimeout(r, extra));
     // 실제 네트워크처럼 한 박자 늦게 답한다 — 즉시 답하면 React 가 로딩 on/off 를 한 번에 묶어
     // 로딩 화면이 그려지지 않고, 언마운트 결함이 테스트에서 드러나지 않는다.
     await new Promise((r) => setTimeout(r, 5));
@@ -167,4 +175,57 @@ test("[설정에서 켜기] 성공 문구는 목록을 다시 읽은 뒤에도 �
     host.querySelector('[data-worker-propagation-result="enabled"]'),
     "재조회 뒤 켜기 성공 문구가 사라졌다",
   );
+});
+
+const wait = (ms: number) =>
+  act(async () => {
+    await new Promise((r) => setTimeout(r, ms));
+  });
+
+test("재조회가 늦으면 알림을 지우지 않은 채 '새로 읽는 중' 을 보이고, 끝나면 거둔다", async () => {
+  mockFetch(
+    {
+      "GET /api/gateways": (n) => ({
+        gateways: [gateway({ workerPropagation: n === 0 ? "disabled" : "enabled" })],
+      }),
+      "POST /api/gateways/gw-1/plugin/worker-propagation": { propagation: "enabled", results: [] },
+    },
+    { "GET /api/gateways": (n) => (n === 0 ? 0 : 600) },
+  );
+  await renderPage();
+  assert.equal(host.querySelector("[data-gateways-refreshing]"), null, "첫 화면에 표시가 있다");
+  await click(host.querySelector('[data-action="worker-propagation-enable"]'));
+  await wait(450);
+  const status = host.querySelector("[data-gateways-refreshing]");
+  assert.ok(status, "느린 재조회인데 '새로 읽는 중' 이 없다");
+  assert.equal(status.getAttribute("role"), "status");
+  assert.match(status.textContent ?? "", /새로 읽는 중/);
+  assert.ok(
+    host.querySelector('[data-worker-propagation-result="enabled"]'),
+    "재조회 중에 알림이 사라졌다",
+  );
+  await wait(300);
+  await flush();
+  assert.equal(host.querySelector("[data-gateways-refreshing]"), null, "끝났는데 표시가 남았다");
+  assert.ok(host.querySelector('[data-worker-propagation-result="enabled"]'));
+});
+
+test("빠른 재조회는 '새로 읽는 중' 을 깜빡이지 않는다", async () => {
+  const seen: boolean[] = [];
+  mockFetch({
+    "GET /api/gateways": (n) => ({
+      gateways: [gateway({ workerPropagation: n === 0 ? "disabled" : "enabled" })],
+    }),
+    "POST /api/gateways/gw-1/plugin/worker-propagation": { propagation: "enabled", results: [] },
+  });
+  await renderPage();
+  const observer = new MutationObserver(() => {
+    seen.push(host.querySelector("[data-gateways-refreshing]") !== null);
+  });
+  observer.observe(host, { childList: true, subtree: true });
+  await click(host.querySelector('[data-action="worker-propagation-enable"]'));
+  await flush();
+  await wait(400);
+  observer.disconnect();
+  assert.equal(seen.includes(true), false, "짧은 재조회에 표시가 깜빡였다");
 });

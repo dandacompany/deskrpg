@@ -1,6 +1,7 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -181,6 +182,9 @@ async function applyWorkerPluginRequest(gatewayId: string): Promise<WorkerPlugin
 
 const EMPTY_TEST_STATE: GatewayTestState = { status: "idle" };
 
+/** 재조회가 이보다 오래 걸릴 때만 "새로 읽는 중" 을 보인다 — 짧은 재조회마다 깜빡이지 않게. */
+const REFRESH_INDICATOR_DELAY_MS = 300;
+
 export default function GatewayManagementPage() {
   const t = useT();
   return (
@@ -236,8 +240,25 @@ function GatewayManagementPageInner() {
   const [panel, setPanel] = useState<"share" | "diagnostics" | null>(null);
   const [diagnosticsAvailable, setDiagnosticsAvailable] = useState(false);
 
+  // 재조회 진행 표시. 화면을 갈아 끼우지 않고 제목 옆에 작게 띄운다(겹친 재조회는 수를 센다).
+  const [refreshing, setRefreshing] = useState(false);
+  const loadedOnce = useRef(false);
+  const refreshesInFlight = useRef(0);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    },
+    [],
+  );
+
   const loadGateways = useCallback(
     async (options: { autoSelect?: boolean } = {}) => {
+      const isRefresh = loadedOnce.current;
+      if (isRefresh) {
+        refreshesInFlight.current += 1;
+        refreshTimer.current ??= setTimeout(() => setRefreshing(true), REFRESH_INDICATOR_DELAY_MS);
+      }
       // `loading` 은 첫 로딩에만 쓴다(초기값 true). 재조회 때 다시 세우면 `if (loading)` 이 페이지를
       // 로딩 화면으로 바꿔 자식을 언마운트하고, 작업 뒤에 뜨는 결과 알림(갱신의 "계속 켭니다 [끄기]",
       // [설정에서 켜기] 성공)이 지역 상태째 사라진다(2026-09-24 E2E 실측). 저장·삭제·공유는 각자의
@@ -256,6 +277,15 @@ function GatewayManagementPageInner() {
         setError(getLocalizedErrorMessage(t, nextError, "common.error"));
       } finally {
         setLoading(false);
+        loadedOnce.current = true;
+        if (isRefresh) {
+          refreshesInFlight.current -= 1;
+          if (refreshesInFlight.current === 0) {
+            if (refreshTimer.current) clearTimeout(refreshTimer.current);
+            refreshTimer.current = null;
+            setRefreshing(false);
+          }
+        }
       }
     },
     [t],
@@ -565,7 +595,20 @@ function GatewayManagementPageInner() {
       <div className="workspace-page-inner">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div>
-            <h1 className="text-3xl font-bold">{t("gateways.title")}</h1>
+            <h1 className="flex items-center gap-3 text-3xl font-bold">
+              {t("gateways.title")}
+              {refreshing && (
+                <span
+                  role="status"
+                  aria-live="polite"
+                  data-gateways-refreshing=""
+                  className="flex items-center gap-1 text-xs font-normal text-text-muted"
+                >
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {t("gateways.refreshing")}
+                </span>
+              )}
+            </h1>
             <p className="mt-1 text-text-muted">{t("gateways.subtitle")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

@@ -2275,6 +2275,7 @@ const en: Record<string, string> = {
     "Register employees (Hermes profiles) and manage their persona, look and model on the Employees page.",
   "gateways.employeesOpen": "Open employees →",
   "gateways.title": "Connections",
+  "gateways.refreshing": "Refreshing the list…",
   "gateways.subtitle": "Register, test, and share your Hermes gateways with other users.",
   "gateways.backToChannels": "Back to channels",
   "gateways.listTitle": "Gateway List",
