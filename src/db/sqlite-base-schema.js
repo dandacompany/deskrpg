@@ -343,7 +343,7 @@ const SQLITE_BASE_SCHEMA = `
     );
     CREATE INDEX IF NOT EXISTS approvals_channel_status_idx ON approvals(channel_id, status);
 
-    -- task_id 는 Hermes 카드를 가리키기만 한다 — FK 가 아니고 사본도 아니다(하드 게이트 1).
+    -- task_id only points at a Hermes card — it is neither an FK nor a copy (hard gate 1).
     CREATE TABLE IF NOT EXISTS approval_targets (
       approval_id TEXT NOT NULL REFERENCES approvals(id) ON DELETE CASCADE,
       task_id TEXT NOT NULL,

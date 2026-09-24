@@ -2,6 +2,7 @@
 
 import { useLocale, useT } from "@/lib/i18n";
 import { sortRooms, type RoomSummary } from "@/lib/chat-rooms-policy";
+import { roomMessagePreview } from "@/components/rooms/room-message-preview";
 
 interface RoomListProps {
   rooms: RoomSummary[];
@@ -97,7 +98,7 @@ export default function RoomList({ rooms, currentRoomId, onOpen, onNew }: RoomLi
               )}
               {room.lastMessage && (
                 <div className="mt-0.5 text-xs text-text-muted truncate">
-                  {room.lastMessage.senderName}: {room.lastMessage.content}
+                  {room.lastMessage.senderName}: {roomMessagePreview(room.lastMessage, t)}
                 </div>
               )}
             </div>

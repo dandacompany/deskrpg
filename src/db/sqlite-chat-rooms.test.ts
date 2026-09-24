@@ -98,7 +98,7 @@ test("without channels.owner_id, the backfill is skipped and a warning is logged
     "owner_id 가 없으니 office 백필은 일어나지 않아야 한다",
   );
   const matching = warnings.filter((args) =>
-    args.some((a) => typeof a === "string" && a.includes("office 방 백필")),
+    args.some((a) => typeof a === "string" && a.includes("office room backfill")),
   );
   assert.equal(matching.length, 1, "office 방 백필 스킵 경고가 정확히 한 번 찍혀야 한다");
 });

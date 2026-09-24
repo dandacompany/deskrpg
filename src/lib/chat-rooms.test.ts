@@ -105,7 +105,19 @@ test("stacking messages bumps last_message_at and returns the most recent N line
   const summary = rooms.find((r) => r.id === room.id);
   const emptySummary = rooms.find((r) => r.id === emptyRoom.id);
   assert.equal(summary?.lastMessage?.content, "3");
+  assert.equal(summary?.lastMessage?.notice, null);
   assert.equal(emptySummary?.lastMessage, undefined);
+
+  await appendRoomMessage({
+    roomId: room.id,
+    senderKind: "npc",
+    senderId: "n",
+    senderName: "소피",
+    content: "",
+    notice: { kind: "cron_result", jobId: "j", jobName: "n", npcName: "소피", status: "ok" },
+  });
+  const afterCron = (await listRoomsForUser(ch.id, owner.id)).find((r) => r.id === room.id);
+  assert.deepEqual(afterCron?.lastMessage?.notice, { kind: "cron_result", status: "ok" });
 });
 
 test("inviting an NPC member ignores duplicates, and deleting a room cascades", async () => {

@@ -98,7 +98,7 @@ for (const dbType of [undefined, "", "sqlite", "postgresql"]) {
     const homeDir = path.join(fixtureRoot, "home");
     fs.mkdirSync(homeDir);
     fs.writeFileSync(path.join(homeDir, ".env.local"), "DB_TYPE=sqlite\nSQLITE_PATH=/saved.db\n");
-    for (const name of ["runtime-env-bootstrap.js", "startup-check.js"]) {
+    for (const name of ["runtime-env-bootstrap.js", "startup-check.js", "cli-messages.js"]) {
       fs.copyFileSync(
         path.join(repoRoot, "src/lib", name),
         path.join(packageRoot, "src/lib", name),

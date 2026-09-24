@@ -1,4 +1,9 @@
-import { sortRooms, type RoomMessage, type RoomSummary } from "@/lib/chat-rooms-policy";
+import {
+  sortRooms,
+  toRoomPreview,
+  type RoomMessage,
+  type RoomSummary,
+} from "@/lib/chat-rooms-policy";
 
 /**
  * State of the channel chat room screen. A pure reducer that knows neither socket nor React — `node:test` can cover it.
@@ -103,11 +108,7 @@ export function reduceRoomState(state: RoomState, action: RoomAction): RoomState
             ? {
                 ...room,
                 lastMessageAt: action.message.createdAt,
-                lastMessage: {
-                  senderName: action.message.senderName,
-                  content: action.message.content,
-                  createdAt: action.message.createdAt,
-                },
+                lastMessage: toRoomPreview(action.message),
               }
             : room,
         ),

@@ -9,6 +9,7 @@ const {
   isInternalRequestAuthorized,
 } = require("./src/lib/internal-transport.js");
 const { bootstrapRuntimeEnv } = require("./src/lib/runtime-env-bootstrap.js");
+const { cliMessage } = require("./src/lib/cli-messages.js");
 const {
   checkDatabaseReachable,
   hostSetupHint,
@@ -51,7 +52,7 @@ async function main() {
   const hint = hostSetupHint();
   if (hint) console.log(`[startup] ${hint}`);
   if (!reportEnvironmentInspection(inspection)) {
-    console.error("[startup] 환경 설정이 올바르지 않아 서버를 시작하지 않습니다.");
+    console.error(cliMessage("server.environmentInvalid"));
     process.exit(1);
   }
 
@@ -205,9 +206,11 @@ async function main() {
     target: inspection.dbTarget,
   });
   if (dbProbe.ok) {
-    console.log(`[startup] DB(${dbProbe.target}) 확인: ${dbProbe.message}`);
+    console.log(
+      cliMessage("server.databaseOk", { target: dbProbe.target, message: dbProbe.message }),
+    );
   } else {
-    console.warn(`[startup] 경고: ${dbProbe.message}`);
+    console.warn(cliMessage("report.warning", { message: dbProbe.message }));
   }
 
   const internalHostname = getInternalSocketHostname(process.env);
@@ -217,9 +220,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(
-    "[startup] 서버를 시작하지 못했습니다 — 아래 스택의 첫 줄이 직접 원인입니다. `deskrpg doctor` 로 환경·DB·포트를 먼저 점검하세요.",
-  );
+  console.error(cliMessage("server.startFailed"));
   console.error(err);
   process.exit(1);
 });

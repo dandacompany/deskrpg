@@ -1,5 +1,7 @@
 "use strict";
 
+const { cliMessage } = require("./cli-messages.js");
+
 /**
  * The SQLite-side body of `deskrpg reset-password`. The CLI (bin/deskrpg.js) is one big JS
  * blob that tests can't reach, so only the part that actually touches the DB is split out here.
@@ -12,9 +14,7 @@ function resetSqliteUserPassword(db, loginId, passwordHash) {
     .all()
     .map((column) => column.name);
   if (!columns.includes("must_change_password")) {
-    throw new Error(
-      "users.must_change_password 가 없습니다. 먼저 `deskrpg start` 로 한 번 부팅해 스키마를 올리세요.",
-    );
+    throw new Error(cliMessage("resetPassword.schemaMissing"));
   }
 
   const user = db

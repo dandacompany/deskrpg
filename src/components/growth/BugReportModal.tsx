@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { APP_VERSION } from "@/lib/app-meta";
-import { useT } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
 
 import {
   buildGithubIssueUrl,
@@ -24,6 +24,7 @@ export function BugReportModal({
   onClose: () => void;
 }) {
   const t = useT();
+  const { locale } = useLocale();
   useEscapeClose(onClose);
   // The modal only renders after the user opens it, so creating the install ID here does not conflict with server rendering.
   const [installId] = useState(() => getInstallId(browserStorage()));
@@ -77,12 +78,15 @@ export function BugReportModal({
 
   const openGithub = () => {
     window.open(
-      buildGithubIssueUrl({
-        title: title.trim(),
-        body: body.trim(),
-        repro: repro.trim(),
-        attachments: kept,
-      }),
+      buildGithubIssueUrl(
+        {
+          title: title.trim(),
+          body: body.trim(),
+          repro: repro.trim(),
+          attachments: kept,
+        },
+        locale,
+      ),
       "_blank",
       "noopener,noreferrer",
     );

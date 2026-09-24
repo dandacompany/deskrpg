@@ -361,3 +361,42 @@ test("an unknown notice.kind — falls back to content, no link", async () => {
   );
   await cleanup();
 });
+
+test("cron_result with an empty body — the viewer's locale says the run failed or had no result", async () => {
+  const cases: Array<{ status: "ok" | "error"; locale: Locale; text: string }> = [
+    { status: "error", locale: "ja", text: "実行失敗" },
+    { status: "ok", locale: "ja", text: "結果なし" },
+    { status: "error", locale: "ko", text: "실행 실패" },
+    { status: "ok", locale: "en", text: "No result" },
+    { status: "error", locale: "zh", text: "执行失败" },
+  ];
+  for (const { status, locale, text } of cases) {
+    const { host, cleanup } = await render(
+      <RoomNoticeMessage
+        message={message({
+          content: "",
+          notice: { kind: "cron_result", jobId: "j", jobName: "n", npcName: "소피", status },
+        })}
+      />,
+      locale,
+    );
+    assert.ok((host.textContent ?? "").includes(text), `${status}/${locale}: ${host.textContent}`);
+    await cleanup();
+  }
+});
+
+test("cron_result from before the change — an old Korean body is shown as stored", async () => {
+  const { host, cleanup } = await render(
+    <RoomNoticeMessage
+      message={message({
+        content: "실행 실패",
+        notice: { kind: "cron_result", jobId: "j", jobName: "n", npcName: "소피", status: "error" },
+      })}
+    />,
+    "ja",
+  );
+  const text = host.textContent ?? "";
+  assert.ok(text.includes("실행 실패"));
+  assert.ok(!text.includes("実行失敗"));
+  await cleanup();
+});

@@ -3246,6 +3246,46 @@ const en: Record<string, string> = {
   // --- content-i18n:B ---
   // --- /content-i18n:B ---
   // --- content-i18n:C ---
+  "room.cronResult.failed": "Run failed",
+  "room.cronResult.empty": "No result",
+  "profiles.page.title": "Employees",
+  "profiles.page.subtitle":
+    "Choose a profile from a connected gateway to manage your NPC’s name and appearance. Each NPC’s identity and appearance belong to that Hermes profile.",
+  "profiles.gateways.loading": "Loading connected gateways…",
+  "profiles.gateways.loadFailed": "Could not load gateways",
+  "profiles.gateways.retry": "Try again",
+  "profiles.gateways.emptyTitle": "Connect a gateway first",
+  "profiles.gateways.emptyBody":
+    "NPCs start with profiles on a connected Hermes gateway. Connect a gateway or obtain shared access to manage its profiles and appearances here.",
+  "profiles.gateways.connect": "Connect gateway",
+  "profiles.gateways.connected": "Connected gateways",
+  "profiles.gateways.choose": "Choose gateway",
+  "profiles.gateway.ownerHint": "Manage this gateway’s profiles and NPC appearances.",
+  "profiles.gateway.sharedHint":
+    "This gateway is shared with you. Its owner manages profile registration and appearance.",
+  "profiles.noGateway": "No gateway was given.",
+  "profiles.new.title": "New employee",
+  "profiles.new.subtitle":
+    "One employee is one Hermes profile. Name it, write its persona, then sign that employee in to a model.",
+  "profiles.new.sharedGateway": "This gateway is shared with you; its owner registers employees.",
+  "profiles.detail.notFound": "No such employee on this gateway.",
+  "profiles.detail.sectionTitle": "Persona, appearance & AI model",
+  "character.preview.label": "Selected character",
+  "character.preview.rotateLeft": "Rotate left",
+  "character.preview.rotateRight": "Rotate right",
+  "character.preview.walking": "Walking",
+  "character.preview.standing": "Standing",
+  "character.form.officeName": "Your name in the office",
+  "character.form.charCount": "Character count",
+  "meeting.unknownNpc": "Unknown NPC",
+  "meeting.recordedParticipants": "Recorded participants",
+  "meeting.recordedParticipantsNote":
+    "The recorded participant count reflects the participants present when the meeting started.",
+  "workspace.nav.label": "Workspace",
+  "workspace.npc.menuLabel": "Manage {name}",
+  "skills.template.whenToUse": "When to use",
+  "skills.template.steps": "Steps",
+  "skills.template.check": "Check",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   // --- /content-i18n:D ---

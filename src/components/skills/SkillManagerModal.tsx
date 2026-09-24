@@ -110,7 +110,15 @@ export default function SkillManagerModal({
     });
   const create = () =>
     run(async () => {
-      await api.create(newName, undefined, skillTemplate(newName, newDesc.trim()));
+      await api.create(
+        newName,
+        undefined,
+        skillTemplate(newName, newDesc.trim(), {
+          whenToUse: t("skills.template.whenToUse"),
+          steps: t("skills.template.steps"),
+          check: t("skills.template.check"),
+        }),
+      );
       setAddMode(null);
       setNewName("");
       setNewDesc("");

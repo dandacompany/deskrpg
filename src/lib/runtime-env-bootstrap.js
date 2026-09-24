@@ -23,6 +23,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { parseEnv } = require("node:util");
 
+const { cliMessage } = require("./cli-messages.js");
+
 /** Parses a single `KEY=value` line. A comment, blank line, or malformed line yields null. */
 function parseEnvLine(line) {
   const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
@@ -84,7 +86,7 @@ function bootstrapRuntimeEnv(options = {}) {
   try {
     envPath = runtimePaths.ensureDeskRpgHome({ homeDir: env.DESKRPG_HOME }).envPath;
   } catch (err) {
-    warn(`[startup] 런타임 홈을 준비하지 못했습니다: ${err.message}`);
+    warn(cliMessage("bootstrap.homeFailed", { message: err.message }, env));
     return { envPath: null, applied: [] };
   }
 
@@ -92,7 +94,7 @@ function bootstrapRuntimeEnv(options = {}) {
   try {
     text = fs.readFileSync(envPath, "utf8");
   } catch (err) {
-    warn(`[startup] 런타임 env 를 읽지 못했습니다: ${err.message}`);
+    warn(cliMessage("bootstrap.envReadFailed", { message: err.message }, env));
     return { envPath, applied: [] };
   }
 

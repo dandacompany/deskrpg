@@ -109,3 +109,25 @@ test("returns diagnostics with 200 even when the DB is unreachable", async () =>
     process.env.SQLITE_PATH = original;
   }
 });
+
+test("messages follow the viewer's locale cookie without touching process.env", async () => {
+  const { GET } = await import("./route");
+  const admin = await user("system_admin");
+  const before = process.env.LC_ALL;
+  const withCookie = (cookie?: string) =>
+    new NextRequest(url, {
+      headers: {
+        host: "localhost:3102",
+        "x-user-id": admin,
+        ...(cookie ? { cookie } : {}),
+      },
+    });
+
+  const korean = await (await GET(withCookie("deskrpg-locale=ko"))).json();
+  assert.match(korean.database.message, /^SQLite 파일/);
+  const english = await (await GET(withCookie())).json();
+  assert.match(english.database.message, /^The SQLite file/);
+  const japanese = await (await GET(withCookie("deskrpg-locale=ja"))).json();
+  assert.match(japanese.database.message, /^The SQLite file/);
+  assert.equal(process.env.LC_ALL, before);
+});

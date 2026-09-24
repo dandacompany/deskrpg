@@ -74,7 +74,7 @@ async function main() {
       path.join(ROOT, "public/assets/brand/deskrpg-mark-simple.svg"),
       simpleMarkSvg(64),
     );
-    process.stdout.write(`public/favicon.ico (${FAVICON_SIZES.join("·")}px, 단순형)\n`);
+    process.stdout.write(`public/favicon.ico (${FAVICON_SIZES.join("·")}px, simplified)\n`);
   } finally {
     await rm(work, { recursive: true, force: true });
   }

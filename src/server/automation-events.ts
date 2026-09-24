@@ -167,7 +167,7 @@ export type IngestDeps = {
   boardSlug: string;
   findNpcByProfile(channelId: string, profileName: string): Promise<ChannelNpcLookup | null>;
   /**
-   * Is this card `blocked` because it is **awaiting approval**? If so, no "막혔습니다" notice is posted — the approval
+   * Is this card `blocked` because it is **awaiting approval**? If so, no "card blocked" (`notice.cardBlocked`) notice is posted — the approval
    * request line already says the same thing, and awaiting approval is not a failure. Optional dependency; if absent,
    * notifies as before.
    */
@@ -416,7 +416,9 @@ async function resolveSender(
 }
 
 function withPrefix(sender: Sender, body: string): string {
-  return sender.senderKind === "system" && sender.npcName ? `${sender.npcName}: ${body}` : body;
+  return sender.senderKind === "system" && sender.npcName && body
+    ? `${sender.npcName}: ${body}`
+    : body;
 }
 
 async function post(
@@ -540,13 +542,8 @@ async function postNotice(channelId: string, event: PluginEvent, deps: IngestDep
     const status: "ok" | "error" = p.status === "error" ? "error" : "ok";
     const text = typeof p.result_text === "string" ? p.result_text.trim() : "";
     const max = deps.maxResultLength ?? DEFAULT_RESULT_MAX_CHARS;
-    const body = text
-      ? text.length > max
-        ? `${text.slice(0, max)}…`
-        : text
-      : status === "error"
-        ? "실행 실패"
-        : "결과 없음";
+    // An empty result is stored empty — the room notice says "failed" / "no result" in the viewer's language.
+    const body = text.length > max ? `${text.slice(0, max)}…` : text;
     const sender = await resolveSender(channelId, profileName, deps);
     await post(
       channelId,

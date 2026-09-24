@@ -72,6 +72,7 @@ test("messages accumulate per room and the list's lastMessage updates", () => {
   s = reduceRoomState(s, { type: "message", roomId: "g1", message: m });
   assert.deepEqual(s.messages.g1, [m]);
   assert.equal(s.rooms.find((r) => r.id === "g1")?.lastMessage?.content, "hi");
+  assert.equal(s.rooms.find((r) => r.id === "g1")?.lastMessage?.notice, null);
   assert.equal(s.rooms[1].id, "g1", "최신 메시지 방이 office 바로 아래로");
 });
 
@@ -205,4 +206,27 @@ test("remembers the viewerUserId the list carried, and responses without it do n
   assert.equal(s1.viewerUserId, "u1");
   const s2 = reduceRoomState(s1, { type: "list", rooms: [office], preferRoomId: null });
   assert.equal(s2.viewerUserId, "u1", "옛 서버 응답이 신원을 지우면 안 된다");
+});
+
+test("the list preview keeps a cron result's kind and status so an empty body can be labelled", () => {
+  let s = reduceRoomState(initialRoomState, {
+    type: "list",
+    rooms: [office, g1],
+    preferRoomId: null,
+  });
+  const m: RoomMessage = {
+    id: "m2",
+    roomId: "o",
+    senderKind: "npc",
+    senderId: "n",
+    senderName: "소피",
+    content: "",
+    createdAt: "2026-09-11T00:00:00Z",
+    notice: { kind: "cron_result", jobId: "j", jobName: "n", npcName: "소피", status: "error" },
+  };
+  s = reduceRoomState(s, { type: "message", roomId: "o", message: m });
+  assert.deepEqual(s.rooms.find((r) => r.id === "o")?.lastMessage?.notice, {
+    kind: "cron_result",
+    status: "error",
+  });
 });

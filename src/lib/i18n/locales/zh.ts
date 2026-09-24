@@ -3111,6 +3111,44 @@ const zh: Record<string, string> = {
   // --- content-i18n:B ---
   // --- /content-i18n:B ---
   // --- content-i18n:C ---
+  "room.cronResult.failed": "执行失败",
+  "room.cronResult.empty": "无结果",
+  "profiles.page.title": "员工",
+  "profiles.page.subtitle":
+    "一名员工就是一个 Hermes 配置文件。在这里登记员工并管理其人格、外观和模型。模型登录需为每名员工分别进行。",
+  "profiles.gateways.loading": "正在加载已连接的网关…",
+  "profiles.gateways.loadFailed": "无法加载网关",
+  "profiles.gateways.retry": "重试",
+  "profiles.gateways.emptyTitle": "请先连接网关",
+  "profiles.gateways.emptyBody":
+    "NPC 从已连接的 Hermes 网关的配置文件开始。连接网关或获得共享访问后，即可在这里管理配置文件和外观。",
+  "profiles.gateways.connect": "连接网关",
+  "profiles.gateways.connected": "已连接的网关",
+  "profiles.gateways.choose": "选择网关",
+  "profiles.gateway.ownerHint": "管理此网关的配置文件和 NPC 外观。",
+  "profiles.gateway.sharedHint": "这是与你共享的网关。配置文件登记和外观管理由所有者负责。",
+  "profiles.noGateway": "无法确定该员工属于哪个网关。",
+  "profiles.new.title": "新员工",
+  "profiles.new.subtitle":
+    "一名员工就是一个 Hermes 配置文件。设定名字，写下人格，然后以该员工身份登录模型。",
+  "profiles.new.sharedGateway": "这是与你共享的网关，员工由所有者登记。",
+  "profiles.detail.notFound": "此网关上没有该员工。",
+  "profiles.detail.sectionTitle": "人格、外观与 AI 模型",
+  "character.preview.label": "已选角色",
+  "character.preview.rotateLeft": "向左旋转",
+  "character.preview.rotateRight": "向右旋转",
+  "character.preview.walking": "行走",
+  "character.preview.standing": "站立",
+  "character.form.officeName": "在办公室使用的名字",
+  "character.form.charCount": "字数",
+  "meeting.unknownNpc": "未知 NPC",
+  "meeting.recordedParticipants": "记录的参与者",
+  "meeting.recordedParticipantsNote": "记录的参与者人数以会议开始时在场的参与者为准。",
+  "workspace.nav.label": "工作区",
+  "workspace.npc.menuLabel": "管理 {name}",
+  "skills.template.whenToUse": "何时使用",
+  "skills.template.steps": "步骤",
+  "skills.template.check": "检查",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   // --- /content-i18n:D ---

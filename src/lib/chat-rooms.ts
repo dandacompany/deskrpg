@@ -16,6 +16,7 @@ import { projectNpcRow } from "./npc-projection";
 import {
   parseRoomNotice,
   sortRooms,
+  toRoomPreview,
   type ReplyPolicy,
   type RoomMessage,
   type RoomNotice,
@@ -233,11 +234,7 @@ function toSummary(
     members: membersByRoom.get(room.id) ?? [],
     ...(last
       ? {
-          lastMessage: {
-            senderName: last.senderName,
-            content: last.content,
-            createdAt: last.createdAt,
-          },
+          lastMessage: toRoomPreview(last),
         }
       : {}),
   };
