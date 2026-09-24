@@ -1,15 +1,15 @@
 /**
- * 아침 하늘의 구름 — 출근길 화면(`/auth`)이 쓰는 미니어처 구름.
+ * Morning sky clouds — the miniature clouds used by the commute screen (`/auth`).
  *
- * 사이드바 본사와 같은 방식이다: three.js 로 만들고 한 번 구워 PNG 로 쓴다
- * (`scripts/sky/render-clouds.ts`). CSS 도형으로 만든 구름은 타원 두 개가 겹쳐 보여
- * "도형 같다" 는 지적을 받았다(2026-09-20). 구체를 여러 개 겹쳐 뭉게구름의 실루엣을 만든다.
+ * Same approach as the sidebar headquarters: built with three.js, baked once and used as a PNG
+ * (`scripts/sky/render-clouds.ts`). Clouds made from CSS shapes showed two overlapping ellipses
+ * and were called "shape-like" (2026-09-20). Several spheres are overlapped to make a cumulus silhouette.
  */
 import * as T from "three";
 
 export type CloudPuff = { x: number; y: number; z: number; r: number };
 
-/** 씨앗에서 같은 구름이 나온다 — 화면과 스크립트가 어긋나지 않게 난수를 쓰지 않는다. */
+/** The same cloud comes from a seed — no random numbers, so the screen and the script do not drift apart. */
 export function cloudPuffs(variant: 0 | 1 | 2): CloudPuff[] {
   const shapes: CloudPuff[][] = [
     [
@@ -41,23 +41,23 @@ export function cloudPuffs(variant: 0 | 1 | 2): CloudPuff[] {
   return shapes[variant];
 }
 
-/** 구름 하나. 위는 햇빛을 받아 희고 아래는 살짝 가라앉는다(하늘빛 반사). */
+/** One cloud. The top is white in the sunlight and the bottom sinks slightly (sky-blue reflection). */
 export function buildCloud(variant: 0 | 1 | 2): T.Group {
   const group = new T.Group();
-  // 덩어리 경계가 도드라지지 않게 명암 폭을 좁게 둔다 — 대비가 크면 "공을 붙여 놓은 것" 처럼 보이고,
-  // 아예 없애면(발광) 구름이 흰 판이 된다. 아래쪽만 하늘빛으로 살짝 가라앉힌다.
+  // Keep the shading range narrow so lump boundaries do not stand out — high contrast looks like "balls glued together",
+  // and removing it entirely (emissive) turns the cloud into a white plate. Only the bottom sinks slightly with sky blue.
   const material = new T.MeshStandardMaterial({ color: "#fdfefe", roughness: 1, metalness: 0 });
   for (const puff of cloudPuffs(variant)) {
     const mesh = new T.Mesh(new T.SphereGeometry(puff.r, 32, 24), material);
     mesh.position.set(puff.x, puff.y, puff.z);
-    // 뭉게구름은 위아래로 눌려 있다 — 완전한 구는 솜사탕처럼 보인다.
+    // Cumulus clouds are squashed vertically — perfect spheres look like cotton candy.
     mesh.scale.set(1, 0.82, 0.94);
     group.add(mesh);
   }
   return group;
 }
 
-/** 구름 전용 조명 — 위에서 흰빛, 아래에서 하늘빛. 본사 조명과 섞지 않는다. */
+/** Cloud-only lighting — white from above, sky blue from below. Not mixed with the headquarters lighting. */
 export function addCloudLights(scene: T.Scene) {
   scene.add(new T.HemisphereLight("#ffffff", "#dce7f1", 3.1));
   const sun = new T.DirectionalLight("#fff6e0", 0.55);

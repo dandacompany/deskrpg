@@ -15,7 +15,7 @@ for (const { id } of OFFICE_ENVIRONMENTS)
     assert.ok(boardLocation(m));
     assert.ok(boardApproach(m, start, walkable));
   });
-test("도착 전에는 열리지 않고 도착 후 한 번만 열린다", () => {
+test("does not open before arrival and opens only once after arrival", () => {
   const a = new BoardArrival();
   a.start(5.5, 2.5, 0);
   assert.equal(a.update({ x: 5.5, y: 2.5, walking: true }, 5), false);
@@ -23,7 +23,7 @@ test("도착 전에는 열리지 않고 도착 후 한 번만 열린다", () => 
   assert.equal(a.update({ x: 5.5, y: 2.5, walking: false }, 7), true);
   assert.equal(a.update({ x: 5.5, y: 2.5, walking: false }, 8), false);
 });
-test("새 이동 명령과 시간 초과는 게시판 예약을 취소한다", () => {
+test("a new move command or a timeout cancels the board reservation", () => {
   const a = new BoardArrival();
   a.start(1, 1, 0);
   a.cancel();

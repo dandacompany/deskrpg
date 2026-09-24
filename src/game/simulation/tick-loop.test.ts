@@ -8,27 +8,27 @@ import {
   TickLoop,
 } from "./tick-loop";
 
-test("첫 프레임은 경과 0, 그 뒤는 실제 경과를 쓴다", () => {
+test("the first frame has zero elapsed, and after that the real elapsed time is used", () => {
   assert.equal(clampFrameDelta(1000, null), 0);
   assert.equal(clampFrameDelta(1016.7, 1000), 16.700000000000045);
 });
 
-test("가려진 탭에서 돌아온 긴 공백은 상한으로 잘린다", () => {
+test("a long gap after returning from a hidden tab is clipped to the cap", () => {
   assert.equal(clampFrameDelta(60_000, 1000), MAX_FRAME_DELTA_MS);
   assert.equal(clampFrameDelta(1300, 1000, 100), 100);
 });
 
-test("시계가 거꾸로 가도 음수 경과는 내지 않는다", () => {
+test("never produces negative elapsed time even if the clock goes backwards", () => {
   assert.equal(clampFrameDelta(900, 1000), 0);
 });
 
-test("가려진 틱은 긴 경과를 상한 크기 스텝으로 나눠 모두 반영한다", () => {
+test("hidden ticks split a long elapsed time into cap-sized steps and apply all of them", () => {
   assert.deepEqual(hiddenStepDeltas(2000, 1000), [200, 200, 200, 200, 200]);
   assert.deepEqual(hiddenStepDeltas(1250, 1000), [200, 50]);
   assert.deepEqual(hiddenStepDeltas(1000, null), [], "첫 틱은 경과가 없다");
 });
 
-test("오래 잠든 탭이 깨어나도 따라잡는 경과는 상한까지다", () => {
+test("even when a long-sleeping tab wakes up, catch-up elapsed time goes only up to the cap", () => {
   const steps = hiddenStepDeltas(600_000, 0);
   assert.equal(
     steps.reduce((sum, d) => sum + d, 0),
@@ -36,7 +36,7 @@ test("오래 잠든 탭이 깨어나도 따라잡는 경과는 상한까지다",
   );
 });
 
-test("탭이 가려지면 rAF 대신 타이머로 틱을 이어 간다", () => {
+test("when the tab is hidden, ticks continue with a timer instead of rAF", () => {
   const g = globalThis as Record<string, unknown>;
   const saved = {
     document: g.document,
@@ -75,8 +75,8 @@ test("탭이 가려지면 rAF 대신 타이머로 틱을 이어 간다", () => {
     listener!();
     assert.ok(timer.tick, "가려지면 타이머로 넘어간다");
     clock = 1000;
-    timer.tick!(); // 첫 틱: 기준 시각만 잡는다
-    clock = 2000; // 브라우저가 1초 간격으로 늦췄다
+    timer.tick!(); // First tick: only set the reference time
+    clock = 2000; // The browser slowed it down to 1-second intervals
     timer.tick!();
     assert.equal(
       deltas.reduce((sum, d) => sum + d, 0),

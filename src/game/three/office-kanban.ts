@@ -3,7 +3,7 @@ import type { MapSnapshot } from "./bridge";
 import { findPath } from "../navigation";
 import { round } from "./primitives";
 
-/** 맵별 마감만 다르고 접근·선택·도착 동작은 공유하는 사무실 게시판. */
+/** The office bulletin board: only the finish differs per map, while approach, selection and arrival behavior are shared. */
 export const OFFICE_BOARD_STYLES = {
   agency: { x: 26, frame: "#b39a73", panel: "#d4bd8d", accent: "#cd785b" },
   publishing: { x: 24, frame: "#977348", panel: "#ddd2b3", accent: "#788668" },
@@ -80,7 +80,7 @@ export function buildOfficeBoard(map: MapSnapshot) {
   }
   return g;
 }
-/** 재명령·맵교체·시간초과 때 취소하며 실제 도착 후 한 번만 실행한다. */
+/** Cancelled on re-command, map swap or timeout, and run only once after actual arrival. */
 export class BoardArrival {
   private pending: { x: number; y: number; expires: number } | null = null;
   start(x: number, y: number, now: number) {

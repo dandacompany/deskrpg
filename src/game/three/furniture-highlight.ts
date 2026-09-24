@@ -1,6 +1,6 @@
 import * as T from "three";
 
-/** 원본·배치 프록시의 형상을 빌려 좌석 위에만 선택 색상을 입힌다. */
+/** Borrow the shape of the original or placement proxy and apply the selection color only over the seat. */
 export class FurnitureHighlight {
   readonly group = new T.Group();
   private readonly material = new T.MeshBasicMaterial({
@@ -31,7 +31,7 @@ export class FurnitureHighlight {
       this.clear();
       return;
     }
-    // 실제 숨긴 가구는 제외하고 정적 배치가 남긴 선택 프록시만 허용한다.
+    // Exclude furniture that is actually hidden and allow only selection proxies left by static placement.
     for (let ancestor: T.Object3D | null = owner; ancestor; ancestor = ancestor.parent) {
       if (!ancestor.visible) {
         this.clear();
@@ -64,7 +64,7 @@ export class FurnitureHighlight {
         this.overlays.set(node, overlay);
         this.group.add(overlay);
       }
-      // 에셋 교체·회전 후에도 별도 형상 복제 없이 현재 월드 좌표를 따라간다.
+      // Follows the current world coordinates even after asset swaps and rotation, without cloning the shape separately.
       overlay.geometry = node.geometry;
       overlay.matrix.multiplyMatrices(this.inverseWorld, node.matrixWorld);
       overlay.matrixWorldNeedsUpdate = true;

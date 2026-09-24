@@ -234,7 +234,7 @@ export function studioDecorations(
   return out;
 }
 /** After all loads settle, resource ownership moves from independent hosts to the whole scene. */
-/** 바이트 배열을 한 번 훑어 32비트로 접는다. 같은 바이트면 같은 값이다. */
+/** Sweep a byte array once and fold it into 32 bits. The same bytes give the same value. */
 function fnv1a(bytes: ArrayLike<number>) {
   let hash = 0x811c9dc5;
   for (let i = 0; i < bytes.length; i++) {
@@ -246,13 +246,13 @@ function fnv1a(bytes: ArrayLike<number>) {
 
 export function finalizeStudioScene(root: T.Group) {
   /**
-   * 같은 그림인지 픽셀을 구워서 비교하지 않는다.
+   * Do not bake pixels to compare whether two images are the same.
    *
-   * 예전에는 이미지를 캔버스에 그려 `toDataURL()` 로 base64 PNG 를 만들어 키로 썼고, 텍스처
-   * 신호도 `Texture.toJSON()` 으로 만들어 three 가 이미지를 한 번 더 인코딩했다. 2048×1024 한
-   * 장이 20~30ms 다. 픽셀 배열을 가진 텍스처는 바이트를 접어서 그대로 비교하고(정확도 유지),
-   * 이미지 객체는 URL 이나 `Source` uuid 로 가른다 — 같은 GLB 를 복제한 텍스처는 source 를
-   * 공유하므로 중복 제거가 성립한다.
+   * This used to draw the image to a canvas and use a base64 PNG from `toDataURL()` as the key, and the texture
+   * signature was also built with `Texture.toJSON()`, making three encode the image once more. One 2048×1024
+   * image took 20–30ms. Textures holding pixel arrays fold the bytes and compare them as is (keeping accuracy),
+   * and image objects are told apart by URL or `Source` uuid — textures cloned from the same GLB share
+   * a source, so deduplication holds.
    */
   const imageKeys = new WeakMap<object, string>();
   const imageKey = (texture: T.Texture) => {
@@ -275,7 +275,7 @@ export function finalizeStudioScene(root: T.Group) {
     imageKeys.set(source, key);
     return key;
   };
-  /** 공유 판정에 실제로 쓰이는 샘플링 설정만 모은다. 픽셀은 보지 않는다. */
+  /** Collect only the sampling settings actually used in the sharing decision. Pixels are not looked at. */
   const textureSignature = (texture: T.Texture) =>
     JSON.stringify([
       texture.mapping,
@@ -360,7 +360,7 @@ export function addCreativeStudioScene(
     } else scene.userData.unhandledObjects.push(object);
   }
   for (const d of creativeStudioDecorations()) {
-    // 벽 게시판은 공통 상호작용 모듈에서 렌더링한다.
+    // Wall bulletin boards are rendered by the shared interaction module.
     if (d.object.type === "studio_art_wall") continue;
     const host = new T.Group();
     const [x, y, z] = d.position;

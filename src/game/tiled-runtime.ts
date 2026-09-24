@@ -1,4 +1,4 @@
-/** 3D 공식 맵의 논리 타일에도 타일셋 항목이 하나는 있어야 하는 도구(맵 에디터·검증)를 위해 내장 타일셋을 채운다. 순수 기하 보조 모듈이다. */
+/** Fill in a built-in tileset for tools (map editor, validation) that need at least one tileset entry even for the logical tiles of 3D official maps. A pure geometry helper module. */
 export function withRuntimeTileset(map: Record<string, unknown>): Record<string, unknown> {
   if (Array.isArray(map.tilesets) && map.tilesets.length > 0) return map;
   return {

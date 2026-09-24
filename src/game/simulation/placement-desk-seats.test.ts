@@ -20,7 +20,7 @@ for (const env of OFFICE_ENVIRONMENTS) {
   });
 }
 
-test("taken 콜백이 참인 타일만 taken 으로 표시한다", () => {
+test("marks as taken only the tiles for which the taken callback is true", () => {
   const mapData = buildOfficeEnvironment(OFFICE_ENVIRONMENTS[0].id);
   const layout = deriveChannelMotionLayout({ mapData }, [])!;
   const objects = projectMeetingMap(normalizeMeetingMap(mapData, null).mapData).objects;

@@ -1,10 +1,10 @@
 /**
- * 화면 없는 오피스 시뮬레이션.
+ * The office simulation without a screen.
  *
- * 플레이어·NPC·원격 플레이어의 위치와 상태를 굴리고, 소켓과 EventBus 로 페이지와 대화하며,
- * 결과를 `OfficeBridge` 로 렌더러(three.js)에 내보낸다. 이 모듈은 그리지 않는다 — 텍스처·
- * 스프라이트·카메라가 없고, 브라우저 API 는 `start()` 뒤의 rAF 루프와 키보드 리스너뿐이다.
- * 생성만으로는 DOM 을 건드리지 않으므로 node 에서 핸들러를 직접 검사할 수 있다.
+ * It advances the positions and states of the player, NPCs and remote players, talks to the page via the socket and the EventBus,
+ * and sends the results to the renderer (three.js) through `OfficeBridge`. This module does not draw — there are no textures,
+ * sprites or camera, and the only browser APIs are the rAF loop and keyboard listeners after `start()`.
+ * Construction alone does not touch the DOM, so handlers can be checked directly in node.
  */
 import type { Socket } from "socket.io-client";
 import { isNpcCallRejected, npcCallErrorKey } from "../../lib/npc-call-errors";
@@ -96,7 +96,7 @@ import {
 
 type PlayerBody = { x: number; y: number };
 
-/** 입력 상자·편집 가능한 요소에 포커스가 있으면 게임 키를 가로채지 않는다. */
+/** Do not intercept game keys when an input box or editable element has focus. */
 export function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
@@ -104,7 +104,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || !!el.isContentEditable;
 }
 
-/** 옛 게임 루프가 브라우저에서 가로채던 키. 화살표(스크롤)·슬래시(Firefox 빠른 찾기). */
+/** Keys the old game loop intercepted in the browser. Arrows (scrolling) and slash (Firefox quick find). */
 const CAPTURED_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "]);
 
 type PendingNpcCall = {
@@ -116,20 +116,20 @@ type PendingNpcCall = {
   roomId?: string;
 };
 
-/** 한 번 위치 보고에 움직여도 되는 거리(px) — 옛 걸음 150px/s 가 200ms 에 가던 거리다. */
+/** The distance (px) allowed per position report — how far the old 150px/s walk went in 200ms. */
 const NPC_SYNC_CHORD_PX = 30;
 const NPC_SYNC_MAX_INTERVAL_MS = 200;
-/** 초당 20번보다 자주 보내지 않는다 — 최고 속도(480px/s)에서도 62ms 라 여기에 닿지 않는다. */
+/** Never send more often than 20 times per second — even at top speed (480px/s) it is 62ms, so this is not reached. */
 const NPC_SYNC_MIN_INTERVAL_MS = 50;
 
 export class OfficeSimulation {
   // ---------------------------------------------------------------------------
-  // 수명 · 시계
+  // Lifetime · clock
   // ---------------------------------------------------------------------------
   private disposed = false;
   private paused = false;
   private booted = false;
-  /** rAF 시각(ms). 소켓 핸들러도 마지막 틱의 값을 본다 — 옛 씬 시계와 같다. */
+  /** The rAF time (ms). Socket handlers also see the last tick's value — same as the old scene clock. */
   private now = 0;
   private delta = 0;
   private loop = new TickLoop((now, delta) => this.step(now, delta));
@@ -139,7 +139,7 @@ export class OfficeSimulation {
   private justPressed = new Set<string>();
 
   // ---------------------------------------------------------------------------
-  // 회의
+  // Meetings
   // ---------------------------------------------------------------------------
   private meetingMode = false;
   private meetingEntryPending = false;
@@ -149,7 +149,7 @@ export class OfficeSimulation {
   private spatialNpcRoutes = new Map<string, { generation: number; done: boolean }>();
 
   // ---------------------------------------------------------------------------
-  // 이동 조정 · 스냅샷
+  // Movement coordination · snapshots
   // ---------------------------------------------------------------------------
   private presentationActorId: string | undefined;
   private ambientDepartures = new AmbientDepartures();
@@ -177,13 +177,13 @@ export class OfficeSimulation {
   private speechPreviews = new SpeechPreviews();
   private smalltalk = new NpcSmalltalk();
   private responsePhases: Record<string, "queued" | "thinking" | "streaming"> = {};
-  /** 카드 실행·크론 실행 중인 NPC(R27). `npc:working-state` 로 통째로 갱신된다. */
+  /** NPCs running cards or cron jobs (R27). Replaced wholesale by `npc:working-state`. */
   private workingNpcs = new Set<string>();
-  /** npcId → 진행 중인 건수. 한 직원이 여러 장을 돌릴 수 있어 개수까지 받는다. */
+  /** npcId → number of items in progress. One employee can run several, so the count is received too. */
   private workingCounts: Record<string, number> = {};
 
   // ---------------------------------------------------------------------------
-  // 플레이어
+  // Player
   // ---------------------------------------------------------------------------
   private player: PlayerBody | null = null;
   private currentDirection: number = DIR_DOWN;
@@ -191,7 +191,7 @@ export class OfficeSimulation {
   private playerActuallyWalking = false;
 
   // ---------------------------------------------------------------------------
-  // 멀티플레이
+  // Multiplayer
   // ---------------------------------------------------------------------------
   private socket: Socket | null = null;
   private rejoin = createRejoinTracker();
@@ -212,23 +212,23 @@ export class OfficeSimulation {
   // NPC
   // ---------------------------------------------------------------------------
   private npcs: NpcController[] = [];
-  private npcTilePositions: Set<string> = new Set(); // "col,row" — 스폰 충돌 검사용
+  private npcTilePositions: Set<string> = new Set(); // "col,row" — for spawn collision checks
   private npcPositionSyncTimer = 0;
   private nearbyNpcs: NpcController[] = [];
   private nearbyPlayers: { id: string; name: string }[] = [];
   private dialogOpen = false;
-  /** 어느 방의 대화가 보이는가 — GamePageClient 가 room:visible 로 알려 준다. null 이면 보이는 방이 없음. */
+  /** Which room's conversation is visible — GamePageClient reports it via room:visible. null means no room is visible. */
   private visibleRoomId: string | null = null;
   private lastToastMessage: string | null = null;
   private lastChatInputEnabled: boolean | null = null;
   private greetedNpcs: Set<string> = new Set();
-  /** NPC 말풍선. 텍스트가 없으면 "할 말 있음"(점 세 개)이다. */
+  /** NPC speech bubbles. Without text it means "has something to say" (three dots). */
   private npcBubbles: Map<string, { text?: string }> = new Map();
-  /** 활동 표시로 띄운 말풍선. "할 말 있음" 말풍선과 구분하기 위해 따로 센다. */
+  /** Bubbles shown as activity indicators. Counted separately to tell them apart from "has something to say" bubbles. */
   private activityBubbles: Set<string> = new Set();
 
   // ---------------------------------------------------------------------------
-  // 경로 추종
+  // Path following
   // ---------------------------------------------------------------------------
   private currentPath: NavigationPoint[] | null = null;
   private pathIndex = 0;
@@ -237,7 +237,7 @@ export class OfficeSimulation {
   private pathLastDist = Infinity;
 
   // ---------------------------------------------------------------------------
-  // 맵
+  // Map
   // ---------------------------------------------------------------------------
   private floorData: number[][] = [];
   private wallsData: number[][] = [];
@@ -251,8 +251,8 @@ export class OfficeSimulation {
   private channelId = "";
   private meetingSpace: MeetingSpace | undefined;
   /**
-   * 채널의 NPC 걸음 속도. 채널 공유 설정이다 — 이 브라우저가 NPC 를 구동하면 이 값으로 걷고,
-   * 다른 사람은 방송된 위치를 따라가므로 모두 같은 속도를 본다.
+   * The channel's NPC walking speed. A shared channel setting — when this browser drives NPCs they walk at this value,
+   * and others follow the broadcast positions, so everyone sees the same speed.
    */
   private motion: NpcMotionConfig = DEFAULT_NPC_MOTION;
   private tiledMode = false;
@@ -266,36 +266,36 @@ export class OfficeSimulation {
   private mapConfigSpawnRow: number | null = null;
 
   // ---------------------------------------------------------------------------
-  // 배치 · 시작 위치 지정
+  // Placement · start position selection
   // ---------------------------------------------------------------------------
   private placementMode = false;
-  /** 자리 변경 모드 번호 라벨 캐시 — 모드 진입·NPC 추가/제거 때 비운다. */
+  /** Cache of number labels for seat change mode — cleared on entering the mode and when NPCs are added/removed. */
   private seatLabelCache: EditorSnapshot["seatLabels"] | null = null;
   private placementNpcId: string | null = null;
   private isChannelOwner = false;
   private spawnSetMode = false;
 
   // ---------------------------------------------------------------------------
-  // 진단(개발용)
+  // Diagnostics (for development)
   // ---------------------------------------------------------------------------
   private returnDiagnosticAt = 0;
   private returnDiagnosticNode: HTMLOutputElement | null = null;
 
   // ===========================================================================
-  // 수명
+  // Lifetime
   // ===========================================================================
 
   /**
-   * 브라우저 진입점. 페이지가 `setPendingChannelData` 로 넘긴 채널 데이터를 소비해 맵을 세우고,
-   * `scene-ready`·`three:bridge-ready`·`request-socket` 을 낸 뒤 틱 루프를 돈다.
-   * 채널 데이터가 아직 없으면 `channel-data-ready` 를 기다렸다가 같은 절차를 밟는다.
+   * The browser entry point. Consumes the channel data the page handed over via `setPendingChannelData` to build the map,
+   * emits `scene-ready`, `three:bridge-ready` and `request-socket`, then runs the tick loop.
+   * If channel data is not there yet, it waits for `channel-data-ready` and follows the same steps.
    */
   start(): void {
     if (this.disposed) return;
     const data = pendingChannelData;
     const source = data?.tiledJson ?? data?.mapData;
     if (!data || !source) {
-      // 옛 씬의 "Loading channel map..." 대기 상태. 데이터가 오면 처음부터 다시 세운다.
+      // The old scene's "Loading channel map..." waiting state. When data arrives, build again from scratch.
       const handleChannelDataReady = () => {
         EventBus.off("channel-data-ready", handleChannelDataReady);
         if (!this.disposed) this.start();
@@ -313,7 +313,7 @@ export class OfficeSimulation {
       window.removeEventListener("keyup", this.handleKeyUp);
       window.removeEventListener("blur", this.handleWindowBlur);
     });
-    // 소켓이 이미 준비돼 있었을 수 있으니 다시 요청한다.
+    // The socket may already have been ready, so request again.
     EventBus.emit("request-socket");
   }
 
@@ -322,7 +322,7 @@ export class OfficeSimulation {
     this.disposed = true;
     this.loop.stop();
     this.scheduler.clear();
-    // 이 시뮬레이션이 건 리스너만 떼어 낸다 — 페이지의 EventBus 리스너는 남는다.
+    // Remove only the listeners this simulation attached — the page's EventBus listeners stay.
     this.eventScope.dispose();
     EventBus.off("socket-rejoin", this.handleSocketRejoin);
     this.socketListenerCleanup = null;
@@ -330,7 +330,7 @@ export class OfficeSimulation {
     this.returnDiagnosticNode = null;
   }
 
-  /** 렌더러가 소비하는 시뮬레이션 상태. */
+  /** Simulation state consumed by the renderer. */
   readonly officeBridge: OfficeBridge = {
     actors: () => this.actors(),
     mapKey: () =>
@@ -398,7 +398,7 @@ export class OfficeSimulation {
         this.playerSeatGoal,
       );
     },
-    // 그릴 것이 없으므로 붙고 떨어지는 알림은 무시한다.
+    // There is nothing to draw, so attach and detach notices are ignored.
     setPresentation: () => {},
   };
 
@@ -467,13 +467,13 @@ export class OfficeSimulation {
   }
 
   // ===========================================================================
-  // 부팅 — 옛 씬의 create()
+  // Boot — the old scene's create()
   // ===========================================================================
 
   private boot(data: NonNullable<typeof pendingChannelData>): void {
     this.booted = true;
     this.setMotionConfig(data.motionConfig);
-    // 소유자가 채널 설정에서 바꾸면 `channel:updated` 로 온다 — 다시 불러오지 않아도 바로 반영.
+    // When the owner changes it in channel settings it arrives via `channel:updated` — applied right away without reloading.
     this.eventScope.on("channel:motion-config", (config: unknown) => this.setMotionConfig(config));
     this.eventScope.on("meeting:request-entry", () => this.requestMeetingEntry());
     this.eventScope.on("meeting:cancel-entry", () => this.cancelMeetingEntry());
@@ -510,7 +510,7 @@ export class OfficeSimulation {
     if (data.tiledJson) {
       tiledJsonData = data.tiledJson as Record<string, unknown>;
     } else if (data.mapData) {
-      // mapData 자체가 Tiled JSON 일 수 있다(tiledversion 필드).
+      // mapData itself may be Tiled JSON (tiledversion field).
       const mapData = data.mapData as Record<string, unknown>;
       if ("tiledversion" in mapData) tiledJsonData = mapData;
       else legacyMapData = mapData;
@@ -536,20 +536,20 @@ export class OfficeSimulation {
 
     if (data.savedPosition) this.savedPosition = data.savedPosition;
 
-    setPendingChannelData(null); // 소비했다
+    setPendingChannelData(null); // consumed
 
     this.applyMapRuntime(
       tiledJsonData ? loadTiledRuntime(tiledJsonData) : loadLegacyRuntime(legacyMapData),
     );
 
-    // 대화창
+    // dialog
     this.eventScope.on("dialog:open", () => {
       this.dialogOpen = true;
     });
     this.eventScope.on("dialog:close", () => {
       this.dialogOpen = false;
     });
-    // 보이는 방이 바뀌면, 그 방이 아닌 호출된 NPC 는 타이머 없이 바로 자리로 간다.
+    // When the visible room changes, called NPCs not for that room go to their seats right away without a timer.
     this.eventScope.on("room:visible", (payload: { roomId: string | null }) => {
       this.visibleRoomId = payload.roomId;
       for (const npc of this.npcs) {
@@ -558,7 +558,7 @@ export class OfficeSimulation {
       }
     });
 
-    // 배치 모드
+    // placement mode
     this.eventScope.on("placement-mode-start", (npc: { id: string }) => {
       this.placementNpcId = npc.id;
       this.placementMode = true;
@@ -569,7 +569,7 @@ export class OfficeSimulation {
       this.placementNpcId = null;
     });
 
-    // 시작 위치 지정 모드
+    // start position selection mode
     this.eventScope.on("map-refresh-start", () => {
       this.paused = true;
     });
@@ -583,7 +583,7 @@ export class OfficeSimulation {
       this.isChannelOwner = payload.isOwner;
     });
 
-    // 로컬 NPC 추가/제거(자기 고용/해고)
+    // local NPC add/remove (own hiring/firing)
     this.eventScope.on(
       "npc:spawn-local",
       (raw: {
@@ -657,7 +657,7 @@ export class OfficeSimulation {
       this.handleNpcCallToPlayer(payload),
     );
 
-    // NPC 응답이 끝났다 — 플레이어와 멀면 걸어가서 전한다
+    // The NPC's response finished — if far from the player, walk over and deliver it
     this.eventScope.on("npc:deliver-response", (payload: { npcId: string; npcName: string }) => {
       if (!this.player) return;
       const npc = this.npcs.find((n) => n.id === payload.npcId);
@@ -665,12 +665,12 @@ export class OfficeSimulation {
 
       const dist = npc.distanceTo(this.player.x, this.player.y);
       if (dist < TILE_SIZE + 4) {
-        // 이미 가깝다 — 말풍선만
+        // Already close — bubble only
         EventBus.emit("npc:bubble", { npcId: npc.id });
         return;
       }
 
-      // 멀다 — 플레이어에게 간다(쉬고 있을 때만)
+      // Far — go to the player (only while resting)
       if (!this.ensureLocalNpcOwnership(npc) || npc.moveState !== "idle") return;
       this.npcTilePositions.delete(`${npc.homeCol},${npc.homeRow}`);
       const playerCol = Math.floor(this.player.x / TILE_SIZE);
@@ -695,14 +695,14 @@ export class OfficeSimulation {
       },
     );
 
-    // NPC 위치를 먼저 받아 스폰 충돌 검사를 맞춘 뒤, 플레이어를 세운다.
+    // Receive NPC positions first to line up spawn collision checks, then place the player.
     void this.prefetchNpcPositions().then((npcs) => {
       if (this.disposed) return;
       this.loadNpcs(npcs);
       this.createPlayer();
     });
 
-    // React 가 주는 소켓 — 플레이어 스폰 전후 어느 쪽이든 올 수 있다
+    // The socket React provides — can come either before or after the player spawns
     this.eventScope.on(
       "socket-ready",
       (payload: {
@@ -730,7 +730,7 @@ export class OfficeSimulation {
         this.responsePhases = payload.phases;
       },
     );
-    // 작업 중 표시(R27) — GamePageClient 가 소켓의 `npc:working` 을 id 목록 + 건수로 접어 준다.
+    // Working indicator (R27) — GamePageClient folds the socket's `npc:working` into an id list + counts.
     this.workingNpcs = new Set();
     this.workingCounts = {};
     this.eventScope.on(
@@ -744,11 +744,11 @@ export class OfficeSimulation {
         }
       },
     );
-    // 대화 미리보기는 활동·인사 수명과 무관하다.
+    // Conversation previews are independent of activity and greeting lifetimes.
     this.eventScope.on("chat:speech", (payload: { actorId: string; text: string }) => {
       this.speechPreviews.set(payload.actorId, payload.text, this.now);
     });
-    // 말풍선. 원격 플레이어의 `chat:bubble` 은 렌더러가 직접 그린다.
+    // Speech bubbles. Remote players' `chat:bubble` is drawn by the renderer directly.
     this.eventScope.on(
       "npc:bubble",
       (payload: { npcId: string; text?: string; durationMs?: number }) => {
@@ -759,9 +759,9 @@ export class OfficeSimulation {
       this.clearNpcBubble(payload.npcId);
       this.activityBubbles.delete(payload.npcId);
     });
-    // 작업 중 표시. "할 말 있음"(점 세 개) 말풍선과 자리는 같지만 뜻이 다르므로,
-    // 활동으로 띄운 것만 따로 기억해 두었다가 활동이 끝날 때 그것만 지운다 —
-    // 그러지 않으면 NPC 가 정말 할 말이 있어 띄운 말풍선까지 같이 사라진다.
+    // Working indicator. It shares the spot with the "has something to say" (three dots) bubble but means something different,
+    // so only the ones shown as activity are remembered separately and only those are cleared when the activity ends —
+    // otherwise bubbles the NPC showed because it really has something to say would vanish too.
     this.eventScope.on("npc:activity-bubble", (payload: { npcId: string; text?: string }) => {
       if (payload.text) {
         this.activityBubbles.add(payload.npcId);
@@ -773,14 +773,14 @@ export class OfficeSimulation {
       }
     });
 
-    // 떠날 때 저장하려고 React 가 위치를 묻는다
+    // React asks for the position so it can save it on leave
     this.eventScope.on("request-player-position", () => {
       if (this.player) {
         EventBus.emit("player-position-response", { x: this.player.x, y: this.player.y });
       }
     });
 
-    // React 에 준비됐다고 알린다
+    // Tell React we are ready
     EventBus.emit("scene-ready");
     EventBus.emit("three:bridge-ready", this.officeBridge);
   }
@@ -797,7 +797,7 @@ export class OfficeSimulation {
     this.collisionData = runtime.collision;
     this.mapObjects = runtime.objects;
     this.collisionCells = runtime.collisionCells;
-    // Objects 레이어의 spawn 은 mapConfig 가 정하지 않았을 때만 쓴다
+    // The Objects layer's spawn is used only when mapConfig did not decide one
     if (this.mapConfigSpawnCol === null && runtime.tiledSpawn.col !== null)
       this.tiledSpawnCol = runtime.tiledSpawn.col;
     if (this.mapConfigSpawnRow === null && runtime.tiledSpawn.row !== null)
@@ -805,7 +805,7 @@ export class OfficeSimulation {
     this.refreshObjectOccupancy();
   }
 
-  /** 오브젝트 목록이 바뀌면 점유 타일을 다시 만든다(옛 renderObjects 의 판정 부분). */
+  /** When the object list changes, rebuild occupied tiles (the decision part of the old renderObjects). */
   private refreshObjectOccupancy(): void {
     this.objectOccupiedTiles = occupiedTiles({
       objects: this.mapObjects,
@@ -814,23 +814,23 @@ export class OfficeSimulation {
   }
 
   // ===========================================================================
-  // 걷기 판정 · 경로
+  // Walkability · paths
   // ===========================================================================
 
   private isWalkable(tileX: number, tileY: number): boolean {
     if (tileX < 0 || tileX >= this.effectiveMapCols || tileY < 0 || tileY >= this.effectiveMapRows)
       return false;
-    // Tiled 맵의 collision 레이어
+    // the Tiled map's collision layer
     if (this.collisionData.length > 0) {
       const collisionGid = this.collisionData[tileY]?.[tileX] ?? 0;
       if (collisionGid !== 0) return false;
     }
-    // 레거시 벽
+    // legacy walls
     if (this.wallsData.length > 0 && this.collisionData.length === 0) {
       const wallTile = this.wallsData[tileY]?.[tileX] ?? TILE_EMPTY;
       if (COLLISION_TILES.has(wallTile)) return false;
     }
-    // 오브젝트 점유 타일
+    // object-occupied tiles
     if (this.objectOccupiedTiles.has(`${tileX},${tileY}`)) return false;
     return true;
   }
@@ -889,7 +889,7 @@ export class OfficeSimulation {
   }
 
   private createNpcWalkValidator(): (tx: number, ty: number) => boolean {
-    // 거친 경로는 정적 지형만 본다; 지나가는 액터는 교통 조정이 스윕 디스크로 다룬다.
+    // Coarse paths see only static terrain; passing actors are handled by traffic coordination with swept disks.
     return (tx, ty) => this.isWalkable(tx, ty);
   }
 
@@ -907,9 +907,9 @@ export class OfficeSimulation {
     return null;
   }
 
-  /** NPC·원격 플레이어·미리 받은 NPC 자리가 그 타일에 있는가 */
+  /** Whether an NPC, a remote player or a pre-received NPC seat is on that tile */
   private isTileOccupied(col: number, row: number): boolean {
-    // 컨트롤러가 생기기 전에도 미리 받은 NPC 자리는 안다
+    // Pre-received NPC seats are known even before controllers exist
     if (this.npcTilePositions.has(`${col},${row}`)) return true;
 
     return !clearActors(
@@ -919,7 +919,7 @@ export class OfficeSimulation {
     );
   }
 
-  /** 원하는 타일 근처의 빈 스폰 위치 */
+  /** An empty spawn position near the desired tile */
   private findFreeSpawn(preferCol: number, preferRow: number): { col: number; row: number } {
     if (this.isWalkable(preferCol, preferRow) && !this.isTileOccupied(preferCol, preferRow)) {
       return { col: preferCol, row: preferRow };
@@ -936,7 +936,7 @@ export class OfficeSimulation {
         }
       }
     }
-    return { col: preferCol, row: preferRow }; // 폴백
+    return { col: preferCol, row: preferRow }; // fallback
   }
 
   private canPlaceAt(col: number, row: number): boolean {
@@ -948,10 +948,10 @@ export class OfficeSimulation {
   }
 
   // ===========================================================================
-  // 회의
+  // Meetings
   // ===========================================================================
 
-  /** 도착 사건만 UI의 회의 참여를 허용한다. 요청 자체는 참가 등록을 하지 않는다. */
+  /** Only the arrival event lets the UI join the meeting. The request itself does not register participation. */
   isInMeetingSpace(): boolean {
     return (
       !!this.player &&
@@ -1013,13 +1013,13 @@ export class OfficeSimulation {
   }
 
   // ===========================================================================
-  // NPC 이동 권위 · 스냅샷 적용
+  // NPC movement authority · applying snapshots
   // ===========================================================================
 
   /**
-   * 걷던 중에 서버가 도착을 확정했다(`STALLED_MOTION_MS` — 탭이 가려져 걸음이 멈춘 경우).
-   * 이 탭이 구동자라 평소엔 스냅샷 좌표를 받지 않지만, 남은 걸음을 버리고 확정된 자리로 옮긴다.
-   * 스스로 도착한 경우에는 좌표가 같아 보이는 변화가 없다.
+   * The server confirmed arrival while they were walking (`STALLED_MOTION_MS` — walking stopped because the tab was hidden).
+   * This tab is the driver, so it normally does not accept snapshot coordinates, but it drops the remaining steps and moves to the confirmed spot.
+   * When they arrived on their own, the coordinates are the same and no visible change occurs.
    */
   private snapToAuthority(npc: NpcController, state: MotionNpc): void {
     npc.pixelX = state.x;
@@ -1065,7 +1065,7 @@ export class OfficeSimulation {
       return;
     }
     path[path.length - 1] = { x: target.x / 32 - 0.5, y: target.y / 32 - 0.5 };
-    // 회의 호출. 전에는 산책 경로를 그대로 써서 산책 속도(55px/s)로 모였다 — 부르면 뛰어온다.
+    // Meeting call. It used to reuse the stroll path and gather at stroll speed (55px/s) — when called, they come running.
     npc.startStroll(path, this.motion.meetingSummon);
   }
 
@@ -1121,7 +1121,7 @@ export class OfficeSimulation {
   private applyMotionNpc(npc: NpcController, state: MotionNpc, force = false): void {
     if (adoptNpcMotionHome(npc, state)) {
       force = true;
-      this.seatLabelCache = null; // 점유 표시는 자리(home)를 따른다
+      this.seatLabelCache = null; // The occupancy marker follows the seat (home)
     }
     const previousOwner = this.npcOwnership.owner(npc.id);
     if (state.ownerSocketId) this.takeNpcOwnership(npc.id, state.ownerSocketId);
@@ -1138,7 +1138,7 @@ export class OfficeSimulation {
     npc.remotePresentation ??= new RemoteNpcPresentation(npc.pixelX, npc.pixelY);
     if (reset) {
       npc.cancelMovement();
-      // 권위 재설정이 경로를 취소했으므로 같은 공간 이동 세대도 다시 계획한다.
+      // The authority reset cancelled the path, so plan the same spatial move generation again.
       this.spatialNpcRoutes.delete(npc.id);
       npc.pixelX = state.x;
       npc.pixelY = state.y;
@@ -1147,7 +1147,7 @@ export class OfficeSimulation {
       npc.remotePresentation.accept(state.x, state.y, true);
       this.traffic.clear(npc.id);
     } else if (!localDriver) {
-      // 권위 충돌 좌표는 지금 갱신하고, 표시는 프레임마다 따라온다.
+      // Update the authoritative collision coordinates now; the display follows every frame.
       npc.pixelX = state.x;
       npc.pixelY = state.y;
       npc.direction = directionFromName(state.direction);
@@ -1241,8 +1241,8 @@ export class OfficeSimulation {
       if (!accepted) {
         this.currentPath = null;
         this.playerSeatGoal = null;
-        // 만료된 캐시 좌석이 복원된 아바타 아래에 있을 수 있다. 예약 없이 앉아 있는 것처럼
-        // 보이지 않도록 빈 바닥 타일로 옮긴다.
+        // An expired cached seat may be under the restored avatar. Move it to an empty floor tile so it does not
+        // look seated without a reservation.
         if (
           goal.seatId &&
           Math.hypot(goal.targetX - this.player.x, goal.targetY - this.player.y) <= 8
@@ -1344,8 +1344,8 @@ export class OfficeSimulation {
             socket !== this.socket ||
             channelId !== this.channelId
           ) {
-            // 같은 Socket 객체가 재연결 뒤 더 새로운 예약을 이미 가질 수 있다.
-            // 낡은 예약은 서버의 출발/접근 임대 정리가 맡는다.
+            // The same Socket object may already hold a newer reservation after reconnecting.
+            // Stale reservations are cleaned up by the server's departure/approach lease cleanup.
             return;
           }
           this.pendingSeatClaims.delete(actorId);
@@ -1391,9 +1391,9 @@ export class OfficeSimulation {
   private ensureLocalNpcOwnership(npc: NpcController, reason?: string, roomId?: string) {
     if (!this.socket?.connected || !this.socket.id || !this.motionSnapshot.current) return false;
     if (this.npcOwnership.owner(npc.id) === this.socket.id) return true;
-    // 소유권을 낙관적으로 먼저 잡는다 — 걸음이 한 틱도 끊기지 않게 하려는 것이다.
-    // 그래서 **거절되면 반드시 되돌린다.** 예전에는 ack 조차 받지 않아 서버가 거절해도
-    // 클라이언트만 자기가 주인이라고 믿었고, 그 뒤로는 호출을 다시 보내지도 않았다.
+    // Ownership is taken optimistically first — so walking is not interrupted for even one tick.
+    // That is why it **must be reverted on refusal.** The ack used to be ignored entirely, so even when the server refused,
+    // only the client believed it was the owner, and it never sent the call again afterwards.
     const previousOwner = this.npcOwnership.owner(npc.id);
     this.takeNpcOwnership(npc.id, this.socket.id);
     const npcId = npc.id;
@@ -1465,9 +1465,9 @@ export class OfficeSimulation {
     if (npc.moveState !== "idle") return;
     npc.calledForRoom = payload.reason === "map-chat" ? (payload.roomId ?? null) : null;
 
-    // B-1. 업무 중인 직원도 **막지 않고** 부른다 — 실행은 Hermes 워커가 하므로 자리를 떠나도
-    // 카드는 계속 돈다. 다만 방해했는지 모른 채로 두지는 않는다. 개수까지 말하는 이유는
-    // 한 직원이 여러 장을 돌릴 수 있어서다(프로필별 상한은 기본 무제한).
+    // B-1. Working employees are also called **without blocking** — Hermes workers do the execution, so the card keeps running
+    // even if they leave the seat. But do not leave the user unaware that they interrupted. The count is stated because
+    // one employee can run several cards (the per-profile limit is unlimited by default).
     const busyCount = this.workingCounts[npc.id] ?? 0;
     if (busyCount > 0)
       EventBus.emit("toast:show", {
@@ -1510,13 +1510,13 @@ export class OfficeSimulation {
     npc.moveTo(playerCol, playerRow, findPath, this.createNpcWalkValidator(), {
       message: payload.message,
       bubbleText: payload.bubbleText,
-      // 호출 — 부르면 뛰어온다(기본은 평소 걸음의 2배).
+      // Call — when called they come running (default 2× the usual walk).
       speed: this.motion.summon,
     });
   }
 
   // ===========================================================================
-  // 포인터 · 키보드
+  // Pointer · keyboard
   // ===========================================================================
 
   private handlePointerDown(
@@ -1527,7 +1527,7 @@ export class OfficeSimulation {
     screenY: number,
   ): void {
     const rightButtonDown = button === 2;
-    // 배치 모드: 찍은 타일에 NPC 를 둔다
+    // Placement mode: put the NPC on the clicked tile
     if (this.placementMode) {
       const col = Math.floor(worldX / TILE_SIZE);
       const row = Math.floor(worldY / TILE_SIZE);
@@ -1535,7 +1535,7 @@ export class OfficeSimulation {
       return;
     }
 
-    // 시작 위치 지정 모드
+    // start position selection mode
     if (this.spawnSetMode) {
       const col = Math.floor(worldX / TILE_SIZE);
       const row = Math.floor(worldY / TILE_SIZE);
@@ -1547,7 +1547,7 @@ export class OfficeSimulation {
     if (this.meetingMode) return;
     this.cancelMeetingEntry();
 
-    // NPC 우클릭: 컨텍스트 메뉴
+    // NPC right-click: context menu
     if (rightButtonDown) {
       for (const npc of this.npcs) {
         if (
@@ -1618,15 +1618,15 @@ export class OfficeSimulation {
 
     const path = this.findPlayerPath(startTileX, startTileY, destTileX, destTileY);
 
-    // 클릭 한 번이 무슨 뜻인지 여기서 정한다. 예전에는 "걸어가서 도착하면 대화"뿐이라
-    // 이미 옆에 서 있으면 경로가 서지 않아 아무 일도 일어나지 않았다.
+    // Decide here what a single click means. It used to be only "walk over and talk on arrival",
+    // so when already standing next to them no path formed and nothing happened.
     const intent = decideNpcClick({
       pathLength: path?.length ?? 0,
       clickedNpcId: clickedNpc?.id ?? null,
     });
 
-    // 도착 대기를 걸 때만 목표를 남긴다 — 그러지 않으면 다음 이동의 도착 시점에
-    // 엉뚱한 NPC 대화가 열린다.
+    // Keep the target only when setting up an arrival wait — otherwise at the arrival of the next move
+    // an unrelated NPC conversation opens.
     this.targetNpcId = clickedNpc && shouldRememberTarget(intent) ? clickedNpc.id : null;
 
     if (intent === "interact-now" && clickedNpc) {
@@ -1670,13 +1670,13 @@ export class OfficeSimulation {
   }
 
   // ===========================================================================
-  // NPC 로딩
+  // NPC loading
   // ===========================================================================
 
-  /** 컨트롤러를 만들기 전에 NPC 자리를 먼저 받아 스폰 충돌 검사가 맞게 한다 */
+  /** Receive NPC seats before creating controllers so spawn collision checks line up */
   private async prefetchNpcPositions(): Promise<NpcData[]> {
-    // 실패는 빈 목록과 구분해서 알린다. 예전에는 채널 없이 `/api/npcs` 를 부르고
-    // 응답 상태를 보지 않아, 400 이 조용히 "NPC 0명" 으로 그려졌다.
+    // Report failures distinctly from an empty list. It used to call `/api/npcs` without a channel and
+    // ignore the response status, so a 400 was quietly drawn as "0 NPCs".
     const result = await fetchChannelNpcs(this.channelId);
     if (!result.ok) {
       console.warn(
@@ -1692,13 +1692,13 @@ export class OfficeSimulation {
     return npcs;
   }
 
-  /** 채널 걸음 설정을 받는다. 믿지 않고 접으므로 비었거나 틀린 값이면 기본값이다. */
+  /** Receive the channel walking setting. It is not trusted but clamped, so empty or invalid values give defaults. */
   setMotionConfig(config: unknown): void {
     this.motion = normalizeNpcMotionConfig(config);
     for (const npc of this.npcs) this.applyMotion(npc);
   }
 
-  /** 위치 보고 간격(ms). 가장 빠르게 움직이는 NPC 가 한 번에 30px 를 넘지 않게 한다. */
+  /** Position report interval (ms). Keeps the fastest-moving NPC from exceeding 30px at a time. */
   private npcPositionSyncInterval(): number {
     let fastest = 0;
     for (const npc of this.npcs)
@@ -1741,14 +1741,14 @@ export class OfficeSimulation {
     this.npcTilePositions.delete(`${col},${row}`);
     this.npcs.splice(idx, 1);
     this.seatLabelCache = null;
-    // 말풍선은 컨트롤러가 아니라 npcId 로 든 맵에 있다. 여기서 지우지 않으면
-    // 퇴근에도, npc:removed 에도 마지막 자리에 영구히 남는다.
+    // Bubbles live in a map keyed by npcId, not in the controller. Without clearing them here,
+    // they stay forever at the last spot on clock-out and on npc:removed alike.
     this.clearNpcBubble(npcId);
     this.activityBubbles.delete(npcId);
   }
 
   // ===========================================================================
-  // 소켓 리스너
+  // Socket listeners
   // ===========================================================================
 
   private handleSocketDisconnect = (): void => {
@@ -1772,17 +1772,17 @@ export class OfficeSimulation {
     }
   };
 
-  // 이 경로는 connect 트래커와 경쟁한다: 재연결 시 socket.io-client 가 버퍼링된
-  // chat:send 를 유저 connect 리스너보다 먼저 플러시해, 서버의 chat:error not_joined 가
-  // connect 핸들러의 join 뒤에 도착할 수 있다. 소켓 id 로 중복을 걸러낸다
-  // (src/game/socket-rejoin.ts 의 shouldRejoinForError 주석 참조).
+  // This path races with the connect tracker: on reconnect socket.io-client flushes the buffered
+  // chat:send before the user's connect listener, so the server's chat:error not_joined can
+  // arrive after the connect handler's join. Duplicates are filtered by socket id
+  // (see the shouldRejoinForError comment in src/game/socket-rejoin.ts).
   private handleSocketRejoin = (): void => {
     if (!this.playerReady || !this.player) return;
     if (!shouldRejoinForError(this.socket?.id, this.joinedSocketId)) return;
     this.joinMultiplayer(this.player.x, this.player.y);
   };
 
-  /** 회의 상태의 참가자 목록에서 내 socket ↔ user 를 배운다. 끊긴 소켓은 배우지 않는다. */
+  /** Learn my socket ↔ user from the participant list in the meeting state. Disconnected sockets are not learned. */
   private handleMeetingState(
     socket: Socket,
     state: { participants?: Array<{ id: string; userId?: string }> },
@@ -1842,7 +1842,7 @@ export class OfficeSimulation {
     }
   }
 
-  /** 권위 스폰. 아직 입력이 없었던 아바타만 서버 위치로 옮기고, 이동 목표 복원을 예약한다. */
+  /** The authoritative spawn. Only avatars with no input yet are moved to the server position, and restoring the movement target is scheduled. */
   private handlePlayerSpawn(position: PlayerSpawnState): void {
     if (this.player && untouchedSpawn(this.spawnRequest, this.player, this.spawnInputStarted)) {
       this.player.x = position.x;
@@ -1851,11 +1851,11 @@ export class OfficeSimulation {
       this.playerActuallyWalking = false;
       this.currentPath = null;
       this.traffic.clear("player:local");
-      // 기억된 좌석은 의도일 뿐, 살아 있는 예약의 증거가 아니다.
+      // A remembered seat is only an intent, not evidence of a live reservation.
       this.playerSeatGoal = null;
       this.pendingPlayerResume = position.motion ?? null;
     }
-    // 권위 스냅샷을 소비한 뒤에야 로컬 프레임이 이동을 내보낼 수 있다.
+    // Only after consuming the authoritative snapshot may local frames send movement.
     this.spawnRequest = null;
     this.playerSpawnReady = true;
     this.lastSentMotion = "";
@@ -1863,8 +1863,8 @@ export class OfficeSimulation {
   }
 
   /**
-   * 옛 위치 패킷. 새 스냅샷이 이미 실어 나르는 NPC 에는 손대지 않는다 — 같은 좌표의 중복
-   * 패킷이 표시를 끊거나 걷기 플래그를 지우면 안 된다.
+   * Old position packets. NPCs that the new snapshot already carries are not touched — duplicate packets
+   * with the same coordinates must not break the display or clear the walking flag.
    */
   private handleLegacyPositionSync(data: {
     npcId: string;
@@ -1900,13 +1900,13 @@ export class OfficeSimulation {
     this.socketListenerCleanup = dispose;
     this.eventScope.addCleanup(dispose);
 
-    // 재연결 = 새 socket.id. 서버 players 맵에 없으므로 다시 join 한다.
+    // Reconnect = a new socket.id. It is not in the server's players map, so join again.
     // (docs/BACKLOG.md "소켓이 재연결되면 채널 채팅·NPC 지명이 조용히 죽는다")
     //
-    // setupSocketListeners() 는 정상 흐름에서 두 번 불린다 — 부팅의 request-socket →
-    // socket-ready 1차, createPlayer() 의 player-spawned → ThreeGame 이 같은 소켓으로
-    // socket-ready 를 재발행하는 2차. off-then-on 으로 멱등하게 만들어, 재조인 1회에
-    // player:join 이 두 번 나가지 않게 한다 (핸들러는 인스턴스 필드라 참조가 안정적이다).
+    // setupSocketListeners() is called twice in the normal flow — first from boot's request-socket →
+    // socket-ready, second when createPlayer()'s player-spawned → ThreeGame re-emits socket-ready with the
+    // same socket. Off-then-on makes it idempotent so one rejoin does not send
+    // player:join twice (handlers are instance fields, so the references are stable).
     this.socket.off("disconnect", this.handleSocketDisconnect);
     listen("disconnect", this.handleSocketDisconnect);
     this.socket.off("connect", this.handleSocketConnect);
@@ -1989,11 +1989,11 @@ export class OfficeSimulation {
       this.remotePlayers.delete(data.id);
     });
 
-    // NPC 실시간 동기화
+    // Real-time NPC sync
     listen("npc:added", (npcData: NpcData) => this.addNpc(npcData));
 
-    // 두 가지 모양이 온다 — 옛 `{ npcId, … }`(외형·방향 편집)와 새 `{ npc }`(출근부
-    // 토글). 판단은 `decideNpcUpdate` 가 한다(node 에서 테스트되는 순수 함수).
+    // Two shapes arrive — the old `{ npcId, … }` (appearance/direction edits) and the new `{ npc }` (roster
+    // toggle). `decideNpcUpdate` decides (a pure function tested in node).
     listen("npc:updated", (data: NpcUpdatedPayload) => {
       const action = decideNpcUpdate(data, (id) => this.npcs.some((n) => n.id === id));
       if (action.kind === "ignore") return;
@@ -2016,7 +2016,7 @@ export class OfficeSimulation {
       this.removeNpcById(data.npcId);
     });
 
-    // 맵 편집 실시간 동기화(레거시 맵)
+    // Real-time map edit sync (legacy maps)
     listen("map:object-added", (data: { object: MapObject }) => {
       this.mapObjects.push(data.object);
       this.refreshObjectOccupancy();
@@ -2030,7 +2030,7 @@ export class OfficeSimulation {
     listen(
       "map:tiles-updated",
       (data: { layer: string; row: number; col: number; tileId: number }) => {
-        if (this.tiledMode) return; // Tiled JSON 맵은 레거시 타일 편집을 쓰지 않는다
+        if (this.tiledMode) return; // Tiled JSON maps do not use legacy tile editing
         if (data.layer === "floor" && this.floorData[data.row]) {
           this.floorData[data.row][data.col] = data.tileId;
         } else if (data.layer === "walls" && this.wallsData[data.row]) {
@@ -2054,7 +2054,7 @@ export class OfficeSimulation {
   }
 
   // ===========================================================================
-  // 원격 플레이어 · 로컬 플레이어
+  // Remote players · local player
   // ===========================================================================
 
   private addRemotePlayer(data: RemotePlayerData): void {
@@ -2067,12 +2067,12 @@ export class OfficeSimulation {
   }
 
   private createPlayer(): void {
-    if (this.playerReady) return; // 중복 생성 방지
+    if (this.playerReady) return; // prevent duplicate creation
 
     let spawnX: number;
     let spawnY: number;
 
-    // 기존 멤버는 떠난 자리에서 이어 간다; 설정된 스폰은 첫 방문용이다.
+    // Existing members continue from where they left; the configured spawn is for first visits.
     if (this.savedPosition) {
       spawnX = this.savedPosition.x;
       spawnY = this.savedPosition.y;
@@ -2086,7 +2086,7 @@ export class OfficeSimulation {
       spawnY = spawnRow * TILE_SIZE + TILE_SIZE / 2;
       this.savedPosition = null;
     } else {
-      // NPC·원격 플레이어·오브젝트 점유 타일을 모두 피한 빈 자리를 찾는다
+      // Find an empty spot avoiding NPCs, remote players and object-occupied tiles
       const preferSpawnCol = this.tiledSpawnCol ?? 8;
       const preferSpawnRow = this.tiledSpawnRow ?? 3;
       const { col: spawnCol, row: spawnRow } = this.findFreeSpawn(preferSpawnCol, preferSpawnRow);
@@ -2121,7 +2121,7 @@ export class OfficeSimulation {
     this.playerSeatGoal = null;
     this.spawnRequest = { x, y };
     this.spawnInputStarted = false;
-    // 이름·외형은 서버가 내 캐릭터 행에서 채운다 — 보내지 않는다(characterId 는 대조용).
+    // The server fills name and appearance from my character row — do not send them (characterId is for matching).
     this.socket.emit("player:join", {
       characterId: this.characterId,
       mapId: this.channelId || "office",
@@ -2132,7 +2132,7 @@ export class OfficeSimulation {
     this.joinedSocketId = this.socket.id;
   }
 
-  /** 위치 전송(스로틀). 두 권위 스냅샷이 모두 온 뒤에만 내보낸다. */
+  /** Position sending (throttled). Sent only after both authoritative snapshots have arrived. */
   private sendPosition(x: number, y: number, direction: string, animation: string): void {
     if (!this.socket?.connected || !this.playerSpawnReady || !this.peerSnapshotReady) return;
 
@@ -2164,7 +2164,7 @@ export class OfficeSimulation {
     this.socket.emit("player:move", { x, y, direction, animation, motion });
   }
 
-  /** 검사를 통과한 끝점을 그대로 확정한다. 움직였는지 돌려준다. */
+  /** Commit the endpoint that passed the check as is. Returns whether it moved. */
   private commitPlayerStep(to: { x: number; y: number }): boolean {
     const player = this.player!;
     const moved = player.x !== to.x || player.y !== to.y;
@@ -2174,7 +2174,7 @@ export class OfficeSimulation {
   }
 
   // ===========================================================================
-  // 말풍선
+  // Speech bubbles
   // ===========================================================================
 
   private showNpcBubbleIcon(npcId: string, text?: string, durationMs?: number): void {
@@ -2190,7 +2190,7 @@ export class OfficeSimulation {
     this.npcBubbles.set(npcId, bubble);
     if (durationMs)
       this.scheduler.delay(this.now, durationMs, () => {
-        // 옛 인사가 더 새로운 작업/보고 말풍선을 지우면 안 된다.
+        // An old greeting must not erase a newer work/report bubble.
         if (this.npcBubbles.get(npcId) === bubble) this.clearNpcBubble(npcId);
       });
   }
@@ -2200,7 +2200,7 @@ export class OfficeSimulation {
   }
 
   // ===========================================================================
-  // NPC 근접
+  // NPC proximity
   // ===========================================================================
 
   private checkNpcProximity(): void {
@@ -2214,7 +2214,7 @@ export class OfficeSimulation {
     nearby.sort((a, b) => a.distanceTo(player.x, player.y) - b.distanceTo(player.x, player.y));
     this.nearbyNpcs = nearby;
 
-    // 처음 다가갈 때 자동 인사
+    // Automatic greeting when first approaching
     for (const npc of nearby) {
       if (!this.greetedNpcs.has(npc.id) && !this.dialogOpen && npc.moveState === "idle") {
         this.greetedNpcs.add(npc.id);
@@ -2222,7 +2222,7 @@ export class OfficeSimulation {
       }
     }
 
-    // 근처 원격 플레이어
+    // nearby remote players
     const nearbyP: { id: string; name: string }[] = [];
     for (const [id, remote] of this.remotePlayers) {
       if (remote.distanceTo(player.x, player.y) < NPC_INTERACT_RADIUS) {
@@ -2233,8 +2233,8 @@ export class OfficeSimulation {
 
     const hasNearby = nearby.length > 0 || nearbyP.length > 0;
 
-    // NPC 대화창: 근처에 아무도 없으면 자동으로 닫는다
-    // 단, NPC 가 플레이어에게 오는 중(응답 전달)이면 닫지 않는다
+    // NPC dialog: close automatically when nobody is nearby
+    // But do not close while the NPC is coming to the player (delivering a response)
     const npcApproaching = this.npcs.some((n) => n.moveState === "moving-to-player");
     if (
       this.dialogOpen &&
@@ -2245,9 +2245,9 @@ export class OfficeSimulation {
       EventBus.emit("npc:dialog-auto-close");
     }
 
-    // 채널 채팅: 대화 대상 근접 여부로 입력 활성/비활성을 알린다.
-    // NPC 도 맵 채팅으로 지명할 수 있으므로(@[이름]), 사람 없이 NPC 만 근처에 있어도
-    // 입력을 열어야 한다 — nearbyP 만 보면 혼자 있는 플레이어는 NPC 를 영영 부를 수 없다.
+    // Channel chat: report input enabled/disabled by whether a conversation target is nearby.
+    // NPCs can also be mentioned in map chat (@[name]), so the input must open even when only an NPC is nearby
+    // with no people — looking only at nearbyP, a player alone could never call an NPC.
     const inputEnabled = hasNearby;
     if (inputEnabled !== this.lastChatInputEnabled) {
       this.lastChatInputEnabled = inputEnabled;
@@ -2256,7 +2256,7 @@ export class OfficeSimulation {
 
     if (hasNearby && !this.dialogOpen) {
       const targetName = nearby.length > 0 ? nearby[0].name : nearbyP[0].name;
-      // 문구 자체가 아니라 대상 이름으로 중복을 판단한다 — 번역은 React 가 한다.
+      // Judge duplicates by the target name, not the text itself — React does the translation.
       if (targetName !== this.lastToastMessage) {
         this.lastToastMessage = targetName;
         EventBus.emit("toast:show", {
@@ -2327,20 +2327,20 @@ export class OfficeSimulation {
   }
 
   // ===========================================================================
-  // 틱
+  // Tick
   // ===========================================================================
 
-  /** 대기 중인 NPC 를 자리로 보낸다 — 타이머 만료와 채널 채팅 닫힘이 같은 경로를 쓴다. */
+  /** Send a waiting NPC to their seat — timer expiry and channel chat closing use the same path. */
   /**
-   * 카드가 돌기 시작한 직원을 **자기 지정석으로 돌려보낸다**(설계 2026-09-21 npc-working-state, C-1).
+   * **Send an employee whose card started running back to their own assigned seat** (design 2026-09-21 npc-working-state, C-1).
    *
-   * 임자는 `mayDriveNpc` 가 정한다 — 소유자가 나이거나, 소유자가 없고 내가 앰비언트 리더일 때만
-   * 움직인다. 이 판정을 빼면 접속한 모두가 같은 NPC 를 따로 걷게 하고, 반대로 너무 좁히면
-   * 아무도 걷지 않는다(`src/game/AGENTS.md` 의 이동 소유권 불변식).
+   * `mayDriveNpc` decides the owner — move only when I am the owner, or there is no owner and I am the ambient leader.
+   * Dropping this check makes everyone connected walk the same NPC separately, and narrowing it too much makes
+   * nobody walk (the movement ownership invariant in `src/game/AGENTS.md`).
    *
-   * 부름을 받아 와 있거나(`calledForRoom`) 이미 움직이는 중이면 건드리지 않는다 — 사용자가
-   * 부른 것이 자동 착석보다 우선이다. 좌석 점유는 `sendNpcHome` 이 타는 서버 경로가 정본이라
-   * 여기서 좌석을 직접 잡지 않는다.
+   * Do not touch them if they came when called (`calledForRoom`) or are already moving — what the user
+   * called takes priority over automatic seating. Seat occupancy is owned by the server path `sendNpcHome` rides,
+   * so the seat is not grabbed directly here.
    */
   private seatNpcForWork(npcId: string): void {
     const npc = this.npcs.find((entry) => entry.id === npcId);
@@ -2437,7 +2437,7 @@ export class OfficeSimulation {
     this.justPressed.clear();
   }
 
-  /** 프레임 갱신. 옛 씬의 update() 와 같은 순서다. */
+  /** Frame update. The same order as the old scene's update(). */
   private update(): void {
     this.playerActuallyWalking = false;
     if (this.meetingEntryPending && this.currentPath !== this.meetingEntryPath)
@@ -2447,25 +2447,25 @@ export class OfficeSimulation {
       EventBus.emit("meeting:entry-state", { status: "failed", reasonCode: "arrival_timeout" });
     }
     this.publishReturnDiagnostics();
-    // 원격 플레이어는 매 프레임 보간한다
+    // Remote players are interpolated every frame
     for (const remote of this.remotePlayers.values()) remote.lerpUpdate();
 
     this.updateRemoteNpcPresentation();
 
-    // 원격 스냅샷은 계속 오지만, 로컬 입력은 권위 하이드레이션과 경쟁할 수 없다.
+    // Remote snapshots keep coming, but local input cannot compete with authoritative hydration.
     if (!this.canMovePlayer()) return;
     if (this.player) this.updateNpcs();
 
-    // 배치 모드: 플레이어 이동을 건너뛴다(강조 표시는 렌더러 커서가 맡는다)
+    // Placement mode: skip player movement (the renderer cursor handles highlighting)
     if (this.placementMode) return;
-    // 시작 위치 지정 모드: 마찬가지
+    // start position selection mode: same
     if (this.spawnSetMode) return;
 
     if (!this.playerReady || !this.player) return;
 
     this.checkNpcProximity();
 
-    // `/` 키로 NPC/플레이어와 상호작용
+    // Interact with NPCs/players with the `/` key
     if (this.justPressed.has("Slash")) {
       if (isTypingTarget(document.activeElement)) return;
       if (!this.dialogOpen) {
@@ -2519,7 +2519,7 @@ export class OfficeSimulation {
       })),
       this.now,
       (a, b) => {
-        // 벽이나 책장 줄 너머로 인사하지 않는다.
+        // Do not greet across walls or rows of bookshelves.
         for (let step = 1; step < 8; step++) {
           const x = Math.floor(a.x + ((b.x - a.x) * step) / 8);
           const y = Math.floor(a.y + ((b.y - a.y) * step) / 8);
@@ -2548,7 +2548,7 @@ export class OfficeSimulation {
       }
       npc.ambientPaused = paused;
     }
-    // 가장 오래 준비된 사람이 다음 출발 자리를 받는다.
+    // The person ready the longest gets the next departure slot.
     const ambientOrder = [...this.npcs].sort(
       (a, b) =>
         b.ambientSchedule.elapsed -
@@ -2561,9 +2561,9 @@ export class OfficeSimulation {
       const allowed =
         this.npcOwnership.mayRoam(npc.id, leader) &&
         ambientAllowed(
-          // 일하는 중이면 산책을 나가지 않는다. 활동 말풍선만으로는 부족하다 — 조용히 오래 도는
-          // 실행에서는 `tool.progress` 가 없어, 앰비언트 일정(rest 60~100초)이 차는 순간
-          // 배지를 단 채 자리에서 일어난다(결정 C-1 "실행이 시작되면 자리로 가서 앉는다").
+          // Do not go for a stroll while working. The activity bubble alone is not enough — long quiet
+          // runs have no `tool.progress`, so the moment the ambient schedule (rest 60–100s) is due
+          // they would get up from the seat wearing the badge (decision C-1 "when a run starts, go to the seat and sit").
           this.workingNpcs.has(npc.id) ||
             !!this.responsePhases[npc.id] ||
             this.activityBubbles.has(npc.id),
@@ -2579,9 +2579,9 @@ export class OfficeSimulation {
         npc.ambientTimer = 0;
         delete npc.ambientSchedule.seatTarget;
         delete npc.ambientSchedule.seatRest;
-        // 걷던 중에 일이 시작된 직원은 여기서 멈춘다. `seatNpcForWork` 는 `moveState !== "idle"`
-        // 이면 돌아서므로, 멈춘 자리에 배지만 단 채 서 있지 않도록 이 자리에서 다시 보낸다.
-        // 이 분기는 일하는 동안 매 틱 도니 아직 idle 이 아니어도 다음 틱에 다시 시도한다.
+        // An employee whose work started mid-walk stops here. `seatNpcForWork` turns back when `moveState !== "idle"`,
+        // so send them again from this spot so they do not stand where they stopped with just the badge.
+        // This branch runs every tick while working, so even if not idle yet it retries on the next tick.
         if (this.workingNpcs.has(npc.id)) this.seatNpcForWork(npc.id);
         continue;
       }
@@ -2591,9 +2591,9 @@ export class OfficeSimulation {
       const sx = Math.floor(npc.pixelX / TILE_SIZE),
         sy = Math.floor(npc.pixelY / TILE_SIZE);
       if (!npc.ambientSeat) {
-        // 저장된 배치가 권위 있는 자리다 — 다른 의자를 고르지 않는다.
+        // The saved layout is the authoritative seat — do not pick another chair.
         npc.ambientSeat = { x: npc.homeCol, y: npc.homeRow };
-        // 첫 도착도 주기를 시작하기 전에 근무 자리를 확정한다.
+        // Even the first arrival fixes the work seat before starting the cycle.
         npc.ambientSchedule.phase = "home";
       }
       const home = npc.ambientSeat;
@@ -2685,14 +2685,14 @@ export class OfficeSimulation {
               (x, y) => walkable(x, y) && ambientTileAllowed(this.ambientZones, x, y),
             );
       if (visitSeats) {
-        // 방/방석 순서가 방문마다 치우치지 않게 좌석을 따로 섞는다.
+        // Shuffle seats separately so room/seat order is not biased per visit.
         for (let i = publicSeats.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [publicSeats[i], publicSeats[j]] = [publicSeats[j], publicSeats[i]];
         }
         destinations.unshift(...publicSeats);
       }
-      // 한 번에 하는 A* 를 제한한다; 이 무작위 묶음이 닿지 않으면 나중에 다시 시도한다.
+      // Limit A* per pass; if this random batch cannot reach, try again later.
       for (const destination of destinations.slice(0, 12)) {
         if (
           !walkable(destination.x, destination.y) ||
@@ -2736,7 +2736,7 @@ export class OfficeSimulation {
       npc.ambientSchedule.pause =
         npc.ambientSchedule.phase === "home" ? 1000 : randomDuration(2000, 6000);
     }
-    // 대화창 없이 충분히 기다린 NPC 는 자동으로 돌아간다
+    // NPCs who waited long enough without a dialog go back automatically
     for (const npc of this.npcs) {
       if (
         this.mayDriveNpc(npc) &&
@@ -2872,7 +2872,7 @@ export class OfficeSimulation {
       }
     }
 
-    // 쉬는 시계·멈춤 시계도 보존한다; 위치 갱신만으로는 멈춰 있는 상태를 놓친다.
+    // Also preserve the rest clock and stall clock; position updates alone miss the stopped state.
     this.npcContinuationTimer += this.delta;
     if (this.npcContinuationTimer >= 1000) {
       this.npcContinuationTimer = 0;
@@ -2885,11 +2885,11 @@ export class OfficeSimulation {
           });
       }
     }
-    // 움직이는 NPC 위치를 서버에 보낸다. 간격은 **한 번에 움직이는 거리**로 정한다 — 서버는
-    // 연속한 두 보고 사이의 직선이 막히지 않았는지 검사하는데, 빠르게 걸으면 그 직선이 모퉁이·가구를
-    // 가로지른다. 한 번 거절되면 서버 위치가 뒤처져 다음 직선은 더 길어지고 영영 받아들여지지 않는다
-    // (실측: 200ms 고정일 때 회의 호출 150px/s 는 집결했고 300px/s 는 "이동 중" 에서 멈췄다). 옛
-    // 걸음(150px/s)이 200ms 에 가던 30px 를 넘지 않게 속도에 맞춰 간격을 줄인다.
+    // Send moving NPC positions to the server. The interval is set by **the distance moved per report** — the server
+    // checks that the straight line between two consecutive reports is not blocked, and when walking fast that line cuts across
+    // corners and furniture. Once rejected, the server position lags so the next line is even longer and is never accepted
+    // (measured: with a fixed 200ms, meeting calls at 150px/s gathered while 300px/s stalled at "moving"). Shorten the interval
+    // to match the speed so each report does not exceed the 30px the old walk (150px/s) covered in 200ms.
     this.npcPositionSyncTimer += this.delta;
     if (this.npcPositionSyncTimer >= this.npcPositionSyncInterval()) {
       this.npcPositionSyncTimer = 0;
@@ -2915,7 +2915,7 @@ export class OfficeSimulation {
 
   private updatePlayer(): void {
     const player = this.player!;
-    // 키보드 입력
+    // keyboard input
     const left = !this.meetingMode && this.isKeyDown("ArrowLeft");
     const right = !this.meetingMode && this.isKeyDown("ArrowRight");
     const up = !this.meetingMode && this.isKeyDown("ArrowUp");
@@ -2930,14 +2930,14 @@ export class OfficeSimulation {
       }
     }
 
-    // 화살표 키는 경로 추종을 취소한다
+    // arrow keys cancel path following
     if (hasKeyboardInput && this.currentPath) {
       this.traffic.clear("player:local");
       this.currentPath = null;
       this.targetNpcId = null;
     }
 
-    // 좌석에 다가가기 전에 예약한다; 겹쳐 서서는 경합이 풀리지 않는다.
+    // Reserve before approaching the seat; standing overlapped does not resolve contention.
     if (this.currentPath?.length && this.socket?.id) {
       const goal = this.currentPath[this.currentPath.length - 1];
       const goalId = `${(goal.x + 0.5) * TILE_SIZE}:${(goal.y + 0.5) * TILE_SIZE}`;
@@ -2964,7 +2964,7 @@ export class OfficeSimulation {
         return;
       }
     }
-    // 경로 추종
+    // path following
     if (this.currentPath && this.pathIndex < this.currentPath.length) {
       const target = this.currentPath[this.pathIndex];
       const targetPixelX = target.x * TILE_SIZE + TILE_SIZE / 2;
@@ -2981,7 +2981,7 @@ export class OfficeSimulation {
         this.pathStuckTimer++;
       }
 
-      // 좌석은 보통 목적지와 달리 중심까지 가야 한다.
+      // Unlike ordinary destinations, seats must be reached at their center.
       const arrivingAtSeat =
         this.pathIndex === this.currentPath.length - 1 &&
         isSeatAnchor(this.mapObjects, target.x, target.y);
@@ -3046,7 +3046,7 @@ export class OfficeSimulation {
       return;
     }
 
-    // 수동 충돌 검사(레이어 콜라이더가 없다)
+    // Manual collision check (there are no layer colliders)
     if (hasKeyboardInput) {
       const currentTileX = Math.floor(player.x / TILE_SIZE);
       const currentTileY = Math.floor(player.y / TILE_SIZE);
@@ -3054,7 +3054,7 @@ export class OfficeSimulation {
       let vx = 0;
       let vy = 0;
 
-      // 가로 이동(걸을 수 있고 NPC/플레이어가 없는지)
+      // Horizontal move (walkable and no NPC/player)
       if (left) {
         const checkX = Math.floor((player.x - 12) / TILE_SIZE);
         if (this.isWalkable(checkX, currentTileY)) vx = -PLAYER_SPEED;
@@ -3063,7 +3063,7 @@ export class OfficeSimulation {
         if (this.isWalkable(checkX, currentTileY)) vx = PLAYER_SPEED;
       }
 
-      // 세로 이동
+      // Vertical move
       if (up) {
         const checkY = Math.floor((player.y - 12) / TILE_SIZE);
         if (this.isWalkable(currentTileX, checkY)) vy = -PLAYER_SPEED;

@@ -1,13 +1,13 @@
 /**
- * `npc:updated` 소켓 이벤트에는 **두 가지 모양**이 흘러 다닌다.
+ * **Two shapes** flow through the `npc:updated` socket event.
  *
- * - 옛 모양 `{ npcId, name?, direction?, appearance? }` — 외형·방향 편집이 보낸다
+ * - The old shape `{ npcId, name?, direction?, appearance? }` — sent by appearance/direction edits
  *   (`socket-handlers.ts`).
- * - 새 모양 `{ npc: ProjectedNpc }` — 출근부 토글이 보낸다(`npc-roster-socket.ts`).
+ * - The new shape `{ npc: ProjectedNpc }` — sent by the roster toggle (`npc-roster-socket.ts`).
  *
- * 씬의 리스너가 `data.npcId` 만 보던 동안 새 모양은 **조용히 무시**됐다. 퇴근시킨
- * NPC 가 다른 사람 화면에 그대로 서 있었고, 아무 오류도 나지 않았다. 그래서 판단을
- * 시뮬레이션 밖 순수 함수로 빼 둔다 — 소켓 없이 node 에서 판단만 검사할 수 있다.
+ * While the scene's listener looked only at `data.npcId`, the new shape was **silently ignored**. A clocked-out
+ * NPC kept standing on other people's screens, and no error occurred. So the decision is pulled
+ * out of the simulation into a pure function — the decision alone can be checked in node without a socket.
  */
 
 export type LegacyNpcUpdatedPayload = {
@@ -50,7 +50,7 @@ export type NpcUpdatedAction =
     };
 
 /**
- * @param hasSprite 그 id 의 스프라이트가 씬에 이미 있는가.
+ * @param hasSprite Whether a sprite with that id already exists in the scene.
  */
 export function decideNpcUpdate(
   data: NpcUpdatedPayload | null | undefined,
@@ -61,8 +61,8 @@ export function decideNpcUpdate(
   const npc = data.npc;
   if (npc) {
     if (!npc.id) return { kind: "ignore" };
-    // 퇴근했거나 자리를 잃은 NPC 는 맵에서 뺀다. 자리가 없는 NPC 를 그리면
-    // 좌표가 null 이라 스프라이트가 NaN 위치로 간다.
+    // NPCs who clocked out or lost their seat are removed from the map. Drawing an NPC without a seat
+    // sends the sprite to a NaN position because the coordinates are null.
     if (!npc.active || npc.positionX === null || npc.positionY === null) {
       return { kind: "remove", npcId: npc.id };
     }

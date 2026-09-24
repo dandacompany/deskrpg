@@ -6,7 +6,7 @@ import { addPublishingArchitecture } from "./publishing-scene";
 import type { MapSnapshot } from "./bridge";
 import { disposeTree } from "./dispose-tree";
 
-test("신간 진열대의 눕힌 책은 속지 앞면을 표지 상자와 겹치지 않는다", () => {
+test("books laid flat on the new releases display do not overlap the page front with the cover box", () => {
   const root = buildPublishingAsset("pub-newbook-display");
   try {
     const pages = root.children.filter(
@@ -32,7 +32,7 @@ test("신간 진열대의 눕힌 책은 속지 앞면을 표지 상자와 겹치
   }
 });
 
-test("출판사 걸레받이는 양쪽 벽면보다 돌출되어 동일 평면을 만들지 않는다", () => {
+test("publisher baseboards protrude beyond both wall faces and do not form a coplanar surface", () => {
   const root = new T.Group();
   try {
     const scene = addPublishingArchitecture(root, {

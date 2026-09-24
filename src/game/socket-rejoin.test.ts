@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRejoinTracker, registerOnce, shouldRejoinForError } from "./socket-rejoin";
 
-test("첫 connect 는 재조인이 아니다 — 스폰 경로가 이미 join 을 보냈다", () => {
+test("the first connect is not a rejoin — the spawn path already sent join", () => {
   const t = createRejoinTracker();
   assert.equal(t.shouldRejoin(true), false);
 });
 
-test("disconnect 뒤 connect 는 재조인이고, 한 번만 소비된다", () => {
+test("a connect after disconnect is a rejoin, consumed only once", () => {
   const t = createRejoinTracker();
   t.onDisconnect();
   assert.equal(t.shouldRejoin(true), true);
@@ -18,14 +18,14 @@ test("disconnect 뒤 connect 는 재조인이고, 한 번만 소비된다", () =
   );
 });
 
-test("플레이어가 아직 스폰 전이면 재조인하지 않고 플래그를 남긴다", () => {
+test("if the player has not spawned yet, do not rejoin and leave the flag", () => {
   const t = createRejoinTracker();
   t.onDisconnect();
   assert.equal(t.shouldRejoin(false), false);
   assert.equal(t.shouldRejoin(true), true, "스폰 뒤 다음 connect 에서 잡아야 한다");
 });
 
-test("registerOnce 는 같은 핸들러를 두 번 등록해도 한 번만 걸린다", () => {
+test("registerOnce attaches only once even if the same handler is registered twice", () => {
   const handlers = new Map<string, Set<() => void>>();
   const bus = {
     on(event: string, handler: () => void) {
@@ -48,7 +48,7 @@ test("registerOnce 는 같은 핸들러를 두 번 등록해도 한 번만 걸�
   );
 });
 
-test("shouldRejoinForError: 같은 소켓 id 면 이미 join 했으니 재조인하지 않는다", () => {
+test("shouldRejoinForError: with the same socket id join already happened, so do not rejoin", () => {
   assert.equal(
     shouldRejoinForError("abc", "abc"),
     false,
@@ -56,14 +56,14 @@ test("shouldRejoinForError: 같은 소켓 id 면 이미 join 했으니 재조인
   );
 });
 
-test("shouldRejoinForError: 다른 소켓 id 면 아직 join 안 한 것이므로 재조인한다", () => {
+test("shouldRejoinForError: with a different socket id join has not happened yet, so rejoin", () => {
   assert.equal(shouldRejoinForError("new-id", "old-id"), true);
 });
 
-test("shouldRejoinForError: 현재 소켓 id 가 없으면(연결 끊김) 이 id 로는 join 한 적이 없으니 재조인한다", () => {
+test("shouldRejoinForError: without a current socket id (disconnected) this id never joined, so rejoin", () => {
   assert.equal(shouldRejoinForError(undefined, "old-id"), true);
 });
 
-test("shouldRejoinForError: 이번 세션에서 한 번도 join 한 적 없으면 재조인한다", () => {
+test("shouldRejoinForError: rejoin if join never happened in this session", () => {
   assert.equal(shouldRejoinForError("abc", undefined), true);
 });

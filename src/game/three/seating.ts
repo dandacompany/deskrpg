@@ -153,16 +153,16 @@ export function sofaSeats(object: MapObject): Seat[] {
   });
 }
 /**
- * 좌석 계산은 한 맵당 한 번만 한다.
+ * Seats are computed only once per map.
  *
- * `furnitureSeats` 는 의자마다 `resolveSeat` 를 부르고, 그 안에서 `adjacentTable` 이 모든
- * 오브젝트를 훑은 뒤 같은 테이블의 이웃 의자를 찾느라 `adjacentTable` 을 또 의자 수만큼 부른다.
- * 결과는 맵이 바뀌기 전까지 변하지 않는데, `isSeatAnchor` 가 타일 하나를 물어볼 때마다 이 전부를
- * 다시 계산했다. 캐릭터가 걷는 동안 그 질문이 매 프레임 나가면서(시뮬레이션의 도착 판정)
- * 실측 CPU 의 약 66% 를 여기서 썼고 프레임 중앙값이 8.7ms → 41.6ms 가 됐다.
+ * `furnitureSeats` calls `resolveSeat` per chair, inside which `adjacentTable` sweeps every
+ * object and then calls `adjacentTable` again as many times as there are chairs to find neighboring chairs of the same table.
+ * The result does not change until the map changes, yet each time `isSeatAnchor` asked about one tile all of this was
+ * recomputed. While characters walked that question went out every frame (the simulation's arrival check),
+ * and measured CPU spent about 66% here, taking the median frame from 8.7ms → 41.6ms.
  *
- * 캐시 키는 배열의 정체성과 길이다. 이 코드베이스에서 맵 오브젝트 배열은 통째로 교체되거나
- * `push`/`splice` 로 바뀌므로 둘 중 하나는 반드시 달라진다. 배열이 사라지면 항목도 함께 사라진다.
+ * The cache key is the array identity and length. In this codebase map object arrays are either replaced wholesale or
+ * changed with `push`/`splice`, so one of the two always differs. When the array disappears, its entry goes with it.
  */
 const seatCache = new WeakMap<
   MapObject[],
@@ -177,8 +177,8 @@ const seatCache = new WeakMap<
 >();
 
 /**
- * 대표석 — `executive_desk` 뒤편 의자. 책상이 바라보는 쪽을 같이 보는 의자가 주인 자리이고,
- * 맞은편(책상 앞) 의자는 손님 자리다. 대표석은 직원 지정석으로 내주지 않는다.
+ * The CEO seat — the chair behind `executive_desk`. The chair facing the same way as the desk is the owner's seat,
+ * and the chair opposite (in front of the desk) is the guest seat. The CEO seat is not given out as an assigned employee seat.
  */
 function isExecutiveSeat(chair: MapObject, objects: MapObject[]) {
   const table = adjacentTable(chair, objects);
@@ -206,8 +206,8 @@ function seatIndex(objects: MapObject[]) {
   const anchors = new Set(
     seats.map((seat) => anchorKey((seat.anchorX ?? seat.x) - 0.5, (seat.anchorZ ?? seat.z) - 0.5)),
   );
-  // 데스크 좌석 = 전체에서 공용(회의 테이블·라운지)을 뺀 것. 자리 배정은 이것만 쓴다.
-  // 대표석도 뺀다 — 1번 자리가 대표석이라 첫 직원이 대표 의자에 앉던 것을 막는다.
+  // Desk seats = all seats minus the shared ones (meeting tables, lounges). Seat assignment uses only these.
+  // The CEO seat is removed too — seat 1 was the CEO seat, and this stops the first employee sitting in the CEO chair.
   const common = new Set(commonAreaSeats(objects).map(seatIdentity));
   const reserved = new Set(executive.map(seatIdentity));
   const desk = seats.filter(
@@ -230,12 +230,12 @@ export function isSeatAnchor(objects: MapObject[], col: number, row: number) {
   return seatIndex(objects).anchors.has(anchorKey(col, row));
 }
 
-/** 대표석 — 좌석이지만 직원에게 배정하지 않는다. */
+/** The CEO seat — a seat, but not assigned to employees. */
 export function executiveSeats(objects: MapObject[]) {
   return seatIndex(objects).executive;
 }
 
-/** 개인 데스크 의자 — 직원의 지정자리 후보. */
+/** Personal desk chairs — candidates for employees' assigned seats. */
 export function deskSeats(objects: MapObject[]) {
   return seatIndex(objects).desk;
 }
@@ -243,7 +243,7 @@ export function isDeskSeatAnchor(objects: MapObject[], col: number, row: number)
   return seatIndex(objects).deskAnchors.has(anchorKey(col, row));
 }
 
-/** 자리 변경 모드의 번호 라벨 — 데스크 좌석 타일을 row→col 로 세어 1부터. */
+/** Number labels for seat change mode — desk seat tiles counted row→col starting from 1. */
 export function deskSeatLabels(
   objects: MapObject[],
   canStand: (col: number, row: number) => boolean,

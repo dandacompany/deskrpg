@@ -3,7 +3,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 // Baking a reflection changes winding; keep those meshes under Three's original front-face handling.
 function eligibleTransform(object: T.Mesh, root: T.Group, inverse: T.Matrix4) {
   const materials = Array.isArray(object.material) ? object.material : [object.material];
-  // 회의 차폐 재질은 복원 시 폐기되므로 늦은 자산 배칭에 재사용하면 안 된다.
+  // Meeting occlusion materials are discarded on restore, so they must not be reused for late asset batching.
   if (materials.some((material) => material.userData.meetingOcclusion)) return false;
   if (new T.Matrix4().multiplyMatrices(inverse, object.matrixWorld).determinant() <= 0)
     return false;
@@ -27,14 +27,14 @@ function eligibleTransform(object: T.Mesh, root: T.Group, inverse: T.Matrix4) {
   );
 }
 /**
- * 배칭 키를 만들 때 텍스처 픽셀까지 PNG 로 굽지 않는다.
+ * Do not bake texture pixels into PNG when building the batching key.
  *
- * `Material.toJSON` 은 참조하는 텍스처를 함께 직렬화하고, three 의 `Source.toJSON` 은 이미지가
- * 메타에 없으면 `getDataURL` → `canvas.toDataURL()` 로 base64 PNG 를 통째로 인코딩한다.
- * 배칭 키에 필요한 것은 "같은 텍스처를 쓰는가" 뿐이고 그건 uuid 로 충분하다.
+ * `Material.toJSON` serializes the textures it references, and three's `Source.toJSON` encodes a whole base64 PNG
+ * via `getDataURL` → `canvas.toDataURL()` when the image is not in meta.
+ * All the batching key needs is "do they use the same texture", and the uuid is enough for that.
  *
- * three 는 이미지 항목을 **Source** 의 uuid 로 찾는다 — 이미지 객체의 uuid 로 넣으면 아무것도
- * 막지 못한다(실측으로 한 번 헛짚었다). 둘 다 빈 껍데기로 등록해 인코딩을 건너뛰게 한다.
+ * three looks up image entries by the **Source** uuid — putting the image object's uuid there blocks
+ * nothing (measurement once led us astray). Register both as empty shells so encoding is skipped.
  */
 function stubTextureImages(material: T.Material, resources: T.JSONMeta) {
   for (const value of Object.values(material as unknown as Record<string, unknown>)) {

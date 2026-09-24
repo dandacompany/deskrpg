@@ -11,7 +11,7 @@ export interface RemotePlayerData {
   animation: string;
 }
 
-/** 원격 플레이어. 서버 스냅샷 좌표(target)를 향해 프레임마다 보간한 표시 좌표(x, y)를 갖는다. */
+/** A remote player. Holds display coordinates (x, y) interpolated every frame toward the server snapshot coordinates (target). */
 export class RemotePlayer {
   readonly id: string;
   userId?: string;
@@ -42,7 +42,7 @@ export class RemotePlayer {
     this.animation = animation;
   }
 
-  /** 가까우면 붙이고, 너무 멀면(200px 초과) 순간이동, 그 사이는 고정 비율 보간. */
+  /** Snap when close, teleport when too far (over 200px), fixed-ratio interpolation in between. */
   lerpUpdate(): void {
     const dx = this.targetX - this.x;
     const dy = this.targetY - this.y;

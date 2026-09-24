@@ -1,14 +1,14 @@
 /**
- * 사이드바 아래의 미니어처 본사와 브랜드 마크가 함께 쓰는 모델.
+ * The model shared by the miniature headquarters under the sidebar and the brand mark.
  *
- * 화면(OfficeBuilding)과 마크 렌더 스크립트(scripts/brand-mark)가 같은 코드를 보게 둔다 —
- * 로고가 그림 파일로만 있으면 건물을 고칠 때 둘이 어긋난다.
+ * The screen (OfficeBuilding) and the mark render script (scripts/brand-mark) look at the same code —
+ * if the logo existed only as an image file, the two would drift apart when the building is changed.
  */
 import * as T from "three";
 
 import { cylinder, round, sphere } from "./primitives";
 
-/** 층·창·입구까지 갖춘 본사. `trees` 를 끄면 마크용으로 실루엣만 남는다. */
+/** The headquarters with floors, windows and entrance. Turning off `trees` leaves only the silhouette, for the mark. */
 export function buildOfficeBuilding({ trees = true }: { trees?: boolean } = {}): T.Group {
   const model = new T.Group();
   // Raised plaza, five-storey tower and a lower entrance wing.
@@ -56,7 +56,7 @@ export function buildOfficeBuilding({ trees = true }: { trees?: boolean } = {}):
   return model;
 }
 
-/** 화면과 마크가 같은 빛을 쓰도록 조명도 한곳에서 만든다. */
+/** Lighting is also built in one place so the screen and the mark use the same light. */
 export function addOfficeBuildingLights(scene: T.Scene) {
   scene.add(new T.HemisphereLight("#fff8e9", "#879889", 2.6));
   const sun = new T.DirectionalLight("#fff1d6", 3);

@@ -5,7 +5,7 @@ import { FurnitureHighlight } from "./furniture-highlight";
 
 const close = (a: number[], b: number[]) =>
   a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-8));
-test("호버 형상은 숨은 좌석 프록시의 회전·이동·부모 변환을 따른다", () => {
+test("the hover shape follows the rotation, translation and parent transform of the hidden seat proxy", () => {
   const scene = new T.Scene(),
     world = new T.Group(),
     owner = new T.Group();
@@ -35,7 +35,7 @@ test("호버 형상은 숨은 좌석 프록시의 회전·이동·부모 변환�
   chair.geometry.dispose();
   (chair.material as T.Material).dispose();
 });
-test("복합 소파는 모든 쿠션을 강조하고 원본 재질과 형상 수명을 바꾸지 않는다", () => {
+test("a composite sofa highlights every cushion without changing the original material or shape lifetime", () => {
   const sofa = new T.Group(),
     material = new T.MeshStandardMaterial({ color: "#526f59" }),
     geometry = new T.BoxGeometry();
@@ -74,7 +74,7 @@ test("복합 소파는 모든 쿠션을 강조하고 원본 재질과 형상 수
   geometry.dispose();
   material.dispose();
 });
-test("에셋 교체와 숨긴 부모는 오래된 호버 형상을 남기지 않는다", () => {
+test("asset swaps and hidden parents leave no stale hover shape", () => {
   const owner = new T.Group(),
     a = new T.Mesh(new T.BoxGeometry(), new T.MeshBasicMaterial());
   owner.add(a);

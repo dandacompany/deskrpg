@@ -39,14 +39,14 @@ test("miniature rig preserves finite walking and seated geometry within office s
 });
 
 // ---------------------------------------------------------------------------
-// 뛰기 — 에셋에 달리기 클립이 없으니 절차적으로 만든다
+// Running — the asset has no run clip, so it is made procedurally
 
-test("뛸 때는 온몸이 바라보는 쪽으로 기운다 — 머리도 함께 앞으로 간다", () => {
+test("when running the whole body leans toward the facing side — the head goes forward too", () => {
   const actor = createMiniatureActor("runner", OFFICE_LOOKS[0], 0);
   const headZ = (running: boolean) => {
     actor.update(0.3, true, "idle", false, undefined, { running, cadence: running ? 2 : 1 });
     actor.root.updateMatrixWorld(true);
-    // 가장 높이 있는 부품이 머리다.
+    // The highest part is the head.
     let top = -Infinity;
     let z = 0;
     actor.rig.traverse((node) => {
@@ -60,14 +60,14 @@ test("뛸 때는 온몸이 바라보는 쪽으로 기운다 — 머리도 함께
   };
   const walkZ = headZ(false);
   const runZ = headZ(true);
-  // 바라보는 쪽은 +z 다. 몸통만 기울이면 머리는 제자리라 이 차이가 0 이 된다.
+  // The facing side is +z. Leaning only the torso leaves the head in place, making this difference 0.
   assert.ok(
     runZ - walkZ > 0.1,
     `머리가 앞으로 가지 않았습니다: ${walkZ.toFixed(3)} → ${runZ.toFixed(3)}`,
   );
 });
 
-test("걷다가 멈추면 기울임이 사라진다", () => {
+test("stopping after walking removes the lean", () => {
   const actor = createMiniatureActor("stop", OFFICE_LOOKS[0], 0);
   actor.update(0.3, true, "idle", false, undefined, { running: true, cadence: 2 });
   assert.ok(actor.rig.rotation.x > 0);
@@ -75,12 +75,12 @@ test("걷다가 멈추면 기울임이 사라진다", () => {
   assert.equal(actor.rig.rotation.x, 0);
 });
 
-test("뛸 때 걸음 주기가 빨라진다 — 같은 시간에 다리가 더 많이 돈다", () => {
+test("the step cycle speeds up when running — the legs cycle more in the same time", () => {
   const legAngles = (running: boolean) => {
     const actor = createMiniatureActor("cadence", OFFICE_LOOKS[0], 0);
     const leg = actor.rig.children.find((c) => c.position.y === 0.89 && c.position.x < 0)!;
     const angles: number[] = [];
-    // 1초면 한두 주기라 부호 전환 수가 거칠다. 3초를 센다.
+    // One second is one or two cycles, so the number of sign changes is coarse. Count over 3 seconds.
     for (let i = 0; i < 180; i++) {
       actor.update(i / 60, true, "idle", false, undefined, { running, cadence: running ? 2 : 1 });
       angles.push(leg.rotation.x);

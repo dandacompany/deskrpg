@@ -107,7 +107,7 @@ test("room sender user ID resolves to socket actor without name matching", async
   assert.equal(speechActorId(actors, "unknown"), "unknown");
 });
 
-test("indicatorCountLabel — 2건 이상일 때만 숫자가 붙는다", () => {
+test("indicatorCountLabel — a number is attached only for 2 or more", () => {
   assert.equal(indicatorCountLabel("working", { workingCount: 3 }), "3");
   assert.equal(indicatorCountLabel("working", { workingCount: 2 }), "2");
   assert.equal(
@@ -118,12 +118,12 @@ test("indicatorCountLabel — 2건 이상일 때만 숫자가 붙는다", () => 
   assert.equal(indicatorCountLabel("working", {}), "");
 });
 
-test("indicatorCountLabel — 작업 중이 아닌 표시에는 숫자를 붙이지 않는다", () => {
+test("indicatorCountLabel — no number on indicators other than working", () => {
   assert.equal(indicatorCountLabel("thinking", { workingCount: 5 }), "");
   assert.equal(indicatorCountLabel(null, { workingCount: 5 }), "");
 });
 
-test("여러 장을 돌리는 직원은 대화 응답 중이면 응답 표시가 이긴다 — 개수는 가려진다", () => {
+test("for an employee running several cards, the response indicator wins while responding — the count is hidden", () => {
   const actor = { phase: "thinking" as const, active: false, working: true, workingCount: 4 };
   const kind = actorIndicator(actor);
   assert.equal(kind, "thinking");

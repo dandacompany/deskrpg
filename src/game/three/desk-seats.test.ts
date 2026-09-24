@@ -12,7 +12,7 @@ import {
 import { projectTiledGeometry, type TiledGeometryMap } from "@/lib/tiled-geometry";
 import { deriveChannelMotionLayout } from "@/lib/channel-motion-layout";
 
-// 대표석(executive_desk 뒤편 의자)은 직원 지정석이 아니라 여기서 빠진다.
+// The CEO seat (the chair behind executive_desk) is not an assigned employee seat and is left out here.
 const EXPECTED: Record<string, number> = {
   trading: 28,
   agency: 14,

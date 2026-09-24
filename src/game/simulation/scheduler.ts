@@ -1,4 +1,4 @@
-/** 틱 시계(rAF 시각)에 묶인 지연 호출. 루프가 멈추면 같이 멈춘다 — 옛 씬 타이머와 같다. */
+/** Delayed calls bound to the tick clock (rAF time). They stop when the loop stops — same as the old scene timers. */
 export class Scheduler {
   private entries: { at: number; run: () => void }[] = [];
 

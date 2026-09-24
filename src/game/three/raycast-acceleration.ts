@@ -2,14 +2,14 @@ import * as T from "three";
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from "three-mesh-bvh";
 
 /**
- * 레이캐스트를 BVH 로 가속한다.
+ * Accelerate raycasts with a BVH.
  *
- * 이 씬은 메시 799개·삼각형 906,164개이고, 배칭이 만든 가장 큰 메시가 8만 삼각형이다(실측:
- * 프로덕션 빌드, trading 오피스 44×30). three 기본 레이캐스트는 그 삼각형을 전부 훑어서
- * 월드 레이캐스트 한 번이 약 100ms 걸렸다 — 마우스를 움직이기만 해도 10fps 였다.
+ * This scene has 799 meshes and 906,164 triangles, and the largest mesh batching produced has 80k triangles (measured:
+ * production build, trading office 44×30). three's default raycast sweeps all those triangles, so
+ * one world raycast took about 100ms — just moving the mouse gave 10fps.
  *
- * `acceleratedRaycast` 는 `geometry.boundsTree` 가 없으면 three 기본 경로로 그대로 떨어진다.
- * 트리를 세운 지오메트리만 빨라지고 나머지 동작은 변하지 않는다.
+ * `acceleratedRaycast` falls back to three's default path as is when there is no `geometry.boundsTree`.
+ * Only geometry with a built tree gets faster; everything else behaves the same.
  */
 let installed = false;
 function installRaycastAcceleration() {
@@ -21,7 +21,7 @@ function installRaycastAcceleration() {
   (T.Mesh.prototype as unknown as Record<string, unknown>).raycast = acceleratedRaycast;
 }
 
-/** 트리를 세우는 값이 있는 크기. 작은 메시는 만드는 비용이 더 크다. */
+/** The size at which building a tree pays off. For small meshes building costs more. */
 const MIN_TRIANGLES_FOR_BVH = 600;
 
 export function buildBoundsTrees(root: T.Object3D) {

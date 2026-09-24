@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { buildOfficeEnvironment, OFFICE_ENVIRONMENTS } from "./three/office-environments";
 import { normalizeMeetingMap, projectMeetingMap } from "./meeting-map-normalization";
 
-test("agency v3+ 회의실 정규화도 폐기된 설정 스폰 대신 맵 스폰을 사용한다", () => {
+test("agency v3+ meeting room normalization also uses the map spawn instead of the retired configured spawn", () => {
   const source = buildOfficeEnvironment("agency");
   assert.deepEqual(
     normalizeMeetingMap(source, { spawnCol: 0, spawnRow: 0 }),

@@ -26,8 +26,8 @@ export type NpcPathfinder = (
 export type NpcMoveState = "idle" | "moving-to-player" | "waiting" | "returning" | "strolling";
 
 /**
- * README 캡처는 회의 장면을 9초 안에 담아야 하는데, 평소 걸음으로는 모이는 데만 16초가 걸린다
- * (실측 2026-09-20). 캡처 런타임에서만 걸음을 빠르게 한다 — 서비스 값은 그대로다.
+ * The README capture must fit the meeting scene into 9 seconds, but at normal walking speed gathering alone takes 16 seconds
+ * (measured 2026-09-20). Walking is sped up only in the capture runtime — the service values stay as they are.
  */
 export const CAPTURE_WALK_MULTIPLIER = 3;
 export function captureWalkSpeed(speed: number): number {
@@ -35,8 +35,8 @@ export function captureWalkSpeed(speed: number): number {
 }
 
 /**
- * NPC 한 명의 이동 상태 기계. 화면 요소는 없다 — `pixelX/pixelY` 가 충돌·권위 좌표이고,
- * `viewX/viewY` 는 렌더러에 내보내는 표시 좌표다(원격 구동 NPC 는 보간 표시가 따로 따라온다).
+ * The movement state machine for one NPC. There are no screen elements — `pixelX/pixelY` are the collision/authoritative coordinates,
+ * and `viewX/viewY` are the display coordinates sent to the renderer (remote-driven NPCs have a separate interpolated display following).
  */
 export class NpcController {
   appearance: unknown;
@@ -48,7 +48,7 @@ export class NpcController {
   viewY: number;
   direction: number;
 
-  // 이동 상태(런타임 전용, 저장하지 않는다)
+  // Movement state (runtime only, not persisted)
   homeCol: number;
   homeRow: number;
   homeDirection: number;
@@ -68,24 +68,24 @@ export class NpcController {
   remoteWalkingUntil = 0;
   remotePresentation: RemoteNpcPresentation | null = null;
   motionLocallyDriven?: boolean;
-  /** 일반 이동(복귀·대화 접근) 속도, px/s. 채널 걸음 설정이 덮어쓴다(`npc-motion-config`). */
+  /** Normal move (return, approaching to talk) speed, px/s. Overridden by the channel's walking setting (`npc-motion-config`). */
   moveSpeed = DEFAULT_NPC_MOTION.walk;
-  /** 산책 속도, px/s. */
+  /** Stroll speed, px/s. */
   strollSpeed = DEFAULT_NPC_MOTION.stroll;
   /**
-   * 지금 걷는 경로의 속도. 호출·회의 호출처럼 경로마다 다른 속도를 쓰는 이동이 정한다.
-   * `null` 이면 상태에 맞는 기본값(산책이면 `strollSpeed`, 그 밖엔 `moveSpeed`)이다.
+   * The speed of the path being walked now. Set by moves that use a different speed per path, like calls and meeting calls.
+   * `null` means the default for the state (`strollSpeed` when strolling, `moveSpeed` otherwise).
    */
   pathSpeed: number | null = null;
   pendingMessage: string | null = null;
   arrivalBubbleText: string | null = null;
   waitDurationMs = 10000;
-  /** 어느 방에서 불렀나 — null 이면 직접 부른 것. "r1" 같은 roomId 면 방에서 불렀으므로 그 방이 보이는 동안 자리로 돌아가지 않는다. */
+  /** Which room called — null means called directly. A roomId like "r1" means called from a room, so they do not go back to their seat while that room is visible. */
   calledForRoom: string | null = null;
-  private pathRecalcTimer = 0; // ms 누적
+  private pathRecalcTimer = 0; // accumulated ms
   private stuckFrames = 0;
   private lastDist = Infinity;
-  waitTimer = 0; // "waiting" 상태로 누적된 ms
+  waitTimer = 0; // ms accumulated in the "waiting" state
 
   constructor(data: NpcData) {
     this.id = data.id;
@@ -101,13 +101,13 @@ export class NpcController {
     this.homeDirection = this.direction;
   }
 
-  /** 권위 좌표를 표시 좌표로 옮긴다. 로컬 구동 이동은 매 프레임 이것을 부른다. */
+  /** Move the authoritative coordinates into the display coordinates. Locally driven moves call this every frame. */
   syncView(): void {
     this.viewX = this.pixelX;
     this.viewY = this.pixelY;
   }
 
-  /** 권위 좌표와 표시 좌표를 함께 옮긴다(스냅). */
+  /** Move the authoritative and display coordinates together (snap). */
   setPosition(x: number, y: number): void {
     this.pixelX = x;
     this.pixelY = y;
@@ -149,15 +149,15 @@ export class NpcController {
       bubbleText?: string;
       waitDurationMs?: number;
       destinationTag?: string;
-      /** 이 이동의 속도(px/s). 호출은 뛰어온다 — 평소 걸음과 다르다. */
+      /** The speed (px/s) of this move. A call comes running — different from the usual walk. */
       speed?: number;
     },
   ): boolean {
     const startCol = Math.floor(this.pixelX / TILE_SIZE);
     const startRow = Math.floor(this.pixelY / TILE_SIZE);
 
-    // 플레이어 타일까지 바로 경로를 잡는다 — 도착은 NPC_INTERACT_RADIUS 로 판정하므로
-    // 실제로 겹치기 전에 멈춘다.
+    // Path straight to the player's tile — arrival is judged by NPC_INTERACT_RADIUS, so they
+    // stop before actually overlapping.
     const path = findPathFn(startCol, startRow, targetCol, targetRow, isWalkableFn);
     if (!path || path.length === 0) return false;
 
@@ -177,14 +177,14 @@ export class NpcController {
     return true;
   }
 
-  /** 지금 걷는 속도(px/s). README 캡처 런타임에서는 배수가 붙는다. */
+  /** The current walking speed (px/s). In the README capture runtime a multiplier applies. */
   currentSpeed(): number {
     const base =
       this.pathSpeed ?? (this.moveState === "strolling" ? this.strollSpeed : this.moveSpeed);
     return captureWalkSpeed(base);
   }
 
-  /** `speed` 를 주면 산책 속도 대신 그 속도로 걷는다 — 회의 집결이 이 경로를 쓴다. */
+  /** If `speed` is given, walk at that speed instead of the stroll speed — meeting gathering uses this path. */
   startStroll(path: NavigationPoint[], speed?: number): void {
     this.pathSpeed = speed ?? null;
     this.destinationTag = null;
@@ -236,7 +236,7 @@ export class NpcController {
       return true;
     }
 
-    // 자리가 막혀 있거나 끊겨 있어도 복귀는 대기 상태로 남는다 — 벽을 뚫고 순간이동하지 않는다.
+    // Even if the seat is blocked or cut off, the return stays in the waiting state — no teleporting through walls.
     this.currentPath = findPathFn(startCol, startRow, this.homeCol, this.homeRow, isWalkableFn);
     this.pathIndex = 0;
     this.stuckFrames = 0;
@@ -259,7 +259,7 @@ export class NpcController {
   }
 
   pauseForSmalltalk(other: NpcController): void {
-    // 경로와 목표 지점을 유지해 대화가 끝나면 같은 산책을 잇는다.
+    // Keep the path and goal so the same stroll continues after the conversation ends.
     if (this.moveState === "strolling") {
       const dx = other.pixelX - this.pixelX,
         dy = other.pixelY - this.pixelY;
@@ -313,7 +313,7 @@ export class NpcController {
       this.lastDist = Infinity;
     }
 
-    // --- 경로 재계산(3초마다, 플레이어에게 가는 중일 때만) ---
+    // --- Path recomputation (every 3 seconds, only while heading to the player) ---
     if (this.moveState === "moving-to-player" && !this.destinationTag) {
       this.pathRecalcTimer += delta;
       if (this.pathRecalcTimer >= 3000) {
@@ -334,10 +334,10 @@ export class NpcController {
         }
       }
 
-      // --- 도착 판정 — 상호작용 거리(한 타일) 안 ---
+      // --- Arrival check — within interaction distance (one tile) ---
       const distToPlayer = this.distanceTo(playerX, playerY);
       if (distToPlayer < TILE_SIZE + 4) {
-        // ~36px — 플레이어 바로 옆
+        // ~36px — right next to the player
         this.currentPath = null;
         this.moveState = "waiting";
         const adx = playerX - this.pixelX;
@@ -353,26 +353,26 @@ export class NpcController {
       }
     }
 
-    // --- 경로 소진 확인 ---
+    // --- Path exhaustion check ---
     if (this.pathIndex >= this.currentPath.length) {
       if (this.moveState === "strolling") {
         this.stopStroll();
         return "idle";
       }
       if (this.moveState === "returning") {
-        // 경로가 끝났다 — 거리와 무관하게 자리에 붙인다
+        // The path ended — attach to the spot regardless of distance
         this.snapToHome();
         this.currentPath = null;
         this.moveState = "idle";
         return "returning-done";
       }
       if (this.destinationTag) return this.finishDestinationMove();
-      // 플레이어에게 가는 중인데 닿지 못하고 경로가 끝났다 — 재계산을 기다린다
+      // Heading to the player, but the path ended before reaching them — wait for recomputation
       this.currentPath = null;
       return "moving";
     }
 
-    // --- 경로 추종(플레이어와 같은 방식) ---
+    // --- Path following (same approach as the player) ---
     const target = this.currentPath[this.pathIndex];
     if (this.moveState === "strolling" && !isWalkableFn(target.x, target.y)) {
       this.stopStroll();
@@ -385,7 +385,7 @@ export class NpcController {
     const dy = targetPy - this.pixelY;
     const dist = Math.hypot(dx, dy);
 
-    // 갇힘 감지(플레이어와 같다)
+    // Stuck detection (same as the player)
     if (dist < this.lastDist - 0.5) {
       this.stuckFrames = 0;
       this.lastDist = dist;
@@ -407,7 +407,7 @@ export class NpcController {
       return "moving";
     }
     if (reached) {
-      // 다음 경유지로(스냅 없이 — 플레이어와 같다)
+      // On to the next waypoint (no snap — same as the player)
       this.pathIndex++;
       this.stuckFrames = 0;
       this.lastDist = Infinity;
@@ -425,14 +425,14 @@ export class NpcController {
           return "returning-done";
         }
         if (this.destinationTag) return this.finishDestinationMove();
-        // 플레이어에게 가는 경로가 끝났다 — 다음 재계산 주기를 기다린다
+        // The path to the player ended — wait for the next recompute cycle
         this.currentPath = null;
         this.stopWalking();
         return "moving";
       }
     }
 
-    // 항상 현재 경유지를 향해 움직인다(속도 기반)
+    // Always move toward the current waypoint (velocity-based)
     const curTarget = this.currentPath[this.pathIndex];
     const curPx = curTarget.x * TILE_SIZE + TILE_SIZE / 2;
     const curPy = curTarget.y * TILE_SIZE + TILE_SIZE / 2;
@@ -473,11 +473,11 @@ export class NpcController {
     }
     if (Math.hypot(nextX - this.pixelX, nextY - this.pixelY) < 1e-6) {
       this.trafficBlockedMs += Math.min(delta, 100);
-      // 멈춰 선 액터가 중간 경유지를 영영 차지할 수 있다. 교통 조정은 그 경유지에
-      // 닿을 수 없으므로 목적지까지 전체 경로를 다시 잡아 우회한다.
+      // A stopped actor can occupy an intermediate waypoint forever. Traffic coordination cannot reach
+      // that waypoint, so recompute the whole path to the destination and detour.
       if (this.trafficBlockedMs >= 1500) {
-        // 우회로가 없어도 산책·좌석 목적지는 유지한다. 산책 경로를 비우면 플레이어
-        // 목표로 잘못 떨어진다.
+        // Even without a detour, keep the stroll or seat destination. Clearing the stroll path would
+        // wrongly drop into the player target.
         const destination = this.currentPath[this.currentPath.length - 1];
         const detour =
           destination &&
@@ -506,7 +506,7 @@ export class NpcController {
     this.pixelX = nextX;
     this.pixelY = nextY;
 
-    // 양보하느라 원래 경유지와 다른 쪽으로 움직일 수 있다 — 실제 이동 방향을 본다.
+    // Yielding can move in a direction other than the original waypoint — look at the actual movement direction.
     if (Math.abs(actualDx) > Math.abs(actualDy)) {
       this.direction = actualDx > 0 ? DIR_RIGHT : DIR_LEFT;
     } else {

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { buildOfficeEnvironment, OFFICE_ENVIRONMENTS } from "./three/office-environments";
 import { withRuntimeTileset } from "./tiled-runtime";
 
-test("모든 공식 맵의 양수 타일 GID가 런타임 타일셋 안에 존재한다", () => {
+test("positive tile GIDs of every official map exist in the runtime tileset", () => {
   for (const { id } of OFFICE_ENVIRONMENTS) {
     const source = buildOfficeEnvironment(id);
     const before = JSON.stringify(source);
@@ -21,7 +21,7 @@ test("모든 공식 맵의 양수 타일 GID가 런타임 타일셋 안에 존�
     assert.equal(runtime.layers, source.layers);
   }
 });
-test("사용자 타일셋은 교체하지 않는다", () => {
+test("user tilesets are not replaced", () => {
   const map = { tilesets: [{ firstgid: 1, source: "custom.tsx" }] };
   assert.equal(withRuntimeTileset(map), map);
 });

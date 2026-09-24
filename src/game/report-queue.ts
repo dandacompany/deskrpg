@@ -1,12 +1,12 @@
 /**
- * 보고 큐 — 사무실 방 알림에서 "누가 찾아와 말해야 하는가" 를 뽑는다.
+ * The report queue — extracts "who should come and speak" from office room notices.
  *
- * 서버가 아니라 **보는 브라우저**가 주체다. `npc:call` 은 `targetPlayerId: socket.id` 로
- * 대상을 정하는 소켓 핸들러라(`src/server/npc-coordination.ts`) 자동화 사건에는 걸어갈
- * 대상이 없다. 그래서 알림을 받은 브라우저가 스스로 기존 호출을 쏜다 — 아무도 접속해
- * 있지 않으면 이동이 생략되고 알림만 방에 남는 것이 옳은 동작이다.
+ * The actor is **the viewing browser**, not the server. `npc:call` is a socket handler that determines its target
+ * with `targetPlayerId: socket.id` (`src/server/npc-coordination.ts`), so automation events have no one
+ * to walk to. So the browser that received the notice fires the existing call itself — if nobody is
+ * connected, the move is skipped and only the notice stays in the room, which is the right behavior.
  *
- * 순수 함수만 둔다. 이 파일은 클라이언트 번들에 들어가므로 `node:*`·`@/db` 를 쓰지 않는다.
+ * Only pure functions here. This file goes into the client bundle, so it does not use `node:*` or `@/db`.
  */
 import type { RoomMessage, RoomNotice } from "@/lib/chat-rooms-policy";
 
@@ -17,32 +17,32 @@ export type ReportItem = {
   npcId: string;
   npcName: string;
   kind: ReportKind;
-  /** 카드 보고만 값이 있다. 크론 실패는 열 카드가 없다. */
+  /** Only card reports have a value. Cron failures have no card to open. */
   cardId: string | null;
   boardSlug: string | null;
-  /** 크론 실패만 값이 있다 — 이 보고를 열 곳은 카드가 아니라 크론 이력이다. */
+  /** Only cron failures have a value — this report opens the cron history, not a card. */
   jobId: string | null;
   cardTitle: string;
-  /** 알림 본문(로케일 무관 폴백 — 카드 제목·결과 본문). 보고 대화창 맨 위 요약에 쓴다. */
+  /** The notice body (locale-independent fallback — card title, result body). Used for the summary at the top of the report dialog. */
   summary: string;
   createdAt: string;
 };
 
 /**
- * 무엇을 확인했는가. 확인은 **보고 한 건 단위**다(`ids`).
+ * What was acknowledged. Acknowledgment is **per report** (`ids`).
  *
- * 예전에는 마지막으로 확인한 알림의 `createdAt` 하나(워터마크)만 두어, 뒤의 보고를 확인하면
- * 그 앞에 있던 **다른 직원의** 보고까지 오지도 않은 채 확인됐다. `through` 는 그때 저장된
- * 옛 값을 읽기 위한 하위 호환이다 — 그 시각 이전은 확인된 것으로 본다. 새로 쓰지 않는다.
+ * It used to keep only one `createdAt` of the last acknowledged notice (a watermark), so acknowledging a later report
+ * acknowledged **other employees'** reports before it without them ever coming. `through` is backward compatibility for reading
+ * old values saved back then — everything before that time counts as acknowledged. It is not written anew.
  */
 export type ReportAck = { through: string | null; ids: readonly string[] };
 
 export const EMPTY_REPORT_ACK: ReportAck = { through: null, ids: [] };
 
-/** 저장된 id 상한. 오래된 것부터 버린다 — 버려진 보고는 방 알림이 오래돼 큐에서도 밀려난 뒤다. */
+/** Cap on stored ids. Oldest are dropped first — dropped reports have already been pushed out of the queue as the room notices aged. */
 const MAX_ACK_IDS = 500;
 
-/** 브라우저에 저장된 값을 읽는다. 옛 문자열 워터마크와 새 JSON 을 둘 다 받는다. */
+/** Read the value stored in the browser. Accepts both the old string watermark and the new JSON. */
 export function parseReportAck(raw: string | null): ReportAck {
   if (!raw) return EMPTY_REPORT_ACK;
   if (!raw.startsWith("{")) return { through: raw, ids: [] };
@@ -63,7 +63,7 @@ export function serializeReportAck(ack: ReportAck): string {
   return JSON.stringify({ through: ack.through, ids: ack.ids });
 }
 
-/** 이 보고 한 건만 확인한다. 다른 보고는 건드리지 않는다. */
+/** Acknowledge only this one report. Other reports are not touched. */
 export function acknowledgeReport(ack: ReportAck, messageId: string): ReportAck {
   if (ack.ids.includes(messageId)) return ack;
   return { through: ack.through, ids: [...ack.ids, messageId].slice(-MAX_ACK_IDS) };
@@ -76,7 +76,7 @@ export function isReportAcknowledged(
   return ack.ids.includes(message.id) || (ack.through !== null && message.createdAt <= ack.through);
 }
 
-/** 보고가 되는 알림만 골라 종류를 정한다. 성공한 크론과 일반 메시지는 보고가 아니다. */
+/** Pick only the notices that become reports and decide their kind. Successful cron jobs and ordinary messages are not reports. */
 function reportKindOf(notice: RoomNotice | null | undefined): ReportKind | null {
   if (!notice) return null;
   if (
@@ -90,12 +90,12 @@ function reportKindOf(notice: RoomNotice | null | undefined): ReportKind | null 
 }
 
 /**
- * 아직 확인하지 않은 보고를 발생 순서대로.
+ * Unacknowledged reports in order of occurrence.
  *
- * - 확인한 보고(`ReportAck`)는 뺀다. 건 단위이며, 옛 워터마크 이전도 확인된 것으로 본다.
- * - 맵에 없는 NPC 는 뺀다 — 걸어올 주체가 없다.
- * - 담당 NPC 가 잠들어 시스템 메시지로 대체된 알림(`senderId === null`)도 뺀다. 알림은 방에
- *   남아 있으니 사용자가 놓치지는 않는다.
+ * - Acknowledged reports (`ReportAck`) are excluded. Per report, and anything before the old watermark counts as acknowledged too.
+ * - NPCs not on the map are excluded — there is nobody to walk over.
+ * - Notices replaced by a system message because the assigned NPC is asleep (`senderId === null`) are excluded too. The notice
+ *   stays in the room, so the user does not miss it.
  */
 export function pendingReports(
   messages: readonly RoomMessage[],

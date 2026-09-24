@@ -1,23 +1,23 @@
 /**
- * requestAnimationFrame 기반 틱 루프. 탭이 가려진 동안은 타이머로 이어 간다.
+ * A requestAnimationFrame-based tick loop. While the tab is hidden it continues with a timer.
  *
- * 가려진 탭에서 브라우저는 rAF 를 **멈춘다**(스로틀이 아니다). NPC 걸음은 이 루프가 구동하므로
- * 예전에는 탭을 가리면 직원이 걷지 않아 호출·회의 집결이 "이동 중" 에서 굳었다. 가려진 동안은
- * `setInterval` 로 틱을 잇는다 — 브라우저가 가려진 탭의 타이머를 1초 간격으로 줄여도 걸음은
- * 진행되고 도착 통지는 나간다. 서버도 멈춘 걸음을 기한 뒤 정산하지만(`STALLED_MOTION_MS`),
- * 여기서 걸어 두면 탭이 돌아왔을 때 순간이동이 줄어든다.
+ * In a hidden tab the browser **stops** rAF (it is not throttling). This loop drives NPC walking, so
+ * hiding the tab used to stop employees walking and calls and meeting gatherings froze at "moving". While hidden,
+ * ticks continue with `setInterval` — even if the browser reduces hidden-tab timers to 1-second intervals, walking
+ * progresses and arrival notifications go out. The server also settles stalled walks after a deadline (`STALLED_MOTION_MS`),
+ * but walking here reduces teleporting when the tab comes back.
  *
- * dt 는 실제 경과 시간을 쓰되 한 스텝의 상한을 둔다: 한 번에 수십 초가 들어오면 경로 추종·
- * 대기 타이머가 한꺼번에 튀기 때문이다. 가려진 틱은 긴 경과를 상한 크기 스텝 여러 개로 나눈다 —
- * 그러지 않으면 1초 간격 타이머에서 200ms 만 반영돼 걸음이 원래 속도의 1/5 이 된다.
+ * dt uses the real elapsed time but caps a single step: tens of seconds arriving at once would make path following and
+ * wait timers jump all together. Hidden ticks split a long elapsed time into several cap-sized steps —
+ * otherwise only 200ms would be applied per 1-second timer and walking would run at 1/5 of its real speed.
  */
 export const MAX_FRAME_DELTA_MS = 200;
-/** 가려진 동안 틱 간격(브라우저가 1초로 늘릴 수 있다). */
+/** Tick interval while hidden (the browser may stretch it to 1 second). */
 export const HIDDEN_TICK_MS = 250;
-/** 가려진 틱 한 번이 따라잡는 최대 경과. 탭이 오래 잠들었다 깨어나도 이만큼만 몰아서 걷는다. */
+/** The maximum elapsed time one hidden tick catches up. Even when a tab wakes from a long sleep, it walks only this much in one go. */
 export const HIDDEN_MAX_CATCH_UP_MS = 2_000;
 
-/** 첫 프레임(이전 시각 없음)은 0, 그 뒤로는 실제 경과를 상한으로 자른 값. 음수는 0 이다. */
+/** 0 for the first frame (no previous time), after that the real elapsed time clipped to the cap. Negatives become 0. */
 export function clampFrameDelta(
   now: number,
   previous: number | null,
@@ -27,7 +27,7 @@ export function clampFrameDelta(
   return Math.max(0, Math.min(now - previous, max));
 }
 
-/** 가려진 틱 한 번의 스텝들. 경과(최대 `catchUp`)를 `max` 이하 조각으로 나눈다. */
+/** The steps of one hidden tick. Splits the elapsed time (at most `catchUp`) into pieces of at most `max`. */
 export function hiddenStepDeltas(
   now: number,
   previous: number | null,
@@ -88,8 +88,8 @@ export class TickLoop {
 
   private onVisibility = () => {
     if (!this.running) return;
-    // rAF 와 performance.now 는 같은 시계다. 전환 시 이전 시각을 버리면 첫 틱이 0 이 되어
-    // 두 시계 사이의 공백이 한꺼번에 들어오지 않는다.
+    // rAF and performance.now share the same clock. Dropping the previous time on switching makes the first tick 0,
+    // so the gap between the two clocks does not come in all at once.
     this.previous = null;
     this.schedule();
   };

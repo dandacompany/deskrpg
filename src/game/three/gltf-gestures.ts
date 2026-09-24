@@ -40,8 +40,8 @@ export function createGltfGestures(model: T.Object3D, seed: number) {
       model.updateWorldMatrix(true, true);
       model.getWorldQuaternion(modelRotation);
       if (running) {
-        // 뛰는 팔: 팔꿈치를 굽히고 팔을 조금 앞으로 든다. 흔드는 위상은 걷기 클립의 것을 그대로 둔다 —
-        // 사인파를 얹으면 클립과 박자가 어긋나 팔이 떨린다. 굽힘은 일정하므로 싸우지 않는다.
+        // Running arms: bend the elbows and raise the arms slightly forward. Keep the swing phase from the walk clip as is —
+        // adding a sine wave would put it out of beat with the clip and make the arms jitter. The bend is constant, so it does not fight.
         rotate(forearm, 1, 0, -1.0);
         rotate(leftForearm, 1, 0, -1.0);
         rotate(right, 1, 0, -0.2);

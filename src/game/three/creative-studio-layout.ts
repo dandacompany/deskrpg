@@ -193,7 +193,7 @@ export function furnishCreativeStudio(add: CreativeStudioAdd) {
       destinationTags: ["work", "desk"],
     });
   add("studio_shelf", 19, 2, { variant: "credenza" });
-  // 두 번째 4인 업무석 군집을 배치해 소규모 팀이 함께 작업할 수 있게 한다.
+  // Place a second cluster of 4-person workstations so small teams can work together.
   for (const [col, row] of [
     [17, 3],
     [18, 3],

@@ -1,11 +1,11 @@
 import { OFFICE_LOOKS, type OfficeLook } from "./office-looks";
 
 /**
- * 외형 모델의 정본. 서버(API 라우트·소켓 핸들러)와 클라이언트가 함께 import 하므로
- * 브라우저 API·DB 접근이 이 파일에 들어오면 안 된다.
+ * The source of truth for the appearance model. Server (API routes, socket handlers) and client both import it, so
+ * browser APIs and DB access must not enter this file.
  *
- * 정본 형태는 `{ officeLookId, bodyType }` 두 키뿐이다. `officeLookId` 는 `OFFICE_LOOKS`
- * 의 ID 이고 `bodyType` 은 그 룩의 `bodyType` 과 같다. 추가 키는 저장·전달 시 보존한다.
+ * The canonical form is only the two keys `{ officeLookId, bodyType }`. `officeLookId` is an ID in `OFFICE_LOOKS`
+ * and `bodyType` equals that look's `bodyType`. Extra keys are preserved when saving and passing along.
  */
 
 export type OfficeBodyType = OfficeLook["bodyType"];
@@ -15,21 +15,21 @@ export type CharacterAppearance = {
   bodyType: OfficeBodyType;
 } & Record<string, unknown>;
 
-/** 옛 LPC 레이어 선택(`{ itemKey, variant }`). DB 변환 코드에서만 쓴다. */
+/** An old LPC layer selection (`{ itemKey, variant }`). Used only in DB conversion code. */
 export interface AppearanceSelection {
   itemKey: string;
   variant: string;
 }
 
-/** 더 옛 형식의 레이어(`{ type, variant }`). DB 변환 코드에서만 쓴다. */
+/** An even older layer format (`{ type, variant }`). Used only in DB conversion code. */
 export interface AppearanceLayer {
   type: string;
   variant: string;
 }
 
 /**
- * 옛 레이어 외형. 룩 ID 가 없거나 레이어 키만 있던 시절의 저장값을 읽을 때 쓴다.
- * 새 코드는 이 타입으로 무엇도 만들지 않는다 — `normalizeOfficeAppearance` 로 접는다.
+ * The old layered appearance. Used to read values saved back when there was no look ID or only layer keys.
+ * New code builds nothing with this type — fold it with `normalizeOfficeAppearance`.
  */
 export interface LegacyCharacterAppearance {
   officeLookId?: string;
@@ -44,12 +44,12 @@ export interface LegacyCharacterAppearance {
   feet?: AppearanceLayer | null;
 }
 
-/** 첫 번째 남성 룩 — 기본 외형이자 변환 실패 시의 폴백. */
+/** The first male look — the default appearance and the fallback when conversion fails. */
 export const DEFAULT_OFFICE_LOOK_ID = "office-jun";
-/** 옛 외형의 `bodyType === "female"` 이 접히는 룩. */
+/** The look that an old appearance's `bodyType === "female"` folds into. */
 export const DEFAULT_FEMALE_OFFICE_LOOK_ID = "office-nari";
 
-/** 변환 규칙이 가리키는 룩이 실제 목록에 없으면 데이터 자체가 깨진 것이다 — 조용히 넘어가지 않는다. */
+/** If a look the conversion rules point to is not in the real list, the data itself is broken — do not pass over it quietly. */
 export function findOfficeLook(id: unknown): OfficeLook | undefined {
   if (typeof id !== "string") return undefined;
   return OFFICE_LOOKS.find((look) => look.id === id);
@@ -63,9 +63,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
 /**
- * REST 검증. 오류 문구를 돌려주고 정상이면 `null`.
- * `officeLookId` 가 없거나 알 수 없는 값이면 거절한다. `bodyType` 불일치는 거절하지
- * 않는다 — 저장 전에 `normalizeOfficeAppearance` 가 룩의 값으로 덮어쓴다.
+ * REST validation. Returns an error message, or `null` if valid.
+ * Rejects a missing or unknown `officeLookId`. A `bodyType` mismatch is not
+ * rejected — `normalizeOfficeAppearance` overwrites it with the look's value before saving.
  */
 export function validateOfficeAppearance(value: unknown): string | null {
   if (!isRecord(value)) return "appearance must be an object";
@@ -84,13 +84,13 @@ function fallbackLook(bodyType: unknown): OfficeLook {
 }
 
 /**
- * 어떤 값이든 정본 형태로 접는다(변환 규칙 D).
+ * Fold any value into the canonical form (conversion rule D).
  *
- * - `null`/`undefined` → `null` 그대로.
- * - JSON 문자열은 파싱 뒤 같은 규칙, 파싱 실패는 기본 룩.
- * - 유효한 `officeLookId` 면 추가 키를 보존하고 `bodyType` 만 룩의 값으로 덮어쓴다.
- * - 그 밖에는 옛 `bodyType === "female"` → `office-nari`, 나머지 → `office-jun`.
- *   결과는 두 키뿐이고 옛 레이어 키는 버린다.
+ * - `null`/`undefined` → `null` as is.
+ * - JSON strings follow the same rules after parsing, and parse failures give the default look.
+ * - For a valid `officeLookId`, extra keys are preserved and only `bodyType` is overwritten with the look's value.
+ * - Otherwise the old `bodyType === "female"` → `office-nari`, the rest → `office-jun`.
+ *   The result is only the two keys, and old layer keys are dropped.
  */
 export function normalizeOfficeAppearance(value: unknown): CharacterAppearance | null {
   if (value === null || value === undefined) return null;
@@ -101,7 +101,7 @@ export function normalizeOfficeAppearance(value: unknown): CharacterAppearance |
     } catch {
       parsed = undefined;
     }
-    // 문자열 "null" 은 값이 없는 것이 아니라 깨진 값이다 — 기본 룩으로 접는다.
+    // The string "null" is not an absent value but a broken one — fold it into the default look.
   }
   if (!isRecord(parsed)) {
     const look = fallbackLook(undefined);
@@ -113,7 +113,7 @@ export function normalizeOfficeAppearance(value: unknown): CharacterAppearance |
   return { officeLookId: fallback.id, bodyType: fallback.bodyType };
 }
 
-/** 정본 형태의 기본 외형(첫 번째 남성 룩). 호출마다 새 객체를 준다. */
+/** The default appearance in canonical form (the first male look). A new object on every call. */
 export function defaultOfficeAppearance(): CharacterAppearance {
   const look = fallbackLook(undefined);
   return { officeLookId: look.id, bodyType: look.bodyType };

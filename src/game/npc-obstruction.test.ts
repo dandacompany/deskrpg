@@ -8,7 +8,7 @@ import { tiledSnapshot } from "./three/tiled-preview";
 import { NpcController } from "./simulation/npc-controller";
 import { OfficeSimulation } from "./simulation/office-simulation";
 
-// 실제 컨트롤러를 그대로 돌린다 — 화면이 없으므로 node 에서 바로 import 된다.
+// Run the real controller as is — it has no screen, so it imports directly in node.
 function actor(state: NpcController["moveState"]) {
   const npc = new NpcController({
     id: "npc",
@@ -122,7 +122,7 @@ test("tagged retry starts at the current tile and keeps the fixed purpose destin
   const blocked = new Set(snapshot.blocked);
   const walkable = (x: number, y: number) =>
     x >= 1 && x < snapshot.cols - 1 && y >= 1 && y < snapshot.rows && !blocked.has(`${x},${y}`);
-  // 실제 시뮬레이션의 경로 계획기를 부분 런타임에 묶어 쓴다(교통 액터 없음).
+  // Use the real simulation's path planner bound to a partial runtime (no traffic actors).
   const runtime = Object.assign(Object.create(OfficeSimulation.prototype), {
     ambientZones: zones,
     trafficActors: () => [],
@@ -157,13 +157,13 @@ test("tagged retry starts at the current tile and keeps the fixed purpose destin
 });
 
 // ---------------------------------------------------------------------------
-// 걸음 속도 — 이동마다 속도가 다르다(`npc-motion-config`)
+// Walking speed — each move has its own speed (`npc-motion-config`)
 
 function walker() {
   return new NpcController({ id: "n", name: "n", positionX: 2, positionY: 2, direction: "down" });
 }
 
-test("호출처럼 속도를 준 이동은 그 속도로, 복귀는 일반 이동 속도로 걷는다", () => {
+test("a move given a speed, like a call, walks at that speed; returning walks at the normal move speed", () => {
   const npc = walker();
   npc.moveSpeed = 150;
   const path = (_c: number, _r: number, tc: number, tr: number) => [{ x: tc, y: tr }];
@@ -177,7 +177,7 @@ test("호출처럼 속도를 준 이동은 그 속도로, 복귀는 일반 이�
   );
 });
 
-test("산책은 산책 속도, 속도를 준 산책 경로(회의 집결)는 그 속도다", () => {
+test("strolling uses the stroll speed; a stroll path given a speed (meeting gathering) uses that speed", () => {
   const npc = walker();
   npc.strollSpeed = 55;
   npc.startStroll([{ x: 5, y: 2 }]);

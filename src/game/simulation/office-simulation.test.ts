@@ -25,7 +25,7 @@ function withFetch<T>(body: unknown, run: () => Promise<T>) {
 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-test("부팅은 scene-ready → three:bridge-ready 순서로 알리고 채널 데이터를 소비한다", async () => {
+test("boot announces scene-ready → three:bridge-ready in that order and consumes the channel data", async () => {
   const order: string[] = [];
   const sceneReady = () => order.push("scene-ready");
   const bridgeReady = (bridge: unknown) => {
@@ -51,7 +51,7 @@ test("부팅은 scene-ready → three:bridge-ready 순서로 알리고 채널 �
   }
 });
 
-test("브리지는 타일 편집 진입점 없이 배치·시작 위치·소유자·Tiled 여부만 낸다", async () => {
+test("the bridge exposes only layout, start position, owner and whether it is Tiled — no tile editing entry point", async () => {
   setPendingChannelData({ channelId: "ch", mapData: legacyMap });
   const sim = new OfficeSimulation() as Runtime;
   try {
@@ -81,7 +81,7 @@ test("브리지는 타일 편집 진입점 없이 배치·시작 위치·소유�
     EventBus.emit("placement-mode-end");
     const map = sim.officeBridge.map();
     assert.equal("artwork" in map, false, "the simulation never produces map artwork");
-    // 회의 공간 정규화가 맵을 넓힌다 — 원본 격자는 왼쪽 위에 그대로 남는다.
+    // Meeting space normalization widens the map — the original grid stays as is at the top left.
     assert.ok(map.cols >= 6 && map.rows >= 5);
     assert.equal(map.tiled, false);
     assert.ok(map.meetingSpace, "normalization attaches the meeting space");
@@ -94,7 +94,7 @@ test("브리지는 타일 편집 진입점 없이 배치·시작 위치·소유�
   }
 });
 
-test("플레이어는 NPC 위치를 받은 뒤 빈 자리에 스폰하고 액터 스냅샷에 텍스처가 없다", async () => {
+test("the player spawns in an empty spot after receiving NPC positions, and actor snapshots carry no texture", async () => {
   const spawned: string[] = [];
   const onSpawn = () => spawned.push("player-spawned");
   EventBus.on("player-spawned", onSpawn);
@@ -127,17 +127,17 @@ test("플레이어는 NPC 위치를 받은 뒤 빈 자리에 스폰하고 액터
   }
 });
 
-test("채널 데이터 없이 시작하면 channel-data-ready 를 기다렸다가 부팅한다", async () => {
+test("starting without channel data waits for channel-data-ready, then boots", async () => {
   setPendingChannelData(null);
   const sim = new OfficeSimulation() as Runtime;
   const booted: unknown[] = [];
   sim["boot"] = (data: unknown) => booted.push(data);
   try {
-    // start() 의 대기 분기는 브라우저 API 를 쓰지 않는다.
+    // start()'s waiting branch uses no browser APIs.
     sim.start();
     assert.equal(booted.length, 0);
     setPendingChannelData({ channelId: "late", mapData: legacyMap });
-    // boot 을 가짜로 바꿨으므로 start() 의 나머지(rAF·키보드)는 가짜 창에 붙는다.
+    // boot is replaced with a fake, so the rest of start() (rAF, keyboard) attaches to a fake window.
     sim["loop"] = { start() {}, stop() {} } as unknown as TickLoop;
     const originalWindow = (globalThis as { window?: unknown }).window;
     const listeners: string[] = [];
@@ -164,7 +164,7 @@ test("채널 데이터 없이 시작하면 channel-data-ready 를 기다렸다�
   }
 });
 
-test("입력 상자에 포커스가 있으면 게임 키를 가로채지 않는다", () => {
+test("does not intercept game keys when an input box has focus", () => {
   assert.equal(isTypingTarget(null), false);
   assert.equal(
     isTypingTarget({ tagName: "DIV", isContentEditable: false } as unknown as EventTarget),
@@ -178,7 +178,7 @@ test("입력 상자에 포커스가 있으면 게임 키를 가로채지 않는�
   );
 });
 
-test("dispose 는 이 시뮬레이션의 EventBus 리스너만 떼고 페이지 리스너는 남긴다", async () => {
+test("dispose removes only this simulation's EventBus listeners and leaves the page's listeners", async () => {
   let pageCount = 0;
   const page = () => pageCount++;
   EventBus.on("dialog:open", page);
@@ -198,12 +198,12 @@ test("dispose 는 이 시뮬레이션의 EventBus 리스너만 떼고 페이지 
   EventBus.off("dialog:open", page);
 });
 
-// 카드 "npc:call 거절이 사용자에게 도달하지 않는다".
+// Card "npc:call refusals never reach the user".
 //
-// 소유권은 걸음이 끊기지 않게 낙관적으로 먼저 잡는다. 예전에는 ack 조차 받지 않아
-// 서버가 거절해도 **클라이언트만 자기가 주인이라고 믿었고**, 사용자에게는 아무 표시도
-// 없었다. 거절되면 소유권을 되돌리고 이유를 보여 줘야 한다.
-test("호출이 거절되면 낙관적 소유권을 되돌리고 이유를 보여 준다", async () => {
+// Ownership is taken optimistically first so walking is not interrupted. The ack used to be ignored entirely,
+// so even when the server refused **only the client believed it was the owner**, and the user saw no
+// indication at all. On refusal, ownership must be reverted and the reason shown.
+test("when a call is refused, optimistic ownership is reverted and the reason is shown", async () => {
   const sim = new OfficeSimulation() as Runtime;
   const toasts: string[] = [];
   const onToast = (data: { messageKey?: string }) => toasts.push(data.messageKey ?? "");
@@ -232,7 +232,7 @@ test("호출이 거절되면 낙관적 소유권을 되돌리고 이유를 보�
   }
 });
 
-test("호출이 받아들여지면 소유권과 화면은 그대로 둔다", async () => {
+test("when a call is accepted, ownership and the screen are left as is", async () => {
   const sim = new OfficeSimulation() as Runtime;
   const toasts: string[] = [];
   const onToast = (data: { messageKey?: string }) => toasts.push(data.messageKey ?? "");
@@ -258,10 +258,10 @@ test("호출이 받아들여지면 소유권과 화면은 그대로 둔다", asy
 });
 
 // ---------------------------------------------------------------------------
-// 일하는 직원 (설계 2026-09-21 npc-working-state, 결정 B-1·C-1)
+// Working employees (design 2026-09-21 npc-working-state, decisions B-1 and C-1)
 // ---------------------------------------------------------------------------
 
-test("카드가 돌기 시작하면 그 직원을 지정석으로 보낸다", () => {
+test("when a card starts running, that employee is sent to their assigned seat", () => {
   const sim = new OfficeSimulation() as Runtime;
   try {
     const sent: string[] = [];
@@ -286,7 +286,7 @@ test("카드가 돌기 시작하면 그 직원을 지정석으로 보낸다", ()
   }
 });
 
-test("임자가 아니면 움직이지 않는다 — 모두가 같은 직원을 걷게 하면 안 된다", () => {
+test("does not move unless it is the owner — everyone must not walk the same employee", () => {
   const sim = new OfficeSimulation() as Runtime;
   try {
     const sent: string[] = [];
@@ -311,7 +311,7 @@ test("임자가 아니면 움직이지 않는다 — 모두가 같은 직원을 
   }
 });
 
-test("부름을 받아 와 있는 직원은 자리로 돌려보내지 않는다 — 사용자가 부른 것이 우선이다", () => {
+test("an employee who came when called is not sent back to their seat — what the user called takes priority", () => {
   const sim = new OfficeSimulation() as Runtime;
   try {
     const sent: string[] = [];
@@ -336,11 +336,11 @@ test("부름을 받아 와 있는 직원은 자리로 돌려보내지 않는다 
   }
 });
 
-test("이미 지정석에 있으면 다시 보내지 않는다", () => {
+test("not sent again when already at the assigned seat", () => {
   const sim = new OfficeSimulation() as Runtime;
   try {
     const sent: string[] = [];
-    // TILE_SIZE 가 무엇이든 0,0 은 home 0,0 과 같은 칸이다.
+    // Whatever TILE_SIZE is, 0,0 is the same cell as home 0,0.
     sim["npcs"] = [
       {
         id: "n1",
@@ -362,7 +362,7 @@ test("이미 지정석에 있으면 다시 보내지 않는다", () => {
   }
 });
 
-test("새로 일을 시작한 직원만 자리로 보낸다 — 이미 일하던 직원은 다시 보내지 않는다", async () => {
+test("only employees who newly started work are sent to their seat — employees already working are not sent again", async () => {
   setPendingChannelData({ channelId: "ch", mapData: legacyMap });
   const sim = new OfficeSimulation() as Runtime;
   try {
@@ -382,7 +382,7 @@ test("새로 일을 시작한 직원만 자리로 보낸다 — 이미 일하던
   }
 });
 
-test("업무 중인 직원을 부르면 막지 않고 그 사실을 알린다", () => {
+test("calling a working employee is not blocked, and that fact is reported", () => {
   const sim = new OfficeSimulation() as Runtime;
   const toasts: { key: string; params?: Record<string, string> }[] = [];
   const onToast = (d: { messageKey?: string; params?: Record<string, string> }) =>
@@ -418,7 +418,7 @@ test("업무 중인 직원을 부르면 막지 않고 그 사실을 알린다", 
   }
 });
 
-test("놀고 있는 직원을 부르면 작업 중 안내를 띄우지 않는다", () => {
+test("calling an idle employee does not show the working notice", () => {
   const sim = new OfficeSimulation() as Runtime;
   const toasts: string[] = [];
   const onToast = (d: { messageKey?: string }) => toasts.push(d.messageKey ?? "");
@@ -453,7 +453,7 @@ test("놀고 있는 직원을 부르면 작업 중 안내를 띄우지 않는다
   }
 });
 
-test("일하는 직원은 앰비언트 일정이 차도 산책을 나가지 않는다", async () => {
+test("working employees do not go for a stroll even when the ambient schedule is due", async () => {
   setPendingChannelData({ channelId: "ch", mapData: legacyMap });
   const sim = new OfficeSimulation() as Runtime;
   try {
@@ -469,13 +469,13 @@ test("일하는 직원은 앰비언트 일정이 차도 산책을 나가지 않�
     const seated: string[] = [];
     sim["seatNpcForWork"] = (id: string) => seated.push(id);
     sim["mayDriveNpc"] = () => true;
-    // 테스트에는 소켓이 없어 앰비언트 리더가 아니다 — 그대로 두면 일하든 말든 산책이 막혀
-    // 이 테스트가 아무것도 구별하지 못한다.
+    // The test has no socket, so it is not the ambient leader — left as is, strolling would be blocked whether working or not
+    // and this test would distinguish nothing.
     (sim["npcOwnership"] as { mayRoam: (npcId: string, leader: boolean) => boolean }).mayRoam =
       () => true;
 
     sim["workingNpcs"] = new Set(["n1"]);
-    npc.ambientTimer = 99_999; // 일정이 넘치게 찼다
+    npc.ambientTimer = 99_999; // The schedule is more than due
     sim["updateNpcs"]();
 
     assert.equal(npc.moveState, "idle", "일하는 중인데 자리에서 일어났습니다");
@@ -486,7 +486,7 @@ test("일하는 직원은 앰비언트 일정이 차도 산책을 나가지 않�
   }
 });
 
-test("산책 중에 일이 시작되면 멈추고 자리로 간다", async () => {
+test("when work starts during a stroll, they stop and go to their seat", async () => {
   setPendingChannelData({ channelId: "ch", mapData: legacyMap });
   const sim = new OfficeSimulation() as Runtime;
   try {
@@ -507,8 +507,8 @@ test("산책 중에 일이 시작되면 멈추고 자리로 간다", async () =>
     const seated: string[] = [];
     sim["seatNpcForWork"] = (id: string) => seated.push(id);
     sim["mayDriveNpc"] = () => true;
-    // 테스트에는 소켓이 없어 앰비언트 리더가 아니다 — 그대로 두면 일하든 말든 산책이 막혀
-    // 이 테스트가 아무것도 구별하지 못한다.
+    // The test has no socket, so it is not the ambient leader — left as is, strolling would be blocked whether working or not
+    // and this test would distinguish nothing.
     (sim["npcOwnership"] as { mayRoam: (npcId: string, leader: boolean) => boolean }).mayRoam =
       () => true;
 
@@ -522,7 +522,7 @@ test("산책 중에 일이 시작되면 멈추고 자리로 간다", async () =>
   }
 });
 
-test("일하지 않는 직원의 산책은 그대로 둔다", async () => {
+test("strolls of employees who are not working are left alone", async () => {
   setPendingChannelData({ channelId: "ch", mapData: legacyMap });
   const sim = new OfficeSimulation() as Runtime;
   try {
@@ -546,9 +546,9 @@ test("일하지 않는 직원의 산책은 그대로 둔다", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// 걸음 속도 — 채널 설정이 호출·회의 호출·일반 이동·산책에 각각 닿는다
+// Walking speed — the channel setting reaches calls, meeting calls, normal moves and strolls separately
 
-test("호출은 채널의 호출 속도로 뛰어온다", () => {
+test("a call comes running at the channel's call speed", () => {
   const sim = new OfficeSimulation() as Runtime;
   try {
     const calls: { speed?: number }[] = [];
@@ -581,8 +581,8 @@ test("호출은 채널의 호출 속도로 뛰어온다", () => {
   }
 });
 
-test("회의 호출은 산책 속도가 아니라 채널의 회의 호출 속도로 모인다", () => {
-  // 전에는 회의 집결이 산책 경로를 그대로 써서 55px/s 로 모였다.
+test("a meeting call gathers at the channel's meeting call speed, not the stroll speed", () => {
+  // Meeting gathering used to reuse the stroll path and gather at 55px/s.
   const sim = new OfficeSimulation() as Runtime;
   try {
     const strolls: (number | undefined)[] = [];
@@ -611,14 +611,14 @@ test("회의 호출은 산책 속도가 아니라 채널의 회의 호출 속도
   }
 });
 
-test("채널 설정은 모든 NPC 의 일반 이동·산책 속도에 입혀진다 — 나중에 온 NPC 에도", () => {
+test("the channel setting applies to every NPC's normal move and stroll speed — including NPCs that arrive later", () => {
   const sim = new OfficeSimulation() as Runtime;
   try {
     const first = { moveSpeed: 0, strollSpeed: 0 };
     sim["npcs"] = [first] as never;
     sim.setMotionConfig({ walk: 200, stroll: 70 });
     assert.deepEqual(first, { moveSpeed: 200, strollSpeed: 70 });
-    // 비었거나 틀린 설정은 기본값이다 — 걸음이 멈추지 않는다.
+    // Empty or invalid settings mean defaults — walking does not stop.
     sim.setMotionConfig(null);
     assert.deepEqual(first, { moveSpeed: 150, strollSpeed: 55 });
   } finally {
@@ -626,9 +626,9 @@ test("채널 설정은 모든 NPC 의 일반 이동·산책 속도에 입혀진�
   }
 });
 
-test("빠르게 걸을수록 위치를 자주 보낸다 — 한 번에 30px 를 넘지 않게", () => {
-  // 서버는 연속한 두 위치 보고 사이의 직선이 막히지 않았는지 검사한다. 200ms 고정이면 300px/s 에서
-  // 한 번에 60px(2칸)라 모퉁이를 가로질러 거절되고, 회의 집결이 "이동 중" 에서 영영 멈췄다(실측).
+test("the faster they walk, the more often positions are sent — never more than 30px at a time", () => {
+  // The server checks that the straight line between two consecutive position reports is not blocked. With a fixed 200ms, at 300px/s
+  // one step is 60px (2 cells), cutting across corners and getting rejected, and meeting gathering stalled at "moving" forever (measured).
   const sim = new OfficeSimulation() as Runtime;
   try {
     const interval = (speeds: { speed: number; state: string }[]) => {

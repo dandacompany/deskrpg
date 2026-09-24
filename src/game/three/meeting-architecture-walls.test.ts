@@ -15,7 +15,7 @@ import { addPublishingArchitecture } from "./publishing-scene";
 import { addTradingArchitecture } from "./trading-scene";
 import type { MapSnapshot } from "./bridge";
 
-test("실제 스튜디오 전체 GLTF 로드 뒤 낮은 시선의 착석 캐릭터를 가리는 벽을 투명화한다", async () => {
+test("after loading the full real studio GLTF, walls hiding seated characters from a low eye line become transparent", async () => {
   const root = new T.Group();
   const map = tiledSnapshot(buildOfficeEnvironment("agency"));
   const scene = addCreativeStudioScene(root, map, {
@@ -62,7 +62,7 @@ test("실제 스튜디오 전체 GLTF 로드 뒤 낮은 시선의 착석 캐릭�
       }
     }
   }
-  // 브라우저에서 확인한 충돌 좌표와 실제 착석 모델 위치가 약 0.85m 다르다.
+  // The collision coordinates checked in the browser differ from the actual seated model position by about 0.85m.
   const actor = { x: 1135.530705, y: 111.77254, walking: false };
   const seats = furnitureSeats(map.objects);
   const pose = seatAt(seats, actor.x / 32, actor.y / 32, false)!;
@@ -98,7 +98,7 @@ test("실제 스튜디오 전체 GLTF 로드 뒤 낮은 시선의 착석 캐릭�
   occlusion.dispose();
 });
 
-test("회의벽은 준비 완료와 정적 배칭 이후에도 개별 차폐와 복원이 가능하다", () => {
+test("meeting walls can still be occluded and restored individually after readiness and static batching", () => {
   const root = new T.Group();
   const material = new T.MeshStandardMaterial();
   const walls = [0, 8].map((x) => {
@@ -123,7 +123,7 @@ test("회의벽은 준비 완료와 정적 배칭 이후에도 개별 차폐와 
   assert.equal(walls[0].material, material);
 });
 
-test("같은 평면의 회의 유리벽도 회전 시 따로 복원하도록 보존한다", () => {
+test("meeting glass walls in the same plane are kept so they restore separately on rotation too", () => {
   const root = new T.Group();
   const material = new T.MeshStandardMaterial({ transparent: true, opacity: 0.4 });
   const walls = [0, 8].map((x) => {
@@ -138,7 +138,7 @@ test("같은 평면의 회의 유리벽도 회전 시 따로 복원하도록 보
   assert.ok(walls.every((wall) => wall.parent === root));
 });
 
-test("활성 회의 중 늦은 배칭은 차폐용 임시 재질을 합치지 않는다", () => {
+test("late batching during an active meeting does not merge the temporary occlusion materials", () => {
   const root = new T.Group();
   root.userData.meetingWall = true;
   const material = new T.MeshStandardMaterial({ transparent: true, opacity: 0.4 });
@@ -159,7 +159,7 @@ test("활성 회의 중 늦은 배칭은 차폐용 임시 재질을 합치지 �
   occlusion.dispose();
 });
 
-test("스튜디오 비동기 건축 로드 후 벽 목록은 남고 바닥과 기단은 제외된다", async () => {
+test("after the studio's async architecture load, the wall list remains and floors and plinths are excluded", async () => {
   const root = new T.Group();
   const shell = addCreativeStudioArchitecture(root, 42, 26, {
     load: async () => {
@@ -179,7 +179,7 @@ test("스튜디오 비동기 건축 로드 후 벽 목록은 남고 바닥과 �
   assert.ok(walls.some((wall) => wall.getObjectByName("meeting-open-door")));
 });
 
-test("회의 가능한 스튜디오도 벽 평면별 배칭으로 건축 호출 예산을 지킨다", async (t) => {
+test("meeting-capable studios also keep within the architecture draw call budget with per-wall-plane batching", async (t) => {
   const root = new T.Group();
   const shell = addCreativeStudioArchitecture(root, 42, 26, {
     load: async (url) => {
@@ -211,7 +211,7 @@ test("회의 가능한 스튜디오도 벽 평면별 배칭으로 건축 호출 
   t.diagnostic(`회의 건축 draw calls: ${calls}`);
   const walls = shell.userData.meetingWalls as T.Object3D[];
   assert.ok(walls.every((wall) => wall.parent === shell && wall.children.length > 0));
-  // 로딩과 내부 배칭이 교체한 메시를 다시 등록해야 활성 회의에도 적용된다.
+  // Meshes replaced by loading and internal batching must be re-registered to apply to an active meeting too.
   occlusion.enter(walls);
   const originals = new Map<T.Mesh, T.Material | T.Material[]>();
   shell.traverse((object) => {
@@ -226,7 +226,7 @@ test("회의 가능한 스튜디오도 벽 평면별 배칭으로 건축 호출 
   occlusion.dispose();
 });
 
-test("출판사와 트레이딩 후보는 전용 벽만 포함하고 러그와 슬래브를 보존한다", (t) => {
+test("publisher and trading candidates include only dedicated walls and preserve rugs and slabs", (t) => {
   t.mock.method(
     T.TextureLoader.prototype,
     "load",

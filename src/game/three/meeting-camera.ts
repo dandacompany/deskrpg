@@ -53,9 +53,9 @@ const BODY_PAD = 0.8;
 const SEAT_SNAP = 0.6;
 const FIT_MARGIN = 0.08;
 const MIN_SPEAKER_DISTANCE = 2.2;
-/** 상반신 구도가 담는 몸의 위쪽 비율과 머리 위 여유(칸). */
+/** The upper fraction of the body the upper-body framing contains, and the headroom above the head (cells). */
 const UPPER_BODY_SHARE = 0.5;
-/** 가슴 위: 머리부터 몸 높이의 이 비율까지. 옆 사람이 걸리면 상반신도 여기까지 당긴다. */
+/** Above the chest: from the head down to this fraction of body height. If a neighbor is caught, the upper body pulls in to here too. */
 const BUST_SHARE = 0.3;
 const HEADROOM = 0.1;
 // A speaker shot may stand just past a wall (faded) but not deep in the next room.
@@ -63,16 +63,16 @@ const ROOM_REACH = 1.5;
 
 type Shot = { kind: "table" } | { kind: "speaker"; key: string };
 
-/** 발언자를 찾았는지, 못 찾았다면 어디서 끊겼는지. */
+/** Whether the speaker was found, and if not, where it broke off. */
 export type MeetingSpeakerState = "none" | "not-speaking" | "no-actor" | "outside-room" | "found";
 
 /**
- * 렌더러가 **실제로 그린** 모습 — 월드 경계 상자와 몸이 향한 각도(rig.rotation.y, 0 이면 +z).
+ * The appearance the renderer **actually drew** — the world bounding box and the angle the body faces (rig.rotation.y, 0 means +z).
  *
- * 처음엔 카메라가 이것을 짐작했다: 방향은 `ActorSnapshot.direction`, 키는 상수. 로컬에서 실제로
- * 돌려 보니 앉은 발언자를 옆에서, 너무 가깝게, 몸이 잘린 채 잡았다. 앉은 사람은 좌석 방향을 보는데
- * (`seat?.direction ?? actor.direction`) 스냅숏 방향은 좌석으로 걸어 들어갈 때의 마지막 방향이고,
- * 앉은 머리는 상수보다 낮았다. 렌더러는 둘 다 정확히 안다.
+ * At first the camera guessed these: direction from `ActorSnapshot.direction`, height as a constant. Actually running it locally,
+ * it framed a seated speaker from the side, too close, with the body cut off. A seated person faces the seat direction
+ * (`seat?.direction ?? actor.direction`), but the snapshot direction is the last direction while walking into the seat,
+ * and the seated head was lower than the constant. The renderer knows both exactly.
  */
 export type ActorPresentation = { box: T.Box3; yaw: number };
 export type ActorPresenter = (actor: ActorSnapshot) => ActorPresentation | null;
@@ -127,8 +127,8 @@ export class MeetingCamera {
   }
   /** What the automatic camera is framing: `table` or `speaker:<kind>:<id>`. */
   /**
-   * 화면에서 읽을 수 있는 진단. 스테이징에서 발언자 클로즈업이 한 번도 안 나왔는데 로컬에서는 매번
-   * 나와 원인을 코드로 가를 수 없었다 — 다음 실행에서 DOM 만 보고 어디서 끊겼는지 알 수 있게 한다.
+   * Diagnostics readable from the screen. On staging a speaker close-up never appeared while locally it appeared every time,
+   * and the cause could not be isolated from code — so the next run can tell where it broke off just by looking at the DOM.
    */
   get diagnostics(): { shot: string; speaker: MeetingSpeakerState; error: string | null } {
     return { shot: this.shot, speaker: this.speakerState, error: this.error };
@@ -145,7 +145,7 @@ export class MeetingCamera {
     return (this.options[key] ??
       MEETING_CAMERA_DEFAULTS[key]) as (typeof MEETING_CAMERA_DEFAULTS)[K];
   }
-  /** 렌더러가 실제로 그린 모습을 알려 준다. 없으면(테스트 등) 스냅숏에서 짐작한다. */
+  /** Report the appearance the renderer actually drew. Without it (tests etc.) guess from the snapshot. */
   setPresenter(presenter: ActorPresenter | null) {
     this.presenter = presenter;
     this.dirty = true;
@@ -330,8 +330,8 @@ export class MeetingCamera {
 
   /** Start a transition to `shot` (or re-frame it, when it is already the current shot). */
   private begin(shot: Shot) {
-    // 구도를 **먼저** 계산한다. 예전에는 샷 이름을 먼저 바꾸고 계산했는데, 계산이 던지면 샷은
-    // "발언자" 인데 화면은 테이블에 멈추고 다음 프레임부터는 같은 샷이라 다시 시도하지도 않았다.
+    // Compute the framing **first**. It used to change the shot name first and then compute, so when the computation threw the shot
+    // was "speaker" while the screen stayed on the table, and from the next frame on it was the same shot so it never retried.
     let framed: { target: T.Vector3; orbit: T.Spherical };
     try {
       framed = this.compose(shot);
@@ -461,13 +461,13 @@ export class MeetingCamera {
     const angle = new T.Spherical(1, Math.PI / 2 - SPEAKER_ELEVATION, heading);
     if (framing === "face") return this.speakerFit(body, BUST_SHARE, angle);
     if (framing === "fullBody") return this.speakerFit(body, 1, angle);
-    // 상반신. 좌석이 붙어 있으면 16:9 화면 옆으로 옆자리 사람이 들어와 투샷이 된다(스테이징 실측).
-    // 그럴 때만 가슴 위까지 당겨 발언자를 주인공으로 둔다. 옆이 비어 있으면 상반신 그대로다.
+    // Upper body. When seats are adjacent the neighbor comes in at the side of the 16:9 screen and it becomes a two-shot (staging measurement).
+    // Only then pull in to above the chest to keep the speaker as the subject. With the side empty, keep the upper body.
     const upper = this.speakerFit(body, UPPER_BODY_SHARE, angle);
     return this.neighborInFrame(actor, upper) ? this.speakerFit(body, BUST_SHARE, angle) : upper;
   }
 
-  /** 몸 상자의 위쪽 `share` 만큼(머리 여유 포함)을 가운데 두고 담는다. */
+  /** Center and contain the top `share` of the body box (including headroom). */
   private speakerFit(body: Box, share: number, angle: T.Spherical) {
     const height = body.max.y - body.min.y;
     const bottom = body.max.y - height * share;
@@ -486,7 +486,7 @@ export class MeetingCamera {
     return framed;
   }
 
-  /** 발언자가 아닌 참가자의 머리가 이 구도의 화면 안(카메라 앞)에 들어오는가. */
+  /** Whether the head of a participant other than the speaker falls within this framing's screen (in front of the camera). */
   private neighborInFrame(
     speaker: ActorSnapshot,
     framed: { target: T.Vector3; orbit: T.Spherical },
@@ -665,7 +665,7 @@ export class MeetingCamera {
       const x = actor.x / 32;
       const z = actor.y / 32;
       if (x < b.x || x > b.x + b.width || z < b.y || z > b.y + b.height) continue;
-      // 실제 모습이 있으면 그 경계로 — 앉은 사람은 좌석에, 선 사람은 그 키로 담긴다.
+      // With the actual appearance, use its bounds — a seated person is contained at the seat, a standing person at their height.
       const shown = this.presenter?.(actor);
       if (shown) {
         points.push({ x: shown.box.min.x + BODY_PAD, z: shown.box.min.z + BODY_PAD });

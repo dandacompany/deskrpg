@@ -68,7 +68,7 @@ import {
 } from "./bridge";
 import { getObjectDimensions, TILE_ID_TO_OBJECT, type MapObject } from "../../lib/object-types";
 
-/** 이름표 옆 글리프 — 대화 응답 셋 + 작업 중(R27). `actorIndicator` 가 우선순위를 정한다. */
+/** Glyphs next to name tags — three conversation responses + working (R27). `actorIndicator` decides priority. */
 const INDICATOR_GLYPH: Record<NonNullable<ReturnType<typeof actorIndicator>> | "none", string> = {
   queued: "⏳",
   thinking: "💭",
@@ -94,7 +94,7 @@ const environmentPalettes = {
 type RenderedActor = {
   previous?: { x: number; z: number; time: number; direction: string };
   yaw?: number;
-  /** 보이는 이동 속도로 뛰는지 가른다 — 이동 종류가 아니라 관측한 속도라 모든 화면에서 같다. */
+  /** Decide running from the visible movement speed — observed speed rather than move kind, so it is the same on every screen. */
   gait?: ReturnType<typeof createGaitTracker>;
   model: ReturnType<typeof createActor>;
   label: HTMLButtonElement;
@@ -176,13 +176,13 @@ export class OfficeRenderer {
   };
   private hoveredActorId: string | undefined;
   /**
-   * 호버 피킹은 프레임당 한 번만, 카메라를 잡고 있지 않을 때만 한다.
+   * Hover picking happens only once per frame, and only while not grabbing the camera.
    *
-   * `point()` 는 좌석을 찾느라 월드 전체를 삼각형 단위로 레이캐스트한다
-   * (`pickFurnitureSeat(this.ray, this.world.children)`). 그것을 `pointermove` 마다 돌리면
-   * 카메라를 끄는 동안 렌더 루프와 같은 스레드에서 초당 수십 번 돈다 — 실측(1680×1000,
-   * M2 Max)에서 그 구간 CPU 의 약 59% 가 three 의 레이캐스팅이었고 프레임 p95 가
-   * 9.9ms → 66.6ms 로 뛰었다. 마지막 좌표만 모았다가 tick 에서 한 번 처리한다.
+   * `point()` raycasts the whole world triangle by triangle to find seats
+   * (`pickFurnitureSeat(this.ray, this.world.children)`). Running it on every `pointermove`
+   * runs it dozens of times per second on the same thread as the render loop while dragging the camera — measured (1680×1000,
+   * M2 Max) about 59% of CPU in that span was three's raycasting, and frame p95 jumped from
+   * 9.9ms → 66.6ms. Collect only the last coordinates and process once in tick.
    */
   private pendingMove: PointerEvent | null = null;
   private cameraInteracting = false;
@@ -201,9 +201,9 @@ export class OfficeRenderer {
     private labels: HTMLDivElement,
   ) {
     this.renderer = new T.WebGLRenderer({ antialias: true, alpha: false });
-    // 셰이더 오류 검사는 링크 직후 `getShaderParameter`/`getProgramInfoLog` 를 불러 드라이버가
-    // 컴파일을 끝낼 때까지 메인 스레드를 세운다. 맵 진입의 긴 프레임에서 이 호출이 상위에
-    // 올라온다(실측). 개발 중에는 셰이더 오류를 봐야 하므로 프로덕션에서만 끈다.
+    // Shader error checking calls `getShaderParameter`/`getProgramInfoLog` right after linking, stalling the main thread until
+    // the driver finishes compiling. In the long frames of entering a map these calls rise to the top
+    // (measured). During development shader errors must be visible, so it is turned off only in production.
     this.renderer.debug.checkShaderErrors = process.env.NODE_ENV !== "production";
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     this.renderer.shadowMap.enabled = true;
@@ -470,8 +470,8 @@ export class OfficeRenderer {
       this.meetingRightInset,
     );
     this.meetingCamera.enter(space);
-    // 카메라가 사람의 위치·방향·크기를 짐작하지 않게 실제로 그린 모습을 넘긴다. 링(바닥 표시)은
-    // 몸보다 넓어 구도를 흐리므로 리그만 잰다. precise 는 스키닝 자세(앉음)를 반영한다.
+    // Hand over what was actually drawn so the camera does not guess people's position, direction and size. The ring (floor marker) is
+    // wider than the body and blurs the framing, so only the rig is measured. precise reflects the skinned pose (seated).
     this.meetingCamera.setPresenter((actor) => {
       const rendered = this.actors.get(actor.id);
       if (!rendered) return null;
@@ -493,7 +493,7 @@ export class OfficeRenderer {
     this.onMeetingCameraChange?.(this.meetingCameraState());
     return true;
   }
-  /** 회의 카메라가 지금 무엇을 찍는지 DOM 에 남긴다 — 배포본에서 개발자 도구로 읽는 진단. */
+  /** Leave in the DOM what the meeting camera is shooting now — diagnostics readable with developer tools in deployed builds. */
   private publishMeetingDiagnostics() {
     const { shot, speaker, error } = this.meetingCamera.diagnostics;
     const data = this.host.dataset;
@@ -611,7 +611,7 @@ export class OfficeRenderer {
     this.pendingMove = null;
     this.gesture.cancel();
   };
-  /** 카메라를 잡는 동안에는 호버 판정을 쉰다 — 커서 아래 대상이 매 프레임 바뀌어 의미가 없다. */
+  /** Pause hover checks while grabbing the camera — the target under the cursor changes every frame, so it is meaningless. */
   private cameraInteractionStart = () => {
     this.cameraInteracting = true;
     this.pendingMove = null;
@@ -630,7 +630,7 @@ export class OfficeRenderer {
     this.setHoveredSeat(null);
   };
   private pointerMove = (e: PointerEvent) => {
-    // 제스처(클릭이냐 드래그냐)는 이벤트마다 봐야 정확하고, 값이 싸다.
+    // The gesture (click or drag) must be checked per event to be accurate, and it is cheap.
     this.gesture.move(e);
     if (this.cameraInteracting) return;
     this.pendingMove = e;
@@ -790,7 +790,7 @@ export class OfficeRenderer {
     return this.renderer.domElement.toDataURL("image/webp", 0.9);
   }
   private buildMap(map: MapSnapshot) {
-    // 회의 카메라를 유지할지 판단하려고 지도 구조만 따로 지문으로 만든다.
+    // Fingerprint only the map structure separately to decide whether to keep the meeting camera.
     const structure = JSON.stringify([
       map.cols,
       map.rows,
@@ -896,7 +896,7 @@ export class OfficeRenderer {
       floor.receiveShadow = true;
       this.world.add(floor);
     }
-    // 환경 프리셋이 아닌 맵은 아트워크 없이 기하(바닥·벽·오브젝트)만으로 그린다.
+    // Maps that are not environment presets are drawn from geometry alone (floor, walls, objects) without artwork.
     if (!isOfficeEnvironmentId(map.environment)) {
       const tiles = new T.InstancedMesh(
         new T.BoxGeometry(0.98, 0.015, 0.98),
@@ -1363,7 +1363,7 @@ export class OfficeRenderer {
         if (this.disposed || marker.parent !== this.world) return false;
         // Shared finalizer deduplicates textures and keeps exact seat pick proxies.
         finalizeStudioScene(this.world);
-        // 자산이 들어오며 새 지오메트리가 붙는다 — 그것들도 트리를 갖게 한다.
+        // New geometry is attached as assets arrive — give those trees too.
         buildBoundsTrees(this.world);
         if (this.meetingCamera.active) this.meetingWalls.enter(this.meetingWallObjects);
         marker.userData.assetStatus = results.every(Boolean) ? "ready" : "failed";
@@ -1401,7 +1401,7 @@ export class OfficeRenderer {
         : ["#b98064", "#7c91ab", "#9b87a2", "#a59963"][
             Array.from(actor.id).reduce((n, c) => n + c.charCodeAt(0), 0) % 4
           ];
-    // 색은 룩 정의에서만 온다. 룩이 없는 액터는 createActor 의 기본 팔레트를 쓴다.
+    // Colors come only from look definitions. Actors without a look use createActor's default palette.
     const look = resolveOfficeLook(actor.appearance);
     const model = createActor(actor.id, color, this.actors.size % 4, undefined, look);
     const label = document.createElement("button"),
@@ -1457,7 +1457,7 @@ export class OfficeRenderer {
         const fingerprint = this.bridge.mapKey();
         if (fingerprint !== this.lastMap) {
           this.buildMap(this.bridge.map());
-          // buildMap 은 맵 종류마다 다른 갈래로 빠져나간다 — 어느 갈래든 세워지도록 여기서 부른다.
+          // buildMap exits through different branches per map kind — call it here so it is set up whichever branch runs.
           buildBoundsTrees(this.world);
           this.lastMap = fingerprint;
         }
@@ -1732,7 +1732,7 @@ export class OfficeRenderer {
       }
     }
   };
-  /** 자리 변경 모드의 데스크 좌석 번호 배지 — 액터 라벨과 같은 DOM 오버레이에 둔다. */
+  /** Desk seat number badges for seat change mode — kept in the same DOM overlay as the actor labels. */
   private syncSeatBadges(width: number, height: number) {
     const labels = this.bridge?.editor().seatLabels ?? [];
     const live = new Set(labels.map((l) => l.number));

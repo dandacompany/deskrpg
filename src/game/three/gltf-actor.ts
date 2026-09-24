@@ -83,7 +83,7 @@ function cloneAsset(source: T.Object3D) {
   return model;
 }
 
-/** 뛸 때 앞으로 기울이는 각도와 걸음마다 뛰어오르는 높이(월드 단위). 모델 기준이라 바라보는 쪽으로 기운다. */
+/** The forward lean angle when running and the bounce height per step (world units). Model-relative, so it leans toward the facing side. */
 const GLTF_RUN_LEAN = 0.18;
 const GLTF_RUN_BOUNCE = 0.05;
 
@@ -210,8 +210,8 @@ export function createGltfActor(
         }
         current = next;
       }
-      // 에셋에 달리기 클립이 없다(idle·walk·sit 뿐). 걷기 클립을 이동 속도에 맞춰 빨리 돌려 발이
-      // 미끄러지지 않게 하고, 기울임·반동·굽힌 팔을 얹어 뛰는 모양을 만든다.
+      // The asset has no run clip (only idle, walk, sit). Play the walk clip faster to match the movement speed so the feet
+      // do not slide, and add lean, bounce and bent arms to make it look like running.
       if (current && name === "walk") current.setEffectiveTimeScale(run ? pace!.cadence : 1);
       gestures?.restore();
       if (synced && walking && current && gait !== undefined) {
@@ -221,7 +221,7 @@ export function createGltfActor(
       gestures?.apply(t, walking, phase, run);
       if (model) model.rotation.x = run ? GLTF_RUN_LEAN : 0;
       if (!synced) {
-        // 걷기 클립 한 주기는 두 걸음이다 — |sin| 은 주기마다 두 번 뛰어오른다.
+        // One cycle of the walk clip is two steps — |sin| bounces twice per cycle.
         const cycle = current ? (current.time / current.getClip().duration) * Math.PI * 2 : 0;
         rig.position.y = run ? Math.abs(Math.sin(cycle)) * GLTF_RUN_BOUNCE : 0;
       }

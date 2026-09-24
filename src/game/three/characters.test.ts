@@ -4,10 +4,10 @@ import * as T from "three";
 
 import { createActor } from "./characters";
 
-/** 외형 없는 옛 절차적 캐릭터 — 렌더러가 이 리그의 y 회전으로 방향을 준다. */
+/** An old procedural character without appearance — the renderer gives direction via this rig's y rotation. */
 function headPosition(yaw: number, running: boolean) {
   const actor = createActor("legacy", "#667788", 0);
-  actor.rig.rotation.y = yaw; // 렌더러가 하는 일
+  actor.rig.rotation.y = yaw; // what the renderer does
   actor.update(0.3, true, "idle", false, undefined, { running, cadence: running ? 2 : 1 });
   actor.root.updateMatrixWorld(true);
   let top = -Infinity;
@@ -22,14 +22,14 @@ function headPosition(yaw: number, running: boolean) {
   return at;
 }
 
-test("뛸 때 바라보는 쪽으로 기운다 — 아래(+z)를 보면 머리가 +z 로", () => {
+test("leans toward the facing side when running — facing down (+z) puts the head toward +z", () => {
   const run = headPosition(0, true);
   const walk = headPosition(0, false);
   assert.ok(run.z - walk.z > 0.1, `${walk.z.toFixed(3)} → ${run.z.toFixed(3)}`);
 });
 
-test("오른쪽(+x)을 봐도 오른쪽으로 기운다 — 기울임이 방향보다 먼저 적용된다", () => {
-  // 오일러 기본 순서(XYZ)면 기울임이 월드 x 축으로 걸려, 옆을 볼 때 머리가 옆이 아니라 +z 로 간다.
+test("facing right (+x) leans right too — the lean is applied before the direction", () => {
+  // With the default Euler order (XYZ) the lean applies to the world x axis, so when facing sideways the head goes to +z instead of sideways.
   const run = headPosition(Math.PI / 2, true);
   const walk = headPosition(Math.PI / 2, false);
   assert.ok(

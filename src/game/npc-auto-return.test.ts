@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { shouldAutoReturn, shouldReturnOnRoomChange } from "./npc-auto-return";
 
-test("직접 부른 NPC(calledForRoom=null) 는 대화창이 없으면 타이머를 탄다", () => {
+test("an NPC called directly (calledForRoom=null) runs the timer when there is no dialog", () => {
   assert.equal(
     shouldAutoReturn(
       { moveState: "waiting", calledForRoom: null },
@@ -18,7 +18,7 @@ test("직접 부른 NPC(calledForRoom=null) 는 대화창이 없으면 타이머
     false,
   );
 });
-test("방이 부른 NPC 는 그 방이 보이는 동안 머문다 — 다른 방이 보이면 타이머를 탄다", () => {
+test("an NPC called by a room stays while that room is visible — when another room is visible it runs the timer", () => {
   assert.equal(
     shouldAutoReturn(
       { moveState: "waiting", calledForRoom: "r1" },
@@ -41,7 +41,7 @@ test("방이 부른 NPC 는 그 방이 보이는 동안 머문다 — 다른 방
     true,
   );
 });
-test("보이는 방이 바뀌면, 대기 중이고 그 방이 아닌 NPC 만 즉시 돌아간다", () => {
+test("when the visible room changes, only NPCs that are waiting and not for that room go back immediately", () => {
   assert.equal(shouldReturnOnRoomChange({ moveState: "waiting", calledForRoom: "r1" }, "r2"), true);
   assert.equal(
     shouldReturnOnRoomChange({ moveState: "waiting", calledForRoom: "r1" }, "r1"),

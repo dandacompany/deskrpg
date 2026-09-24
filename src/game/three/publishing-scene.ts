@@ -6,7 +6,7 @@ import { surfaceTexture } from "./surface-detail";
 export function isPublishingMap(map: Pick<MapSnapshot, "environment" | "environmentVersion">) {
   return map.environment === "publishing" && (map.environmentVersion ?? 0) >= 3;
 }
-/** 출판사 마감: 낮은 전면벽, 크림색 후면벽, 직물 러그와 작업 조명. */
+/** The publisher finish: low front walls, cream back walls, fabric rugs and task lighting. */
 export function addPublishingArchitecture(root: T.Group, map: MapSnapshot) {
   const g = new T.Group();
   g.name = "publishing-architecture";
@@ -22,7 +22,7 @@ export function addPublishingArchitecture(root: T.Group, map: MapSnapshot) {
     g.add(host);
     round(host, w, h, d, plaster, x, h / 2, z, 0.025);
     round(host, w + 0.05, 0.09, d + 0.06, cap, x, h + 0.025, z, 0.012);
-    // 수직·수평 벽 모두 얇은 축 방향으로 돌출시켜 벽과 걸레받이의 공면을 없앤다.
+    // Both vertical and horizontal walls protrude along the thin axis to remove coplanarity between walls and baseboards.
     round(
       host,
       w + (w < d ? 0.045 : 0),
@@ -42,7 +42,7 @@ export function addPublishingArchitecture(root: T.Group, map: MapSnapshot) {
     doorEnd = doorStart + 3;
   wall(doorStart - 0.5, 0.8, 0.24, (doorStart + 0.5) / 2, map.rows - 0.5);
   wall(map.cols - 0.5 - doorEnd, 0.8, 0.24, (map.cols - 0.5 + doorEnd) / 2, map.rows - 0.5);
-  // 문틀은 논리 출입구 바깥에 두어 접근 경로를 가리지 않는다.
+  // Door frames are placed outside the logical entrance so they do not block the access path.
   for (const x of [doorStart, doorEnd])
     round(g, 0.12, 1.55, 0.25, "#65715a", x, 0.775, map.rows - 0.5, 0.012);
   const fabric = surfaceTexture("fabric");
@@ -56,7 +56,7 @@ export function addPublishingArchitecture(root: T.Group, map: MapSnapshot) {
     });
     round(g, w, 0.025, d, mat, x, 0.018, z, 0.014);
   };
-  // 가구 태그에서 러그 위치를 얻어 레이아웃을 중복 선언하지 않는다.
+  // Take rug positions from furniture tags so the layout is not declared twice.
   const desks = map.objects.filter(
     (o) => o.type === "reception_desk" && o.destinationTags?.includes("work"),
   );
@@ -68,7 +68,7 @@ export function addPublishingArchitecture(root: T.Group, map: MapSnapshot) {
   if (proof) rug(proof.col + 2, proof.row + 1, 5.6, 3.8);
   const lounge = map.objects.find((o) => o.type === "studio_sofa");
   if (lounge) rug(lounge.col + 1.5, lounge.row + 1.5, 6.6, 4.7);
-  // 그림·액자는 소품을 재사용할 수 있도록 별도 그룹으로 생성한다.
+  // Paintings and frames are created as a separate group so the props can be reused.
   for (const [x, z] of [
     [23, 0.66],
     [26, 0.66],
@@ -86,7 +86,7 @@ export function addPublishingArchitecture(root: T.Group, map: MapSnapshot) {
     round(frame, 0.59, 0.34, 0.009, "#85917b", 0, -0.13, 0.05, 0.015);
     round(frame, 0.29, 0.29, 0.011, "#b8a082", 0.13, 0.1, 0.052, 0.025);
   }
-  // 회의실 조명은 실제 회의 테이블 위치에서 파생한다.
+  // Meeting room lighting is derived from the actual meeting table position.
   const table = map.objects.find((o) => o.type === "meeting_table" && o.variant === "studio-oak");
   if (table) {
     rug(table.col + 1, table.row + 1, 4.8, 4.5);

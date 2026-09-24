@@ -1,4 +1,4 @@
-/** 서버 와이어 계약의 방향 이름과 시뮬레이션 내부의 숫자 방향을 오간다. */
+/** Convert between the server wire contract's direction names and the simulation's internal numeric directions. */
 export const DIR_UP = 0;
 export const DIR_LEFT = 1;
 export const DIR_DOWN = 2;
@@ -20,7 +20,7 @@ export function directionName(direction: number): string {
   return DIR_NUM_TO_NAME[direction] ?? "down";
 }
 
-/** 이동 벡터가 가리키는 방향. 가로 성분이 크면 좌우, 아니면 상하다. */
+/** The direction a movement vector points. Left/right if the horizontal component is larger, otherwise up/down. */
 export function directionOfDelta(dx: number, dy: number, horizontalFirst = true): number {
   const horizontal = horizontalFirst ? Math.abs(dx) > Math.abs(dy) : Math.abs(dx) >= Math.abs(dy);
   if (horizontal) return dx > 0 ? DIR_RIGHT : DIR_LEFT;

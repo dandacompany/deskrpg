@@ -286,7 +286,7 @@
   font-size: 11px;
   pointer-events: none;
 }
-/* 회의 카메라 중에는 오른쪽 아래가 카메라 도구 자리다 — 왼쪽 아래로 비키고, 장면 위에서도 읽히게 판을 깐다. */
+/* During the meeting camera the bottom right is where the camera tools are — move aside to the bottom left and lay a plate so it reads over the scene. */
 .office-movement-hint[data-meeting] {
   right: auto;
   left: 24px;

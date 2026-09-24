@@ -5,10 +5,10 @@ import { disposeTree } from "./office-renderer";
 import { captureWhenReady } from "./ready-capture";
 
 /**
- * 초상(원형 아바타)용 카메라 프레이밍. 정사각 출력, 목 위쪽 살짝 정면에서 봤을 때
- * 머리끝(높은 번헤어·컬 포함)부터 양쪽 어깨까지 들어오게 잡는다. 캐릭터는 GLB 액터로
- * 바닥 원점 기준 약 1.9~1.93m 로 정규화돼 있다(`commute-walk.ts` 주석 참조).
- * `office-look-thumbnail.test.ts` 가 이 상수로 커버리지를 고정한다.
+ * Camera framing for the portrait (round avatar). Square output, framed so that, seen slightly from the front above the neck,
+ * it includes from the top of the head (including high buns and curls) down to both shoulders. Characters are GLB actors
+ * normalized to about 1.9–1.93m from the floor origin (see the `commute-walk.ts` comment).
+ * `office-look-thumbnail.test.ts` pins the coverage with these constants.
  */
 export const PORTRAIT_FRAMING = {
   fov: 20,

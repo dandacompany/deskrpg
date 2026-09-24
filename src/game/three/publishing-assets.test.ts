@@ -12,7 +12,7 @@ import { SCENE_ASSETS } from "./scene-asset-definitions";
 import { getObjectDimensions } from "../../lib/object-types";
 import { disposeTree } from "./dispose-tree";
 
-test("출판 집기는 이동 점유 영역과 높이 계약 안에 머문다", () => {
+test("publishing props stay within the movement occupancy area and the height contract", () => {
   for (const id of Object.keys(PUBLISHING_ASSETS) as (keyof typeof PUBLISHING_ASSETS)[]) {
     const d = PUBLISHING_ASSETS[id],
       root = buildPublishingAsset(id),
@@ -25,7 +25,7 @@ test("출판 집기는 이동 점유 영역과 높이 계약 안에 머문다", 
     disposeTree(root);
   }
 });
-test("출판 GLB의 카탈로그 치수·해시·PBR 텍스처가 실제 파일과 일치한다", async () => {
+test("catalog dimensions, hashes and PBR textures of the publishing GLBs match the real files", async () => {
   const report = JSON.parse(
     await readFile("public/assets/shared/publishing/build-report.json", "utf8"),
   );
@@ -50,8 +50,8 @@ test("출판 GLB의 카탈로그 치수·해시·PBR 텍스처가 실제 파일�
   }
 });
 
-// 출력대의 회전된 메시와 논리 점유가 같은 면적을 사용한다.
-test("출력대는 방향별 점유 영역 안에서 회전한다", () => {
+// The printing station's rotated mesh and its logical occupancy use the same area.
+test("the printing station rotates within its per-direction occupancy area", () => {
   for (const direction of ["down", "right", "up", "left"] as const) {
     const host = new T.Group();
     const object = {

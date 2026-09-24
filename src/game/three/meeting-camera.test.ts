@@ -67,7 +67,7 @@ test("meeting locks navigation, restores camera and controls, and can reenter", 
   assert.equal(controls.enableZoom, false);
   assert.equal(controls.touches.ONE, T.TOUCH.ROTATE);
   assert.equal(controls.mouseButtons.LEFT, T.MOUSE.ROTATE);
-  // 목표점은 방 중심이 아니라 참가자 구도의 화면 중심이다 — 방 안에만 있으면 된다.
+  // The target point is the screen center of the participant framing, not the room center — it only needs to be inside the room.
   assert.ok(controls.target.x > 10 && controls.target.x < 18, `목표 x ${controls.target.x}`);
   meeting.exit();
   assert.equal(controls.enablePan, true);
@@ -105,7 +105,7 @@ function rebuildingRenderer() {
     furnitureHighlight: new FurnitureHighlight(),
     boardArrival: new BoardArrival(),
     meetingWallObjects: [],
-    // 카메라가 렌더러에 각 액터의 실제 모습을 묻는다.
+    // The camera asks the renderer for each actor's actual appearance.
     actors: new Map(),
     world,
     scene,
@@ -134,7 +134,7 @@ function rebuildingRenderer() {
     refresh(next = map) {
       map = next;
       assetVersion++;
-      // 실제 tick도 같은 buildMap 경로를 사용한다. 진입 메서드로 WebGL 없이 그 경로를 실행한다.
+      // The real tick uses the same buildMap path. The entry method runs that path without WebGL.
       renderer.enterMeeting();
     },
     map: () => map,
@@ -144,7 +144,7 @@ function rebuildingRenderer() {
   };
 }
 
-test("증축 표식의 ID·좌표·타입이 맞는 벽만 생략하거나 세로 경계로 그린다", () => {
+test("only walls whose ID, coordinates and type match the extension marker are omitted or drawn as vertical boundaries", () => {
   const fixture = rebuildingRenderer();
   const objects = [
     { id: "hidden", type: "room_wall_h", col: 2, row: 2 },
@@ -264,7 +264,7 @@ for (const environment of ["executive", "tech", undefined]) {
   });
 }
 
-test("같은 지도의 늦은 텍스처 갱신은 회의·수동 방향·발언·복원값을 유지한다", () => {
+test("a late texture refresh of the same map keeps the meeting, manual direction, speaking and restore values", () => {
   const fixture = rebuildingRenderer();
   const { renderer, camera, controls, meeting } = fixture;
   const original = camera.position.clone();
@@ -293,7 +293,7 @@ test("같은 지도의 늦은 텍스처 갱신은 회의·수동 방향·발언�
   });
 });
 
-test("자산 갱신은 이전 벽 재질을 복원·해제한 뒤 새 회의 벽에만 가림 처리를 연결한다", () => {
+test("an asset refresh restores and releases the previous wall materials, then wires occlusion only to the new meeting walls", () => {
   const fixture = rebuildingRenderer();
   fixture.renderer.enterMeeting();
   const firstWall = () => {
@@ -365,7 +365,7 @@ for (const environment of ["tech", "trading", "publishing"]) {
   });
 }
 
-test("같은 경계라도 실제 가구·좌석·지도·회의 공간 변경은 회의 모드를 종료한다", () => {
+test("even with the same bounds, real furniture, seat, map or meeting space changes end meeting mode", () => {
   const fixture = rebuildingRenderer();
   for (const change of [
     (map: MapSnapshot) => ({
@@ -393,7 +393,7 @@ test("같은 경계라도 실제 가구·좌석·지도·회의 공간 변경은
     "같은 객체를 제자리 수정해도 변경으로 판정한다",
   );
 });
-/** 사용 가능 화면(전체 폭 − 회의 패널) 안에서의 위치. 0~1 이면 보인다. */
+/** Position within the usable screen (full width − meeting panel). Visible if 0–1. */
 function usableSpot(camera: T.PerspectiveCamera, point: T.Vector3, width: number, right: number) {
   camera.updateMatrixWorld(true);
   const p = point.clone().project(camera);
@@ -410,7 +410,7 @@ function assertVisible(
   assert.ok(spot.x >= 0 && spot.x <= 1, `${label}: 가로 ${spot.x.toFixed(3)} 가 사용 가능 폭 밖`);
   assert.ok(spot.y >= 0 && spot.y <= 1, `${label}: 세로 ${spot.y.toFixed(3)} 가 화면 밖`);
 }
-/** 두 참가자 몸을 감싸는 상자 꼭짓점 — 회의 구도가 반드시 담아야 하는 것. */
+/** The corners of the box enclosing two participants' bodies — what the meeting framing must always contain. */
 function participantCorners() {
   const corners: T.Vector3[] = [];
   for (const actor of actors)
@@ -420,17 +420,17 @@ function participantCorners() {
           corners.push(new T.Vector3(actor.x / 32 + dx, y, actor.y / 32 + dz));
   return corners;
 }
-test("기본 구도는 방이 아니라 참가자를 담고, 화면을 채운다", () => {
-  // 옛 구도는 방 네 모서리의 경계 구로 거리를 잡아 8×6 칸 방을 23칸 밖에서 봤다(실측).
-  // 이제 주제는 사람이다 — 모두 보이되 화면의 큰 몫을 차지해야 한다.
+test("the default framing contains the participants, not the room, and fills the screen", () => {
+  // The old framing set distance from a bounding sphere over the room's four corners and viewed an 8×6 cell room from 23 cells away (measured).
+  // Now the subject is the people — everyone must be visible while taking up a large share of the screen.
   const { camera, meeting } = setup();
   meeting.enter(space);
   meeting.update(1, actors);
   assert.equal(meeting.shot, "table");
   for (const corner of participantCorners()) assertVisible(camera, corner, 1200, 350, "참가자");
-  // 꽉 찬 구도란 "제한하는 축이 거의 가득" 이다 — 상자를 비스듬히 보므로 가로와 세로 중
-  // 어느 쪽이 먼저 차는지는 방 모양에 달렸다. 처음엔 가로 60% 를 단정했다가 세로가 먼저 차는
-  // 이 픽스처에서 틀렸다.
+  // A tight framing means "the limiting axis is nearly full" — the box is seen at an angle, so whether width or height
+  // fills first depends on the room shape. At first 60% width was asserted, which was wrong for this fixture
+  // where height fills first.
   const spots = participantCorners().map((c) => usableSpot(camera, c, 1200, 350));
   const spreadX = Math.max(...spots.map((p) => p.x)) - Math.min(...spots.map((p) => p.x));
   const spreadY = Math.max(...spots.map((p) => p.y)) - Math.min(...spots.map((p) => p.y));
@@ -440,7 +440,7 @@ test("기본 구도는 방이 아니라 참가자를 담고, 화면을 채운다
   );
 });
 
-test("발언자 구도는 바라보는 쪽 정면에서 상반신으로 당긴다", () => {
+test("the speaker framing pulls in to the upper body from straight in front of the facing side", () => {
   const { camera, controls, meeting } = setup();
   meeting.enter(space);
   meeting.update(1, actors);
@@ -449,7 +449,7 @@ test("발언자 구도는 바라보는 쪽 정면에서 상반신으로 당긴�
   meeting.update(1, actors);
   assert.equal(meeting.shot, "speaker:npc:npc");
   const speaker = new T.Vector3(16, 0, 9);
-  // npc 는 아래(+z)를 본다 → 카메라는 발언자보다 +z 쪽, 거의 같은 x 에 있어야 정면이다.
+  // The npc faces down (+z) → the camera must be on the +z side of the speaker at almost the same x to be head-on.
   const toCamera = camera.position.clone().sub(speaker).setY(0).normalize();
   assert.ok(toCamera.z > 0.9, `정면이 아닙니다 — 카메라 방향 ${toCamera.toArray()}`);
   const distance = camera.position.distanceTo(controls.target);
@@ -462,7 +462,7 @@ test("발언자 구도는 바라보는 쪽 정면에서 상반신으로 당긴�
   assert.ok(Math.abs(head.x - 0.5) < 0.2, `머리가 화면 가운데에서 벗어났습니다: ${head.x}`);
 });
 
-test("위를 보는 발언자는 반대편(−z)에서 잡는다", () => {
+test("a speaker facing up is framed from the opposite side (−z)", () => {
   const { camera, meeting } = setup();
   const facingUp = actors.map((a) => (a.kind === "npc" ? { ...a, direction: "up" } : a));
   meeting.enter(space);
@@ -472,7 +472,7 @@ test("위를 보는 발언자는 반대편(−z)에서 잡는다", () => {
   assert.ok(camera.position.z < 9, `카메라 z ${camera.position.z} — 얼굴 쪽이 아닙니다`);
 });
 
-test("발언자 확대 정도: 얼굴 가까이 < 상반신 < 전신 < 테이블 전체", () => {
+test("speaker zoom levels: close to the face < upper body < full body < whole table", () => {
   const distances: number[] = [];
   for (const speakerFraming of ["face", "upperBody", "fullBody", "table"] as const) {
     const { camera, controls, meeting } = setup();
@@ -502,8 +502,8 @@ function speakerDistance(
   return { camera, distance: camera.position.distanceTo(controls.target) };
 }
 
-test("상반신 구도에 옆자리 사람이 들어오면 가슴 위까지 당기고, 옆이 비면 상반신 그대로다", () => {
-  // 스테이징 실측: 붙은 좌석에서 발언자와 옆 사람이 투샷으로 잡혔다.
+test("if the neighbor enters the upper-body framing, pull in to above the chest; with the side empty, keep the upper body", () => {
+  // Staging measurement: in adjacent seats the speaker and the neighbor were framed as a two-shot.
   const neighbor: ActorSnapshot = {
     id: "neighbor",
     kind: "npc",
@@ -519,12 +519,12 @@ test("상반신 구도에 옆자리 사람이 들어오면 가슴 위까지 당�
   assert.ok(beside.distance < alone - 0.1, `옆자리 ${beside.distance} vs 단독 ${alone}`);
   assert.ok(Math.abs(beside.distance - bust) < 1e-6, "옆자리가 있으면 가슴 위 구도와 같다");
   assertVisible(beside.camera, new T.Vector3(16, 2.9, 9), 1200, 350, "발언자 머리");
-  // 방 밖(유리벽 너머)에 있는 사람은 옆자리가 아니다.
+  // Someone outside the room (beyond the glass wall) is not a neighbor.
   const outside = { ...neighbor, x: 40 * 32 };
   assert.ok(Math.abs(speakerDistance([...actors, outside]).distance - alone) < 1e-6);
 });
 
-test("발언 중 '테이블 전체' 설정은 참가자를 모두 담은 채 발언자 쪽으로 돈다", () => {
+test("with the 'whole table' setting during speech, it turns toward the speaker while keeping all participants", () => {
   const { camera, meeting } = setup();
   meeting.configure({ speakerFraming: "table" });
   meeting.enter(space);
@@ -534,13 +534,13 @@ test("발언 중 '테이블 전체' 설정은 참가자를 모두 담은 채 발
   for (const corner of participantCorners()) assertVisible(camera, corner, 1200, 350, "참가자");
 });
 
-test("짧은 발언도 최소 체류 동안 머물고, 끝난 뒤 잠깐 더 머문 다음 테이블로 돌아간다", () => {
+test("even short speech stays for the minimum dwell, lingers briefly after ending, then returns to the table", () => {
   const { meeting } = setup();
   meeting.configure({ minSpeakerDwellSeconds: 1.5, holdAfterSpeechSeconds: 1.2 });
   meeting.enter(space);
   meeting.update(0.1, actors);
   meeting.setSpeaker({ kind: "npc", id: "npc", utteranceId: "short" });
-  meeting.update(0.1, actors); // t=0.2 발언 시작 — 즉시 발언자로
+  meeting.update(0.1, actors); // t=0.2 speech starts — immediately to the speaker
   assert.equal(meeting.shot, "speaker:npc:npc", "발언 시작에는 늦지 않고 반응해야 합니다");
   meeting.setSpeaker(null);
   const at = (t: number) => {
@@ -556,7 +556,7 @@ test("짧은 발언도 최소 체류 동안 머물고, 끝난 뒤 잠깐 더 머
   assert.equal(at(2.2), "table");
 });
 
-test("다음 발언자가 이어지면 테이블을 거치지 않고 바로 넘어간다(직행 기본값)", () => {
+test("when the next speaker follows, it moves directly without going through the table (direct by default)", () => {
   const { meeting } = setup();
   meeting.configure({ minSpeakerDwellSeconds: 0.5, holdAfterSpeechSeconds: 1.2 });
   meeting.enter(space);
@@ -577,7 +577,7 @@ test("다음 발언자가 이어지면 테이블을 거치지 않고 바로 넘�
   assert.equal(shots.at(-1), "speaker:user:user");
 });
 
-test("직행을 끄면 테이블 구도를 거쳐 다음 발언자로 간다", () => {
+test("with direct turned off, it goes through the table framing to the next speaker", () => {
   const { meeting } = setup();
   meeting.configure({ minSpeakerDwellSeconds: 0.5, directHandoff: false });
   meeting.enter(space);
@@ -595,9 +595,9 @@ test("직행을 끄면 테이블 구도를 거쳐 다음 발언자로 간다", (
   assert.ok(table >= 0 && next > table, `순서가 틀렸습니다: ${shots.join(",")}`);
 });
 
-test("발언자가 빠르게 바뀌어도 최소 체류가 카메라를 붙잡는다 — 흔들리지 않는다", () => {
-  // 옛 단정은 "방향이 ±1.2 rad 안" 이었다. 정면 구도에서는 방향이 발언자의 시선이므로
-  // 그 단정은 뜻이 없다. 흔들림의 실체는 구도가 너무 자주 바뀌는 것이다.
+test("even when speakers change quickly, the minimum dwell holds the camera — it does not shake", () => {
+  // The old assertion was "direction within ±1.2 rad". In a head-on framing the direction is the speaker's gaze, so
+  // that assertion is meaningless. What shaking really is: the framing changing too often.
   const first = setup();
   const second = setup();
   first.meeting.enter(space);
@@ -614,13 +614,13 @@ test("발언자가 빠르게 바뀌어도 최소 체류가 카메라를 붙잡�
     if (first.meeting.shot !== last) changes += 1;
     last = first.meeting.shot;
   }
-  // 3초 동안 1.5초 체류면 발언자 구도는 많아야 세 번 바뀐다(첫 진입 포함).
+  // With a 1.5-second dwell over 3 seconds, the speaker framing changes at most three times (including the first entry).
   assert.ok(changes <= 3, `3초에 구도가 ${changes}번 바뀌었습니다`);
   first.meeting.manualRotate();
   assert.equal(second.meeting.automatic, true);
 });
 
-test("발언 중이 아니거나(생각 중) 이름만 같은 발언자는 테이블 구도다 — 식별은 타입 있는 ID", () => {
+test("when not speaking (thinking) or a speaker only matches by name, it is the table framing — identification is by typed ID", () => {
   const { meeting } = setup();
   meeting.configure({ minSpeakerDwellSeconds: 0, holdAfterSpeechSeconds: 0 });
   meeting.enter(space);
@@ -631,13 +631,13 @@ test("발언 중이 아니거나(생각 중) 이름만 같은 발언자는 테�
   meeting.setSpeaker({ kind: "npc", id: "npc", utteranceId: "thought", phase: "thinking" });
   meeting.update(1, actors);
   assert.equal(meeting.shot, "table", "생각 중은 발언이 아닙니다");
-  // 두 참가자의 이름이 모두 "Same" 이다 — 이름으로 찾으면 엉뚱한 사람을 잡는다.
+  // Both participants are named "Same" — looking up by name grabs the wrong person.
   meeting.setSpeaker({ kind: "user", id: "Same", utteranceId: "three" });
   meeting.update(1, actors);
   assert.equal(meeting.shot, "table");
 });
 
-test("같은 발언의 스트림 갱신은 전환을 다시 시작하지 않고, 수동 회전은 자동을 멈춘다", () => {
+test("stream updates of the same speech do not restart the transition, and manual rotation stops the automatic one", () => {
   const { camera, controls, meeting } = setup(false);
   meeting.enter(space);
   meeting.update(2, actors);
@@ -664,7 +664,7 @@ test("같은 발언의 스트림 갱신은 전환을 다시 시작하지 않고,
   assert.equal(meeting.shot, "speaker:npc:npc");
 });
 
-test("전환하는 모든 프레임에서 발언자가 화면 밖으로 나가지 않는다", () => {
+test("the speaker never leaves the screen in any frame of a transition", () => {
   const { camera, meeting } = setup(false);
   meeting.enter(space);
   meeting.update(2, actors);
@@ -675,7 +675,7 @@ test("전환하는 모든 프레임에서 발언자가 화면 밖으로 나가�
   }
 });
 
-test("좁게 줄여도 그 즉시 참가자가 모두 보인다 — 다음 프레임을 기다리지 않는다", () => {
+test("even when narrowed, all participants are visible immediately — without waiting for the next frame", () => {
   const { camera, meeting } = setup(false);
   meeting.enter(space);
   meeting.update(2, actors);
@@ -683,7 +683,7 @@ test("좁게 줄여도 그 즉시 참가자가 모두 보인다 — 다음 프�
   for (const corner of participantCorners()) assertVisible(camera, corner, 600, 240, "줄인 직후");
 });
 
-test("발언자 구도에서 좁게 줄여도 발언자가 보인다", () => {
+test("even when narrowed in the speaker framing, the speaker is visible", () => {
   const { camera, meeting } = setup();
   meeting.enter(space);
   meeting.setSpeaker({ kind: "npc", id: "npc", utteranceId: "one" });
@@ -693,15 +693,15 @@ test("발언자 구도에서 좁게 줄여도 발언자가 보인다", () => {
   ]) {
     meeting.setViewport(width, height, right);
     meeting.update(1, actors);
-    // 서 있는 발언자(좌석 없음)의 상반신은 머리 2.9 에서 가슴 약 1.3 까지다.
+    // The upper body of a standing speaker (no seat) goes from the head at 2.9 to the chest at about 1.3.
     assertVisible(camera, new T.Vector3(16, 2.9, 9), width, right, `${width}×${height} 머리`);
     assertVisible(camera, new T.Vector3(16, 1.4, 9), width, right, `${width}×${height} 가슴`);
   }
 });
 
-test("발언자 정면이 벽 너머여도 발언자를 자르지 않고, 옆방 깊이 들어가지 않는다", () => {
-  // npc(16,9)가 아래(+z)를 보면 정면 카메라가 남쪽 벽(z=11) 너머로 나간다. 처음 구현은 방 안으로
-  // 당기다가 머리를 잘랐다. 벽은 이미 흐려지므로 벽 바로 너머는 괜찮고, 옆방 깊이는 안 된다.
+test("even when the speaker's front is beyond a wall, it does not cut off the speaker nor go deep into the next room", () => {
+  // When npc(16,9) faces down (+z), the head-on camera goes beyond the south wall (z=11). The first implementation pulled it
+  // into the room and cut off the head. Walls are already faded, so just beyond the wall is fine, but not deep into the next room.
   const { camera, meeting } = setup();
   meeting.enter(space);
   meeting.setSpeaker({ kind: "npc", id: "npc", utteranceId: "one" });
@@ -714,7 +714,7 @@ test("발언자 정면이 벽 너머여도 발언자를 자르지 않고, 옆방
   assertVisible(camera, new T.Vector3(16, 1.4, 9), 1200, 350, "가슴");
 });
 
-test("좌석에 앉은 발언자는 좌석 위치와 앉은 키로 잡는다", () => {
+test("a speaker seated on a seat is framed by the seat position and seated height", () => {
   const { camera, meeting } = setup();
   meeting.enter(space);
   meeting.setSeats([
@@ -723,7 +723,7 @@ test("좌석에 앉은 발언자는 좌석 위치와 앉은 키로 잡는다", (
   ]);
   meeting.setSpeaker({ kind: "npc", id: "npc", utteranceId: "one" });
   meeting.update(1, actors);
-  // 앉은 머리(약 2.0)가 화면 위쪽 절반 안에 있어야 한다.
+  // The seated head (about 2.0) must be within the upper half of the screen.
   const head = usableSpot(camera, new T.Vector3(16.2, 2.0, 9.1), 1200, 350);
   assert.ok(head.y > 0 && head.y < 0.5, `앉은 머리 세로 ${head.y.toFixed(2)}`);
 });
@@ -807,9 +807,9 @@ test("renderer enter/rotate/resume/exit restores follow state and wall materials
 });
 
 // ---------------------------------------------------------------------------
-// 렌더러가 넘기는 실제 모습 — 짐작하지 않는다
+// The actual appearance the renderer hands over — no guessing
 
-/** 앉은 npc: 좌석(16,9)에 앉아 +x(오른쪽)를 본다. 앉은 몸은 1.5칸 높이다. */
+/** A seated npc: sits on seat (16,9) facing +x (right). The seated body is 1.5 cells tall. */
 function seatedPresenter(yaw = Math.PI / 2) {
   return (actor: ActorSnapshot) =>
     actor.id === "npc"
@@ -817,13 +817,13 @@ function seatedPresenter(yaw = Math.PI / 2) {
       : null;
 }
 
-test("실제 몸 방향을 따른다 — 스냅숏이 '아래' 라도 몸이 오른쪽을 보면 오른쪽에서 잡는다", () => {
-  // 로컬 실측에서 드러난 결함: 앉은 사람은 좌석 방향을 보는데, 스냅숏 방향은 좌석으로 걸어 들어갈
-  // 때의 마지막 방향이라 카메라가 옆에서 잡았다.
+test("follows the real body direction — even if the snapshot says 'down', if the body faces right it frames from the right", () => {
+  // A defect revealed in local measurement: a seated person faces the seat direction, but the snapshot direction is the last direction
+  // while walking into the seat, so the camera framed from the side.
   const { camera, meeting } = setup();
   meeting.setPresenter(seatedPresenter());
   meeting.enter(space);
-  meeting.update(1, actors); // actors 의 npc 스냅숏 방향은 "down"
+  meeting.update(1, actors); // the npc snapshot direction in actors is "down"
   meeting.setSpeaker({ kind: "npc", id: "npc", utteranceId: "one" });
   meeting.update(1, actors);
   const toCamera = camera.position
@@ -837,7 +837,7 @@ test("실제 몸 방향을 따른다 — 스냅숏이 '아래' 라도 몸이 오
   );
 });
 
-test("상반신은 실제 키로 잡는다 — 머리는 보이고 발은 잘린다, 전신은 발까지 보인다", () => {
+test("the upper body is framed by real height — the head is visible and the feet are cut; full body shows down to the feet", () => {
   for (const [speakerFraming, feetVisible] of [
     ["upperBody", false],
     ["fullBody", true],
@@ -863,7 +863,7 @@ test("상반신은 실제 키로 잡는다 — 머리는 보이고 발은 잘린
   }
 });
 
-test("진단은 발언자를 어디서 못 찾았는지 말한다", () => {
+test("diagnostics say where the speaker could not be found", () => {
   const { meeting } = setup();
   meeting.configure({ minSpeakerDwellSeconds: 0, holdAfterSpeechSeconds: 0 });
   meeting.enter(space);
@@ -883,8 +883,8 @@ test("진단은 발언자를 어디서 못 찾았는지 말한다", () => {
   assert.deepEqual(meeting.diagnostics, { shot: "speaker:npc:npc", speaker: "found", error: null });
 });
 
-test("발언자 구도 계산이 던지면 샷을 바꾸지 않고, 다음 프레임에 다시 시도한다", () => {
-  // 예전에는 샷 이름을 먼저 바꾼 뒤 계산해, 던지면 이름은 '발언자' 인데 화면은 테이블에 멈췄다.
+test("if computing the speaker framing throws, the shot does not change and it retries on the next frame", () => {
+  // It used to change the shot name first and then compute, so on a throw the name was 'speaker' while the screen stayed on the table.
   const { meeting } = setup();
   let broken = false;
   meeting.setPresenter(() => {

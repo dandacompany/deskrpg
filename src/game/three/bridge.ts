@@ -11,15 +11,15 @@ export type ActorSnapshot = {
   y: number;
   direction: string;
   walking: boolean;
-  /** 룩 정의(`officeLookId`)의 출처. 렌더러는 이것으로만 색을 정한다. */
+  /** The source of look definitions (`officeLookId`). The renderer decides colors only from this. */
   appearance?: unknown;
   bubble?: string;
   active?: boolean;
   /** Optional explicit response state; attention bubbles are not streamed responses. */
   phase?: "idle" | "queued" | "thinking" | "streaming" | "done" | "attention";
-  /** 칸반 카드 실행·크론 실행이 진행 중(R27). 대화 응답 표시가 없을 때만 그린다. */
+  /** A kanban card run or cron run is in progress (R27). Drawn only when there is no conversation response indicator. */
   working?: boolean;
-  /** 진행 중인 건수(카드 + 크론). 2 이상일 때만 배지에 숫자가 붙는다. */
+  /** The number in progress (cards + cron). A number is attached to the badge only when 2 or more. */
   workingCount?: number;
 };
 export type MapSnapshot = {
@@ -36,13 +36,13 @@ export type MapSnapshot = {
   /** Optional persisted template version used for backwards-compatible presentation. */
   environmentVersion?: number;
 };
-/** 게임 화면의 모드. 타일 편집 진입점은 없다 — NPC 배치·시작 위치 지정만 있다. */
+/** The game screen's mode. There is no tile editing entry point — only NPC placement and start position selection. */
 export type EditorSnapshot = {
   placement: boolean;
   spawn: boolean;
   owner: boolean;
   tiled: boolean;
-  /** 자리 변경 모드에서만 채워진다 — 데스크 좌석 번호와 점유 여부. */
+  /** Filled only in seat change mode — desk seat numbers and occupancy. */
   seatLabels: Array<{ number: number; col: number; row: number; taken: boolean }>;
 };
 export interface OfficeBridge {
@@ -64,7 +64,7 @@ export interface OfficeBridge {
   seatAvailable?(x: number, z: number): boolean;
   /** Server-pixel reservation ID for the player's current or approaching seat. */
   seatIntent?(): string | null;
-  /** 렌더러가 붙고 떨어질 때 알린다. 화면 없는 시뮬레이션은 그릴 것이 없어 무시해도 된다. */
+  /** Announced when the renderer attaches and detaches. The simulation without a screen has nothing to draw and may ignore it. */
   setPresentation(active: boolean): void;
 }
 export function pixelToWorld(x: number, y: number) {
@@ -97,8 +97,8 @@ export function actorPresentationPhase(actor: Pick<ActorSnapshot, "phase" | "act
 export type ActorIndicator = "queued" | "thinking" | "streaming" | "working" | null;
 
 /**
- * 이름표 옆 표시 하나(R27). 대화 응답(queued/thinking/streaming)이 우선하고, 없을 때만
- * "작업 중" — 둘을 같은 자리에 그리므로 겹치지 않는다.
+ * One indicator next to the name tag (R27). The conversation response (queued/thinking/streaming) takes priority, and only without it
+ * "working" — both are drawn in the same spot, so they do not overlap.
  */
 export function actorIndicator(
   actor: Pick<ActorSnapshot, "phase" | "active" | "bubble" | "working">,
@@ -109,9 +109,9 @@ export function actorIndicator(
 }
 
 /**
- * 표시 옆에 붙는 숫자. **2 이상일 때만** 붙는다 — 1건은 배지 자체가 이미 말하고 있어서
- * 숫자를 붙이면 잡음만 는다. 한 직원이 여러 장을 돌릴 수 있는데(프로필별 상한은 기본 무제한)
- * 지금까지 화면이 그것을 한 장처럼 보여 줬다.
+ * The number next to the indicator. Attached **only when 2 or more** — for 1 the badge itself already says it,
+ * so a number only adds noise. One employee can run several cards (the per-profile limit is unlimited by default),
+ * yet until now the screen showed that as one card.
  */
 export function indicatorCountLabel(
   indicator: ActorIndicator,

@@ -175,7 +175,7 @@ for (const { name, gid, tilesets } of [
     assert.deepEqual(normalizeMeetingMap(result.mapData), result);
   });
 }
-test("증축은 원본 좌표와 객체를 보존하고 재실행해도 누적되지 않는다", () => {
+test("an extension keeps original coordinates and objects and does not accumulate when rerun", () => {
   const input = legacy();
   const before = structuredClone(input);
   const result = normalizeMeetingMap(input);
@@ -191,7 +191,7 @@ test("증축은 원본 좌표와 객체를 보존하고 재실행해도 누적�
   assert.ok(server);
   for (const id of result.meetingSpace.seatIds) assert.ok(server.seats.some((s) => s.id === id));
 });
-test("공식 맵의 회의실은 라운지 대신 기존 공간을 사용한다", () => {
+test("the official map's meeting room uses the existing space instead of the lounge", () => {
   for (const env of OFFICE_ENVIRONMENTS) {
     const input = buildOfficeEnvironment(env.id);
     const result = normalizeMeetingMap(input);
@@ -202,7 +202,7 @@ test("공식 맵의 회의실은 라운지 대신 기존 공간을 사용한다"
     assert.deepEqual(normalizeMeetingMap(result.mapData), result);
   }
 });
-test("잘못된 맵을 별도 공간으로 대체하지 않는다", () => {
+test("an invalid map is not replaced with a separate space", () => {
   assert.throws(() => normalizeMeetingMap({ nonsense: true }), /맵/);
 });
 
@@ -225,21 +225,21 @@ function enclosed() {
   }
   return map;
 }
-test("명확하게 둘러싸인 미표시 회의실은 재사용한다", () => {
+test("a clearly enclosed unmarked meeting room is reused", () => {
   const input = enclosed();
   const result = normalizeMeetingMap(input);
   assert.equal(result.meetingSpace.id, "meeting-conference_table-5-5");
   assert.deepEqual(result.meetingSpace.bounds, { x: 2, y: 2, width: 10, height: 8 });
   assert.deepEqual(projectMeetingMap(result.mapData).objects, input.objects);
 });
-test("meeting_table도 벽·의자·출입구가 명확하면 기존 방을 재사용한다", () => {
+test("a meeting_table reuses the existing room too when walls, chairs and entrance are clear", () => {
   const input = enclosed();
   input.objects.find((o) => o.type === "conference_table")!.type = "meeting_table";
   const result = normalizeMeetingMap(input);
   assert.notEqual(result.meetingSpace.id, "meeting-annex-v1");
   assert.deepEqual(result.meetingSpace.bounds, { x: 2, y: 2, width: 10, height: 8 });
 });
-test("라운지나 여러 회의 후보는 보존하고 회의실을 증축한다", () => {
+test("lounges and multiple meeting candidates are preserved and a meeting room is added", () => {
   const input = legacy();
   input.objects.push({ id: "lounge", type: "meeting_table", col: 8, row: 5 });
   const result = normalizeMeetingMap(input);
@@ -277,7 +277,7 @@ test("라운지나 여러 회의 후보는 보존하고 회의실을 증축한�
   assert.equal(ambiguous.meetingSpace.id, "meeting-annex-v1");
   assert.deepEqual(normalizeMeetingMap(ambiguous.mapData), ambiguous);
 });
-test("Tiled 증축은 기존 객체 ID·좌표·타일을 유지하며 새 ID는 겹치지 않는다", () => {
+test("a Tiled extension keeps existing object IDs, coordinates and tiles, and new IDs do not collide", () => {
   const input = buildOfficeEnvironment("executive");
   for (const layer of input.layers) layer.properties = [];
   const before = structuredClone(input);
@@ -309,7 +309,7 @@ test("Tiled 증축은 기존 객체 ID·좌표·타일을 유지하며 새 ID는
   }
   assert.deepEqual(normalizeMeetingMap(mapData).mapData, mapData);
 });
-test("회의실 좌석·대기 위치는 입구에서 몸통이 벽과 겹치지 않고 접근한다", () => {
+test("meeting room seats and waiting spots are reachable from the entrance without the body overlapping walls", () => {
   for (const input of [legacy(), ...OFFICE_ENVIRONMENTS.map((e) => buildOfficeEnvironment(e.id))]) {
     const { mapData, meetingSpace: s } = normalizeMeetingMap(input);
     const layout = deriveChannelMotionLayout({ mapData }, [])!;
@@ -335,7 +335,7 @@ test("회의실 좌석·대기 위치는 입구에서 몸통이 벽과 겹치지
     }
   }
 });
-test("접근할 수 없는 맵과 잘못된 명시적 회의실은 실패한다", () => {
+test("unreachable maps and invalid explicit meeting rooms fail", () => {
   const map = legacy();
   map.layers.floor = Array.from({ length: 30 }, () => Array(40).fill(1));
   map.layers.walls = Array.from({ length: 30 }, () => Array(40).fill(2));
@@ -351,7 +351,7 @@ test("접근할 수 없는 맵과 잘못된 명시적 회의실은 실패한다"
     /지정된 회의실/,
   );
 });
-test("명시된 Tiled 회의실 속성이 잘못되면 조용히 증축하지 않는다", () => {
+test("an invalid explicit Tiled meeting room property does not quietly extend", () => {
   const map = buildOfficeEnvironment("tech");
   for (const layer of map.layers) layer.properties = [];
   map.layers
@@ -368,7 +368,7 @@ test("명시된 Tiled 회의실 속성이 잘못되면 조용히 증축하지 �
     });
   assert.throws(() => normalizeMeetingMap(map), /지정된 회의실/);
 });
-test("Tiled 저장은 충돌 객체·레이어와 기존 객체 ID를 보존한다", () => {
+test("Tiled saves preserve collision objects, layers and existing object IDs", () => {
   const source = buildOfficeEnvironment("tech");
   source.layers.push({
     id: 200,
@@ -396,7 +396,7 @@ test("Tiled 저장은 충돌 객체·레이어와 기존 객체 ID를 보존한�
   assert.deepEqual(normalizeMeetingMap(saved).mapData, saved);
   assert.deepEqual(projectMeetingMap(saved).objects, snapshot.objects);
 });
-test("연속 저장에서 앞 객체를 지워도 남은 객체의 저장 ID는 변하지 않는다", () => {
+test("across consecutive saves, deleting an earlier object does not change the saved IDs of the remaining objects", () => {
   const source = normalizeMeetingMap(buildOfficeEnvironment("tech")).mapData;
   const g = projectMeetingMap(source);
   const objects = [

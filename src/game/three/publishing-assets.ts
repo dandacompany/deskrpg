@@ -12,7 +12,7 @@ export const PUBLISHING_ASSETS = {
   "pub-binding-bench": { type: "studio_shelf", footprint: [2, 1], height: 1.42 },
   "pub-workstation": { type: "reception_desk", footprint: [2, 1], height: 1.45 },
 } as const;
-/** 바닥 원점·미터 단위·+Z 전면을 사용하는 재사용 출판 집기. */
+/** Reusable publishing props using a floor origin, meter units and a +Z front. */
 export function buildPublishingAsset(id: keyof typeof PUBLISHING_ASSETS) {
   const root = id === "pub-workstation" ? buildTechStartupAsset("tech-workstation") : new T.Group();
   root.name = id;
@@ -71,13 +71,13 @@ export function buildPublishingAsset(id: keyof typeof PUBLISHING_ASSETS) {
         box(0.12, 0.001, 0.004, x + s * 0.085, y + 0.03, z - 0.075 + j * 0.032, ink);
     }
   };
-  // 책 단면·원고 줄·교정 표시를 같은 작은 조립 함수로 재사용한다.
+  // Book cross-sections, manuscript lines and proofreading marks reuse the same small assembly function.
   const stack = (x: number, y: number, z: number, count: number, width = 0.28, depth = 0.23) => {
     for (let i = 0; i < count; i++) {
       const offset = ((i % 3) - 1) * 0.011;
       const centerY = y + 0.024 + i * 0.05;
       const cover = covers[i % covers.length];
-      // 표지는 위·아래 판과 책등으로 분리해 속지와 동일한 앞면을 만들지 않는다.
+      // Covers are split into top and bottom boards and a spine so they do not form the same front face as the pages.
       for (const side of [-1, 1])
         box(width, 0.009, depth, x + offset, centerY + side * 0.017, z, cover);
       box(width, 0.025, 0.008, x + offset, centerY, z - depth / 2 + 0.004, cover);
@@ -131,7 +131,7 @@ export function buildPublishingAsset(id: keyof typeof PUBLISHING_ASSETS) {
     stack(-0.39, 0.665, 0, 4, 0.32, 0.25);
     stack(-0.39, 1.745, 0, 3, 0.32, 0.25);
     vase(0.55, 1.205, 0.015);
-    // 선반의 빈 칸에는 작은 액자와 도자기를 배치한다.
+    // Small frames and ceramics are placed in empty shelf slots.
     box(0.14, 0.18, 0.025, -0.42, 2.0, -0.04, oak);
     box(0.11, 0.145, 0.005, -0.42, 2.0, -0.024, paper);
     box(0.06, 0.07, 0.006, -0.42, 2.0, -0.02, covers[2]);

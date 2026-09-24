@@ -1,4 +1,4 @@
-// 브라우저와 SSR 양쪽에서 도는 단순 EventEmitter. 모듈 수준에서 `window` 를 만지지 않는다.
+// A simple EventEmitter that runs in both the browser and SSR. Does not touch `window` at module level.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Listener = (...args: any[]) => void;
@@ -49,7 +49,7 @@ export type PendingChannelData = {
   mapData: unknown;
   tiledJson?: unknown;
   mapConfig?: unknown;
-  /** 채널의 NPC 걸음 속도(`npc-motion-config`). 비어 있으면 기본값. */
+  /** The channel's NPC walking speed (`npc-motion-config`). Defaults when empty. */
   motionConfig?: unknown;
   savedPosition?: { x: number; y: number } | null;
 } | null;
@@ -72,7 +72,7 @@ function writePendingChannelData(data: PendingChannelData) {
   ] = data;
 }
 
-// 대기 중인 채널 데이터 — 시뮬레이션이 시작하기 전에 두고, start() 가 읽어 소비한다
+// Pending channel data — set before the simulation starts, read and consumed by start()
 export let pendingChannelData: PendingChannelData = readPendingChannelData();
 
 export function setPendingChannelData(data: PendingChannelData) {

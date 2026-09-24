@@ -1,4 +1,4 @@
-/** 회의실 좌표 계약: 경계·입구는 타일, 참가자 위치·좌석 ID는 서버 픽셀. */
+/** The meeting room coordinate contract: bounds and entrance in tiles, participant positions and seat IDs in server pixels. */
 export const MEETING_SPACE_VERSION = 1;
 export type MeetingBounds = { x: number; y: number; width: number; height: number };
 export type MeetingPosition = { x: number; y: number; direction: "up" | "down" | "left" | "right" };
@@ -11,7 +11,7 @@ export type MeetingSpace = {
   standingPositions: MeetingPosition[];
   wallObjectIds: string[];
   wallTileKeys: string[];
-  /** 충돌 객체를 유지한 채 생성된 증축 외곽만 그리는 렌더링 전용 표식. */
+  /** A render-only marker that draws only the outline of the generated extension while keeping collision objects. */
   generatedAnnexWalls?: Array<{
     id: string;
     col: number;

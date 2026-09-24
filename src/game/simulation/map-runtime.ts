@@ -12,25 +12,25 @@ import {
 } from "../three/office-environment-theme";
 import { MAP_COLS, MAP_ROWS, TILE_SIZE } from "./constants";
 
-/** Tiled GID 의 상위 3비트는 뒤집기 플래그다. 논리 타일 번호만 남긴다. */
+/** The top 3 bits of a Tiled GID are flip flags. Keep only the logical tile number. */
 const GID_MASK = 0x1fffffff;
 
-/** 시뮬레이션이 읽는 맵 기하. 아트워크·타일셋 이미지는 없다 — 걷기 판정과 렌더러 입력뿐이다. */
+/** The map geometry the simulation reads. No artwork or tileset images — only walkability checks and renderer input. */
 export type MapRuntime = {
   cols: number;
   rows: number;
   floor: number[][];
   walls: number[][];
-  /** Tiled 맵의 collision 타일 레이어(행 단위). 비어 있으면 레거시 벽 판정을 쓴다. */
+  /** The collision tile layer of a Tiled map (by row). If empty, the legacy wall check is used. */
   collision: number[][];
   objects: MapObject[];
-  /** 오브젝트 점유 타일과 collision 레이어(타일·사각형) 셀. `"col,row"`. */
+  /** Object-occupied tiles and collision layer (tiles, rectangles) cells. `"col,row"`. */
   collisionCells: Set<string>;
   tiled: boolean;
   environment?: string;
   environmentVersion?: number;
   ambientZones: AmbientZone[];
-  /** Objects 레이어의 spawn 오브젝트. mapConfig 가 없을 때의 폴백이다. */
+  /** The spawn object of the Objects layer. The fallback when there is no mapConfig. */
   tiledSpawn: { col: number | null; row: number | null };
 };
 
@@ -43,14 +43,14 @@ type TiledLayer = {
   objects?: Array<Record<string, unknown>>;
 };
 
-/** Tiled JSON 에서 걷기·좌석·환경 정보를 읽는다. 옛 파서가 하던 것과 같은 규칙이다. */
+/** Read walking, seat and environment info from Tiled JSON. The same rules the old parser used. */
 export function loadTiledRuntime(tiledJson: Record<string, unknown>): MapRuntime {
   const cols = (tiledJson.width as number) || MAP_COLS;
   const rows = (tiledJson.height as number) || MAP_ROWS;
   const layers = (tiledJson.layers as TiledLayer[] | undefined) ?? [];
   const tileLayers = layers.filter((layer) => layer.type === "tilelayer");
   const tileLayerNames = tileLayers.map((layer) => layer.name ?? "");
-  // 이름으로 먼저 찾고, 없으면 순서로 고른다.
+  // Look up by name first, and if missing pick by order.
   const floorLayerName =
     tileLayerNames.find((name) => name.toLowerCase() === "floor") || tileLayerNames[0];
   const wallsLayerName =
@@ -142,7 +142,7 @@ export function loadTiledRuntime(tiledJson: Record<string, unknown>): MapRuntime
   };
 }
 
-/** 레거시 `{ layers, objects }` 맵(또는 그 이전 포맷). 벽 레이어의 벽 타일이 충돌이다. */
+/** A legacy `{ layers, objects }` map (or an even older format). Wall tiles of the wall layer are collision. */
 export function loadLegacyRuntime(mapData: unknown): MapRuntime {
   const converted = detectAndConvertMapData(mapData, MAP_COLS, MAP_ROWS);
   const floor = converted.layers.floor;
@@ -160,7 +160,7 @@ export function loadLegacyRuntime(mapData: unknown): MapRuntime {
   };
 }
 
-/** 오브젝트가 바뀐 뒤 걷기 판정에 쓰는 점유 집합을 다시 만든다. collision 레이어 셀은 유지한다. */
+/** Rebuild the occupied set used for walkability after objects change. Collision layer cells are kept. */
 export function occupiedTiles(runtime: Pick<MapRuntime, "objects" | "collisionCells">) {
   const occupied = computeOccupiedTiles(runtime.objects);
   for (const cell of runtime.collisionCells) occupied.add(cell);

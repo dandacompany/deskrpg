@@ -12,7 +12,7 @@ const map = {
   tileheight: 32,
   layers: [
     { id: 1, name: "Floor", type: "tilelayer", data: Array(12).fill(1) },
-    // 뒤집기 플래그(상위 비트)가 붙은 GID 도 논리 타일 번호로 읽는다.
+    // GIDs carrying flip flags (high bits) are read as logical tile numbers too.
     { id: 2, name: "Walls", type: "tilelayer", data: [0x80000002, ...Array(11).fill(0)] },
     { id: 3, name: "Collision", type: "tilelayer", data: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
     {
@@ -43,7 +43,7 @@ const map = {
   tilesets: [],
 } as unknown as TiledMap;
 
-test("Tiled 런타임은 미리보기 스냅샷과 같은 기하·차단 타일을 낸다", () => {
+test("the Tiled runtime produces the same geometry and blocked tiles as the preview snapshot", () => {
   const runtime = loadTiledRuntime(map as unknown as Record<string, unknown>);
   const preview = tiledSnapshot(map);
   assert.equal(runtime.cols, preview.cols);
@@ -59,7 +59,7 @@ test("Tiled 런타임은 미리보기 스냅샷과 같은 기하·차단 타일�
   assert.equal(runtime.tiled, true);
 });
 
-test("공식 환경 맵은 환경 id·버전·산책 구역을 함께 읽는다", () => {
+test("official environment maps read the environment id, version and stroll zones together", () => {
   const source = buildOfficeEnvironment("agency");
   const runtime = loadTiledRuntime(source as unknown as Record<string, unknown>);
   const preview = tiledSnapshot(source);
@@ -69,7 +69,7 @@ test("공식 환경 맵은 환경 id·버전·산책 구역을 함께 읽는다"
   assert.ok(runtime.ambientZones.length > 0);
 });
 
-test("레거시 맵은 벽 타일이 충돌이고 오브젝트 점유만 차단한다", () => {
+test("legacy maps treat wall tiles as collision and block only object occupancy", () => {
   const runtime = loadLegacyRuntime({
     layers: {
       floor: [
@@ -93,7 +93,7 @@ test("레거시 맵은 벽 타일이 충돌이고 오브젝트 점유만 차단�
   );
 });
 
-test("오브젝트가 바뀌어도 collision 레이어 셀은 점유 집합에 남는다", () => {
+test("collision layer cells remain in the occupied set even when objects change", () => {
   const runtime = loadTiledRuntime(map as unknown as Record<string, unknown>);
   runtime.objects = [];
   assert.ok(occupiedTiles(runtime).has("0,0"));

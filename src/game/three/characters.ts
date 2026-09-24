@@ -23,7 +23,7 @@ export function createActor(
   const root = new T.Group(),
     rig = new T.Group();
   root.add(rig);
-  // 렌더러가 rig.rotation.y 로 방향을 준다. 기울임(x)이 방향보다 먼저 적용돼야 바라보는 쪽으로 기운다.
+  // The renderer gives direction with rig.rotation.y. The lean (x) must be applied before the direction to lean toward the facing side.
   rig.rotation.order = "YXZ";
   root.userData.actorId = id;
   const skin = palette?.skin || ["#e8b991", "#f1c9a4", "#d4a17c", "#edc6a6"][index % 4],
@@ -100,7 +100,7 @@ export function createActor(
     ) {
       const sit = seated && !walking;
       const run = walking && !!pace?.running;
-      // 뛰면 걸음 주기를 속도에 맞춰 빠르게 한다 — 그대로 두면 발이 미끄러진다.
+      // When running, speed up the step cycle to match the speed — left as is, the feet slide.
       const cycle = t * 9 * (run ? pace!.cadence : 1);
       const motion = idleMotion(t, index, walking, phase);
       head.rotation.y = motion.yaw;
@@ -110,7 +110,7 @@ export function createActor(
           ? -0.14 + Math.abs(Math.sin(cycle)) * (run ? 0.07 : 0.035)
           : -0.14 + Math.sin(t * 2.3 + index) * 0.012;
       torso.rotation.z = phase === "thinking" ? Math.sin(t * 1.4) * 0.035 : motion.sway;
-      // 발목에서부터 온몸이 기운다 — 머리·팔·다리가 몸통의 형제라 몸통만 기울이면 안 된다.
+      // The whole body leans from the ankles — head, arms and legs are siblings of the torso, so leaning only the torso is wrong.
       rig.rotation.x = run ? 0.18 : 0;
       head.rotation.x = phase === "thinking" ? 0.12 : motion.nod;
       head.rotation.z = phase === "thinking" ? 0.12 : Math.sin(t * 1.8 + index) * 0.025;

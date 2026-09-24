@@ -7,7 +7,7 @@ import type { OfficeLook } from "./office-looks";
 import type { ActorPhase } from "./characters";
 
 /** Sculpted miniature pilot. The rig interface is shared with the standard office actors. */
-/** 뛸 때 온몸이 앞으로 기우는 각도(라디안). */
+/** The angle (radians) the whole body leans forward when running. */
 const RUN_LEAN = 0.22;
 
 export function createMiniatureActor(id: string, look: OfficeLook, index: number) {
@@ -251,7 +251,7 @@ export function createMiniatureActor(id: string, look: OfficeLook, index: number
       walkPhase?: number,
       pace?: ActorGait,
     ) {
-      // 뛰기: 걸음 주기를 속도에 맞춰 빠르게 하고, 앞으로 기울이고, 팔을 굽혀 크게 흔든다.
+      // Running: speed up the step cycle to match the speed, lean forward, and swing the bent arms widely.
       const run = walking && !!pace?.running;
       const gait = walkPhase ?? t * 7 * (run ? pace!.cadence : 1);
       const sit = seated && !walking,
@@ -261,11 +261,11 @@ export function createMiniatureActor(id: string, look: OfficeLook, index: number
         : walking
           ? Math.abs(Math.sin(gait)) * (run ? 0.03 : 0.009)
           : Math.sin(t * 1.6 + index) * 0.003;
-      // 기울인 만큼 고개를 들어 시선은 앞을 향한다.
+      // Raise the head by as much as the lean so the gaze points forward.
       head.rotation.set(motion.nod * 0.6 - (run ? 0.12 : 0), motion.yaw * 0.7, 0);
       torso.rotation.z = motion.sway * 0.4;
-      // 뛸 때는 발목에서부터 온몸이 기운다. 머리·팔·다리는 몸통의 자식이 아니라 형제라, 몸통만
-      // 기울이면 몸통 메시만 기울고 머리는 곧게 선다(처음 구현이 그랬다).
+      // When running, the whole body leans from the ankles. Head, arms and legs are siblings of the torso, not children, so leaning
+      // only the torso tilts just the torso mesh while the head stands straight (the first implementation did that).
       rig.rotation.x = run ? RUN_LEAN : 0;
       arms.forEach((a, i) => {
         a.rotation.x = walking

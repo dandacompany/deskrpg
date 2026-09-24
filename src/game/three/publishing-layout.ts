@@ -77,7 +77,7 @@ export function furnishPublishing(add: CreativeStudioAdd) {
   add("microwave_cabinet", 1, 10, { variant: "coffee-station", direction: "right" });
   add("bookshelf", 1, 13, { variant: "studio-oak", direction: "right" });
   add("office_locker", 1, 17, { variant: "olive" });
-  // 벽면 수납을 연결해 중앙 통로를 유지하면서 출판 집기 밀도를 높인다.
+  // Connect wall storage to raise the density of publishing props while keeping the central aisle.
   for (const row of [14, 18])
     add("studio_shelf", 1, row, { variant: "pub-newbook-display", direction: "right" });
   for (const col of [10, 18]) add("studio_shelf", col, 9, { variant: "pub-newbook-display" });

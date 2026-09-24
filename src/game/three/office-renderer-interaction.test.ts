@@ -34,7 +34,7 @@ function fixture() {
   return { renderer, scene, seat, board, furnitureHighlight, boardArrival };
 }
 
-test("선택 좌석은 호버가 떠난 뒤에도 단일 초록 오버레이로 유지된다", () => {
+test("the selected seat stays as a single green overlay even after the hover leaves", () => {
   const { renderer, seat, scene, furnitureHighlight } = fixture();
   const target = { owner: seat, action: { x: 1, z: 1 } };
   renderer.setSelectedSeat(target);
@@ -47,7 +47,7 @@ test("선택 좌석은 호버가 떠난 뒤에도 단일 초록 오버레이로 
   assert.equal(furnitureHighlight.group.visible, false);
 });
 
-test("보드 호버 이후 같은 좌석으로 돌아오면 좌석 오버레이를 복원한다", () => {
+test("returning to the same seat after a board hover restores the seat overlay", () => {
   const { renderer, seat, board, furnitureHighlight } = fixture();
   const target = { owner: seat, action: { x: 1, z: 1 } };
   renderer.setSelectedSeat(target);
@@ -57,7 +57,7 @@ test("보드 호버 이후 같은 좌석으로 돌아오면 좌석 오버레이�
   assert.equal(overlay.geometry, seat.geometry);
 });
 
-test("회의 이동 시작과 직접 진입은 보드 도착 의도를 취소한다", () => {
+test("starting a meeting move or entering directly cancels the board arrival intent", () => {
   const { renderer, boardArrival } = fixture();
   boardArrival.start(1, 1, 0);
   renderer.cancelBoardIntent();
@@ -67,14 +67,14 @@ test("회의 이동 시작과 직접 진입은 보드 도착 의도를 취소한
   assert.equal(boardArrival.update({ x: 1, y: 1, walking: false }, 10), false);
 });
 
-test("회의 중 보드 클릭은 레이 판정과 이동을 시작하지 않는다", () => {
+test("a board click during a meeting starts neither a ray test nor a move", () => {
   const { renderer, boardArrival } = fixture();
   renderer.meetingCamera.active = true;
   renderer.point({ button: 0 } as PointerEvent, "down");
   assert.equal(boardArrival.update({ x: 1, y: 1, walking: false }, 10), false);
 });
 
-test("회의 진입 이동 중에는 새 보드 클릭도 차단하고 취소 후 해제한다", () => {
+test("new board clicks are blocked while moving into a meeting, and released after cancel", () => {
   const { renderer } = fixture();
   renderer.setMeetingEntryState("walking");
   Object.assign(renderer, {

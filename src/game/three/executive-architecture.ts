@@ -6,7 +6,7 @@ import { round } from "./primitives";
 import { surfaceTexture } from "./surface-detail";
 import { EXECUTIVE_ZONES } from "./executive-room-layout";
 
-/** 일반 모드는 고정 셸을 유지하며 회의 모드에서만 반환된 벽의 가림을 처리한다. */
+/** Normal mode keeps the fixed shell; occlusion of the returned walls is handled only in meeting mode. */
 export function addExecutiveArchitecture(root: T.Group, cols: number, rows: number) {
   const walls: T.Object3D[] = [];
   const wood = executiveSurface(root, "walnut");

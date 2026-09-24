@@ -9,8 +9,8 @@ import { NpcController } from "./simulation/npc-controller";
 import { RemotePlayer } from "./simulation/remote-player";
 
 /**
- * 실제 시뮬레이션 인스턴스에 상태를 주입해 "진짜 핸들러" 를 돌린다. 생성자는 DOM 을 만지지
- * 않으므로 node 에서 그대로 만들 수 있고, private 멤버는 대괄호 접근으로 검사한다.
+ * Inject state into a real simulation instance and run the "real handler". The constructor does not touch the DOM,
+ * so it can be created in node as is, and private members are checked with bracket access.
  */
 type Runtime = OfficeSimulation & Record<string, unknown>;
 function simulation(overrides: Record<string, unknown> = {}): Runtime {
@@ -75,7 +75,7 @@ test("async actor hydration stops after the simulation is disposed", async () =>
     setPendingChannelData(null);
   }
 });
-/** boot 은 소비 전 데이터를 받는다 — 테스트에서는 방금 넣은 값을 그대로 넘긴다. */
+/** boot receives data before it is consumed — in the test, pass the value just set as is. */
 function setPendingChannelDataPeek() {
   return {
     channelId: "channel",
@@ -308,7 +308,7 @@ for (const reason of ["home", "forced-hydration"] as const) {
   });
 }
 
-test("실제 NPC 제거는 컨트롤러가 없어도 공간 이동 세대 캐시를 비운다", () => {
+test("real NPC removal clears the spatial move generation cache even without a controller", () => {
   const runtime = simulation();
   (runtime["spatialNpcRoutes"] as Map<string, unknown>).set("npc", {
     generation: 1,

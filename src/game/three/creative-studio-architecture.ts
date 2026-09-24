@@ -229,12 +229,12 @@ export function addCreativeStudioArchitecture(
     const asset = sceneAsset(id);
     const host = new T.Group();
     host.name = name ?? id;
-    // 기단은 바닥 마감이며, 벽 모듈만 회의 차폐 대상으로 보존한다.
+    // The plinth is floor finish; only wall modules are kept as meeting occlusion targets.
     host.position.set(x, y, z);
     host.scale.set(...scale);
     host.rotation.y = rotation;
     if (id !== "shared-cutaway-plinth") {
-      // 연속 벽은 같은 평면 안에서만 배칭한다. 문짝은 독립적으로 차폐/복원한다.
+      // Continuous walls are batched only within the same plane. Door leaves are occluded/restored independently.
       const vertical = Math.abs(Math.sin(rotation)) > 0.5;
       const key = /door|entrance/.test(id)
         ? `door:${host.uuid}`

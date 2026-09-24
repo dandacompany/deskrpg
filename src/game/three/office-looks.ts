@@ -286,6 +286,6 @@ export function resolveOfficeLook(appearance: unknown): OfficeLook | undefined {
 export function officeLookAppearance(id: string): CharacterAppearance {
   const look = OFFICE_LOOKS.find((candidate) => candidate.id === id);
   if (!look) throw new Error(`Unknown office look: ${id}`);
-  // 정본 형태는 두 키뿐이다 — 레이어 데이터는 더 이상 만들지 않는다.
+  // The canonical form is only the two keys — layer data is no longer built.
   return { officeLookId: look.id, bodyType: look.bodyType };
 }

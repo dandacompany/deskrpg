@@ -16,7 +16,7 @@ function stubFetch(res: { ok: boolean; status: number; body?: unknown }) {
   return { impl, calls };
 }
 
-test("채널이 있으면 channelId 를 실어 부르고 목록을 준다", async () => {
+test("with a channel it calls with channelId and returns the list", async () => {
   const { impl, calls } = stubFetch({
     ok: true,
     status: 200,
@@ -30,7 +30,7 @@ test("채널이 있으면 channelId 를 실어 부르고 목록을 준다", asyn
   assert.equal(result.ok && result.npcs.length, 1);
 });
 
-test("채널이 비면 아예 부르지 않는다 — 채널 없는 /api/npcs 는 400 이다", async () => {
+test("with an empty channel it does not call at all — /api/npcs without a channel is 400", async () => {
   const { impl, calls } = stubFetch({ ok: true, status: 200, body: { npcs: [] } });
 
   const result = await fetchChannelNpcs("", impl);
@@ -40,9 +40,9 @@ test("채널이 비면 아예 부르지 않는다 — 채널 없는 /api/npcs �
   assert.equal(!result.ok && result.reason, "no-channel");
 });
 
-test("4xx 를 빈 목록으로 삼키지 않는다 — 상태를 담아 실패로 돌려준다", async () => {
-  // 이것이 회귀의 핵심이다. 예전 코드는 `data.npcs || []` 라서 400 응답이
-  // "NPC 0명" 으로 그려졌고, 사용자에게는 아무 오류도 보이지 않았다.
+test("does not swallow 4xx as an empty list — returns a failure carrying the status", async () => {
+  // This is the heart of the regression. The old code was `data.npcs || []`, so a 400 response
+  // was drawn as "0 NPCs" and the user saw no error at all.
   const { impl } = stubFetch({
     ok: false,
     status: 400,
@@ -56,7 +56,7 @@ test("4xx 를 빈 목록으로 삼키지 않는다 — 상태를 담아 실패�
   assert.match(!result.ok ? result.message : "", /400/);
 });
 
-test("fetch 자체가 터져도 실패로 보고한다", async () => {
+test("reports a failure even when fetch itself blows up", async () => {
   const impl = (async () => {
     throw new Error("boom");
   }) as unknown as typeof fetch;

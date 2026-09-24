@@ -44,7 +44,7 @@ function invalid(reason: string): never {
   throw new Error(`회의실 맵 오류: ${reason}`);
 }
 
-/** 렌더러가 편집한 바닥·가구만 합친다. Tiled 충돌과 미지의 레이어는 그대로 저장한다. */
+/** Merge only the floor and furniture the renderer edited. Tiled collisions and unknown layers are saved as is. */
 export function serializeMeetingMap(source: unknown, edits: MapData): JsonMap {
   return prepareMeetingMapSave(source, edits).mapData;
 }
@@ -117,7 +117,7 @@ export function prepareMeetingMapSave(
   return { mapData: normalizeMeetingMap(map).mapData, objectIds };
 }
 
-/** 원본을 건드리지 않는 서버/브라우저 공통 기하 투영. */
+/** A geometric projection shared by server and browser that does not touch the original. */
 export function projectMeetingMap(input: unknown): Geometry {
   if (record(input) && "tiledversion" in input) {
     if (
@@ -166,7 +166,7 @@ export function projectMeetingMap(input: unknown): Geometry {
   const walls = Array.from({ length: rows }, (_, y) =>
     Array.from({ length: cols }, (_, x) => legacy.layers.walls[y]?.[x] ?? 0),
   );
-  // 옛 변환기가 새 ID를 생성하므로 저장 ID가 없는 포맷만 좌표로 고정한다.
+  // The old converter generates new IDs, so only formats without saved IDs are pinned by coordinates.
   const objects = legacy.objects.map((o, i) =>
     record(input) && Array.isArray(input.objects)
       ? { ...o }
@@ -302,7 +302,7 @@ function spaceFor(
     }
   if (!entry) return null;
   const entryTile = { x: Math.floor(entry.x), y: Math.floor(entry.y) };
-  // 실제 착석 경로는 비워 둔다. 대기자가 출입 통로를 점유하지 않는다.
+  // Keep the actual seating path clear. Waiting people do not occupy the entrance corridor.
   const paths = seatIds.map((id) => {
     const [x, y] = id.split(":").map(Number);
     return findPath(entryTile.x, entryTile.y, Math.floor(x / 32), Math.floor(y / 32), can, (a, b) =>
@@ -435,7 +435,7 @@ function candidates(map: JsonMap, g: Geometry): Array<{ id: string; bounds: Meet
           });
   }
   if (explicit.length) return explicit;
-  // 이름만 있는 라운지는 후보가 아니다. 벽으로 둘러싸인 회의 탁자만 추론한다.
+  // A lounge with only a name is not a candidate. Only meeting tables enclosed by walls are inferred.
   const walls = new Set(g.objects.filter(wall).map((o) => key(o.col, o.row)));
   g.walls.forEach((r, y) =>
     r.forEach((t, x) => {
@@ -476,7 +476,7 @@ function candidates(map: JsonMap, g: Geometry): Array<{ id: string; bounds: Meet
   );
 }
 
-/** 반환값만 사용하며 DB 쓰기는 호출자의 기존 권한 있는 저장 경로가 담당한다. */
+/** Only the return value is used; DB writes are handled by the caller's existing authorized save path. */
 export function normalizeMeetingMap(
   input: unknown,
   config?: unknown,
@@ -536,7 +536,7 @@ export function normalizeMeetingMap(
       invalid("지정된 회의실의 입구·좌석·대기 위치가 유효하지 않습니다");
   }
   if (record(map.meetingSpace)) invalid("지정된 회의실의 입구·좌석·대기 위치가 유효하지 않습니다");
-  // 오른쪽 또는 아래쪽 경계에서 한 벽만 열어 연결한다. 내부 장애물은 건드리지 않는다.
+  // Connect by opening just one wall on the right or bottom boundary. Interior obstacles are not touched.
   let edge: { x: number; y: number; side: "right" | "bottom" } | undefined;
   const occupied = computeOccupiedTiles(g.objects.filter((o) => !wall(o)));
   for (let y = 1; y < g.rows - 1 && !edge; y++)
@@ -581,7 +581,7 @@ export function normalizeMeetingMap(
     for (const layer of tiled.layers) {
       if (layer.type === "tilelayer") {
         const old = layer.data!;
-        // 정의가 확인된 기존 바닥만 재사용한다. 뒤집기 플래그는 판정 때만 제거한다.
+        // Reuse only existing floors whose definition is confirmed. Flip flags are stripped only for the check.
         const floorGid =
           layer.name.toLowerCase() === "floor"
             ? (old.find((value) => {

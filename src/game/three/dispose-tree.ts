@@ -27,7 +27,7 @@ export function disposeTree(root: T.Object3D) {
     }
   });
   geometries.forEach((g) => {
-    // BVH 를 세운 지오메트리는 트리도 함께 버린다(three-mesh-bvh 가 붙여 준 메서드).
+    // Geometry with a built BVH also discards the tree (a method three-mesh-bvh attached).
     (g as T.BufferGeometry & { disposeBoundsTree?: () => void }).disposeBoundsTree?.();
     g.dispose();
   });
