@@ -18,12 +18,13 @@
 
 import { promptLocale, type PromptLocale } from "@/lib/i18n/prompt-locale";
 
-export const REPORT_FORMAT_HEADER = "[보고 형식]";
-
 const HEADERS: Record<PromptLocale, string> = {
-  ko: REPORT_FORMAT_HEADER,
+  ko: "[보고 형식]",
   en: "[Report format]",
 };
+
+/** The Korean header — what the rule block starts with when no locale is given. */
+export const REPORT_FORMAT_HEADER = HEADERS.ko;
 
 /** Keep entries as single lines only — a long prefix pushes the real script back. */
 const RULES: Record<PromptLocale, readonly string[]> = {

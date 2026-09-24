@@ -23,7 +23,7 @@ const WORDS: Record<
 
 /**
  * Folds into one line. `\r`, U+2028, and U+2029 are also treated as newlines — a newline left
- * in a name or bio could forge a fake `[대화 상대]`/`[Conversation partner]` header or an instruction-looking line.
+ * in a name or bio could forge a fake conversation-partner header or an instruction-looking line.
  */
 function foldLine(text: string): string {
   return text.replace(/\s*[\r\n\u2028\u2029]+\s*/g, " ").trim();

@@ -27,7 +27,7 @@ type Words = {
 /**
  * Two variants: `ko` is the original script byte-for-byte, `en` serves every other language
  * (the NPC's language-policy section decides the language it actually answers in).
- * Header markers are read back by some callers (`[최근 대화]` … `[답하는 법]` slicing), so
+ * Header markers are read back by some callers (slicing from `recent` to `howToReply`), so
  * readers must recognize both variants.
  */
 const WORDS: Record<PromptLocale, Words> = {
@@ -88,7 +88,7 @@ export function formatOpenChatMessage(
 
   // The report format string is shared across all three conversation paths (DM · whole
   // office · meeting) — report-format.ts. Placed **before** the recent conversation: some
-  // callers read the script by slicing from [최근 대화] to [답하는 법].
+  // callers read the script by slicing from the `recent` marker to the `howToReply` marker.
   lines.push(formatReportFormat(locale));
   lines.push("");
 
