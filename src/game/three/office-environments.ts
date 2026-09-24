@@ -27,6 +27,7 @@ import {
 } from "./creative-studio-layout";
 import type { TiledMap, TiledObject, TiledProperty } from "../../lib/tiled-map";
 import { getObjectDimensions } from "../../lib/object-types";
+import { normalizeLocale } from "../../lib/i18n/server";
 
 /**
  * Server-safe base map factory. The map-editor hook is a Client Module, so its
@@ -147,6 +148,56 @@ export const OFFICE_ENVIRONMENTS = Object.freeze([
 ] as const);
 
 export type OfficeEnvironmentId = (typeof OFFICE_ENVIRONMENTS)[number]["id"];
+
+type OfficeEnvironment = (typeof OFFICE_ENVIRONMENTS)[number];
+export type EnvironmentLabel = { name: string; description: string };
+
+/** ja/zh display labels. ko and en live on the environment itself. */
+const ENVIRONMENT_LABELS: Record<"ja" | "zh", Record<OfficeEnvironmentId, EnvironmentLabel>> = {
+  ja: {
+    trading: {
+      name: "総合商社",
+      description: "デスクの島と役員席、会議スペースが調和した正統派オフィス",
+    },
+    agency: {
+      name: "クリエイティブスタジオ",
+      description: "撮影、アイデア出し、制作、ラウンジがつながる開放的なスタジオ",
+    },
+    tech: {
+      name: "テックスタートアップ",
+      description: "集中できる作業席とスプリント会議スペースを備えた開発チームのオフィス",
+    },
+    executive: {
+      name: "役員オフィス",
+      description: "ウォールナットの執務席、ラウンドミーティングと応接ラウンジのある役員室",
+    },
+    publishing: {
+      name: "出版社",
+      description: "書架の間の編集席と、原稿を一緒に読むテーブル",
+    },
+  },
+  zh: {
+    trading: { name: "综合商社", description: "办公桌岛、主管席与会议空间相融合的经典办公室" },
+    agency: { name: "创意工作室", description: "拍摄、创意、制作与休息区相连的开放式工作室" },
+    tech: { name: "科技初创公司", description: "配有专注工位与冲刺会议空间的开发团队办公室" },
+    executive: {
+      name: "高管办公室",
+      description: "设有胡桃木办公桌、圆桌会议与接待休息区的高管室",
+    },
+    publishing: { name: "出版社", description: "书架间的编辑席与一起读稿的长桌" },
+  },
+};
+
+/** The only way to pick an environment's display name and description. Unknown locales fall back to English. */
+export function environmentLabel(
+  environment: OfficeEnvironment,
+  locale: string | null | undefined,
+): EnvironmentLabel {
+  const lang = normalizeLocale(locale);
+  if (lang === "ko") return { name: environment.nameKo, description: environment.descriptionKo };
+  if (lang === "en") return { name: environment.nameEn, description: environment.descriptionEn };
+  return ENVIRONMENT_LABELS[lang][environment.id];
+}
 
 export const CREATIVE_STUDIO_ENTRANCE = Object.freeze({
   fromCol: 21,

@@ -67,6 +67,27 @@ import {
   indicatorCountLabel,
 } from "./bridge";
 import { getObjectDimensions, TILE_ID_TO_OBJECT, type MapObject } from "../../lib/object-types";
+import { normalizeLocale } from "../../lib/i18n/server";
+
+/** The renderer draws a few strings outside React; they follow the page's `<html lang>`. */
+const RENDERER_TEXT = {
+  speechRail: {
+    ko: "현재 화면의 대화",
+    en: "Conversations in view",
+    ja: "表示中の会話",
+    zh: "当前画面中的对话",
+  },
+  kanbanBoard: {
+    ko: "Kanban · 클릭하여 이동",
+    en: "Kanban · click to walk over",
+    ja: "Kanban · クリックして移動",
+    zh: "Kanban · 点击前往",
+  },
+} as const;
+
+function rendererText(key: keyof typeof RENDERER_TEXT, lang: string): string {
+  return RENDERER_TEXT[key][normalizeLocale(lang)];
+}
 
 /** Glyphs next to name tags — three conversation responses + working (R27). `actorIndicator` decides priority. */
 const INDICATOR_GLYPH: Record<NonNullable<ReturnType<typeof actorIndicator>> | "none", string> = {
@@ -234,7 +255,7 @@ export class OfficeRenderer {
     this.speechRail.setAttribute("role", "region");
     this.speechRail.setAttribute(
       "aria-label",
-      document.documentElement.lang.startsWith("ko") ? "현재 화면의 대화" : "Conversations in view",
+      rendererText("speechRail", document.documentElement.lang),
     );
     this.speechRail.tabIndex = 0;
     this.labels.append(this.speechRail);
@@ -680,7 +701,7 @@ export class OfficeRenderer {
           this.selectedActorId = undefined;
         }
         this.furnitureHighlight.highlight(this.board);
-        this.renderer.domElement.title = "Kanban · 클릭하여 이동";
+        this.renderer.domElement.title = rendererText("kanbanBoard", document.documentElement.lang);
         this.renderer.domElement.style.cursor = "pointer";
         this.cursor.visible = false;
         if (kind === "down" && e.button === 0) {

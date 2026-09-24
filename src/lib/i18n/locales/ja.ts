@@ -3312,6 +3312,25 @@ const ja: Record<string, string> = {
   "game.camera.zoomOut": "縮小",
   "game.camera.movementHint":
     "クリック: 歩く · ドラッグ: 画面移動 · 右ドラッグ: 回転 · ホイール: 拡大/縮小",
+  "lookbook.collectionLabel": "オフィスキャラクターコレクション",
+  "lookbook.title": "一緒に働きたい顔ぶれ",
+  "lookbook.intro": "それぞれの好み、それぞれの物語。あなたのオフィスに合う一人を選んでください。",
+  "lookbook.searchLabel": "キャラクター検索",
+  "lookbook.searchPlaceholder": "名前やスタイルで検索",
+  "lookbook.filters": "スタイルフィルター",
+  "lookbook.selected": "選択中",
+  "lookbook.empty": "一致するキャラクターがいません。別の名前やスタイルで検索してください。",
+  "officeEnv.choose": "オフィス環境の選択",
+  "officeEnv.title": "どのオフィスで働きますか？",
+  "officeEnv.count": "すぐ使える空間 5 種",
+  "officeEnv.thumbnailAlt": "{name} の実際の 3D シーン",
+  "officeEnv.previewLabel": "選択したオフィスの 3D プレビュー",
+  "appearanceEditor.officeCharacter": "オフィスキャラクター",
+  "appearanceEditor.keepCurrent": "現在の外見のまま",
+  "characterPreview.unavailable":
+    "3D プレビューを利用できません。キャラクターの選択と保存はできます。",
+  "mapPreview.webglUnavailable": "WebGL を利用できないため、3D プレビューを表示できません。",
+  "mapPreview.controlsHint": "右ドラッグ: 回転 · ホイール: 拡大/縮小 · 中ボタン: 移動",
   // --- /content-i18n:D ---
 };
 

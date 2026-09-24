@@ -3,13 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import { OfficeRenderer } from "@/game/three/office-renderer";
 import { tiledSnapshot } from "@/game/three/tiled-preview";
 import type { TiledMap } from "@/lib/tiled-map";
-import { useLocale } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 
 export default function ThreeMapPreview({ map }: { map: TiledMap }) {
   const host = useRef<HTMLDivElement>(null),
     labels = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
-  const { locale } = useLocale();
+  const t = useT();
   useEffect(() => {
     if (!host.current || !labels.current) return;
     let view: OfficeRenderer;
@@ -41,13 +41,7 @@ export default function ThreeMapPreview({ map }: { map: TiledMap }) {
       <div ref={host} className="absolute inset-0" />
       <div ref={labels} className="absolute inset-0 pointer-events-none" />
       <p className="absolute bottom-4 right-4 rounded-lg bg-surface px-3 py-2 text-caption text-text-muted border border-border">
-        {failed
-          ? locale === "ko"
-            ? "WebGL을 사용할 수 없어 3D 미리보기를 표시할 수 없습니다."
-            : "WebGL is unavailable. The 3D preview cannot be displayed."
-          : locale === "ko"
-            ? "우클릭 드래그: 회전 · 휠: 확대/축소 · 가운데 버튼: 이동"
-            : "Right-drag: orbit · Wheel: zoom · Middle-drag: pan"}
+        {failed ? t("mapPreview.webglUnavailable") : t("mapPreview.controlsHint")}
       </p>
     </div>
   );

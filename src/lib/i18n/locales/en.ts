@@ -3298,6 +3298,25 @@ const en: Record<string, string> = {
   "game.camera.zoomIn": "Zoom in",
   "game.camera.zoomOut": "Zoom out",
   "game.camera.movementHint": "Click: walk · Drag: pan · Right-drag: orbit · Scroll: zoom",
+  "lookbook.collectionLabel": "Office character collection",
+  "lookbook.title": "Meet your office cast",
+  "lookbook.intro": "Distinct styles, individual stories. Choose someone for your office.",
+  "lookbook.searchLabel": "Search characters",
+  "lookbook.searchPlaceholder": "Search name or style",
+  "lookbook.filters": "Style filters",
+  "lookbook.selected": "Selected",
+  "lookbook.empty": "No matching characters. Try another name or style.",
+  "officeEnv.choose": "Choose your office",
+  "officeEnv.title": "Where will your team work?",
+  "officeEnv.count": "5 ready-to-use offices",
+  "officeEnv.thumbnailAlt": "{name} rendered scene",
+  "officeEnv.previewLabel": "Selected office 3D preview",
+  "appearanceEditor.officeCharacter": "Office character",
+  "appearanceEditor.keepCurrent": "Keep current appearance",
+  "characterPreview.unavailable":
+    "3D preview unavailable. You can still select and save a character.",
+  "mapPreview.webglUnavailable": "WebGL is unavailable. The 3D preview cannot be displayed.",
+  "mapPreview.controlsHint": "Right-drag: orbit · Wheel: zoom · Middle-drag: pan",
   // --- /content-i18n:D ---
 };
 

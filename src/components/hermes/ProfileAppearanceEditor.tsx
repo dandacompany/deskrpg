@@ -7,6 +7,7 @@ import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "@/game/th
 import { DEFAULT_OFFICE_LOOK_ID } from "@/game/three/office-appearance";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT, useLocale } from "@/lib/i18n";
+import { lookLabel, lookOutfit } from "@/game/three/office-look-labels";
 import type { CharacterAppearance } from "@/game/three/office-appearance";
 
 interface ProfileAppearanceEditorProps {
@@ -24,8 +25,7 @@ export default function ProfileAppearanceEditor({
   onSaved,
 }: ProfileAppearanceEditorProps) {
   const t = useT(),
-    { locale } = useLocale(),
-    ko = locale === "ko";
+    { locale } = useLocale();
   const [appearance, setAppearance] = useState(
     () => initialAppearance ?? officeLookAppearance(DEFAULT_OFFICE_LOOK_ID),
   );
@@ -59,7 +59,7 @@ export default function ProfileAppearanceEditor({
         onSelect={(look) => setAppearance(officeLookAppearance(look.id))}
       />
       <label className="block text-xs text-text-secondary">
-        {ko ? "오피스 캐릭터" : "Office character"}
+        {t("appearanceEditor.officeCharacter")}
         <select
           className="mt-2 w-full rounded border border-border bg-surface p-2 text-text"
           value={selected?.id ?? ""}
@@ -67,14 +67,10 @@ export default function ProfileAppearanceEditor({
             if (e.target.value) setAppearance(officeLookAppearance(e.target.value));
           }}
         >
-          {!selected && (
-            <option value="">{ko ? "기존 외형 유지" : "Keep current appearance"}</option>
-          )}
+          {!selected && <option value="">{t("appearanceEditor.keepCurrent")}</option>}
           {OFFICE_LOOKS.map((look) => (
             <option key={look.id} value={look.id}>
-              {ko
-                ? `${look.name} · ${look.subtitle.split(" · ")[1]}`
-                : `${look.nameEn} · ${look.subtitleEn.split(" · ")[1]}`}
+              {`${lookLabel(look, locale).name} · ${lookOutfit(look, locale)}`}
             </option>
           ))}
         </select>

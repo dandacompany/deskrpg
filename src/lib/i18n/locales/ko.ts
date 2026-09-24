@@ -3276,6 +3276,25 @@ const ko: Record<string, string> = {
   "game.camera.zoomOut": "축소",
   "game.camera.movementHint":
     "클릭: 걷기 · 드래그: 화면 이동 · 우클릭 드래그: 회전 · 휠: 확대/축소",
+  "lookbook.collectionLabel": "오피스 캐릭터 컬렉션",
+  "lookbook.title": "함께 일하고 싶은 얼굴들",
+  "lookbook.intro": "각자의 취향, 각자의 이야기. 당신의 오피스에 어울리는 한 사람을 골라보세요.",
+  "lookbook.searchLabel": "캐릭터 검색",
+  "lookbook.searchPlaceholder": "이름이나 스타일 검색",
+  "lookbook.filters": "스타일 필터",
+  "lookbook.selected": "선택됨",
+  "lookbook.empty": "일치하는 캐릭터가 없습니다. 다른 이름이나 스타일로 검색해보세요.",
+  "officeEnv.choose": "사무환경 선택",
+  "officeEnv.title": "어떤 오피스에서 일할까요?",
+  "officeEnv.count": "완성형 공간 5종",
+  "officeEnv.thumbnailAlt": "{name} 실제 3D 장면",
+  "officeEnv.previewLabel": "선택한 사무환경 3D 미리보기",
+  "appearanceEditor.officeCharacter": "오피스 캐릭터",
+  "appearanceEditor.keepCurrent": "기존 외형 유지",
+  "characterPreview.unavailable":
+    "3D 미리보기를 사용할 수 없습니다. 캐릭터 선택과 저장은 가능합니다.",
+  "mapPreview.webglUnavailable": "WebGL을 사용할 수 없어 3D 미리보기를 표시할 수 없습니다.",
+  "mapPreview.controlsHint": "우클릭 드래그: 회전 · 휠: 확대/축소 · 가운데 버튼: 이동",
   // --- /content-i18n:D ---
 };
 
