@@ -3301,6 +3301,17 @@ const ja: Record<string, string> = {
   "skills.template.check": "確認",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
+  "game.camera.controls": "カメラ操作",
+  "game.camera.overview": "全体表示",
+  "game.camera.rotateLeft": "左に回転",
+  "game.camera.rotateRight": "右に回転",
+  "game.camera.isometric": "立体ビュー",
+  "game.camera.top": "真上から見る",
+  "game.camera.follow": "自分のキャラクターを追う",
+  "game.camera.zoomIn": "拡大",
+  "game.camera.zoomOut": "縮小",
+  "game.camera.movementHint":
+    "クリック: 歩く · ドラッグ: 画面移動 · 右ドラッグ: 回転 · ホイール: 拡大/縮小",
   // --- /content-i18n:D ---
 };
 

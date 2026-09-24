@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { EventBus, pendingChannelData, setPendingChannelData } from "../EventBus";
 import { OfficeSimulation, isTypingTarget } from "./office-simulation";
 import type { TickLoop } from "./tick-loop";
+import { SMALLTALK_LINES } from "../npc-smalltalk";
 
 type Runtime = OfficeSimulation & Record<string, unknown>;
 
@@ -659,4 +660,15 @@ test("the faster they walk, the more often positions are sent — never more tha
   } finally {
     sim.dispose();
   }
+});
+
+test("smalltalk follows the viewer locale given at creation and after setDisplayLocale", () => {
+  const lineSet = (sim: OfficeSimulation) =>
+    (sim as unknown as { smalltalk: { lineSet: unknown } }).smalltalk.lineSet;
+  const defaulted = new OfficeSimulation();
+  assert.equal(lineSet(defaulted), SMALLTALK_LINES.en);
+  const sim = new OfficeSimulation({ locale: "ja" });
+  assert.equal(lineSet(sim), SMALLTALK_LINES.ja);
+  sim.setDisplayLocale("zh");
+  assert.equal(lineSet(sim), SMALLTALK_LINES.zh);
 });

@@ -175,7 +175,7 @@ export class OfficeSimulation {
   private socketListenerCleanup: (() => void) | null = null;
   private pendingNpcCalls = new Map<string, PendingNpcCall>();
   private speechPreviews = new SpeechPreviews();
-  private smalltalk = new NpcSmalltalk();
+  private smalltalk: NpcSmalltalk;
   private responsePhases: Record<string, "queued" | "thinking" | "streaming"> = {};
   /** NPCs running cards or cron jobs (R27). Replaced wholesale by `npc:working-state`. */
   private workingNpcs = new Set<string>();
@@ -290,6 +290,16 @@ export class OfficeSimulation {
    * emits `scene-ready`, `three:bridge-ready` and `request-socket`, then runs the tick loop.
    * If channel data is not there yet, it waits for `channel-data-ready` and follows the same steps.
    */
+  /** `locale` is the viewer's language — it only picks the local smalltalk lines, nothing leaves the browser. */
+  constructor(options: { locale?: string | null } = {}) {
+    this.smalltalk = new NpcSmalltalk(options.locale);
+  }
+
+  /** Switches the smalltalk language; the exchange on screen finishes in the old language. */
+  setDisplayLocale(locale: string | null | undefined): void {
+    this.smalltalk.setLocale(locale);
+  }
+
   start(): void {
     if (this.disposed) return;
     const data = pendingChannelData;
@@ -676,7 +686,7 @@ export class OfficeSimulation {
       const playerCol = Math.floor(this.player.x / TILE_SIZE);
       const playerRow = Math.floor(this.player.y / TILE_SIZE);
       npc.moveTo(playerCol, playerRow, findPath, this.createNpcWalkValidator(), {
-        message: `${payload.npcName}이(가) 대화를 원합니다`,
+        message: `${payload.npcName} wants to talk`,
       });
     });
 
@@ -2415,7 +2425,7 @@ export class OfficeSimulation {
     if (!this.returnDiagnosticNode) {
       const node = document.createElement("output");
       node.id = "ui2-return-diagnostics";
-      node.setAttribute("aria-label", "개발용 NPC 복귀 경로 진단");
+      node.setAttribute("aria-label", "NPC return path diagnostics (development)");
       node.style.cssText =
         "position:fixed;bottom:0;left:0;z-index:99999;max-width:560px;max-height:100px;overflow:auto;font:10px monospace;background:#fff;color:#111;pointer-events:none";
       document.body.append(node);

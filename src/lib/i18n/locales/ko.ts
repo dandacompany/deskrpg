@@ -3265,6 +3265,17 @@ const ko: Record<string, string> = {
   "skills.template.check": "확인",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
+  "game.camera.controls": "카메라 조작",
+  "game.camera.overview": "전체 보기",
+  "game.camera.rotateLeft": "왼쪽으로 회전",
+  "game.camera.rotateRight": "오른쪽으로 회전",
+  "game.camera.isometric": "입체 시점",
+  "game.camera.top": "위에서 보기",
+  "game.camera.follow": "내 캐릭터 따라가기",
+  "game.camera.zoomIn": "확대",
+  "game.camera.zoomOut": "축소",
+  "game.camera.movementHint":
+    "클릭: 걷기 · 드래그: 화면 이동 · 우클릭 드래그: 회전 · 휠: 확대/축소",
   // --- /content-i18n:D ---
 };
 

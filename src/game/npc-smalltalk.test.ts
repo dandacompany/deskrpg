@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { GREETINGS, NpcSmalltalk } from "./npc-smalltalk";
+import { NpcSmalltalk, SMALLTALK_LINES } from "./npc-smalltalk";
 const actors = () => [
   { id: "a", name: "노아", x: 1, y: 1, walking: true, available: true },
   { id: "b", name: "미나 · 기획", x: 2, y: 1, walking: false, available: true },
 ];
 test("named exchange is staggered, expires, and avoids immediate template repetition", () => {
-  const talk = new NpcSmalltalk();
+  const talk = new NpcSmalltalk("ko");
   talk.update(
     actors(),
     0,
@@ -35,7 +35,7 @@ test("named exchange is staggered, expires, and avoids immediate template repeti
 });
 test("busy staff, stationary pairs, distant staff and walls do not trigger greetings", () => {
   for (const condition of ["busy", "still", "far", "wall"]) {
-    const talk = new NpcSmalltalk(),
+    const talk = new NpcSmalltalk("ko"),
       people = actors();
     if (condition === "busy") people[1].available = false;
     if (condition === "still") people[0].walking = false;
@@ -45,7 +45,7 @@ test("busy staff, stationary pairs, distant staff and walls do not trigger greet
   }
 });
 test("real conversations cancel pending replies", () => {
-  const talk = new NpcSmalltalk(),
+  const talk = new NpcSmalltalk("ko"),
     people = actors();
   talk.update(people, 0, () => true);
   people[1].available = false;
@@ -53,7 +53,7 @@ test("real conversations cancel pending replies", () => {
   assert.equal(talk.text("b", 2000), undefined);
 });
 test("both participants stay through the reply and resume together after 7.5 seconds", () => {
-  const talk = new NpcSmalltalk(),
+  const talk = new NpcSmalltalk("ko"),
     people = actors();
   talk.update(people, 0, () => true);
   assert.equal(talk.partner("a", 0), "b");
@@ -69,7 +69,7 @@ test("both participants stay through the reply and resume together after 7.5 sec
 });
 test("a call or removal releases both participants immediately, including delayed reply", () => {
   for (const removed of [false, true]) {
-    const talk = new NpcSmalltalk(),
+    const talk = new NpcSmalltalk("ko"),
       people = actors();
     talk.update(people, 0, () => true);
     if (removed) people.pop();
@@ -103,5 +103,57 @@ const KO_LINES_BEFORE_I18N = [
 ];
 
 test("the Korean smalltalk lines stay exactly as they were", () => {
-  assert.deepEqual(GREETINGS, KO_LINES_BEFORE_I18N);
+  assert.deepEqual(SMALLTALK_LINES.ko, KO_LINES_BEFORE_I18N);
+});
+
+test("every locale has the same number of exchanges and each line names the partner once", () => {
+  for (const [locale, lines] of Object.entries(SMALLTALK_LINES)) {
+    assert.equal(lines.length, SMALLTALK_LINES.ko.length, locale);
+    for (const pair of lines)
+      for (const line of pair)
+        assert.equal(line.split("{name}").length - 1, 1, `${locale}: ${line}`);
+  }
+});
+
+test("an instance created for ja speaks Japanese, and an unknown locale falls back to English", () => {
+  const ja = new NpcSmalltalk("ja");
+  ja.update(
+    actors(),
+    0,
+    () => true,
+    () => 0,
+  );
+  assert.equal(ja.text("a", 0), SMALLTALK_LINES.ja[0][0].replace("{name}", "미나"));
+  const unknown = new NpcSmalltalk("fr");
+  unknown.update(
+    actors(),
+    0,
+    () => true,
+    () => 0,
+  );
+  assert.equal(unknown.text("a", 0), SMALLTALK_LINES.en[0][0].replace("{name}", "미나"));
+});
+
+test("changing the locale applies from the next exchange", () => {
+  const talk = new NpcSmalltalk("ko");
+  talk.update(
+    actors(),
+    0,
+    () => true,
+    () => 0,
+  );
+  const korean = talk.text("a", 0);
+  talk.setLocale("zh");
+  assert.equal(talk.text("a", 0), korean);
+  talk.update(
+    actors(),
+    200_000,
+    () => true,
+    () => 0.99,
+  );
+  assert.ok(
+    SMALLTALK_LINES.zh.some(
+      ([first]) => first.replace("{name}", "미나") === talk.text("a", 200_000),
+    ),
+  );
 });

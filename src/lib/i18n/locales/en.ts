@@ -3288,6 +3288,16 @@ const en: Record<string, string> = {
   "skills.template.check": "Check",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
+  "game.camera.controls": "Camera controls",
+  "game.camera.overview": "Overview",
+  "game.camera.rotateLeft": "Rotate left",
+  "game.camera.rotateRight": "Rotate right",
+  "game.camera.isometric": "Isometric view",
+  "game.camera.top": "Top view",
+  "game.camera.follow": "Follow my character",
+  "game.camera.zoomIn": "Zoom in",
+  "game.camera.zoomOut": "Zoom out",
+  "game.camera.movementHint": "Click: walk · Drag: pan · Right-drag: orbit · Scroll: zoom",
   // --- /content-i18n:D ---
 };
 

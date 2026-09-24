@@ -52,7 +52,11 @@ export default function ThreeGame(props: ThreeGameProps) {
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const t = useT();
   const { locale } = useLocale();
-  const ko = locale === "ko";
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
+  const simulationRef = useRef<
+    import("@/game/simulation/office-simulation").OfficeSimulation | null
+  >(null);
   const { socket, characterId, characterName, appearance, channelInitData, onFatal } = props;
   const socketRef = useRef(socket);
   const characterRef = useRef({ characterId, characterName, appearance });
@@ -212,18 +216,25 @@ export default function ThreeGame(props: ThreeGameProps) {
     // The dynamic import makes `scene-ready` fire only after all mount effects are registered.
     import("@/game/simulation/office-simulation").then(({ OfficeSimulation }) => {
       if (cancelled) return;
-      simulation = new OfficeSimulation();
+      simulation = new OfficeSimulation({ locale: localeRef.current });
+      simulationRef.current = simulation;
       simulation.start();
     });
     return () => {
       cancelled = true;
       simulation?.dispose();
       simulation = null;
+      simulationRef.current = null;
       // Only remove the listeners this component added. EventBus.removeAllListeners() would also wipe page listeners.
       EventBus.off("player-spawned", emitSocketIfReady);
       EventBus.off("request-socket", emitSocketIfReady);
     };
   }, []);
+
+  // Smalltalk is drawn in the viewer's language — switching the language applies from the next exchange.
+  useEffect(() => {
+    simulationRef.current?.setDisplayLocale(locale);
+  }, [locale]);
 
   useEffect(() => {
     setPendingChannelData(channelInitData);
@@ -248,7 +259,7 @@ export default function ThreeGame(props: ThreeGameProps) {
         <>
           <div ref={host} className="office-three-canvas" />
           <div ref={labels} className="office-actor-labels" />
-          <div className="office-camera-tools" aria-label={ko ? "카메라 조작" : "Camera controls"}>
+          <div className="office-camera-tools" aria-label={t("game.camera.controls")}>
             {meetingCamera.active && (
               <button
                 type="button"
@@ -263,24 +274,24 @@ export default function ThreeGame(props: ThreeGameProps) {
               type="button"
               disabled={meetingCamera.active}
               onClick={() => renderer.current?.showOverview()}
-              title={ko ? "전체 보기" : "Overview"}
-              aria-label={ko ? "전체 보기" : "Overview"}
+              title={t("game.camera.overview")}
+              aria-label={t("game.camera.overview")}
             >
               <Maximize size={17} />
             </button>
             <button
               type="button"
               onClick={() => renderer.current?.rotateCamera(-1)}
-              title={ko ? "왼쪽으로 회전" : "Rotate left"}
-              aria-label={ko ? "왼쪽으로 회전" : "Rotate left"}
+              title={t("game.camera.rotateLeft")}
+              aria-label={t("game.camera.rotateLeft")}
             >
               <RotateCcw size={17} />
             </button>
             <button
               type="button"
               onClick={() => renderer.current?.rotateCamera(1)}
-              title={ko ? "오른쪽으로 회전" : "Rotate right"}
-              aria-label={ko ? "오른쪽으로 회전" : "Rotate right"}
+              title={t("game.camera.rotateRight")}
+              aria-label={t("game.camera.rotateRight")}
             >
               <RotateCw size={17} />
             </button>
@@ -288,8 +299,8 @@ export default function ThreeGame(props: ThreeGameProps) {
               type="button"
               onClick={() => renderer.current?.setCameraAngle(false)}
               disabled={meetingCamera.active}
-              title={ko ? "입체 시점" : "Isometric view"}
-              aria-label={ko ? "입체 시점" : "Isometric view"}
+              title={t("game.camera.isometric")}
+              aria-label={t("game.camera.isometric")}
             >
               <Box size={17} />
             </button>
@@ -297,8 +308,8 @@ export default function ThreeGame(props: ThreeGameProps) {
               type="button"
               onClick={() => renderer.current?.setCameraAngle(true)}
               disabled={meetingCamera.active}
-              title={ko ? "위에서 보기" : "Top view"}
-              aria-label={ko ? "위에서 보기" : "Top view"}
+              title={t("game.camera.top")}
+              aria-label={t("game.camera.top")}
             >
               <LayoutGrid size={17} />
             </button>
@@ -306,8 +317,8 @@ export default function ThreeGame(props: ThreeGameProps) {
               type="button"
               onClick={() => renderer.current?.focus()}
               disabled={meetingCamera.active}
-              title={ko ? "내 캐릭터 따라가기" : "Follow my character"}
-              aria-label={ko ? "내 캐릭터 따라가기" : "Follow my character"}
+              title={t("game.camera.follow")}
+              aria-label={t("game.camera.follow")}
             >
               <Focus size={17} />
             </button>
@@ -315,7 +326,7 @@ export default function ThreeGame(props: ThreeGameProps) {
               type="button"
               onClick={() => renderer.current?.zoom(0.8)}
               disabled={meetingCamera.active}
-              aria-label={ko ? "확대" : "Zoom in"}
+              aria-label={t("game.camera.zoomIn")}
             >
               <Plus size={17} />
             </button>
@@ -323,17 +334,13 @@ export default function ThreeGame(props: ThreeGameProps) {
               type="button"
               onClick={() => renderer.current?.zoom(1.25)}
               disabled={meetingCamera.active}
-              aria-label={ko ? "축소" : "Zoom out"}
+              aria-label={t("game.camera.zoomOut")}
             >
               <Minus size={17} />
             </button>
           </div>
           <div className="office-movement-hint" data-meeting={meetingCamera.active || undefined}>
-            {meetingCamera.active
-              ? t("meeting.rotationHint")
-              : ko
-                ? "클릭: 걷기 · 드래그: 화면 이동 · 우클릭 드래그: 회전 · 휠: 확대/축소"
-                : "Click: walk · Drag: pan · Right-drag: orbit · Scroll: zoom"}
+            {meetingCamera.active ? t("meeting.rotationHint") : t("game.camera.movementHint")}
           </div>
           {meetingCamera.active && (
             <button

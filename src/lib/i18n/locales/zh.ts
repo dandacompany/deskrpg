@@ -3151,6 +3151,16 @@ const zh: Record<string, string> = {
   "skills.template.check": "检查",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
+  "game.camera.controls": "相机控制",
+  "game.camera.overview": "全景",
+  "game.camera.rotateLeft": "向左旋转",
+  "game.camera.rotateRight": "向右旋转",
+  "game.camera.isometric": "等距视角",
+  "game.camera.top": "俯视",
+  "game.camera.follow": "跟随我的角色",
+  "game.camera.zoomIn": "放大",
+  "game.camera.zoomOut": "缩小",
+  "game.camera.movementHint": "点击: 行走 · 拖动: 平移 · 右键拖动: 旋转 · 滚轮: 缩放",
   // --- /content-i18n:D ---
 };
 
