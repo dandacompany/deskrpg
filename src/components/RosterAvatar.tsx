@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { resolveOfficeLook } from "@/game/three/office-looks";
+import { lookLabel } from "@/game/three/office-look-labels";
+import { useLocale } from "@/lib/i18n";
 
 /**
  * A small round avatar used in rosters (players, NPCs). Pulled out of `GamePageClient`
  * so it could be shared with `NpcRoster`.
  *
  * When there's a look, a 3D thumbnail; when the thumbnail isn't ready yet, the first
- * letter of the look name; when there's no appearance, "?".
+ * letter of the look name in the viewer's language; when there's no appearance, "?".
  * The server normalizes an appearance whose look ID is unknown, so here it just folds
  * down to "?".
  */
@@ -20,6 +22,7 @@ export default function RosterAvatar({
   size?: number;
 }) {
   const look = resolveOfficeLook(appearance);
+  const { locale } = useLocale();
   const [portrait, setPortrait] = useState<{ id: string; url: string } | null>(null);
   useEffect(() => {
     if (!look) return;
@@ -50,7 +53,7 @@ export default function RosterAvatar({
             style={{ width: size, height: size, objectFit: "cover" }}
           />
         ) : (
-          <span aria-hidden="true">{look.name.slice(0, 1)}</span>
+          <span aria-hidden="true">{lookLabel(look, locale).name.slice(0, 1)}</span>
         )}
       </div>
     );
