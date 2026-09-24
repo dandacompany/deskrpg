@@ -35,7 +35,7 @@ import {
 import { describeActivity } from "@/lib/npc-activity";
 import { readLocaleCookie } from "@/lib/i18n/server";
 import { composeNpcInstructions } from "@/lib/npc-prompt-layers";
-import { getDefaultMeetingProtocol } from "@/lib/npc-agent-defaults";
+import { getDefaultMeetingProtocol } from "@/lib/meeting-protocol";
 import {
   appendNpcChatMessage,
   characterBelongsToUser,

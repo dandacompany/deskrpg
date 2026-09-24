@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildMeetingSummaryPrompt } from "./meeting-outcome";
-import { getDefaultMeetingProtocol } from "./npc-agent-defaults";
+import { getDefaultMeetingProtocol } from "./meeting-protocol";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const formatter = require("./meeting-formatter.js") as typeof import("./meeting-formatter.js");
 
