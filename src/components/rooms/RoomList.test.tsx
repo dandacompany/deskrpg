@@ -77,3 +77,40 @@ test("Clicking an item calls onOpen(roomId), [New Room] calls onNew", async () =
   });
   assert.equal(created, 1);
 });
+
+test("an empty cron result previews in the viewer's language; an old stored body stays as is", async () => {
+  const cron = (content: string): RoomSummary => ({
+    ...g1,
+    lastMessage: {
+      senderName: "소피",
+      content,
+      createdAt: "2026-09-10T00:00:00Z",
+      notice: { kind: "cron_result", status: "error" },
+    },
+  });
+  const empty = await mount(
+    <I18nProvider initialLocale="ja">
+      <RoomList rooms={[office, cron("")]} currentRoomId="o" onOpen={() => {}} onNew={() => {}} />
+    </I18nProvider>,
+  );
+  const emptyRow = empty.el.querySelectorAll('[role="listitem"]')[1]?.textContent ?? "";
+  assert.match(emptyRow, /実行失敗/);
+  await act(async () => empty.root.unmount());
+  empty.el.remove();
+
+  const old = await mount(
+    <I18nProvider initialLocale="ja">
+      <RoomList
+        rooms={[office, cron("실행 실패")]}
+        currentRoomId="o"
+        onOpen={() => {}}
+        onNew={() => {}}
+      />
+    </I18nProvider>,
+  );
+  const oldRow = old.el.querySelectorAll('[role="listitem"]')[1]?.textContent ?? "";
+  assert.match(oldRow, /실행 실패/);
+  assert.doesNotMatch(oldRow, /実行失敗/);
+  await act(async () => old.root.unmount());
+  old.el.remove();
+});

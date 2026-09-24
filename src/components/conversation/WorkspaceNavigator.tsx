@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { sortRooms, type RoomSummary } from "@/lib/chat-rooms-policy";
+import { roomMessagePreview } from "@/components/rooms/room-message-preview";
 import type { DmThreadEntry } from "@/lib/dm-threads";
 import { useT } from "@/lib/i18n";
 import type { RosterNpc } from "../NpcRoster";
@@ -155,7 +156,7 @@ export default function WorkspaceNavigator(props: Props) {
                 </span>
                 {room.lastMessage && (
                   <span className="mt-0.5 block truncate text-[11px] text-text-dim">
-                    {room.lastMessage.senderName}: {room.lastMessage.content}
+                    {room.lastMessage.senderName}: {roomMessagePreview(room.lastMessage, t)}
                   </span>
                 )}
               </button>

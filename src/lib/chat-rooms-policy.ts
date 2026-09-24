@@ -115,6 +115,27 @@ export function parseRoomNotice(raw: string | null | undefined): RoomNotice | nu
   }
 }
 
+/** Enough of a notice for a room list to label a last message that has no body. */
+export type RoomPreviewNotice = { kind: "cron_result"; status: "ok" | "error" };
+
+export type RoomPreview = {
+  senderName: string;
+  content: string;
+  createdAt: string;
+  notice?: RoomPreviewNotice | null;
+};
+
+/** The list preview of a message: only a cron result's kind and status travel with it. */
+export function toRoomPreview(message: RoomMessage): RoomPreview {
+  const notice = message.notice;
+  return {
+    senderName: message.senderName,
+    content: message.content,
+    createdAt: message.createdAt,
+    notice: notice?.kind === "cron_result" ? { kind: "cron_result", status: notice.status } : null,
+  };
+}
+
 export type RoomSummary = {
   id: string;
   kind: "office" | "group";
@@ -123,7 +144,7 @@ export type RoomSummary = {
   createdBy: string;
   lastMessageAt: string | null;
   members: { kind: "user" | "npc"; id: string; name: string }[];
-  lastMessage?: { senderName: string; content: string; createdAt: string };
+  lastMessage?: RoomPreview;
 };
 
 /** Room policy × mentions → which NPCs answer this message. office(mention) is mentions only; group(members) is everyone, or the mentioned subset if any. */
