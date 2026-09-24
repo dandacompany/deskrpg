@@ -3240,6 +3240,8 @@ const ko: Record<string, string> = {
   // --- content-i18n:B ---
   // --- /content-i18n:B ---
   // --- content-i18n:C ---
+  "room.cronResult.failed": "실행 실패",
+  "room.cronResult.empty": "결과 없음",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   // --- /content-i18n:D ---

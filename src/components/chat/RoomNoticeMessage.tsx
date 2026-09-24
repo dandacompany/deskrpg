@@ -151,7 +151,13 @@ export default function RoomNoticeMessage({
               </span>
             )}
           </div>
-          <MarkdownContent content={message.content} />
+          {message.content.trim() ? (
+            <MarkdownContent content={message.content} />
+          ) : (
+            <p className="text-text-muted">
+              {t(failed ? "room.cronResult.failed" : "room.cronResult.empty")}
+            </p>
+          )}
           {onOpenCronJob && (
             <button
               type="button"

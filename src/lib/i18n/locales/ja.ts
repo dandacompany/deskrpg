@@ -3276,6 +3276,8 @@ const ja: Record<string, string> = {
   // --- content-i18n:B ---
   // --- /content-i18n:B ---
   // --- content-i18n:C ---
+  "room.cronResult.failed": "実行失敗",
+  "room.cronResult.empty": "結果なし",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   // --- /content-i18n:D ---

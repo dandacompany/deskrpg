@@ -3262,6 +3262,8 @@ const en: Record<string, string> = {
   // --- content-i18n:B ---
   // --- /content-i18n:B ---
   // --- content-i18n:C ---
+  "room.cronResult.failed": "Run failed",
+  "room.cronResult.empty": "No result",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   // --- /content-i18n:D ---

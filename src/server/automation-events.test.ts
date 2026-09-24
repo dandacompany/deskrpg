@@ -376,7 +376,7 @@ test("cron result — not posted for another channel, no origin, or a different 
   }
 });
 
-test("cron result — error is the error summary, empty result is '결과 없음', long result is truncated with '…' (E8)", async () => {
+test("cron result — error is the error summary, an empty result is stored empty, long result is truncated with '…' (E8)", async () => {
   const origins = { [`${GATEWAY}/sophie/job-1`]: { channelId: CHANNEL, gatewayId: GATEWAY } };
   const npcs = { sophie: SOPHIE_ACTIVE };
 
@@ -387,11 +387,12 @@ test("cron result — error is the error summary, empty result is '결과 없음
 
   h = harness({ npcs, origins });
   await ingest(CHANNEL, [cronFinished({ status: "error", result_text: "  " })], h.deps);
-  assert.equal(h.posted[0].content, "실행 실패");
+  assert.equal(h.posted[0].content, "");
+  assert.equal(h.posted[0].notice?.kind === "cron_result" && h.posted[0].notice.status, "error");
 
   h = harness({ npcs, origins });
   await ingest(CHANNEL, [cronFinished({ status: "ok", result_text: "" })], h.deps);
-  assert.equal(h.posted[0].content, "결과 없음");
+  assert.equal(h.posted[0].content, "");
 
   h = harness({ npcs, origins, maxResultLength: 10 });
   await ingest(CHANNEL, [cronFinished({ result_text: "가".repeat(25) })], h.deps);
@@ -406,6 +407,16 @@ test("cron result — if the assigned NPC is asleep, a system message + name pre
   await ingest(CHANNEL, [cronFinished({})], h.deps);
   assert.equal(h.posted[0].senderKind, "system");
   assert.equal(h.posted[0].content, "소피: 오늘의 브리핑입니다");
+});
+
+test("cron result — an empty result from an asleep NPC gets no dangling name prefix", async () => {
+  const h = harness({
+    npcs: { sophie: SOPHIE_ASLEEP },
+    origins: { [`${GATEWAY}/sophie/job-1`]: { channelId: CHANNEL, gatewayId: GATEWAY } },
+  });
+  await ingest(CHANNEL, [cronFinished({ status: "error", result_text: "" })], h.deps);
+  assert.equal(h.posted[0].senderKind, "system");
+  assert.equal(h.posted[0].content, "");
 });
 
 test("cron.run.started changes only map state, without a room post", async () => {
