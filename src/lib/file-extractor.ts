@@ -5,6 +5,8 @@
  * Text-based files (PDF, XLSX, DOCX) are extracted and inlined in the message.
  */
 
+import { promptLocale, type PromptLocale } from "@/lib/i18n/prompt-locale";
+
 // ─── Constants ───────────────────────────────────────────────────────
 
 export const FILE_LIMITS = {
@@ -60,9 +62,37 @@ export interface GatewayAttachment {
   content: string; // raw base64
 }
 
+// ─── Wording ─────────────────────────────────────────────────────────
+
+/** Text inlined into the message for the NPC. `ko` is the original wording; every other language gets `en`. */
+type Locale = string | null | undefined;
+
+const WORDS: Record<
+  PromptLocale,
+  {
+    truncated: (total: string, limit: string) => string;
+    unsupported: string;
+    failed: (name: string, msg: string) => string;
+    attachment: string;
+  }
+> = {
+  ko: {
+    truncated: (total, limit) => `(... 이하 생략, 총 ${total}자 중 ${limit}자 표시)`,
+    unsupported: "지원하지 않는 파일 형식입니다.",
+    failed: (name, msg) => `[파일 처리 오류: ${name}] ${msg}`,
+    attachment: "📎 첨부파일",
+  },
+  en: {
+    truncated: (total, limit) => `(... truncated, showing ${limit} of ${total} characters)`,
+    unsupported: "Unsupported file type.",
+    failed: (name, msg) => `[File processing error: ${name}] ${msg}`,
+    attachment: "📎 Attachment",
+  },
+};
+
 // ─── Truncation ──────────────────────────────────────────────────────
 
-function truncateText(text: string): { text: string; truncated: boolean } {
+function truncateText(text: string, locale: Locale): { text: string; truncated: boolean } {
   if (text.length <= FILE_LIMITS.maxTextLength) {
     return { text, truncated: false };
   }
@@ -70,7 +100,7 @@ function truncateText(text: string): { text: string; truncated: boolean } {
   const limit = FILE_LIMITS.maxTextLength.toLocaleString();
   const truncated = text.slice(0, FILE_LIMITS.maxTextLength);
   return {
-    text: `${truncated}\n\n(... 이하 생략, 총 ${total}자 중 ${limit}자 표시)`,
+    text: `${truncated}\n\n${WORDS[promptLocale(locale)].truncated(total, limit)}`,
     truncated: true,
   };
 }
@@ -120,7 +150,9 @@ export async function extractFileContent(
   buffer: Buffer,
   name: string,
   mimeType: string,
+  locale: Locale = "ko",
 ): Promise<ExtractedFile> {
+  const words = WORDS[promptLocale(locale)];
   try {
     const ext = extOf(name);
 
@@ -151,20 +183,20 @@ export async function extractFileContent(
       return {
         name,
         mimeType,
-        textContent: "지원하지 않는 파일 형식입니다.",
+        textContent: words.unsupported,
         imageBase64: null,
         truncated: false,
       };
     }
 
-    const { text, truncated } = truncateText(rawText);
+    const { text, truncated } = truncateText(rawText, locale);
     return { name, mimeType, textContent: text, imageBase64: null, truncated };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return {
       name,
       mimeType,
-      textContent: `[파일 처리 오류: ${name}] ${msg}`,
+      textContent: words.failed(name, msg),
       imageBase64: null,
       truncated: false,
     };
@@ -173,12 +205,13 @@ export async function extractFileContent(
 
 // ─── Prompt builder (text files only) ───────────────────────────────
 
-export function buildFilePromptSection(files: ExtractedFile[]): string {
+export function buildFilePromptSection(files: ExtractedFile[], locale: Locale = "ko"): string {
   if (files.length === 0) return "";
+  const label = WORDS[promptLocale(locale)].attachment;
 
   const sections = files
     .filter((f) => f.textContent) // skip images — they go via attachments
-    .map((f) => `📎 첨부파일: ${f.name}\n\`\`\`\n${f.textContent}\n\`\`\``);
+    .map((f) => `${label}: ${f.name}\n\`\`\`\n${f.textContent}\n\`\`\``);
 
   if (sections.length === 0) return "";
   return "\n\n" + sections.join("\n\n");
