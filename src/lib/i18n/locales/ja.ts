@@ -2291,6 +2291,7 @@ const ja: Record<string, string> = {
     "社員(Hermes プロフィール)の登録・人格・外見・モデルは社員画面で管理します。",
   "gateways.employeesOpen": "社員管理を開く →",
   "gateways.title": "接続",
+  "gateways.refreshing": "一覧を更新中…",
   "gateways.subtitle": "Hermes ゲートウェイを登録、接続テスト、共有できます。",
   "gateways.backToChannels": "チャンネル一覧へ",
   "gateways.listTitle": "ゲートウェイ一覧",

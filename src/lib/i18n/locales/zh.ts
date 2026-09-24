@@ -2191,6 +2191,7 @@ const zh: Record<string, string> = {
   "gateways.employeesHint": "员工(Hermes 配置文件)的注册、人格、外观与模型在员工页面管理。",
   "gateways.employeesOpen": "打开员工管理 →",
   "gateways.title": "连接",
+  "gateways.refreshing": "正在刷新列表…",
   "gateways.subtitle": "注册、测试并与其他用户共享你的 Hermes 网关。",
   "gateways.backToChannels": "返回频道列表",
   "gateways.listTitle": "网关列表",
