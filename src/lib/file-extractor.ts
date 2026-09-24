@@ -6,6 +6,7 @@
  */
 
 import { promptLocale, type PromptLocale } from "@/lib/i18n/prompt-locale";
+import { normalizeLocale } from "@/lib/i18n/server";
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -96,8 +97,10 @@ function truncateText(text: string, locale: Locale): { text: string; truncated: 
   if (text.length <= FILE_LIMITS.maxTextLength) {
     return { text, truncated: false };
   }
-  const total = text.length.toLocaleString();
-  const limit = FILE_LIMITS.maxTextLength.toLocaleString();
+  // Format numbers in the reader's locale, never the server's — the output must not depend on the host.
+  const numberLocale = promptLocale(locale) === "ko" ? "ko-KR" : normalizeLocale(locale);
+  const total = text.length.toLocaleString(numberLocale);
+  const limit = FILE_LIMITS.maxTextLength.toLocaleString(numberLocale);
   const truncated = text.slice(0, FILE_LIMITS.maxTextLength);
   return {
     text: `${truncated}\n\n${WORDS[promptLocale(locale)].truncated(total, limit)}`,

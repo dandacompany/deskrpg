@@ -84,5 +84,7 @@ test("attachment wording is English outside Korean", async () => {
     );
     assert.doesNotMatch(long.textContent!, HANGUL);
     assert.match(long.textContent!, /truncated/);
+    // Numbers follow the reader's locale, not the host's (e.g. a de_DE server would print "50.001").
+    assert.match(long.textContent!, /showing 50,000 of 50,001 characters/);
   }
 });
