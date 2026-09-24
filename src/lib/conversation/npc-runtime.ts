@@ -60,6 +60,9 @@ export type NpcRuntimeDeps = {
   historyLimit: number;
   turnTimeout: TurnTimeoutConfig;
   now: () => number;
+  /** Language of the meeting turn prompts (meeting-formatter.js). Omitted means Korean, as before
+   * locales existed; null (no language cookie) means English. */
+  locale?: string | null;
 };
 
 export type SpeakOutcome =
@@ -129,6 +132,7 @@ export class NpcRuntime {
       maxTurns,
       remaining,
       this.participant.passPolicy ?? null,
+      this.deps.locale,
     );
     const { response } = await this.participant.adapter.execute({
       sessionKey: `${this.participant.sessionKey}-poll`,
@@ -138,7 +142,7 @@ export class NpcRuntime {
       // persistent session must not accumulate "SPEAK:/PASS" exchanges.
       multiParty: true,
     });
-    return parseHandRaise(response);
+    return parseHandRaise(response, this.deps.locale);
   }
 
   /**
@@ -175,6 +179,7 @@ export class NpcRuntime {
       currentTurn,
       maxTurns,
       remaining,
+      this.deps.locale,
     );
 
     return this.speakWithPrompt(message, hooks);
