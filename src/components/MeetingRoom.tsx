@@ -272,12 +272,12 @@ export default function MeetingRoom({
     durationSeconds: number | null;
     participantCount: number;
   } | null>(null);
-  // 종료 화면이 떠 있는 동안만 — 후속 업무 등록을 마치면 오피스로 돌아가 보고를 받게 한다.
+  // Only while the end screen is up — once follow-up tasks are registered, return to the office to hear the report.
   const autoReturn = useMeetingAutoReturn(meetingEnded && lastMeetingResult !== null);
   const endedWithoutMinutes = meetingEnded && lastMeetingResult?.minutesId === null;
   const { hint: hintAutoReturn } = autoReturn;
   useEffect(() => {
-    // 회의록이 없으면 등록할 것도 없다 — 안내만.
+    // With no minutes, there's nothing to register — just a hint.
     if (endedWithoutMinutes) hintAutoReturn();
   }, [endedWithoutMinutes, hintAutoReturn]);
   const [showMinutesModal, setShowMinutesModal] = useState(false);
@@ -292,7 +292,7 @@ export default function MeetingRoom({
     type: "user",
   };
 
-  // 발언 말풍선의 아바타 — 직원은 채널 명부에서, 사람은 회의 참가자(소켓 id)에서 찾는다.
+  // Avatar for a speech bubble — look up employees from the channel roster, people from meeting participants (socket id).
   const meetingAvatarFor = createAvatarLookup(
     npcs,
     participants.map((participant) => ({
@@ -457,7 +457,7 @@ export default function MeetingRoom({
       npcName?: string;
       chunk: string;
       done: boolean;
-      /** 턴 끝(done)에만 온다 — 회의 기록에 남는 것과 같은 최종 본문. */
+      /** Only arrives at the end of a turn (done) — the final body, same as what's kept in the meeting record. */
       text?: unknown;
     }) => {
       if (data.done) {
@@ -563,7 +563,7 @@ export default function MeetingRoom({
       }
     };
 
-    // 서버가 옛 버전이라 객체를 보내도 [object Object] 를 그리지 않는다 — 코드는 문자열일 때만 쓴다.
+    // If the server is an old version and sends an object, don't render [object Object] — only use the code when it's a string.
     const handleMeetingError = (data: { error?: unknown; detail?: unknown }) => {
       clearTimeout(joinTimer);
       setStartingMeeting(false);
@@ -587,7 +587,7 @@ export default function MeetingRoom({
       npcName: string;
       reason: "quota_exhausted" | "backend_failing";
     }) => {
-      // 삼항이 아니라 표에서 고른다 — 사유가 늘 때 컴파일러가 막아 준다(mention-skip-notice.ts).
+      // Picked from a table, not a ternary — the compiler catches it when a new reason is added (mention-skip-notice.ts).
       const i18nKey = mentionSkipI18nKey(data.reason);
       const infoMsg: MeetingMessage = {
         id: `mention-skipped-${Date.now()}-${data.npcId}`,
@@ -786,10 +786,10 @@ export default function MeetingRoom({
           hybridMode && hybridResumeMode === "timer" ? hybridResumeSeconds * 1000 : null,
       },
     });
-    // 지난 회의의 종료 화면을 걷어낸다. 렌더 조건이 `meetingEnded && lastMeetingResult`
-    // 라서, 이걸 비우지 않으면 새 회의가 정상적으로 턴을 돌리는 동안에도 화면에는 이전
-    // 회의의 요약이 그대로 떠 있는다 — 서버는 발언을 보내는데 사용자는 지난 회의만 본다.
-    // 예전에는 「새 시작」(handleResetDiscussion, window.confirm 동반)에서만 정리했다.
+    // Clear the previous meeting's end screen. The render condition is `meetingEnded && lastMeetingResult`,
+    // so without clearing this, the previous meeting's summary stays on screen even while the new
+    // meeting is running turns normally — the server sends speech, but the user only sees the old meeting.
+    // This used to be cleared only from "Start over" (handleResetDiscussion, with a window.confirm).
     setMeetingEnded(false);
     setLastMeetingResult(null);
   }, [
@@ -1226,7 +1226,7 @@ export default function MeetingRoom({
                   const isMe = msg.senderId === socket?.id;
                   const isNpc = msg.senderType === "npc";
                   const isSystem = msg.senderId === "system";
-                  // 채팅 패널과 같은 규칙 — 상대에게만 아바타, 같은 발화자가 이어 말하면 자리만.
+                  // Same rule as the chat panel — avatar only for others, and just leave the slot when the same speaker continues.
                   const previous = messages[index - 1];
                   const continued =
                     !!previous &&
@@ -1235,8 +1235,8 @@ export default function MeetingRoom({
                   return (
                     <div
                       key={msg.id}
-                      // e2e 훅. 발언권이 실제로 여러 NPC 사이를 도는지 검증하려면 각 발언의
-                      // 화자를 밖에서 읽을 수 있어야 한다 — 색상 유틸리티 클래스로는 못 한다.
+                      // e2e hook. To verify the turn actually rotates among several NPCs, each speech's
+                      // speaker must be readable from outside — a color utility class can't do that.
                       data-meeting-message={msg.senderType}
                       data-sender={msg.sender}
                       className={`flex gap-2 ${isMe ? "justify-end" : "justify-start"}`}
@@ -1255,7 +1255,7 @@ export default function MeetingRoom({
                             <RosterAvatar
                               appearance={meetingAvatarFor({
                                 kind: isNpc ? "npc" : "user",
-                                // 회의 서버는 직원 발언의 senderId 를 `npc-<id>` 로 싣는다.
+                                // The meeting server carries an employee's speech senderId as `npc-<id>`.
                                 id: isNpc ? msg.senderId.replace(/^npc-/, "") : msg.senderId,
                                 name: msg.sender,
                               })}
@@ -1398,7 +1398,7 @@ export default function MeetingRoom({
                   )}
                 </div>
 
-                {/* 결정·후속 업무와 "프로젝트로 등록할까요?" — 회의록이 저장됐을 때만 */}
+                {/* Decisions/follow-ups and "register as a project?" — only when the minutes were saved */}
                 {lastMeetingResult.minutesId && (
                   <MeetingOutcomeSection
                     minutesId={lastMeetingResult.minutesId}
@@ -1452,7 +1452,7 @@ export default function MeetingRoom({
                 </div>
               </div>
 
-              {/* 자동 복귀 안내 — 결과 패널은 스크롤되므로 늘 보이는 하단에 둔다. 머무르기를 못 보면 고를 수 없다. */}
+              {/* Auto-return hint — placed at the always-visible bottom since the result panel scrolls; if "stay" isn't visible, it can't be chosen. */}
               {autoReturn.state.status === "counting" && (
                 <div
                   data-auto-return

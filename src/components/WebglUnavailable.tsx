@@ -6,13 +6,13 @@ import { MonitorX } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
 type WebglUnavailableProps = {
-  /** "다시 시도" — 전체 페이지를 다시 검사·마운트한다. */
+  /** "Retry" — re-checks and re-mounts the whole page. */
   onRetry: () => void;
 };
 
 /**
- * 3D 오피스를 시작할 수 없을 때 채널 화면 대신 띄우는 전체 화면 안내.
- * 2D 폴백은 없으므로 여기서 더 들어갈 길을 주지 않는다 — 고치거나 돌아가거나 둘뿐이다.
+ * Full-screen notice shown instead of the channel screen when the 3D office can't start.
+ * There's no 2D fallback, so this doesn't offer any way further in — only fix it or go back.
  */
 export default function WebglUnavailable({ onRetry }: WebglUnavailableProps) {
   const t = useT();

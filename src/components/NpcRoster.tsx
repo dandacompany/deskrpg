@@ -6,10 +6,10 @@ import { useT } from "@/lib/i18n";
 import RosterAvatar from "./RosterAvatar";
 
 /**
- * NPC 출근부.
+ * NPC roster (who's clocked in).
  *
- * 출근한 직원은 항상 자리가 있다: 데스크 좌석이면 번호, 만석이라 서 있으면 "서 있음".
- * 둘 다 버튼이고 누르면 자리 변경 모드로 들어간다(소유자만).
+ * A clocked-in employee always has a spot: a number for a desk seat, or "standing" when
+ * the desks are full. Both are buttons, and clicking one enters seat-change mode (owner only).
  */
 export type RosterNpc = {
   id: string;
@@ -23,18 +23,18 @@ export type RosterNpc = {
 
 export type NpcRosterProps = {
   npcs: RosterNpc[];
-  /** 진행 중인 토론에 앉아 있는 NPC — 퇴근시키면 턴이 갈 곳을 잃는다. */
+  /** NPCs seated in an ongoing discussion — clocking one out leaves its turn with nowhere to go. */
   meetingNpcIds: Set<string>;
   isOwner: boolean;
   currentUserId: string;
   onToggle: (npcId: string, active: boolean) => void;
   onPlace: (npcId: string) => void;
   onHire: () => void;
-  /** 채널에 게이트웨이가 없으면 새 직원을 만들 곳이 없다. */
+  /** With no gateway on the channel, there's nowhere to create a new employee. */
   hireDisabled?: boolean;
-  /** 행을 눌렀을 때 여는 동작 메뉴(대화·호출 등). 없으면 행은 버튼이 아니다. */
+  /** Action menu opened on row click (chat, summon, etc). Without it, the row isn't a button. */
   onOpenMenu?: (anchor: HTMLElement, npc: RosterNpc) => void;
-  /** 있으면 헤더에 "여러 명 선택" 토글이 뜨고, 체크한 출근 NPC 로 그룹 대화를 시작한다. */
+  /** When present, shows a "select multiple" toggle in the header and starts a group chat with the checked clocked-in NPCs. */
   onStartGroupChat?: (npcIds: string[]) => void;
 };
 
@@ -116,8 +116,8 @@ export default function NpcRoster({
         ) : (
           npcs.map((npc) => {
             const inMeeting = meetingNpcIds.has(npc.id);
-            // 내가 누구인지 모르면(빈 문자열) 아무 주장도 하지 않는다 — 모르는 채로
-            // 비교하면 전부 "공유됨" 이 된다.
+            // If we don't know who "I" am (empty string), assert nothing — comparing while
+            // unknown would mark everything as "shared".
             const shared =
               !!currentUserId &&
               !!npc.profile?.ownerUserId &&

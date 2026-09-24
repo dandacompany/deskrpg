@@ -37,7 +37,7 @@ function listState(): RoomState {
   };
 }
 
-// 필수 prop 만 채운 뼈대. 목록 뷰의 닫기 동작만 검증한다.
+// A skeleton filled with only the required props. Verifies just the list view's close behavior.
 function panel(roomState: RoomState, props: Partial<React.ComponentProps<typeof ChatPanel>> = {}) {
   return (
     <I18nProvider initialLocale="ko">
@@ -89,20 +89,20 @@ async function click(node: Element) {
   });
 }
 
-const OPEN = "▶"; // ▶ 다시 열기
-const BACK = "◀"; // ◀ 뒤로
+const OPEN = "▶"; // ▶ reopen
+const BACK = "◀"; // ◀ back
 
-test("방이 여러 개인 목록 뷰에서 ◀ 는 패널을 접는다 (I-2)", async () => {
+test("in a multi-room list view, ◀ collapses the panel (I-2)", async () => {
   const el = await mount(panel(listState()));
 
-  // 처음엔 닫혀 있고 다시 열기 버튼만 보인다.
+  // Starts closed, showing only the reopen button.
   await click(buttonByText(el, OPEN));
 
-  // 패널이 열리며 목록 헤더의 ◀ 가 나타난다.
+  // The panel opens and the list header's ◀ appears.
   const back = buttonByText(el, BACK);
   await click(back);
 
-  // 방이 2개여도 목록의 ◀ 는 패널을 닫아야 한다 — 다시 열기 버튼만 남는다.
+  // Even with 2 rooms, the list's ◀ must close the panel — only the reopen button should remain.
   const reopen = Array.from(el.querySelectorAll("button")).filter(
     (b) => (b.textContent ?? "").trim() === OPEN,
   );
@@ -209,14 +209,14 @@ test("workspace presentation stays open and renders as an embedded conversation 
 });
 
 // ---------------------------------------------------------------------------
-// T9 — NPC DM 의 크론 탭
+// T9 — NPC DM's cron tab
 // ---------------------------------------------------------------------------
 
 function dmState(): RoomState {
   return { ...listState(), view: "room" };
 }
 
-test("cron 컨텍스트가 없으면 NPC DM 에 탭이 없다 (배선 전 동작 그대로)", async () => {
+test("with no cron context, the NPC DM has no tabs (same as pre-wiring behavior)", async () => {
   const el = await mount(
     <I18nProvider initialLocale="ko">
       <ChatPanel
@@ -244,7 +244,7 @@ test("cron 컨텍스트가 없으면 NPC DM 에 탭이 없다 (배선 전 동작
   assert.equal(el.querySelector('[data-testid="cron-panel"]'), null);
 });
 
-test("cron 컨텍스트가 있으면 '크론' 탭이 그 NPC 것만 단일 모드로 연다 (R15)", async () => {
+test("with a cron context, the 'cron' tab opens single-mode for just that NPC (R15)", async () => {
   const originalFetch = globalThis.fetch;
   const urls: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
@@ -278,7 +278,7 @@ test("cron 컨텍스트가 있으면 '크론' 탭이 그 NPC 것만 단일 모�
     );
     const tabs = el.querySelector('[data-testid="npc-dialog-tabs"]');
     assert.ok(tabs, "탭 바가 있어야 한다");
-    // 기본은 대화 탭 — 크론은 아직 조회하지 않는다.
+    // Chat is the default tab — cron isn't fetched yet.
     assert.equal(el.querySelector('[data-testid="cron-panel"]'), null);
     assert.equal(urls.length, 0);
 
@@ -294,7 +294,7 @@ test("cron 컨텍스트가 있으면 '크론' 탭이 그 NPC 것만 단일 모�
     );
     assert.deepEqual(urls, ["/api/channels/ch1/cron/jobs?npcId=npc-a"]);
 
-    // 대화 탭으로 돌아오면 입력창이 다시 보인다.
+    // Returning to the chat tab makes the input box visible again.
     await click(buttonByText(el, "대화"));
     assert.equal(el.querySelector('[data-testid="cron-panel"]'), null);
     assert.ok(el.querySelector("textarea"), "대화 입력창");
@@ -303,8 +303,8 @@ test("cron 컨텍스트가 있으면 '크론' 탭이 그 NPC 것만 단일 모�
   }
 });
 
-// R29·R30: `notice` 가 있는 줄만 알림 렌더러로 가고, 없는 줄은 예전 그대로다(system 줄 포함).
-test("방 메시지 — notice 가 있으면 알림 렌더러, 없으면 기존 렌더 그대로", async () => {
+// R29/R30: only a line with `notice` goes to the notice renderer; a line without it renders as before (system lines included).
+test("room messages — the notice renderer when notice is present, the existing render otherwise", async () => {
   const opened: string[] = [];
   const state: RoomState = {
     ...listState(),
@@ -374,16 +374,16 @@ test("방 메시지 — notice 가 있으면 알림 렌더러, 없으면 기존 
       />
     </I18nProvider>,
   );
-  // notice 없는 NPC 줄은 말풍선 그대로.
+  // An NPC line with no notice stays a plain bubble.
   assert.ok(
     Array.from(el.querySelectorAll('[data-chat-bubble="npc"]')).some((b) =>
       (b.textContent ?? "").includes("plain npc line"),
     ),
     "일반 NPC 줄이 말풍선으로 남아야 한다",
   );
-  // notice 없는 system 줄은 기존 시스템 문장.
+  // A system line with no notice uses the existing system sentence.
   assert.match(el.textContent ?? "", /Other 님이 나갔습니다/);
-  // notice 줄은 알림 렌더러 — content 의 접두가 아니라 로케일 문장.
+  // A line with notice goes through the notice renderer — a locale sentence, not the content's prefix.
   const notice = el.querySelector('[data-room-notice="card_done"]');
   assert.ok(notice, "알림 렌더러가 그리지 않았다");
   assert.match(notice!.textContent ?? "", /카드를 완료했습니다: 주간 보고서/);
@@ -425,7 +425,7 @@ function npcDialog(props: {
   );
 }
 
-test("대화 중 NPC 의 결과물 칩을 마지막 NPC 답변 아래에 그리고 누르면 onOpenArtifact", async () => {
+test("draws an NPC's artifact chip under the last NPC reply, and clicking it calls onOpenArtifact", async () => {
   const opened: string[] = [];
   const el = await mount(
     npcDialog({
@@ -434,7 +434,7 @@ test("대화 중 NPC 의 결과물 칩을 마지막 NPC 답변 아래에 그리�
     }),
   );
   const chip = buttonByText(el, "결과물 저장됨: 대시보드");
-  // 마지막 NPC 답변 뒤에 온다.
+  // Comes after the last NPC reply.
   const answer = Array.from(el.querySelectorAll("*")).find(
     (node) => node.children.length === 0 && node.textContent === "만들었습니다",
   );
@@ -444,7 +444,7 @@ test("대화 중 NPC 의 결과물 칩을 마지막 NPC 답변 아래에 그리�
   assert.deepEqual(opened, ["a1"]);
 });
 
-test("칩이 없거나 onOpenArtifact 가 없으면 칩을 그리지 않는다", async () => {
+test("draws no chip when there's no chip or no onOpenArtifact", async () => {
   const el = await mount(
     npcDialog({ npcArtifactChips: [{ artifactId: "a1", title: "대시보드" }] }),
   );
@@ -456,7 +456,7 @@ test("칩이 없거나 onOpenArtifact 가 없으면 칩을 그리지 않는다",
   );
 });
 
-// ── 아바타 ────────────────────────────────────────────────────────────────────
+// ── Avatars ────────────────────────────────────────────────────────────────────
 
 function avatarPanel(roomState: RoomState, extra: Record<string, unknown> = {}) {
   const asked: Array<{ kind: string; id?: string | null; name: string }> = [];
@@ -505,7 +505,7 @@ function roomMessage(id: string, kind: "user" | "npc", senderId: string, senderN
   };
 }
 
-test("방 말풍선 — 상대에게만 아바타, 같은 발화자가 이어 말하면 자리만 남긴다", async () => {
+test("room bubbles — avatar only for others, and just a spacer when the same speaker continues", async () => {
   const state: RoomState = {
     rooms: [room("g1", "group", "기획팀")],
     viewerUserId: "u1",
@@ -536,7 +536,7 @@ test("방 말풍선 — 상대에게만 아바타, 같은 발화자가 이어 �
   );
 });
 
-test("NPC DM — 헤더 이름 앞과 상대 말풍선에 아바타가 붙는다", async () => {
+test("NPC DM — an avatar appears before the header name and on the other party's bubbles", async () => {
   const state: RoomState = {
     rooms: [room("office", "office", "오피스")],
     viewerUserId: "u1",
@@ -561,7 +561,7 @@ test("NPC DM — 헤더 이름 앞과 상대 말풍선에 아바타가 붙는다
   assert.ok(asked.every((who) => who.id === "npc-noah"));
 });
 
-test("방 헤더 — 참여자를 최대 5명까지 겹쳐 쌓고 나머지는 +N", async () => {
+test("room header — stacks up to 5 participants and shows the rest as +N", async () => {
   const members = Array.from({ length: 7 }, (_, i) => ({
     kind: "npc" as const,
     id: `npc-${i}`,
@@ -582,7 +582,7 @@ test("방 헤더 — 참여자를 최대 5명까지 겹쳐 쌓고 나머지는 +
   assert.equal(stack.querySelector("[data-room-avatar-more]")?.textContent, "+2");
 });
 
-test("avatarFor 가 없으면 아바타를 그리지 않는다 — 기존 화면 그대로", async () => {
+test("draws no avatar when avatarFor is absent — same as the existing screen", async () => {
   const state: RoomState = {
     rooms: [room("g1", "group", "기획팀")],
     viewerUserId: "u1",
@@ -597,7 +597,7 @@ test("avatarFor 가 없으면 아바타를 그리지 않는다 — 기존 화면
 });
 
 // ---------------------------------------------------------------------------
-// T6 — 카드 탭 배선과 배지
+// T6 — Cards tab wiring and badges
 // ---------------------------------------------------------------------------
 
 function cardsPanel(
@@ -630,7 +630,7 @@ function cardsPanel(
   );
 }
 
-/** 이 블록의 테스트는 탭 줄만 본다 — 탭을 열면 나가는 조회는 빈 응답으로 막는다. */
+/** Tests in this block only check the tab row — stub the fetch that opening a tab triggers with an empty response. */
 async function withStubbedFetch<T>(run: () => Promise<T>): Promise<T> {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () =>
@@ -644,18 +644,18 @@ async function withStubbedFetch<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-test("탭이 넷이다(대화·크론·카드·스킬)", async () => {
+test("there are four tabs (chat/cron/cards/skills)", async () => {
   const el = await mount(cardsPanel());
   assert.equal(el.querySelectorAll('[data-testid="npc-dialog-tabs"] [role="tab"]').length, 4);
 });
 
-test("미확인 개수가 배지로 보이고 0 이면 배지가 없다", async () => {
+test("the unread count shows as a badge, and there's no badge when it's 0", async () => {
   const el = await mount(cardsPanel({ badges: { cards: 3, cron: 0 } }));
   assert.equal(el.querySelector('[data-badge="cards"]')?.textContent, "3");
   assert.equal(el.querySelector('[data-badge="cron"]'), null);
 });
 
-test("탭을 열면 그 탭의 열람이 기록된다 — 대화 탭은 기록하지 않는다", async () => {
+test("opening a tab records that tab's view — the chat tab is not recorded", async () => {
   await withStubbedFetch(async () => {
     const posted: string[] = [];
     const el = await mount(cardsPanel({ onMarkSeen: (tab) => posted.push(tab) }));
@@ -666,7 +666,7 @@ test("탭을 열면 그 탭의 열람이 기록된다 — 대화 탭은 기록�
   });
 });
 
-test("카드 탭은 보드를 조회해 담당 카드를 그리고, 누르면 그 카드를 지목한다", async () => {
+test("the cards tab fetches the board, draws assigned cards, and clicking one targets that card", async () => {
   const originalFetch = globalThis.fetch;
   const urls: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
@@ -704,7 +704,7 @@ test("카드 탭은 보드를 조회해 담당 카드를 그리고, 누르면 �
   }
 });
 
-test("보드 조회가 막히면 서버가 준 코드를 그대로 카드 탭에 넘긴다", async () => {
+test("when the board fetch is blocked, the server's code is passed through to the cards tab as-is", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () =>
     new Response(JSON.stringify({ code: "board_unavailable", message: "not ready" }), {
@@ -718,7 +718,7 @@ test("보드 조회가 막히면 서버가 준 코드를 그대로 카드 탭에
     });
     const alert = el.querySelector('[data-testid="cards-error"]');
     assert.ok(alert, "게이트 안내가 보이지 않는다");
-    // `board_unavailable` 전용 문구 — 일반 폴백("알 수 없는 오류")으로 떨어지면 안 된다.
+    // The `board_unavailable`-specific copy — must not fall back to the generic ("unknown error") message.
     assert.match(alert.textContent ?? "", /보드/);
     assert.equal(el.querySelector('[data-testid="cards-empty"]'), null);
   } finally {
@@ -726,25 +726,25 @@ test("보드 조회가 막히면 서버가 준 코드를 그대로 카드 탭에
   }
 });
 
-test("직원을 바꾸면 탭이 chat 으로 돌아간다", () => {
-  // 기존 동작(탭 선택이 npcId 로 묶여 있다)을 깨지 않는다.
+test("switching employees returns the tab to chat", () => {
+  // Doesn't break the existing behavior (tab selection is tied to npcId).
   assert.equal(tabFor({ npcId: "n1", tab: "cards" }, "n2"), "chat");
   assert.equal(tabFor({ npcId: "n1", tab: "cards" }, "n1"), "cards");
 });
 
-test("닫힌 보드는 initialTaskId, 열린 보드는 focusRequest 로 지목한다", () => {
+test("a closed board targets via initialTaskId, an open board via focusRequest", () => {
   const closed = openCardTarget({ boardOpen: false, taskId: "t1" });
   assert.equal(closed.initialTaskId, "t1");
   assert.equal(closed.focusRequest, null);
   const open = openCardTarget({ boardOpen: true, taskId: "t1", prev: closed });
   assert.equal(open.initialTaskId, null);
   assert.equal(open.focusRequest?.taskId, "t1");
-  // 같은 카드를 다시 눌러도 새 요청이다 — seq 가 오른다.
+  // Clicking the same card again is still a new request — seq rises.
   assert.equal(openCardTarget({ boardOpen: true, taskId: "t1", prev: open }).focusRequest?.seq, 2);
 });
 
 // ---------------------------------------------------------------------------
-// 카드 제안 해소 배선 (T7)
+// Card proposal resolution wiring (T7)
 // ---------------------------------------------------------------------------
 
 function proposalState(): RoomState {
@@ -803,7 +803,7 @@ function proposalPanel(opts: { onRoomSend?: (message: string) => void } = {}) {
   );
 }
 
-test("제안 알림 — 등록 버튼이 해소 라우트를 부르고 성공하면 결정이 보인다", async () => {
+test("proposal notice — the register button calls the resolve route and shows the decision on success", async () => {
   const originalFetch = globalThis.fetch;
   const calls: Array<{ url: string; body: string }> = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -821,7 +821,7 @@ test("제안 알림 — 등록 버튼이 해소 라우트를 부르고 성공하
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, "/api/channels/ch-1/kanban/proposals/cp_1/resolve");
     assert.deepEqual(JSON.parse(calls[0].body), { choice: "card" });
-    // 결정이 보이고 버튼은 사라진다 — 카드 번호까지.
+    // The decision is shown and the button disappears — down to the card number.
     assert.equal(el.querySelectorAll("[data-testid='card-proposal'] button").length, 0);
     assert.match(el.querySelector("[data-testid='card-proposal-resolved']")!.textContent!, /t-9/);
   } finally {
@@ -829,7 +829,7 @@ test("제안 알림 — 등록 버튼이 해소 라우트를 부르고 성공하
   }
 });
 
-test("제안 알림 — 여기서 처리는 같은 방에 그 직원을 지명한 후속 메시지를 보낸다", async () => {
+test("proposal notice — 'handle here' sends a follow-up message naming that employee in the same room", async () => {
   const originalFetch = globalThis.fetch;
   const sent: string[] = [];
   globalThis.fetch = (async () =>
@@ -847,7 +847,7 @@ test("제안 알림 — 여기서 처리는 같은 방에 그 직원을 지명�
   }
 });
 
-test("제안 알림 — 서버가 409 로 거절하면 안내를 보이고 버튼을 남긴다", async () => {
+test("proposal notice — a 409 from the server shows guidance and leaves the button in place", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () =>
     new Response(JSON.stringify({ code: "already_resolved", message: "already" }), {
@@ -860,7 +860,7 @@ test("제안 알림 — 서버가 409 로 거절하면 안내를 보이고 버�
     const error = el.querySelector("[data-testid='card-proposal-error']");
     assert.ok(error);
     assert.doesNotMatch(error.textContent!, /already_resolved/);
-    // 버튼이 남아 다시 고를 수 있다.
+    // The button remains so it can be chosen again.
     assert.equal(el.querySelectorAll("[data-testid='card-proposal'] button").length, 2);
     assert.equal(buttonByText(el, "이슈카드등록").disabled, false);
   } finally {
@@ -869,10 +869,10 @@ test("제안 알림 — 서버가 409 로 거절하면 안내를 보이고 버�
 });
 
 // ---------------------------------------------------------------------------
-// 카드 탭 목록이 `kanban:event` 로 갱신된다 — 배지만 오르고 목록이 낡는 상태를 없앤다.
+// The cards tab list refreshes on `kanban:event` — eliminates the state where only the badge rises while the list goes stale.
 // ---------------------------------------------------------------------------
 
-/** prop 을 바꿔 다시 그릴 수 있는 mount. 배선이 올려 주는 tick 을 흉내낸다. */
+/** A mount that can rerender with changed props. Simulates the tick the wiring raises. */
 async function mountRerender(
   node: React.ReactElement,
 ): Promise<{ el: HTMLElement; render: (next: React.ReactElement) => Promise<void> }> {
@@ -892,14 +892,14 @@ async function mountRerender(
   };
 }
 
-/** 디바운스가 지나고 그 뒤 조회까지 끝나기를 기다린다. */
+/** Waits for the debounce to pass and the fetch after it to finish. */
 async function settle(ms: number) {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, ms));
   });
 }
 
-/** 담당 카드 `titles` 를 가진 보드를 돌려주는 fetch. 호출된 URL 을 모은다. */
+/** A fetch that returns a board with assigned-card `titles`. Collects the called URLs. */
 function boardFetch(titlesByCall: string[][]): { urls: string[]; fetch: typeof fetch } {
   const urls: string[] = [];
   let call = 0;
@@ -934,7 +934,7 @@ function cardTitles(el: HTMLElement): string[] {
   );
 }
 
-test("카드 탭을 열어 둔 채 kanban:event 가 오면 목록이 다시 읽힌다", async () => {
+test("with the cards tab open, a kanban:event reloads the list", async () => {
   const originalFetch = globalThis.fetch;
   const server = boardFetch([["주간 보고서"], ["주간 보고서", "새로 배정된 카드"]]);
   globalThis.fetch = server.fetch;
@@ -956,7 +956,7 @@ test("카드 탭을 열어 둔 채 kanban:event 가 오면 목록이 다시 읽�
   }
 });
 
-test("사건이 몰아쳐도 보드 조회는 묶여서 한 번만 나간다", async () => {
+test("a burst of events still coalesces into a single board fetch", async () => {
   const originalFetch = globalThis.fetch;
   const server = boardFetch([["주간 보고서"]]);
   globalThis.fetch = server.fetch;
@@ -980,7 +980,7 @@ test("사건이 몰아쳐도 보드 조회는 묶여서 한 번만 나간다", a
   }
 });
 
-test("카드 탭을 열지 않았으면 사건이 와도 보드를 읽지 않는다", async () => {
+test("without the cards tab open, the board isn't read even if an event arrives", async () => {
   const originalFetch = globalThis.fetch;
   const server = boardFetch([[]]);
   globalThis.fetch = server.fetch;
@@ -994,9 +994,9 @@ test("카드 탭을 열지 않았으면 사건이 와도 보드를 읽지 않는
   }
 });
 
-test("다시 읽는 동안에도 이전 목록이 남는다 — 빈 목록으로 단정하지 않는다", async () => {
+test("the previous list stays visible during a refetch — never treated as an empty list", async () => {
   const originalFetch = globalThis.fetch;
-  // 둘째 조회를 붙잡아 둘 문. 콜백 안에서 대입하면 TS 가 `never` 로 좁히므로 미리 만든다.
+  // A gate to hold the second fetch. Assigning it inside the callback would let TS narrow it to `never`, so it's built beforehand.
   let release = () => {};
   const held = new Promise<void>((resolve) => {
     release = resolve;
@@ -1013,7 +1013,7 @@ test("다시 읽는 동안에도 이전 목록이 남는다 — 빈 목록으로
       ],
       npcs: [{ npcId: "npc-a", npcName: "소피", profileName: "sophie", active: true }],
     });
-    // 둘째 조회는 붙잡아 둔다 — 그 사이 화면이 어떻게 보이는지가 이 테스트의 전부다.
+    // Hold the second fetch — what the screen looks like in the meantime is this test's whole point.
     if (urls.length === 2) await held;
     return new Response(body, { status: 200 });
   }) as typeof fetch;
@@ -1035,7 +1035,7 @@ test("다시 읽는 동안에도 이전 목록이 남는다 — 빈 목록으로
   }
 });
 
-test("사건이 없으면 탭을 열어 둔 채 시간이 흘러도 보드를 다시 읽지 않는다 — 폴링하지 않는다", async () => {
+test("with no events, the board isn't reread just because time passes with the tab open — no polling", async () => {
   const originalFetch = globalThis.fetch;
   const server = boardFetch([["주간 보고서"]]);
   globalThis.fetch = server.fetch;
@@ -1051,7 +1051,7 @@ test("사건이 없으면 탭을 열어 둔 채 시간이 흘러도 보드를 �
   }
 });
 
-test("탭을 닫아 둔 사이 사건이 지나가도, 같은 직원의 탭을 다시 열 때 보드는 한 번만 읽는다", async () => {
+test("even if an event passes while the tab is closed, reopening the same employee's tab reads the board only once", async () => {
   const originalFetch = globalThis.fetch;
   const server = boardFetch([["주간 보고서"], ["주간 보고서"], ["주간 보고서"]]);
   globalThis.fetch = server.fetch;
@@ -1061,13 +1061,13 @@ test("탭을 닫아 둔 사이 사건이 지나가도, 같은 직원의 탭을 �
     await settle(30);
     assert.equal(server.urls.length, 1);
 
-    // 대화 탭으로 돌아간 사이 사건이 지나간다 — 닫힌 탭은 읽지 않는다.
+    // An event passes while back on the chat tab — a closed tab doesn't fetch.
     await click(view.el.querySelector('[role="tab"][data-tab="chat"]')!);
     await view.render(cardsPanel({ cardsRefreshTick: 2, cardsDebounceMs: 5 }));
     await settle(30);
     assert.equal(server.urls.length, 1, "닫힌 탭이 보드를 읽었다");
 
-    // 다시 열면 그 순간이 최신이다 — 열기 조회 하나로 끝나야 한다.
+    // Reopening makes that moment current — it must end with a single open-time fetch.
     await click(view.el.querySelector('[role="tab"][data-tab="cards"]')!);
     await settle(30);
     assert.equal(server.urls.length, 2, "다시 여는 것만으로 보드를 두 번 읽는다");
@@ -1076,12 +1076,12 @@ test("탭을 닫아 둔 사이 사건이 지나가도, 같은 직원의 탭을 �
   }
 });
 
-test("사건이 이미 지나간 뒤 탭을 열어도 보드는 한 번만 읽는다 — 그 뒤 새 사건에는 반응한다", async () => {
+test("opening the tab after an event already passed still reads the board only once — but reacts to a new event after that", async () => {
   const originalFetch = globalThis.fetch;
   const server = boardFetch([["주간 보고서"]]);
   globalThis.fetch = server.fetch;
   try {
-    // 대화창을 열기 전에 사건이 세 번 지나갔다 — tick 은 세션 동안 오르기만 한다.
+    // Three events passed before the chat panel opened — the tick only ever rises during a session.
     const view = await mountRerender(cardsPanel({ cardsRefreshTick: 3, cardsDebounceMs: 5 }));
     await click(view.el.querySelector('[role="tab"][data-tab="cards"]')!);
     await settle(30);
@@ -1099,7 +1099,7 @@ test("사건이 이미 지나간 뒤 탭을 열어도 보드는 한 번만 읽�
   }
 });
 
-test("보고하러 온 직원의 대화창은 맨 위에 그 보고의 요약과 열기 링크를 보여 준다", async () => {
+test("an employee's chat coming to report shows that report's summary and an open link at the top", async () => {
   const opened: [string, string][] = [];
   const report = {
     messageId: "m1",
@@ -1150,7 +1150,7 @@ test("보고하러 온 직원의 대화창은 맨 위에 그 보고의 요약과
   assert.equal(plain.querySelector('[data-testid="dialog-report-summary"]'), null);
 });
 
-test("모달이 떠 있으면 Esc 는 모달만 닫고 뒤의 직원 대화창은 닫지 않는다", async () => {
+test("with a modal open, Esc closes only the modal and not the employee chat behind it", async () => {
   let closed = 0;
   const node = (
     <I18nProvider>
@@ -1192,7 +1192,7 @@ test("모달이 떠 있으면 Esc 는 모달만 닫고 뒤의 직원 대화창�
   assert.equal(closed, 1, "모달이 없으면 Esc 가 대화창을 닫는다");
 });
 
-test("보고 목록 팝오버가 열려 있으면 Esc 는 목록만 닫고 대화창은 남는다", async () => {
+test("with the report list popover open, Esc closes only the list and the chat panel remains", async () => {
   let closed = 0;
   const item: ReportItem = {
     messageId: "m1",
@@ -1245,7 +1245,7 @@ test("보고 목록 팝오버가 열려 있으면 Esc 는 목록만 닫고 대�
   });
   assert.ok(el.querySelector('[data-testid="report-list"]'), "배지를 누르면 목록이 열린다");
 
-  // 실제 브라우저처럼 한 이벤트가 본문에서 올라가 document 와 window 를 차례로 지난다.
+  // Like a real browser, a single event bubbles up from the body through document and then window.
   await act(async () => {
     document.body.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
@@ -1258,8 +1258,9 @@ test("보고 목록 팝오버가 열려 있으면 Esc 는 목록만 닫고 대�
   );
   assert.equal(closed, 0, "목록을 닫는 Esc 가 뒤의 대화창까지 닫으면 안 된다");
 
-  // 실제 브라우저에서는 목록이 DOM 에서 사라진 뒤에 대화창 리스너가 돈다(2026-09-21 스테이징
-  // 실측). 그때도 닫히지 않아야 하므로, 레이어가 Esc 를 소비한 상태를 그대로 세워 본다.
+  // In a real browser, the chat panel's listener runs only after the list has already left the DOM
+  // (observed on staging, 2026-09-21). It must still not close then, so this reproduces the state
+  // where a layer has already consumed Esc.
   const consume = (event: KeyboardEvent) => event.preventDefault();
   document.addEventListener("keydown", consume);
   await act(async () => {
@@ -1276,7 +1277,7 @@ test("보고 목록 팝오버가 열려 있으면 Esc 는 목록만 닫고 대�
   assert.equal(closed, 1, "목록이 닫힌 뒤에는 Esc 가 대화창을 닫는다");
 });
 
-test("완성된 답변의 카드 등록 버튼은 직전 요청과 답변을 확인 화면으로 넘긴다", async () => {
+test("a completed reply's register-card button carries the preceding request and reply into the confirmation screen", async () => {
   let draft: { title: string; body: string; assigneeNpcId: string } | undefined;
   const el = await mount(
     panel(listState(), {
@@ -1312,7 +1313,7 @@ test("완성된 답변의 카드 등록 버튼은 직전 요청과 답변을 확
   assert.match(draft?.body ?? "", /완료한 일과 다음 주 계획/);
 });
 
-test("스트리밍 중 답변에는 카드 등록 버튼을 보이지 않는다", async () => {
+test("does not show the register-card button on a reply that's still streaming", async () => {
   const el = await mount(
     panel(listState(), {
       dialogNpc: { npcId: "n1", npcName: "직원" },
@@ -1329,7 +1330,7 @@ test("스트리밍 중 답변에는 카드 등록 버튼을 보이지 않는다"
   );
 });
 
-test("연속 요청 이력 A,B,답변A는 요청 식별자로 A에 연결한다", async () => {
+test("with a request history of A, B, replyA, the reply links to A by request id", async () => {
   let draft: { title: string; body: string; assigneeNpcId: string } | undefined;
   const el = await mount(
     panel(listState(), {
@@ -1360,7 +1361,7 @@ test("연속 요청 이력 A,B,답변A는 요청 식별자로 A에 연결한다"
   assert.doesNotMatch(draft?.body ?? "", /요청 B/);
 });
 
-test("연결 정보 없는 과거 답변은 인접 요청을 원문으로 단정하지 않는다", async () => {
+test("a past reply with no link info does not assume the adjacent request is its original text", async () => {
   let body = "";
   const el = await mount(
     panel(listState(), {

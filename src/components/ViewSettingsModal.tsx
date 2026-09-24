@@ -14,9 +14,10 @@ import {
 } from "@/lib/meeting-camera-prefs";
 
 /**
- * 보기 설정 — **이 브라우저에만** 적용된다. 채널 설정(소유자 전용, DB 저장)과 달리 누구나 열 수
- * 있고, 저장 버튼이 없다: 바꾸는 즉시 저장하고 카메라에 반영한다. 같은 설정 메뉴 안에 두 종류가
- * 섞여 "저장" 이 무엇을 저장하는지 헷갈리지 않도록, 이 화면에는 저장 버튼 자체를 두지 않는다.
+ * View settings — apply **only to this browser**. Unlike channel settings (owner-only, saved
+ * to the DB), anyone can open this and there's no save button: it saves immediately on change
+ * and applies to the camera right away. To avoid confusing what "save" means when both kinds
+ * live in the same settings menu, this screen has no save button at all.
  */
 export default function ViewSettingsModal({ onClose }: { onClose: () => void }) {
   const t = useT();

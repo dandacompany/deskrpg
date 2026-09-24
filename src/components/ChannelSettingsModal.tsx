@@ -22,7 +22,7 @@ interface ChannelSettingsModalProps {
   channelDescription: string | null;
   isPublic: boolean;
   inviteCode: string | null;
-  /** 채널의 NPC 걸음 속도. 서버가 접어서 준다. */
+  /** The channel's NPC walk speed. The server folds it in and returns it. */
   motionConfig?: NpcMotionConfig;
   initialTab?: ChannelSettingsTab;
   onClose: () => void;
@@ -34,7 +34,7 @@ interface ChannelSettingsModalProps {
     gatewayConfig?: {
       gatewayId?: string | null;
       url?: string | null;
-      // 토큰은 서버가 돌려주지 않는다(하드 게이트 2) — 저장 여부만 안다.
+      // The server never returns the token (hard gate 2) — only whether one is saved.
       hasToken?: boolean;
       canEditCredentials?: boolean;
     };
@@ -95,7 +95,7 @@ export default function ChannelSettingsModal({
   // AI Gateway state
   const [gatewayUrl, setGatewayUrl] = useState("");
   const [gatewayToken, setGatewayToken] = useState("");
-  // 서버는 저장된 키를 돌려주지 않는다. 입력칸을 비워 두고 "저장돼 있음"만 알린다.
+  // The server never returns the saved key. Keep the field empty and just indicate "saved".
   const [gatewayHasSavedToken, setGatewayHasSavedToken] = useState(false);
   const [gatewayId, setGatewayId] = useState<string | null>(null);
   const [gatewayMode, setGatewayMode] = useState<"resource" | "direct">("direct");
@@ -327,7 +327,7 @@ export default function ChannelSettingsModal({
       gatewayConfig.gatewayId = selectedGatewayId;
     } else {
       gatewayConfig.url = gatewayUrl.trim() || null;
-      // 비워 두면 "그대로 두라"는 뜻이다 — 키를 지우려면 게이트웨이를 해제한다.
+      // Leaving it empty means "keep as-is" — to clear the key, disconnect the gateway.
       if (gatewayToken.trim()) gatewayConfig.token = gatewayToken.trim();
     }
     try {
@@ -337,8 +337,8 @@ export default function ChannelSettingsModal({
         body: JSON.stringify(gatewayConfig),
       });
       if (!res.ok) {
-        // 게이트웨이를 바꿔도 NPC 를 지우지 않는다 — NPC 는 프로필의 자리이고,
-        // 서버는 더 이상 "NPC 를 초기화할까요" 409 를 돌려주지 않는다.
+        // Changing the gateway does not delete the NPC — the NPC is the profile's seat,
+        // and the server no longer returns a "reset the NPC?" 409.
         const data = await res.json().catch(() => ({}));
         setGatewayError(getLocalizedErrorMessage(t, data, "settings.failedToSave"));
       } else {
@@ -353,7 +353,7 @@ export default function ChannelSettingsModal({
         setGatewayHasSavedToken(
           data?.gatewayConfig?.hasToken === true || Boolean(gatewayToken.trim()),
         );
-        // 입력칸은 비운다 — 저장된 키를 화면에 되돌려 두지 않는다.
+        // Clear the field — don't put the saved key back on screen.
         setGatewayToken("");
         if (nextGatewayId) {
           setGatewayOptions((prev) => {

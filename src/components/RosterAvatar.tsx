@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { resolveOfficeLook } from "@/game/three/office-looks";
 
 /**
- * 명부(플레이어·NPC)에서 쓰는 작은 원형 아바타. `GamePageClient` 안에 있던 것을
- * `NpcRoster` 와 나눠 쓰기 위해 꺼냈다.
+ * A small round avatar used in rosters (players, NPCs). Pulled out of `GamePageClient`
+ * so it could be shared with `NpcRoster`.
  *
- * 룩이 있으면 3D 썸네일, 썸네일이 아직 없으면 룩 이름 첫 글자, 외형이 없으면 "?".
- * 룩 ID 를 모르는 외형은 서버가 정규화하므로 여기서는 "?" 로만 접는다.
+ * When there's a look, a 3D thumbnail; when the thumbnail isn't ready yet, the first
+ * letter of the look name; when there's no appearance, "?".
+ * The server normalizes an appearance whose look ID is unknown, so here it just folds
+ * down to "?".
  */
 export default function RosterAvatar({
   appearance,

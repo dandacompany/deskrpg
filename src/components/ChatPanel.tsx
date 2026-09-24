@@ -33,14 +33,14 @@ import { tabFor, type NpcPanelTab, type NpcTabState } from "./chat/npc-tab-state
 import { createKanbanApi, KanbanApiError, type BoardResponse } from "./kanban/kanban-api";
 
 /**
- * `kanban:event` 가 몰아칠 때 카드 탭이 보드를 이벤트 수만큼 읽지 않도록 묶는 시간.
- * 칸반 모달의 `KANBAN_EVENT_DEBOUNCE_MS` 와 같은 값이다 — 같은 사건 스트림을 듣는다.
- * 모듈을 끌어오지 않으려고 여기 둔다(모달은 무거운 클라이언트 컴포넌트다).
+ * How long the cards tab coalesces bursts of `kanban:event` so it doesn't reread the board
+ * once per event. Matches the kanban modal's `KANBAN_EVENT_DEBOUNCE_MS` — both listen to the
+ * same event stream. Kept here to avoid pulling in that module (the modal is a heavy client component).
  */
 const CARDS_EVENT_DEBOUNCE_MS = 400;
 
-/** NPC 대화창의 크론 탭(T9)에 필요한 것. 배선(GamePageClient)이 넘긴다 — 없으면 탭이 없다. */
-/** 직원 대화창 탭의 미확인 개수(`GET .../panel-reads`). */
+/** What the NPC chat's cron tab (T9) needs. Passed in by the wiring (GamePageClient) — without it, there's no tab. */
+/** Unread count for an employee chat tab (`GET .../panel-reads`). */
 export type PanelBadgeCounts = { cards: number; cron: number };
 
 export type ChatPanelCronContext = {
@@ -56,7 +56,7 @@ interface ChatPanelProps {
   onWidthChange?: (width: number) => void;
   dialogNpc: { npcId: string; npcName: string } | null;
   npcMessages: NpcChatMessage[];
-  /** 지금 NPC 가 무엇을 하는 중인지 알려 주는 번역 키. 없으면 표시하지 않는다. */
+  /** Translation key describing what the NPC is doing right now. When absent, nothing is shown. */
   npcActivityKey?: string | null;
   isNpcStreaming: boolean;
   npcResponses?: ChatResponse[];
@@ -73,9 +73,9 @@ interface ChatPanelProps {
   onResetNpcChat?: (npcId: string) => void;
   npcMoveState?: string;
   onReturnNpc?: (npcId: string) => void;
-  /** 이 대화창이 보고하러 온 직원의 것이면 그 보고. 맨 위에 요약을 띄운다. */
+  /** The report, when this dialog belongs to the employee who came to report. Shows a summary at the top. */
   dialogReport?: ReportItem | null;
-  // Channel chat — 방(room) 단위. 목록·방 안·새 방/초대 세 화면이다.
+  // Channel chat — per room. Three screens: the list, inside a room, and new room/invite.
   roomState: RoomState;
   channelChatOpen?: boolean;
   channelChatInputDisabled?: boolean;
@@ -86,54 +86,55 @@ interface ChatPanelProps {
   onRoomLeave: (roomId: string) => void;
   onRoomRename: (roomId: string, name: string) => void;
   onRoomDelete: (roomId: string) => void;
-  /** `@` 로 지명할 수 있는 NPC — 방마다 다르다(office 는 출근 중 전원, group 은 멤버). */
+  /** NPCs that can be `@`-mentioned — differs by room (office is everyone clocked in, group is its members). */
   mentionCandidatesFor: (roomId: string | null) => { id: string; name: string }[];
-  /** 지금 접속 중인 사람들 — 새 방/초대 화면의 사람 후보. */
+  /** People currently online — candidates for the new room/invite screen. */
   onlinePlayers: { id: string; name: string }[];
-  /** 방 안 화면(패널 열림 + DM/선택목록 아님)이 보이는지 — 맵의 NPC 대기 규칙이 이걸 본다. */
+  /** Whether the inside-a-room screen (panel open, not DM/select list) is visible — the map's NPC waiting rule reads this. */
   onChannelChatVisibleChange?: (visible: boolean) => void;
   currentPlayerName?: string;
-  /** NPC DM 에 "크론" 탭을 붙인다 — 그 NPC 것만(R15). 없으면 대화만 보인다. */
+  /** Attaches a "cron" tab to an NPC DM — only that NPC's (R15). Without it, only chat shows. */
   cron?: ChatPanelCronContext | null;
-  /** 방 알림의 "카드 열기"(R29) — 칸반 모달을 그 카드로 연다. 없으면 링크가 없다. */
+  /** "Open card" from a room notice (R29) — opens the kanban modal to that card. Without it, there's no link. */
   onOpenNoticeCard?: (cardId: string, boardSlug: string) => void;
-  /** 탭별 미확인 개수. 0 이면 배지를 그리지 않는다. 없으면 배지가 없다. */
+  /** Unread count per tab. 0 means no badge is drawn. Without it, there's no badge. */
   badges?: PanelBadgeCounts | null;
-  /** 크론·카드 탭을 골랐다 — 열람 기록(`POST .../panel-reads`)은 배선이 한다. */
+  /** The cron/cards tab was selected — the wiring records the view (`POST .../panel-reads`). */
   onMarkSeen?: (tab: "cron" | "cards") => void;
-  /** 스킬 탭의 "관리 열기" — 그 직원의 스킬 관리 모달을 연다. 없으면 버튼이 아무 일도 하지 않는다. */
+  /** "Open management" in the skills tab — opens that employee's skill management modal. Without it, the button does nothing. */
   onOpenSkillManager?: (npcId: string, skillName?: string) => void;
-  /** 카드 탭에서 카드를 눌렀다 — 칸반을 그 카드로 지목한다. 없으면 누를 수 없다. */
+  /** A card was clicked in the cards tab — points kanban at that card. Without it, it can't be clicked. */
   onOpenAssignedCard?: (taskId: string) => void;
   onCreateTaskFromChat?: (draft: ChatTaskDraft) => void;
   /**
-   * `kanban:event` 마다 오르는 값(배선의 `kanbanRefreshTick`). 카드 탭이 열려 있을 때만
-   * 보드를 다시 읽는다 — 배지와 목록이 같은 트리거를 쓰게 하는 것이 이 prop 의 전부다.
+   * A value that rises on every `kanban:event` (the wiring's `kanbanRefreshTick`). The board
+   * is reread only while the cards tab is open — this prop's whole job is to let the badge and
+   * the list share the same trigger.
    */
   cardsRefreshTick?: number;
-  /** 사건 → 재조회 디바운스(ms). 칸반 모달과 같은 값이다(테스트에서 줄인다). */
+  /** Debounce (ms) from event to refetch. Same value as the kanban modal (shortened in tests). */
   cardsDebounceMs?: number;
-  /** 방 알림의 "이력 열기"(R30) — 채널 크론 화면을 그 잡으로 연다. 없으면 링크가 없다. */
+  /** "Open history" from a room notice (R30) — opens the channel cron screen to that job. Without it, there's no link. */
   onOpenNoticeCronJob?: (jobId: string) => void;
-  /** 승인 요청 알림의 "승인 열기" — 판단 모음을 연다. 없으면 버튼이 없다. */
+  /** "Open approval" from an approval-request notice — opens the judgment queue. Without it, there's no button. */
   onOpenNoticeApproval?: (approvalId: string) => void;
-  /** 회의 결과 알림의 "프로젝트로 등록" — 그 회의록을 연다. 없으면 버튼이 없다. */
+  /** "Register as project" from a meeting-result notice — opens those minutes. Without it, there's no button. */
   onOpenNoticeMinutes?: (minutesId: string) => void;
-  /** 이 대화에서 NPC 가 저장한 결과물 — 마지막 답변 아래 칩으로 그린다. */
+  /** Artifacts the NPC saved in this conversation — drawn as chips under the last reply. */
   npcArtifactChips?: Array<{ artifactId: string; title: string }>;
-  /** 결과물 칩을 누르면 결과물 모달을 그 결과물로 연다. 없으면 칩이 없다. */
+  /** Clicking an artifact chip opens the artifact modal to that artifact. Without it, there's no chip. */
   onOpenArtifact?: (artifactId: string) => void;
   /**
-   * 발화자의 외형을 찾아 준다 — 말풍선·헤더의 원형 아바타에 쓴다. 메시지마다 외형을 싣지
-   * 않고 조회 함수를 받는다(외형은 채널 명부에 이미 있다). 못 찾으면 `null`(기본 표시).
-   * 없으면 아바타를 그리지 않는다.
+   * Looks up a speaker's appearance — used for the round avatar in bubbles and the header. Takes
+   * a lookup function instead of carrying the appearance on every message (it's already in the
+   * channel roster). Returns `null` on a miss (default display). Without it, no avatar is drawn.
    */
   avatarFor?: AvatarLookup;
 }
 
 /**
- * 바로 앞 메시지와 같은 발화자인가 — 아바타·이름을 되풀이하지 않기 위해 본다.
- * 알림·시스템 메시지는 흐름을 끊으므로 그 뒤의 말풍선은 다시 아바타를 단다.
+ * Is this the same speaker as the immediately preceding message — checked so avatar/name
+ * aren't repeated. A notice or system message breaks the flow, so the bubble after it gets an avatar again.
  */
 function sameSpeaker(previous: RoomMessage | undefined, current: RoomMessage): boolean {
   if (!previous || previous.notice || previous.senderKind === "system") return false;
@@ -147,7 +148,7 @@ const MIN_WIDTH = 250;
 const MAX_WIDTH = 600;
 const DEFAULT_WIDTH = 320;
 
-/** 대화창보다 위에 모달 레이어가 떠 있는가. */
+/** Is a modal layer floating above the chat panel? */
 function modalLayerOpen(): boolean {
   return document.querySelector('[aria-modal="true"], [data-modal-overlay]') !== null;
 }
@@ -206,8 +207,8 @@ export default function ChatPanel({
   avatarFor,
 }: ChatPanelProps) {
   const [internalWidth, setInternalWidth] = useState(DEFAULT_WIDTH);
-  // NPC DM 의 탭 — 어느 NPC 의 선택인지 같이 기억해, 다른 NPC 로 바뀌면 대화 탭으로 돌아간다
-  // (effect 로 되돌리지 않는다 — 렌더 중 파생).
+  // The NPC DM's tab — remembers which NPC the selection is for too, and returns to the chat tab
+  // when the NPC changes (derived during render, not reset via an effect).
   const [npcTabState, setNpcTabState] = useState<NpcTabState>({ npcId: null, tab: "chat" });
   const dialogNpcId = dialogNpc?.npcId ?? null;
   const npcTab = tabFor(npcTabState, dialogNpcId);
@@ -215,10 +216,11 @@ export default function ChatPanel({
     setNpcTabState({ npcId: dialogNpcId, tab });
     if (tab === "cron" || tab === "cards") onMarkSeen?.(tab);
   };
-  // 카드 탭의 보드 — 탭을 열 때, 그리고 `kanban:event` 가 올 때 읽는다. 실패하면 **서버가 준 코드를 그대로** 들고 가야
-  // `NpcCardsTab` 이 428·409·503 전용 안내를 고를 수 있다(감싸거나 바꾸지 않는다).
-  // 결과에 조회 키를 함께 담아, 직원·채널이 바뀌면 옛 결과를 렌더 중에 버린다(effect 로
-  // 되돌리지 않는다 — 한 프레임 동안 남의 카드가 보이는 일이 없다).
+  // The cards tab's board — read when the tab opens and when `kanban:event` arrives. On failure,
+  // **the server's code must be carried through as-is** so `NpcCardsTab` can pick the right 428/409/503
+  // guidance (never wrapped or rewritten). The fetch key travels with the result, so switching
+  // employees/channels discards the stale result during render (not reset via an effect —
+  // no other person's cards are ever visible for a single frame).
   const [cardsFetch, setCardsFetch] = useState<{
     key: string;
     board: BoardResponse | null;
@@ -227,8 +229,8 @@ export default function ChatPanel({
   const cardsChannelId = cron?.channelId ?? null;
   const cardsKey =
     npcTab === "cards" && cardsChannelId && dialogNpcId ? `${cardsChannelId}:${dialogNpcId}` : null;
-  // 늦게 온 응답이 새 조회 결과를 덮지 않게 하는 세대 번호. 디바운스 재조회가 생기면서
-  // 조회가 겹칠 수 있어 effect 지역의 `alive` 플래그만으로는 모자란다.
+  // A generation number so a late response can't overwrite a newer fetch's result. Once debounced
+  // refetches exist, fetches can overlap, and a local `alive` flag inside the effect isn't enough.
   const cardsRequestRef = useRef(0);
   const loadCards = useCallback(() => {
     if (!cardsKey || !cardsChannelId) return;
@@ -250,23 +252,25 @@ export default function ChatPanel({
   useEffect(() => {
     loadCards();
     return () => {
-      // 직원·채널이 바뀌면 진행 중인 조회의 결과를 버린다.
+      // Discard an in-flight fetch's result when the employee/channel changes.
       cardsRequestRef.current += 1;
     };
   }, [loadCards]);
   /**
-   * `kanban:event` 로 목록을 다시 읽는다 — 배지만 오르고 목록이 낡는 상태를 없앤다.
+   * Reread the list on `kanban:event` — eliminates the state where only the badge rises while
+   * the list goes stale.
    *
-   * **"tick 이 0 이 아니다" 가 아니라 "tick 이 올랐다" 에 반응해야 한다.** `kanbanRefreshTick`
-   * 은 세션 동안 오르기만 하므로, 사건이 한 번 지나간 뒤 탭을 열면 위의 첫 조회와 여기의
-   * 타이머가 겹쳐 보드를 두 번 읽는다 — 그 사이에 새 사건은 없었는데도. 이 조회는 서버에서
-   * Hermes 보드를 읽으므로 탭 열기마다 두 배다. 그래서 마지막으로 반영한 tick 을 들고 다니며
-   * 탭을 연 순간의 값을 기준선으로 삼는다(열기 = 최신).
+   * **Must react to "the tick rose," not "the tick is nonzero."** `kanbanRefreshTick` only ever
+   * rises during a session, so opening the tab after an event has already passed makes the initial
+   * fetch above and this timer overlap and read the board twice — even though no new event happened
+   * in between. This fetch reads the Hermes board on the server, so it's doubly expensive per tab open.
+   * So it carries the last-applied tick and takes the value at the moment the tab opened as the
+   * baseline (opening = up to date).
    *
-   * **탭이 열려 있을 때만** 돈다 — 조회를 막는 것은 `loadCards` 의 `cardsKey` 검사이고,
-   * 여기 같은 조건을 한 번 더 두는 것은 닫힌 탭에서 타이머를 걸지 않기 위해서다. 조회 키는
-   * 그대로라 재조회 중에도 이전 목록이 남는다 — 확정되지 않은 상태를 빈 목록으로
-   * 단정하지 않는다는 카드 탭의 불변식(`6b2fb198`)이 여기서 유지된다.
+   * Runs **only while the tab is open** — what actually blocks the fetch is `loadCards`'s `cardsKey`
+   * check; the same condition is repeated here just so no timer is set on a closed tab. The fetch
+   * key stays the same, so the previous list remains visible during a refetch — the cards tab's
+   * invariant of never treating an unsettled state as an empty list (`6b2fb198`) is preserved here too.
    */
   const cardsAppliedRef = useRef<{ key: string | null; tick: number }>({
     key: null,
@@ -274,13 +278,13 @@ export default function ChatPanel({
   });
   useEffect(() => {
     if (!cardsKey) {
-      // 탭이 닫혔다 — 기준선을 버린다. 남겨 두면 같은 직원의 탭을 다시 열 때 "그 사이 tick 이 올랐다" 로
-      // 읽혀, 열기 조회에 더해 한 번 더 읽는다.
+      // The tab closed — discard the baseline. Keeping it would read as "the tick rose in between"
+      // when the same employee's tab reopens, causing one extra fetch on top of the open-time fetch.
       cardsAppliedRef.current = { key: null, tick: cardsRefreshTick };
       return;
     }
     if (cardsAppliedRef.current.key !== cardsKey) {
-      // 탭을 열었거나 직원이 바뀌었다 — 위 effect 가 방금 읽었으므로 여기선 기준선만 맞춘다.
+      // The tab opened or the employee changed — the effect above just fetched, so only align the baseline here.
       cardsAppliedRef.current = { key: cardsKey, tick: cardsRefreshTick };
       return;
     }
@@ -327,7 +331,7 @@ export default function ChatPanel({
   };
   const isWorkspace = presentation === "workspace";
   const isOpen = isWorkspace || manualOpen || !!dialogNpc || !!npcSelectList || !!channelChatOpen;
-  // NPC 는 "방이 보이는 동안" 만 곁에 머문다 — 목록·새 방 화면은 대화가 아니다.
+  // The NPC only stays around "while the room is visible" — the list and new-room screens aren't a conversation.
   const channelChatVisible = isOpen && !dialogNpc && !npcSelectList && roomState.view === "room";
   useEffect(() => {
     onChannelChatVisibleChange?.(channelChatVisible);
@@ -347,17 +351,18 @@ export default function ChatPanel({
   }, [npcResponses]);
 
   const currentRoom = roomState.rooms.find((room) => room.id === roomState.currentRoomId) ?? null;
-  // useMemo 로 감싼다 — 삼항이 매 렌더마다 새 배열을 만들면 스크롤 useEffect 가 계속 돈다.
+  // Wrapped in useMemo — if the ternary created a new array on every render, the scroll useEffect would keep firing.
   const roomMessages = useMemo(
     () => (roomState.currentRoomId ? (roomState.messages[roomState.currentRoomId] ?? []) : []),
     [roomState.currentRoomId, roomState.messages],
   );
 
-  // ---- 카드 제안 해소 (T7) ------------------------------------------------
+  // ---- Card proposal resolution (T7) ---------------------------------------
   //
-  // 버튼 유무의 정본은 알림의 `resolved` 이고, 그 정본은 서버에 있다. 다만 방 메시지가
-  // 갱신되는 소켓 경로가 없어(새 이벤트를 만들지 않는다) 성공 직후에는 이 화면이 기억한
-  // 결정을 알림에 얹어 그린다 — 새로고침하면 서버가 실어 준 값으로 대체된다.
+  // The notice's `resolved` field is the source of truth for whether the button shows, and that
+  // source of truth lives on the server. But since there's no socket path that refreshes room
+  // messages (no new event is added), right after success this screen overlays its remembered
+  // decision on the notice for rendering — a refresh replaces it with what the server carries.
   const [proposalResolved, setProposalResolved] = useState<
     Record<string, { choice: "card" | "inline"; taskId?: string }>
   >({});
@@ -376,9 +381,9 @@ export default function ChatPanel({
           [proposalId]: { choice, ...(result.taskId ? { taskId: result.taskId } : {}) },
         }));
         setProposalCalls((prev) => ({ ...prev, [proposalId]: { pending: false, error: null } }));
-        // 담당이 떨어진 카드는 triage 로 들어간다 — 그 사실을 사용자에게 알린다.
+        // A card that lost its assignee goes into triage — let the user know.
         if (result.assigneeDropped) cron?.onToast?.(t("notice.cardProposal.assigneeDropped"));
-        // 여기서 처리하기로 했으면 그 직원에게 후속 메시지를 보낸다 — 기존 방 전송 경로다.
+        // If handling it here was chosen, send a follow-up message to that employee — the existing room-send path.
         if (choice === "inline") {
           const notice = roomMessages.find(
             (message) =>
@@ -392,7 +397,7 @@ export default function ChatPanel({
           );
         }
       } catch (err) {
-        // 실패는 버튼을 지우지 않는다 — 이유를 보이고 다시 고르게 둔다.
+        // A failure doesn't remove the button — show the reason and let them choose again.
         setProposalCalls((prev) => ({
           ...prev,
           [proposalId]: {
@@ -405,7 +410,7 @@ export default function ChatPanel({
     [cardsChannelId, cron, onRoomSend, roomMessages, t],
   );
 
-  /** 알림에 이 화면이 기억한 결정을 얹는다. 서버가 이미 `resolved` 를 실었으면 그것이 이긴다. */
+  /** Overlays this screen's remembered decision onto the notice. If the server already carries `resolved`, that wins. */
   const withLocalResolution = useCallback(
     (message: RoomMessage): RoomMessage => {
       const notice = message.notice;
@@ -416,7 +421,7 @@ export default function ChatPanel({
         ...message,
         notice: {
           ...notice,
-          // `by`·`at` 은 화면에 쓰이지 않는다 — 정본은 서버가 쓴 값이다.
+          // `by`/`at` aren't used on screen — the server's value is the source of truth.
           resolved: {
             choice: local.choice,
             by: "",
@@ -450,10 +455,10 @@ export default function ChatPanel({
   // ESC to close NPC dialog (return to channel chat)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 가장 위 레이어만 Esc 를 먹는다. 칸반·크론 같은 모달이 열려 있으면 그 모달이 닫히고
-      // 뒤의 대화창은 그대로다 — 예전에는 둘 다 닫혀, 보고 대화창이면 "확인 없이 닫음" 으로
-      // 보고가 접혔다(스테이징 실측).
-      // 위 레이어가 이미 소비한 Esc 는 여기서 다시 처리하지 않는다.
+      // Only the topmost layer consumes Esc. When a modal like kanban or cron is open, that modal
+      // closes and the chat panel behind it stays open — it used to close both, and for a report
+      // dialog that collapsed the report as "closed without confirming" (observed on staging).
+      // An Esc already consumed by a layer above is not handled again here.
       if (e.defaultPrevented) return;
       if (e.key === "Escape" && dialogNpc && !modalLayerOpen()) {
         onClose();
@@ -509,7 +514,7 @@ export default function ChatPanel({
   const inNpcSelect = !!npcSelectList && !dialogNpc;
 
   const composeMode: "create" | "invite" = roomState.compose?.inviteTo ? "invite" : "create";
-  // 초대 화면은 이미 그 방에 있는 사람을 후보에서 뺀다 — 고를 수는 있지만 아무 일도 안 일어난다.
+  // The invite screen excludes people already in that room from the candidates — they could still be picked, but nothing would happen.
   const inviteCandidates = candidatesForInvite(
     roomState.rooms.find((room) => room.id === roomState.compose?.inviteTo) ?? null,
     mentionCandidatesFor(null),
@@ -517,9 +522,9 @@ export default function ChatPanel({
     roomState.viewerUserId,
   );
 
-  /** 목록은 단일 office 채널에서도 새 방 만들기의 진입점이다. */
+  /** The list is the entry point for creating a new room, even for a single office channel. */
   const backFromRoom = () => onRoomAction({ type: "showList" });
-  // 목록이 최상위 화면이다 — 그 위는 "닫힘". 방이 여러 개여도 여기서 패널을 접을 수 있어야 한다.
+  // The list is the top-level screen — above it is "closed." Even with multiple rooms, the panel must be collapsible here.
   const backFromList = () => {
     if (!isWorkspace) setManualOpen(false);
   };
@@ -541,7 +546,7 @@ export default function ChatPanel({
           isWorkspace ? "" : "border-r border-border"
         }`}
       >
-        {/* Panel header — 방 안에서는 RoomHeader 가 이 자리를 대신한다(화살표가 두 줄이 되지 않게). */}
+        {/* Panel header — inside a room, RoomHeader takes this spot instead (so the arrow doesn't wrap to two lines). */}
         {!inNpcDialog && !inNpcSelect && roomState.view === "room" && currentRoom ? (
           <RoomHeader
             room={currentRoom}
@@ -872,12 +877,12 @@ export default function ChatPanel({
                     })}
                   />
                 </div>
-                {/* 진행 상태 — 답변 본문과 섞이지 않는 별도 줄.
-                    예전에는 tool.progress 를 채팅 청크로 흘려서 답이 두 번 보였다. */}
-                {/* isStreaming 을 함께 보지 않는다 — 그 값은 **첫 답변 청크**가 와야
-                    true 가 되는데, 도구는 그 전에 돈다. 실측(2026-08-28): web_search 가
-                    3회 돌 동안 화면에 아무것도 뜨지 않았다. 활동 키가 있다는 것 자체가
-                    "아직 진행 중"이라는 뜻이므로 그것만으로 충분하다. */}
+                {/* Progress state — a separate line, not mixed into the reply body.
+                    It used to stream tool.progress into chat chunks, which made the reply show up twice. */}
+                {/* Doesn't also check isStreaming — that value only becomes true once **the first reply
+                    chunk** arrives, but tools run before that. Observed (2026-08-28): web_search ran
+                    3 times with nothing showing on screen. Having an activity key at all already means
+                    "still in progress," so that alone is enough. */}
                 {npcActivityKey && !npcResponses.some(isActiveChatResponse) && (
                   <div
                     className="flex items-center gap-2 px-3 pb-1 text-xs text-text-dim"
@@ -923,18 +928,18 @@ export default function ChatPanel({
               const inviteTo = roomState.compose?.inviteTo;
               if (inviteTo) {
                 onRoomInvite(inviteTo, npcIds, userIds);
-                // 초대는 이미 그 방에 있던 사람이 하는 일이다 — 목록이 아니라 방으로 돌아간다.
+                // Inviting is something someone already in that room does — return to the room, not the list.
                 onRoomAction({ type: "open", roomId: inviteTo });
               } else {
                 onRoomCreate(name, npcIds, userIds);
-                // 새 방은 서버의 `room:created` 가 들어오면 그 방으로 데려간다.
+                // For a new room, navigate there once the server's `room:created` arrives.
                 onRoomAction({ type: "showList" });
               }
             }}
             onCancel={() => onRoomAction({ type: "showList" })}
           />
         ) : (
-          // 방 안 — 메시지 + 입력
+          // Inside a room — messages + input
           <>
             <div
               ref={channelScrollRef}
@@ -949,7 +954,7 @@ export default function ChatPanel({
                 </div>
               )}
               {roomMessages.map((msg, index) => {
-                // 구조화 알림(R29·R30)은 발신자 종류와 무관하게 알림 렌더러가 그린다.
+                // A structured notice (R29/R30) is drawn by the notice renderer regardless of sender type.
                 if (msg.notice) {
                   return (
                     <RoomNoticeMessage

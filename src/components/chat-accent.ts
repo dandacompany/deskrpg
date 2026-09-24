@@ -1,24 +1,24 @@
 /**
- * 대화 입력칸의 강조색.
+ * The chat input's accent color.
  *
- * 예전에는 호출자가 팔레트 이름("amber"·"indigo")을 넘기고 클래스를 문자열로 조립했다
- * (`bg-${accent}-500/20`). Tailwind 는 소스를 문자열로 스캔해 클래스를 생성하므로 조립한
- * 이름은 CSS 가 아예 만들어지지 않고, 아무 오류 없이 색이 사라진다. 그래서 강조색은
- * **미리 적어 둔 브랜드 토큰 클래스**로만 고르게 한다.
+ * Previously, callers passed a palette name ("amber"/"indigo") and the class was assembled as a
+ * string (`bg-${accent}-500/20`). Tailwind generates classes by scanning source as text, so an
+ * assembled name never produces CSS, and the color silently disappears with no error. So the
+ * accent is now chosen only from **pre-written brand-token classes**.
  *
- * 글자색은 두 강조색 모두 `text-text` 다 — 배경 틴트만으로 NPC 와 회의를 구분하고, 대비는
- * 어느 테마에서든 본문 글자색으로 보장한다.
+ * The text color is `text-text` for both accents — only the background tint distinguishes NPC
+ * from meeting, and contrast is guaranteed by the body text color in every theme.
  */
 export type ChatAccent = "npc" | "meeting";
 
 type AccentClasses = {
-  /** 드롭다운에서 선택된 후보 */
+  /** Selected candidate in the dropdown */
   option: string;
-  /** 본문에 박히는 멘션 칩 */
+  /** Mention chip embedded in the body */
   chip: string;
-  /** 입력칸 포커스 테두리 */
+  /** Input focus border */
   focusBorder: string;
-  /** 보내기 버튼(활성) */
+  /** Send button (active) */
   sendButton: string;
 };
 

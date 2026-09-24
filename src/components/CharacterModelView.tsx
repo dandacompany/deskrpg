@@ -5,7 +5,7 @@ import { createActor, cylinder } from "@/game/three/characters";
 import type { OfficeLook } from "@/game/three/office-looks";
 import { disposeTree } from "@/game/three/office-renderer";
 
-/** 룩 하나를 돌려 보는 작은 3D 무대. 색은 룩 정의에서 그대로 읽는다. */
+/** A small 3D stage that spins one look. Colors are read as-is from the look definition. */
 export default function CharacterModelView({
   look,
   size,

@@ -4,20 +4,22 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useT } from "../lib/i18n";
 
-// 클립보드 API의 제공 여부에는 구독 이벤트가 없으며 서버에서는 사용할 수 없다.
+// There's no subscription event for clipboard API availability, and it's unavailable on the server.
 const subscribeClipboard = () => () => {};
 const clipboardAvailable = () =>
   typeof navigator !== "undefined" && typeof navigator.clipboard?.writeText === "function";
 const serverClipboardAvailable = () => false;
 
 /**
- * 붙여넣어야 하는 명령을 보여 주고 복사 버튼을 붙인다.
+ * Shows the command that needs to be pasted and attaches a copy button.
  *
- * 설치 안내에서 사용자가 하는 일은 결국 "이 줄을 터미널에 붙여넣기" 하나다. 지금까지는
- * 손으로 긁어야 했고, 줄이 길어 가로 스크롤 안에서 일부만 잡히기 쉬웠다.
+ * In the install instructions, what the user ultimately does boils down to one thing: "paste this
+ * line into the terminal." Until now they had to select it by hand, and long lines were easy to
+ * grab only partially inside horizontal scroll.
  *
- * 클립보드는 보안 컨텍스트(HTTPS·localhost)에서만 열린다. 평문 HTTP 로 띄운 인스턴스에서는
- * 버튼을 감추고 기존처럼 명령만 보여 준다 — 눌러도 아무 일이 없는 버튼을 두지 않는다.
+ * The clipboard only opens in a secure context (HTTPS/localhost). On an instance served over plain
+ * HTTP, hide the button and just show the command as before — don't leave a button that does
+ * nothing when pressed.
  */
 export function CopyCommand({ command, className }: { command: string; className?: string }) {
   const t = useT();
@@ -39,7 +41,7 @@ export function CopyCommand({ command, className }: { command: string; className
     try {
       await navigator.clipboard.writeText(command);
     } catch {
-      return; // 거부당하면 조용히 둔다 — 명령은 화면에 그대로 있다.
+      return; // If it's rejected, stay quiet — the command is still shown on screen.
     }
     setCopied(true);
     if (timer.current) clearTimeout(timer.current);

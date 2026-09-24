@@ -10,7 +10,7 @@ import { I18nProvider } from "@/lib/i18n";
 import { DEFAULT_NPC_MOTION } from "@/lib/npc-motion-config";
 import ChannelSettingsModal from "./ChannelSettingsModal";
 
-/** 모달이 여는 요청은 전부 가짜로 받고, PUT 본문만 모은다. */
+/** Fake every request the modal makes and only collect the PUT bodies. */
 function fakeFetch() {
   const puts: Record<string, unknown>[] = [];
   const original = globalThis.fetch;
@@ -63,7 +63,7 @@ async function slide(host: HTMLElement, kind: string, value: number) {
   });
 }
 
-test("네 속도 칸이 있고 기본값에서 호출·회의 호출은 '뛰기' 로 표시된다", async () => {
+test("has four speed fields and, at defaults, shows summon/meeting-summon as 'running'", async () => {
   const net = fakeFetch();
   try {
     const host = await mount();
@@ -76,7 +76,7 @@ test("네 속도 칸이 있고 기본값에서 호출·회의 호출은 '뛰기'
   }
 });
 
-test("속도를 바꾸고 저장하면 PUT 본문에 motionConfig 가 실리고 부모에게도 알린다", async () => {
+test("changing the speed and saving includes motionConfig in the PUT body and notifies the parent", async () => {
   const net = fakeFetch();
   const updates: Record<string, unknown>[] = [];
   try {
@@ -90,7 +90,7 @@ test("속도를 바꾸고 저장하면 PUT 본문에 motionConfig 가 실리고 
   }
 });
 
-test("속도를 안 바꾼 저장은 motionConfig 를 싣지 않는다", async () => {
+test("saving without changing the speed does not include motionConfig", async () => {
   const net = fakeFetch();
   try {
     const host = await mount();
