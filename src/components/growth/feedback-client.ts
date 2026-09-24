@@ -67,11 +67,18 @@ export interface BugDraft {
   attachments: Attachment[];
 }
 
-export function buildGithubIssueUrl(draft: BugDraft): string {
-  const lines = ["## 문제 설명", "", draft.body, "", "## 재현 방법", "", draft.repro, ""];
+/** Issue headings in the reporter's language. The issue tracker reads Korean and English; other languages get English. */
+const ISSUE_HEADINGS = {
+  ko: { problem: "## 문제 설명", repro: "## 재현 방법", debug: "## 디버그 정보" },
+  en: { problem: "## Problem", repro: "## Steps to reproduce", debug: "## Debug info" },
+} as const;
+
+export function buildGithubIssueUrl(draft: BugDraft, locale: string): string {
+  const headings = ISSUE_HEADINGS[locale === "ko" ? "ko" : "en"];
+  const lines = [headings.problem, "", draft.body, "", headings.repro, "", draft.repro, ""];
   if (draft.attachments.length > 0) {
     lines.push(
-      "## 디버그 정보",
+      headings.debug,
       "",
       ...draft.attachments.map((a) => `- ${a.key}: ${a.value.replace(/\n/g, " / ")}`),
     );

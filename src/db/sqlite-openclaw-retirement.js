@@ -67,8 +67,8 @@ function retireOpenclawConfig(sqlite) {
   const result = run();
   if (result.migrated || result.removed) {
     console.log(
-      `[db] OpenClaw 은퇴: 페르소나 ${result.migrated}건을 agent_config 로 옮기고, ` +
-        `레거시 NPC ${result.removed}건을 npcs_openclaw_backup 으로 옮긴 뒤 삭제했습니다.`,
+      `[db] OpenClaw retirement: moved ${result.migrated} personas to agent_config, ` +
+        `moved ${result.removed} legacy NPCs to npcs_openclaw_backup and deleted them.`,
     );
   }
   return result;

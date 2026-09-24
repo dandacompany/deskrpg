@@ -71,3 +71,13 @@ test("share metadata provides the canonical URL and a large image as absolute ad
   assert.match(String(metadata.title), /DeskRPG for Hermes/);
   assert.match(String(metadata.description), /Hermes/);
 });
+
+test("the public share copy stays the Korean copy the landing page advertises (og:locale ko_KR)", () => {
+  const metadata = createPublicShareMetadata();
+  assert.equal(metadata.title, "DeskRPG for Hermes — AI 직원이 일하는 사무실");
+  assert.equal(
+    metadata.description,
+    "Hermes 에이전트와 함께 대화하고, 회의하고, 칸반 작업을 진행하는 셀프호스팅 3D 가상 오피스.",
+  );
+  assert.equal(metadata.openGraph?.locale, "ko_KR");
+});

@@ -19,8 +19,8 @@ const KANBAN_CRON_TABLES = `
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
-  -- (channel_id, board_slug)·carrier 유니크 인덱스는 여기서 만들지 않는다. 기존 DB 는 이 시점에
-  -- 아직 옛 모양(carrier 컬럼 없음)이라 터진다 — 재구축을 마친 sqlite-project-registry.js 몫이다.
+  -- The (channel_id, board_slug) and carrier unique indexes are not created here. An existing DB still has the
+  -- old shape (no carrier column) at this point and would fail — that belongs to sqlite-project-registry.js after its rebuild.
   CREATE INDEX IF NOT EXISTS idx_channel_kanban_boards_gateway_id ON channel_kanban_boards(gateway_id);
   CREATE TABLE IF NOT EXISTS cron_job_origins (
     id TEXT PRIMARY KEY NOT NULL,

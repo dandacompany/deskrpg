@@ -163,9 +163,9 @@ function normalizeLegacyAppearances(sqlite) {
 
   if (Object.keys(converted).length > 0) {
     console.log(
-      "[db] 옛 외형을 오피스 룩으로 변환했습니다:",
+      "[db] Converted old appearances to office looks:",
       Object.entries(converted)
-        .map(([t, n]) => `${t} ${n}건`)
+        .map(([t, n]) => `${t} ${n}`)
         .join(", "),
     );
   }

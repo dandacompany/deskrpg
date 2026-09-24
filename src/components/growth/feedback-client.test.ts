@@ -10,6 +10,7 @@ import {
   recentErrorDigest,
   recordClientError,
   resolveFeedbackUrl,
+  type BugDraft,
 } from "./feedback-client";
 
 function memoryStorage(): Storage {
@@ -61,12 +62,15 @@ test("the GitHub issue URL includes only the attachments the user kept", () => {
     ["version", "userAgent", "viewport"],
   );
   const url = new URL(
-    buildGithubIssueUrl({
-      title: "맵 멈춤",
-      body: "회의 뒤",
-      repro: "1. 회의",
-      attachments: attachments.filter((a) => a.key !== "userAgent"),
-    }),
+    buildGithubIssueUrl(
+      {
+        title: "맵 멈춤",
+        body: "회의 뒤",
+        repro: "1. 회의",
+        attachments: attachments.filter((a) => a.key !== "userAgent"),
+      },
+      "ko",
+    ),
   );
   assert.equal(url.searchParams.get("title"), "맵 멈춤");
   const body = url.searchParams.get("body") ?? "";
@@ -91,4 +95,21 @@ test("falls back to the built-in default survey when it can't be fetched from th
   assert.equal((await fetchSurvey("https://x.test", ok as typeof fetch)).version, 2);
   const junk = async () => new Response(JSON.stringify({ version: "x" }));
   assert.deepEqual(await fetchSurvey("https://x.test", junk as typeof fetch), FALLBACK_SURVEY);
+});
+
+test("issue headings follow the reporter's language — Korean or English, English for the rest", () => {
+  const draft: BugDraft = {
+    title: "t",
+    body: "b",
+    repro: "r",
+    attachments: [{ key: "version", value: "1" }],
+  };
+  const headings = (locale: string) =>
+    (new URL(buildGithubIssueUrl(draft, locale)).searchParams.get("body") ?? "")
+      .split("\n")
+      .filter((line) => line.startsWith("## "));
+  assert.deepEqual(headings("ko"), ["## 문제 설명", "## 재현 방법", "## 디버그 정보"]);
+  assert.deepEqual(headings("en"), ["## Problem", "## Steps to reproduce", "## Debug info"]);
+  assert.deepEqual(headings("ja"), headings("en"));
+  assert.deepEqual(headings("zh"), headings("en"));
 });

@@ -40,6 +40,13 @@ export function unusedSkillNames(rows: SkillRow[]): string[] {
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 export const isValidSkillName = (name: string) => NAME_RE.test(name);
 
-export function skillTemplate(name: string, description: string): string {
-  return `---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\n\n## 언제 쓰나\n\n## 절차\n\n1. \n\n## 확인\n`;
+/** Section headings of a new SKILL.md, in the author's language. */
+export type SkillTemplateHeadings = { whenToUse: string; steps: string; check: string };
+
+export function skillTemplate(
+  name: string,
+  description: string,
+  headings: SkillTemplateHeadings,
+): string {
+  return `---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\n\n## ${headings.whenToUse}\n\n## ${headings.steps}\n\n1. \n\n## ${headings.check}\n`;
 }

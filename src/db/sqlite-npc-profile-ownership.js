@@ -157,7 +157,7 @@ function migrateNpcsToProfileOwnership(sqlite) {
   const broken = sqlite.pragma("foreign_key_check(npcs)");
   if (broken.length > 0) {
     throw new Error(
-      `npcs 재생성 후 외래키 무결성이 깨졌습니다(${broken.length}건): ` +
+      `Foreign key integrity broke after rebuilding npcs (${broken.length} rows): ` +
         JSON.stringify(broken.slice(0, 5)),
     );
   }

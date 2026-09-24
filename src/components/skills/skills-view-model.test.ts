@@ -72,7 +72,19 @@ test("name rules and the SKILL.md template", () => {
   assert.equal(isValidSkillName("Invoice"), false);
   assert.equal(isValidSkillName("a/b"), false);
   assert.equal(
-    skillTemplate("invoice-check", "청구서 확인"),
+    skillTemplate("invoice-check", "청구서 확인", {
+      whenToUse: "언제 쓰나",
+      steps: "절차",
+      check: "확인",
+    }),
     "---\nname: invoice-check\ndescription: 청구서 확인\n---\n\n# invoice-check\n\n## 언제 쓰나\n\n## 절차\n\n1. \n\n## 확인\n",
+  );
+  assert.equal(
+    skillTemplate("invoice-check", "Check invoices", {
+      whenToUse: "When to use",
+      steps: "Steps",
+      check: "Check",
+    }),
+    "---\nname: invoice-check\ndescription: Check invoices\n---\n\n# invoice-check\n\n## When to use\n\n## Steps\n\n1. \n\n## Check\n",
   );
 });

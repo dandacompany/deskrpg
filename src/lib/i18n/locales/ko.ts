@@ -3243,20 +3243,24 @@ const ko: Record<string, string> = {
   "room.cronResult.failed": "실행 실패",
   "room.cronResult.empty": "결과 없음",
   "profiles.page.title": "직원",
-  "profiles.page.subtitle": "직원 한 명이 Hermes 프로필 하나입니다. 여기서 직원을 등록하고 인격·외형·모델을 관리합니다. 모델 로그인은 직원마다 따로 합니다.",
+  "profiles.page.subtitle":
+    "직원 한 명이 Hermes 프로필 하나입니다. 여기서 직원을 등록하고 인격·외형·모델을 관리합니다. 모델 로그인은 직원마다 따로 합니다.",
   "profiles.gateways.loading": "연결된 게이트웨이를 불러오는 중…",
   "profiles.gateways.loadFailed": "게이트웨이를 불러오지 못했습니다",
   "profiles.gateways.retry": "다시 시도",
   "profiles.gateways.emptyTitle": "먼저 게이트웨이를 연결하세요",
-  "profiles.gateways.emptyBody": "NPC는 연결된 Hermes 게이트웨이의 프로필에서 시작합니다. 게이트웨이를 연결하거나 공유받으면 여기에서 프로필과 외형을 관리할 수 있습니다.",
+  "profiles.gateways.emptyBody":
+    "NPC는 연결된 Hermes 게이트웨이의 프로필에서 시작합니다. 게이트웨이를 연결하거나 공유받으면 여기에서 프로필과 외형을 관리할 수 있습니다.",
   "profiles.gateways.connect": "게이트웨이 연결하기",
   "profiles.gateways.connected": "연결된 게이트웨이",
   "profiles.gateways.choose": "게이트웨이 선택",
   "profiles.gateway.ownerHint": "이 게이트웨이의 프로필과 NPC 외형을 관리합니다.",
-  "profiles.gateway.sharedHint": "공유받은 게이트웨이입니다. 프로필 등록과 외형 관리는 소유자가 담당합니다.",
+  "profiles.gateway.sharedHint":
+    "공유받은 게이트웨이입니다. 프로필 등록과 외형 관리는 소유자가 담당합니다.",
   "profiles.noGateway": "어느 게이트웨이의 직원인지 알 수 없습니다.",
   "profiles.new.title": "새 직원",
-  "profiles.new.subtitle": "직원 한 명이 Hermes 프로필 하나입니다. 이름을 정하고, 인격을 적고, 그 직원으로 모델에 로그인합니다.",
+  "profiles.new.subtitle":
+    "직원 한 명이 Hermes 프로필 하나입니다. 이름을 정하고, 인격을 적고, 그 직원으로 모델에 로그인합니다.",
   "profiles.new.sharedGateway": "공유받은 게이트웨이입니다. 직원 등록은 소유자가 합니다.",
   "profiles.detail.notFound": "이 게이트웨이에 그 직원이 없습니다.",
   "profiles.detail.sectionTitle": "인격·외형·AI 모델",
@@ -3269,9 +3273,13 @@ const ko: Record<string, string> = {
   "character.form.charCount": "글자 수",
   "meeting.unknownNpc": "알 수 없는 NPC",
   "meeting.recordedParticipants": "기록된 참가자",
-  "meeting.recordedParticipantsNote": "기록된 참가자 수는 회의 시작 시점의 참여자를 기준으로 합니다.",
+  "meeting.recordedParticipantsNote":
+    "기록된 참가자 수는 회의 시작 시점의 참여자를 기준으로 합니다.",
   "workspace.nav.label": "워크스페이스",
   "workspace.npc.menuLabel": "{name} 관리",
+  "skills.template.whenToUse": "언제 쓰나",
+  "skills.template.steps": "절차",
+  "skills.template.check": "확인",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   // --- /content-i18n:D ---

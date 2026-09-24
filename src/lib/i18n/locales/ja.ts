@@ -3279,20 +3279,24 @@ const ja: Record<string, string> = {
   "room.cronResult.failed": "実行失敗",
   "room.cronResult.empty": "結果なし",
   "profiles.page.title": "社員",
-  "profiles.page.subtitle": "社員1人がHermesプロフィール1つです。ここで社員を登録し、人格・外見・モデルを管理します。モデルへのログインは社員ごとに行います。",
+  "profiles.page.subtitle":
+    "社員1人がHermesプロフィール1つです。ここで社員を登録し、人格・外見・モデルを管理します。モデルへのログインは社員ごとに行います。",
   "profiles.gateways.loading": "接続済みのゲートウェイを読み込み中…",
   "profiles.gateways.loadFailed": "ゲートウェイを読み込めませんでした",
   "profiles.gateways.retry": "再試行",
   "profiles.gateways.emptyTitle": "まずゲートウェイを接続してください",
-  "profiles.gateways.emptyBody": "NPCは接続済みのHermesゲートウェイのプロフィールから始まります。ゲートウェイを接続するか共有を受けると、ここでプロフィールと外見を管理できます。",
+  "profiles.gateways.emptyBody":
+    "NPCは接続済みのHermesゲートウェイのプロフィールから始まります。ゲートウェイを接続するか共有を受けると、ここでプロフィールと外見を管理できます。",
   "profiles.gateways.connect": "ゲートウェイを接続",
   "profiles.gateways.connected": "接続済みのゲートウェイ",
   "profiles.gateways.choose": "ゲートウェイを選択",
   "profiles.gateway.ownerHint": "このゲートウェイのプロフィールとNPCの外見を管理します。",
-  "profiles.gateway.sharedHint": "共有されたゲートウェイです。プロフィールの登録と外見の管理は所有者が行います。",
+  "profiles.gateway.sharedHint":
+    "共有されたゲートウェイです。プロフィールの登録と外見の管理は所有者が行います。",
   "profiles.noGateway": "どのゲートウェイの社員か分かりません。",
   "profiles.new.title": "新しい社員",
-  "profiles.new.subtitle": "社員1人がHermesプロフィール1つです。名前を決め、人格を書き、その社員としてモデルにログインします。",
+  "profiles.new.subtitle":
+    "社員1人がHermesプロフィール1つです。名前を決め、人格を書き、その社員としてモデルにログインします。",
   "profiles.new.sharedGateway": "共有されたゲートウェイです。社員の登録は所有者が行います。",
   "profiles.detail.notFound": "このゲートウェイにその社員はいません。",
   "profiles.detail.sectionTitle": "人格・外見・AIモデル",
@@ -3305,9 +3309,13 @@ const ja: Record<string, string> = {
   "character.form.charCount": "文字数",
   "meeting.unknownNpc": "不明なNPC",
   "meeting.recordedParticipants": "記録された参加者",
-  "meeting.recordedParticipantsNote": "記録された参加者数は、会議開始時点の参加者を基準にしています。",
+  "meeting.recordedParticipantsNote":
+    "記録された参加者数は、会議開始時点の参加者を基準にしています。",
   "workspace.nav.label": "ワークスペース",
   "workspace.npc.menuLabel": "{name}を管理",
+  "skills.template.whenToUse": "使うとき",
+  "skills.template.steps": "手順",
+  "skills.template.check": "確認",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   // --- /content-i18n:D ---

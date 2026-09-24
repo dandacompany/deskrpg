@@ -59,7 +59,7 @@ function ensureChatRoomTables(sqlite) {
   sqlite.exec(CHAT_ROOM_TABLES);
   if (!tableExists(sqlite, "channels") || !hasColumn(sqlite, "channels", "owner_id")) {
     console.warn(
-      "[chat-rooms] channels.owner_id 가 없어 office 방 백필을 건너뜁니다 — 이 DB 의 채널 채팅이 비어 보일 수 있습니다",
+      "[chat-rooms] channels.owner_id is missing, so the office room backfill is skipped — channel chat in this DB may look empty",
     );
     return;
   }
