@@ -3257,6 +3257,14 @@ const en: Record<string, string> = {
   "hermes.wizard.result.workerPropagationHow":
     "Turn it on from the gateway page, then press [Apply] to include this employee",
   "hermes.wizard.result.workerPropagationLink": "How to turn it on",
+  // --- content-i18n:A ---
+  // --- /content-i18n:A ---
+  // --- content-i18n:B ---
+  // --- /content-i18n:B ---
+  // --- content-i18n:C ---
+  // --- /content-i18n:C ---
+  // --- content-i18n:D ---
+  // --- /content-i18n:D ---
 };
 
 export default en;

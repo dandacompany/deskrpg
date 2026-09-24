@@ -3123,6 +3123,14 @@ const zh: Record<string, string> = {
     "此员工的看板和定时任务成果不会被收集 — 网关已关闭工作者传播",
   "hermes.wizard.result.workerPropagationHow": "在网关页面开启后点击[应用]，即可应用到此员工",
   "hermes.wizard.result.workerPropagationLink": "查看开启方法",
+  // --- content-i18n:A ---
+  // --- /content-i18n:A ---
+  // --- content-i18n:B ---
+  // --- /content-i18n:B ---
+  // --- content-i18n:C ---
+  // --- /content-i18n:C ---
+  // --- content-i18n:D ---
+  // --- /content-i18n:D ---
 };
 
 export default zh;

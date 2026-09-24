@@ -3271,6 +3271,14 @@ const ja: Record<string, string> = {
   "hermes.wizard.result.workerPropagationHow":
     "ゲートウェイ画面でオンにしてから[適用]を押すと、この社員にも適用されます",
   "hermes.wizard.result.workerPropagationLink": "オンにする方法",
+  // --- content-i18n:A ---
+  // --- /content-i18n:A ---
+  // --- content-i18n:B ---
+  // --- /content-i18n:B ---
+  // --- content-i18n:C ---
+  // --- /content-i18n:C ---
+  // --- content-i18n:D ---
+  // --- /content-i18n:D ---
 };
 
 export default ja;
