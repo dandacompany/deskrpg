@@ -19,3 +19,12 @@ test("translateServer uses locale strings and falls back to english for unknown 
   );
   assert.equal(translateServer("zh-CN", "nonexistent.key"), "nonexistent.key");
 });
+
+test("translateServer inserts parameter values literally, without replacement patterns or re-expansion", () => {
+  const topic = "Price $& cost $1 {topic}";
+  assert.ok(translateServer("en", "minutes.exportTitle", { topic }).includes(topic));
+});
+
+test("a parameter value that looks like another placeholder is not expanded again", () => {
+  assert.equal(translateServer("en", "meeting.duration", { min: "{sec}", sec: 5 }), "{sec}m 5s");
+});

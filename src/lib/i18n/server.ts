@@ -47,13 +47,12 @@ export function translateServer(
   params?: Record<string, string | number>,
 ): string {
   const normalized = typeof locale === "string" ? normalizeLocale(locale) : "en";
-  let text = translations[normalized][key] ?? translations.en[key] ?? key;
+  const text = translations[normalized][key] ?? translations.en[key] ?? key;
 
-  if (params) {
-    for (const [paramKey, value] of Object.entries(params)) {
-      text = text.replace(new RegExp(`\\{${paramKey}\\}`, "g"), String(value));
-    }
-  }
-
-  return text;
+  if (!params) return text;
+  // One pass with a replacer function: values are inserted literally (no `$&`/`$1` patterns) and a value that
+  // itself looks like `{name}` is never expanded again. Values often carry user text such as a meeting topic.
+  return text.replace(/\{(\w+)\}/g, (match, name: string) =>
+    Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match,
+  );
 }
