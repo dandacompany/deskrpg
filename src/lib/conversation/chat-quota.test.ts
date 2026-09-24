@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import { ChatQuota, DEFAULT_CHAT_BUDGET } from "./chat-quota";
 
 describe("ChatQuota", () => {
-  test("기본 예산은 6이다", () => {
+  test("the default budget is 6", () => {
     assert.equal(DEFAULT_CHAT_BUDGET, 6);
     assert.equal(new ChatQuota().remaining(), 6);
   });
 
-  test("spend 는 남아 있으면 차감하고 true", () => {
+  test("spend deducts and returns true while budget remains", () => {
     const q = new ChatQuota(2);
     assert.equal(q.spend(), true);
     assert.equal(q.remaining(), 1);
@@ -16,7 +16,7 @@ describe("ChatQuota", () => {
     assert.equal(q.remaining(), 0);
   });
 
-  test("예산이 없으면 false 를 돌려주고 음수로 내려가지 않는다", () => {
+  test("returns false when out of budget and never goes negative", () => {
     const q = new ChatQuota(1);
     q.spend();
     assert.equal(q.spend(), false);
@@ -25,7 +25,7 @@ describe("ChatQuota", () => {
     assert.equal(q.remaining(), 0);
   });
 
-  test("사람이 말하면 예산이 가득 찬다", () => {
+  test("a human speaking refills the budget", () => {
     const q = new ChatQuota(3);
     q.spend();
     q.spend();
@@ -36,7 +36,7 @@ describe("ChatQuota", () => {
     assert.equal(q.spend(), true);
   });
 
-  test("예산 0 으로 만들면 NPC 사슬이 아예 안 이어진다", () => {
+  test("a budget of 0 means the NPC chain never continues", () => {
     const q = new ChatQuota(0);
     assert.equal(q.spend(), false);
   });

@@ -5,12 +5,13 @@ import { MeetingFloorController } from "./floor-controller";
 import type { NpcRuntime } from "./npc-runtime";
 import type { Participant } from "./turn-policy";
 
-// 폴에 **닿지 못한** 참가자를 침묵과 구분한다.
+// Distinguishes a participant the poll **couldn't reach** from one who stayed silent.
 //
-// 실패한 참가자는 raises 에도 passes 에도 들어가지 않고 사라졌다. 그래서 결정은
-// `all-passed` 가 되고 화면에는 "전원 PASS" 로 보였다 — 아무도 패스하지 않았는데도.
-// 과거 '전원 PASS' 사고가 정확히 이 모양이었다. Hermes 는 동시 실행 상한을 넘기면
-// 429 로 또박또박 거절하는데(api_server.py:7154), 그 거절이 여기서 증발했다.
+// A failed participant used to vanish — it went into neither raises nor passes. So the
+// decision became `all-passed` and the screen showed "everyone PASSed" — even though no
+// one actually passed. The past "everyone PASSed" incident was exactly this shape. Hermes
+// clearly rejects with 429 when the concurrent-run cap is exceeded (api_server.py:7154),
+// but that rejection evaporated here.
 
 function participant(npcId: string): Participant {
   return { npcId, displayName: npcId, seated: true, turnCount: 0, lastSpokeAt: 0 } as Participant;
@@ -38,7 +39,7 @@ function controllerWith(
     });
 }
 
-test("닿지 못한 참가자는 PASS 가 아니라 failures 로 기록된다", async () => {
+test("an unreachable participant is recorded in failures, not as a PASS", async () => {
   const next = controllerWith(async (npcId) => {
     if (npcId === "b") throw new Error("Too many concurrent runs (max 2)");
     return { wantsToSpeak: false, reason: "" };
@@ -56,7 +57,7 @@ test("닿지 못한 참가자는 PASS 가 아니라 failures 로 기록된다", 
   );
 });
 
-test("전원이 닿지 못하면 passes 는 비고 failures 만 찬다", async () => {
+test("if no one is reachable, passes is empty and only failures is filled", async () => {
   const next = controllerWith(async () => {
     throw new Error("Too many concurrent runs (max 2)");
   });
@@ -68,7 +69,7 @@ test("전원이 닿지 못하면 passes 는 비고 failures 만 찬다", async (
   assert.equal(report.failures?.length, 2);
 });
 
-test("아무도 실패하지 않으면 failures 는 빈 배열이다", async () => {
+test("if no one fails, failures is an empty array", async () => {
   const next = controllerWith(async () => ({ wantsToSpeak: false, reason: "" }));
   const decision = await next([participant("a")]);
   const report = "pollResult" in decision ? decision.pollResult : null;

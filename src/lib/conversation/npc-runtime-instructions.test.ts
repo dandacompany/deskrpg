@@ -6,11 +6,12 @@ import { Transcript } from "./transcript";
 import type { EngineParticipant } from "./types";
 import type { NpcAdapter, AdapterExecuteOptions } from "@/lib/adapters/types";
 
-// 회의·채널 멘션 경로가 시스템 지시를 싣는지 고정한다.
+// Pins that the meeting and channel-mention paths carry system instructions.
 //
-// 이 경로를 한 번 빠뜨린 적이 있다(2026-08-30). 1:1 경로만 배선하고 여기를 놓쳤는데,
-// 회의야말로 <team-instructions> 가 가장 필요한 자리다. 폴과 발언 **둘 다** 봐야 한다 —
-// 한쪽만 실으면 같은 NPC 가 손들 때와 말할 때 다른 규칙을 받는다.
+// This path was missed once before (2026-08-30). Only the 1:1 path got wired up and this
+// one was overlooked, even though meetings are exactly where <team-instructions> matters
+// most. **Both** poll and speak must be checked — carrying it on only one means the same
+// NPC gets different rules when raising a hand versus when speaking.
 
 function capturing(): { adapter: NpcAdapter; calls: AdapterExecuteOptions[] } {
   const calls: AdapterExecuteOptions[] = [];
@@ -62,7 +63,7 @@ function runtimeFor(p: EngineParticipant, transcript = new Transcript()) {
 
 const INSTR = "<team-instructions>\n한 번에 한 명씩\n</team-instructions>";
 
-test("발언 턴이 instructions 를 싣는다", async () => {
+test("a speaking turn carries instructions", async () => {
   const cap = capturing();
   const p = participant("a", cap.adapter, { instructions: INSTR });
   await runtimeFor(p).takeTurn(4, { onChunk: () => {} });
@@ -70,7 +71,7 @@ test("발언 턴이 instructions 를 싣는다", async () => {
   assert.equal(speak?.instructions, INSTR);
 });
 
-test("폴(손들기)도 같은 instructions 를 싣는다", async () => {
+test("polling (raising a hand) carries the same instructions", async () => {
   const cap = capturing();
   const p = participant("a", cap.adapter, { instructions: INSTR });
   await runtimeFor(p).poll(3);
@@ -78,7 +79,7 @@ test("폴(손들기)도 같은 instructions 를 싣는다", async () => {
   assert.equal(poll?.instructions, INSTR);
 });
 
-test("지시가 없으면 필드를 만들지 않는다", async () => {
+test("no instructions field is created when there are none", async () => {
   const cap = capturing();
   const p = participant("a", cap.adapter);
   await runtimeFor(p).takeTurn(4, { onChunk: () => {} });

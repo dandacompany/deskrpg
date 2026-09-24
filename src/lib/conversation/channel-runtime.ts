@@ -1,9 +1,12 @@
-// 채널 하나의 대화 루프. 트랜스크립트를 소유하고, FloorController에게 "다음은 누구인가"를
-// 묻고, 선발된 NpcRuntime에게 발언권을 준다. 회의 정책에서는 한 번에 하나다.
+// The conversation loop for a single channel. Owns the transcript, asks FloorController
+// "who's next", and hands the floor to the selected NpcRuntime. In meeting policy there's
+// only ever one at a time.
 //
-// 다자 대화 턴 루프. 어댑터만 알고 게이트웨이·소켓·DB를 모른다.
-// MeetingBroker.run()(meeting-broker.js:78-184)의 루프 구조를 어댑터 위로 이식한 것 —
-// 게이트웨이 호출을 NpcAdapter.execute() 호출로 바꾸고, 정책 판단은 turn-policy.ts에 위임한다.
+// The turn loop for multi-party conversation. Only the adapter is known here — no gateway,
+// socket, or DB.
+// A port of MeetingBroker.run()'s loop structure (meeting-broker.js:78-184) onto the
+// adapter — gateway calls become NpcAdapter.execute() calls, and policy decisions are
+// delegated to turn-policy.ts.
 
 import type { EngineParticipant } from "./types";
 import { Transcript, USER_SPEAKER_ID, type Turn } from "./transcript";
@@ -13,17 +16,18 @@ import { DEFAULT_IDLE_MS, DEFAULT_MAX_MS, NpcRuntime } from "./npc-runtime";
 import { MeetingFloorController, type MentionSkipReason } from "./floor-controller";
 import type { ConversationMode, Participant } from "./turn-policy";
 
-// 정의는 types.ts 에 있다 — npc-runtime 이 이 파일을 도로 가리키지 않게 하려는 것이다.
-// 호출부(meeting-discussion, 테스트, conversation-engine 껍데기)가 계속 여기서 가져오므로
-// 재export 로 남긴다.
+// Defined in types.ts — this keeps npc-runtime from pointing back at this file.
+// Callers (meeting-discussion, tests, the conversation-engine shell) keep importing
+// from here, so it's kept as a re-export.
 export type { EngineParticipant } from "./types";
 
-/** 회의 런타임 컨트롤 서브모드. meeting-broker.js:53 이식 — EngineConfig.mode(peer/meeting/group,
- * 참가자 구조/정책 축)와는 별개 축이다. auto=자동 진행, manual=매 라운드 뒤 대기, directed=폴링 없이
- * directSpeak만 받는다. */
+/** Meeting runtime control submode. Ported from meeting-broker.js:53 — a separate axis
+ * from EngineConfig.mode (peer/meeting/group, the participant structure/policy axis).
+ * auto=proceeds automatically, manual=waits after every round, directed=receives only
+ * directSpeak with no polling. */
 export type RunMode = "auto" | "manual" | "directed";
 
-/** 루프가 왜 끝났는지. onEnd로 함께 통지한다. */
+/** Why the loop ended. Reported together via onEnd. */
 export type EngineEndReason =
   "max_turns" | "consecutive_passes" | "consecutive_failures" | "no_candidates" | "stopped";
 
@@ -32,21 +36,23 @@ export type EngineCallbacks = {
   onPollResult?: (
     raises: Array<{ npcId: string; reason: string }>,
     passes: string[],
-    /** 폴에 닿지 못한 참가자. 침묵(passes)과 갈라 전달한다. */
+    /** Participants the poll couldn't reach. Reported separately from silence (passes). */
     failures: Array<{ npcId: string; reason: string }>,
   ) => void;
   onTurnStart?: (npcId: string, displayName: string) => void;
   onTurnChunk?: (npcId: string, chunk: string) => void;
-  /** meta는 턴이 중단되어 끝났을 때만 실린다 — 그 경우 fullResponse는 그때까지 스트리밍된
-   * 부분 텍스트(없을 수도 있다)이며 트랜스크립트에는 기록되지 않는다.
+  /** meta is only populated when the turn ended aborted — in that case fullResponse is
+   * whatever partial text was streamed up to that point (may be empty) and is not recorded
+   * in the transcript.
    *
-   * **다섯 갈래 전부에서 호출된다** — 발언 성공, 지목만 남긴 턴, 빈 응답, 어댑터 예외,
-   * 타임아웃. 클라이언트의 스트리밍 말풍선은 이 콜백이 만드는 done:true 로만 닫히고
-   * 같은 신호가 "발언 중" 표시도 푼다. 예전에는 성공과 타임아웃 둘만 불러서, 빈 응답과
-   * 평범한 예외에서는 말풍선이 영영 열린 채 남았다.
+   * **Called on all five branches** — successful speech, a turn that left only a mention,
+   * an empty response, an adapter exception, and a timeout. The client's streaming speech
+   * bubble is only closed by the done:true this callback produces, and the same signal also
+   * clears the "speaking" indicator. It used to be called only on success and timeout, so an
+   * empty response or a plain exception left the bubble open forever.
    *
-   * meta.reason 으로 갈래를 구분한다: `empty_after_mention`(지목만 남김) /
-   * `empty_response`(쓸 만한 텍스트 없음) / `adapter_error` / `timeout:<kind>`. */
+   * meta.reason distinguishes the branch: `empty_after_mention` (left only a mention) /
+   * `empty_response` (no usable text) / `adapter_error` / `timeout:<kind>`. */
   onTurnEnd?: (
     npcId: string,
     fullResponse: string,
@@ -54,29 +60,33 @@ export type EngineCallbacks = {
   ) => void;
   onEnd?: (turns: Turn[], reason: EngineEndReason) => void;
   onError?: (err: unknown, npcId: string) => void;
-  /** RunMode가 바뀔 때. source: 사용자의 setMode 호출로 바뀌면 "user"(드레인 시점에 일괄 통지 —
-   * hybridMode 자동 복귀도 setMode를 거치므로 "user"로 통지된다. meeting-broker.js:275-277 그대로
-   * 이식한 특이 동작이며 고치지 않는다), directSpeak가 hybridMode에서 auto→manual로 승격시키면
-   * 그 자리에서 "system"(meeting-broker.js:239-242). */
+  /** When RunMode changes. source: "user" when changed via the user's setMode call (batched
+   * at drain time — hybridMode's automatic return also goes through setMode, so it's also
+   * reported as "user"; this is a quirk ported as-is from meeting-broker.js:275-277 and left
+   * unfixed), or "system" right when directSpeak promotes hybridMode from auto→manual
+   * (meeting-broker.js:239-242). */
   onModeChanged?: (mode: RunMode, source: "user" | "system") => void;
-  /** manual/directed 모드가 다음 입력을 기다리기 시작할 때. manual은 실제 폴링 결과가 아니라
-   * 항상 고정된 빈 값 { raises: [], passes: [] }을 보낸다(meeting-broker.js:159 그대로 이식 — 실제
-   * 폴 결과를 담지 않는 특이 동작). directed 및 direct-speak 이후 대기는 null. */
+  /** When manual/directed mode starts waiting for the next input. manual doesn't send the
+   * actual poll result — it always sends the fixed empty value { raises: [], passes: [] }
+   * (ported as-is from meeting-broker.js:159 — a quirk where the real poll result isn't
+   * carried). The wait after directed and after direct-speak is null. */
   onWaitingInput?: (pollResult: { raises: unknown[]; passes: string[] } | null) => void;
   /**
-   * 지목받았지만 발언 할당량이 없어 건너뛴 NPC. 조용히 빼지 않고 알린다
-   * (meeting-discussion 의 onParticipantsExcluded 와 같은 계열).
+   * An NPC that was mentioned but had no speaking quota left, so it was skipped. Reported
+   * rather than silently dropped (same family as meeting-discussion's onParticipantsExcluded).
    *
-   * 트랜스크립트 턴이 아니라 콜백인 이유: 턴으로 넣으면 maxTotalTurns 예산을 갉아먹고,
-   * totalTurns 집계를 부풀리고, 프롬프트 히스토리에 실려 NPC 들이 할당량 이야기를
-   * 연기하기 시작한다.
+   * Why a callback rather than a transcript turn: turning it into a turn would eat into the
+   * maxTotalTurns budget, inflate the totalTurns tally, and get carried in the prompt
+   * history where NPCs start postponing to talk about their quota.
    *
-   * 완성된 문장이 아니라 (npcId, reason) 을 넘기는 이유: 엔진에는 사용자용 문자열이
-   * 하나도 없다. 표시 문구는 i18n 로케일에 있고 클라이언트가 렌더한다.
+   * Why it passes (npcId, reason) rather than a finished sentence: the engine has no
+   * user-facing strings at all. Display text lives in i18n locales and is rendered by the
+   * client.
    *
-   * reason 이 유니온인 이유: "quota_exhausted"(발언 할당량 소진)와 "backend_failing"
-   * (게이트웨이 연속 실패로 burnout)을 합치면 죽은 게이트웨이가 정상적인 할당량 소진으로
-   * 보인다 — endReason 에서 이미 피한 혼동(§8)을 여기서도 피한다.
+   * Why reason is a union: merging "quota_exhausted" (speaking quota used up) with
+   * "backend_failing" (burnout from consecutive gateway failures) would make a dead gateway
+   * look like ordinary quota exhaustion — the same confusion already avoided in endReason
+   * (§8) is avoided here too.
    */
   onMentionSkipped?: (npcId: string, reason: MentionSkipReason) => void;
 };
@@ -84,7 +94,8 @@ export type EngineCallbacks = {
 export type EngineQuota = {
   maxTurnsPerAgent: number;
   maxTotalTurns: number;
-  /** peer 모드는 손들기가 없어 연속 PASS 개념이 없으므로 생략 가능. 기본 2(브로커 기본값과 동일). */
+  /** peer mode has no hand-raising, so there's no concept of consecutive PASS — optional.
+   * Defaults to 2 (same as the broker's default). */
   maxConsecutivePasses?: number;
   cooldownMs: number;
 };
@@ -94,17 +105,20 @@ export type EngineConfig = {
   topic: string;
   participants: EngineParticipant[];
   quota: EngineQuota;
-  /** Hermes gateway.api_server.max_concurrent_runs 에 맞춘다. 기본 4. */
+  /** Matches Hermes gateway.api_server.max_concurrent_runs. Defaults to 4. */
   maxConcurrentPolls?: number;
-  /** 히스토리로 실어 보낼 최근 턴 수. 기본 10. */
+  /** Number of recent turns to carry as history. Defaults to 10. */
   historyLimit?: number;
   now?: () => number;
-  /** 초기 RunMode. 기본 "auto" — 생략하면 컨트롤 서페이스 도입 이전과 동일하게 동작한다. */
+  /** Initial RunMode. Defaults to "auto" — omitting this behaves the same as before the
+   * control surface was introduced. */
   initialRunMode?: RunMode;
-  /** manual 모드가 유휴 시간 후 auto로 자동 복귀. meeting-broker.js:54-55, 162-167 이식. */
+  /** manual mode automatically returns to auto after an idle period. Ported from
+   * meeting-broker.js:54-55, 162-167. */
   hybridMode?: boolean;
   hybridAutoResumeMs?: number | null;
-  /** 두 겹 턴 타임아웃(§3.5). 생략 시 idleMs 180초(옛 turnTimeoutMs와 동일)/maxMs 600초. */
+  /** Two-tier turn timeout (§3.5). If omitted: idleMs 180s (same as the old
+   * turnTimeoutMs)/maxMs 600s. */
   turnTimeout?: Partial<TurnTimeoutConfig>;
 };
 
@@ -121,29 +135,34 @@ export class ChannelRuntime {
   private running = false;
   private consecutivePasses = 0;
   /**
-   * npcId별 NpcRuntime. 프롬프트 조립·타임아웃·스트리밍 정제·멘션 파싱과 함께
-   * 연속 실패 카운터(NPC 별로 소유 — 예전에는 엔진 전역이라 NPC 하나의 백엔드가 죽으면
-   * 3연속 실패로 회의 전체가 끝났다)도 여기 산다.
+   * NpcRuntime per npcId. Along with prompt assembly, timeouts, streaming sanitization, and
+   * mention parsing, this also holds the consecutive-failure counter (owned per NPC — it used
+   * to be engine-global, so one NPC's dead backend could end the whole meeting after 3
+   * consecutive failures).
    */
   private readonly runtimes: Map<string, NpcRuntime>;
   private endReason: EngineEndReason | null = null;
   private lastSpeakerId: string | null = null;
   private userMessageQueue: Array<{ userName: string; content: string }> = [];
 
-  // 컨트롤 서페이스 상태 — meeting-broker.js:52-66 이식
+  // Control surface state — ported from meeting-broker.js:52-66
   private runMode: RunMode;
   private readonly hybridMode: boolean;
   private readonly hybridAutoResumeMs: number | null;
   private autoResumeTimer: ReturnType<typeof setTimeout> | null = null;
   private commandQueue: Array<{ type: "setMode"; mode: string }> = [];
-  /** 발언권 부여 대기열. 예전 단일 슬롯을 대체한다 — 지목이 더는 무음으로 사라지지 않는다. */
+  /** Queue of floor grants. Replaces the old single slot — a mention no longer silently
+   * vanishes. */
   private readonly inbox = new FloorInbox();
-  /** "다음 발언자가 누구인가" 정책. 스펙 §6의 정책 교체점 — floor-controller.ts 참고. */
+  /** Policy for "who speaks next". The policy swap point from spec §6 — see
+   * floor-controller.ts. */
   private readonly floor: MeetingFloorController;
   private waitResolve: (() => void) | null = null;
-  /** 대기가 걸리기 전에 도착한 해제. 래치(불리언)이지 카운터가 아니다 — releaseWait 주석 참고. */
+  /** A release that arrived before the wait was armed. This is a latch (boolean), not a
+   * counter — see the releaseWait comment. */
   private pendingRelease = false;
-  /** abortCurrentTurn 대상 — speak() 진행 중에만 채워진다. meeting-broker.js:_currentSessionKey/_currentAgentId. */
+  /** Target for abortCurrentTurn — populated only while speak() is in progress. Matches
+   * meeting-broker.js:_currentSessionKey/_currentAgentId. */
   private current: NpcRuntime | null = null;
 
   constructor(config: EngineConfig, callbacks: EngineCallbacks) {
@@ -199,10 +218,10 @@ export class ChannelRuntime {
   }
 
   /**
-   * RunMode를 바꾼다. meeting-broker.js:213-225 이식.
-   * 보존된 결함: mode가 "auto"/"manual"/"directed" 중 하나가 아니면 아무 일도 하지 않고 조용히
-   * 무시한다 — 에러도, 콜백도 없어 호출자는 실패를 알 방법이 없다. 마이그레이션 단계에서는
-   * 고치지 않고 그대로 옮긴다(별도 후속 수정 후보).
+   * Changes the RunMode. Ported from meeting-broker.js:213-225.
+   * Preserved defect: if mode isn't one of "auto"/"manual"/"directed", this silently does
+   * nothing — no error, no callback, and the caller has no way to know it failed. Left as-is
+   * during migration and not fixed (a candidate for a separate follow-up fix).
    */
   setMode(mode: string): void {
     if (mode !== "auto" && mode !== "manual" && mode !== "directed") return;
@@ -213,10 +232,12 @@ export class ChannelRuntime {
   }
 
   /**
-   * manual 모드의 대기를 해제해 다음 라운드로 진행시킨다. meeting-broker.js:227-234 이식.
-   * commandQueue에 넣는 커맨드는 drainCommands가 소비하지 않는다 — 브로커 원본도 동일하게
-   * "nextTurn" 타입을 무시하므로(broker.js:262-274), 실질 효과는 대기 해제뿐이다. 큐에 넣지 않아도
-   * 관찰 가능한 동작은 동일하지만, 포트 대상 구조를 그대로 남기기 위해 큐잉은 생략한다.
+   * Releases manual mode's wait to advance to the next round. Ported from
+   * meeting-broker.js:227-234.
+   * The command pushed onto commandQueue is not consumed by drainCommands — the original
+   * broker also ignores the "nextTurn" type the same way (broker.js:262-274), so the only
+   * real effect is releasing the wait. The observable behavior would be identical without
+   * queuing it, but it's kept to preserve the structure being ported.
    */
   nextTurn(): void {
     if (this.runMode !== "manual") return;
@@ -224,17 +245,20 @@ export class ChannelRuntime {
   }
 
   /**
-   * 지정한 NPC에게 발언권을 강제로 준다. meeting-broker.js:236-247 이식.
-   * 보존된 결함: npcId가 참가자 목록에 없어도 여기서는 검증하지 않는다. run()이 다음 루프에서
-   * 그 npcId로 참가자를 찾다가 실패하면 조용히 아무도 발언하지 않고 대기로 돌아간다
-   * (meeting-broker.js의 run()이 agent를 못 찾을 때와 동일한 무음 실패 — 고치지 않는다).
+   * Forces the floor onto a given NPC. Ported from meeting-broker.js:236-247.
+   * Preserved defect: this doesn't validate that npcId is in the participant list. If run()
+   * looks for that npcId among participants on the next loop and fails, it silently has no
+   * one speak and returns to waiting (the same silent failure as when the original
+   * meeting-broker.js's run() can't find the agent — left unfixed).
    *
-   * setMode()처럼 clearAutoResumeTimer()를 호출 즉시 부른다(드레인을 기다리지 않는다).
-   * manual 대기가 풀릴 때마다 run()이 무조건 새 자동 복귀 타이머를 재장전하므로(위 run() 5번
-   * 참고), 여기서 미리 지우지 않으면 이전 타이머의 핸들을 그 새 타이머가 덮어써 이전 타이머가
-   * 필드 참조를 잃은 채 고아로 계속 돌다가, 뒤이어 사용자가 만든 개입과 무관하게 만료되어
-   * auto로 튄다(takeGrant()가 발언권을 소비할 때 거는 clearAutoResumeTimer()만으로는 이 경합을
-   * 못 막는다 — 그 시점엔 이미 새 타이머로 필드가 덮인 뒤다).
+   * Like setMode(), calls clearAutoResumeTimer() immediately (doesn't wait for the drain).
+   * Every time the manual wait is released, run() unconditionally re-arms a new
+   * auto-resume timer (see run() step 5 above), so if this doesn't clear it first, the old
+   * timer's handle gets overwritten by the new timer and the old one keeps running
+   * orphaned, its field reference lost — it then expires later, unrelated to the user's
+   * subsequent intervention, and jumps to auto (the clearAutoResumeTimer() that
+   * takeGrant() calls when consuming the floor alone can't prevent this race — by that point
+   * the field has already been overwritten by the new timer).
    */
   directSpeak(npcId: string): void {
     this.inbox.push(npcId, "user");
@@ -247,22 +271,24 @@ export class ChannelRuntime {
     this.releaseWait();
   }
 
-  /** 발언권을 쥔 런타임에 abort 를 요청한다. 회의 정책에서 이 포인터는 항상 0개나 1개다.
-   * meeting-broker.js:249-253 이식. */
+  /** Requests an abort on the runtime currently holding the floor. In meeting policy this
+   * pointer is always 0 or 1. Ported from meeting-broker.js:249-253. */
   abortCurrentTurn(): void {
     this.current?.abort();
   }
 
-  /** 대기 프라미스를 먼저 걸어둔 뒤(need) 콜백을 부른다 — 콜백이 동기적으로
-   * stop()/nextTurn()/setMode()/directSpeak()를 호출해 대기를 즉시 해제해도 안전하게 걸리도록 하는
-   * 순서다(원본은 콜백 호출 뒤에 대기를 걸어, 콜백에서 동기 해제를 시도하면 걸리지 않은 대기를
-   * 풀려다 놓치고 다음에 새로 건 대기가 영영 안 풀리는 경합이 있다 — 테스트 결정성을 위해 이 순서만
-   * 안전하게 조정했다. 관찰 가능한 타이밍/순서는 바뀌지 않는다).
+  /** Arms the wait promise first (need), then calls the callback — an order that stays safe
+   * even if the callback synchronously calls stop()/nextTurn()/setMode()/directSpeak() to
+   * release the wait immediately (the original calls the callback before arming the wait, so
+   * a synchronous release attempted from the callback misses a wait that isn't armed yet, and
+   * the wait armed afterward never gets released — this order was adjusted only for test
+   * determinism. Observable timing/ordering is unchanged).
    */
   private armWait(): Promise<void> {
-    // 대기를 걸기 전에 이미 해제가 도착했으면 그것을 소비하고 곧바로 통과시킨다.
-    // 이 래치가 없으면 releaseWait()가 waitResolve 를 못 찾고 조용히 버려지고, 뒤이어
-    // 걸린 대기는 아무도 깨우지 않아 회의가 멈춘 채로 남는다.
+    // If a release already arrived before the wait was armed, consume it and pass straight
+    // through. Without this latch, releaseWait() wouldn't find waitResolve and would be
+    // silently dropped, and the wait armed right after would never be woken — leaving the
+    // meeting stuck.
     if (this.pendingRelease) {
       this.pendingRelease = false;
       return Promise.resolve();
@@ -278,9 +304,10 @@ export class ChannelRuntime {
       this.waitResolve = null;
       return;
     }
-    // 아직 대기가 걸리지 않았다 — 버리지 말고 기억해 둔다. 카운터가 아니라 **래치**인
-    // 이유: 해제가 두 번 도착해도 대기 하나만 통과해야 한다. 세었다면 쌓인 해제가 이후
-    // 대기들을 연달아 통과시켜 manual 모드가 사실상 auto 처럼 돈다.
+    // No wait has been armed yet — remember it instead of dropping it. Why this is a
+    // **latch** and not a counter: even if the release arrives twice, only one wait should
+    // pass through. If it were counted, the accumulated releases would let subsequent waits
+    // pass through one after another, and manual mode would effectively behave like auto.
     this.pendingRelease = true;
   }
 
@@ -292,10 +319,10 @@ export class ChannelRuntime {
   }
 
   /**
-   * setMode 커맨드만 소비한다. 발언권 부여는 FloorInbox 가 따로 들고 있다.
+   * Consumes only setMode commands. Floor grants are held separately by FloorInbox.
    *
-   * 예전에는 여기서 부여도 함께 드레인하면서 "하나만 살아남는" 슬롯 역할을 했다.
-   * 그 구조에서는 지목이 로그도 없이 버려졌다 — 이제 인박스가 순서대로 보관한다.
+   * This used to also drain grants here, acting as a "only one survives" slot. Under that
+   * structure a mention could be dropped with no log — now the inbox keeps them in order.
    */
   private drainCommands(): void {
     let modeChanged = false;
@@ -312,39 +339,44 @@ export class ChannelRuntime {
   async run(): Promise<void> {
     this.running = true;
     this.endReason = null;
-    // 이전 run()이 남긴 실패 카운터를 물려받으면 두 번째 run()은 예산 3이 아니라 1로 시작한다.
+    // If the previous run() leaves its failure counters behind, the second run() starts with
+    // a budget of 1 instead of 3.
     for (const r of this.runtimes.values()) r.resetFailures();
 
     while (this.running && !this.isFinished()) {
-      // 1. 커맨드 큐 비우기(setMode)
+      // 1. Drain the command queue (setMode)
       this.drainCommands();
 
-      // 2. 사용자 메시지 큐 비우기
+      // 2. Drain the user message queue
       while (this.userMessageQueue.length > 0) {
         const { userName, content } = this.userMessageQueue.shift()!;
         this.transcript.add(USER_SPEAKER_ID, userName, content, this.now());
         this.consecutivePasses = 0;
       }
 
-      // 3+5. 다음 발언자 결정 — 지정 발언(어느 runMode 에서든 최우선) 또는 후보 산출 →
-      //    (필요 시) 폴링 → 선발. MeetingFloorController.next()에 위임한다(floor-controller.ts).
-      //    보존된 결함: npcId 를 참가자 목록에서 못 찾으면 조용히 아무도 발언하지 않는다.
+      // 3+5. Decide the next speaker — a direct grant (always highest priority regardless of
+      //    runMode) or candidate generation → (if needed) polling → selection. Delegated to
+      //    MeetingFloorController.next() (floor-controller.ts).
+      //    Preserved defect: if npcId can't be found in the participant list, no one silently
+      //    speaks.
       //
-      // directed 이고 인박스가 완전히 비어 있으면 floor.next()를 부르지 않고 곧장 대기를
-      // 건다. next()는 async라 그 결과를 await하면 반드시 마이크로태스크 한 틱이 끼는데,
-      // 원본 코드(동기 takeGrant())는 그 틱 없이 같은 이벤트 루프 턴 안에서 armWait()까지
-      // 도달했다 — directSpeak()가 run()과 같은 동기 구간에서 호출되는 테스트가 이 틱에
-      // 의존한다(그 틱이 생기면 push 가 armWait() 이전에 일어나 releaseWait()가 무효화된다).
-      // 인박스가 비어 있지 않을 때는 이 최적화가 필요 없다 — 부여가 이미 쌓여 있으므로
-      // 이번 틱이든 다음 틱이든 next()가 그것을 집어간다.
+      // In directed mode with a completely empty inbox, skip calling floor.next() and go
+      // straight to arming the wait. next() is async, so awaiting its result necessarily
+      // inserts one microtask tick, whereas the original code's synchronous takeGrant()
+      // reached armWait() within the same event loop turn without that tick — a test where
+      // directSpeak() is called in the same synchronous section as run() depends on this tick
+      // (if that tick existed, the push would happen before armWait() and releaseWait() would
+      // be nullified). When the inbox isn't empty this optimization isn't needed — a grant is
+      // already queued, so next() will pick it up whether it's this tick or the next.
 
       const decision = await this.floor.next({
         participants: this.participantsView(),
         runtimeFor: (npcId) => this.runtimes.get(npcId),
         remainingTurns: (npcId) => this.remainingTurns(npcId),
         lastSpeakerId: this.lastSpeakerId,
-        // directed 는 폴링 없이 지정 발언만 받는다. 부여를 먼저 보는 구조이므로 이 플래그가
-        // 없으면 부여가 없을 때 없던 LLM 폴링 호출이 매 라운드 생긴다.
+        // directed only receives direct grants with no polling. Since grants are checked
+        // first, without this flag an LLM poll that didn't exist before would fire every
+        // round when there's no grant.
         pollingAllowed: this.runMode !== "directed",
         onSkippedGrant: (npcId, reason) => this.callbacks.onMentionSkipped?.(npcId, reason),
       });
@@ -365,8 +397,8 @@ export class ChannelRuntime {
         continue;
       }
 
-      // 4. directed: 폴링 없이 대기만 한다 — 다음 directSpeak은 다음 루프의 3번에서 처리된다.
-      //    meeting-broker.js:169-173 이식.
+      // 4. directed: waits only, with no polling — the next directSpeak is handled in step 3
+      //    of the next loop. Ported from meeting-broker.js:169-173.
       if (this.runMode === "directed") {
         const waiting = this.armWait();
         this.callbacks.onWaitingInput?.(null);
@@ -375,8 +407,9 @@ export class ChannelRuntime {
       }
 
       if (decision.kind === "no-candidates") {
-        // 왜 아무도 없는가를 구분한다. 전원이 실패 예산을 소진한 것과, 다들 할당량을
-        // 다 쓴 것은 운영상 전혀 다른 상황이다 — 전자는 백엔드가 죽었다는 뜻이다.
+        // Distinguish why there's no one. Everyone exhausting their failure budget and
+        // everyone using up their quota are operationally very different situations — the
+        // former means the backend is dead.
         const seated = this.config.participants.filter((p) => p.seated);
         const allBurnedOut =
           seated.length > 0 &&
@@ -385,11 +418,12 @@ export class ChannelRuntime {
         break;
       }
 
-      // pollResult !== null 일 때만, 그리고 그때는 내용과 무관하게 통지한다 — 폴링 참가자
-      // 전원의 어댑터가 실패하면 raises/passes 가 둘 다 빈 배열이 되지만, 그래도 폴링은
-      // 일어났다는 사실 자체를 클라이언트가 알아야 한다. all-passed/speaker 두 갈래가
-      // 같은 필드(decision.pollResult)를 쓰므로 kind 와 무관하게 갈래 앞으로 뺀다 — 한쪽만
-      // 고치다 다른 쪽에 남는 사고를 구조적으로 없앤다.
+      // Notify only when pollResult !== null, and when that's true, notify regardless of
+      // content — if every polled participant's adapter fails, raises/passes both become
+      // empty arrays, but the client still needs to know polling happened at all. Since the
+      // all-passed/speaker branches share the same field (decision.pollResult), this is
+      // pulled out ahead of the kind check — structurally preventing a fix applied to one
+      // branch from being missed on the other.
       if (decision.pollResult) {
         this.callbacks.onPollResult?.(
           decision.pollResult.raises,
@@ -409,27 +443,31 @@ export class ChannelRuntime {
         const runtime = this.runtimes.get(decision.npcId);
         if (runtime) {
           await this.speak(runtime);
-          // 실패한 턴은 트랜스크립트에 아무것도 남기지 않아 다른 어떤 종료 조건도 전진시키지
-          // 못한다 — 소진된 NPC 는 다음 루프의 후보 필터에서 빠진다(peer/group/meeting 모두 적용).
+          // A failed turn leaves nothing in the transcript, so it can't advance any other
+          // termination condition — a burned-out NPC drops out of the candidate filter on
+          // the next loop (applies to peer/group/meeting alike).
         }
       }
 
-      // 6. manual은 발언 여부와 무관하게 매 라운드 끝에 항상 대기한다(쿨다운 없음).
-      //    auto만 쿨다운 후 계속 돈다. meeting-broker.js:159-167 이식.
+      // 6. manual always waits at the end of every round regardless of whether anyone spoke
+      //    (no cooldown). Only auto keeps going after a cooldown. Ported from
+      //    meeting-broker.js:159-167.
       if (this.runMode === "manual") {
         const waiting = this.armWait();
         this.callbacks.onWaitingInput?.({ raises: [], passes: [] });
         await waiting;
 
         if (this.hybridMode && this.hybridAutoResumeMs && this.runMode === "manual") {
-          // 필드에 곧바로 대입하면 이전 타이머의 핸들을 잃는다 — 그 타이머는 살아 있는 채로
-          // 취소 불가능해지고, 나중에 만료되며 this.autoResumeTimer = null 로 **현재** 타이머의
-          // 핸들까지 지운다. 사용자가 nextTurn 을 연달아 누르면 매 라운드 고아가 하나씩 쌓여,
-          // 아직 수동으로 회의를 몰고 있는 동안 옛 타이머가 만료돼 auto 로 튀었다.
+          // Assigning directly to the field would lose the previous timer's handle — that
+          // timer would stay alive, uncancellable, and later expire, wiping out the
+          // **current** timer's handle too via this.autoResumeTimer = null. If the user
+          // presses nextTurn repeatedly, an orphan piles up every round, and while manual
+          // control is still ongoing, an old timer expires and jumps to auto.
           //
-          // 취소를 nextTurn() 쪽이 아니라 **여기** 두는 이유: 타이머 핸들이 덮이는 자리가
-          // 여기 한 곳뿐이다. 대기를 푸는 경로(nextTurn/setMode/directSpeak/stop)마다 취소를
-          // 심으면 다섯 번째 경로가 생길 때 또 빠뜨린다 — 실제로 이 결함이 그렇게 생겼다.
+          // Why the cancellation lives **here** and not in nextTurn(): this is the only
+          // place where the timer handle gets overwritten. If cancellation were planted at
+          // every path that releases the wait (nextTurn/setMode/directSpeak/stop), a fifth
+          // path would miss it again — this is in fact how this defect happened.
           this.clearAutoResumeTimer();
           this.autoResumeTimer = setTimeout(() => {
             this.autoResumeTimer = null;
@@ -458,11 +496,13 @@ export class ChannelRuntime {
   }
 
   /**
-   * turn-policy(eligibleParticipants/selectNextSpeaker)에 넘길 참가자 스냅샷을 매 라운드
-   * 새로 만든다. Transcript가 lastSpokeAt/turnCount의 유일한 출처다 — EngineParticipant 쪽
-   * 필드는 생성 시 값(항상 0)에서 갱신되지 않으므로, 그걸 직접 참조하면 공정성 선택
-   * (meeting/group의 "가장 오래 발언하지 않은 참가자")이 사실상 배열의 첫 후보로 고착된다.
-   * 매번 파생시키면 갱신을 깜빡할 여지 자체가 없다.
+   * Builds a fresh participant snapshot every round to pass to turn-policy
+   * (eligibleParticipants/selectNextSpeaker). Transcript is the sole source of truth for
+   * lastSpokeAt/turnCount — EngineParticipant's own fields are never updated from their
+   * creation-time value (always 0), so referencing them directly would make fairness
+   * selection (meeting/group's "participant who hasn't spoken the longest") effectively
+   * lock onto the first candidate in the array. Deriving it fresh each time removes any
+   * chance of forgetting to update it.
    */
   private participantsView(): Participant[] {
     return this.config.participants.map((p) => ({
@@ -481,13 +521,13 @@ export class ChannelRuntime {
     );
   }
 
-  /** 발언권을 부여하고 스트리밍 응답을 받아 트랜스크립트에 기록한다. */
+  /** Grants the floor and receives the streamed response, recording it in the transcript. */
   private async speak(runtime: NpcRuntime): Promise<void> {
     this.callbacks.onTurnStart?.(runtime.npcId, runtime.displayName);
     this.current = runtime;
 
-    // takeTurn 은 throw 하지 않는다 — 모든 실패를 SpeakOutcome 으로 돌려준다.
-    // 그래야 콜백 호출 조건이 한곳(여기)에 모인다.
+    // takeTurn doesn't throw — every failure is returned as a SpeakOutcome.
+    // That way the callback-invocation condition lives in one place (here).
     const outcome = await runtime.takeTurn(this.remainingTurns(runtime.npcId), {
       onChunk: (chunk) => this.callbacks.onTurnChunk?.(runtime.npcId, chunk),
     });
@@ -497,31 +537,36 @@ export class ChannelRuntime {
       this.transcript.add(runtime.npcId, runtime.displayName, outcome.text, this.now());
       this.lastSpeakerId = runtime.npcId;
       this.callbacks.onTurnEnd?.(runtime.npcId, outcome.text);
-      // directSpeak() 메서드를 부르지 않는다 — 그쪽은 사용자 지목용이라
-      // abortCurrentTurn() 으로 진행 중인 턴을 끊고 hybridMode 를 manual 로 승격시킨다.
-      // 멘션은 발언이 끝난 뒤의 힌트일 뿐이므로 인박스에만 넣는다.
+      // Don't call the directSpeak() method — that one is for user-directed grants and
+      // interrupts the in-progress turn via abortCurrentTurn() and promotes hybridMode to
+      // manual. A mention is just a hint after the turn is already done, so it only goes
+      // into the inbox.
       if (outcome.mentionNpcId) this.inbox.push(outcome.mentionNpcId, "mention");
       return;
     }
 
     if (outcome.kind === "empty") {
-      // "TO: 이름"만 있고 본문이 없는 응답이거나, 쓸 만한 텍스트가 하나도 없는 턴이다.
-      // 트랜스크립트에는 남기지 않지만 **말풍선은 닫아 준다** — 클라이언트의 스트리밍
-      // 말풍선은 onTurnEnd 가 만드는 done:true 로만 닫히고, 같은 신호가 "발언 중" 표시도
-      // 푼다. 두 사유를 구분하는 이유: 지목만 남긴 턴은 다음 발언자가 정해진 정상 흐름이고,
-      // 아무것도 못 만든 턴은 백엔드를 의심해야 하는 상황이다.
+      // Either a response that had only "TO: name" and no body, or a turn with no usable
+      // text at all. It's not recorded in the transcript, but **the speech bubble is still
+      // closed** — the client's streaming speech bubble is only closed by the done:true that
+      // onTurnEnd produces, and the same signal also clears the "speaking" indicator. Why the
+      // two reasons are distinguished: a turn that left only a mention is a normal flow where
+      // the next speaker is already decided, while a turn that produced nothing at all is a
+      // situation where the backend should be suspected.
       this.callbacks.onTurnEnd?.(runtime.npcId, outcome.partialText, {
         aborted: true,
         reason: outcome.mentionNpcId ? "empty_after_mention" : "empty_response",
       });
-      // 본문이 비어 실패로 처리되는 경우에도 지목 자체는 유효한 의사표시다.
+      // Even when the body is empty and treated as a failure, the mention itself is still a
+      // valid signal of intent.
       if (outcome.mentionNpcId) this.inbox.push(outcome.mentionNpcId, "mention");
       return;
     }
 
     this.callbacks.onError?.(outcome.error, runtime.npcId);
-    // 타임아웃이든 평범한 예외든 말풍선은 반드시 닫는다. 예전에는 타임아웃만 닫아서,
-    // 어댑터가 다른 이유로 터지면 onError 만 나가고 말풍선이 영영 열린 채 남았다.
+    // Close the speech bubble whether it's a timeout or a plain exception. It used to close
+    // only on timeout, so if the adapter blew up for any other reason, only onError fired and
+    // the bubble stayed open forever.
     this.callbacks.onTurnEnd?.(runtime.npcId, outcome.partialText, {
       aborted: true,
       reason: outcome.timedOut ? `timeout:${outcome.timedOut.kind}` : "adapter_error",

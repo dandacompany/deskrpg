@@ -4,7 +4,7 @@ import { OpenChatRuntime } from "./open-chat-runtime";
 import type { EngineParticipant } from "./types";
 import type { NpcAdapter, AdapterExecuteOptions } from "@/lib/adapters/types";
 
-/** 지정한 시간만큼 기다렸다가 정해진 답을 돌려주는 목. 동시성 검증용. */
+/** A mock that waits the given time before returning a fixed reply. For concurrency verification. */
 function delayed(reply: string, ms: number): NpcAdapter {
   return {
     type: "mock",
@@ -58,7 +58,7 @@ function p(npcId: string, displayName: string, adapter: NpcAdapter): EngineParti
 const TIMEOUT = { idleMs: 3000, maxMs: 5000 };
 
 describe("OpenChatRuntime", () => {
-  test("한 메시지에 둘을 지명하면 둘 다 말한다", async () => {
+  test("mentioning two in one message makes both speak", async () => {
     const a = p("n1", "단비", always("김치찌개요"));
     const b = p("n2", "하늘", always("저도요"));
     const spoke: string[] = [];
@@ -72,8 +72,8 @@ describe("OpenChatRuntime", () => {
     assert.deepEqual(spoke.sort(), ["n1", "n2"]);
   });
 
-  test("먼저 끝난 쪽이 먼저 말한다 — 순서대로 돌지 않는다", async () => {
-    // 이 단언이 "동시 발언"의 전부다. 순차 구현이면 항상 지명 순서(단비→하늘)로 나온다.
+  test("whichever finishes first speaks first — it doesn't go in call order", async () => {
+    // This assertion is the whole point of "simultaneous speaking." A sequential implementation would always come out in mention order (단비→하늘).
     const a = p("n1", "단비", delayed("느린 답", 80));
     const b = p("n2", "하늘", delayed("빠른 답", 10));
     const spoke: string[] = [];
@@ -91,7 +91,7 @@ describe("OpenChatRuntime", () => {
     );
   });
 
-  test("사람이 지명하면 예산을 쓰지 않는다 — 예산 0 이어도 전원 대답", async () => {
+  test("a human mention doesn't spend budget — everyone still answers even at budget 0", async () => {
     const a = p("n1", "단비", always("네"));
     const b = p("n2", "하늘", always("네"));
     const spoke: string[] = [];
@@ -105,8 +105,8 @@ describe("OpenChatRuntime", () => {
     assert.equal(spoke.length, 2, "사람이 부른 것은 예산과 무관하다");
   });
 
-  test("NPC 가 지명하면 예산을 쓰고, 다 쓰면 멈춘다", async () => {
-    // 단비가 하늘을, 하늘이 단비를 계속 부른다. 예산 2 면 NPC 발 지명은 2회까지.
+  test("an NPC mention spends budget, and it stops once budget runs out", async () => {
+    // 단비 keeps calling 하늘 and 하늘 keeps calling 단비. With a budget of 2, NPC-issued mentions cap at 2.
     const a = p("n1", "단비", always("@[하늘] 네 생각은?"));
     const b = p("n2", "하늘", always("@[단비] 아니 네 생각은?"));
     const spoke: string[] = [];
@@ -117,7 +117,7 @@ describe("OpenChatRuntime", () => {
 
     await rt.handleHumanMessage("지호", "@[단비] 시작해줘");
 
-    // 사람이 부른 단비 1회(무료) + NPC 발 지명 2회 = 최대 3회
+    // 1 human-called turn for 단비 (free) + 2 NPC-issued mentions = 3 turns max
     assert.ok(spoke.length <= 3, `예산이 사슬을 끊어야 한다. 실제: ${spoke.length}회`);
     assert.ok(
       spoke.length >= 2,
@@ -125,7 +125,7 @@ describe("OpenChatRuntime", () => {
     );
   });
 
-  test("이미 말하는 중인 NPC 를 다시 부르면 순서대로 처리한다", async () => {
+  test("calling an already-speaking NPC again is processed in order", async () => {
     const a = p("n1", "단비", delayed("네", 60));
     const starts: string[] = [];
     const rt = new OpenChatRuntime(
@@ -134,7 +134,7 @@ describe("OpenChatRuntime", () => {
     );
 
     const first = rt.handleHumanMessage("지호", "@[단비] 하나");
-    // 첫 턴이 끝나기 전에 또 부른다
+    // Call it again before the first turn finishes
     await new Promise((r) => setTimeout(r, 10));
     assert.equal(rt.isSpeaking("n1"), true);
     await rt.handleHumanMessage("지호", "@[단비] 둘");
@@ -143,7 +143,7 @@ describe("OpenChatRuntime", () => {
     assert.deepEqual(starts, ["n1", "n1"], "두 번째 사람 호출을 버리지 않고 다음 턴으로 처리한다");
   });
 
-  test("어댑터가 터져도 다른 NPC 는 말한다", async () => {
+  test("if an adapter throws, other NPCs still speak", async () => {
     const a = p("n1", "단비", throwing());
     const b = p("n2", "하늘", always("저는 괜찮아요"));
     const spoke: string[] = [];
@@ -164,9 +164,9 @@ describe("OpenChatRuntime", () => {
     assert.equal(errors.length, 1);
   });
 
-  test("소진된 NPC 를 지명하면 onMentionSkipped 만 부르고 말하지 않는다", async () => {
-    // 실패를 MAX_CONSECUTIVE_FAILURES(3)만큼 쌓아 실제로 burned out 상태를 만든다 —
-    // 내부 필드를 건드리지 않아야 "언젠가 이 분기로 들어온다"가 진짜로 고정된다.
+  test("mentioning an exhausted NPC only calls onMentionSkipped and doesn't speak", async () => {
+    // Stack up failures to MAX_CONSECUTIVE_FAILURES (3) to actually reach the burned-out state —
+    // doing it without touching internal fields is what actually locks down "this branch is reachable."
     const a = p("n1", "단비", throwing());
     const starts: string[] = [];
     const skipped: Array<[string, string]> = [];
@@ -193,8 +193,8 @@ describe("OpenChatRuntime", () => {
     assert.equal(starts.length, 3, "소진된 NPC 는 새 턴을 열지 않는다");
   });
 
-  test("onTurnStart 는 호출자의 소켓 id 를 싣는다 — NPC 사슬도 같은 값", async () => {
-    // 이 값이 클라이언트의 A* 대상이다. null 이면 아무 클라이언트도 걷기를 시작하지 않는다.
+  test("onTurnStart carries the caller's socket id — an NPC chain carries the same value", async () => {
+    // This value is the client's A* target. If it's null, no client starts walking.
     const a = p("n1", "단비", always("@[하늘] 네 생각은?"));
     const b = p("n2", "하늘", always("저는 좋아요"));
     const starts: Array<[string, string | null]> = [];
@@ -215,7 +215,7 @@ describe("OpenChatRuntime", () => {
     );
   });
 
-  test("호출자가 바뀌면 다음 턴부터 새 호출자에게 걸어간다", async () => {
+  test("when the caller changes, the next turn walks to the new caller", async () => {
     const a = p("n1", "단비", always("네"));
     const starts: Array<string | null> = [];
     const rt = new OpenChatRuntime(
@@ -233,9 +233,9 @@ describe("OpenChatRuntime", () => {
     );
   });
 
-  test("onTurnStart 가 던져도 그 NPC 가 영구히 잠기지 않는다", async () => {
-    // io.emit 은 호출부가 주입하는 남의 코드다. 한 번 던졌다고 speaking 집합에 남으면
-    // 그 NPC 는 프로세스가 죽을 때까지 이 채널에서 말하지 못한다.
+  test("if onTurnStart throws, that NPC isn't locked out permanently", async () => {
+    // io.emit is someone else's code injected by the caller. If throwing once left it in the
+    // speaking set, that NPC couldn't speak in this channel until the process died.
     const a = p("n1", "단비", always("네"));
     let boom = true;
     const rt = new OpenChatRuntime(
@@ -255,7 +255,7 @@ describe("OpenChatRuntime", () => {
     assert.equal(rt.isSpeaking("n1"), false, "실패한 턴 뒤에도 잠금이 풀려 있어야 한다");
   });
 
-  test("지명이 없으면 아무도 깨지 않는다", async () => {
+  test("with no mention, nobody wakes up", async () => {
     const a = p("n1", "단비", always("네"));
     const spoke: string[] = [];
     const rt = new OpenChatRuntime(
@@ -268,7 +268,7 @@ describe("OpenChatRuntime", () => {
     assert.deepEqual(spoke, [], "지명 전용이므로 그냥 하는 말에는 반응하지 않는다");
   });
 
-  test("selectResponders 가 있으면 지명 대신 그 결과를 깨운다 — 지명 없는 메시지에도 전원 대답", async () => {
+  test("when selectResponders is set, it wakes that result instead of mentions — everyone answers even with no mention", async () => {
     const spoke: string[] = [];
     const rt = new OpenChatRuntime(
       {
@@ -286,7 +286,7 @@ describe("OpenChatRuntime", () => {
     assert.deepEqual(spoke, ["a"]);
   });
 
-  test("지명했지만 아무 멤버에도 안 맞으면 onMentionNoMatch 를 부른다 (M-7)", async () => {
+  test("a mention that matches no member calls onMentionNoMatch (M-7)", async () => {
     const spoke: string[] = [];
     const noMatch: (string | null)[] = [];
     const rt = new OpenChatRuntime(
@@ -303,7 +303,7 @@ describe("OpenChatRuntime", () => {
     assert.deepEqual(noMatch, ["sock-1"], "부른 사람의 소켓 id 를 싣는다");
   });
 
-  test("지명이 없으면 onMentionNoMatch 를 부르지 않는다 (M-7)", async () => {
+  test("with no mention, onMentionNoMatch isn't called (M-7)", async () => {
     const noMatch: (string | null)[] = [];
     const rt = new OpenChatRuntime(
       { participants: [p("n1", "단비", always("네"))], recent: () => [], turnTimeout: TIMEOUT },
@@ -315,7 +315,7 @@ describe("OpenChatRuntime", () => {
     assert.deepEqual(noMatch, [], "지목 표기가 없으면 침묵이 정상이다");
   });
 
-  test("유효한 지명이면 onMentionNoMatch 를 부르지 않는다 (M-7)", async () => {
+  test("with a valid mention, onMentionNoMatch isn't called (M-7)", async () => {
     const noMatch: (string | null)[] = [];
     const rt = new OpenChatRuntime(
       { participants: [p("n1", "단비", always("네"))], recent: () => [], turnTimeout: TIMEOUT },
@@ -412,7 +412,7 @@ test("ordinary completion closes the chunk callback before a late adapter delta 
   assert.deepEqual(chunks, []);
 });
 
-test("사람이 부른 턴의 대본 둘째 줄에 [대화 상대] 가 실리고, NPC 가 이어 부른 턴에는 실리지 않는다", async () => {
+test("a human-called turn's prompt carries [대화 상대] on the second line, but an NPC-chained turn doesn't", async () => {
   const prompts = new Map<string, string[]>();
   const capturing = (npcId: string, reply: string): NpcAdapter =>
     ({
