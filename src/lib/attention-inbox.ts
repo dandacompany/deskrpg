@@ -1,28 +1,28 @@
 /**
- * 판단 모음 — **사람이 답해야 하는 것만** 모은다.
+ * A collection of judgments — collects **only what a human needs to answer**.
  *
- * Paperclip 의 수신함과 같은 기준이다: "무엇이 이것을 다음으로 전진시키는가" 에 답할 수
- * 없는 줄은 넣지 않는다. 방치된 항목을 자동으로 재배정하지 않고 드러낸다.
+ * Same criterion as Paperclip's inbox: a line that can't answer "what moves this forward" is
+ * never included. Neglected items are surfaced rather than auto-reassigned.
  *
- * 순수 함수다 — 화면과 지표가 같은 목록을 보게 하려면 조립이 한 곳이어야 한다.
- * 세는 일은 `needs-attention.ts` 가 맡고, 이 파일은 **줄을 만든다.**
+ * A pure function — assembly must live in one place for the screen and the metrics to see the
+ * same list. Counting is `needs-attention.ts`'s job; this file **builds the rows.**
  */
 export type AttentionRowKind = "approval" | "blocked" | "review" | "cron_failed";
 
 export type AttentionRow = {
   kind: AttentionRowKind;
-  /** 승인이면 approvalId, 카드면 taskId, 크론이면 jobId. */
+  /** approvalId for an approval, taskId for a card, jobId for a cron job. */
   id: string;
   title: string;
-  /** 발생 시각(ISO). 플러그인이 못 준 카드만 null 이다. */
+  /** When it occurred (ISO). Null only for a card the plugin couldn't provide it for. */
   at: string | null;
   requestedBy: string | null;
-  /** 승인은 묶인 카드 수, 나머지는 1. */
+  /** The number of bundled cards for an approval, 1 for everything else. */
   count: number;
 };
 
 export type AttentionInboxInput = {
-  /** `at` 은 호출자가 `taskTimeMs` 로 읽어 ISO 로 바꾼 값. 못 읽으면 null. */
+  /** `at` is the value the caller read with `taskTimeMs` and converted to ISO. Null if it couldn't be read. */
   cards: readonly { id: string; status: string; title: string; at?: string | null }[];
   approvals: readonly {
     id: string;
@@ -41,7 +41,7 @@ export type AttentionInboxInput = {
 
 export function buildAttentionInbox(input: AttentionInboxInput): AttentionRow[] {
   const rows: AttentionRow[] = [];
-  // 승인 대기 카드는 각각이 아니라 **승인 한 줄**로 모인다 — 사용자가 한 번 눌러 푸는 단위다.
+  // Cards awaiting approval are collected as **one approval row**, not individually — that's the unit a user unblocks with a single click.
   const claimed = new Set<string>();
   for (const approval of input.approvals) {
     for (const taskId of approval.taskIds) claimed.add(taskId);
@@ -55,7 +55,7 @@ export function buildAttentionInbox(input: AttentionInboxInput): AttentionRow[] 
     });
   }
   for (const card of input.cards) {
-    // 승인에 묶인 blocked 카드를 또 내면 사용자가 같은 것을 두 번 본다.
+    // Emitting a blocked card that's already bundled into an approval would show the user the same thing twice.
     if (card.status === "blocked" && !claimed.has(card.id))
       rows.push({
         kind: "blocked",
@@ -85,8 +85,8 @@ export function buildAttentionInbox(input: AttentionInboxInput): AttentionRow[] 
       count: 1,
     });
 
-  // 오래된 것이 위로 — 방치를 드러내는 것이 이 화면의 일이다. 시각을 못 읽은 줄만 뒤로
-  // 보내고 id 로 갈라, 같은 입력에 늘 같은 순서가 나오게 한다.
+  // Oldest goes to the top — surfacing neglect is this screen's job. Only rows whose time
+  // couldn't be read go last, tie-broken by id, so the same input always yields the same order.
   return rows.sort((a, b) => {
     if (a.at && b.at) return a.at === b.at ? a.id.localeCompare(b.id) : a.at < b.at ? -1 : 1;
     if (a.at) return -1;

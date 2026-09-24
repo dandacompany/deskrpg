@@ -1,8 +1,10 @@
 /**
- * "내 캐릭터" 는 사용자당 하나다 — 이 사용자 자신이다(스펙 2026-09-18).
+ * "My character" is one per user — this user themself (spec 2026-09-18).
  *
- * DB 에는 예전 다중 캐릭터가 남아 있을 수 있어 유일 제약을 걸지 않는다. 대신 **가장 이른 캐릭터**를
- * "나" 로 삼고 나머지는 보존만 한다. 이 규칙은 여기 한 곳에만 있다 — API·페이지·소켓이 전부 이 함수를 쓴다.
+ * The DB may still hold old multi-character rows, so no unique constraint is enforced.
+ * Instead, the **earliest character** is treated as "me" and the rest are kept only for
+ * preservation. This rule lives in exactly one place — API, pages, and sockets all use
+ * this function.
  */
 import { asc, eq } from "drizzle-orm";
 
@@ -62,7 +64,7 @@ export function isMyCharacter(mine: MyCharacter | null, characterId: string): bo
   return !!mine && mine.id === characterId;
 }
 
-/** `bio` 입력 검증 — POST/PATCH 공용. 빈 값은 null 로, 2,000자 초과는 거절한다. */
+/** Validates `bio` input — shared by POST/PATCH. Empty becomes null; over 2,000 chars is rejected. */
 export function validateBio(
   value: unknown,
 ):

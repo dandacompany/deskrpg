@@ -44,8 +44,9 @@ function getDeskRpgTemplateUploadDir(templateId, options = {}) {
 }
 
 /**
- * 사람이 채우라고 적어 둔 자리표시자인가. `.env.example` 의 안내 문구와, 그 문구를 조금 고쳤을
- * 뿐인 값들을 잡는다. 진짜 비밀로 쓰기에 너무 짧은 값도 자리표시자로 본다.
+ * Is this a placeholder left for a human to fill in? Catches `.env.example`'s guidance text
+ * and values that are only slightly modified from it. A value too short to be a real
+ * secret is also treated as a placeholder.
  *
  * @param {string} value
  * @returns {boolean}
@@ -53,12 +54,13 @@ function getDeskRpgTemplateUploadDir(templateId, options = {}) {
 function isPlaceholderSecret(value) {
   const normalized = value.trim().replace(/^["']|["']$/g, "");
   if (normalized.length < 24) return true;
-  // 접두사만 보면 `deskrpg-change-this-secret-…` 같은 우리 자신의 기본값을 놓친다.
-  // 48자라 길이 검사도 통과해, 손대지 않은 설치가 공개된 키로 조용히 뜬다(2026-09-16 실측).
+  // Checking only the prefix would miss our own defaults, like `deskrpg-change-this-secret-…`.
+  // At 48 characters it also passes the length check, so an untouched install silently ships with a public key (observed 2026-09-16).
   if (/change[-_ ]?(me|this)/i.test(normalized)) return true;
-  // `my` 는 뺐다. `my-production-key-…` 같은 **진짜** 사용자 키를 자리표시자로 판정해
-  // 런타임이 덮어써 버린다 — 사용자가 직접 넣은 값이 이기는 것이 이 함수의 전제다.
-  // 우리 안내 문구 중 `my` 로 시작하는 것은 없다.
+  // `my` is deliberately excluded. Flagging it would misjudge a **real** user key like
+  // `my-production-key-…` as a placeholder and let the runtime overwrite it — this
+  // function's premise is that a value the user set themselves wins. None of our
+  // guidance text starts with `my`.
   return /^(change|replace|set|your|example|placeholder|todo|fixme|insert)[-_ ]?/i.test(normalized);
 }
 
@@ -95,9 +97,10 @@ function ensureDeskRpgHome(options = {}) {
     }
   }
 
-  // `.env.example` 를 복사해 온 런타임은 JWT_SECRET 자리에 안내 문구가 들어 있다. 값이 비어
-  // 있는지만 보면 그 안내 문구를 진짜 비밀로 착각해, 모든 설치가 공개된 같은 키로 세션 토큰을
-  // 서명하고 게이트웨이 토큰을 암호화한다. 자리표시자는 값이 없는 것과 똑같이 취급한다.
+  // A runtime that copied `.env.example` has guidance text sitting in the JWT_SECRET slot.
+  // Checking only for emptiness would mistake that guidance text for a real secret, and
+  // every installation would sign session tokens and encrypt gateway tokens with the same
+  // public key. A placeholder is treated exactly like a missing value.
   const jwtLine = envText.match(/^#?\s*JWT_SECRET=(.*)$/m);
   const jwtValue = jwtLine ? jwtLine[1].trim() : "";
   if (!jwtValue || isPlaceholderSecret(jwtValue)) {

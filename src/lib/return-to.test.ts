@@ -3,42 +3,42 @@ import test from "node:test";
 
 import { safeReturnTo } from "./return-to";
 
-test("같은 오리진의 경로는 그대로 통과한다", () => {
+test("a same-origin path passes through unchanged", () => {
   assert.equal(safeReturnTo("/game?channelId=1"), "/game?channelId=1");
 });
 
-test("절대 URL 은 폴백으로 떨어진다", () => {
+test("an absolute URL falls back", () => {
   assert.equal(safeReturnTo("https://evil.com"), "/channels");
 });
 
-test("프로토콜 상대 URL 은 폴백으로 떨어진다", () => {
-  // `//evil.com` 은 `/` 로 시작하지만 브라우저는 https://evil.com 으로 나간다.
+test("a protocol-relative URL falls back", () => {
+  // `//evil.com` starts with `/`, but the browser navigates to https://evil.com.
   assert.equal(safeReturnTo("//evil.com"), "/channels");
   assert.equal(safeReturnTo("/\\evil.com"), "/channels");
 });
 
-test("빈 값은 폴백으로 떨어지고, 폴백은 바꿀 수 있다", () => {
+test("an empty value falls back, and the fallback is configurable", () => {
   assert.equal(safeReturnTo(null), "/channels");
   assert.equal(safeReturnTo(undefined), "/channels");
   assert.equal(safeReturnTo(""), "/channels");
   assert.equal(safeReturnTo(null, "/"), "/");
 });
 
-test("개행이 섞인 값은 폴백으로 떨어진다", () => {
+test("a value containing a newline falls back", () => {
   assert.equal(safeReturnTo("/game\r\nSet-Cookie: a=b"), "/channels");
 });
 
-test("탭 문자가 섞인 값은 폴백으로 떨어진다", () => {
-  // 브라우저의 URL 파서는 탭·개행을 URL 에서 **제거한다**. `/\t/evil.com` 은
-  // 첫 글자가 `/` 이고 `//` 도 아니라 옛 검사를 통과했지만, 렌더된 href 를
-  // 브라우저는 `//evil.com` 으로 읽어 다른 오리진으로 나갔다.
+test("a value containing a tab character falls back", () => {
+  // A browser's URL parser **strips** tabs and newlines from a URL. `/\t/evil.com` starts with
+  // `/` and isn't `//`, so it passed the old check, but the browser reads the rendered href as
+  // `//evil.com` and navigates to a different origin.
   assert.equal(safeReturnTo("/\t/evil.com"), "/channels");
   assert.equal(safeReturnTo("/" + String.fromCharCode(9) + "/evil.com"), "/channels");
 });
 
-test("오리진 검사를 더해도 평범한 경로는 그대로 통과한다", () => {
-  // 벨트-앤-브레이스로 넣은 `new URL(value, "http://x")` 검사가 정상 경로를
-  // 막으면 안 된다 — 쿼리·해시·인코딩된 문자가 다 살아 있어야 한다.
+test("adding an origin check still lets an ordinary path through unchanged", () => {
+  // The belt-and-braces `new URL(value, "http://x")` check must not block a normal path — its
+  // query, hash, and encoded characters all have to survive intact.
   assert.equal(
     safeReturnTo("/gateways?new=1&returnTo=%2Fgame"),
     "/gateways?new=1&returnTo=%2Fgame",

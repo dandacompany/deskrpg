@@ -13,9 +13,10 @@ import {
 } from "@/test-setup/npc-seed";
 import { startFakePluginServer, type FakePluginServer } from "@/lib/hermes/fake-plugin-server";
 
-// T6. `createSwarm`/`getBlackboard` — 이 기능의 유일한 권한 경계다. 클라이언트는 NPC id 만
-// 보내고 서버가 채널의 active NPC 를 프로필 이름으로 바꿔서 Hermes 로 보낸다. 하나라도
-// 채널 밖이면 아무것도 만들지 않는다(부분 생성 금지). 능력 판정(428)은 NPC 해석보다 먼저다.
+// T6. `createSwarm`/`getBlackboard` — the only authorization boundary for this feature.
+// The client sends only NPC ids; the server translates the channel's active NPCs to
+// profile names and sends that to Hermes. If even one is outside the channel, nothing
+// is created (no partial creation). The capability check (428) comes before NPC resolution.
 setupThrowawaySqlite("kanban-routes-swarm-test");
 
 const OWNER_TOKEN = "gateway-owner-key-1234567890";
@@ -65,9 +66,9 @@ function swarmRequests() {
 }
 
 /**
- * 채널 하나 + 가짜 플러그인 서버를 가리키는 게이트웨이(소유자 = 채널 소유자) + `names` 순서로
- * active NPC 를 만든다. `capabilities` 를 주면 이 테스트 동안 플러그인 계약을 그 값으로
- * 좁힌다(스웜 게이트 실패를 재현하는 용도).
+ * Creates one channel + a gateway pointing at the fake plugin server (owner = channel
+ * owner) + active NPCs in `names` order. Passing `capabilities` narrows the plugin
+ * contract to that value for this test (used to reproduce swarm-gate failures).
  */
 async function seedChannelWithNpcs(names: string[], opts: { capabilities?: string[] } = {}) {
   server.reset();
@@ -121,7 +122,7 @@ function getRequest(ctx: SwarmCtx, taskId: string) {
   return req(ctx.ownerId, "GET", `${base(ctx.channelId)}/tasks/${taskId}/blackboard`);
 }
 
-test("신규 스웜은 정책 계약이 없으면 어떤 카드도 만들지 않고 428", async () => {
+test("a new swarm creates no card and returns 428 when there is no policy contract", async () => {
   const { createSwarm } = await import("@/lib/kanban-routes");
   const ctx = await seedChannelWithNpcs(["nova", "sophie", "dante"]);
   const res = await createSwarm(
@@ -138,12 +139,14 @@ test("신규 스웜은 정책 계약이 없으면 어떤 카드도 만들지 않
   assert.equal(ctx.fakePlugin.swarmCallCount(), 0);
 });
 
-test("플러그인이 스웜을 못 하면 getBlackboard 도 428 을 낸다", async () => {
-  // createSwarm 과 같은 게이트다. 플러그인 계약 판정은 게이트웨이당 1시간 캐시되므로(R5·
-  // automation-gate.ts), 능력이 있는 채널에서 먼저 만든 taskId 를 나중에 캐시만 바꿔 재조회하면
-  // 캐시가 여전히 "swarm 있음" 을 돌려줘 이 게이트를 못 때린다. 그래서 createSwarm 428 테스트와
-  // 같은 방식으로 **처음부터** swarm 없는 채널을 만들고, 게이트가 NPC 해석보다 먼저 걸리는지만
-  // 본다(taskId 는 존재할 필요가 없다 — 게이트가 그 전에 막는다).
+test("if the plugin cannot do swarm, getBlackboard also returns 428", async () => {
+  // Same gate as createSwarm. The plugin-contract verdict is cached for 1 hour per
+  // gateway (R5 · automation-gate.ts), so creating a taskId first on a capable channel
+  // and then just flipping the cache and re-querying would still return "swarm present"
+  // from the cache and miss this gate. So, the same way as the createSwarm 428 test,
+  // this builds a channel **without swarm from the start** and checks only that the gate
+  // fires before NPC resolution (the taskId doesn't need to exist — the gate blocks
+  // before that).
   const { getBlackboard } = await import("@/lib/kanban-routes");
   const ctx = await seedChannelWithNpcs(["nova", "sophie", "dante"], {
     capabilities: ["kanban", "cron", "events"],
@@ -155,7 +158,7 @@ test("플러그인이 스웜을 못 하면 getBlackboard 도 428 을 낸다", as
   assert.deepEqual(body.missing, ["swarm"]);
 });
 
-test("블랙보드를 그대로 돌려준다", async () => {
+test("returns the blackboard as-is", async () => {
   const { getBlackboard } = await import("@/lib/kanban-routes");
   const ctx = await seedChannelWithNpcs(["nova", "sophie", "dante"]);
   const { resolveKanbanChannelContext } = await import("@/lib/kanban-access");
@@ -164,7 +167,7 @@ test("블랙보드를 그대로 돌려준다", async () => {
     channelId: ctx.channelId,
   });
   assert.ok(resolved.ok);
-  // 업그레이드 전에 존재하던 스웜을 fake Hermes에 심는다.
+  // Seed a swarm that existed before the upgrade into the fake Hermes.
   const created = await resolved.ctx.client.kanban.createSwarm(resolved.ctx.boardSlug, {
     goal: "기존",
     workers: [{ profile: "nova", title: "조사" }],

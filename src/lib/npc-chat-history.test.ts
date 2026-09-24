@@ -8,24 +8,24 @@ import {
   type StoredChatMessage,
 } from "./npc-chat-history";
 
-// --- 키: 이력의 소유 단위가 캐릭터라는 사실을 고정한다 ---
+// --- Key: pins down that the owning unit of history is the character ---
 
-test("이력 키는 캐릭터별로 갈린다", () => {
-  // 같은 채널의 두 사람이 같은 NPC 와 나눈 대화는 섞이지 않는다.
+test("history keys differ per character", () => {
+  // A conversation two different people in the same channel had with the same NPC must not mix.
   assert.notEqual(npcHistoryKey("char-a", "npc-1"), npcHistoryKey("char-b", "npc-1"));
 });
 
-test("같은 캐릭터가 다른 NPC 와 나눈 대화도 갈린다", () => {
+test("the same character's conversations with different NPCs also differ", () => {
   assert.notEqual(npcHistoryKey("char-a", "npc-1"), npcHistoryKey("char-a", "npc-2"));
 });
 
-test("같은 캐릭터·같은 NPC 는 같은 키다", () => {
+test("the same character and same NPC yield the same key", () => {
   assert.equal(npcHistoryKey("char-a", "npc-1"), npcHistoryKey("char-a", "npc-1"));
 });
 
-// --- 행 빌더 ---
+// --- Row builder ---
 
-test("행은 캐릭터·NPC·역할·내용을 담는다", () => {
+test("a row holds character, NPC, role, and content", () => {
   const row = buildChatMessageRow({
     characterId: "char-a",
     npcId: "npc-1",
@@ -39,16 +39,16 @@ test("행은 캐릭터·NPC·역할·내용을 담는다", () => {
   assert.equal(row.content, "안녕");
 });
 
-test("빈 내용은 저장하지 않는다", () => {
+test("empty content isn't saved", () => {
   assert.equal(
     buildChatMessageRow({ characterId: "c", npcId: "n", role: "npc", content: "   " }),
     null,
   );
 });
 
-// --- DB 행 → 클라이언트 메시지 ---
+// --- DB row -> client message ---
 
-test("저장된 행을 클라이언트 이력 모양으로 되돌린다", () => {
+test("converts a saved row back into the client history shape", () => {
   const at = new Date("2026-08-26T01:02:03.000Z");
   const rows: StoredChatMessage[] = [
     { role: "player", content: "안녕", createdAt: at },
@@ -60,14 +60,14 @@ test("저장된 행을 클라이언트 이력 모양으로 되돌린다", () => 
   ]);
 });
 
-test("createdAt 이 비어 있어도 메시지를 잃지 않는다", () => {
-  // 부트스트랩으로 만든 행이나 구버전 데이터에 null 이 있을 수 있다.
+test("a message isn't lost even when createdAt is empty", () => {
+  // A row made by bootstrap or older data can have null here.
   const [msg] = toHistoryMessages([{ role: "npc", content: "안녕", createdAt: null }]);
   assert.equal(msg.content, "안녕");
   assert.equal(typeof msg.timestamp, "number");
 });
 
-test("알 수 없는 역할은 버린다", () => {
+test("an unknown role is dropped", () => {
   const rows = [
     { role: "player", content: "ok", createdAt: null },
     { role: "system", content: "내부용", createdAt: null },
@@ -78,7 +78,7 @@ test("알 수 없는 역할은 버린다", () => {
   );
 });
 
-// --- DB 경계: 배선이 실제로 도는지 (순수 함수만 고정하면 여기가 빈다) ---
+// --- DB boundary: does the wiring actually run (this is the gap left if we only pin the pure functions) ---
 
 import { appendNpcChatMessage, clearNpcChatHistory, loadNpcChatHistory } from "./npc-chat-history";
 
@@ -92,7 +92,7 @@ const schema = {
   },
 };
 
-test("append 는 빌드한 행을 그대로 insert 한다", async () => {
+test("append inserts the built row as-is", async () => {
   const inserted: unknown[] = [];
   const db = {
     insert: () => ({
@@ -113,7 +113,7 @@ test("append 는 빌드한 행을 그대로 insert 한다", async () => {
   assert.equal(row?.content, "안녕");
 });
 
-test("빈 발화는 DB 에 닿지도 않는다", async () => {
+test("an empty utterance never even touches the DB", async () => {
   let touched = false;
   const db = {
     insert: () => {
@@ -131,7 +131,7 @@ test("빈 발화는 DB 에 닿지도 않는다", async () => {
   assert.equal(touched, false);
 });
 
-test("load 는 조회 결과를 이력 메시지로 돌려준다", async () => {
+test("load returns the query result as history messages", async () => {
   const at = new Date("2026-08-26T00:00:00.000Z");
   const db = {
     select: () => ({
@@ -149,7 +149,7 @@ test("load 는 조회 결과를 이력 메시지로 돌려준다", async () => {
   assert.deepEqual(messages, [{ role: "npc", content: "안녕하세요", timestamp: at.getTime() }]);
 });
 
-test("clear 는 delete 를 부른다", async () => {
+test("clear calls delete", async () => {
   let deleted = false;
   const db = {
     delete: () => ({
@@ -162,20 +162,20 @@ test("clear 는 delete 를 부른다", async () => {
   assert.equal(deleted, true);
 });
 
-// --- 소유자 결정: join 전 대화가 조용히 사라지지 않게 하는 지점 ---
+// --- Owner determination: the point that keeps pre-join conversation from silently vanishing ---
 
 import { characterBelongsToUser, pickHistoryCharacterId } from "./npc-chat-history";
 
-test("join 된 소켓은 서버가 아는 캐릭터를 쓰고 검증하지 않는다", () => {
+test("a joined socket uses the character the server knows about and doesn't validate", () => {
   const picked = pickHistoryCharacterId({
     joinedCharacterId: "char-joined",
     claimedCharacterId: "char-claimed",
   });
-  // 클라이언트가 다른 값을 불러도 서버가 아는 쪽이 이긴다.
+  // Even if the client calls out a different value, what the server knows wins.
   assert.deepEqual(picked, { characterId: "char-joined", needsVerification: false });
 });
 
-test("아직 join 전이면 클라이언트가 말한 캐릭터를 쓰되 검증을 요구한다", () => {
+test("before join, uses the character the client claims but requires verification", () => {
   assert.deepEqual(
     pickHistoryCharacterId({ joinedCharacterId: null, claimedCharacterId: "char-x" }),
     {
@@ -185,21 +185,21 @@ test("아직 join 전이면 클라이언트가 말한 캐릭터를 쓰되 검증
   );
 });
 
-test("둘 다 없으면 소유자를 정하지 못한다", () => {
+test("with neither present, the owner can't be determined", () => {
   assert.deepEqual(pickHistoryCharacterId({ joinedCharacterId: null, claimedCharacterId: null }), {
     characterId: null,
     needsVerification: false,
   });
 });
 
-test("빈 문자열은 캐릭터로 치지 않는다", () => {
+test("an empty string doesn't count as a character", () => {
   assert.deepEqual(pickHistoryCharacterId({ joinedCharacterId: "", claimedCharacterId: "  " }), {
     characterId: null,
     needsVerification: false,
   });
 });
 
-test("소유 검증은 그 사용자의 캐릭터일 때만 통과한다", async () => {
+test("ownership verification only passes for that user's own character", async () => {
   const db = {
     select: () => ({
       from: () => ({ where: () => ({ limit: async () => [{ id: "char-x" }] }) }),
@@ -211,8 +211,8 @@ test("소유 검증은 그 사용자의 캐릭터일 때만 통과한다", async
   );
 });
 
-test("남의 캐릭터를 실어 보내면 거부한다", async () => {
-  // 조회가 비면 그 사용자의 것이 아니다 — 남의 이력에 쓰지 못하게 막는 지점이다.
+test("rejects when someone else's character is sent", async () => {
+  // An empty query result means it's not that user's — this is the point that blocks writing to someone else's history.
   const db = {
     select: () => ({ from: () => ({ where: () => ({ limit: async () => [] }) }) }),
   };
@@ -222,12 +222,13 @@ test("남의 캐릭터를 실어 보내면 거부한다", async () => {
   );
 });
 
-// --- 태스크와 이력이 같은 소유자를 봐야 한다 ---
+// --- Tasks and history must see the same owner ---
 
-test("이력과 태스크는 같은 캐릭터 판정을 쓴다", () => {
-  // 실측(2026-08-28): 태스크 분기만 `players` 맵을 직접 봐서, 재연결 직후 세션에서
-  // 이력은 남는데 태스크만 조용히 사라졌다 — 사용자는 승인까지 마친 뒤였다.
-  // 두 경로가 같은 함수를 쓰는 한 이 어긋남은 다시 생길 수 없다.
+test("history and tasks use the same character resolution", () => {
+  // Confirmed 2026-08-28: only the task branch looked directly at the `players` map, so
+  // right after a reconnect, history stayed while the task silently vanished — the user
+  // had already gotten as far as approving it.
+  // As long as both paths use the same function, this divergence can't happen again.
   const joined = pickHistoryCharacterId({
     joinedCharacterId: null,
     claimedCharacterId: "char-x",
@@ -235,7 +236,7 @@ test("이력과 태스크는 같은 캐릭터 판정을 쓴다", () => {
   assert.equal(joined.characterId, "char-x");
   assert.equal(joined.needsVerification, true);
 
-  // join 전이어도 소유자를 정할 수 있다는 것이 핵심이다 —
-  // 예전 태스크 경로는 이 경우를 그냥 버렸다.
+  // The key point is that the owner can be determined even before join —
+  // the old task path used to just drop this case.
   assert.notEqual(joined.characterId, null);
 });

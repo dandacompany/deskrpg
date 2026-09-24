@@ -20,7 +20,7 @@ const outcome: MeetingOutcome = {
   project: { recommended: true, name: "가격 개편", reason: null },
 };
 
-test("초안은 모든 항목을 선택한 채로 시작하고 프로젝트 이름에서 서브프로젝트를 제안한다", () => {
+test("the draft starts with all items selected and suggests a subproject from the project name", () => {
   const draft = createOutcomeDraft(outcome);
   assert.deepEqual(
     draft.items.map((item) => [item.index, item.selected, item.title, item.npcId]),
@@ -33,11 +33,11 @@ test("초안은 모든 항목을 선택한 채로 시작하고 프로젝트 이�
   assert.equal(draft.subprojectName, "가격 개편");
 });
 
-test("권고가 없으면 서브프로젝트 이름은 비어 있다", () => {
+test("with no recommendation, the subproject name is empty", () => {
   assert.equal(createOutcomeDraft({ ...outcome, project: null }).subprojectName, "");
 });
 
-test("항목 수정은 그 항목만 바꾼다", () => {
+test("editing an item changes only that item", () => {
   const draft = updateDraftItem(createOutcomeDraft(outcome), 1, {
     title: "초안 v2",
     npcId: "npc-2",
@@ -52,7 +52,7 @@ test("항목 수정은 그 항목만 바꾼다", () => {
   );
 });
 
-test("등록 본문은 선택한 항목만 담고, 빠진 항목으로 가는 after 는 버린다", () => {
+test("the registration body includes only selected items, and an after pointing to a dropped item is discarded", () => {
   const draft = updateDraftItem(createOutcomeDraft(outcome), 1, { selected: false });
   const body = draftToRegistration(draft);
   assert.deepEqual(body.items, [
@@ -62,22 +62,22 @@ test("등록 본문은 선택한 항목만 담고, 빠진 항목으로 가는 af
   assert.deepEqual(body.tenant, { slug: "가격-개편", name: "가격 개편" });
 });
 
-test("서브프로젝트 이름을 비우면 tenant 는 null 이다", () => {
+test("clearing the subproject name makes tenant null", () => {
   const draft = { ...createOutcomeDraft(outcome), subprojectName: "  " };
   assert.equal(draftToRegistration(draft).tenant, null);
 });
 
-test("제목을 비운 항목은 등록 본문에서 빠진다", () => {
+test("an item with a blank title is excluded from the registration body", () => {
   const draft = updateDraftItem(createOutcomeDraft(outcome), 0, { title: "   " });
   assert.deepEqual(
     draftToRegistration(draft).items.map((item) => item.index),
     [1, 2],
   );
-  // 0번이 빠졌으니 1번의 after 도 비어야 한다.
+  // Item 0 was dropped, so item 1's after must also be empty.
   assert.deepEqual(draftToRegistration(draft).items[0].after, []);
 });
 
-test("테넌트 슬러그는 소문자·하이픈이고 64자를 넘지 않는다", () => {
+test("a tenant slug is lowercase-and-hyphen and never exceeds 64 characters", () => {
   assert.equal(tenantSlugFromName("  Q4 Content  Pipeline! "), "q4-content-pipeline");
   assert.equal(tenantSlugFromName("가격 개편"), "가격-개편");
   assert.equal(tenantSlugFromName("---"), "");

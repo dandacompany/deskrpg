@@ -1,4 +1,4 @@
-// 해소 도메인 로직 — 순서·한 번만·실패는 되돌린다.
+// Resolve domain logic — ordering, exactly once, roll back on failure.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -28,12 +28,12 @@ const NOTICE: CardProposalNotice = {
 type Stub = ResolveDeps<Ctx> & {
   createTaskCalls: number;
   noticeUpdates: number;
-  /** `unresolve` 시도 횟수 — 성공 여부와 따로 센다. */
+  /** Count of `unresolve` attempts — counted separately from success. */
   rollbacks: number;
-  /** 되돌리기가 실제로 성공한 횟수. */
+  /** Count of rollbacks that actually succeeded. */
   rollbacksDone: number;
   tasks: ProposalTaskInput[];
-  /** `recordTask` 가 받은 `(proposalId, taskId)` 쌍. */
+  /** The `(proposalId, taskId)` pairs `recordTask` received. */
   recordedTasks: Array<{ proposalId: string; taskId: string }>;
   order: string[];
   resolvedWrites: NonNullable<CardProposalNotice["resolved"]>[];
@@ -111,7 +111,7 @@ function stubDeps(over: {
 
 const CARD = { channelId: "c1", userId: "u1", proposalId: "p1", choice: "card" } as const;
 
-test("card 선택은 카드를 만들고 taskId 를 돌려준다", async () => {
+test("choosing card creates a card and returns taskId", async () => {
   const deps = stubDeps({ createTask: async () => ({ task: { id: "t1" } }) });
   const out = await resolveProposal(CARD, deps);
   assert.deepEqual(out, { ok: true, choice: "card", taskId: "t1", assigneeDropped: false });
@@ -121,9 +121,9 @@ test("card 선택은 카드를 만들고 taskId 를 돌려준다", async () => {
   assert.deepEqual(deps.resolvedWrites, [
     { choice: "card", by: "u1", at: "2026-09-21T00:00:00.000Z", taskId: "t1" },
   ]);
-  // 만든 카드 id 가 제안에 기록된다 — 플러그인의 "되돌릴 수 없다" 가드가 이걸로 살아난다.
+  // The created card's id is recorded on the proposal — this is what keeps the plugin's "can't be unresolved" guard alive.
   assert.deepEqual(deps.recordedTasks, [{ proposalId: "p1", taskId: "t1" }]);
-  // 관문 → 해소 표시 → 담당 → 카드 → 알림. 이 순서가 규칙이다.
+  // gate → mark resolved → assignee → card → notice. This order is the rule.
   assert.deepEqual(deps.order, [
     "gate",
     "loadProposal",
@@ -135,7 +135,7 @@ test("card 선택은 카드를 만들고 taskId 를 돌려준다", async () => {
   ]);
 });
 
-test("이미 해소된 제안은 409 이고 카드를 만들지 않는다", async () => {
+test("an already-resolved proposal is 409 and creates no card", async () => {
   const deps = stubDeps({ markResolved: async () => false });
   const out = await resolveProposal(CARD, deps);
   assert.deepEqual(out, { ok: false, status: 409, code: "already_resolved" });
@@ -143,7 +143,7 @@ test("이미 해소된 제안은 409 이고 카드를 만들지 않는다", asyn
   assert.equal(deps.noticeUpdates, 0);
 });
 
-test("카드 생성 실패는 해소를 기록하지 않는다", async () => {
+test("a card-creation failure does not record the resolution", async () => {
   const deps = stubDeps({
     createTask: async () => {
       throw gateError(428, "plugin_required");
@@ -156,11 +156,11 @@ test("카드 생성 실패는 해소를 기록하지 않는다", async () => {
     code: "plugin_required",
     message: "plugin_required",
   });
-  assert.equal(deps.noticeUpdates, 0); // notice_json.resolved 가 쓰이지 않았다
-  assert.equal(deps.rollbacks, 1); // 플러그인 쪽 해소 표시도 되돌렸다
+  assert.equal(deps.noticeUpdates, 0); // notice_json.resolved was not written
+  assert.equal(deps.rollbacks, 1); // the plugin-side resolved marker was also rolled back
 });
 
-test("되돌리기가 실패하면 그 사실을 오류에 담아 올린다", async () => {
+test("if the rollback fails, that fact is surfaced in the error", async () => {
   const deps = stubDeps({
     createTask: async () => {
       throw gateError(503, "board_unavailable");
@@ -179,7 +179,7 @@ test("되돌리기가 실패하면 그 사실을 오류에 담아 올린다", as
   assert.equal(deps.noticeUpdates, 0);
 });
 
-test("담당이 퇴근했으면 담당 없이 만들고 그 사실을 알린다", async () => {
+test("if the assignee has clocked out, creates the card with no assignee and flags the fact", async () => {
   const deps = stubDeps({
     assignee: { ok: false, code: "assignee_not_in_channel" },
     createTask: async () => ({ task: { id: "t1" } }),
@@ -189,7 +189,7 @@ test("담당이 퇴근했으면 담당 없이 만들고 그 사실을 알린다"
   assert.deepEqual(deps.tasks, [{ title: "청구서 정리", body: "본문", acceptance: "표로 정리" }]);
 });
 
-test("카드 id 기록이 실패해도 흐름은 온전하다 — 빠지는 것은 이중 방어뿐이다", async () => {
+test("even if recording the card id fails, the flow stays intact — all that's lost is a second line of defense", async () => {
   const deps = stubDeps({
     recordTask: async () => {
       throw new ProposalStepError(409, "card_proposal_task_not_recordable");
@@ -197,23 +197,23 @@ test("카드 id 기록이 실패해도 흐름은 온전하다 — 빠지는 것�
   });
   const out = await resolveProposal(CARD, deps);
   assert.deepEqual(out, { ok: true, choice: "card", taskId: "t1", assigneeDropped: false });
-  assert.equal(deps.noticeUpdates, 1); // notice_json.resolved 는 정상으로 쓰인다
+  assert.equal(deps.noticeUpdates, 1); // notice_json.resolved is still written normally
   assert.equal(deps.rollbacks, 0);
 });
 
-test("inline 선택은 카드를 만들지 않는다", async () => {
+test("choosing inline creates no card", async () => {
   const deps = stubDeps({});
   const out = await resolveProposal({ ...CARD, choice: "inline" }, deps);
   assert.deepEqual(out, { ok: true, choice: "inline" });
   assert.equal(deps.createTaskCalls, 0);
   assert.deepEqual(deps.order, ["gate", "loadProposal", "markResolved", "writeResolved"]);
-  assert.deepEqual(deps.recordedTasks, []); // 카드가 없으니 기록할 것도 없다
+  assert.deepEqual(deps.recordedTasks, []); // no card, so nothing to record
   assert.deepEqual(deps.resolvedWrites, [
     { choice: "inline", by: "u1", at: "2026-09-21T00:00:00.000Z" },
   ]);
 });
 
-test("관문이 막으면 플러그인을 건드리지 않는다", async () => {
+test("if the gate blocks, the plugin is never touched", async () => {
   const deps = stubDeps({
     gate: async () => ({ ok: false, status: 409, code: "gateway_not_bound" }),
   });
@@ -223,14 +223,14 @@ test("관문이 막으면 플러그인을 건드리지 않는다", async () => {
   assert.equal(deps.createTaskCalls, 0);
 });
 
-test("없는 제안은 404 이고 해소를 표시하지 않는다", async () => {
+test("a missing proposal is 404 and doesn't mark resolved", async () => {
   const deps = stubDeps({ proposal: null });
   const out = await resolveProposal(CARD, deps);
   assert.deepEqual(out, { ok: false, status: 404, code: "card_proposal_not_found" });
   assert.deepEqual(deps.order, ["gate", "loadProposal"]);
 });
 
-test("이미 resolved 가 남은 알림은 플러그인을 부르기 전에 409", async () => {
+test("a notice already carrying resolved gets 409 before the plugin is even called", async () => {
   const deps = stubDeps({
     proposal: {
       messageId: "m1",
@@ -245,7 +245,7 @@ test("이미 resolved 가 남은 알림은 플러그인을 부르기 전에 409"
   assert.deepEqual(deps.order, ["gate", "loadProposal"]);
 });
 
-test("알림 쓰기 실패는 카드가 만들어졌다는 사실을 오류에 남긴다", async () => {
+test("a notice-write failure leaves the fact that the card was created in the error", async () => {
   const deps = stubDeps({
     writeResolved: async () => {
       throw new Error("db down");
@@ -255,11 +255,11 @@ test("알림 쓰기 실패는 카드가 만들어졌다는 사실을 오류에 �
   assert.equal(out.ok, false);
   assert.equal(out.ok === false && out.code, "notice_write_failed");
   assert.match(out.ok === false ? (out.message ?? "") : "", /t1/);
-  // 비대칭이 의도된 것이다 — 카드는 Hermes 의 정본이므로 되돌리지 않는다.
+  // The asymmetry is intentional — the card is not rolled back because it's Hermes's source of truth.
   assert.equal(deps.rollbacks, 0);
 });
 
-test("inline + 알림 쓰기 실패는 되돌려 다시 고를 수 있게 둔다", async () => {
+test("inline + a notice-write failure rolls back so the user can choose again", async () => {
   const deps = stubDeps({
     writeResolved: async () => {
       throw new Error("db down");
@@ -273,7 +273,7 @@ test("inline + 알림 쓰기 실패는 되돌려 다시 고를 수 있게 둔다
     message: "db down",
   });
   assert.equal(deps.createTaskCalls, 0);
-  assert.equal(deps.rollbacks, 1); // 카드가 없으니 되돌릴 수 있다
+  assert.equal(deps.rollbacks, 1); // no card exists, so it can be rolled back
   assert.equal(deps.rollbacksDone, 1);
   assert.deepEqual(deps.order, [
     "gate",
@@ -284,7 +284,7 @@ test("inline + 알림 쓰기 실패는 되돌려 다시 고를 수 있게 둔다
   ]);
 });
 
-test("inline 의 되돌리기가 실패하면 그 사실을 오류에 담아 올린다", async () => {
+test("if the inline rollback fails, that fact is surfaced in the error", async () => {
   const deps = stubDeps({
     writeResolved: async () => {
       throw new Error("db down");
@@ -300,5 +300,5 @@ test("inline 의 되돌리기가 실패하면 그 사실을 오류에 담아 올
   assert.match(message, /notice_write_failed/);
   assert.match(message, /gateway offline/);
   assert.equal(deps.rollbacks, 1);
-  assert.equal(deps.rollbacksDone, 0); // 시도했으나 성공하지 못했다
+  assert.equal(deps.rollbacksDone, 0); // it was attempted but did not succeed
 });

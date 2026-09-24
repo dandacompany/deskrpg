@@ -8,7 +8,7 @@ import {
   parsePreviewTarget,
 } from "./guard";
 
-test("사설·루프백·링크로컬·CGNAT 주소는 막는다", () => {
+test("blocks private, loopback, link-local, and CGNAT addresses", () => {
   for (const ip of [
     "127.0.0.1",
     "127.1.2.3",
@@ -17,7 +17,7 @@ test("사설·루프백·링크로컬·CGNAT 주소는 막는다", () => {
     "172.16.0.1",
     "172.31.255.255",
     "192.168.0.1",
-    "169.254.169.254", // 클라우드 메타데이터 — 이것을 막는 것이 이 가드의 존재 이유다
+    "169.254.169.254", // cloud metadata — blocking this is this guard's whole reason to exist
     "100.64.0.1",
     "::1",
     "fe80::1",
@@ -28,49 +28,49 @@ test("사설·루프백·링크로컬·CGNAT 주소는 막는다", () => {
   }
 });
 
-test("공인 주소는 통과한다", () => {
+test("public addresses pass", () => {
   for (const ip of ["8.8.8.8", "1.1.1.1", "172.32.0.1", "100.128.0.1", "2606:4700::1111"]) {
     assert.equal(isBlockedAddress(ip), false, `통과해야 한다: ${ip}`);
   }
 });
 
-test("http(s) 가 아닌 주소는 거부한다", () => {
+test("rejects non-http(s) addresses", () => {
   for (const url of ["file:///etc/passwd", "ftp://example.com/x", "javascript:alert(1)"]) {
     assert.equal(parsePreviewTarget(url), null, url);
   }
 });
 
-test("자격증명이 박힌 주소는 거부한다 — 프록시가 남의 인증을 대신 들고 가지 않는다", () => {
+test("rejects addresses with embedded credentials — the proxy never carries someone else's auth", () => {
   assert.equal(parsePreviewTarget("https://user:pw@example.com/"), null);
 });
 
-test("표준 포트가 아니면 거부한다 — 내부망 포트 스캔 통로가 된다", () => {
+test("rejects non-standard ports — otherwise this becomes a way to port-scan the internal network", () => {
   assert.equal(parsePreviewTarget("https://example.com:8080/"), null);
   assert.ok(parsePreviewTarget("https://example.com:443/"));
   assert.ok(parsePreviewTarget("http://example.com:80/"));
 });
 
-test("호스트가 이미 사설 IP 리터럴이면 DNS 를 보지 않고 거부한다", () => {
+test("rejects a host that is already a private IP literal, without even looking at DNS", () => {
   assert.equal(parsePreviewTarget("http://169.254.169.254/latest/meta-data/"), null);
   assert.equal(parsePreviewTarget("http://[::1]/"), null);
   assert.equal(parsePreviewTarget("http://localhost/"), null);
 });
 
-test("정상 주소는 해시를 떼고 정규화해 돌려준다", () => {
+test("a normal address is stripped of its hash and returned normalized", () => {
   const url = parsePreviewTarget("https://Example.com/a/b?q=1#frag");
   assert.equal(url?.toString(), "https://example.com/a/b?q=1");
 });
 
-test("정규화는 모양만 본다 — 사설 주소도 모양이 맞으면 통과시킨다(주소 판정은 요청 직전에 한다)", () => {
+test("normalization only checks shape — a private address with the right shape passes through (the address verdict happens right before the request)", () => {
   assert.ok(normalizePreviewUrl("http://127.0.0.1/p"));
   assert.equal(normalizePreviewUrl("file:///etc/passwd"), null);
   assert.equal(normalizePreviewUrl("https://a:b@example.com/"), null);
-  // 포트는 모양이 아니라 목적지 판정이다 — parsePreviewTarget 이 막는다.
+  // Port is a destination verdict, not a shape check — parsePreviewTarget blocks it.
   assert.ok(normalizePreviewUrl("https://example.com:8080/"));
   assert.equal(parsePreviewTarget("https://example.com:8080/"), null);
 });
 
-test("프록시가 되돌려 줄 수 있는 이미지 타입은 래스터뿐이다 — svg 는 스크립트를 품는다", () => {
+test("the only image types the proxy will return are raster — svg can carry scripts", () => {
   for (const ok of ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"]) {
     assert.equal(isSafeImageType(ok), true, ok);
   }
@@ -85,10 +85,11 @@ test("프록시가 되돌려 줄 수 있는 이미지 타입은 래스터뿐이�
   }
 });
 
-// dev1 이 `a3c93fd7` 에서 실측한 우회(2026-09-20). URL 파서가 `[::ffff:127.0.0.1]` 을 16진
-// 표기 `[::ffff:7f00:1]` 로 정규화해, 표기를 정규식으로 보던 판정이 전부 통과했다.
-// 리눅스 듀얼스택 소켓은 `::ffff:a.b.c.d` 연결을 IPv4 `a.b.c.d` 로 보낸다.
-test("URL 파서가 정규화한 IPv4-mapped IPv6 로는 내부망에 닿을 수 없다", () => {
+// A bypass dev1 observed in `a3c93fd7` (2026-09-20). The URL parser normalizes
+// `[::ffff:127.0.0.1]` to the hex notation `[::ffff:7f00:1]`, which let every check that
+// looked at the notation with a regex pass through. Linux dual-stack sockets route a
+// `::ffff:a.b.c.d` connection to IPv4 `a.b.c.d`.
+test("an IPv4-mapped IPv6 address normalized by the URL parser still cannot reach the internal network", () => {
   for (const raw of [
     "http://[::ffff:127.0.0.1]/",
     "http://[::ffff:169.254.169.254]/latest/meta-data/",
@@ -101,36 +102,36 @@ test("URL 파서가 정규화한 IPv4-mapped IPv6 로는 내부망에 닿을 수
   }
 });
 
-test("정규화된 16진 표기 자체도 막는다 — DNS·리다이렉트가 이 형태로 돌려줄 수 있다", () => {
+test("blocks the normalized hex notation itself too — DNS or a redirect can return it in this form", () => {
   for (const address of [
     "::ffff:7f00:1", // 127.0.0.1
     "::ffff:a9fe:a9fe", // 169.254.169.254
     "::ffff:a00:1", // 10.0.0.1
     "::ffff:c0a8:1", // 192.168.0.1
-    "64:ff9b::7f00:1", // NAT64 로 감싼 루프백
-    "2002:a00:1::", // 6to4 로 감싼 10.0.0.1
+    "64:ff9b::7f00:1", // loopback wrapped in NAT64
+    "2002:a00:1::", // 10.0.0.1 wrapped in 6to4
     "::1",
     "fe80::1",
     "fc00::1",
-    "fe80::1%en0", // 스코프 식별자가 붙어도
-    "2001:db8::1", // 문서용
+    "fe80::1%en0", // even with a scope identifier attached
+    "2001:db8::1", // documentation-only
     "2001::1", // Teredo
   ]) {
     assert.equal(isBlockedAddress(address), true, address);
   }
 });
 
-test("글로벌 유니캐스트만 통과한다 — IPv6 는 허용 목록으로 판정한다", () => {
+test("only global unicast passes — IPv6 is judged by an allowlist", () => {
   for (const address of ["2606:4700::1111", "2001:4860:4860::8888", "::ffff:8.8.8.8"]) {
     assert.equal(isBlockedAddress(address), false, address);
   }
-  // 2000::/3 밖은 정체를 몰라도 막는다.
+  // Outside 2000::/3 is blocked even without knowing what it is.
   for (const address of ["3ffe::1", "0100::1", "ff02::1"]) {
     assert.equal(isBlockedAddress(address), address !== "3ffe::1", address);
   }
 });
 
-test("IP 가 아닌 문자열은 막는다 — 모르는 것을 통과시키지 않는다", () => {
+test("blocks strings that are not IPs — nothing unrecognized gets through", () => {
   for (const junk of ["example.com", "", "::ffff:999.1.1.1", "1:2:3", "not-an-ip"]) {
     assert.equal(isBlockedAddress(junk), true, JSON.stringify(junk));
   }

@@ -180,11 +180,12 @@ const REQUIRED_KEYS = [
   "errors.templateDeleteConfirm",
 ] as const;
 
-// **전수 목록이 아니다.** 코드 → 번역 키 매핑이 조용히 바뀌는 것을 막는 고정용
-// 스팟체크다. 전수 검사는 아래 두 테스트가 맡는다 — 모든 등록 코드가 4개 로케일에
-// 번역을 갖는지, 그리고 라우트가 실제로 내보내는 errorCode 가 전부 등록돼 있는지.
-// 여기에 모든 코드를 나열하면 ERROR_MESSAGE_KEYS 를 그대로 베껴 자기 자신과
-// 비교하게 되므로, 타입도 Partial 이 정직하다.
+// **Not an exhaustive list.** This is a pinning spot check that guards against the
+// code -> translation-key mapping silently drifting. The two tests below own the
+// exhaustive checks — whether every registered code has a translation in all 4 locales,
+// and whether every errorCode a route actually emits is registered. Listing every code
+// here would just copy ERROR_MESSAGE_KEYS and compare it against itself, so the
+// `Partial` type is honest about that.
 const TEST_CODES: Partial<Record<ErrorCode, string>> = {
   invalid_credentials: "errors.invalidCredentials",
   login_id_password_required: "errors.loginIdPasswordRequired",
@@ -340,10 +341,11 @@ test("group RBAC error codes map to stable translation keys", () => {
   assert.equal(getErrorMessageKey("group_not_found"), "errors.groupNotFound");
 });
 
-// 에러코드는 등록만으로는 화면에 뜨지 않는다. 번역 키가 로케일에 없으면
-// getLocalizedMessage 가 fallback 으로 떨어져 사용자는 "오류가 발생했습니다" 만 본다.
-// 실제로 not_a_hermes_gateway 는 서버가 보내는데 타입에도 로케일에도 없어서, 게이트웨이
-// 주소가 틀렸다는 사실이 화면에 전혀 전달되지 않았다.
+// An error code being registered alone doesn't put it on screen. If the translation key
+// is missing from a locale, getLocalizedMessage falls back and the user sees only a
+// generic error message. In practice, not_a_hermes_gateway is sent by the server but was
+// in neither the type nor a locale, so the fact that the gateway address was wrong never
+// reached the screen at all.
 test("every registered error code has a message in every locale", () => {
   const locales: Array<[string, Record<string, string>]> = [
     ["ko", ko],
@@ -367,7 +369,7 @@ test("every registered error code has a message in every locale", () => {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
-/** src 아래 모든 .ts 를 훑어 라우트가 실제로 내보내는 errorCode 를 모은다. */
+/** Walks every .ts file under src to collect the errorCodes routes actually emit. */
 function emittedErrorCodes(): Set<string> {
   const found = new Set<string>();
   const walk = (dir: string) => {
@@ -387,12 +389,13 @@ function emittedErrorCodes(): Set<string> {
   return found;
 }
 
-// 앞 테스트는 **등록된** 코드만 순회한다. 등록 자체가 빠진 코드는 그 표에 없으므로
-// 순회 대상이 아니고, 그래서 잡히지 않는다 — 실제로 그 상태로 23개가 남아 있었고
-// gateway_in_use_by_channels 를 누른 사용자는 "오류가 발생했습니다" 만 봤다
-// ("채널에 묶여 있어 지울 수 없다"가 아니라).
+// The test above only iterates over codes that are **registered**. A code missing
+// registration entirely isn't in that table, so it's never iterated over and never
+// caught — in practice 23 such codes were left in exactly that state, and a user who
+// triggered gateway_in_use_by_channels saw only "an error occurred" (not "can't delete,
+// it's bound to a channel").
 //
-// 세는 쪽을 뒤집는다: 라우트가 **보내는** 코드 전부가 등록돼 있어야 한다.
+// So flip which side we count from: every code a route **emits** must be registered.
 test("every error code a route emits is registered", () => {
   const registered = new Set(Object.keys(ERROR_MESSAGE_KEYS));
   const missing = [...emittedErrorCodes()].filter((c) => !registered.has(c)).sort();
@@ -404,9 +407,10 @@ test("every error code a route emits is registered", () => {
   );
 });
 
-// 로케일 간 키가 어긋나면 그 언어 사용자에게는 **키 문자열이 그대로** 보인다. 에러코드
-// 쪽은 위 두 가드가 지키지만 UI 키(gateways.* 등)는 아무도 안 봤고, 실제로 옛 맵 에디터의
-// 툴바 키가 ja·zh 에서 빠진 채 새고 있었다.
+// If keys diverge between locales, a user in that language sees **the raw key string**.
+// The error-code side is guarded by the two checks above, but nobody was watching UI
+// keys (gateways.*, etc.), and in practice the old map editor's toolbar keys were
+// leaking with ja/zh missing them.
 test("all locales carry the same keys", () => {
   const base = Object.keys(ko).sort();
   const missing: string[] = [];
@@ -423,8 +427,8 @@ test("all locales carry the same keys", () => {
   assert.deepEqual(missing, [], `로케일 키가 어긋납니다:\n  ${missing.join("\n  ")}`);
 });
 
-test("헤더의 에러코드로 사라진 본문을 보충한다", () => {
-  // 스테이징에서 실제로 겪은 모양: 502 인데 본문이 {} 로 도착했다.
+test("fills in a missing body using the header's error code", () => {
+  // The shape actually seen in staging: a 502 whose body arrived as {}.
   const headers = {
     get: (n: string) => (n === ERROR_CODE_HEADER ? "gateway_in_use_by_channels" : null),
   };
@@ -433,28 +437,30 @@ test("헤더의 에러코드로 사라진 본문을 보충한다", () => {
   });
 });
 
-test("본문에 코드가 있으면 헤더가 덮어쓰지 않는다", () => {
-  // 본문이 더 풍부하다(error 문구 등). 헤더는 어디까지나 보충이다.
+test("if the body already has a code, the header doesn't overwrite it", () => {
+  // The body is richer (has an error message, etc.). The header is only a supplement.
   const headers = { get: () => "gateway_in_use_by_channels" };
   const body = { errorCode: "forbidden", error: "nope" };
   assert.deepEqual(withHeaderErrorCode(body, headers), body);
 });
 
-test("헤더도 본문도 없으면 그대로 둔다", () => {
+test("leaves it as-is when neither header nor body has one", () => {
   assert.deepEqual(withHeaderErrorCode({}, { get: () => null }), {});
 });
 
-test("본문이 객체가 아니어도 헤더만으로 코드를 만든다", () => {
+test("builds a code from the header alone even when the body isn't an object", () => {
   const headers = { get: () => "not_a_hermes_gateway" };
   assert.deepEqual(withHeaderErrorCode(null, headers), { errorCode: "not_a_hermes_gateway" });
 });
 
-// 로케일 파일에 같은 키가 두 번 있으면 **뒤엣것이 조용히 이긴다** — 앞의 문구를 고쳐도
-// 화면은 그대로다. TypeScript 가 빌드에서 잡아 주지만(`An object literal cannot have
-// multiple properties with the same name`), 그건 몇 분짜리 검사이고 실제로 그 상태로
-// 커밋·푸시가 나간 적이 있다. 몇 초 안에 잡는다.
+// If a locale file defines the same key twice, **the later one silently wins** — editing
+// the earlier wording leaves the screen unchanged. TypeScript does catch this at build
+// time (`An object literal cannot have multiple properties with the same name`), but
+// that's a check that takes minutes, and a commit and push have actually gone out in
+// exactly that state before. This catches it in seconds.
 //
-// 앞의 세 가드는 키의 **존재**만 봤다. 중복은 존재하므로 그물을 빠져나갔다.
+// The three guards above only checked whether a key **exists**. A duplicate still
+// exists, so it slips through that net.
 test("no locale defines the same key twice", () => {
   const dupes: string[] = [];
   for (const lang of ["ko", "en", "ja", "zh"]) {
@@ -468,7 +474,7 @@ test("no locale defines the same key twice", () => {
   assert.deepEqual(dupes, [], `중복 키는 뒤엣것이 이깁니다:\n  ${dupes.join("\n  ")}`);
 });
 
-test("인계 오류는 네 로케일에서 사용자 문장으로 해석된다", () => {
+test("handoff errors resolve to a user-facing sentence in all four locales", () => {
   const codes = [
     "event_cursor_handoff_required",
     "event_carrier_handoff_pending",

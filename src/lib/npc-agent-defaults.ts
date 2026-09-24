@@ -222,7 +222,7 @@ export function getNpcPresetDefaults(
     presetId: preset.id,
     displayName: preset.nameKo,
     defaultAgentId: getDefaultAgentIdForPreset(presetId),
-    // 프리셋의 옛 레이어는 버리고 성별만 기본 룩으로 접는다(변환 규칙 D).
+    // Drop the preset's legacy layers and collapse to the default look for that gender only (conversion rule D).
     appearance: normalizeOfficeAppearance({ bodyType: preset.bodyType })!,
     identity: localizeNpcPromptDocument(
       applyPresetName(preset.identity, resolvedName),
@@ -246,8 +246,9 @@ export function buildPersonaConfig({
   const identitySource = identityOverride?.trim() || fallbackPersona?.trim() || defaults.identity;
   const soulSource = soulOverride?.trim() || defaults.soul;
 
-  // 절차를 인격에 섞지 않는다. 회의 규칙 같은 절차는 시스템 지시의 층
-  // (npc-prompt-layers.ts)으로 간다. 여기 저장되는 것은 사용자가 쓴 인격뿐이다.
+  // Never mix procedure into the persona. Procedure such as meeting rules goes to the
+  // system-instruction layer (npc-prompt-layers.ts). What's stored here is only what the
+  // user wrote as their persona.
   return {
     identity: localizeNpcPromptDocument(identitySource, locale, "identity"),
     soul: localizeNpcPromptDocument(soulSource, locale, "soul"),

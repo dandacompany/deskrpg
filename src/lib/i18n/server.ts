@@ -20,9 +20,10 @@ export function normalizeLocale(locale: string | null | undefined): ServerLocale
 }
 
 /**
- * 소켓 핸드셰이크의 Cookie 헤더에서 사용자가 고른 화면 언어를 꺼낸다. 브라우저가
- * `LOCALE_COOKIE_NAME` 쿠키를 같은 출처 소켓 연결에 자동으로 싣는다 — 새 이벤트
- * 필드 없이 서버가 "이 요청을 한 사람의 언어" 를 안다. 없으면 null(추측하지 않는다).
+ * Extracts the user's chosen display language from the socket handshake's Cookie header.
+ * The browser automatically attaches the `LOCALE_COOKIE_NAME` cookie to a same-origin
+ * socket connection — so the server knows "the language of whoever made this request"
+ * without a new event field. null if absent (never guessed).
  */
 export function readLocaleCookie(cookieHeader: string | null | undefined): ServerLocale | null {
   if (!cookieHeader) return null;
@@ -33,7 +34,7 @@ export function readLocaleCookie(cookieHeader: string | null | undefined): Serve
       const raw = decodeURIComponent(part.slice(eq + 1).trim());
       return raw ? normalizeLocale(raw) : null;
     } catch {
-      // 깨진 퍼센트 인코딩(`%E0%A4%A`)은 URIError 를 던진다 — 쿠키 하나 때문에 소켓 핸들러가 죽지 않게 한다.
+      // A broken percent-encoding (`%E0%A4%A`) throws URIError — don't let one bad cookie crash the socket handler.
       return null;
     }
   }

@@ -259,7 +259,7 @@ for (const edit of ["object", "layer-order", "metadata", "spawn", "dimension"]) 
   });
 }
 
-test("출판사 초기 v3만 집기 보강본으로 갱신하고 수정본을 보존한다", () => {
+test("updates only the publishing office's initial v3 to the furniture-enhanced version, and preserves an edited one", () => {
   assert.deepEqual(
     upgradeOfficialEnvironmentMap(publishingV3Initial).map,
     buildOfficeEnvironment("publishing"),

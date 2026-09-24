@@ -1,10 +1,11 @@
-// 직원과의 1:1 대화(DM)를 **대화 목록에 올리기 위한** 정책.
+// Policy for **surfacing** 1:1 conversations (DMs) with employees in the conversation list.
 //
-// DM 은 방(`chat_rooms`)이 아니라 `chat_messages` 의 (character_id, npc_id) 쌍이다.
-// 기록은 남는데 목록에 입구가 없어서, 패널을 닫으면 맵에서 그 직원을 다시 찾아
-// 호출해야만 이어서 말할 수 있었다. 여기서 그 쌍을 "대화 한 줄" 로 환산한다.
+// A DM isn't a room (`chat_rooms`) — it's a (character_id, npc_id) pair in `chat_messages`.
+// The record persists, but with no entry point in the list, closing the panel meant you had to
+// go find that employee on the map and call them again just to keep talking. This converts that
+// pair into "one conversation line."
 //
-// DB 에 닿는 부분은 `npc-chat-history.ts` 에 있고, 이 파일은 순수 함수만 둔다.
+// The part that touches the DB lives in `npc-chat-history.ts`; this file holds only pure functions.
 
 export type DmThreadRow = {
   npcId: string;
@@ -15,16 +16,18 @@ export type DmThreadRow = {
 
 export type DmThread = {
   npcId: string;
-  /** 목록 미리보기에 쓰는 마지막 발화. 누가 말했는지까지 보여 준다. */
+  /** The last message used for the list preview. Also shows who said it. */
   lastMessage: { role: "player" | "npc"; content: string };
   lastAt: number;
 };
 
 /**
- * 같은 직원의 여러 행을 한 줄로 접는다 — 마지막 발화만 남기고 최신순으로 세운다.
+ * Folds multiple rows for the same employee into one line — keeps only the last message and
+ * sorts most-recent-first.
  *
- * 시각이 없는 행(`createdAt` null)도 버리지 않는다. 순서는 조회에서 이미 정해졌고
- * 여기서 잃을 것은 표시용 시각뿐이다 — `toHistoryMessages` 와 같은 판단이다.
+ * Rows with no timestamp (`createdAt` null) aren't dropped either. The order is already decided
+ * by the query, and all that's lost here is the display timestamp — same reasoning as
+ * `toHistoryMessages`.
  */
 export function summarizeDmThreads(rows: DmThreadRow[]): DmThread[] {
   const byNpc = new Map<string, DmThread>();
@@ -34,7 +37,7 @@ export function summarizeDmThreads(rows: DmThreadRow[]): DmThread[] {
     if (!content) continue;
     const at = row.createdAt ? row.createdAt.getTime() : 0;
     const current = byNpc.get(row.npcId);
-    // 같은 시각이면 나중에 읽은 행이 이긴다 — 조회가 오름차순이므로 그게 마지막 발화다.
+    // At the same timestamp, the row read later wins — since the query is ascending, that's the last message.
     if (current && current.lastAt > at) continue;
     byNpc.set(row.npcId, {
       npcId: row.npcId,
@@ -50,12 +53,13 @@ export type DmThreadNpc = { id: string; name: string; active: boolean };
 export type DmThreadEntry = DmThread & { npcName: string; active: boolean };
 
 /**
- * 목록에 그릴 줄을 만든다.
+ * Builds the lines to render in the list.
  *
- * **퇴근한 직원은 감추지 않는다** — 기록은 사용자의 것이고, 감추면 지금 고치는 결함
- * (입구가 없어 맵으로 돌아가야 하는 것)을 그대로 되살린다. 비활성으로 표시하고 읽게 둔다.
- * 반면 **명단에 아예 없는 직원은 뺀다** — 삭제되면 `chat_messages` 도 함께 지워지므로
- * (schema 의 onDelete: cascade) 여기 남은 것은 낡은 목록뿐이다.
+ * **An employee who has clocked out is not hidden** — the record belongs to the user, and hiding
+ * it would bring back the exact defect this fixes (having no entry point and needing to go back
+ * to the map). It's shown as inactive but still readable. On the other hand, **an employee not
+ * in the roster at all is excluded** — deleting one cascades to delete `chat_messages` too
+ * (schema's onDelete: cascade), so what's left here is just a stale listing.
  */
 export function buildDmThreadEntries(threads: DmThread[], npcs: DmThreadNpc[]): DmThreadEntry[] {
   const known = new Map(npcs.map((npc) => [npc.id, npc]));
@@ -69,10 +73,11 @@ export function buildDmThreadEntries(threads: DmThread[], npcs: DmThreadNpc[]): 
 }
 
 /**
- * 목록에서 연 DM 에 메시지를 보낼 때 그 직원을 호출해야 하는가.
+ * Whether sending a message in a DM opened from the list needs to call that employee over.
  *
- * 단테 지시: **여는 것만으로는 호출하지 않고, 보내는 시점에 호출한다.** 이미 곁에 있거나
- * 오는 중이면 다시 부르지 않는다 — 방 대화(`handleRoomSend`)가 쓰는 판정과 같은 규칙이다.
+ * Dante's instruction: **opening it alone doesn't call them — the call happens at send time.**
+ * If they're already nearby or already on the way, they aren't called again — the same
+ * decision rule room chat (`handleRoomSend`) uses.
  */
 export function needsCallBeforeDmSend(moveState: string | undefined | null): boolean {
   return moveState !== "waiting" && moveState !== "moving-to-player";

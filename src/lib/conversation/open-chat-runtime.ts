@@ -1,10 +1,12 @@
 import { withStreamDiagnosticRequest } from "@/lib/hermes/stream-diagnostics";
-// 맵 채팅에서 지명받은 NPC 들이 동시에 대답한다. 루프가 없다 — 사람의 말이 올 때만 깨어난다.
+// In map chat, the NPCs that were called respond at the same time. There's no loop — it only
+// wakes up when a human's message arrives.
 //
-// 회의(ChannelRuntime)와 갈라 둔 이유: 회의는 매 라운드 "다음은 누구"를 정하는 박자로 돌지만
-// 자유채팅에는 그 박자가 없다. 라운드 루프를 이벤트 구동에 맞추려면 빈 박자를 계속 돌게
-// 해야 한다. 공유하는 것은 NpcRuntime.speakWithPrompt — 대본을 들고 가서 말을 시키고
-// 답을 받아오는 기계다.
+// Split from the meeting (ChannelRuntime) because: a meeting runs on a "who's next" beat
+// decided every round, but free chat has no such beat. Fitting a round loop to event-driven
+// behavior would mean constantly spinning on an empty beat. What's shared is
+// NpcRuntime.speakWithPrompt — the machine that takes a prompt, makes it speak, and gets the
+// response back.
 
 import { randomUUID } from "node:crypto";
 import { SessionQueue } from "./request-queue";
@@ -16,7 +18,7 @@ import { formatOpenChatMessage, type ChatLine } from "@/lib/open-chat-formatter"
 import type { EngineParticipant } from "./types";
 import type { UserContext } from "@/lib/user-context";
 
-/** speakWithPrompt 는 이 둘을 읽지 않는다. 읽히면 테스트에서 드러나도록 눈에 띄는 값을 넣는다. */
+/** speakWithPrompt never reads these two. Set to conspicuous values so a test would reveal it if it ever did. */
 const UNUSED_TOPIC = "__open_chat_topic_should_never_be_read__";
 const UNUSED_MAX_TURNS = -1;
 
@@ -25,8 +27,9 @@ export type TurnContext = {
   sourceMessageId: string;
   callerSocketId: string | null;
   /**
-   * 사람이 직접 부른 턴에서만 그 사람의 이름·소개. NPC 가 NPC 를 부른 턴은 null 이다 —
-   * 그 턴의 "부른 사람" 은 동료 NPC 라서 사람의 소개를 붙이면 상대를 잘못 알려 준다.
+   * The caller's name/intro, but only for a turn a human called directly. Null for a turn
+   * where an NPC called another NPC — that turn's "caller" is a fellow NPC, so attaching a
+   * human's intro would misidentify who's speaking.
    */
   callerContext?: UserContext | null;
 };
@@ -36,8 +39,9 @@ export type OpenChatCallbacks = {
   onDisposed?: () => void;
   onQueueFull?: (npcId: string, sourceMessageId: string) => void;
   /**
-   * 턴이 열렸다. `callerSocketId` 는 **이 사슬을 시작한 사람의 소켓 id** 다 — NPC 가
-   * 누구 곁으로 걸어갈지를 정하는 값이라, NPC 가 NPC 를 부른 턴도 같은 값을 쓴다.
+   * A turn opened. `callerSocketId` is **the socket id of the person who started this
+   * chain** — since it decides who the NPC walks over to, a turn where an NPC called another
+   * NPC uses that same value too.
    */
   onTurnStart?: (
     npcId: string,
@@ -52,11 +56,12 @@ export type OpenChatCallbacks = {
     meta: { aborted: true; reason: string } | undefined,
     context: TurnContext,
   ) => unknown;
-  /** 지명받았으나 게이트웨이가 죽어 건너뛴 NPC. 회의의 같은 이름 콜백과 짝이다. */
+  /** An NPC that was mentioned but skipped because the gateway is down. Paired with the meeting's same-named callback. */
   onMentionSkipped?: (npcId: string, reason: "backend_failing") => void;
   /**
-   * 사람이 누군가를 지목했지만 그 지목이 응답자를 하나도 만들지 못했다(비멤버·오타).
-   * 맵에는 말풍선이 없어 이대로면 완전 침묵이다 — 부른 사람에게만 신호를 준다.
+   * A human mentioned someone, but that mention produced not a single responder
+   * (non-member, typo). There's no speech bubble on the map, so as-is this would be total
+   * silence — this signals only the caller.
    */
   onMentionNoMatch?: (callerSocketId: string | null) => void;
   onError?: (err: unknown, npcId: string) => void;
@@ -64,14 +69,14 @@ export type OpenChatCallbacks = {
 
 export type OpenChatDeps = {
   participants: EngineParticipant[];
-  /** 프롬프트에 실을 최근 대화. 소켓 계층의 채널 히스토리를 그대로 넘긴다. */
+  /** The recent conversation to include in the prompt. Passed through as-is from the socket layer's channel history. */
   recent: () => ChatLine[];
   recentForSource?: (sourceMessageId: string) => ChatLine[];
   turnTimeout: { idleMs: number; maxMs: number };
   historyLimit?: number;
   budget?: number;
   now?: () => number;
-  /** 방 정책. 없으면 지명만 — 사무실 전체 방과 같다. */
+  /** The room's policy. If absent, mentions only — same as the whole-office room. */
   selectResponders?: (mentionedIds: string[]) => string[];
 };
 

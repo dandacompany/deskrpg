@@ -1,10 +1,10 @@
 "use strict";
 
 /**
- * `deskrpg reset-password` 의 SQLite 쪽 본체다. CLI(bin/deskrpg.js)는 큰 JS 한 덩어리라
- * 테스트가 닿지 않으므로, DB 를 실제로 건드리는 부분만 여기로 떼어 낸다.
+ * The SQLite-side body of `deskrpg reset-password`. The CLI (bin/deskrpg.js) is one big JS
+ * blob that tests can't reach, so only the part that actually touches the DB is split out here.
  *
- * 비밀번호 평문은 여기까지 오지 않는다 — 호출자가 해시해서 넘긴다.
+ * A plaintext password never reaches this far — the caller hashes it before passing it in.
  */
 function resetSqliteUserPassword(db, loginId, passwordHash) {
   const columns = db

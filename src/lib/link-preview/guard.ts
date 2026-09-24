@@ -1,41 +1,43 @@
 /**
- * 링크 미리보기 프록시의 SSRF 가드.
+ * SSRF guard for the link-preview proxy.
  *
- * 미리보기는 남의 사이트를 **서버가** 읽어야 한다. 그 순간 서버는 사용자가 준 주소로
- * 요청을 보내는 도구가 되므로, 막지 않으면 로그인한 아무 사용자나 내부망·클라우드
- * 메타데이터(`169.254.169.254`)를 우리 서버를 통해 읽을 수 있다.
+ * A preview requires **the server** to read someone else's site. At that moment the server
+ * becomes a tool that sends a request to whatever address the user gives it, so without a
+ * block, any logged-in user could read internal-network or cloud metadata
+ * (`169.254.169.254`) through our server.
  *
- * 세 겹으로 막는다.
- *   1. 주소 자체 — http(s) 만, 자격증명 금지, 표준 포트만, 호스트가 사설 IP 리터럴이면 거부.
- *   2. 이름 해석 결과 — DNS 가 돌려준 **모든** 주소를 검사한다(DNS rebinding).
- *   3. 리다이렉트 — 수동으로 따라가며 홉마다 1·2 를 다시 본다(`fetchGuarded`).
+ * Blocked in three layers.
+ *   1. The address itself — http(s) only, no credentials, standard ports only, reject if
+ *      the host is a private-IP literal.
+ *   2. The name-resolution result — check **every** address DNS returns (DNS rebinding).
+ *   3. Redirects — follow manually, re-checking 1 and 2 at every hop (`fetchGuarded`).
  *
- * 1·2 를 나눈 이유: 1 은 순수 함수라 테스트가 싸고, 2 는 I/O 라 느리다. 둘 중 하나만
- * 있으면 뚫린다 — 1 만 있으면 `internal.example.com` 이 10.x 로 풀리고, 2 만 있으면
- * `file://`·비표준 포트가 그대로 나간다.
+ * Why 1 and 2 are split: 1 is a pure function so testing it is cheap, while 2 is I/O and
+ * slow. Having only one of them is a hole — with only 1, `internal.example.com` can still
+ * resolve to 10.x; with only 2, `file://` or a non-standard port would go straight through.
  */
 import { isIPv4, isIPv6 } from "node:net";
 
 const ALLOWED_PORTS = new Set(["", "80", "443"]);
 
-/** 점 넷짜리 IPv4 문자열이면 옥텟 배열, 아니면 null. */
+/** The octet array if this is a dotted-quad IPv4 string, else null. */
 function ipv4Octets(host: string): number[] | null {
   if (!isIPv4(host)) return null;
   return host.split(".").map(Number);
 }
 
 /**
- * IPv6 문자열을 16바이트로 펼친다. 파싱할 수 없으면 null.
+ * Expands an IPv6 string into 16 bytes. null if it can't be parsed.
  *
- * 문자열 정규식으로 IPv6 를 판정하면 반드시 뚫린다 — WHATWG URL 파서가
- * `[::ffff:127.0.0.1]` 을 **16진 표기** `[::ffff:7f00:1]` 로 정규화하기 때문이다
- * (2026-09-20 실측: 그 형태로 루프백·사설망·169.254 가 전부 통과했다). 표기를 비교하지 말고
- * 바이트로 펼쳐서 판정한다.
+ * Judging IPv6 with a string regex will always be beaten — the WHATWG URL parser
+ * normalizes `[::ffff:127.0.0.1]` into its **hex form** `[::ffff:7f00:1]`
+ * (measured 2026-09-20: in that form, loopback, private networks, and 169.254 all got
+ * through). Don't compare notations — expand to bytes and judge those.
  */
 function ipv6Bytes(host: string): Uint8Array | null {
   if (!isIPv6(host)) return null;
   let text = host;
-  // 끝에 점 넷 IPv4 가 붙은 형태(`::ffff:127.0.0.1`)는 16진 두 그룹으로 바꿔 둔다.
+  // A form with a dotted-quad IPv4 tail (`::ffff:127.0.0.1`) is converted to two hex groups.
   const tail = /(\d{1,3}(?:\.\d{1,3}){3})$/.exec(text);
   if (tail) {
     const v4 = ipv4Octets(tail[1]);
@@ -61,23 +63,23 @@ function ipv6Bytes(host: string): Uint8Array | null {
   return bytes;
 }
 
-/** IPv4 는 차단 목록으로 판정한다 — 공인 대역이 훨씬 넓어 목록이 짧다. */
+/** IPv4 is judged with a blocklist — the public range is far larger, so the list is short. */
 function isBlockedIpv4(octets: number[]): boolean {
   const [a, b, c] = octets;
-  if (a === 0 || a === 127 || a === 10) return true; // 이 호스트 · 루프백 · 사설
-  if (a === 172 && b >= 16 && b <= 31) return true; // 사설
-  if (a === 192 && b === 168) return true; // 사설
-  if (a === 169 && b === 254) return true; // 링크로컬(클라우드 메타데이터)
+  if (a === 0 || a === 127 || a === 10) return true; // this host · loopback · private
+  if (a === 172 && b >= 16 && b <= 31) return true; // private
+  if (a === 192 && b === 168) return true; // private
+  if (a === 169 && b === 254) return true; // link-local (cloud metadata)
   if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-  if (a === 192 && b === 0 && (c === 0 || c === 2)) return true; // IETF 프로토콜 할당 · 문서용
-  if (a === 198 && (b === 18 || b === 19)) return true; // 벤치마크
-  if (a === 198 && b === 51 && c === 100) return true; // 문서용
-  if (a === 203 && b === 0 && c === 113) return true; // 문서용
-  if (a >= 224) return true; // 멀티캐스트 · 예약 · 브로드캐스트
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return true; // IETF protocol assignment · documentation
+  if (a === 198 && (b === 18 || b === 19)) return true; // benchmarking
+  if (a === 198 && b === 51 && c === 100) return true; // documentation
+  if (a === 203 && b === 0 && c === 113) return true; // documentation
+  if (a >= 224) return true; // multicast · reserved · broadcast
   return false;
 }
 
-/** 앞 `bits` 비트가 접두사와 같은가. */
+/** Do the first `bits` bits match the prefix? */
 function hasPrefix(bytes: Uint8Array, prefix: number[], bits: number): boolean {
   for (let i = 0; i < bits; i++) {
     const bit = (bytes[i >> 3] >> (7 - (i & 7))) & 1;
@@ -87,7 +89,7 @@ function hasPrefix(bytes: Uint8Array, prefix: number[], bits: number): boolean {
   return true;
 }
 
-/** 안에 IPv4 를 품는 IPv6 대역이면 그 IPv4 를, 아니면 null. */
+/** The embedded IPv4 if this is an IPv6 range that carries one, else null. */
 function embeddedIpv4(bytes: Uint8Array): number[] | null {
   const last4 = [bytes[12], bytes[13], bytes[14], bytes[15]];
   // ::ffff:0:0/96 (IPv4-mapped) · ::/96 (IPv4-compatible) · ::ffff:0:0:0/96 (IPv4-translated)
@@ -103,33 +105,34 @@ function embeddedIpv4(bytes: Uint8Array): number[] | null {
   // 64:ff9b::/96 · 64:ff9b:1::/48 (NAT64)
   if (bytes[0] === 0x00 && bytes[1] === 0x64 && bytes[2] === 0xff && bytes[3] === 0x9b)
     return last4;
-  // 2002::/16 (6to4) — 안쪽 v4 가 진짜 목적지다.
+  // 2002::/16 (6to4) — the embedded v4 is the real destination.
   if (bytes[0] === 0x20 && bytes[1] === 0x02) return [bytes[2], bytes[3], bytes[4], bytes[5]];
   return null;
 }
 
 /**
- * IPv6 는 **허용 목록**으로 판정한다 — 차단 목록은 새 표기가 나올 때마다 뚫린다.
- * 글로벌 유니캐스트(`2000::/3`)만 통과시키고, 그 안에서도 v4 를 품거나 특수 용도인
- * 대역은 따로 쳐낸다.
+ * IPv6 is judged with an **allowlist** — a blocklist gets beaten every time a new notation
+ * shows up. Only global unicast (`2000::/3`) is let through, and within that, ranges that
+ * carry a v4 or are for special use are separately excluded.
  */
 function isBlockedIpv6(bytes: Uint8Array): boolean {
   const v4 = embeddedIpv4(bytes);
   if (v4) return isBlockedIpv4(v4);
-  if (!hasPrefix(bytes, [0x20], 3)) return true; // 2000::/3 밖은 전부 차단
+  if (!hasPrefix(bytes, [0x20], 3)) return true; // anything outside 2000::/3 is blocked entirely
   if (bytes[0] === 0x20 && bytes[1] === 0x01 && bytes[2] === 0x00 && bytes[3] === 0x00) return true; // 2001::/32 Teredo
-  if (bytes[0] === 0x20 && bytes[1] === 0x01 && bytes[2] === 0x0d && bytes[3] === 0xb8) return true; // 2001:db8::/32 문서용
+  if (bytes[0] === 0x20 && bytes[1] === 0x01 && bytes[2] === 0x0d && bytes[3] === 0xb8) return true; // 2001:db8::/32 documentation
   return false;
 }
 
 /**
- * 이 주소로 나가면 안 되는가. IP 문자열만 받는다(호스트 이름은 해석한 뒤 넘긴다).
- * 판정할 수 없는 문자열은 **막는다** — 모르는 것을 통과시키는 쪽이 위험하다.
+ * Should we not go out to this address? Takes only IP strings (hostnames are resolved
+ * before being passed in). A string that can't be judged is **blocked** — letting the
+ * unknown through is the riskier choice.
  */
 export function isBlockedAddress(address: string): boolean {
   let host = address.trim().toLowerCase();
   if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
-  // 스코프 식별자(`fe80::1%en0`)는 주소가 아니다 — 떼고 본다.
+  // A scope identifier (`fe80::1%en0`) is not part of the address — strip it before judging.
   const percent = host.indexOf("%");
   if (percent !== -1) host = host.slice(0, percent);
   if (!host) return true;
@@ -140,17 +143,18 @@ export function isBlockedAddress(address: string): boolean {
   const bytes = ipv6Bytes(host);
   if (bytes) return isBlockedIpv6(bytes);
 
-  return true; // IPv4 도 IPv6 도 아니다 — 해석되지 않은 이름
+  return true; // neither IPv4 nor IPv6 — an unresolved name
 }
 
 /**
- * 미리보기를 시도해도 되는 주소인가. 통과하면 정규화된 URL(해시 제거)을 준다.
- * 호스트 이름의 해석 결과는 여기서 보지 않는다 — `fetchGuarded` 가 본다.
+ * Is this an address we may attempt to preview? If it passes, returns the normalized URL
+ * (hash stripped). The resolution result of the hostname is not looked at here —
+ * `fetchGuarded` handles that.
  */
 /**
- * 모양만 본다 — http(s), 자격증명 없음, 해시 제거. 주소와 포트가 어디를 가리키는지는
- * 보지 않는다(`parsePreviewTarget` 이 본다). 캐시 키를 만들려면 주소 판정보다 먼저
- * 정규화가 필요해서 나눠 뒀다.
+ * Checks shape only — http(s), no credentials, hash stripped. Doesn't look at where the
+ * address and port actually point (`parsePreviewTarget` does that). Split out because
+ * building a cache key needs normalization to happen before address judgment.
  */
 export function normalizePreviewUrl(raw: string): URL | null {
   let url: URL;
@@ -169,15 +173,15 @@ export function normalizePreviewUrl(raw: string): URL | null {
 export function parsePreviewTarget(raw: string): URL | null {
   const url = normalizePreviewUrl(raw);
   if (!url) return null;
-  // 표준 포트만. 임의 포트를 허용하면 프록시가 내부망 포트 스캐너가 된다.
+  // Standard ports only. Allowing arbitrary ports would turn the proxy into an internal-network port scanner.
   if (!ALLOWED_PORTS.has(url.port)) return null;
 
   let host = url.hostname.toLowerCase();
   if (host.endsWith(".")) host = host.slice(0, -1);
   if (!host) return null;
-  // 이름이 아니라 주소로 왔으면 지금 판정한다. `localhost` 는 해석을 기다릴 필요가 없다.
+  // Judge right now if it arrived as an address rather than a name. `localhost` doesn't need to wait for resolution.
   if (host === "localhost" || host.endsWith(".localhost")) return null;
-  // 이름이 아니라 주소로 왔으면 지금 판정한다(IPv6 리터럴은 대괄호가 벗겨져 온다).
+  // Judge right now if it arrived as an address rather than a name (an IPv6 literal arrives with the brackets stripped).
   const literal = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
   if (isIPv4(literal) || isIPv6(literal)) {
     if (isBlockedAddress(literal)) return null;
@@ -186,11 +190,12 @@ export function parsePreviewTarget(raw: string): URL | null {
 }
 
 /**
- * 프록시가 브라우저로 되돌려도 되는 이미지 타입인가.
+ * Is this an image type the proxy is allowed to return to the browser?
  *
- * `image/*` 를 전부 통과시키면 **SVG** 가 함께 들어온다. SVG 는 이미지가 아니라 문서다 —
- * `<script>` 를 품고, 우리 출처(`/api/link-preview/image`)에서 열리므로 우리 쿠키·DOM 에
- * 닿는 XSS 가 된다. 미리보기 썸네일에 벡터가 필요하지도 않으므로 래스터만 통과시킨다.
+ * Letting all of `image/*` through would also admit **SVG**. SVG is not an image but a
+ * document — it can carry a `<script>`, and since it's opened from our origin
+ * (`/api/link-preview/image`), that becomes XSS reaching our cookies and DOM. Preview
+ * thumbnails don't need vector formats either, so only raster types are allowed through.
  */
 const SAFE_IMAGE_TYPES = new Set([
   "image/png",

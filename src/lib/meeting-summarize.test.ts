@@ -40,10 +40,10 @@ function deps(over: Partial<ResummarizeMinutesDeps> = {}): ResummarizeMinutesDep
   };
 }
 
-test("주재자가 실패한 요약을 다시 시키면 결과를 저장하고 돌려준다", async () => {
+test("when the host retries a failed summary, the result is saved and returned", async () => {
   const d = deps({
     resummarize: async (input) => {
-      // 담당 후보는 참석 **직원**만이다.
+      // The assignee candidates are only the attending **employees**.
       assert.deepEqual(input.participants, [{ npcId: "npc-1", name: "소피" }]);
       return ok;
     },
@@ -53,13 +53,13 @@ test("주재자가 실패한 요약을 다시 시키면 결과를 저장하고 �
   assert.deepEqual(d.saved, [ok]);
 });
 
-test("주재자도 소유자도 아니면 403 이고 아무것도 부르지 않는다", async () => {
+test("403 and calls nothing when the caller is neither the host nor the owner", async () => {
   const d = deps({ resummarize: async () => assert.fail("부르면 안 된다") });
   const result = await resummarizeMinutes({ minutesId: "m1", userId: "member" }, d);
   assert.deepEqual(result, { ok: false, status: 403, errorCode: "forbidden" });
 });
 
-test("없는 회의록은 404", async () => {
+test("404 for minutes that don't exist", async () => {
   const result = await resummarizeMinutes(
     { minutesId: "x", userId: "host" },
     deps({ loadMinutes: async () => null }),
@@ -67,7 +67,7 @@ test("없는 회의록은 404", async () => {
   assert.deepEqual(result, { ok: false, status: 404, errorCode: "not_found" });
 });
 
-test("이미 등록된 회의는 요약을 덮어쓰지 않는다 — 카드와 초안이 어긋난다", async () => {
+test("doesn't overwrite the summary of an already-registered meeting — it would desync the card and the draft", async () => {
   const registered = {
     ...row,
     summaryStatus: "ok",
@@ -85,14 +85,14 @@ test("이미 등록된 회의는 요약을 덮어쓰지 않는다 — 카드와 
   assert.deepEqual(result, { ok: false, status: 409, errorCode: "already_registered" });
 });
 
-test("소켓 서버 훅이 없으면 503 — 빈 요약으로 덮어쓰지 않는다", async () => {
+test("503 when there's no socket server hook — doesn't overwrite with an empty summary", async () => {
   const d = deps({ resummarize: undefined });
   const result = await resummarizeMinutes({ minutesId: "m1", userId: "owner" }, d);
   assert.deepEqual(result, { ok: false, status: 503, errorCode: "summarizer_unavailable" });
   assert.deepEqual(d.saved, []);
 });
 
-test("다시 시도도 실패하면 저장은 하되(상태가 남는다) 실패를 그대로 돌려준다", async () => {
+test("if the retry also fails, it's still saved (the state persists) and the failure is returned as-is", async () => {
   const failed: ParsedMeetingOutcome = {
     status: "failed",
     keyTopics: [],

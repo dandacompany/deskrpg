@@ -1,7 +1,7 @@
-// 기동·진단 시점의 환경 검증. server.js(커스텀 서버)와 bin/deskrpg.js(doctor)가 함께 쓴다.
-// internal-transport.js 와 같은 CommonJS 형식이라 `require` 로도 `import` 로도 로드된다.
+// Environment validation at startup/diagnostic time. Shared by server.js (custom server)
+// and bin/deskrpg.js (doctor). Same CommonJS format as internal-transport.js, so it loads via both `require` and `import`.
 //
-// 원칙: 비밀 값 자체는 절대 메시지에 싣지 않는다. 존재 여부와 길이만 말한다.
+// Principle: never put a secret value itself in a message. Only say whether it exists and how long it is.
 
 const POSTGRES_DB_TYPES = new Set(["postgresql", "postgres"]);
 const DEFAULT_DB_PROBE_TIMEOUT_MS = 5000;
@@ -12,17 +12,19 @@ function readTrimmed(env, key) {
 }
 
 /**
- * 환경변수만 보고 기동을 막아야 할 문제(errors)와 알려야 할 문제(warnings)를 가른다.
- * 순수 함수 — process.env 를 읽지도, 쓰지도 않는다(기본값으로만 받는다).
+ * Splits environment-variable-only checks into problems that must block startup
+ * (errors) and problems that should just be surfaced (warnings).
+ * A pure function — it never reads or writes process.env (only receives it as a default).
  *
  * @param {Record<string, string | undefined>} env
  * @returns {{ errors: string[], warnings: string[], dbTarget: "postgresql" | "sqlite" }}
  */
 /**
- * 이 컴퓨터에 Hermes 가 없으면 한 줄 알려 준다. Hermes 가 있으면 아무 말도 하지 않는다.
+ * Returns one line if this machine has no Hermes. Says nothing if Hermes is present.
  *
- * 2026-09-19 부터 호스트 설정은 관리자에게 기본으로 열린다 — 연결 마법사의 "로컬 연결" 에서 설치할 수
- * 있다고 안내한다. 운영자가 스위치를 `0` 으로 꺼 두었으면 켜는 명령을 안내한다.
+ * Since 2026-09-19, host setup is open to admins by default — mentions that it can be
+ * installed from the connection wizard's "Local connection". If the operator has turned
+ * the switch off (`0`), mentions the command to turn it back on.
  *
  * @param {Record<string, string | undefined>} [env]
  * @param {string} [homeDir]
@@ -34,11 +36,12 @@ function hostSetupHint(env = process.env, homeDir = require("node:os").homedir()
   const off = (key) => ["0", "false", "no", "off"].includes((env[key] ?? "").trim().toLowerCase());
   try {
     if (fs.existsSync(path.join(homeDir, ".hermes", "hermes-agent"))) return null;
-    // 결합 이미지(deskrpg-office)는 Hermes 를 같은 컨테이너에 담고 HERMES_HOME 으로 가리킨다.
-    // 홈 밑의 `.hermes` 만 보면 그 환경에서 "Hermes 가 없다"고 잘못 알린다(실측: 컨테이너 부팅 로그).
+    // The combined image (deskrpg-office) bundles Hermes in the same container and points
+    // to it via HERMES_HOME. Checking only `.hermes` under home would wrongly report
+    // "no Hermes" in that environment (confirmed: container boot logs).
     const hermesHome = (env.HERMES_HOME ?? "").trim();
     if (hermesHome && fs.existsSync(hermesHome)) return null;
-    // 그 밖에도 PATH 에 hermes 가 있으면 이미 깔려 있는 것이다.
+    // Also, if hermes is on PATH, it's already installed.
     const pathDirs = (env.PATH ?? "").split(path.delimiter).filter(Boolean);
     if (pathDirs.some((dir) => fs.existsSync(path.join(dir, "hermes")))) return null;
   } catch {
@@ -62,12 +65,13 @@ function inspectEnvironment(env = process.env) {
   const jwtSecret = readTrimmed(env, "JWT_SECRET");
   const internalRpcSecret = readTrimmed(env, "INTERNAL_RPC_SECRET");
 
-  // src/db/index.ts 와 같은 판정 규칙을 쓴다: DB_TYPE || (DATABASE_URL ? postgresql : sqlite)
+  // Uses the same rule as src/db/index.ts: DB_TYPE || (DATABASE_URL ? postgresql : sqlite)
   const effectiveDbType = dbTypeRaw || (databaseUrl ? "postgresql" : "sqlite");
   const dbTarget = POSTGRES_DB_TYPES.has(effectiveDbType) ? "postgresql" : "sqlite";
 
-  // `.env.example` 에서 그대로 옮겨 온 안내 문구는 비밀이 아니다. 공개된 값으로 세션 토큰을
-  // 서명하면 누구나 남의 세션을 위조할 수 있으므로, 비어 있는 것과 똑같이 막는다.
+  // The placeholder text copied straight from `.env.example` isn't a secret. Signing
+  // session tokens with a public value would let anyone forge someone else's session,
+  // so this is blocked exactly like an empty value.
   const jwtIsPlaceholder = Boolean(jwtSecret) && isPlaceholderSecret(jwtSecret);
   if (!jwtSecret || jwtIsPlaceholder) {
     const what = jwtIsPlaceholder
@@ -112,8 +116,9 @@ function inspectEnvironment(env = process.env) {
 }
 
 /**
- * 오류를 한 조각의 사람이 읽을 문자열로. `pg` 는 메시지가 빈 오류를 던지는 경로가 있어
- * (실측: 접속 실패 시 `(  )` 만 찍혔다) code·name 까지 훑어 빈 괄호를 만들지 않는다.
+ * Turns an error into a single human-readable string. `pg` has a path that throws an
+ * error with an empty message (confirmed: on connection failure only `(  )` was printed),
+ * so this also checks code/name to avoid producing empty parentheses.
  */
 function describeError(error) {
   if (!error) return "원인 불명";
@@ -164,7 +169,7 @@ async function probePostgres(databaseUrl, timeoutMs) {
     try {
       await client.end();
     } catch {
-      // 접속조차 못 했으면 end() 도 실패한다 — 진단 결과에 영향을 주지 않는다.
+      // If it couldn't even connect, end() also fails — this doesn't affect the diagnostic result.
     }
   }
 }
@@ -190,7 +195,7 @@ async function probeSqlite(sqlitePath) {
       message: `SQLite 파일을 읽고 쓸 수 있습니다: ${sqlitePath}`,
     };
   } catch {
-    // 파일이 아직 없는 것은 정상일 수 있다 — 부모 디렉터리에 쓸 수 있으면 부팅 시 만들어진다.
+    // The file not existing yet can be normal — if the parent directory is writable, it's created at boot.
     try {
       await fs.promises.access(path.dirname(sqlitePath), fs.constants.W_OK);
       return {
@@ -209,7 +214,7 @@ async function probeSqlite(sqlitePath) {
 }
 
 /**
- * DB 에 실제로 닿는지 확인한다. 절대 throw 하지 않고 결과 객체를 돌려준다.
+ * Confirms the DB is actually reachable. Never throws — always returns a result object.
  *
  * @param {{ databaseUrl?: string, sqlitePath?: string, target?: "postgresql" | "sqlite", timeoutMs?: number }} options
  * @returns {Promise<{ ok: boolean, target: "postgresql" | "sqlite", message: string }>}
@@ -217,9 +222,10 @@ async function probeSqlite(sqlitePath) {
 async function checkDatabaseReachable(options = {}) {
   const { databaseUrl, sqlitePath, target, timeoutMs = DEFAULT_DB_PROBE_TIMEOUT_MS } = options;
 
-  // 어느 DB 를 찌를지는 앱이 실제로 쓰는 것과 같아야 한다. `deskrpg init` 은 .env.example 을
-  // 복사하므로 SQLite 런타임에도 PostgreSQL DATABASE_URL 줄이 남아 있다 — URL 유무로 정하면
-  // SQLite 사용자에게 "PostgreSQL 접속 실패" 라는 거짓 진단을 낸다(실측).
+  // Which DB to probe must match what the app actually uses. `deskrpg init` copies
+  // .env.example, so a leftover PostgreSQL DATABASE_URL line stays even in a SQLite
+  // runtime — deciding by URL presence alone would give a SQLite user a false
+  // "PostgreSQL connection failed" diagnosis (confirmed).
   const resolved = target || (databaseUrl ? "postgresql" : "sqlite");
 
   try {
@@ -245,7 +251,7 @@ async function checkDatabaseReachable(options = {}) {
 }
 
 /**
- * 포트가 이미 점유됐는지 본다. 점유 중이면 { free: false }.
+ * Checks whether the port is already in use. { free: false } if it is.
  *
  * @param {number} port
  * @param {string} [host]
@@ -275,9 +281,9 @@ function checkPortAvailable(port, host = "0.0.0.0") {
 }
 
 /**
- * inspectEnvironment 결과를 사람이 읽는 줄로 찍는다.
+ * Prints the inspectEnvironment result as human-readable lines.
  *
- * @returns {boolean} errors 가 하나라도 있으면 false
+ * @returns {boolean} false if there's even one error
  */
 function reportEnvironmentInspection(inspection, logger = console) {
   for (const warning of inspection.warnings) {

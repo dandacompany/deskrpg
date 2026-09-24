@@ -1,8 +1,9 @@
 /**
- * 회의 훅 레지스트리 — 라우트(`src/app/**`)가 소켓 서버의 어댑터에 닿는 유일한 길.
+ * Meeting hook registry — the only path by which routes (`src/app/**`) reach the socket server's adapter.
  *
- * `automation-registry.ts` 와 같은 무늬다. 라우트는 `src/server/**` 를 import 하지 않는다
- * (`app-server-boundary.test.ts`). 소켓 서버가 뜰 때 실제 구현을 `globalThis` 에 꽂는다.
+ * Same pattern as `automation-registry.ts`. Routes never import `src/server/**`
+ * (`app-server-boundary.test.ts`). The real implementation is plugged into `globalThis` when the
+ * socket server starts.
  */
 import type { OutcomeParticipant, ParsedMeetingOutcome } from "./meeting-outcome";
 
@@ -12,12 +13,12 @@ export type ResummarizeInput = {
   userId: string;
   topic: string;
   transcript: string;
-  /** 회의에 참석했던 직원. 요약을 맡길 후보이자 후속 업무의 담당 후보다. */
+  /** Employees who attended the meeting. Candidates both for producing the summary and for follow-up work. */
   participants: OutcomeParticipant[];
 };
 
 export type MeetingHooks = {
-  /** 저장된 트랜스크립트로 요약을 다시 만든다. DB 는 건드리지 않는다 — 쓰는 쪽은 라우트다. */
+  /** Regenerates the summary from the stored transcript. Doesn't touch the DB — the route is what writes. */
   resummarize(input: ResummarizeInput): Promise<ParsedMeetingOutcome>;
 };
 

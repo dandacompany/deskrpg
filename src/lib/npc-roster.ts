@@ -3,10 +3,11 @@ import { db, npcs, hermesProfiles, channelGatewayBindings, nowForDb } from "@/db
 import { placeUnplacedNpcs } from "./npc-seating";
 
 /**
- * 채널에 묶인 게이트웨이의 프로필을 전부 "출근" 시킨다 — `(channel_id, hermes_profile_id)`
- * 유니크에 기대어, 없으면 만들고 있으면 `active=true` 로 되살린다. 새로 만든 NPC 는
- * 곧바로 `placeUnplacedNpcs` 가 빈 데스크 좌석(만석이면 서는 칸)에 배치하고, 되살린
- * NPC 는 잠들기 전 자리를 그대로 되찾는다.
+ * "Clocks in" every profile of the channel's bound gateway — relying on the
+ * `(channel_id, hermes_profile_id)` unique constraint, creates the row if it's missing and
+ * revives it with `active=true` if it exists. `placeUnplacedNpcs` immediately seats a newly
+ * created NPC at an empty desk (a standing tile if full), and a revived NPC gets back the
+ * exact seat it had before going dormant.
  */
 export async function hireGatewayProfilesIntoChannel(
   channelId: string,
@@ -44,7 +45,7 @@ export async function hireGatewayProfilesIntoChannel(
 }
 
 /**
- * 새로 등록된 프로필 하나를, 그 게이트웨이가 이미 묶인 채널 전부에 출근시킨다.
+ * Clocks in one newly registered profile across every channel already bound to that gateway.
  */
 export async function hireProfileIntoBoundChannels(
   profileId: string,
@@ -82,7 +83,7 @@ export async function hireProfileIntoBoundChannels(
   return { created };
 }
 
-/** 해당 게이트웨이 소속 NPC 를 이 채널에서 재운다 — 자리는 기억한 채 맵에서만 뺀다. */
+/** Puts that gateway's NPCs to sleep in this channel — removed from the map only, the seat is remembered. */
 export async function sleepChannelNpcs(
   channelId: string,
   gatewayId: string,
@@ -105,13 +106,13 @@ export async function sleepChannelNpcs(
   return { slept: ids.length };
 }
 
-/** NPC 하나의 출근 상태를 직접 토글한다. */
+/** Directly toggles one NPC's clock-in state. */
 export async function setNpcActive(npcId: string, active: boolean): Promise<void> {
-  // `updated_at` 은 마이그레이션이 "최신 하나" 를 고르는 기준이다 — 상태를 바꾸는
-  // 경로가 전부 같이 갱신해야 그 판단이 낡은 값 위에서 이뤄지지 않는다.
+  // `updated_at` is the criterion the migration uses to pick "the most recent one" — every
+  // path that changes state must update it together, or that judgment ends up made on a stale value.
   await db.update(npcs).set({ active, updatedAt: nowForDb() }).where(eq(npcs.id, npcId));
   if (!active) return;
-  // 자리 없이 잠들었던 직원(이 기능 이전 데이터)은 되살아나면서 자리를 받는다.
+  // An employee that went dormant with no seat (data from before this feature existed) gets a seat as it revives.
   const [row] = await db
     .select({ channelId: npcs.channelId })
     .from(npcs)

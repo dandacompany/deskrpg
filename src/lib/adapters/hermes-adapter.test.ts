@@ -79,8 +79,8 @@ describe("HermesAdapter", () => {
   });
 
   test("takes the runs path on a multi-party turn even when the history is empty", async () => {
-    // 폴 호출과 회의의 첫 턴이 정확히 이 모양이다 — 히스토리 길이로 갈래를 정하면
-    // 둘 다 조용히 영속 세션으로 새어 들어간다(H2).
+    // A poll call and a meeting's first turn look exactly like this — if the branch were
+    // decided by history length, both would silently leak into a persistent session (H2).
     const urls: string[] = [];
     const client = clientWith((url) => {
       urls.push(url);
@@ -123,9 +123,9 @@ describe("HermesAdapter", () => {
     assert.deepEqual(seen, ["r5"]);
   });
 
-  test("실제 도구 사용은 tool.started/completed 로 온다", async () => {
-    // 실측(2026-08-28, 도구 3회 사용): started 3, completed 3, progress 는 `_thinking` 1회.
-    // tool.progress 만 보면 실제 도구 사용을 거의 못 본다.
+  test("real tool use comes through as tool.started/completed", async () => {
+    // Measured live (2026-08-28, 3 tool uses): started 3, completed 3, progress was
+    // `_thinking` once. Looking only at tool.progress shows almost none of the real tool use.
     const client = clientWith(() =>
       sseResponse([
         'event: tool.started\ndata: {"tool_name":"web_search","preview":"쿼리 문자열"}\n\n',
@@ -141,8 +141,8 @@ describe("HermesAdapter", () => {
       prompt: "p",
       onToolProgress: (name, preview) => progress.push([name, preview]),
     });
-    // 이름만 넘긴다. completed 로는 끄지 않는다 — started 와 completed 가 한 배치에
-    // 묶이면 중간 상태가 렌더되지 않아 화면에 아무것도 나타나지 않는다.
+    // Only the name is passed. It's not cleared by completed — if started and completed get
+    // batched together, the intermediate state never renders and nothing shows up on screen.
     assert.deepEqual(progress, [["web_search", ""]]);
   });
 
@@ -194,14 +194,15 @@ describe("HermesAdapter", () => {
   });
 });
 
-describe("ConversationEngine × HermesAdapter — 전송 경로", () => {
+describe("ConversationEngine × HermesAdapter — transport path", () => {
   test(
-    "첫 폴과 첫 발언 턴이 모두 runs 경로를 탄다(영속 세션은 한 번도 쓰지 않는다)",
+    "both the first poll and the first speaking turn take the runs path (a persistent session is never used)",
     { timeout: 5000 },
     async () => {
-      // 리뷰의 재현(final-review.md:109-116)을 뒤집은 형태다. 예전에는 호출 로그가
-      // createSession → streamSessionChat(poll) → streamSessionChat(첫 발언) → startRun(둘째 발언)
-      // 이었다 — 폴 문답이 NPC의 장기 세션에 쌓이고, 1턴과 2턴의 전송 경로가 달랐다.
+      // The inverse of the review's repro (final-review.md:109-116). The call log used to be
+      // createSession → streamSessionChat(poll) → streamSessionChat(first speech) →
+      // startRun(second speech) — the poll exchange piled up in the NPC's long-lived session,
+      // and the transport path differed between turn 1 and turn 2.
       const log: string[] = [];
       let runSeq = 0;
       const replies = ["SPEAK: 하겠습니다", "제 의견은 이렇습니다"];
@@ -253,11 +254,13 @@ describe("ConversationEngine × HermesAdapter — 전송 경로", () => {
   );
 });
 
-// 실측 회귀 — Hermes v0.20.2 의 `_thinking` 툴은 완성된 답변 전체를 tool.progress 의
-// delta 에 한 번 더 실어 보낸다. 아래 시퀀스는 실제 게이트웨이 응답을 그대로 옮긴 것이다
-// ("사과딸기만 출력해" → delta 4개 + tool.progress 통짜 + completed).
-// 이 두 통로를 합쳐서 화면에 쓰면 사용자에게 답이 정확히 두 번 보인다.
-describe("HermesAdapter — tool.progress 는 답변 본문이 아니다", () => {
+// A live-measured regression — Hermes v0.20.2's `_thinking` tool sends the entire finished
+// answer once more in tool.progress's delta. The sequence below is copied straight from a
+// real gateway response ("print only 사과딸기" → 4 deltas + a full tool.progress echo +
+// completed).
+// If these two channels get merged when writing to the screen, the user sees the answer
+// exactly twice.
+describe("HermesAdapter — tool.progress is not the answer body", () => {
   const THINKING_ECHO = [
     'event: assistant.delta\ndata: {"delta":"사"}\n\n',
     'event: assistant.delta\ndata: {"delta":"과"}\n\n',
@@ -267,7 +270,7 @@ describe("HermesAdapter — tool.progress 는 답변 본문이 아니다", () =>
     'event: assistant.completed\ndata: {"content":"사과딸기"}\n\n',
   ];
 
-  test("onDelta 로 흐르는 텍스트는 최종 응답과 같다 — 두 배가 아니다", async () => {
+  test("the text streamed via onDelta matches the final response — not doubled", async () => {
     const client = clientWith(() => sseResponse(THINKING_ECHO));
     const adapter = new HermesAdapter(client, { sessionId: "s" });
 
@@ -289,7 +292,7 @@ describe("HermesAdapter — tool.progress 는 답변 본문이 아니다", () =>
     );
   });
 
-  test("_thinking 의 통짜 에코는 onToolProgress 로만 나간다", async () => {
+  test("_thinking's full echo only goes out via onToolProgress", async () => {
     const client = clientWith(() => sseResponse(THINKING_ECHO));
     const adapter = new HermesAdapter(client, { sessionId: "s" });
 
@@ -300,19 +303,21 @@ describe("HermesAdapter — tool.progress 는 답변 본문이 아니다", () =>
       onToolProgress: (name, preview) => progress.push([name, preview]),
     });
 
-    // preview 라는 이름과 달리 내용은 "미리보기"가 아니라 완성된 답변 전체다.
-    // 그래서 아예 넘기지 않는다 — 소비자가 본문으로 착각할 여지를 없앤다.
+    // Despite the name "preview", the content isn't a preview at all — it's the entire
+    // finished answer. So it's never passed through — removing any chance a consumer could
+    // mistake it for the actual body.
     assert.deepEqual(progress, [["_thinking", ""]]);
     assert.ok(!progress.some(([, preview]) => preview.includes("사과딸기")));
   });
 });
 
-describe("HermesAdapter — 회의 경로의 델타 이벤트 이름", () => {
-  test("message.delta 도 onDelta 로 흘린다", async () => {
-    // 실측(v0.20.2): /v1/runs/<id>/events 는 assistant.delta 가 아니라 message.delta 를
-    // 쓴다. assistant.* 만 보던 탓에 회의에서는 onDelta 가 한 번도 불리지 않았다 —
-    // 응답은 execute() 반환값으로 왔으므로 NPC 는 발언했지만, 클라이언트의 스트림 버퍼가
-    // 비어 done:true 에 확정할 말풍선이 없었고 화면에는 아무것도 붙지 않았다.
+describe("HermesAdapter — delta event name on the meeting path", () => {
+  test("message.delta also flows through onDelta", async () => {
+    // Measured live (v0.20.2): /v1/runs/<id>/events uses message.delta, not
+    // assistant.delta. Because only assistant.* was being watched, onDelta was never called
+    // even once in meetings — the response arrived via execute()'s return value so the NPC
+    // did speak, but the client's stream buffer was empty, leaving no bubble to finalize on
+    // done:true, so nothing appeared on screen.
     const client = clientWith((url) => {
       if (url.endsWith("/v1/runs"))
         return new Response(JSON.stringify({ run_id: "r9" }), { status: 202 });

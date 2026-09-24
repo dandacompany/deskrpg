@@ -1,7 +1,7 @@
-// 이 파일은 호출부 호환을 위한 얇은 재export 다. 실체는 channel-runtime.ts 에 있다.
+// This file is a thin re-export for call-site compatibility. The real implementation lives in channel-runtime.ts.
 //
-// meeting-discussion.ts 가 여기서 import 하고 있고, 그 파일을 건드리는 것은 이번 작업의
-// 범위가 아니다. 이름을 정리하려고 소켓 계층까지 diff 를 번지게 하지 않는다.
+// meeting-discussion.ts imports from here, and touching that file is out of scope for
+// this work. This avoids letting a name cleanup spread the diff into the socket layer.
 
 export { ChannelRuntime as ConversationEngine } from "./channel-runtime";
 export type {

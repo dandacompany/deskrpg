@@ -15,7 +15,7 @@ const ctx = (over: Partial<SkillContext> = {}): SkillContext => ({
   ...over,
 });
 
-test("capability 가 없으면 428 과 최소 버전", async () => {
+test("missing capability yields 428 and the minimum version", async () => {
   const res = requireCapability(ctx({ capabilityReady: false }));
   assert.equal(res?.status, 428);
   const body = await res!.json();
@@ -25,7 +25,7 @@ test("capability 가 없으면 428 과 최소 버전", async () => {
   assert.equal(requireCapability(ctx()), null);
 });
 
-test("소유자가 아니면 403 forbidden", async () => {
+test("a non-owner gets 403 forbidden", async () => {
   const res = requireOwner(ctx({ isGatewayOwner: false }));
   assert.equal(res?.status, 403);
   assert.equal((await res!.json()).code, "forbidden");

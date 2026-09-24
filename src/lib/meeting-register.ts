@@ -1,11 +1,13 @@
 /**
- * "프로젝트로 등록" 의 몸통 — 회의 결과의 후속 업무를 승인 묶음 하나로 넘긴다.
+ * The body of "register as a project" — hands a meeting's follow-up work off as a single approval batch.
  *
- * 등록은 카드를 **만들 뿐**이다. 카드는 승인 대기(`blocked`)로 서고 실행은 사용자가 승인한 뒤에
- * 시작한다(`createApprovalBatch`). 회의에서 "소피가 조사한다" 고 말했다는 이유로 일이 돌지 않는다.
+ * Registering **only creates cards**. Cards start out pending approval (`blocked`), and
+ * execution starts only after the user approves it (`createApprovalBatch`). Saying "Sophie will
+ * research this" in a meeting doesn't make work start moving on its own.
  *
- * 회의록에 남기는 것은 만든 카드의 id 목록(연결)뿐이다 — 카드 내용은 복제하지 않는다.
- * 라우트는 얇게 두고 판단은 여기서 한다. DB·Hermes 는 전부 `deps` 로 받는다.
+ * The only thing written back to the meeting minutes is the list of created card ids (a link) —
+ * card content is not duplicated. Routes stay thin; the judgment happens here. DB and Hermes are
+ * both received entirely through `deps`.
  */
 import type { MeetingOutcome, MeetingOutcomeRegistered } from "./meeting-outcome";
 import type { OutcomeRegistration } from "./meeting-outcome-draft";
@@ -22,7 +24,7 @@ export type RegisterBatchInput = {
     body?: string;
     npcId?: string;
     tenant?: string;
-    /** 이 묶음 안의 자리. 회의 결과의 번호가 아니다. */
+    /** A position within this batch. Not the meeting outcome's index number. */
     parents?: number[];
     idempotencyKey: string;
   }>;
@@ -48,13 +50,13 @@ export type RegisterMeetingDeps<Ctx extends RegisterContext = RegisterContext> =
     outcome: MeetingOutcome | null;
   } | null>;
   loadChannelOwner: (channelId: string) => Promise<string | null>;
-  /** 칸반 관문(로그인 → 멤버 → 게이트웨이 409 → 플러그인 428 → 보드 소속 404 → 보드 확보 503). */
+  /** Kanban gate chain (login → member → gateway 409 → plugin 428 → board membership 404 → board provisioning 503). */
   resolveContext: (input: {
     userId: string;
     channelId: string;
     boardSlug?: string;
   }) => Promise<{ ok: true; ctx: Ctx } | { ok: false; response: Response }>;
-  /** 서브프로젝트 메타 행을 확보한다. 이미 있으면 조용히 지나간다. */
+  /** Provisions the subproject meta row. A silent no-op if one already exists. */
   ensureSubproject: (
     ctx: Ctx,
     tenant: { slug: string; name: string },
@@ -73,7 +75,7 @@ export type RegisterMeetingResult =
       ok: false;
       status: 400 | 403 | 404 | 409 | 502;
       errorCode: string;
-      /** 회의 결과의 번호로 돌려준다 — 화면이 어느 줄인지 짚을 수 있게. */
+      /** Returned as the meeting outcome's index number — so the screen can point at which row. */
       failed?: Array<{ index: number; errorCode: string }>;
     };
 
@@ -90,7 +92,7 @@ function cardBody(
   return [
     followUp.summary,
     followUp.acceptance ? `완료 조건: ${followUp.acceptance}` : null,
-    // 카드에서 회의 결정을 다시 찾는 연결이다. 카드 상세가 이 줄을 "회의록 열기" 로 그린다.
+    // The link back to the meeting decision the card came from. The card detail view renders this line as "open minutes."
     `출처: 회의록 ${minutes.id} — ${minutes.topic}`,
   ]
     .filter(Boolean)
@@ -114,7 +116,7 @@ export async function registerMeetingOutcome<Ctx extends RegisterContext>(
   if (!outcome || outcome.followUps.length === 0) return invalid("nothing_to_register");
   if (outcome.registered) return { ok: false, status: 409, errorCode: "already_registered" };
 
-  // --- 본문 검증: 화면이 보낸 번호를 그대로 믿지 않는다 ---
+  // --- Body validation: the index numbers the screen sent aren't trusted as-is ---
   const { items, tenant } = args.body;
   if (!Array.isArray(items) || items.length === 0) return invalid("nothing_to_register");
   const position = new Map<number, number>();
@@ -126,7 +128,7 @@ export async function registerMeetingOutcome<Ctx extends RegisterContext>(
     position.set(item.index, at);
   }
   for (const item of items) {
-    // 이번에 등록하지 않는 항목을 기다리면 그 카드는 영영 시작하지 못한다.
+    // If it waits on an item that isn't being registered this time, that card can never start.
     if (!Array.isArray(item.after) || item.after.some((target) => !position.has(target)))
       return invalid("invalid_followup_after");
   }
@@ -141,8 +143,9 @@ export async function registerMeetingOutcome<Ctx extends RegisterContext>(
   if (!resolved.ok) return { ok: false, response: resolved.response };
   const ctx = resolved.ctx;
 
-  // 프로젝트 메타는 채널 소유자만 바꾸는 표다(`project-routes.ts` 의 requireOwner). 주재자의 등록이
-  // 그 규칙을 몰래 넓히지 않게 한다 — 카드에는 테넌트가 붙고, 메타 없는 테넌트도 뷰에서 슬러그로 보인다.
+  // Project meta is a table only the channel owner can change (`requireOwner` in `project-routes.ts`).
+  // The chair's registration must not quietly widen that rule — the card still gets the tenant
+  // attached, and a tenant with no meta still shows up as its slug in the view.
   if (tenant && ctx.isChannelOwner) await deps.ensureSubproject(ctx, tenant, minutes.id);
 
   const batch = await deps.createBatch(ctx, {
@@ -157,7 +160,7 @@ export async function registerMeetingOutcome<Ctx extends RegisterContext>(
       ...(item.npcId ? { npcId: item.npcId } : {}),
       ...(tenant ? { tenant: tenant.slug } : {}),
       parents: item.after.map((target) => position.get(target) as number),
-      // 같은 회의의 같은 항목은 몇 번을 눌러도 카드 한 장이다.
+      // The same item in the same meeting is always one card, no matter how many times it's clicked.
       idempotencyKey: `meeting:${minutes.id}:${item.index}`,
     })),
   });
@@ -165,7 +168,7 @@ export async function registerMeetingOutcome<Ctx extends RegisterContext>(
   if (!batch.ok) return { ok: false, status: 502, errorCode: batch.errorCode };
 
   if (batch.failed?.length || batch.taskIds.some((id) => id === null)) {
-    // 등록 완료로 표시하지 않는다. 버튼이 남고, 멱등 키와 승인 재사용 덕에 다시 눌러도 안전하다.
+    // Not marked as fully registered. The button stays, and thanks to the idempotency key and approval reuse, clicking again is safe.
     return {
       ok: false,
       status: 502,

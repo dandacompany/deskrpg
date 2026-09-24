@@ -1,11 +1,13 @@
 /**
- * "한 줄에 링크만 있는 문단"을 판정한다 — 그 문단만 미리보기 카드로 승격한다.
+ * Judges "a paragraph that contains only a link on its own line" — only that paragraph
+ * gets promoted to a preview card.
  *
- * 문장 안의 링크는 그대로 둔다(글 흐름이 끊긴다). 사람이 제목을 붙인 링크
- * (`[제목](URL)`)도 그대로 둔다 — 카드가 그 제목을 남의 og:title 로 덮어쓰게 된다.
- * 파일 링크도 제외한다 — 거기에는 이미 내려받기 아이콘이 붙는다(`chat-file-link.ts`).
+ * A link inside a sentence is left as-is (it would break the flow of the text). A link
+ * a person titled themselves (`[title](URL)`) is also left as-is — a card would
+ * overwrite that title with someone else's og:title. File links are excluded too — they
+ * already get a download icon (`chat-file-link.ts`).
  *
- * 순수 함수. react-markdown 이 주는 hast 노드의 모양만 최소로 받는다.
+ * A pure function. Takes only the minimal shape of the hast node react-markdown gives.
  */
 import { chatFileLink } from "@/lib/chat-file-link";
 
@@ -34,7 +36,7 @@ export function soleLinkUrl(node: { children?: MinimalNode[] } | undefined): str
   const href = only.properties?.href;
   if (typeof href !== "string") return null;
 
-  // 보이는 글자가 주소 그대로일 때만. 끝의 `/` 하나는 브라우저·마크다운이 다르게 쓴다.
+  // Only when the visible text is the raw URL. A trailing `/` is handled differently by browsers/markdown.
   const label = textOf(only).trim();
   if (label !== href && label !== href.replace(/\/$/, "")) return null;
 

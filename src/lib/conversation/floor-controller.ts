@@ -1,12 +1,13 @@
-// "다음 발언자가 누구인가"만 아는 정책 조각. conversation-engine.ts의 takeGrant()/pollCandidates()/
-// run() 5번 블록(후보 산출·폴링·selectNextSpeaker)에서 그대로 옮겼다(순수 이동, 동작 변경 없음).
+// A policy fragment that knows only "who speaks next." Moved as-is from conversation-engine.ts's
+// takeGrant()/pollCandidates()/ block 5 of run() (candidate computation·polling·selectNextSpeaker)
+// (a pure move, no behavior change).
 //
-// 이름에 Meeting을 붙인 이유: 스펙 §6의 "3번 — 정책 교체점"이다. 지금은 이것이 유일한 발언권
-// 정책이지만, 2단계(자유채팅 동시 발언)는 이 옆에 OpenFloorController를 두고 생성자에서
-// 고르게 된다.
+// Why "Meeting" is in the name: it's "#3 — policy swap point" from spec §6. Right now this is
+// the only floor policy, but phase 2 (open-chat simultaneous speaking) will put an
+// OpenFloorController next to it, chosen in the constructor.
 //
-// 메서드 이름이 next()인 이유: select()/decide()는 부작용이 없다고 읽히는데, 이 메서드는
-// 후보가 필요하면 실제로 폴링 LLM 호출을 한다.
+// Why the method is named next(): select()/decide() read as side-effect-free, but this method
+// actually makes polling LLM calls when candidates need it.
 
 import type { FloorInbox } from "./inbox";
 import type { NpcRuntime } from "./npc-runtime";
@@ -18,19 +19,21 @@ import {
   type Participant,
 } from "./turn-policy";
 
-/** 폴링이 실제로 일어났으면 그 결과, 아니면 null. null과 빈 결과는 다르다 — 폴링 참가자
- * 전원의 어댑터가 실패하면 raises/passes 가 둘 다 빈 배열이 되지만, 그래도 폴링은 일어난
- * 것이므로 pollResult는 null이 아니다. */
+/** The result if polling actually happened, otherwise null. null and an empty result differ — if
+ * every polled participant's adapter fails, both raises/passes become empty arrays, but polling
+ * still happened, so pollResult isn't null. */
 export type PollReport = {
   raises: Array<{ npcId: string; reason: string }>;
   passes: string[];
   /**
-   * 폴에 **닿지 못한** 참가자. `passes` 와 갈라 둔다 — 침묵과 부재는 다르다.
+   * Participants the poll **couldn't reach**. Kept separate from `passes` — silence and absence
+   * are different.
    *
-   * 예전에는 실패가 어느 쪽에도 안 들어가고 사라져서, 아무도 패스하지 않았는데도
-   * 결정이 `all-passed` 가 되고 화면에는 "전원 PASS" 로 보였다. Hermes 는 동시 실행
-   * 상한을 넘기면 429 로 또박또박 거절하는데(`api_server.py:7154`) 그 거절이 여기서
-   * 증발했다. 클라이언트가 재시도까지 한 뒤에도 실패한 것만 여기 남는다.
+   * Previously a failure fell into neither bucket and vanished, so the decision became
+   * `all-passed` and the screen showed "everyone PASSED" even though nobody actually passed.
+   * Hermes explicitly rejects with 429 when the concurrent-run cap is exceeded
+   * (`api_server.py:7154`), and that rejection evaporated here. Only requests that still failed
+   * after the client retried remain here.
    */
   failures: Array<{ npcId: string; reason: string }>;
 } | null;
@@ -41,14 +44,15 @@ export type FloorDecision =
   | { kind: "all-passed"; pollResult: PollReport }
   | { kind: "no-candidates" };
 
-/** 멘션 부여를 건너뛴 이유. 유니온으로 둔 이유: 나중에 사유가 늘 때 이 자리만 넓어진다
- * (스펙 §5.3). `isBurnedOut()` 이 참이면 게이트웨이가 죽은 것("backend_failing")이고,
- * 그렇지 않은데 자격이 없으면 발언 할당량 소진("quota_exhausted")이다. 둘 다 참이면
- * backend_failing 을 우선한다 — 운영자에게 더 시급한 사실이다. */
+/** The reason a mention grant was skipped. Kept as a union so this spot just grows when more
+ * reasons are added later (spec §5.3). If `isBurnedOut()` is true, the gateway is down
+ * ("backend_failing"); if not but the NPC still isn't eligible, its speaking quota is used up
+ * ("quota_exhausted"). If both are true, backend_failing wins — it's the more urgent fact for
+ * the operator. */
 export type MentionSkipReason = "quota_exhausted" | "backend_failing";
 
-/** 청크 단위로 나눠 순차 실행한다. Hermes의 max_concurrent_runs를 넘는 폴링이
- * 한꺼번에 발사되어 429로 조용히 유실되는 것을 막는다(스펙 §3.5). */
+/** Runs in sequential chunks. Prevents more polls than Hermes' max_concurrent_runs from firing
+ * at once and being silently dropped with 429 (spec §3.5). */
 function chunk<T>(items: T[], size: number): T[][] {
   if (size <= 0) return [items];
   const out: T[][] = [];
@@ -75,11 +79,11 @@ export class MeetingFloorController {
   }
 
   /**
-   * 다음 발언자를 인박스에서 꺼낸다.
+   * Pops the next speaker off the inbox.
    *
-   * 멘션 부여만 자격 검사를 받는다 — 큐가 생긴 뒤로 지목 사슬이 한 NPC 를 할당량
-   * 너머로 반복 호출할 수 있게 됐기 때문이다. 사용자 부여는 인박스가 검사 없이
-   * 돌려주므로 여기 게이트가 걸리지 않는다.
+   * Only mention grants go through the eligibility check — since the queue was added, a chain of
+   * @-mentions could call the same NPC repeatedly past its quota. User grants are returned by the
+   * inbox without a check, so this gate doesn't apply to them.
    */
   private takeGrant(ctx: {
     runtimeFor: (npcId: string) => NpcRuntime | undefined;
@@ -89,8 +93,8 @@ export class MeetingFloorController {
     return this.inbox.take(
       (npcId) => !(ctx.runtimeFor(npcId)?.isBurnedOut() ?? false) && ctx.remainingTurns(npcId) > 0,
       (npcId) => {
-        // isBurnedOut() 이 참이면 게이트웨이가 죽은 것이지 할당량 문제가 아니다 — 두 조건이
-        // 둘 다 걸려 있어도 이쪽이 더 시급한 사실이므로 우선한다.
+        // If isBurnedOut() is true, the gateway is down, not a quota problem — even if both
+        // conditions hold, this one wins because it's the more urgent fact.
         const reason: MentionSkipReason = ctx.runtimeFor(npcId)?.isBurnedOut()
           ? "backend_failing"
           : "quota_exhausted";
@@ -104,7 +108,7 @@ export class MeetingFloorController {
     runtimeFor: (npcId: string) => NpcRuntime | undefined;
     remainingTurns: (npcId: string) => number;
     lastSpeakerId: string | null;
-    /** false 면 부여가 없을 때 폴링하지 않고 all-passed 를 돌려준다 — directed 모드 보존용. */
+    /** If false, returns all-passed without polling when there's no grant — preserves directed mode. */
     pollingAllowed: boolean;
     onSkippedGrant: (npcId: string, reason: MentionSkipReason) => void;
   }): Promise<FloorDecision> {
@@ -152,11 +156,12 @@ export class MeetingFloorController {
   }
 
   /**
-   * 후보를 maxConcurrentPolls 크기로 나눠 청크마다 병렬 폴링한다(청크 사이는 순차).
+   * Splits candidates into chunks of maxConcurrentPolls and polls each chunk in parallel
+   * (chunks run sequentially relative to each other).
    *
-   * 실패한 참가자는 회의를 중단시키지 않는다(그 라운드에서 발언하지 않는다). 다만
-   * **`failures` 로 기록해 침묵과 구분한다** — 예전에는 조용히 버려서 "전원 PASS" 와
-   * "아무에게도 닿지 못함" 이 화면에서 같아 보였다.
+   * A failed participant doesn't halt the meeting (they simply don't speak that round). It's
+   * still **recorded in `failures`, distinct from silence** — previously it was silently
+   * dropped, so "everyone PASSED" and "reached nobody" looked identical on screen.
    */
   private async pollCandidates(
     candidates: Participant[],
@@ -182,8 +187,8 @@ export class MeetingFloorController {
             const parsed = await runtime.poll(remaining);
             return { npcId: c.npcId, parsed };
           } catch (err) {
-            // 어느 NPC 가 실패했는지 알아야 기록할 수 있다 — reject 를 그대로 올리면
-            // Promise.allSettled 의 reason 에 npcId 가 없다.
+            // We need to know which NPC failed to record it — rethrowing as-is leaves no npcId
+            // on Promise.allSettled's reason.
             throw Object.assign(new Error("poll failed"), {
               npcId: c.npcId,
               cause: err,

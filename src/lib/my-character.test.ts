@@ -8,7 +8,7 @@ async function loadDb() {
   return import("@/db");
 }
 
-test("getMyCharacter 는 가장 이른 캐릭터를 고른다", async () => {
+test("getMyCharacter picks the earliest character", async () => {
   const { db, characters, isPostgres } = await loadDb();
   const { getMyCharacter } = await import("./my-character");
   const user = await seedUser("me");
@@ -30,14 +30,14 @@ test("getMyCharacter 는 가장 이른 캐릭터를 고른다", async () => {
   assert.equal(mine?.name, "첫째");
 });
 
-test("createdAt 이 같으면 id 가 작은 쪽이 나다 — 호출마다 같은 캐릭터", async () => {
+test("when createdAt ties, the smaller id is me — same character on every call", async () => {
   const { db, characters, isPostgres } = await loadDb();
   const { getMyCharacter } = await import("./my-character");
   const user = await seedUser("tie");
   const same = isPostgres ? new Date("2026-03-01T00:00:00Z") : "2026-03-01T00:00:00.000Z";
   const appearance = JSON.stringify({ officeLookId: "look-1", bodyType: "male" });
   const [smallId, bigId] = [randomUUID(), randomUUID()].sort();
-  // 삽입 순서와 id 순서를 반대로 둔다 — 삽입 순서(rowid)에 기대면 "나중" 이 뽑힌다.
+  // Insert order is reversed relative to id order — relying on insert order (rowid) would pick the "later" one.
   await db.insert(characters).values({
     id: bigId,
     userId: user.id,
@@ -55,7 +55,7 @@ test("createdAt 이 같으면 id 가 작은 쪽이 나다 — 호출마다 같�
   assert.equal((await getMyCharacter(user.id))?.name, "작은 id");
 });
 
-test("없으면 null, ensureMyCharacter 는 닉네임으로 하나 만든다", async () => {
+test("null when there is none; ensureMyCharacter creates one from the nickname", async () => {
   const { getMyCharacter, ensureMyCharacter } = await import("./my-character");
   const user = await seedUser("fresh");
   assert.equal(await getMyCharacter(user.id), null);
@@ -65,7 +65,7 @@ test("없으면 null, ensureMyCharacter 는 닉네임으로 하나 만든다", a
   assert.equal(again.id, made.id, "두 번째 호출은 새로 만들지 않는다");
 });
 
-test("isMyCharacter 는 내 것만 참이다", async () => {
+test("isMyCharacter is true only for mine", async () => {
   const { isMyCharacter } = await import("./my-character");
   const mine = { id: "c1", name: "나", bio: null, appearance: {} };
   assert.equal(isMyCharacter(mine, "c1"), true);

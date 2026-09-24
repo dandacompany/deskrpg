@@ -1,15 +1,18 @@
 /**
- * 가드를 통과한 주소만, 상한을 걸고 받아 온다.
+ * Fetches only an address that passed the guard, under strict caps.
  *
- * `fetch` 가 아니라 `node:http(s)` 를 쓴다. 이유는 하나다 — **실제로 연결하는 주소**를
- * 볼 수 있어야 한다. 미리 DNS 를 확인한 뒤 `fetch` 에 호스트 이름을 넘기면 그 사이에 이름이
- * 다시 풀린다(DNS rebinding): 검사 때는 공인 주소, 연결 때는 10.x 가 될 수 있다.
- * `lookup` 훅은 소켓이 실제로 물 주소를 우리에게 주므로 그 틈이 없다.
+ * Uses `node:http(s)` instead of `fetch`. There's one reason — we need to see the
+ * **address it actually connects to**. If we resolve DNS ahead of time and then hand
+ * `fetch` a hostname, the name can resolve differently in between (DNS rebinding): a
+ * public address at check time, a 10.x at connect time. The `lookup` hook hands us the
+ * address the socket actually binds to, so there's no gap.
  *
- * 리다이렉트도 직접 따라간다 — 자동 추적은 중간 홉을 보여 주지 않아 "공인 주소가 사설
- * 주소로 튕기는" 전형적인 우회를 통과시킨다.
+ * Redirects are followed manually too — automatic redirect-following hides the
+ * intermediate hops, letting through the classic bypass of "a public address that
+ * bounces to a private one".
  *
- * 상한 세 가지: 홉 수 · 바이트 수 · 시간. 셋 다 없으면 남의 서버가 우리 워커를 붙잡아 둔다.
+ * Three caps: hop count, byte count, time. Without all three, someone else's server can
+ * hold our worker hostage.
  */
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
@@ -22,39 +25,39 @@ const TIMEOUT_MS = 5_000;
 const TOTAL_TIMEOUT_MS = 8_000;
 
 export type FetchGuardedOptions = {
-  /** 받아들일 content-type 의 앞부분(`text/html`·`image/`). */
+  /** The content-type prefix we accept (`text/html`·`image/`). */
   accept: string;
-  /** 본문을 이 바이트에서 자른다. */
+  /** Truncate the body at this byte count. */
   maxBytes: number;
-  /** 홉마다 이 주소(모양·포트·호스트)로 나가도 되는지 묻는다. 기본값은 진짜 가드다. */
+  /** Asked per hop whether this address (shape·port·host) may be used. Defaults to the real guard. */
   isAllowedUrl?: (url: URL) => Promise<boolean>;
-  /** 소켓이 실제로 물 IP 를 검사한다. 기본값은 사설·루프백·링크로컬 차단. */
+  /** Checks the IP the socket actually binds to. Defaults to blocking private·loopback·link-local. */
   isAllowedAddress?: (address: string) => boolean;
 };
 
 export type FetchedBody = {
-  /** 리다이렉트를 다 따라간 **최종** 주소. 상대 경로 이미지의 기준이 된다. */
+  /** The **final** address after following all redirects. Used as the base for relative image paths. */
   url: URL;
   body: string;
   contentType: string;
   bytes: Uint8Array;
 };
 
-/** 기본 주소 정책. 이름 해석 결과가 하나라도 사설이면 연결하지 않는다. */
+/** The default address policy. Does not connect if any resolved address is private. */
 export async function isAllowedPreviewUrl(url: URL): Promise<boolean> {
   return parsePreviewTarget(url.toString()) !== null;
 }
 
 type Hop = {
   status: number;
-  /** `identity` 를 요청했는데도 압축해 보내는 서버가 있다 — 그런 응답은 버린다. */
+  /** Some servers send compressed content even though `identity` was requested — such responses are discarded. */
   encoding: string;
   location: string | null;
   contentType: string;
   message: IncomingMessage;
 };
 
-/** 호스트가 이름이 아니라 주소면 DNS 를 타지 않는다 — `lookup` 훅이 불리지 않는다. */
+/** If the host is already an address literal rather than a name, DNS is never consulted — the `lookup` hook is never called. */
 function hostIsAddressLiteral(hostname: string): boolean {
   const host = hostname.startsWith("[") ? hostname.slice(1, -1) : hostname;
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":");
@@ -66,7 +69,7 @@ function openHop(
   signal: AbortSignal,
 ): Promise<Hop | null> {
   if (signal.aborted) return Promise.resolve(null);
-  // IP 리터럴은 `lookup` 을 거치지 않으므로 여기서 같은 정책을 적용한다.
+  // IP literals never go through `lookup`, so the same policy is applied here directly.
   if (hostIsAddressLiteral(url.hostname)) {
     const literal = url.hostname.startsWith("[") ? url.hostname.slice(1, -1) : url.hostname;
     if (!isAllowedAddress(literal)) return Promise.resolve(null);
@@ -84,7 +87,7 @@ function openHop(
     const req = send(
       url,
       {
-        // 소켓이 실제로 물 주소를 여기서 본다 — 이름을 미리 확인하는 방식의 빈틈(rebinding)을 없앤다.
+        // This is where we see the address the socket actually binds to — it closes the gap (rebinding) in the pre-resolve-then-connect approach.
         lookup: (hostname, options, callback) => {
           dnsLookup(hostname, { ...(options as object), all: true }, (err, addresses) => {
             const list = (addresses ?? []) as LookupAddress[];
@@ -97,7 +100,7 @@ function openHop(
               callback(new Error("blocked_address"), "", 4);
               return;
             }
-            // `all` 을 되돌려 달라고 한 호출에는 배열을, 아니면 첫 주소를 준다.
+            // Returns the array if the call asked for `all`, otherwise the first address.
             if ((options as { all?: boolean }).all) {
               (callback as unknown as (e: null, a: LookupAddress[]) => void)(null, safe);
             } else {
@@ -106,12 +109,13 @@ function openHop(
           });
         },
         headers: {
-          // 봇으로 보이면 대부분의 사이트가 og 태그를 안 준다. 우리 정체는 밝힌다.
+          // Most sites withhold og tags if they think we're a bot. We identify ourselves honestly.
           "user-agent": "DeskRPG-LinkPreview/1.0 (+https://deskrpg.com)",
           accept: "text/html,image/*;q=0.9,*/*;q=0.5",
           "accept-language": "ko,en;q=0.8",
-          // 압축을 받지 않는다. 우리는 바이트 상한을 **받은 그대로** 센다 — 압축된 본문을
-          // 받으면 512KB 상한이 압축 전 기준이 되어 gzip 폭탄에 의미가 없어진다.
+          // We don't accept compression. We count the byte cap on the **bytes as received** —
+          // accepting a compressed body would make the 512KB cap apply to the pre-compression
+          // size, defeating it against a gzip bomb.
           "accept-encoding": "identity",
         },
       },
@@ -125,7 +129,7 @@ function openHop(
         });
       },
     );
-    // 전체 예산이 끝나면 DNS·헤더·본문 중 어느 단계에 있든 소켓을 끊는다.
+    // When the overall budget runs out, the socket is killed regardless of which stage — DNS, headers, or body — it's in.
     const abort = () => req.destroy(new Error("deadline"));
     signal.addEventListener("abort", abort, { once: true });
     req.on("close", () => signal.removeEventListener("abort", abort));
@@ -136,7 +140,7 @@ function openHop(
   });
 }
 
-/** 상한까지만 읽는다. 상한을 넘으면 연결을 끊는다 — 다 읽고 자르면 상한이 아니다. */
+/** Reads only up to the cap. Once past it, the connection is closed — reading it all and truncating afterward is not a real cap. */
 function readCapped(
   message: IncomingMessage,
   maxBytes: number,
@@ -177,7 +181,7 @@ export async function fetchGuarded(
 ): Promise<FetchedBody | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TOTAL_TIMEOUT_MS);
-  // 주소 검사도 비동기 작업이다. 검사 자체가 멎어도 전체 예산에서 빠져나온다.
+  // The address check is also an async operation. Even if the check itself stalls, we still fall out of the overall budget.
   const expired = new Promise<null>((resolve) => {
     controller.signal.addEventListener("abort", () => resolve(null), { once: true });
   });
@@ -208,7 +212,7 @@ async function fetchWithinDeadline(
     }
 
     if (res.status >= 300 && res.status < 400) {
-      // 리다이렉트 본문은 사용하지 않는다. 흘려 보내면 이전 홉의 소켓이 계속 열린다.
+      // The redirect response body is unused. Letting it stream through keeps the previous hop's socket open.
       res.message.destroy();
       if (!res.location) return null;
       try {

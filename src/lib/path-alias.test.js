@@ -6,9 +6,10 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 
 /**
- * 배포본이 죽던 조건을 그대로 만든다: 소스가 `node_modules` 안에 있을 때 `@/...` 가 풀리는가.
- * tsx 는 node_modules 안의 파일에 tsconfig paths 를 적용하지 않으므로, 우리 리졸버가 없으면
- * 여기서 Cannot find module 이 난다(실측: 2026.9.18·2026.9.19).
+ * Reproduces exactly the condition that killed the published package: does `@/...` resolve
+ * when the source lives inside `node_modules`? tsx doesn't apply tsconfig paths to files
+ * inside node_modules, so without our resolver this throws Cannot find module (observed
+ * 2026-09-18, 2026-09-19).
  */
 function inNodeModules(body) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-alias-"));
@@ -29,7 +30,7 @@ function inNodeModules(body) {
   }
 }
 
-test("node_modules 안에서도 @/ 별칭이 패키지의 src 로 풀린다", () => {
+test("the @/ alias resolves to the package's src even inside node_modules", () => {
   const out = inNodeModules(`
     require("./src/lib/path-alias.js").installPathAlias(__dirname);
     console.log(require("@/db").marker);
@@ -37,7 +38,7 @@ test("node_modules 안에서도 @/ 별칭이 패키지의 src 로 풀린다", ()
   assert.equal(out, "db");
 });
 
-test("별칭이 아닌 요청은 건드리지 않는다", () => {
+test("a non-alias request is left untouched", () => {
   const out = inNodeModules(`
     require("./src/lib/path-alias.js").installPathAlias(__dirname);
     console.log(typeof require("node:path").join);
@@ -45,7 +46,7 @@ test("별칭이 아닌 요청은 건드리지 않는다", () => {
   assert.equal(out, "function");
 });
 
-test("없는 별칭은 원래 오류를 그대로 낸다", () => {
+test("a nonexistent alias produces the original error as-is", () => {
   const out = inNodeModules(`
     require("./src/lib/path-alias.js").installPathAlias(__dirname);
     try { require("@/nope"); } catch (error) { console.log(error.code); }
@@ -53,7 +54,7 @@ test("없는 별칭은 원래 오류를 그대로 낸다", () => {
   assert.equal(out, "MODULE_NOT_FOUND");
 });
 
-test("두 번 설치해도 리졸버가 겹쳐 쌓이지 않는다", () => {
+test("installing twice doesn't stack resolvers on top of each other", () => {
   const out = inNodeModules(`
     const alias = require("./src/lib/path-alias.js");
     const Module = require("node:module");

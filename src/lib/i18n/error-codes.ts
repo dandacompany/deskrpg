@@ -221,7 +221,7 @@ export type ErrorCode =
   | "toolset_has_no_providers"
   | "config_write_failed";
 
-/** 등록된 모든 에러코드 → 번역 키. 커버리지 가드가 이 표 전체를 훑는다. */
+/** Every registered error code → translation key. The coverage guard scans this whole table. */
 export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   review_policy_required: "kanban.review.unsupported",
   swarm_review_policy_unsupported: "kanban.review.swarmUnsupported",
@@ -239,7 +239,7 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   nickname_length_invalid: "errors.nicknameLengthInvalid",
   password_length_invalid: "errors.passwordLengthInvalid",
   password_unchanged: "errors.passwordUnchanged",
-  // 확인칸은 서버로 가지 않는다 — 화면만 쓰는 코드다.
+  // The confirmation field never goes to the server — this code is screen-only.
   password_mismatch: "errors.passwordMismatch",
   current_new_password_required: "errors.currentNewPasswordRequired",
   user_not_found: "errors.userNotFound",
@@ -252,7 +252,7 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   group_id_required: "errors.missingRequiredFields",
   map_template_required: "errors.mapTemplateRequired",
   map_template_not_found: "errors.mapTemplateNotFound",
-  // 채널 생성은 환경 ID 를 받는다. 새 문구 대신 기존 키를 재사용한다(로케일 파일은 다른 작업이 만진다).
+  // Channel creation takes an environment ID. Reuses an existing key instead of a new message (locale files are touched by a different task).
   environment_required: "errors.missingRequiredFields",
   environment_unknown: "errors.environmentUnknown",
   map_template_removed: "errors.mapTemplateRemoved",
@@ -428,9 +428,9 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   unsupported_config_key: "errors.unsupportedConfigKey",
   malformed_response: "errors.malformedResponse",
   no_profile: "errors.noProfile",
-  // 프로바이더 인증(플러그인 profile_oauth·profile_provider_keys). 프록시가 업스트림 코드를
-  // 동적으로 싣고, oauth_denied·oauth_expired·oauth_error 는 ProviderAuthPanel 이 폴 상태에서
-  // 만든다. 문구는 hermes.providerAuth.* 블록에 둔다.
+  // Provider auth (plugin profile_oauth · profile_provider_keys). The proxy loads the
+  // upstream code dynamically, and oauth_denied·oauth_expired·oauth_error are produced by
+  // ProviderAuthPanel from poll state. Messages live in the hermes.providerAuth.* block.
   oauth_denied: "hermes.providerAuth.failed.oauth_denied",
   oauth_expired: "hermes.providerAuth.failed.oauth_expired",
   oauth_error: "hermes.providerAuth.failed.oauth_error",
@@ -444,7 +444,7 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   invalid_key_value: "hermes.providerAuth.errors.invalidKeyValue",
   env_write_failed: "hermes.providerAuth.errors.envWriteFailed",
   invalid_profile: "hermes.providerAuth.errors.invalidProfile",
-  // 도구별 프로바이더(플러그인 profile_tool_providers, 0.10.0). 문구는 hermes.toolProviders.* 블록.
+  // Per-tool providers (plugin profile_tool_providers, 0.10.0). Messages live in the hermes.toolProviders.* block.
   missing_keys: "hermes.toolProviders.errors.missingKeys",
   unknown_env_key: "hermes.toolProviders.errors.unknownEnvKey",
   provider_needs_cli: "hermes.toolProviders.errors.providerNeedsCli",
@@ -477,16 +477,17 @@ export function getLocalizedMessage(
   return fallbackKey ? t(fallbackKey) : keyOrCode;
 }
 
-/** 에러코드를 본문과 **함께** 실어 보내는 헤더 이름. */
+/** The header name that carries the error code **alongside** the body. */
 export const ERROR_CODE_HEADER = "X-DeskRPG-Error-Code";
 
 /**
- * 응답 본문이 사라져도 진단을 잃지 않게 헤더의 코드로 보충한다.
+ * Backfills from the header's code so diagnosis isn't lost even if the response body disappears.
  *
- * 실측: 스테이징에서 502 응답의 본문이 브라우저에 도달하지 않았다(`[gw-test] 502 {}`).
- * 서버는 errorCode 를 정확히 보냈고 클라이언트 매핑도 정상이었지만, 그 사이에서 본문이
- * 비워져 사용자에게는 generic 폴백만 보였다. 같은 정보를 두 경로로 보내면 한쪽이
- * 끊겨도 진단이 살아남는다.
+ * Measured: on staging, a 502 response's body never reached the browser
+ * (`[gw-test] 502 {}`). The server sent the correct errorCode and the client mapping was
+ * fine too, but the body got emptied somewhere in between, so the user only ever saw the
+ * generic fallback. Sending the same information over two paths lets diagnosis survive
+ * even if one path breaks.
  */
 export function withHeaderErrorCode(
   payload: unknown,

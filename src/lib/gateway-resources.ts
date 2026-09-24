@@ -1,4 +1,4 @@
-/** 키를 그대로 두는 저장에서 쓴다 — 주소만으로 내 게이트웨이를 찾는다. */
+/** Used by a save that leaves the key as-is — finds my gateway by address alone. */
 
 import { withChannelAutomationLock } from "./channel-automation-lock";
 import { recoverEventCarrierHandoff } from "./event-carrier-handoff";
@@ -34,8 +34,8 @@ function nowForDb() {
 }
 
 import { selectChannelNpcs } from "./npc-projection";
-// 순환 import 다(kanban-boards → 이 파일의 getChannelGatewayBinding/decryptGatewayToken).
-// 모듈 평가 시점에는 쓰지 않고 함수 안에서만 부르므로 안전하다.
+// This is a circular import (kanban-boards → this file's getChannelGatewayBinding/decryptGatewayToken).
+// Safe because it's only called inside a function, never used at module evaluation time.
 import { ensureChannelBoard } from "./kanban-boards";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import { DEV_JWT_SECRET } from "./dev-constants";
@@ -123,8 +123,9 @@ async function findMatchingOwnedGateway(ownerUserId: string, baseUrl: string, to
 }
 
 /**
- * `token` 을 주지 않으면(=undefined) 이미 저장된 키를 그대로 둔다. 화면이 기존 키를 돌려받지
- * 않게 된 뒤로, URL 만 고치는 저장이 키를 빈 값으로 덮어쓰면 안 되기 때문이다.
+ * If `token` is omitted (=undefined), the already-stored key is left as-is. Since the
+ * screen no longer gets the existing key back, a save that only edits the URL must never
+ * overwrite the key with an empty value.
  */
 export async function upsertOwnedGatewayResource(input: {
   ownerUserId: string;
@@ -220,21 +221,21 @@ export async function listAccessibleGatewayResources(userId: string) {
       lastValidatedAt: resource.lastValidatedAt,
       lastValidationStatus: resource.lastValidationStatus,
       lastValidationError: resource.lastValidationError,
-      // 최종 리뷰 I-1: 이 캐시(Task 4·9 산출물)를 읽는 소비자가 하나도 없어서
-      // HermesProfileList 가 화면 진입마다 무조건 /test 를 다시 쳤다(원격 왕복
-      // 2회 + DB UPDATE, 최대 10초). 여기서 내려줘야 `shouldReprobePlugin` 으로
-      // 캐시가 신선한지 판단할 수 있다.
+      // Final review I-1: no consumer read this cache (a Task 4/9 output), so
+      // HermesProfileList unconditionally re-hit /test on every screen entry (2 remote
+      // round trips + a DB UPDATE, up to 10s). It must be returned here so
+      // `shouldReprobePlugin` can judge whether the cache is fresh.
       pluginStatus: resource.pluginStatus,
       pluginVersion: resource.pluginVersion,
       pluginCheckedAt: resource.pluginCheckedAt,
-      // Hermes 대시보드는 게이트웨이 전체를 다루는 관리 화면이라 소유자에게만 알린다.
+      // The Hermes dashboard is a management screen covering the whole gateway, so only the owner is told about it.
       dashboardUrl: restorePluginInfo(resource.pluginInfoJson)?.dashboard_url ?? null,
-      // 직원 생성은 소유자만 한다. 플러그인이 기본 프로필 복제를 지원할 때만 채용 마법사가
-      // `cloneFrom: "default"` 를 보낸다 — 구버전에 모르는 필드를 보내지 않는다.
+      // Only the owner creates employees. The hiring wizard sends `cloneFrom: "default"`
+      // only when the plugin supports default-profile cloning — an unknown field is never sent to an older version.
       supportsProfileClone: supportsProfileClone(restorePluginInfo(resource.pluginInfoJson)),
-      // 칸반·크론 결과물이 쌓이지 않는 직원. 고치는 것도 소유자만 하므로 소유자에게만 알린다.
+      // An employee whose kanban/cron artifacts aren't accumulating. Fixing it is also owner-only, so only the owner is told.
       workerPluginWarning: workerPluginWarning(restorePluginInfo(resource.pluginInfoJson)),
-      // 0.16.0 워커 전파 옵트인 상태. 빠진 직원이 없어도 "꺼져 있음" 을 알리려고 따로 싣는다(옛 플러그인은 null).
+      // The 0.16.0 worker-propagation opt-in state. Carried separately so "it's off" is surfaced even with no missing employees (null on an older plugin).
       workerPropagation: (restorePluginInfo(resource.pluginInfoJson)?.worker_plugin?.propagation ??
         null) as WorkerPropagation | null,
       canEditCredentials: true,
@@ -363,20 +364,21 @@ export async function countChannelBindingsForGateway(gatewayId: string) {
   return value;
 }
 
-/** 게이트웨이를 삭제하려는 사용자에게 "무엇이 막고 있고, 풀면 무엇이 사라지는가"를 보여준다. */
+/** Shows a user trying to delete a gateway "what's blocking it, and what disappears if unblocked". */
 export type GatewayChannelBinding = {
   channelId: string;
   channelName: string;
-  /** 요청자가 이 채널의 소유자인가. 연결 해제는 채널 소유자만 할 수 있다. */
+  /** Is the requester the owner of this channel? Only the channel owner can unbind. */
   canUnbind: boolean;
-  /** 연결을 해제하면 휴면(`active=false`)에 들어가는 NPC 수. 지워지지는 않는다. */
+  /** Count of NPCs that go dormant (`active=false`) if the binding is removed. They are not deleted. */
   npcCount: number;
   meetingMinutesCount: number;
 };
 
 /**
- * 이 게이트웨이에 묶인 채널들. 삭제가 409 로 거절될 때 "어느 채널이 막고 있는가"를
- * 이름으로 답하기 위한 것 — 개수만 알려주면 사용자가 채널을 찾아 헤매야 한다.
+ * The channels bound to this gateway. Exists so that when a delete is rejected with 409,
+ * "which channel is blocking it" can be answered by name — reporting only a count would
+ * make the user hunt for the channel.
  */
 export async function listChannelBindingsForGateway(
   gatewayId: string,
@@ -390,8 +392,8 @@ export async function listChannelBindingsForGateway(
 
   return Promise.all(
     rows.map(async (row) => {
-      // 개수도 투영을 거친다 — 화면의 "NPC n명" 과 명부(`/api/npcs?roster=1`)가
-      // 같은 집합을 세도록 한다.
+      // The count also goes through the projection — so the screen's "N employees" and the
+      // roster (`/api/npcs?roster=1`) count the same set.
       const npcCount = (await selectChannelNpcs(row.channelId, { roster: true })).length;
       const [{ value: meetingMinutesCount }] = await db
         .select({ value: count() })
@@ -447,7 +449,7 @@ async function bindGatewayToChannelUnlocked(input: {
 }) {
   const existing = await getChannelGatewayBinding(input.channelId);
   if (existing?.binding.gatewayId === input.gatewayId) {
-    // 같은 게이트웨이를 다시 저장하는 것도 보드 확보의 재시도 기회다(R5 — 멱등).
+    // Even re-saving the same gateway is a retry opportunity for ensuring the board (R5 — idempotent).
     await ensureChannelBoardAfterBind(input.channelId);
     return existing.binding;
   }
@@ -474,14 +476,14 @@ async function bindGatewayToChannelUnlocked(input: {
     invalidateGatewayRuntimeState(existing.binding.gatewayId);
   }
 
-  // 바인딩이 커밋된 뒤에 보드를 확보한다(R1). 실패는 바인딩을 실패시키지 않는다(R5).
+  // The board is ensured after the binding is committed (R1). A failure here does not fail the binding (R5).
   await ensureChannelBoardAfterBind(input.channelId);
 
   const next = await getChannelGatewayBinding(input.channelId);
   return next?.binding ?? null;
 }
 
-/** `ensureChannelBoard` 는 던지지 않지만, 바인딩 경로에서는 그것조차 한 번 더 감싼다. */
+/** `ensureChannelBoard` never throws, but the binding path wraps it once more anyway. */
 async function ensureChannelBoardAfterBind(channelId: string) {
   try {
     const result = await ensureChannelBoard(channelId);
@@ -555,10 +557,10 @@ export async function getGatewayRuntimeStateForChannel(
     return { ...cached, gateway: binding };
   }
 
-  // Hermes 게이트웨이는 HTTP+SSE라 OpenClaw 의 WS 핸드셰이크에 403을 돌려주고, 그
-  // 클라이언트는 재시도하며 20초 넘게 매달린다. 이 함수는 NPC 목록 조회 경로에도
-  // 있어서(GET /api/npcs → 실측 25초), 그 사이 화면은 "NPC 0명"으로 그려진다.
-  // /api/gateways/[id]/test 에 넣은 것과 같은 프로브를 여기에도 둔다.
+  // A Hermes gateway is HTTP+SSE, so it returns 403 to OpenClaw's WS handshake, and that
+  // client retries and hangs for over 20 seconds. This function also sits on the NPC list
+  // path (GET /api/npcs → measured 25s), so meanwhile the screen renders "0 employees".
+  // The same probe used in /api/gateways/[id]/test is placed here too.
   const probe = await probeHermesGateway(binding.resource.baseUrl);
   if (probe.kind === "hermes") {
     await persistGatewayValidationState(binding.resource.id, { status: "valid" });
@@ -568,8 +570,8 @@ export async function getGatewayRuntimeStateForChannel(
     };
   }
 
-  // 프로브가 hermes 로 판정하지 못했다. 예전에는 여기서 OpenClaw 의 WS 핸드셰이크를
-  // 한 번 더 시도했지만, 그 백엔드는 사라졌다 — 프로브 결과를 그대로 실패로 보고한다.
+  // The probe couldn't judge it as hermes. This used to retry OpenClaw's WS handshake
+  // once more here, but that backend is gone — the probe result is reported as a failure as-is.
   {
     const errorCode =
       probe.kind === "unreachable"

@@ -16,7 +16,7 @@ function fakeFetch(responses: Record<string, unknown>) {
   return { fetchJson, calls };
 }
 
-test("Star 수와 최신 릴리스 태그를 돌려주고 TTL 안에서는 다시 묻지 않는다", async () => {
+test("returns star count and latest release tag, and does not re-ask within the TTL", async () => {
   let now = 0;
   const { fetchJson, calls } = fakeFetch({
     [REPO]: { stargazers_count: 1234 },
@@ -33,7 +33,7 @@ test("Star 수와 최신 릴리스 태그를 돌려주고 TTL 안에서는 다�
   assert.equal(calls.length, 4);
 });
 
-test("한쪽 호출이 실패해도 다른 쪽 값은 남고, 실패는 짧게 캐시한다", async () => {
+test("if one call fails, the other value survives, and the failure is cached briefly", async () => {
   let now = 0;
   const { fetchJson, calls } = fakeFetch({
     [REPO]: new Error("rate limited"),
@@ -48,7 +48,7 @@ test("한쪽 호출이 실패해도 다른 쪽 값은 남고, 실패는 짧게 �
   assert.equal(calls.length, 4);
 });
 
-test("형식이 맞지 않는 응답은 null 로 본다", async () => {
+test("a malformed response is treated as null", async () => {
   const { fetchJson } = fakeFetch({
     [REPO]: { stargazers_count: "many" },
     [`${REPO}/releases/latest`]: {},

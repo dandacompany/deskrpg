@@ -1,9 +1,9 @@
-// 한 턴에 두 겹의 시한을 건다.
-//   idle — 에이전트가 살아 있다는 신호(tool.progress, assistant.delta)가 오면 리셋.
-//          "멈췄나"를 잡는다.
-//   max  — 활동과 무관한 절대 상한. "폭주하나"를 잡는다.
-// 하나의 타이머로는 이 둘을 구분할 수 없다: 넉넉히 잡으면 멈춘 에이전트를 오래 기다리고,
-// 짧게 잡으면 오래 걸리는 정상 작업을 죽인다.
+// Two nested deadlines per turn.
+//   idle — resets whenever a liveness signal arrives (tool.progress, assistant.delta).
+//          Catches "did it stop?".
+//   max  — an absolute cap regardless of activity. Catches "did it run away?".
+// A single timer can't distinguish the two: set it generously and a stalled agent waits
+// forever; set it tight and it kills normal work that legitimately takes long.
 
 export type TurnTimeoutConfig = { idleMs: number; maxMs: number };
 

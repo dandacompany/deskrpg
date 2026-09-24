@@ -26,18 +26,18 @@ const profile = {
   appearance: { new: true },
 };
 
-test("이름과 외형은 프로필이 정본이다 — npcs 의 옛 값은 무시한다", () => {
+test("the profile is the source of truth for name and appearance — npcs' old values are ignored", () => {
   const p = projectNpcRow(npc, profile, "owner");
   assert.equal(p.name, "올리버");
   assert.deepEqual(p.appearance, { new: true });
 });
 
-test("표시 이름이 없으면 프로필 이름으로 떨어진다", () => {
+test("if there's no display name, it falls back to the profile name", () => {
   const p = projectNpcRow(npc, { ...profile, displayName: null }, "owner");
   assert.equal(p.name, "oliver");
 });
 
-test("맵 필터는 자리 미정과 휴면을 뺀다", () => {
+test("the map filter excludes unplaced and dormant NPCs", () => {
   const placed = projectNpcRow(npc, profile, "owner");
   const unplaced = projectNpcRow(
     { ...npc, id: "n2", positionX: null, positionY: null },

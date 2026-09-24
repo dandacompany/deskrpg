@@ -1,4 +1,5 @@
-// 대화 턴 기록. 순수 — 시각은 호출자가 주입한다(테스트 결정성).
+// A record of conversation turns. Pure — the timestamp is injected by the caller (for test
+// determinism).
 
 export type Turn = {
   seq: number;
@@ -8,7 +9,8 @@ export type Turn = {
   timestamp: number;
 };
 
-/** 사용자 발언의 speakerId. Hermes conversation_history의 role 판정에 쓴다. */
+/** The speakerId for a user's remark. Used to decide the role in Hermes's
+ * conversation_history. */
 export const USER_SPEAKER_ID = "user";
 
 export class Transcript {
@@ -47,10 +49,10 @@ export class Transcript {
   }
 
   /**
-   * Hermes /v1/runs 의 conversation_history 형태로 직렬화한다.
-   * 사용자 발언은 role="user", NPC 발언은 role="assistant".
-   * 발언자 이름을 content에 접두하는 이유: 다자 대화에서 모델이 누가 말했는지
-   * 알아야 하는데 role만으로는 NPC들을 구분할 수 없다.
+   * Serializes into the shape of Hermes /v1/runs's conversation_history.
+   * A user's remark gets role="user"; an NPC's remark gets role="assistant".
+   * Why the speaker's name is prefixed onto content: in multi-party conversation, the model
+   * needs to know who said what, and role alone can't distinguish between NPCs.
    */
   toConversationHistory(limit: number): Array<{ role: string; content: string }> {
     return this.recent(limit).map((t) => ({

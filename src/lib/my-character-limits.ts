@@ -1,5 +1,6 @@
 /**
- * 내 캐릭터 소개(bio) 상한. DB 의존이 없는 상수만 둔다 — 클라이언트 폼과 서버 검증,
- * 대화 앞머리 주입(user-context.ts)이 같은 값을 쓰게 하려고 my-character.ts 에서 떼어 냈다.
+ * The limit for my character's bio. Keeps only a DB-independent constant — split out of
+ * my-character.ts so the client form, server validation, and the conversation-preamble
+ * injection (user-context.ts) all use the same value.
  */
 export const BIO_MAX_LENGTH = 2000;

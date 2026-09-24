@@ -17,7 +17,7 @@ function parse(json: unknown, raw = false) {
   return parseMeetingOutcome(raw ? (json as string) : JSON.stringify(json), participants);
 }
 
-test("넓힌 JSON 에서 결정·후속 업무·프로젝트 권고를 읽는다", () => {
+test("reads decisions, follow-ups, and a project recommendation from the wide JSON", () => {
   const parsed = parse({
     keyTopics: ["가격", "일정"],
     conclusions: "A안으로 간다.",
@@ -63,14 +63,14 @@ test("넓힌 JSON 에서 결정·후속 업무·프로젝트 권고를 읽는다
   });
 });
 
-test("앞뒤에 다른 글이 붙어도 JSON 덩어리를 찾아 읽는다", () => {
+test("finds and reads the JSON chunk even with other text attached before/after", () => {
   const parsed = parse('알겠습니다.\n```json\n{"keyTopics":["a"],"conclusions":"b"}\n```', true);
   assert.equal(parsed.status, "ok");
   assert.deepEqual(parsed.keyTopics, ["a"]);
   assert.deepEqual(parsed.outcome, { decisions: [], followUps: [], project: null });
 });
 
-test("JSON 이 없거나 깨졌으면 실패로 남긴다 — 빈 값으로 성공한 척하지 않는다", () => {
+test("marks it failed when JSON is missing or broken — doesn't fake success with empty values", () => {
   for (const raw of ["", "요약할 수 없습니다", '{"keyTopics": [']) {
     const parsed = parse(raw, true);
     assert.equal(parsed.status, "failed");
@@ -80,7 +80,7 @@ test("JSON 이 없거나 깨졌으면 실패로 남긴다 — 빈 값으로 성�
   }
 });
 
-test("참석자가 아닌 담당은 미지정으로 두되 모델이 쓴 이름은 남긴다", () => {
+test("leaves a non-participant assignee unassigned but keeps the name the model wrote", () => {
   const parsed = parse({
     followUps: [
       { title: "검토", assignee: "리나" },
@@ -96,14 +96,14 @@ test("참석자가 아닌 담당은 미지정으로 두되 모델이 쓴 이름�
   );
 });
 
-test("after 는 범위 밖·자기 참조·중복을 걸러 낸다", () => {
+test("after filters out out-of-range, self-referencing, and duplicate entries", () => {
   const parsed = parse({
     followUps: [{ title: "a", after: [0, 1, 1, 9, -1, "x"] }, { title: "b" }],
   });
   assert.deepEqual(parsed.outcome?.followUps[0].after, [1]);
 });
 
-test("after 가 순환하면 고리를 만드는 쪽 링크를 뺀다", () => {
+test("when after forms a cycle, drops the link that closes the loop", () => {
   const parsed = parse({
     followUps: [
       { title: "a", after: [2] },
@@ -112,11 +112,11 @@ test("after 가 순환하면 고리를 만드는 쪽 링크를 뺀다", () => {
     ],
   });
   const after = parsed.outcome?.followUps.map((item) => item.after);
-  // 앞에서부터 받아들이고, 고리를 닫는 마지막 링크(c → b)만 버린다.
+  // Accepted from the front, dropping only the final link that closes the loop (c → b).
   assert.deepEqual(after, [[2], [0], []]);
 });
 
-test("제목 없는 항목은 버리고 남은 항목의 after 를 새 번호로 옮긴다", () => {
+test("drops titleless items and remaps the remaining items' after to new indices", () => {
   const parsed = parse({
     followUps: [{ title: "  " }, { title: "a" }, { title: "b", after: [0, 1] }],
   });
@@ -129,7 +129,7 @@ test("제목 없는 항목은 버리고 남은 항목의 after 를 새 번호로
   );
 });
 
-test("개수와 길이를 상한에서 자른다", () => {
+test("truncates count and length at the limits", () => {
   const parsed = parse({
     decisions: Array.from({ length: 30 }, (_, i) => `결정 ${i}`),
     followUps: Array.from({ length: 30 }, (_, i) => ({ title: `${i}`.padEnd(500, "x") })),
@@ -139,7 +139,7 @@ test("개수와 길이를 상한에서 자른다", () => {
   assert.equal(parsed.outcome?.followUps[0].title.length, MEETING_OUTCOME_LIMITS.title);
 });
 
-test("project 가 없거나 모양이 틀리면 null", () => {
+test("null when project is missing or malformed", () => {
   assert.equal(parse({ project: "yes" }).outcome?.project, null);
   assert.deepEqual(parse({ project: { recommended: "true", name: 3 } }).outcome?.project, {
     recommended: false,
@@ -148,7 +148,7 @@ test("project 가 없거나 모양이 틀리면 null", () => {
   });
 });
 
-test("요약 프롬프트는 담당 후보를 참석 직원 이름으로 못 박는다", () => {
+test("the summary prompt pins the assignee candidates to attending employee names", () => {
   const prompt = buildMeetingSummaryPrompt("가격 개편", "소피: A안이 낫습니다", participants);
   assert.match(prompt, /참석 직원: 소피, Noah/);
   assert.match(prompt, /회의 주제: 가격 개편/);

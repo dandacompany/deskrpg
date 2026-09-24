@@ -3,28 +3,28 @@ import assert from "node:assert/strict";
 
 import { REPORT_FORMAT_HEADER, formatReportFormat, prefixReportFormat } from "./report-format";
 
-test("보고 형식 규칙은 이미지·링크·마크다운 세 가지를 모두 말한다", () => {
+test("the report format rules cover all three of images, links, and markdown", () => {
   const rules = formatReportFormat();
   assert.ok(rules.startsWith(REPORT_FORMAT_HEADER));
-  // 화면이 실제로 그려 주는 형태를 그대로 지시해야 한다(MarkdownContent.tsx 의 img·a 렌더러).
+  // Must instruct exactly the form the screen actually renders (MarkdownContent.tsx's img/a renderers).
   assert.match(rules, /!\[설명\]\(URL\)/);
   assert.match(rules, /한 줄에 URL 하나/);
   assert.match(rules, /마크다운/);
 });
 
-test("규칙은 한 줄짜리 항목들로만 되어 있다 — 앞머리가 대본을 밀어내지 않는다", () => {
+test("rules are made of single-line entries only — the prefix doesn't push the script back", () => {
   const lines = formatReportFormat().split("\n");
   assert.ok(lines.length <= 5, `너무 길다: ${lines.length}줄`);
   for (const line of lines.slice(1)) assert.match(line, /^- /);
 });
 
-test("앞머리로 붙이면 규칙이 먼저, 원래 대본이 뒤에 온다", () => {
+test("prefixing puts the rules first and the original script after", () => {
   const out = prefixReportFormat("노아: 보고서 정리해 줘");
   assert.ok(out.startsWith(REPORT_FORMAT_HEADER));
   assert.ok(out.endsWith("노아: 보고서 정리해 줘"));
   assert.ok(out.includes("\n\n노아:"));
 });
 
-test("빈 대본에는 규칙만 붙지 않는다 — 대본이 없으면 그대로 돌려준다", () => {
+test("the rule isn't prefixed onto an empty script — returned as-is when there's no script", () => {
   assert.equal(prefixReportFormat(""), "");
 });

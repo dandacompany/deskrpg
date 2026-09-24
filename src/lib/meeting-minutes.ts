@@ -14,7 +14,7 @@ type MeetingMinutesRecord = {
   outcomeJson?: unknown;
 };
 
-/** PG 는 객체로, SQLite 는 문자열로 돌려준다. 모양이 틀리면 결과 없음으로 다룬다. */
+/** PG returns an object, SQLite returns a string. Treated as no result if the shape is wrong. */
 function readOutcome(stored: unknown): MeetingOutcome | null {
   let value = stored;
   if (typeof value === "string") {
@@ -31,9 +31,10 @@ function readOutcome(stored: unknown): MeetingOutcome | null {
 }
 
 /**
- * 반환 타입을 명시한다. 추론에 맡기면 호출부가 리터럴 객체를 넘겼을 때
- * 스프레드와 덮어쓰기가 불가능한 교차 타입으로 접혀 `never` 가 된다 —
- * 테스트에서 `normalized.participants` 가 "does not exist on type 'never'" 로 터졌다.
+ * The return type is spelled out explicitly. Leaving it to inference collapses into an
+ * intersection type that can't be spread/overwritten when the caller passes a literal
+ * object, becoming `never` — in tests, `normalized.participants` blew up with "does not
+ * exist on type 'never'".
  */
 export function normalizeMeetingMinutesRecord<T extends MeetingMinutesRecord>(
   record: T,
@@ -42,7 +43,7 @@ export function normalizeMeetingMinutesRecord<T extends MeetingMinutesRecord>(
   keyTopics: string[];
   outcome: MeetingOutcome | null;
 } {
-  // 제네릭 T 의 나머지(rest)는 TS 가 Omit 교차로 좁히지 못한다 — 세 키를 함께 덜어 단언한다.
+  // TS can't narrow the generic T's rest via an Omit intersection — assert it by destructuring all three keys together.
   const { outcomeJson, participants, keyTopics, ...rest } = record;
   return {
     ...(rest as Omit<T, "participants" | "keyTopics" | "outcomeJson">),

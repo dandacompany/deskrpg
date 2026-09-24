@@ -32,10 +32,10 @@ function metrics(
 }
 
 // ---------------------------------------------------------------------------
-// 성공률 — outcome 어휘로 센다
+// Success rate — counted using outcome vocabulary
 // ---------------------------------------------------------------------------
 
-test("성공은 completed 하나뿐이고 나머지는 합치지 않는다", () => {
+test("only completed counts as success — the rest are not lumped together", () => {
   const m = metrics([
     run({ outcome: "completed" }),
     run({ outcome: "crashed" }),
@@ -51,20 +51,20 @@ test("성공은 completed 하나뿐이고 나머지는 합치지 않는다", () 
   );
 });
 
-test("끝난 실행이 없으면 성공률은 null — 0% 로 쓰면 거짓이다", () => {
+test("success rate is null when there are no finished runs — showing 0% would be a lie", () => {
   const m = metrics([run({ ended_at: undefined, outcome: undefined })]);
   assert.equal(m.successRate, null);
   assert.equal(m.terminalRuns, 0);
   assert.equal(m.openRuns, 1);
 });
 
-test("결과가 없는 채 끝난 실행은 미기록으로 센다 — 지어내지 않는다", () => {
+test("a run that finished with no outcome is counted as unrecorded — nothing is made up", () => {
   const m = metrics([run({ outcome: undefined })]);
   assert.deepEqual(m.outcomes, [{ outcome: "unrecorded", count: 1 }]);
   assert.equal(m.successRate, 0);
 });
 
-test("결과 분포는 많은 것부터, 같으면 이름순", () => {
+test("outcome distribution sorts by count descending, ties broken by name", () => {
   const m = metrics([
     run({ outcome: "crashed" }),
     run({ outcome: "crashed" }),
@@ -78,20 +78,20 @@ test("결과 분포는 많은 것부터, 같으면 이름순", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 창
+// Window
 // ---------------------------------------------------------------------------
 
-test("창 밖에서 끝난 실행은 이 창의 성과가 아니다", () => {
-  // 겹치기만 하는 것을 세면 같은 실행이 두 창에 중복으로 잡힌다.
+test("a run that finished outside the window is not this window's result", () => {
+  // Counting anything that merely overlaps would double-count the same run across two windows.
   const m = metrics([
-    run({ started_at: 900, ended_at: 999 }), // 창 전 종료
-    run({ started_at: 900, ended_at: 1_500 }), // 창 안 종료 — 센다
-    run({ started_at: 1_900, ended_at: 2_500 }), // 창 후 종료
+    run({ started_at: 900, ended_at: 999 }), // ended before the window
+    run({ started_at: 900, ended_at: 1_500 }), // ended inside the window — counted
+    run({ started_at: 1_900, ended_at: 2_500 }), // ended after the window
   ]);
   assert.equal(m.terminalRuns, 1);
 });
 
-test("아직 안 끝난 실행은 성공률 분모에서 빠지고 따로 센다", () => {
+test("a still-running run is excluded from the success-rate denominator and counted separately", () => {
   const m = metrics([
     run({ outcome: "completed" }),
     run({ ended_at: undefined, outcome: undefined }),
@@ -102,10 +102,10 @@ test("아직 안 끝난 실행은 성공률 분모에서 빠지고 따로 센다
 });
 
 // ---------------------------------------------------------------------------
-// 처리량
+// Throughput
 // ---------------------------------------------------------------------------
 
-test("처리량은 카드 수다 — 같은 카드가 여러 번 성공해도 한 번 센다", () => {
+test("throughput is a card count — the same card succeeding multiple times counts once", () => {
   const m = metrics([
     run({ task_id: "same", outcome: "completed" }),
     run({ task_id: "same", outcome: "completed" }),
@@ -114,16 +114,16 @@ test("처리량은 카드 수다 — 같은 카드가 여러 번 성공해도 �
   assert.equal(m.throughput, 2);
 });
 
-test("실패한 실행은 처리량에 들지 않는다", () => {
+test("a failed run doesn't count toward throughput", () => {
   const m = metrics([run({ task_id: "a", outcome: "crashed" })]);
   assert.equal(m.throughput, 0);
 });
 
 // ---------------------------------------------------------------------------
-// 소요
+// Duration
 // ---------------------------------------------------------------------------
 
-test("소요는 중앙값이고 표본 수를 함께 낸다", () => {
+test("duration is the median, reported together with the sample count", () => {
   const m = metrics([
     run({ started_at: 1_100, ended_at: 1_110 }),
     run({ started_at: 1_200, ended_at: 1_230 }),
@@ -133,7 +133,7 @@ test("소요는 중앙값이고 표본 수를 함께 낸다", () => {
   assert.equal(m.duration.medianMs, 20_000, "10·20·30초의 중앙값은 20초다");
 });
 
-test("표본이 짝수면 가운데 둘의 평균이다", () => {
+test("with an even sample count, it's the average of the middle two", () => {
   const m = metrics([
     run({ started_at: 1_100, ended_at: 1_110 }),
     run({ started_at: 1_200, ended_at: 1_230 }),
@@ -141,7 +141,7 @@ test("표본이 짝수면 가운데 둘의 평균이다", () => {
   assert.equal(m.duration.medianMs, 20_000);
 });
 
-test("중앙값은 극단값에 끌려가지 않는다 — 평균이면 달라진다", () => {
+test("the median isn't pulled by outliers — a mean would give a different answer", () => {
   const m = metrics([
     run({ started_at: 1_100, ended_at: 1_110 }),
     run({ started_at: 1_200, ended_at: 1_210 }),
@@ -150,12 +150,12 @@ test("중앙값은 극단값에 끌려가지 않는다 — 평균이면 달라�
   assert.equal(m.duration.medianMs, 10_000);
 });
 
-test("표본이 없으면 중앙값은 null 이고 표본 수는 0 이다", () => {
+test("with no samples, the median is null and the sample count is 0", () => {
   const m = metrics([run({ outcome: "crashed" })]);
   assert.deepEqual(m.duration, { medianMs: null, samples: 0 });
 });
 
-test("실패한 실행의 소요는 섞지 않는다 — 소요의 의미가 다르다", () => {
+test("a failed run's duration is never mixed in — duration means something different there", () => {
   const m = metrics([
     run({ outcome: "completed", started_at: 1_100, ended_at: 1_110 }),
     run({ outcome: "timed_out", started_at: 1_200, ended_at: 1_900 }),
@@ -164,17 +164,17 @@ test("실패한 실행의 소요는 섞지 않는다 — 소요의 의미가 다
   assert.equal(m.duration.medianMs, 10_000);
 });
 
-test("시각을 못 읽는 실행은 소요 표본에서 빠지지만 결과 분포에는 남는다", () => {
+test("a run whose timestamps can't be read is excluded from duration samples but stays in the outcome distribution", () => {
   const m = metrics([run({ outcome: "completed", started_at: undefined, ended_at: 1_200 })]);
   assert.equal(m.duration.samples, 0);
   assert.equal(m.terminalRuns, 1);
 });
 
 // ---------------------------------------------------------------------------
-// 손이 필요한 카드 — 판단 모음과 같은 수
+// Cards needing attention — same count as the decision collection
 // ---------------------------------------------------------------------------
 
-test("손이 필요한 카드를 스스로 세지 않고 공유 함수를 쓴다", () => {
+test("uses the shared function instead of counting attention-needed cards itself", () => {
   const cards = [
     { id: "a", status: "review" },
     { id: "b", status: "blocked" },
@@ -183,7 +183,7 @@ test("손이 필요한 카드를 스스로 세지 않고 공유 함수를 쓴다
   ];
   const pending = new Set(["b"]);
   const m = metrics([], cards, pending);
-  // 두 곳이 각자 세면 다른 수가 나오고, 그때 어느 쪽이 맞는지 아무도 모른다.
+  // If the two counted separately they'd get different numbers, and nobody could tell which is right.
   assert.deepEqual(m.attention, countNeedsAttention(cards, pending));
   assert.equal(m.attention.awaiting_approval, 1);
   assert.equal(m.attention.blocked, 1);
@@ -191,19 +191,19 @@ test("손이 필요한 카드를 스스로 세지 않고 공유 함수를 쓴다
   assert.equal(m.attention.total, 3);
 });
 
-test("승인 대기 집합이 비면 blocked 는 오류 차단으로 읽는다", () => {
-  // 승인이 풀렸는데 아직 blocked 로 보이는 순간에 "승인해 달라" 를 다시 보이면
-  // 사용자가 같은 결정을 두 번 한다.
+test("when the pending-approval set is empty, blocked is read as blocked by an error", () => {
+  // If approval was resolved but the card is still shown as blocked, showing "please
+  // approve" again would make the user make the same decision twice.
   const m = metrics([], [{ id: "b", status: "blocked" }], new Set());
   assert.equal(m.attention.awaiting_approval, 0);
   assert.equal(m.attention.blocked, 1);
 });
 
 // ---------------------------------------------------------------------------
-// 표본 문턱
+// Sample threshold
 // ---------------------------------------------------------------------------
 
-test("표본이 적으면 비율을 수치로 보이지 않는다", () => {
+test("does not show a rate as a number when the sample size is too small", () => {
   assert.equal(hasEnoughSamples(MIN_RATE_SAMPLES - 1), false);
   assert.equal(hasEnoughSamples(MIN_RATE_SAMPLES), true);
   assert.equal(hasEnoughSamples(0), false);

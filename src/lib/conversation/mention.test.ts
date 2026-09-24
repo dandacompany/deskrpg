@@ -10,37 +10,37 @@ const P = [
 ];
 const SPEAKER = "n-sophie";
 
-describe("parseMention — TO: 라인", () => {
-  test("첫 줄의 TO: 로 지목하고 그 줄을 본문에서 뺀다", () => {
+describe("parseMention — TO: line", () => {
+  test("names via a first-line TO: and strips that line from the body", () => {
     assert.deepEqual(parseMention("TO: 단비\n어때요?", P, SPEAKER), {
       npcId: "n-danbi",
       text: "어때요?",
     });
   });
 
-  test("콜론 뒤 공백이 없어도 인정한다", () => {
+  test("accepts it even with no space after the colon", () => {
     assert.deepEqual(parseMention("TO:단비\n어때요?", P, SPEAKER), {
       npcId: "n-danbi",
       text: "어때요?",
     });
   });
 
-  test("TO: 가 @[] 보다 우선한다", () => {
+  test("TO: takes priority over @[]", () => {
     assert.deepEqual(parseMention("TO: 단비\n@[소피] 도 들어주세요", P, SPEAKER), {
       npcId: "n-danbi",
       text: "@[소피] 도 들어주세요",
     });
   });
 
-  test("이름이 참가자에 없어도 TO: 줄은 본문에서 뺀다", () => {
-    // 사용자에게 제어 프리픽스를 보이지 않는 것이 우선이다.
+  test("strips the TO: line from the body even when the name isn't a participant", () => {
+    // Keeping the control prefix hidden from the user takes priority.
     assert.deepEqual(parseMention("TO: 없는사람\n어때요?", P, SPEAKER), {
       npcId: null,
       text: "어때요?",
     });
   });
 
-  test("자기 자신 지목은 무시하되 줄은 뺀다", () => {
+  test("ignores a self-mention but still strips the line", () => {
     assert.deepEqual(parseMention("TO: 소피\n제 생각은", P, SPEAKER), {
       npcId: null,
       text: "제 생각은",
@@ -48,43 +48,43 @@ describe("parseMention — TO: 라인", () => {
   });
 });
 
-describe("parseMention — 본문 @[이름]", () => {
-  test("대괄호 멘션을 인정하고 본문은 그대로 둔다", () => {
+describe("parseMention — in-body @[name]", () => {
+  test("recognizes a bracketed mention and leaves the body as-is", () => {
     assert.deepEqual(parseMention("@[단비] 생각은?", P, SPEAKER), {
       npcId: "n-danbi",
       text: "@[단비] 생각은?",
     });
   });
 
-  test("조사가 붙어도 안전하다", () => {
+  test("is safe even with a trailing particle attached", () => {
     assert.deepEqual(parseMention("@[단비]는 어때요?", P, SPEAKER), {
       npcId: "n-danbi",
       text: "@[단비]는 어때요?",
     });
   });
 
-  test("비슷한 이름을 가로채지 않는다", () => {
+  test("doesn't get captured by a similar name", () => {
     assert.deepEqual(parseMention("@[단비수] 어때요?", P, SPEAKER), {
       npcId: "n-danbisu",
       text: "@[단비수] 어때요?",
     });
   });
 
-  test("여럿이면 첫 번째만 쓴다", () => {
+  test("uses only the first one when there are several", () => {
     assert.deepEqual(parseMention("@[단비] 와 @[단비수]", P, SPEAKER), {
       npcId: "n-danbi",
       text: "@[단비] 와 @[단비수]",
     });
   });
 
-  test("첫 번째가 참가자가 아니면 그 다음을 본다", () => {
+  test("looks at the next one if the first isn't a participant", () => {
     assert.deepEqual(parseMention("@[없는사람] 말고 @[단비]", P, SPEAKER), {
       npcId: "n-danbi",
       text: "@[없는사람] 말고 @[단비]",
     });
   });
 
-  test("이름 앞뒤 공백을 허용한다", () => {
+  test("allows whitespace around the name", () => {
     assert.deepEqual(parseMention("@[ 단비 ] 어때요?", P, SPEAKER), {
       npcId: "n-danbi",
       text: "@[ 단비 ] 어때요?",
@@ -92,34 +92,34 @@ describe("parseMention — 본문 @[이름]", () => {
   });
 });
 
-describe("parseMention — 멘션이 아닌 것", () => {
-  test("대괄호 없는 @이름 은 멘션이 아니다", () => {
-    // 조사 문제를 피하기 위한 의도적 결정이다.
+describe("parseMention — not a mention", () => {
+  test("@name without brackets is not a mention", () => {
+    // An intentional decision to avoid issues with Korean particles.
     assert.deepEqual(parseMention("@단비 어때요?", P, SPEAKER), {
       npcId: null,
       text: "@단비 어때요?",
     });
   });
 
-  test("평범한 발언은 그대로 통과한다", () => {
+  test("an ordinary remark passes through unchanged", () => {
     assert.deepEqual(parseMention("김치찌개가 좋겠습니다.", P, SPEAKER), {
       npcId: null,
       text: "김치찌개가 좋겠습니다.",
     });
   });
 
-  test("본문 중간의 TO: 는 제어 라인이 아니다", () => {
+  test("a TO: in the middle of the body is not a control line", () => {
     assert.deepEqual(parseMention("좋아요.\nTO: 단비", P, SPEAKER), {
       npcId: null,
       text: "좋아요.\nTO: 단비",
     });
   });
 
-  test("빈 문자열", () => {
+  test("empty string", () => {
     assert.deepEqual(parseMention("", P, SPEAKER), { npcId: null, text: "" });
   });
 
-  test("참가자 목록이 비어도 죽지 않는다", () => {
+  test("doesn't crash on an empty participant list", () => {
     assert.deepEqual(parseMention("@[단비] 어때요?", [], SPEAKER), {
       npcId: null,
       text: "@[단비] 어때요?",
@@ -127,72 +127,75 @@ describe("parseMention — 멘션이 아닌 것", () => {
   });
 });
 
-describe("parseAllMentions — 지명 전부를 등장 순서대로", () => {
+describe("parseAllMentions — all mentions in appearance order", () => {
   const people: MentionParticipant[] = [
     { npcId: "n1", displayName: "단비" },
     { npcId: "n2", displayName: "하늘" },
     { npcId: "n3", displayName: "단비수" },
   ];
 
-  test("여러 지명을 등장 순서대로 돌려준다", () => {
+  test("returns multiple mentions in appearance order", () => {
     assert.deepEqual(parseAllMentions("@[하늘] @[단비] 어때?", people, null), ["n2", "n1"]);
   });
 
-  test("같은 이름이 두 번 나오면 한 번만 돌려준다", () => {
+  test("returns the same name only once when it appears twice", () => {
     assert.deepEqual(parseAllMentions("@[단비] 그리고 @[단비] 또", people, null), ["n1"]);
   });
 
-  test("자기 자신 지명은 뺀다", () => {
+  test("excludes a self-mention", () => {
     assert.deepEqual(parseAllMentions("@[단비] @[하늘]", people, "n1"), ["n2"]);
   });
 
-  test("사람이 말할 때(null)는 아무도 빠지지 않는다", () => {
+  test("when a human is speaking (null), no one is excluded", () => {
     assert.deepEqual(parseAllMentions("@[단비] @[하늘]", people, null), ["n1", "n2"]);
   });
 
-  test("대괄호 없는 @이름 은 지명이 아니다", () => {
-    // 한국어 조사(@단비는)와 접두 일치(@단비 가 @단비수 를 삼킴) 때문에 형식을 강제한다.
+  test("@name without brackets is not a mention", () => {
+    // The format is enforced because of Korean particles (@단비는) and prefix matches
+    // (@단비 swallowing @단비수).
     assert.deepEqual(parseAllMentions("@단비 어때?", people, null), []);
     assert.deepEqual(parseAllMentions("@단비는 어때?", people, null), []);
   });
 
-  test("접두가 겹치는 이름을 삼키지 않는다", () => {
+  test("doesn't swallow a name that overlaps as a prefix", () => {
     assert.deepEqual(parseAllMentions("@[단비수] 안녕", people, null), ["n3"]);
   });
 
-  test("TO: 첫 줄도 지명으로 읽는다", () => {
+  test("also reads a first-line TO: as a mention", () => {
     assert.deepEqual(parseAllMentions("TO: 하늘\n의견 부탁해요", people, null), ["n2"]);
   });
 
-  test("TO: 와 본문 @[..] 가 함께 있으면 둘 다 센다", () => {
-    // TO: 는 "다음 발언자", @[..] 는 본문 속 호명 — 자유채팅에서는 둘 다 깨운다.
+  test("counts both when TO: and an in-body @[..] are both present", () => {
+    // TO: means "next speaker", @[..] is a name called out in the body — free chat wakes
+    // both up.
     assert.deepEqual(parseAllMentions("TO: 하늘\n@[단비] 너도", people, null), ["n2", "n1"]);
   });
 
-  test("참가자에 없는 이름은 무시한다", () => {
+  test("ignores a name that isn't a participant", () => {
     assert.deepEqual(parseAllMentions("@[없는사람] @[단비]", people, null), ["n1"]);
   });
 
-  test("문자열이 아니면 빈 배열", () => {
+  test("returns an empty array when the input isn't a string", () => {
     assert.deepEqual(parseAllMentions(null as unknown as string, people, null), []);
   });
 });
 
-describe("extractMentionNames — 해석 전 원문 이름", () => {
-  test("참가자가 아닌 이름도 그대로 센다", () => {
-    // 오타·비멤버 지목도 "지목하려 했다"는 신호이므로 남긴다.
+describe("extractMentionNames — raw names before resolution", () => {
+  test("counts a name even if it isn't a participant", () => {
+    // A typo or non-member mention is still a signal of "intended to mention someone", so
+    // it's kept.
     assert.deepEqual(extractMentionNames("@[없는사람] @[단비]"), ["없는사람", "단비"]);
   });
 
-  test("지목이 없으면 빈 배열", () => {
+  test("returns an empty array when there's no mention", () => {
     assert.deepEqual(extractMentionNames("그냥 인사"), []);
   });
 
-  test("TO: 라인도 이름으로 센다", () => {
+  test("counts a TO: line as a name too", () => {
     assert.deepEqual(extractMentionNames("TO: 하늘\n@[단비] 너도"), ["하늘", "단비"]);
   });
 
-  test("문자열이 아니면 빈 배열", () => {
+  test("returns an empty array when the input isn't a string", () => {
     assert.deepEqual(extractMentionNames(null as unknown as string), []);
   });
 });

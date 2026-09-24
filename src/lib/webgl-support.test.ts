@@ -7,7 +7,7 @@ function docWith(getContext: (contextId: string) => unknown): WebglProbeDocument
   return { createElement: () => ({ getContext }) };
 }
 
-test("webgl2 컨텍스트가 나오면 지원으로 본다", () => {
+test("treated as supported when a webgl2 context comes back", () => {
   const asked: string[] = [];
   const supported = detectWebglSupport(
     docWith((contextId) => {
@@ -19,16 +19,16 @@ test("webgl2 컨텍스트가 나오면 지원으로 본다", () => {
   assert.deepEqual(asked, ["webgl2"]);
 });
 
-test("webgl2 가 없어도 webgl 이 있으면 지원으로 본다", () => {
+test("treated as supported when webgl exists even without webgl2", () => {
   const supported = detectWebglSupport(docWith((contextId) => (contextId === "webgl" ? {} : null)));
   assert.equal(supported, true);
 });
 
-test("모든 컨텍스트가 null 이면 미지원이다", () => {
+test("unsupported when every context is null", () => {
   assert.equal(detectWebglSupport(docWith(() => null)), false);
 });
 
-test("getContext 가 예외를 던져도 미지원으로 떨어진다", () => {
+test("falls back to unsupported even if getContext throws", () => {
   assert.equal(
     detectWebglSupport(
       docWith(() => {
@@ -39,7 +39,7 @@ test("getContext 가 예외를 던져도 미지원으로 떨어진다", () => {
   );
 });
 
-test("createElement 가 예외를 던져도 미지원으로 떨어진다", () => {
+test("falls back to unsupported even if createElement throws", () => {
   const doc = {
     createElement() {
       throw new Error("no document");
@@ -48,7 +48,7 @@ test("createElement 가 예외를 던져도 미지원으로 떨어진다", () =>
   assert.equal(detectWebglSupport(doc), false);
 });
 
-test("document 가 없으면(서버 렌더) 미지원이다", () => {
+test("unsupported when there's no document (server rendering)", () => {
   assert.equal(detectWebglSupport(null), false);
   assert.equal(detectWebglSupport(undefined), false);
 });

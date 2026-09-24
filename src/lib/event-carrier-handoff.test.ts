@@ -33,7 +33,7 @@ async function fixture() {
   return { server, channel, gateway, source, target, project };
 }
 
-// 중간 쓰기 뒤 재시작된 DB 상태를 직접 만든다. 복구는 네트워크 없이 저장된 합성 토큰만 사용해야 한다.
+// Directly builds the DB state after a restart mid-write. Recovery must use only the stored opaque token, with no network calls.
 for (const phase of ["prepared", "demoted", "promoted", "archived"] as const) {
   test(`인계 ${phase} 뒤 재시작은 저장한 커서로 보관을 끝낸다`, async () => {
     const f = await fixture();
@@ -74,7 +74,7 @@ for (const phase of ["prepared", "demoted", "promoted", "archived"] as const) {
         .set({ status: "completed" })
         .where(eq(channelProjects.id, f.project.id));
     const { recoverEventCarrierHandoff } = await import("./event-carrier-handoff");
-    // 별도 프로세스에서 DB를 다시 연다. 메모리 상태에 기대는 복구는 통과하지 못한다.
+    // Reopens the DB in a separate process. Recovery that relies on in-memory state won't pass this.
     const childEnv = { ...process.env };
     delete childEnv.DATABASE_URL;
     execFileSync(
@@ -99,7 +99,7 @@ for (const phase of ["prepared", "demoted", "promoted", "archived"] as const) {
   });
 }
 
-test("인계 기록 없이 carrier 0인 저장 커서는 임의 승격하지 않는다", async () => {
+test("a saved cursor with carrier count 0 and no handoff record isn't arbitrarily promoted", async () => {
   const f = await fixture();
   const { db, channelKanbanBoards } = await import("@/db");
   const { eq } = await import("drizzle-orm");
@@ -152,7 +152,7 @@ for (const code of ["malformed", "cursor_changed", "gateway_changed"] as const) 
   });
 }
 
-test("구버전 합성 라우트 부재는 carrier와 프로젝트 상태를 그대로 둔다", async () => {
+test("a missing legacy handoff route on an old version leaves carrier and project status unchanged", async () => {
   const f = await fixture();
   f.server.setInfo({ capabilities: ["kanban", "cron", "events"] });
   const { archiveChannelProject, readProject } = await import("./project-registry");
@@ -167,7 +167,7 @@ test("구버전 합성 라우트 부재는 carrier와 프로젝트 상태를 그
   assert.equal((await readProject(f.channel.id, f.project.id)).status, "planned");
 });
 
-test("보관 HTTP 오류는 코드와 상태를 전달하고 인계 기록은 응답에 싣지 않는다", async () => {
+test("an archive HTTP error passes through code and status, and doesn't put the handoff record in the response", async () => {
   const f = await fixture();
   f.server.setInfo({ capabilities: ["kanban", "cron", "events"] });
   const { NextRequest } = await import("next/server");
@@ -190,7 +190,7 @@ test("보관 HTTP 오류는 코드와 상태를 전달하고 인계 기록은 �
   assert.equal(JSON.stringify(body).includes("Cursor"), false);
 });
 
-test("일반 프로젝트 PATCH의 완료 상태도 같은 커서 인계를 거친다", async () => {
+test("an ordinary project PATCH to completed status also goes through the same cursor handoff", async () => {
   const f = await fixture();
   const { updateChannelProject } = await import("./project-registry");
   const { resolveChannelBoard, listChannelBoards } = await import("./kanban-boards");

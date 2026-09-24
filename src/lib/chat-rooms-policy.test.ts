@@ -7,16 +7,16 @@ import {
   type RoomSummary,
 } from "./chat-rooms-policy";
 
-test("mention 정책: 지명된 NPC 만, 지명 없으면 아무도", () => {
+test("mention policy: only mentioned NPCs, no one if there's no mention", () => {
   assert.deepEqual(decideResponders("mention", ["a"], ["a", "b"]), ["a"]);
   assert.deepEqual(decideResponders("mention", [], ["a", "b"]), []);
 });
-test("members 정책: 지명 없으면 멤버 전원, 있으면 지명된 멤버만", () => {
+test("members policy: every member with no mention, only the mentioned members with one", () => {
   assert.deepEqual(decideResponders("members", [], ["a", "b"]), ["a", "b"]);
   assert.deepEqual(decideResponders("members", ["b"], ["a", "b"]), ["b"]);
   assert.deepEqual(decideResponders("members", ["z"], ["a", "b"]), [], "멤버가 아닌 지명은 무시");
 });
-test("목록: office 가 맨 위, 나머지는 최신 메시지순", () => {
+test("list: office at the top, the rest sorted by most recent message", () => {
   const r = (id: string, kind: "office" | "group", last: string | null): RoomSummary => ({
     id,
     kind,
@@ -36,7 +36,7 @@ test("목록: office 가 맨 위, 나머지는 최신 메시지순", () => {
     ["off", "g2", "g1"],
   );
 });
-test("접근: 없으면 not_found, 채널 권한 없으면 forbidden, office 는 멤버 아니어도 ok, group 은 멤버여야", () => {
+test("access: not_found if missing, forbidden without channel permission, office is ok even for a non-member, group requires membership", () => {
   const office = {
     id: "o",
     channelId: "c",

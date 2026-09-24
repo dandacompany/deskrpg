@@ -1,11 +1,12 @@
 /**
- * 프로젝트 뷰의 순수 로직 — React·fetch·DOM 을 모른다.
+ * Pure logic for the project view — knows nothing about React, fetch, or the DOM.
  *
- * 보드와 목록은 **다른 화면이 아니라 같은 데이터의 다른 표현**이다. 무엇을 거르고, 어떻게 묶고,
- * 어떤 순서로 놓고, 진행률을 어떻게 세는지를 여기 한 곳에 고정한다. 컴포넌트는 결과만 그린다.
+ * The board and the list are **not different screens, just different presentations of the
+ * same data**. What to filter, how to group, what order to place things in, and how to count
+ * progress are all pinned down in this one place. Components only render the result.
  *
- * 상태 집합(`KANBAN_TASK_STATUSES`)을 여기서 정의하지 않고, 카드 상태를 바꾸지도 않는다.
- * 전부 읽기 전용 파생이다.
+ * This file does not define the status set (`KANBAN_TASK_STATUSES`) and does not change card
+ * state. Everything here is a read-only derivation.
  */
 
 import {
@@ -17,7 +18,7 @@ import {
 import { taskTimeMs } from "@/lib/plugin-time";
 
 // ---------------------------------------------------------------------------
-// 뷰 상태
+// View state
 // ---------------------------------------------------------------------------
 
 export type ViewMode = "board" | "list" | "timeline";
@@ -31,8 +32,9 @@ export type ViewFilter = {
   statuses: KanbanTaskStatus[];
   warningsOnly: boolean;
   /**
-   * 보관함 포함 여부. 기존 모달의 토글이 여기로 들어왔다 — 같은 뜻의 스위치가 두 곳에 있으면
-   * 어느 쪽이 참인지 알 수 없다. 이 값은 서버 조회(`board(includeArchived)`)에도 쓰인다.
+   * Whether to include the archive. The old modal's toggle moved here — if a switch with the
+   * same meaning existed in two places, you couldn't tell which one is true. This value is
+   * also used for the server query (`board(includeArchived)`).
    */
   includeArchived: boolean;
 };
@@ -62,8 +64,8 @@ export const DEFAULT_VIEW_STATE: ProjectViewState = {
 };
 
 /**
- * `localStorage` 에서 읽은 값을 믿지 않고 접는다. 낡은 스키마·손으로 고친 값·다른 버전이
- * 남긴 값이 들어와도 화면이 깨지지 않아야 한다.
+ * Doesn't trust the value read from `localStorage` — folds it into shape. The screen must not
+ * break even if a stale schema, a hand-edited value, or a value left by another version comes in.
  */
 export function normalizeViewState(value: unknown): ProjectViewState {
   const raw = (value && typeof value === "object" ? value : {}) as Partial<ProjectViewState>;
@@ -115,14 +117,15 @@ function isTaskStatus(value: string): value is KanbanTaskStatus {
 }
 
 // ---------------------------------------------------------------------------
-// 거르기
+// Filtering
 // ---------------------------------------------------------------------------
 
 /**
- * 빈 배열은 "전부" 를 뜻한다 — 아무것도 고르지 않은 필터가 카드를 다 지우면 안 된다.
+ * An empty array means "everything" — a filter with nothing selected must not wipe out
+ * every card.
  *
- * `includeArchived` 는 여기서 보지 않는다. 그건 서버 조회 범위이고, 응답에 없는 카드를
- * 한 번 더 거르면 같은 규칙이 두 곳에 생긴다.
+ * `includeArchived` is not checked here. That is the server query's scope, and filtering
+ * again against cards it never returned would create the same rule in two places.
  */
 export function applyFilter(tasks: readonly KanbanTask[], filter: ViewFilter): KanbanTask[] {
   const tenants = new Set(filter.tenants);
@@ -137,7 +140,7 @@ export function applyFilter(tasks: readonly KanbanTask[], filter: ViewFilter): K
   });
 }
 
-/** 지금 걸린 필터가 있는가. 없으면 거를 것도 없다 — 빈 필터가 카드를 지우면 안 된다. */
+/** Is any filter currently active? If not, there's nothing to filter — an empty filter must not remove cards. */
 export function hasActiveFilter(filter: ViewFilter): boolean {
   return (
     filter.tenants.length > 0 ||
@@ -148,14 +151,15 @@ export function hasActiveFilter(filter: ViewFilter): boolean {
 }
 
 /**
- * 실행 기록을 **보이는 카드**로 거른다. 필터가 없으면 그대로 돌려준다.
+ * Filters run records down to **visible cards**. Returns them as-is if there's no filter.
  *
- * 필터가 보드·목록에만 먹고 타임라인에는 안 먹으면, 서브프로젝트를 골라도 타임라인은 그대로다 —
- * 화면이 무언가 했다고 말하면서 아무것도 하지 않는 조용한 실패다(보드 뷰에서 같은 결함을
- * 한 번 겪었다).
+ * If the filter only applies to the board and list but not to the timeline, picking a
+ * sub-project leaves the timeline unchanged — a silent failure where the screen claims to
+ * have done something but hasn't (we've hit the same defect once before, in the board view).
  *
- * 필터가 없을 때 거르지 않는 것이 중요하다. 카드가 지워진 실행도 기록에 남는데(플러그인이
- * LEFT JOIN 으로 일부러 남긴다), 보이는 카드로 교집합을 잡으면 그것들이 조용히 사라진다.
+ * It matters that we don't filter when there's no filter. Runs for deleted cards still stay
+ * in the record (the plugin deliberately keeps them via a LEFT JOIN), and intersecting against
+ * visible cards would silently drop them.
  */
 export function filterRunsByVisibleTasks<T extends { task_id: string }>(
   runs: readonly T[],
@@ -166,10 +170,10 @@ export function filterRunsByVisibleTasks<T extends { task_id: string }>(
 }
 
 // ---------------------------------------------------------------------------
-// 정렬
+// Sorting
 // ---------------------------------------------------------------------------
 
-/** 비어 있는 값은 항상 뒤로 간다 — 방향을 뒤집어도 "모르는 것" 이 맨 앞을 차지하지 않는다. */
+/** Empty values always go last — flipping the direction must not put "unknown" at the front. */
 function compareTasks(a: KanbanTask, b: KanbanTask, field: SortField): number {
   switch (field) {
     case "created":
@@ -186,13 +190,14 @@ function compareTasks(a: KanbanTask, b: KanbanTask, field: SortField): number {
 }
 
 function compareMaybeTime(a: PluginTime | undefined, b: PluginTime | undefined): number {
-  // 둘 다 값이 있을 때만 불린다 — 없는 값의 자리는 `sortTasks` 가 따로 정한다.
+  // Only called when both values are present — where missing values go is decided separately by `sortTasks`.
   return (taskTimeMs(a) ?? 0) - (taskTimeMs(b) ?? 0);
 }
 
 /**
- * Hermes 의 `priority` 는 숫자인데 플러그인 계약에서는 문자열로 온다. 숫자로 읽히면 숫자로,
- * 아니면 문자열 비교로 떨어뜨린다 — "P1" 같은 값도 순서를 잃지 않는다.
+ * Hermes's `priority` is a number, but it comes over as a string in the plugin contract.
+ * Compares as a number when it reads as one, otherwise falls back to a string comparison —
+ * so a value like "P1" doesn't lose its ordering.
  */
 function comparePriority(a: string | undefined, b: string | undefined): number {
   const na = Number(a);
@@ -203,11 +208,11 @@ function comparePriority(a: string | undefined, b: string | undefined): number {
 
 function statusIndex(status: string): number {
   const i = (KANBAN_TASK_STATUSES as readonly string[]).indexOf(status);
-  // 모르는 상태는 맨 뒤로. 버리지는 않는다.
+  // Unknown statuses go last. They are not dropped.
   return i === -1 ? KANBAN_TASK_STATUSES.length : i;
 }
 
-/** 이 카드가 정렬 기준 값을 갖고 있는가. 없으면 방향과 무관하게 뒤로 간다. */
+/** Does this card have a value for the sort field? If not, it goes last regardless of direction. */
 function hasSortKey(task: KanbanTask, field: SortField): boolean {
   switch (field) {
     case "created":
@@ -223,11 +228,13 @@ function hasSortKey(task: KanbanTask, field: SortField): boolean {
 }
 
 /**
- * 안정 정렬. 같은 키를 가진 카드의 상대 순서가 재조회마다 바뀌면 행이 이유 없이 튄다.
+ * Stable sort. If the relative order of cards sharing a key changed on every refetch, rows
+ * would jump around for no reason.
  *
- * **값이 없는 카드는 방향을 뒤집어도 뒤에 남는다.** 비교 결과 전체에 부호를 곱하면 "없는 것은
- * 뒤로" 규칙까지 같이 뒤집혀, 내림차순에서 날짜 없는 카드가 맨 앞을 차지한다(실측으로 잡힌 결함).
- * 그래서 값이 있는 것과 없는 것을 먼저 가르고, 부호는 값끼리의 비교에만 준다.
+ * **Cards without a value stay last even when the direction is flipped.** Multiplying the
+ * whole comparison result by a sign would also flip the "missing goes last" rule, putting
+ * undated cards first in descending order (a defect caught by observation). So we split
+ * cards with and without a value first, and apply the sign only to comparisons between values.
  */
 export function sortTasks(
   tasks: readonly KanbanTask[],
@@ -243,32 +250,34 @@ export function sortTasks(
 }
 
 // ---------------------------------------------------------------------------
-// 묶기
+// Grouping
 // ---------------------------------------------------------------------------
 
 export type TaskGroup = {
-  /** 안정적인 식별자 — 접힘 상태를 기억하는 키. 표시 이름과 다를 수 있다. */
+  /** A stable identifier — the key that remembers collapse state. Can differ from the display name. */
   key: string;
-  /** 서브프로젝트 슬러그 등 원래 값. 표시 이름은 화면이 메타에서 찾아 붙인다. */
+  /** The raw value, e.g. a sub-project slug. The screen looks up the display name from metadata. */
   value: string | null;
   tasks: KanbanTask[];
 };
 
-/** 값이 없는 카드가 모이는 그룹. 항상 마지막에 온다. */
+/** The group that cards without a value fall into. Always comes last. */
 export const UNSET_GROUP_KEY = "__unset__";
 
-/** 알 수 없는 상태값이 모이는 그룹. 카드를 버리지 않기 위한 자리다. */
+/** The group that unknown status values fall into. A place to hold cards without dropping them. */
 export const OTHER_STATUS_GROUP_KEY = "__other_status__";
 
 /**
- * `groupBy` 기준으로 묶는다.
+ * Groups by the `groupBy` criterion.
  *
- * - `status` 는 `KANBAN_TASK_STATUSES` 순서를 따르고, 모르는 상태는 "기타" 그룹으로 간다.
- *   **카드를 버리지 않는다** — 화면에서 사라진 카드는 사용자가 찾을 방법이 없다.
- * - `tenant`·`assignee` 는 보드 응답이 준 목록(`known`) 순서를 먼저 쓰고, 그 목록에 없는
- *   값도 그룹으로 만든다. 메타가 없는 테넌트를 숨기면 그 카드들이 통째로 사라진다.
- * - 값이 빈 카드는 `UNSET_GROUP_KEY` 그룹으로 모이고 **항상 마지막**이다.
- * - 빈 그룹은 만들지 않는다(`status` 도 마찬가지 — 빈 열은 보드 뷰의 일이다).
+ * - `status` follows `KANBAN_TASK_STATUSES` order, and unknown statuses go into an "other"
+ *   group. **Cards are never dropped** — a card that vanishes from the screen gives the user
+ *   no way to find it.
+ * - `tenant`/`assignee` use the order of the list (`known`) the board response provided first,
+ *   and also create groups for values not in that list. Hiding a tenant with no metadata would
+ *   make those cards disappear entirely.
+ * - Cards with an empty value collect into the `UNSET_GROUP_KEY` group, which is **always last**.
+ * - Empty groups are never created (same for `status` — empty columns are the board view's job).
  */
 export function groupTasks(
   tasks: readonly KanbanTask[],
@@ -316,7 +325,7 @@ function orderGroups(
   const last = Number.MAX_SAFE_INTEGER;
   const scoreOf = (group: TaskGroup): number => {
     if (group.key === UNSET_GROUP_KEY || group.key === OTHER_STATUS_GROUP_KEY) return last;
-    // 응답 목록에 없는 값은 알려진 값들 뒤, 그러나 "없음" 그룹보다는 앞.
+    // A value absent from the response list goes after known values, but before the "unset" group.
     return rank.get(group.key) ?? last - 1;
   };
 
@@ -324,18 +333,19 @@ function orderGroups(
     const diff = scoreOf(a) - scoreOf(b);
     if (diff !== 0) return diff;
     if (a.key === b.key) return 0;
-    // 같은 점수(둘 다 미지의 값)면 이름순 — 재조회마다 순서가 흔들리지 않게.
+    // Same score (both unknown values) → alphabetical, so order doesn't shift on every refetch.
     return a.key.localeCompare(b.key);
   });
 }
 
 // ---------------------------------------------------------------------------
-// 진행률 — 두 가지를 섞지 않는다
+// Progress — the two kinds are never mixed
 // ---------------------------------------------------------------------------
 
 /**
- * 카드 진행률 = 그 카드의 **자식 카드** 완료 수. 자식이 없으면 `null` 이고 바를 그리지 않는다.
- * 0/0 을 0% 로 그리면 "시작도 안 한 일" 처럼 보인다 — 실제로는 셀 자식이 없는 것뿐이다.
+ * Card progress = the completion count of that card's **child cards**. If there are no
+ * children, it's `null` and no bar is drawn. Rendering 0/0 as 0% would look like "work not
+ * started" — really it just has no children to count.
  */
 export function cardProgress(task: KanbanTask): { done: number; total: number } | null {
   const p = task.progress;
@@ -346,10 +356,12 @@ export function cardProgress(task: KanbanTask): { done: number; total: number } 
 export type StatusSegment = { status: KanbanTaskStatus; count: number };
 
 /**
- * 묶음 진행률 = 상태 분포 세그먼트. 카드 진행률과 다른 수치이므로 화면에서도 다른 모양이다.
+ * Group progress = status-distribution segments. It's a different figure from card progress,
+ * so it looks different on screen too.
  *
- * **`archived` 는 분모에서 뺀다.** 보관한 일을 미완으로 세면 진행률이 영영 100% 에 닿지 않는다.
- * 모르는 상태도 세지 않는다(상태를 발명하지 않는다) — 대신 `counted` 로 몇 장을 셌는지 밝힌다.
+ * **`archived` is excluded from the denominator.** Counting archived work as incomplete would
+ * mean progress never reaches 100%. Unknown statuses aren't counted either (we don't invent
+ * statuses) — instead `counted` reports how many cards were tallied.
  */
 export function statusSegments(tasks: readonly KanbanTask[]): {
   segments: StatusSegment[];
@@ -369,7 +381,7 @@ export function statusSegments(tasks: readonly KanbanTask[]): {
   return { segments, counted };
 }
 
-/** 세그먼트 바의 폭(%). `counted` 가 0이면 빈 배열 — 0% 바를 그리지 않는다. */
+/** The segment bar widths (%). Returns an empty array when `counted` is 0 — no 0% bar is drawn. */
 export function segmentWidths(
   segments: readonly StatusSegment[],
   counted: number,
@@ -379,19 +391,20 @@ export function segmentWidths(
 }
 
 // ---------------------------------------------------------------------------
-// 하위 트리 (D1(a) — 펼친 카드만 상세를 부른다)
+// Subtrees (D1(a) — only expanded cards fetch detail)
 // ---------------------------------------------------------------------------
 
-/** 카드에 직계 자식이 있는가. 전체 자손 수가 아니다 — 보드 응답은 직계 수만 준다. */
+/** Does the card have direct children? Not total descendant count — the board response only gives the direct count. */
 export function directChildCount(task: KanbanTask): number {
   return Math.max(0, task.link_counts?.children ?? 0);
 }
 
 /**
- * 부모가 **지금 보이는 목록에 없는** 카드를 루트로 올린다.
+ * Promotes a card whose parent is **not in the currently visible list** to a root.
  *
- * `include_archived=false` 로 부모가 걸러졌을 때 자식이 트리 어디에도 안 붙어 사라지는 것을
- * 막는다. 화면에서 조용히 없어진 카드는 사용자가 찾을 방법이 없다.
+ * This prevents a child from disappearing without attaching anywhere in the tree when its
+ * parent was filtered out by `include_archived=false`. A card that silently vanishes from
+ * the screen gives the user no way to find it.
  */
 export function promoteOrphans(
   tasks: readonly KanbanTask[],
@@ -414,11 +427,11 @@ export function promoteOrphans(
 }
 
 /**
- * 부모가 아직 안 끝나서 이 카드가 못 움직이는 상태인가.
+ * Is this card stuck because its parent isn't done yet?
  *
- * Hermes 는 부모가 전부 done/archived 일 때만 `todo`→`ready` 로 올리고, 그전에는 claim 을
- * `parents_not_done` 으로 거절한다. 그래서 상태가 `todo` 인데 아무도 집지 않는 카드가 생기는데,
- * 화면이 이유를 말하지 않으면 멈춘 것처럼 보인다.
+ * Hermes only promotes `todo` to `ready` once all parents are done/archived, and rejects
+ * claims with `parents_not_done` before that. So a card can sit in `todo` with nobody picking
+ * it up — and if the screen doesn't explain why, it just looks stalled.
  */
 export function isWaitingOnParents(
   task: KanbanTask,

@@ -17,9 +17,9 @@ export type ChannelMotionLayout = {
   sanitizedHomes?: boolean;
   npcs: Array<NavigationPoint & { id: string }>;
   seats: Array<NavigationPoint & { id: string }>;
-  /** 직원 지정자리 후보 — 설 수 있는 데스크 의자 타일, row→col 정렬. */
+  /** Candidate assigned seats for employees — standable desk chair tiles, sorted row→col. */
   deskSeatTiles: Array<{ col: number; row: number }>;
-  /** 대표석 타일 — 좌석이지만 직원에게 배정하지 않는다. 없는 맵은 빈 배열. */
+  /** Executive seat tiles — seats that are never assigned to an employee. An empty array for a map that has none. */
   executiveSeatTiles: Array<{ col: number; row: number }>;
   bounds: { width: number; height: number };
   /** Logical tile indices, matching the client simulation's navigation. */

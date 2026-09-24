@@ -29,7 +29,7 @@ async function serve(body: string): Promise<{ origin: string; close: () => void;
   };
 }
 
-test("og 태그가 있는 페이지는 미리보기로 돌아오고 이미지는 우리 프록시를 거친다", async () => {
+test("a page with og tags comes back as a preview, and the image goes through our proxy", async () => {
   clearLinkPreviewCache();
   const s = await serve(
     `<meta property="og:title" content="제목"><meta property="og:image" content="/a.png">`,
@@ -47,7 +47,7 @@ test("og 태그가 있는 페이지는 미리보기로 돌아오고 이미지는
   }
 });
 
-test("같은 주소를 두 번 물어도 남의 서버는 한 번만 부른다", async () => {
+test("querying the same address twice only calls the other server once", async () => {
   clearLinkPreviewCache();
   const s = await serve(`<title>한 번만</title>`);
   try {
@@ -65,14 +65,14 @@ test("같은 주소를 두 번 물어도 남의 서버는 한 번만 부른다",
   }
 });
 
-test("실패도 캐시한다 — 죽은 주소를 화면마다 다시 두드리지 않는다", async () => {
+test("failure is cached too — a dead link isn't re-hit every time the screen loads", async () => {
   clearLinkPreviewCache();
   const first = await buildLinkPreview("http://169.254.169.254/latest/meta-data/", {
     isAllowedUrl: allowAll,
     isAllowedAddress: () => true,
   });
   assert.equal(first, null);
-  // 가드가 거부하는 주소라 두 번째도 null 이고, 어느 쪽도 요청을 보내지 않는다.
+  // The address is rejected by the guard, so the second call is also null, and neither one sends a request.
   assert.equal(
     await buildLinkPreview("http://169.254.169.254/latest/meta-data/", {
       isAllowedUrl: allowAll,
@@ -82,7 +82,7 @@ test("실패도 캐시한다 — 죽은 주소를 화면마다 다시 두드리�
   );
 });
 
-test("가드가 거부하는 주소는 조회하지 않는다", async () => {
+test("an address rejected by the guard is never fetched", async () => {
   clearLinkPreviewCache();
   for (const bad of ["file:///etc/passwd", "http://localhost/", "https://a:b@example.com/"]) {
     assert.equal(
@@ -93,7 +93,7 @@ test("가드가 거부하는 주소는 조회하지 않는다", async () => {
   }
 });
 
-test("HTML 과 이미지 작업이 8개 슬롯을 공유하고 실패 후 슬롯을 반환한다", async () => {
+test("HTML and image work share 8 slots, and a slot is returned after a failure", async () => {
   const { withPreviewSlot } = await import("./service");
   const releases: Array<() => void> = [];
   const pending = Array.from({ length: 8 }, () =>
@@ -123,7 +123,7 @@ test("HTML 과 이미지 작업이 8개 슬롯을 공유하고 실패 후 슬롯
   assert.deepEqual(await withPreviewSlot(async () => "html"), { admitted: true, value: "html" });
 });
 
-test("포화로 실패한 주소는 캐시에 남지 않아 슬롯 해제 뒤 성공한다", async () => {
+test("an address that failed from saturation isn't cached, so it succeeds after a slot frees up", async () => {
   clearLinkPreviewCache();
   const { withPreviewSlot } = await import("./service");
   const s = await serve(`<title>복구</title>`);

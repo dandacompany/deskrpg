@@ -5,7 +5,7 @@ import { FloorInbox } from "./inbox";
 const always = () => true;
 const noop = () => {};
 
-/** take 를 큐가 빌 때까지 반복해 발언 순서를 배열로 뽑는다. */
+/** Calls take repeatedly until the queue is empty, pulling the speaking order into an array. */
 function drainAll(
   inbox: FloorInbox,
   isEligible: (npcId: string) => boolean = always,
@@ -20,11 +20,11 @@ function drainAll(
 }
 
 describe("FloorInbox", () => {
-  test("빈 인박스는 null 을 돌려준다", () => {
+  test("an empty inbox returns null", () => {
     assert.equal(new FloorInbox().take(always, noop), null);
   });
 
-  test("멘션은 들어온 순서대로 전부 나온다 — 하나도 버려지지 않는다", () => {
+  test("mentions come out in the order they arrived — none are dropped", () => {
     const inbox = new FloorInbox();
     inbox.push("b", "mention");
     inbox.push("c", "mention");
@@ -32,7 +32,7 @@ describe("FloorInbox", () => {
     assert.deepEqual(drainAll(inbox), ["b", "c", "d"]);
   });
 
-  test("사용자 지목은 대기 중인 멘션 앞에 서고, 멘션은 그대로 남는다", () => {
+  test("a user call jumps ahead of pending mentions, and the mentions remain", () => {
     const inbox = new FloorInbox();
     inbox.push("b", "mention");
     inbox.push("c", "mention");
@@ -40,14 +40,14 @@ describe("FloorInbox", () => {
     assert.deepEqual(drainAll(inbox), ["d", "b", "c"]);
   });
 
-  test("사용자 지목이 둘이면 마지막 것만 남는다", () => {
+  test("with two user calls, only the last one remains", () => {
     const inbox = new FloorInbox();
     inbox.push("a", "user");
     inbox.push("b", "user");
     assert.deepEqual(drainAll(inbox), ["b"]);
   });
 
-  test("같은 NPC 를 두 번 멘션하면 한 번만 나오고, 순서는 처음 위치를 지킨다", () => {
+  test("mentioning the same NPC twice yields it once, keeping its original position", () => {
     const inbox = new FloorInbox();
     inbox.push("b", "mention");
     inbox.push("c", "mention");
@@ -55,7 +55,7 @@ describe("FloorInbox", () => {
     assert.deepEqual(drainAll(inbox), ["b", "c"]);
   });
 
-  test("사용자 지목은 같은 NPC 의 대기 중 멘션을 흡수한다 — 두 번 말하지 않는다", () => {
+  test("a user call absorbs that same NPC's pending mention — it doesn't speak twice", () => {
     const inbox = new FloorInbox();
     inbox.push("b", "mention");
     inbox.push("c", "mention");
@@ -63,7 +63,7 @@ describe("FloorInbox", () => {
     assert.deepEqual(drainAll(inbox), ["b", "c"]);
   });
 
-  test("자격 없는 멘션은 건너뛰고 onSkipped 로 알린다", () => {
+  test("an ineligible mention is skipped and reported via onSkipped", () => {
     const inbox = new FloorInbox();
     inbox.push("b", "mention");
     inbox.push("c", "mention");
@@ -77,7 +77,7 @@ describe("FloorInbox", () => {
     assert.deepEqual(skipped, ["b"], "건너뛴 지목은 무음으로 사라지면 안 된다");
   });
 
-  test("사용자 지목은 자격 검사를 받지 않는다 — 쿼터를 우회한다", () => {
+  test("a user call is not subject to eligibility checks — it bypasses the quota", () => {
     const inbox = new FloorInbox();
     inbox.push("b", "user");
     const skipped: string[] = [];
@@ -90,7 +90,7 @@ describe("FloorInbox", () => {
     assert.deepEqual(skipped, []);
   });
 
-  test("pendingCount 는 대기 중인 부여 수를 센다", () => {
+  test("pendingCount counts the pending grants", () => {
     const inbox = new FloorInbox();
     assert.equal(inbox.pendingCount(), 0);
     inbox.push("b", "mention");
@@ -101,7 +101,7 @@ describe("FloorInbox", () => {
     assert.equal(inbox.pendingCount(), 2);
   });
 
-  test("clear 는 전부 비운다", () => {
+  test("clear empties everything", () => {
     const inbox = new FloorInbox();
     inbox.push("b", "mention");
     inbox.push("d", "user");

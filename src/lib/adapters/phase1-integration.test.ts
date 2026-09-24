@@ -27,8 +27,8 @@ describe("Phase1: DB Schema", () => {
     // Drizzle table objects expose column names
     assert.ok("adapterType" in npcColumns, "adapterType column should exist in npcs schema");
     assert.ok("adapterConfig" in npcColumns, "adapterConfig column should exist in npcs schema");
-    // openclaw_config 는 은퇴했다 — 내용(페르소나)은 agent_config 로 옮겨졌고,
-    // 정본이 둘이 되지 않도록 열 자체를 없앴다.
+    // openclaw_config has been retired — its content (persona) moved to agent_config, and the
+    // column itself was removed so there wouldn't be two sources of truth.
     assert.ok("agentConfig" in npcColumns, "페르소나는 agent_config 에 산다");
     assert.ok(!("openclawConfig" in npcColumns), "openclaw_config 는 남아 있으면 안 된다");
   });
@@ -101,7 +101,7 @@ describe("Phase1: AdapterRegistry routing", () => {
   });
 });
 
-// (구 3번 섹션 — OpenClawAdapter 스트리밍/에러 처리 — 은 어댑터와 함께 삭제됐다.)
+// (Former section 3 — OpenClawAdapter streaming/error handling — was deleted along with the adapter.)
 
 // ---------------------------------------------------------------------------
 // 4. NpcConfig — adapterType populated
@@ -160,9 +160,9 @@ describe("Phase1: NpcConfig shape", () => {
   });
 });
 
-// (구 5번 섹션 — MeetingBroker adapterResolver 배선 — 은 브로커와 함께 삭제됐다.
-//  P2 에서 ConversationEngine 이 그 역할을 이어받았고, 그쪽은
-//  src/lib/conversation/conversation-engine.test.ts 가 검증한다.)
+// (Former section 5 — MeetingBroker adapterResolver wiring — was deleted along with the broker.
+//  ConversationEngine took over that role in P2, and it's verified by
+//  src/lib/conversation/conversation-engine.test.ts.)
 
 // ---------------------------------------------------------------------------
 // 6. Unsupported adapter — clean rejection path
@@ -191,7 +191,7 @@ describe("Phase1: Unsupported adapter path", () => {
   });
 
   test("adapter routing guard: an unregistered type is rejected before dispatch", () => {
-    // streamNpcResponse 의 가드와 같은 판정 — 레지스트리에 없는 어댑터로는 보내지 않는다.
+    // Same check as streamNpcResponse's guard — never dispatches to an adapter that isn't in the registry.
     const registry = new AdapterRegistry();
     registry.register(new CodexAdapter());
 
@@ -202,6 +202,7 @@ describe("Phase1: Unsupported adapter path", () => {
   });
 });
 
-// (구 End-to-end adapter pipeline 섹션은 OpenClawAdapter.executeWithGateway 를 목
-//  게이트웨이에 대고 부르는 것이 본체였다. 어댑터가 사라졌으므로 다른 어댑터로 옮겨
-//  심을 내용이 아니다 — 남는 것은 세션 키 조립 규칙뿐이고 그건 다른 곳에서 본다.)
+// (The former End-to-end adapter pipeline section was centered on calling
+//  OpenClawAdapter.executeWithGateway against a mock gateway. The adapter is gone, so there's
+//  nothing here to transplant onto another adapter — what remains is just the session-key
+//  assembly rule, and that's covered elsewhere.)

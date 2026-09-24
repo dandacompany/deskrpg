@@ -7,9 +7,10 @@ import {
   type NpcResponseMessageCode,
 } from "./npc-response-messages";
 
-// 전수 목록이다 — 타입이 `Record<NpcResponseMessageCode, string>` 이므로 코드가
-// 늘면 여기가 비어 컴파일이 막힌다. 예전엔 12개 중 5개만 적혀 있었고, 타입은
-// "전수" 라고 주장했지만 tsc 오류로만 남아 아무도 보지 않았다.
+// This is an exhaustive list — the type is `Record<NpcResponseMessageCode, string>`, so
+// adding a code without listing it here fails compilation. It used to list only 5 of 12
+// codes; the type claimed "exhaustive" but that only surfaced as a tsc error that nobody
+// looked at.
 const TEST_CODES: Record<NpcResponseMessageCode, string> = {
   no_agent: "npc.noAgent",
   gateway_not_connected: "npc.gatewayNotConnected",
@@ -62,9 +63,9 @@ test("resolveNpcResponseChunk preserves streamed text when no system message cod
   assert.equal(result, "hello");
 });
 
-// 코드를 등록해도 번역이 없으면 사용자는 키 문자열이나 빈 말풍선을 본다.
-// 에러코드 쪽에는 이 가드가 있었지만 NPC 시스템 메시지에는 없었다.
-test("등록된 NPC 시스템 메시지 코드는 4개 로케일에 전부 번역이 있다", async () => {
+// Registering a code without a translation shows the user the raw key string or an empty
+// bubble. The error-code side had this guard, but NPC system messages did not.
+test("every registered NPC system message code has a translation in all 4 locales", async () => {
   const [ko, en, ja, zh] = await Promise.all([
     import("./i18n/locales/ko"),
     import("./i18n/locales/en"),

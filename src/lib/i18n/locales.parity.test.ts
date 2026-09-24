@@ -1,7 +1,8 @@
 /**
- * 네 로케일의 키 집합이 같아야 한다. `t()` 는 없는 키를 en → 키 문자열 순으로 대신 쓰므로
- * 한 로케일에서 빠진 키는 조용히 다른 언어(또는 키 이름)로 화면에 나온다 — 여기서 잡는다.
- * UI 를 추가하는 작업은 이 테스트를 초록으로 유지해야 한다.
+ * The four locales' key sets must be identical. `t()` falls back to en, then to the key
+ * string itself, for a missing key — so a key missing from one locale silently shows up on
+ * screen in another language (or as the key name). This test catches that. Work that adds UI
+ * must keep this test green.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -27,7 +28,7 @@ test("all four locale files share an identical key set", () => {
   }
 });
 
-// 빈 문자열은 허용한다 — 일부러 비운 값이 있을 수 있다.
+// Empty strings are allowed — a value may be intentionally left blank.
 test("locale values are strings", () => {
   for (const [name, map] of Object.entries(LOCALES)) {
     for (const [key, value] of Object.entries(map)) {

@@ -23,11 +23,11 @@ const base = {
   cronFailures: [] as { messageId: string; jobId: string; jobName: string; createdAt: string }[],
 };
 
-test("빈 보드는 빈 목록이다", () => {
+test("an empty board yields an empty list", () => {
   assert.deepEqual(buildAttentionInbox(base), []);
 });
 
-test("대기 중인 승인이 한 줄이 된다 — 카드 수를 함께 싣는다", () => {
+test("a pending approval becomes one row — it carries the card count", () => {
   const rows = buildAttentionInbox({
     ...base,
     cards: [card("t1", "blocked"), card("t2", "blocked")],
@@ -52,7 +52,7 @@ test("대기 중인 승인이 한 줄이 된다 — 카드 수를 함께 싣는�
   });
 });
 
-test("승인에 묶이지 않은 blocked 카드는 '막힘' 으로 따로 선다", () => {
+test("a blocked card not tied to an approval stands alone as 'blocked'", () => {
   const rows = buildAttentionInbox({
     ...base,
     cards: [card("t1", "blocked", "오류로 막힘")],
@@ -62,7 +62,7 @@ test("승인에 묶이지 않은 blocked 카드는 '막힘' 으로 따로 선다
   ]);
 });
 
-test("승인 대기 카드가 '막힘' 으로 두 번 나오지 않는다", () => {
+test("a card pending approval doesn't also show up as 'blocked'", () => {
   const rows = buildAttentionInbox({
     ...base,
     cards: [card("t1", "blocked"), card("t2", "blocked")],
@@ -79,7 +79,7 @@ test("승인 대기 카드가 '막힘' 으로 두 번 나오지 않는다", () =
   );
 });
 
-test("검토 대기 카드가 한 줄씩 선다", () => {
+test("cards pending review each stand as their own row", () => {
   const rows = buildAttentionInbox({ ...base, cards: [card("t9", "review", "결과 검토")] });
   assert.deepEqual(
     rows.map((r) => r.kind),
@@ -87,7 +87,7 @@ test("검토 대기 카드가 한 줄씩 선다", () => {
   );
 });
 
-test("사람이 할 일이 없는 상태는 목록에 없다", () => {
+test("a status with nothing for a human to do doesn't appear in the list", () => {
   const rows = buildAttentionInbox({
     ...base,
     cards: ["triage", "todo", "scheduled", "ready", "running", "done", "archived"].map((s, i) =>
@@ -97,7 +97,7 @@ test("사람이 할 일이 없는 상태는 목록에 없다", () => {
   assert.deepEqual(rows, [], "무엇이 이것을 전진시키는가에 답할 수 없는 줄은 넣지 않는다");
 });
 
-test("실패한 크론이 한 줄이 된다", () => {
+test("a failed cron run becomes one row", () => {
   const rows = buildAttentionInbox({
     ...base,
     cronFailures: [{ messageId: "m1", jobId: "j1", jobName: "야간 집계", createdAt: T(2) }],
@@ -107,7 +107,7 @@ test("실패한 크론이 한 줄이 된다", () => {
   ]);
 });
 
-test("오래된 것이 위로 온다 — 방치된 것을 드러낸다", () => {
+test("the oldest comes first — surfaces what's been neglected", () => {
   const rows = buildAttentionInbox({
     ...base,
     approvals: [
@@ -122,7 +122,7 @@ test("오래된 것이 위로 온다 — 방치된 것을 드러낸다", () => {
   );
 });
 
-test("시각이 없는 줄은 시각이 있는 줄 뒤에 온다 — 순서가 흔들리지 않게 id 로 가른다", () => {
+test("a row with no timestamp comes after rows that have one — id breaks ties so order doesn't wobble", () => {
   const rows = buildAttentionInbox({
     ...base,
     cards: [card("b2", "blocked"), card("b1", "blocked")],
@@ -134,8 +134,8 @@ test("시각이 없는 줄은 시각이 있는 줄 뒤에 온다 — 순서가 �
   );
 });
 
-test("카드에도 시각이 있으면 함께 줄 세운다 — 보드 응답의 created_at 을 쓴다", () => {
-  // `KanbanTask.created_at` 은 epoch 초로 온다. 호출자가 `taskTimeMs` 로 읽어 ISO 로 넘긴다.
+test("cards with a timestamp are ordered alongside everything else — uses the board response's created_at", () => {
+  // `KanbanTask.created_at` arrives as epoch seconds. The caller reads it with `taskTimeMs` and passes it through as ISO.
   const rows = buildAttentionInbox({
     ...base,
     cards: [card("late", "review", "늦은 검토", T(9)), card("early", "blocked", "이른 막힘", T(1))],
@@ -148,7 +148,7 @@ test("카드에도 시각이 있으면 함께 줄 세운다 — 보드 응답의
   );
 });
 
-test("시각을 못 읽은 카드만 뒤로 간다", () => {
+test("only cards whose timestamp couldn't be read go last", () => {
   const rows = buildAttentionInbox({
     ...base,
     cards: [card("unknown", "review", "시각 없음"), card("known", "review", "시각 있음", T(3))],

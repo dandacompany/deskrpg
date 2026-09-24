@@ -1,5 +1,5 @@
-// src/lib/tiled-map.ts — Tiled JSON 맵 타입. 맵 에디터가 제거된 뒤에도 3D 렌더러·사무환경
-// 빌더·서버 모션 레이아웃이 같은 형태를 공유하므로 여기서 정본으로 유지한다.
+// src/lib/tiled-map.ts — Tiled JSON map types. Even after the map editor was removed, the 3D
+// renderer, office-environment builder, and server motion layout still share this shape, so it's kept here as the source of truth.
 
 export interface TiledTileset {
   firstgid: number;

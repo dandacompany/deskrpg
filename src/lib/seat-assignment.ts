@@ -3,15 +3,17 @@ import { parseDbJson } from "./db-json";
 import { effectiveMapSpawn } from "./effective-map-spawn";
 
 /**
- * 직원 자리 배정의 **순수 로직**. DB 도 `fetch` 도 여기 들어오지 않는다.
+ * **Pure logic** for staff seat assignment. Neither the DB nor `fetch` enters here.
  *
- * 좌석 번호는 저장하지 않는다 — 채널 맵의 데스크 의자를 row→col 로 세어 매번 계산한다.
- * 어느 의자가 데스크 좌석인지는 `seating.ts` 의 `deskSeats` 가 정하고, 여기는 그 결과
- * (`ChannelMotionLayout.deskSeatTiles`)를 받아 번호·서는 칸·배정 계획만 만든다.
+ * Seat numbers are never stored — they're recomputed every time by scanning the channel
+ * map's desk chairs in row→col order. Which chairs count as desk seats is decided by
+ * `deskSeats` in `seating.ts`; this only takes that result
+ * (`ChannelMotionLayout.deskSeatTiles`) and produces numbers, standing tiles, and an
+ * assignment plan.
  */
 export type Tile = { col: number; row: number };
 export type DeskSeat = Tile & { number: number };
-/** `reserved` 는 대표석 — 번호도 없고 서는 칸도 아니다. 이미 앉은 직원은 이행 때 옮긴다. */
+/** `reserved` is the executive seat — no number, not a standing tile. An already-seated NPC there is moved during migration. */
 export type SeatingMap = { seats: DeskSeat[]; standing: Tile[]; reserved: Tile[] };
 export type Placement = { npcId: string; col: number; row: number; seated: boolean };
 
@@ -23,14 +25,15 @@ export function seatingMapFor(channel: {
 }): SeatingMap | null {
   const data = parseDbJson(channel.mapData);
   if (!data || typeof data !== "object") return null;
-  // Tiled 여부를 따지지 않는다 — `projectMeetingMap` 이 옛 형식 맵도 투영하므로, 레이아웃이
-  // 나오면 옛 커스텀 맵의 직원도 배치된다. 투영할 수 없는 맵은 레이아웃이 null 이다.
+  // Doesn't care whether it's Tiled — `projectMeetingMap` also projects old-format maps,
+  // so if a layout comes out, staff on an old custom map get placed too. A map that
+  // can't be projected simply gets a null layout.
   const layout = deriveChannelMotionLayout(channel, []);
   if (!layout) return null;
 
   const seats = layout.deskSeatTiles.map((tile, index) => ({ ...tile, number: index + 1 }));
 
-  // 서는 칸: 좌석(데스크·공용 모두)과 입구를 피한다.
+  // Standing tiles: avoid seats (both desk and shared) and the entrance.
   const blockedTiles = new Set(
     layout.seats.map((seat) =>
       key({
@@ -48,7 +51,7 @@ export function seatingMapFor(channel: {
     layout.isWalkable(col, row) &&
     !blockedTiles.has(key({ col, row })) &&
     layout.canStandAt({ x: (col + 0.5) * CHANNEL_TILE_SIZE, y: (row + 0.5) * CHANNEL_TILE_SIZE });
-  // 8이웃이 모두 열린 바닥만 — 1칸 폭 통로를 막고 서지 않는다.
+  // Only tiles whose all 8 neighbors are open floor — never stand and block a one-tile-wide passage.
   const open = (col: number, row: number) => {
     for (let dy = -1; dy <= 1; dy += 1)
       for (let dx = -1; dx <= 1; dx += 1) if (!layout.isWalkable(col + dx, row + dy)) return false;
@@ -80,7 +83,7 @@ export function seatNumberAt(
   return seats.find((seat) => seat.col === col && seat.row === row)?.number ?? null;
 }
 
-/** FNV-1a — 같은 직원은 늘 같은 칸에서 찾기 시작한다. */
+/** FNV-1a — the same NPC always starts the search from the same tile. */
 function hash(text: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i += 1) {
@@ -91,8 +94,9 @@ function hash(text: string): number {
 }
 
 /**
- * 자리 없는 직원을 id 순으로, 번호가 낮은 빈 데스크 좌석부터 채운다. 좌석이 다하면
- * 서는 칸에 세운다. `occupied` 는 채널의 **모든** NPC 자리다 — 잠든 직원도 자리를 기억한다.
+ * Fills unseated NPCs in id order, starting from the lowest-numbered empty desk seat.
+ * Once seats run out, they're placed on standing tiles. `occupied` is **every** NPC
+ * position in the channel — even a sleeping NPC's seat is remembered.
  */
 export function planPlacements(
   unplaced: readonly { id: string }[],

@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { encryptGatewayToken, listAccessibleGatewayResources } from "./gateway-resources";
 
-// DB-backed, 같은 패턴을 이 레포의 다른 파일들과 공유한다(hermes-profiles.test.ts 등).
+// DB-backed, sharing the same pattern as other files in this repo (hermes-profiles.test.ts, etc.).
 const sqlitePath = path.join(os.tmpdir(), `gateway-resources-test-${crypto.randomUUID()}.db`);
 process.env.DESKRPG_HOME = os.tmpdir();
 process.env.SQLITE_PATH = sqlitePath;
@@ -20,9 +20,9 @@ async function loadDb() {
   return import("@/db");
 }
 
-// `nowForDb()`(src/db/index.ts) 와 같은 이유 — PG 는 timestamp(withTimezone) 컬럼에
-// Date 를, SQLite 는 text 컬럼에 ISO 문자열을 기대한다. 임의 시각을 넣을 때도 같은
-// 방언 분기가 필요하다.
+// Same reason as `nowForDb()` (src/db/index.ts) — PG expects a Date for a
+// timestamp(withTimezone) column, while SQLite expects an ISO string for a text column.
+// Inserting an arbitrary timestamp needs the same dialect branch.
 async function dbTimestamp(d: Date): Promise<Date> {
   const { isPostgres } = await loadDb();
   return (isPostgres ? d : d.toISOString()) as unknown as Date;
@@ -41,13 +41,13 @@ async function seedUser(nickname: string) {
   return user;
 }
 
-// 최종 리뷰 I-1: Task 4 가 만든 pluginStatus/pluginVersion/pluginCheckedAt 캐시 컬럼을
-// listAccessibleGatewayResources 가 실제로 내려주는지 고정한다. 이 배선이 없으면
-// HermesProfileList(UI 레이어, 렌더 테스트 없음)가 캐시를 읽을 방법 자체가 없어
-// 화면 진입마다 무조건 /test 를 다시 쳤다 — 그 회귀가 도달할 수 있는 가장 아래
-// 지점(데이터 레이어)에서 이 테스트가 막는다.
-describe("listAccessibleGatewayResources — 플러그인 캐시 컬럼 (최종 리뷰 I-1)", () => {
-  test("소유한 게이트웨이의 pluginStatus/pluginVersion/pluginCheckedAt 을 그대로 내려준다", async () => {
+// Final review I-1: pins down that listAccessibleGatewayResources actually returns the
+// pluginStatus/pluginVersion/pluginCheckedAt cache columns Task 4 added. Without this
+// wiring, HermesProfileList (the UI layer, no render tests) has no way to read the
+// cache at all, so every screen entry unconditionally re-hit /test — this test catches
+// that regression at the lowest point it can reach (the data layer).
+describe("listAccessibleGatewayResources — plugin cache columns (final review I-1)", () => {
+  test("returns an owned gateway's pluginStatus/pluginVersion/pluginCheckedAt as-is", async () => {
     const owner = await seedUser("owner");
     const { db, gatewayResources } = await loadDb();
     const checkedAt = new Date("2026-08-31T23:50:00Z");
@@ -68,7 +68,7 @@ describe("listAccessibleGatewayResources — 플러그인 캐시 컬럼 (최종 
     assert.ok(rows[0].pluginCheckedAt, "pluginCheckedAt 이 내려와야 캐시 신선도를 판정할 수 있다");
   });
 
-  test("캐시가 아직 없는 게이트웨이는 null 을 그대로 내려준다(가짜 신선도로 접지 않는다)", async () => {
+  test("a gateway with no cache yet returns null as-is (doesn't fake freshness)", async () => {
     const owner = await seedUser("owner2");
     const { db, gatewayResources } = await loadDb();
     await db.insert(gatewayResources).values({
@@ -84,7 +84,7 @@ describe("listAccessibleGatewayResources — 플러그인 캐시 컬럼 (최종 
     assert.equal(rows[0].pluginCheckedAt, null);
   });
 
-  test("공유받은 게이트웨이도 같은 캐시 필드를 내려준다", async () => {
+  test("a shared gateway also returns the same cache fields", async () => {
     const owner = await seedUser("owner3");
     const sharedUser = await seedUser("shared3");
     const { db, gatewayResources, gatewayShares } = await loadDb();
@@ -110,7 +110,7 @@ describe("listAccessibleGatewayResources — 플러그인 캐시 컬럼 (최종 
   });
 });
 
-describe("listAccessibleGatewayResources — Hermes 대시보드 주소", () => {
+describe("listAccessibleGatewayResources — Hermes dashboard URL", () => {
   const info = (dashboardUrl: string | null) =>
     JSON.stringify({
       plugin: "deskrpg",
@@ -121,7 +121,7 @@ describe("listAccessibleGatewayResources — Hermes 대시보드 주소", () => 
       dashboard_url: dashboardUrl,
     });
 
-  test("소유자에게는 캐시된 플러그인 정보의 대시보드 주소를 내려준다", async () => {
+  test("returns the dashboard URL from cached plugin info to the owner", async () => {
     const owner = await seedUser("dash-owner");
     const { db, gatewayResources } = await loadDb();
     await db.insert(gatewayResources).values({
@@ -136,7 +136,7 @@ describe("listAccessibleGatewayResources — Hermes 대시보드 주소", () => 
     assert.equal(rows[0].dashboardUrl, "https://deskrpg-hermes.srv1.hstgr.cloud");
   });
 
-  test("캐시가 없거나 주소가 없으면 null", async () => {
+  test("null if there's no cache or no URL", async () => {
     const owner = await seedUser("dash-none");
     const { db, gatewayResources } = await loadDb();
     await db.insert(gatewayResources).values({
@@ -149,7 +149,7 @@ describe("listAccessibleGatewayResources — Hermes 대시보드 주소", () => 
     assert.equal(rows[0].dashboardUrl, null);
   });
 
-  test("공유받은 사용자에게는 대시보드 주소를 내려주지 않는다 — Hermes 전체를 다루는 관리 화면이다", async () => {
+  test("a shared user doesn't get the dashboard URL — it's a screen for managing all of Hermes", async () => {
     const owner = await seedUser("dash-owner2");
     const sharedUser = await seedUser("dash-shared");
     const { db, gatewayResources, gatewayShares } = await loadDb();

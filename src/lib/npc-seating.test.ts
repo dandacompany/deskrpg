@@ -13,14 +13,14 @@ import {
 } from "@/test-setup/npc-seed";
 
 setupThrowawaySqlite("npc-seating-test");
-const executiveMap = () => buildOfficeEnvironment("executive"); // 데스크 3석(대표석 제외)
+const executiveMap = () => buildOfficeEnvironment("executive"); // 3 desk seats (excluding the executive seat)
 
 async function positions(channelId: string) {
   const { selectChannelNpcs } = await import("./npc-projection");
   return selectChannelNpcs(channelId, { roster: true });
 }
 
-test("자리 없는 직원을 번호 순으로 앉히고, 만석이면 세운다", async () => {
+test("seats unplaced employees in number order, and stands them up once full", async () => {
   const { placeUnplacedNpcs, channelSeats } = await import("./npc-seating");
   const { seatNumberAt } = await import("./seat-assignment");
   const { channelId } = await seedChannelWithProfiles({ unplaced: 6, mapData: executiveMap() });
@@ -40,7 +40,7 @@ test("자리 없는 직원을 번호 순으로 앉히고, 만석이면 세운다
   );
 });
 
-test("이미 자리 있는 직원과 휴면 직원은 건드리지 않는다", async () => {
+test("doesn't touch an employee who already has a seat, or a dormant employee", async () => {
   const { placeUnplacedNpcs } = await import("./npc-seating");
   const { channelId } = await seedChannelWithProfiles({
     placedActive: 1,
@@ -57,13 +57,13 @@ test("이미 자리 있는 직원과 휴면 직원은 건드리지 않는다", a
   }
 });
 
-test("맵을 읽을 수 없는 채널은 실패로 세고 던지지 않는다", async () => {
+test("a channel whose map can't be read counts as failed and doesn't throw", async () => {
   const { placeUnplacedNpcs } = await import("./npc-seating");
   const { channelId } = await seedChannelWithProfiles({ unplaced: 2 });
   assert.deepEqual(await placeUnplacedNpcs(channelId), { seated: 0, standing: 0, failed: 2 });
 });
 
-test("존재하지 않는 채널이어도 던지지 않고 failed 0 을 돌려준다", async () => {
+test("doesn't throw for a nonexistent channel either, and returns failed 0", async () => {
   const { placeUnplacedNpcs } = await import("./npc-seating");
   await assert.doesNotReject(async () => {
     const result = await placeUnplacedNpcs("00000000-0000-0000-0000-000000000000");
@@ -71,7 +71,7 @@ test("존재하지 않는 채널이어도 던지지 않고 failed 0 을 돌려�
   });
 });
 
-test("positionX 만 있고 positionY 가 없는 직원은 미배치로 보고 두 좌표 모두 채워 한 번만 센다", async () => {
+test("an employee with only positionX and no positionY is treated as unplaced, fills both coordinates, and is counted once", async () => {
   const { placeUnplacedNpcs } = await import("./npc-seating");
   const user = await seedUser("half-placed-owner");
   const gateway = await seedGateway(user.id);
@@ -93,9 +93,9 @@ test("positionX 만 있고 positionY 가 없는 직원은 미배치로 보고 �
   assert.ok(Number.isInteger(row.positionX) && Number.isInteger(row.positionY));
 });
 
-test("failed > 0 이면 console.warn 으로 남긴다", async () => {
+test("logs via console.warn when failed > 0", async () => {
   const { placeUnplacedNpcs } = await import("./npc-seating");
-  const { channelId } = await seedChannelWithProfiles({ unplaced: 2 }); // 맵 없음 → 전원 실패
+  const { channelId } = await seedChannelWithProfiles({ unplaced: 2 }); // no map -> everyone fails
   const original = console.warn;
   const calls: unknown[][] = [];
   console.warn = (...args: unknown[]) => calls.push(args);
@@ -113,7 +113,7 @@ test("failed > 0 이면 console.warn 으로 남긴다", async () => {
   );
 });
 
-test("placeAllUnplacedNpcs 는 미배치 직원이 있는 채널을 모두 처리한다", async () => {
+test("placeAllUnplacedNpcs processes every channel that has unplaced employees", async () => {
   const { placeAllUnplacedNpcs } = await import("./npc-seating");
   const a = await seedChannelWithProfiles({ unplaced: 1, mapData: executiveMap() });
   const b = await seedChannelWithProfiles({ unplaced: 1, mapData: executiveMap() });
@@ -123,12 +123,12 @@ test("placeAllUnplacedNpcs 는 미배치 직원이 있는 채널을 모두 처�
     assert.ok((await positions(c.channelId)).every((r) => r.positionX !== null));
 });
 
-test("대표석에 이미 앉아 있던 직원은 부팅 이행 때 다른 자리로 옮긴다", async () => {
+test("an employee already sitting in the executive seat is moved to a different seat during boot migration", async () => {
   const { placeAllUnplacedNpcs, channelSeats } = await import("./npc-seating");
   const { seatNumberAt } = await import("./seat-assignment");
   const { db, npcs } = await import("@/db");
   const { eq } = await import("drizzle-orm");
-  // 대표석이 1번 자리이던 시절에 배치된 직원을 재현한다: executive 맵의 (4,5).
+  // Reproduces an employee placed back when the executive seat was seat #1: (4,5) in the executive map.
   const { channelId } = await seedChannelWithProfiles({ unplaced: 1, mapData: executiveMap() });
   await db.update(npcs).set({ positionX: 4, positionY: 5 }).where(eq(npcs.channelId, channelId));
 

@@ -1,11 +1,13 @@
 /**
- * 이미 방에 남은 알림 한 줄을 **같은 id 로** 되쓰고 다시 방송한다.
+ * Rewrites a notice line already sitting in a room **using the same id** and rebroadcasts it.
  *
- * 등록·승인처럼 DeskRPG 안에서 해소되는 알림이 쓴다. 해소 상태를 알림 자체에 두면 렌더러가 다른 표를
- * 다시 읽지 않아도 되고, 과거 메시지를 스크롤해도 그때의 결과가 보인다. 방송은 열려 있는 화면이 새로고침
- * 없이 버튼을 결과로 바꾸게 한다(`room-state` 가 같은 id 의 바뀐 알림을 제자리에서 갈아 끼운다).
+ * Used by notices that resolve inside DeskRPG, like registration and approval. Keeping
+ * the resolved state on the notice itself means the renderer doesn't have to re-read
+ * another table, and scrolling back to a past message still shows that moment's result.
+ * The broadcast lets an already-open screen swap a button for its result without a
+ * refresh (`room-state` swaps the changed notice for the same id in place).
  *
- * **던지지 않는다.** 알림이 낡는 것과 등록·승인이 실패하는 것은 무게가 다르다.
+ * **Doesn't throw.** A stale notice and a failed registration/approval carry different weight.
  */
 import { and, eq, like } from "drizzle-orm";
 
@@ -15,9 +17,9 @@ import { parseRoomNotice, type RoomNotice } from "@/lib/chat-rooms-policy";
 
 export async function rewriteRoomNotices(input: {
   channelId: string;
-  /** LIKE 로 후보를 좁히는 문자열(알림에 든 id). 정확한 판정은 `update` 가 한다. */
+  /** A string that narrows candidates via LIKE (the id carried in the notice). `update` makes the exact judgment. */
   needle: string;
-  /** 이 알림을 바꿀 것이면 새 알림을, 아니면 null 을 돌려준다. */
+  /** Returns the new notice if this notice should change, otherwise null. */
   update: (notice: RoomNotice) => RoomNotice | null;
 }): Promise<number> {
   let rewritten = 0;
