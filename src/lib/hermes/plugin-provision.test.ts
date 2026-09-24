@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { attachKeyStorage, stripApiKey } from "./plugin-provision";
 
 describe("stripApiKey", () => {
-  it("워커 플러그인 결과는 알려진 모양만 옮긴다(0.16.0 건너뜀 포함)", () => {
+  it("moves only known shapes of the worker plugin result (including the 0.16.0 skip)", () => {
     const skipped = stripApiKey({
       name: "noah",
       keyIssued: true,
@@ -20,17 +20,17 @@ describe("stripApiKey", () => {
     assert.equal(stripApiKey({ name: "noah", keyIssued: true }).workerPlugin, undefined);
   });
 
-  it("apiKey 를 응답에서 제거한다", () => {
-    // 이 값은 게이트웨이의 한 프로필을 여는 자격증명이다. 브라우저에 닿으면
-    // 그 순간부터 우리가 통제할 수 없는 곳(콘솔·확장·에러 리포터)에 남는다.
+  it("strips apiKey from the response", () => {
+    // This value is a credential that opens one profile on the gateway. Once it reaches the browser,
+    // it lingers in places we can't control (console, extensions, error reporters).
     const out = stripApiKey({ name: "noah", apiKey: "k".repeat(40), keyIssued: true });
     assert.deepEqual(out, { name: "noah", keyIssued: true });
     assert.equal("apiKey" in out, false);
   });
 
-  it("키 발급 실패는 프로필이 생겼다는 사실과 함께 남긴다", () => {
-    // 실패를 뭉개면 사용자는 만들어진 프로필을 모른 채 같은 이름으로 재시도해
-    // 409 를 만난다.
+  it("keeps a key issuance failure together with the fact that the profile was created", () => {
+    // If the failure is swallowed, the user retries with the same name without knowing the profile exists
+    // and hits 409.
     const out = stripApiKey({
       name: "noah",
       keyIssued: false,
@@ -43,7 +43,7 @@ describe("stripApiKey", () => {
     });
   });
 
-  it("직렬화 결과에 키가 남지 않는다", () => {
+  it("no key remains in the serialized result", () => {
     const secret = "s".repeat(40);
     const json = JSON.stringify(stripApiKey({ name: "n", apiKey: secret, keyIssued: true }));
     assert.equal(json.includes(secret), false);
@@ -51,21 +51,22 @@ describe("stripApiKey", () => {
 });
 
 describe("attachKeyStorage", () => {
-  it("키가 발급되지 않았으면 저장을 시도하지 않았다는 뜻으로 keyStored:false 만 붙인다", () => {
+  it("attaches only keyStored:false when no key was issued, meaning storage was not attempted", () => {
     const safe = stripApiKey({ name: "noah", keyIssued: false, keyError: "boom" });
     const out = attachKeyStorage(safe, null);
     assert.deepEqual(out, { name: "noah", keyIssued: false, keyError: "boom", keyStored: false });
   });
 
-  it("저장에 성공하면 keyStored:true 다", () => {
+  it("keyStored:true when storage succeeds", () => {
     const safe = stripApiKey({ name: "noah", apiKey: "k".repeat(40), keyIssued: true });
     const out = attachKeyStorage(safe, { ok: true });
     assert.deepEqual(out, { name: "noah", keyIssued: true, keyStored: true });
   });
 
-  it("게이트웨이 소유자가 아니라 저장이 거부되면 이유와 함께 keyStored:false 다", () => {
-    // 판정 B: 프로필은 실제로 만들어졌으니 201 은 유지하되, 저장 실패를 숨기지 않는다 —
-    // 숨기면 그 프로필은 다시 만들 수도(같은 이름 409), 열 수도 없는 상태로 영구히 남는다.
+  it("keyStored:false with a reason when storage is rejected because the user is not the gateway owner", () => {
+    // Verdict B: the profile really was created, so keep 201, but don't hide the storage failure —
+    // hiding it leaves the profile permanently in a state where it can neither be recreated (same name 409)
+    // nor opened.
     const safe = stripApiKey({ name: "noah", apiKey: "k".repeat(40), keyIssued: true });
     const out = attachKeyStorage(safe, { ok: false, reason: "forbidden" });
     assert.deepEqual(out, {

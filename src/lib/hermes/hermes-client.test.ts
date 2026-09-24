@@ -362,8 +362,8 @@ describe("HermesClient.createSession", () => {
   }
 
   test("reads the id out of the nested session object", async () => {
-    // 실측한 v0.20.2 응답 형태. 이걸 못 읽어서 1:1 대화가 통째로 죽었다 —
-    // 화면에는 "AI 게이트웨이 오류" 만 뜨고 원인은 서버 로그에만 남았다.
+    // The measured v0.20.2 response shape. Failing to read this killed 1:1 chat entirely —
+    // the screen showed only "AI 게이트웨이 오류" and the cause was left only in the server log.
     const c = clientReturning({
       object: "hermes.session",
       session: { id: "api_1787291339_b79d5388", source: "api_server", message_count: 0 },
@@ -386,10 +386,10 @@ describe("HermesClient.createSession", () => {
   });
 });
 
-describe("HermesClient.createSession — 제목 충돌", () => {
-  test("제목이 이미 쓰이면 그 세션을 이어 쓴다", async () => {
-    // Hermes 는 제목 유일성을 강제한다. 우리 제목은 NPC×사용자 컨텍스트 키이므로
-    // 충돌은 "그 대화가 이미 있다"는 뜻이다 — 실패가 아니라 재사용해야 한다.
+describe("HermesClient.createSession — title conflict", () => {
+  test("when the title is already in use, continues that session", async () => {
+    // Hermes enforces title uniqueness. Our title is the NPC×user context key, so
+    // a conflict means "that conversation already exists" — it should be reused, not treated as a failure.
     const calls: string[] = [];
     const c = new HermesClient({
       baseUrl: "http://gw:8642",
@@ -416,7 +416,7 @@ describe("HermesClient.createSession — 제목 충돌", () => {
     assert.equal(calls.length, 2, "POST 로 만들어 보고, 충돌하면 GET 으로 찾는다");
   });
 
-  test("충돌인데 그 제목이 목록에 없으면 원래 오류를 던진다", async () => {
+  test("on a conflict where the title isn't in the list, throws the original error", async () => {
     const c = new HermesClient({
       baseUrl: "http://gw:8642",
       profileName: "danvi",
@@ -435,9 +435,9 @@ describe("HermesClient.createSession — 제목 충돌", () => {
   });
 });
 
-// 실측 회귀 — 회의 폴링 한 건의 SSE 를 그대로 옮긴 것이다(Hermes v0.20.2).
-// NPC 는 "SPEAK: …" 라고 또박또박 답했는데 우리는 빈 문자열을 받아 전원 PASS 로 집계했다.
-describe("HermesClient.streamRunEvents — /v1/runs 방언", () => {
+// Measured regression — a verbatim copy of the SSE from one meeting poll (Hermes v0.20.2).
+// The NPC clearly answered "SPEAK: …" but we received an empty string and tallied everyone as PASS.
+describe("HermesClient.streamRunEvents — /v1/runs dialect", () => {
   test("forwards each delta before the upstream run completes", { timeout: 2000 }, async () => {
     let controller!: ReadableStreamDefaultController<Uint8Array>;
     const body = new ReadableStream<Uint8Array>({
@@ -480,7 +480,7 @@ describe("HermesClient.streamRunEvents — /v1/runs 방언", () => {
     assert.deepEqual(seen, ["첫 부분", " 다음 부분"]);
   });
 
-  test("message.delta 를 누적한다 — 회의 폴링 응답이 빈 문자열이면 전원 PASS 가 된다", async () => {
+  test("accumulates message.delta — if the meeting poll response is an empty string, everyone becomes PASS", async () => {
     const frames = [
       'data: {"event": "message.delta", "run_id": "run_1", "delta": "SPE"}\n\n',
       'data: {"event": "message.delta", "run_id": "run_1", "delta": "AK: "}\n\n',
@@ -509,7 +509,7 @@ describe("HermesClient.streamRunEvents — /v1/runs 방언", () => {
   });
 });
 
-describe("streamRunEvents — run.completed 의 output 이 최종 답이다", () => {
+describe("streamRunEvents — the output of run.completed is the final answer", () => {
   function clientOf(frames: string[]) {
     return new HermesClient({
       baseUrl: "http://gw:8642",
@@ -529,10 +529,10 @@ describe("streamRunEvents — run.completed 의 output 이 최종 답이다", ()
   }
   const frame = (event: object) => `data: ${JSON.stringify(event)}\n\n`;
 
-  test("델타가 두 번의 생성을 담아도 본문은 run.completed 의 output 하나다", async () => {
-    // 스테이징 실측: 회의 발언 말풍선에 서로 다르게 쓰인 같은 문단이 두 번 붙었다. /v1/runs 는
-    // message.completed 를 내지 않고 최종 답을 run.completed 의 output(final_response)에 싣는다.
-    // 델타는 되돌려지지 않으므로 모델 호출이 재시도되면 앞선 시도의 글까지 쌓인다.
+  test("even if the deltas contain two generations, the body is the single output of run.completed", async () => {
+    // Measured on staging: the same paragraph, worded differently, was attached twice in a meeting speech bubble.
+    // /v1/runs doesn't emit message.completed and puts the final answer in run.completed's output (final_response).
+    // Deltas aren't rolled back, so when a model call is retried, text from the earlier attempt piles up too.
     const { text } = await clientOf([
       frame({ event: "message.delta", run_id: "r", delta: "Today I'll review… then suggest." }),
       frame({
@@ -549,7 +549,7 @@ describe("streamRunEvents — run.completed 의 output 이 최종 답이다", ()
     assert.equal(text, "Today I'll review… before recommending.");
   });
 
-  test("output 이 비었거나 없으면 델타 누적분을 쓴다", async () => {
+  test("uses the accumulated deltas when output is empty or missing", async () => {
     for (const completed of [{ output: "" }, {}]) {
       const { text } = await clientOf([
         frame({ event: "message.delta", run_id: "r", delta: "SPEAK: 안녕" }),
@@ -560,14 +560,14 @@ describe("streamRunEvents — run.completed 의 output 이 최종 답이다", ()
   });
 });
 
-describe("drain — 종료 이벤트 뒤 취소가 끝나지 않는 스트림", () => {
+describe("drain — a stream whose cancel never finishes after the terminal event", () => {
   /**
-   * 실측(v0.20.2): 회의 경로 /v1/runs/<id>/events 는 run.completed 를 보낸 뒤에도 연결을
-   * 열어 둔다. 그 상태에서 reader.cancel() 을 await 하면 resolve 도 reject 도 하지 않고
-   * 영영 멈춘다. 회의는 폴링 응답을 Promise.allSettled 로 모으므로 참가자 하나가 거기
-   * 걸리면 회의 전체가 첫 턴도 못 내고 멈춘다 — 실제로 그렇게 멈춰 있었다.
+   * Measured (v0.20.2): the meeting path /v1/runs/<id>/events keeps the connection open even after sending
+   * run.completed. Awaiting reader.cancel() in that state neither resolves nor rejects and
+   * hangs forever. Meetings gather poll responses with Promise.allSettled, so if one participant gets stuck
+   * there the whole meeting stalls without producing even the first turn — and it actually was stuck that way.
    *
-   * cancel() 이 절대 settle 하지 않는 본문을 만들어 그 상황을 고정한다.
+   * Builds a body whose cancel() never settles to pin that situation.
    */
   function neverCancellingSse(frames: string[]): Response {
     const enc = new TextEncoder();
@@ -579,7 +579,7 @@ describe("drain — 종료 이벤트 뒤 취소가 끝나지 않는 스트림", 
             i < frames.length
               ? { done: false, value: enc.encode(frames[i++]) }
               : { done: true, value: undefined },
-          // 영영 settle 하지 않는다 — await 하면 그 자리에서 멈춘다.
+          // Never settles — awaiting it hangs right there.
           cancel: () => new Promise<void>(() => {}),
         };
       },
@@ -587,7 +587,7 @@ describe("drain — 종료 이벤트 뒤 취소가 끝나지 않는 스트림", 
     return { ok: true, status: 200, body } as unknown as Response;
   }
 
-  test("취소를 기다리지 않고 누적한 텍스트를 돌려준다", async () => {
+  test("returns the accumulated text without waiting for cancel", async () => {
     const client = new HermesClient({
       baseUrl: "http://gw:8642",
       profileName: "danvi",

@@ -1,11 +1,11 @@
 /**
- * Hermes 대시보드에서 **그 프로필로** 로그인하는 화면 주소.
+ * The URL of the Hermes dashboard screen for logging in **as that profile**.
  *
- * Hermes 는 NPC(프로필)마다 로그인한다 — 업스트림 #111724 부터 프로필은 default 의 `auth.json` 을
- * 물려받지 않는다. 대시보드는 `?profile=<이름>` 으로 관리 대상 프로필을 고르므로, Keys 화면(`/env`)에
- * 그 값을 실어 보내면 사용자가 상단 선택기를 따로 바꿀 필요가 없다.
+ * Hermes logs in per NPC (profile) — since upstream #111724, profiles no longer inherit default's `auth.json`.
+ * The dashboard picks the managed profile via `?profile=<name>`, so sending that value to the Keys screen (`/env`)
+ * means the user doesn't have to change the top selector separately.
  *
- * 클라이언트 컴포넌트가 import 한다 — 서버 전용 모듈에 의존하지 않는다.
+ * Imported by client components — does not depend on server-only modules.
  */
 export function profileLoginUrl(
   dashboardUrl: string | null | undefined,

@@ -1,14 +1,14 @@
 /**
- * `deskrpg-hermes-plugin` 자동화 계약(v0.6.0+)을 흉내내는 **테스트 전용** 인메모리 HTTP 서버.
+ * A **test-only** in-memory HTTP server mimicking the `deskrpg-hermes-plugin` automation contract (v0.6.0+).
  *
- * 플러그인이 아직 없으므로, 스펙 A.1(오너 키 — 칸반·이벤트)·A.2(프로필 키 — 크론)·
- * A.3(인증)을 이 파일이 재현한다. 실제 클라이언트(`plugin-client.ts`)가 이 서버를 상대로
- * 왕복하면서 "경로·키·본문·응답 모양" 을 고정한다. 여기 있는 상태 전이는 **스펙이 정한
- * 것만** 따르고, 나머지(terminate 후 상태 등)는 테스트에 필요한 최소로 정했다 — 실제
- * 플러그인의 판단을 대신하려는 것이 아니다.
+ * Since the plugin doesn't exist yet, this file reproduces spec A.1 (owner key — kanban/events),
+ * A.2 (profile key — cron), and A.3 (auth). The real client (`plugin-client.ts`) round-trips against this
+ * server to pin down "paths, keys, bodies, response shapes". State transitions here follow **only what the
+ * spec defines**, and the rest (state after terminate, etc.) is the minimum the tests need — this is not
+ * trying to stand in for the real plugin's judgment.
  *
- * ⚠️ 앱 코드에서 import 하지 않는다. `node:http` 를 쓰므로 브라우저 번들에 들어가면 안
- * 되고, 릴리스 이미지에도 필요 없다. `*.test.ts` 에서만 부른다.
+ * ⚠️ Don't import this from app code. It uses `node:http`, so it must not end up in the browser bundle,
+ * and the release image doesn't need it. Call it only from `*.test.ts`.
  */
 
 import { createHash } from "node:crypto";
@@ -45,44 +45,44 @@ import { createFakeSkillState, routeSkills, type FakeSkillState } from "./fake-s
 import { BLACKBOARD_PREFIX } from "@/components/kanban/kanban-view-model";
 
 // ---------------------------------------------------------------------------
-// 공개 표면
+// Public surface
 // ---------------------------------------------------------------------------
 
 export type FakePluginServerOptions = {
   ownerToken: string;
-  /** 프로필 이름 → 그 프로필의 키. 첫 항목이 기본 프로필이다. */
+  /** Profile name → that profile's key. The first entry is the default profile. */
   profileTokens: Record<string, string>;
   info?: Partial<Omit<PluginInfo, "plugin">>;
 };
 
-/** 서버가 받은 요청 한 건. 테스트가 "무엇이 나갔는가" 를 확인하는 데 쓴다. */
+/** One request received by the server. Tests use it to check "what went out". */
 export type RecordedRequest = {
   method: string;
-  /** 경로 + 쿼리스트링 */
+  /** Path + query string */
   path: string;
   auth: string | null;
   contentType: string | null;
-  /** JSON 본문이면 파싱 결과, 아니면 null */
+  /** Parsed result if the body is JSON, otherwise null */
   json: unknown;
   status: number;
-  /** 소문자 키로 정규화한 요청 헤더 전부. */
+  /** All request headers, normalized to lowercase keys. */
   headers: Record<string, string>;
 };
 
 export type FakePluginServer = {
   baseUrl: string;
   close(): Promise<void>;
-  /** 보드·카드·이벤트·크론 상태를 전부 비운다(info 설정은 유지). */
+  /** Clears all board, card, event, and cron state (info settings are kept). */
   reset(): void;
   setInfo(patch: Partial<Omit<PluginInfo, "plugin">>): void;
   lastRequest(): RecordedRequest | null;
   requests(): RecordedRequest[];
-  /** 통합 이벤트 스트림에 이벤트를 밀어 넣는다(id·ts 는 서버가 채운다). */
+  /** Pushes an event into the unified event stream (the server fills id and ts). */
   pushEvent(event: Omit<PluginEvent, "id" | "ts"> & { ts?: number }): PluginEvent;
   setTaskLog(board: string, taskId: string, content: string): void;
   setDeliveryTargets(profile: string, targets: CronDeliveryTarget[]): void;
   setBlueprints(profile: string, blueprints: AutomationBlueprint[]): void;
-  /** 아티팩트 하나를 상태에 심는다(버전 1). 기본 kind `document`, mime `text/markdown`,
+  /** Seeds one artifact into state (version 1). Defaults: kind `document`, mime `text/markdown`,
    * filename `<title>.md`, source `chat`. */
   seedArtifact(input: {
     id: string;
@@ -97,34 +97,34 @@ export type FakePluginServer = {
     source_kind?: ArtifactSource;
   }): ArtifactSummary;
   /**
-   * 다음 요청 `count` 건 중 경로가 `pathPrefix` 로 시작하는 것을 503 으로 돌려준다.
-   * 게이트웨이가 잠깐 안 닿는 순간(배포·재시작 겹침)을 흉내내는 데 쓴다.
+   * Returns 503 for the next `count` requests whose path starts with `pathPrefix`.
+   * Used to mimic moments when the gateway is briefly unreachable (overlapping deploy/restart).
    */
   failNext(pathPrefix: string, count?: number): void;
   /**
-   * 카드 제안 하나를 미해소 상태로 심는다(플러그인의 `card_proposals` 표). 심지 않은 id 로
-   * resolve·unresolve 를 부르면 404 다.
+   * Seeds one card proposal in the unresolved state (the plugin's `card_proposals` table). Calling
+   * resolve/unresolve with an id that wasn't seeded gives 404.
    */
   seedCardProposal(proposalId: string): void;
   /** Upgrade test: remove the artifact position from a valid old carrier cursor. */
   legacyCursor(cursor: string): string;
-  /** 그 제안의 지금 상태 — 테스트가 "한 번만 해소됐는가" 를 본다. 없으면 null. */
+  /** The current state of that proposal — tests check "was it resolved only once". null if absent. */
   cardProposal(
     proposalId: string,
   ): { resolvedChoice: string | null; resolvedTaskId: string | null } | null;
-  /** 첨부 하나를 카드 없이도 상태에 심는다 — 보드가 없으면 만든다. */
+  /** Seeds one attachment into state even without a card — creates the board if missing. */
   seedAttachment(input: {
     board: string;
     taskId: string;
     filename: string;
     body: string | Buffer;
   }): { id: string };
-  /** 그 프로필의 0.15.0 스킬 관리 상태(`fake-skill-routes.ts`). 없으면 빈 상태를 만든다. */
+  /** That profile's 0.15.0 skill management state (`fake-skill-routes.ts`). Creates an empty state if absent. */
   skills(profile: string): FakeSkillState;
 };
 
 // ---------------------------------------------------------------------------
-// 내부 상태
+// Internal state
 // ---------------------------------------------------------------------------
 
 type TaskRecord = {
@@ -153,11 +153,11 @@ type CronState = {
 type Reply = {
   status: number;
   body: unknown;
-  /** 있으면 JSON 대신 이 바이트를 이 헤더로 그대로 내보낸다(아티팩트 원시 콘텐츠). */
+  /** If present, sends these bytes as-is with these headers instead of JSON (raw artifact content). */
   raw?: { bytes: Buffer; headers: Record<string, string> };
 };
 
-/** 플러그인의 `card_proposals` 한 행 중 해소에 쓰이는 것만. */
+/** Only the parts of one plugin `card_proposals` row used for resolving. */
 type CardProposalRecord = {
   resolvedAt: string | null;
   resolvedChoice: string | null;
@@ -187,13 +187,13 @@ const notFound = (what = "not_found") => new HttpError(404, { error: what });
 const badRequest = (code: string, detail?: string) =>
   new HttpError(400, { error: code, ...(detail ? { detail } : {}) });
 
-/** 크론 잡·실행의 시각 — 계약상 Hermes 가 주는 ISO 문자열 그대로다(칸반과 다르다). */
+/** Cron job/run timestamps — per the contract, the ISO string Hermes gives as-is (unlike kanban). */
 function nowIso(): string {
   return new Date().toISOString();
 }
 
 // ---------------------------------------------------------------------------
-// 서버
+// Server
 // ---------------------------------------------------------------------------
 
 export async function startFakePluginServer(
@@ -221,7 +221,7 @@ export async function startFakePluginServer(
   const initialInfo = { ...info, capabilities: [...info.capabilities] };
 
   const recorded: RecordedRequest[] = [];
-  /** 남은 일회성 장애 주입(경로 접두사 → 남은 실패 횟수). */
+  /** Remaining one-shot failure injections (path prefix → remaining failure count). */
   const faults: { prefix: string; remaining: number }[] = [];
   let boards = new Map<string, BoardRecord>();
   let currentBoard: string | null = null;
@@ -270,7 +270,7 @@ export async function startFakePluginServer(
     return state;
   }
 
-  // ---- 이벤트 -------------------------------------------------------------
+  // ---- Events ----------------------------------------------------------
 
   function pushEvent(input: Omit<PluginEvent, "id" | "ts"> & { ts?: number }): PluginEvent {
     const event: PluginEvent = { ...input, id: nextId("ev"), ts: input.ts ?? Date.now() };
@@ -340,7 +340,7 @@ export async function startFakePluginServer(
     if (!Number.isInteger(limit) || limit < 1) throw badRequest("invalid_limit");
 
     const include = new Set((params.get("include") ?? "").split(",").filter(Boolean));
-    // 커서가 없으면 "지금" 토큰만 준다 — 과거 이벤트를 쏟지 않는다.
+    // Without a cursor, gives only a "now" token — doesn't dump past events.
     if (cursor === null) {
       const initial = positionNow(board);
       if (!include.has("artifacts") && !include.has("card_proposals")) delete initial.a;
@@ -385,7 +385,7 @@ export async function startFakePluginServer(
     return { status: 200, body: { events: page, cursor: issueCursor(state), has_more: hasMore } };
   }
 
-  // ---- 칸반 ---------------------------------------------------------------
+  // ---- Kanban -----------------------------------------------------------
 
   function boardOf(params: URLSearchParams): BoardRecord {
     const slug = params.get("board");
@@ -450,7 +450,7 @@ export async function startFakePluginServer(
     const slug = typeof body.slug === "string" ? body.slug : "";
     if (!SLUG_RE.test(slug)) throw badRequest("invalid_slug");
     const existing = boards.get(slug);
-    // 같은 slug 는 만들지 않고 기존 것을 200 으로 돌려준다(스펙).
+    // Doesn't create the same slug; returns the existing one with 200 (spec).
     if (existing) return { status: 200, body: { board: boardMeta(existing) } };
     const record: BoardRecord = {
       meta: {
@@ -478,7 +478,7 @@ export async function startFakePluginServer(
     };
   }
 
-  /** `GET /kanban/links` — 쌍만. 카드 본문은 싣지 않는다(카드의 정본은 보드 응답이다). */
+  /** `GET /kanban/links` — pairs only. No card bodies (the board response is the authority on cards). */
   function listLinks(board: BoardRecord, params: URLSearchParams): Reply {
     const links = [...board.links]
       .map((link) => {
@@ -494,8 +494,9 @@ export async function startFakePluginServer(
   }
 
   /**
-   * `GET /kanban/runs` — 창 안의 실행 기록. 실제 플러그인과 같은 규칙을 지킨다:
-   * 겹치기만 하면 싣고, 상한에 걸리면 최근 것을 남기고 `truncated:true`, 응답은 시간순.
+   * `GET /kanban/runs` — run records within the window. Follows the same rules as the real plugin:
+   * include anything that overlaps; on hitting the cap keep the most recent and set `truncated:true`;
+   * response in time order.
    */
   function listRuns(board: BoardRecord, params: URLSearchParams): Reply {
     const slug = params.get("board") ?? "carrier";
@@ -532,7 +533,7 @@ export async function startFakePluginServer(
     }
     rows.sort((a, b) => Number(a.started_at ?? 0) - Number(b.started_at ?? 0));
     const truncated = rows.length > limit;
-    // 상한에 걸리면 최근 것을 남긴다 — 앞을 버린다.
+    // On hitting the cap, keep the most recent — drop the front.
     const kept = truncated ? rows.slice(rows.length - limit) : rows;
     return { status: 200, body: { runs: kept, board: slug, window: { from, to }, truncated } };
   }
@@ -559,7 +560,7 @@ export async function startFakePluginServer(
     };
   }
 
-  /** 상세 전용 필드를 뺀 카드 요약 — 보드 열에는 이 모양이 실린다. */
+  /** A card summary without the detail-only fields — this shape goes into board columns. */
   function summaryOf(task: KanbanTaskFull) {
     const {
       result: _result,
@@ -582,19 +583,19 @@ export async function startFakePluginServer(
       : [];
     for (const parent of parents) if (!board.tasks.has(parent)) throw notFound("unknown_parent");
 
-    // 플러그인이 `{"running","blocked"}` 만 받는다. 모르는 값을 그냥 흘리면 이 필드를 쓰는
-    // 테스트가 아무것도 증명하지 못한다 — 실제 플러그인에서 겪은 함정이다.
+    // The plugin accepts only `{"running","blocked"}`. Letting unknown values through means tests using this field
+    // prove nothing — a trap actually hit with the real plugin.
     const initialStatus = body.initial_status;
     if (initialStatus !== undefined && initialStatus !== "running" && initialStatus !== "blocked")
       throw badRequest("invalid_field");
 
-    // Hermes: 같은 키를 가진 **보관되지 않은** 카드가 있으면 새로 만들지 않고 그것을 돌려준다
-    // (`kanban_db.py` 의 `idempotency_key`). 이게 없으면 재시도가 카드를 늘린다.
+    // Hermes: if there's an **unarchived** card with the same key, it returns that instead of creating a new one
+    // (`idempotency_key` in `kanban_db.py`). Without this, retries multiply cards.
     const idempotencyKey = typeof body.idempotency_key === "string" ? body.idempotency_key : null;
     if (idempotencyKey) {
       for (const existing of board.tasks.values()) {
-        // `idempotency_key` 는 응답 계약(`KanbanTaskFull`)에 없는 내부 값이다 — 가짜 서버가
-        // 재시도를 알아보려고만 들고 있으므로 계약 타입을 넓히지 않는다.
+        // `idempotency_key` is an internal value not in the response contract (`KanbanTaskFull`) — the fake server
+        // holds it only to recognize retries, so the contract type isn't widened.
         const stored = (existing.task as { idempotency_key?: string }).idempotency_key;
         if (stored === idempotencyKey && existing.task.status !== "archived")
           return { status: 201, body: { task: existing.task } };
@@ -605,8 +606,8 @@ export async function startFakePluginServer(
       id,
       title,
       status: body.triage === true ? "triage" : initialStatus === "blocked" ? "blocked" : "todo",
-      // 플러그인은 칸반 시각을 **epoch 초**로 보낸다. ISO 로 두면 화면의 시각 처리가
-      // 가짜 서버에서만 통과하고 실제 게이트웨이에서 깨진다.
+      // The plugin sends kanban timestamps as **epoch seconds**. Keeping them ISO would let the screen's time
+      // handling pass only on the fake server and break on the real gateway.
       created_at: nowEpochSeconds(),
       comment_count: 0,
       link_counts: { parents: parents.length, children: 0 },
@@ -639,11 +640,11 @@ export async function startFakePluginServer(
     return { status: 201, body: { task: summaryOf(task) } };
   }
 
-  // ---- 스웜(v0.7.0+) --------------------------------------------------------
+  // ---- Swarm (v0.7.0+) ----------------------------------------------------
   //
-  // 실제 그래프 오케스트레이션은 흉내내지 않는다. 기존 `createTask`/`addComment`
-  // 로 루트·워커·검증·합성 카드 4장을 만들고 링크를 걸어, 클라이언트가 "경로·본문·
-  // 응답 모양" 을 왕복 검증하게 하는 것이 이 서버의 유일한 목적이다.
+  // Real graph orchestration is not mimicked. The server's sole purpose is to build 4 cards — root, worker,
+  // verify, synthesize — with the existing `createTask`/`addComment` and link them, so the client can round-trip
+  // verify "paths, bodies, response shapes".
 
   function newTaskId(board: BoardRecord, body: Record<string, unknown>): string {
     const reply = createTask(board, body);
@@ -659,7 +660,7 @@ export async function startFakePluginServer(
     const rootId = newTaskId(board, { title: goal });
     const workerIds = rawWorkers.map((raw) => {
       const w = raw as { profile?: unknown; title?: unknown };
-      // 실제 플러그인은 `require_str` 로 빈 title 을 400 `invalid_field` 거절한다.
+      // The real plugin rejects an empty title with 400 `invalid_field` via `require_str`.
       const title = typeof w.title === "string" ? w.title.trim() : "";
       if (!title) throw badRequest("invalid_field", "title");
       return newTaskId(board, { title, assignee: w.profile });
@@ -675,7 +676,7 @@ export async function startFakePluginServer(
       parents: [verifierId],
     });
 
-    // 진짜 `create_swarm` 도 이 코멘트를 남긴다 — 없으면 블랙보드 필터 테스트가 무의미해진다.
+    // The real `create_swarm` also leaves this comment — without it the blackboard filter test becomes meaningless.
     addComment(board, rootId, {
       author: "swarm-orchestrator",
       body:
@@ -717,7 +718,7 @@ export async function startFakePluginServer(
           authors[parsed.key] = comment.author;
         }
       } catch {
-        // 깨진 JSON 은 건너뛴다 — Hermes `latest_blackboard` 와 같은 동작.
+        // Skip broken JSON — same behavior as Hermes `latest_blackboard`.
       }
     }
     if (Object.keys(authors).length > 0) merged._authors = authors;
@@ -813,7 +814,7 @@ export async function startFakePluginServer(
       case "specify":
       case "decompose":
       case "estimate":
-        // 실제 플러그인은 오케스트레이터 세션을 띄운다. 여기서는 이력만 남긴다.
+        // The real plugin spawns an orchestrator session. Here we only leave a history entry.
         recordTaskEvent(record, `task.${action}`, {});
         break;
       case "approve":
@@ -910,7 +911,7 @@ export async function startFakePluginServer(
     const tailRaw = params.get("tail");
     const tail = tailRaw ? Number(tailRaw) : null;
     const lines = content.split("\n");
-    // 끝의 빈 조각(마지막 개행 뒤)은 줄이 아니다.
+    // The trailing empty piece (after the last newline) is not a line.
     const nonEmpty = lines[lines.length - 1] === "" ? lines.slice(0, -1) : lines;
     let out = content;
     let truncated = false;
@@ -982,7 +983,7 @@ export async function startFakePluginServer(
     return { status: 201, body: { attachment: publicShape } };
   }
 
-  /** 첨부 바이트를 내려준다(`kanban_files.download_attachment_handler` 와 같은 모양). */
+  /** Serves attachment bytes (same shape as `kanban_files.download_attachment_handler`). */
   function attachmentContent(
     attachment: KanbanAttachment & { task_id: string; bytes: Buffer },
     req: ParsedRequest,
@@ -1022,10 +1023,10 @@ export async function startFakePluginServer(
   }
 
   /**
-   * 보드 전체 첨부(`GET /deskrpg/kanban/attachments`). 실제 플러그인 계약을 따른다:
-   * capability `kanban_attachment_list` 가 없으면 라우트가 없고(404), 최신 것부터,
-   * `limit` 기본 50·최대 200(넘으면 자른다), 0 이나 숫자 아니면 400 `invalid_query`,
-   * 깨졌거나 다른 보드의 커서면 400 `unknown_cursor`. 카드가 없으면 `task_title` 은 null.
+   * Board-wide attachments (`GET /deskrpg/kanban/attachments`). Follows the real plugin contract:
+   * without capability `kanban_attachment_list` the route doesn't exist (404); newest first;
+   * `limit` defaults to 50, max 200 (clamped above that); 0 or non-numeric gives 400 `invalid_query`;
+   * a broken cursor or one from another board gives 400 `unknown_cursor`. Without a card, `task_title` is null.
    */
   function listBoardAttachments(board: BoardRecord, params: URLSearchParams): Reply {
     if (!info.capabilities?.includes("kanban_attachment_list")) throw notFound();
@@ -1036,7 +1037,7 @@ export async function startFakePluginServer(
       if (!Number.isInteger(parsed) || parsed <= 0) throw badRequest("invalid_query");
       limit = Math.min(parsed, 200);
     }
-    // 심은 순서가 곧 생성 순서다 — 최신이 먼저.
+    // Seeding order is creation order — newest first.
     const all = [...board.attachments.values()].reverse();
     let offset = 0;
     const cursor = params.get("cursor");
@@ -1062,7 +1063,7 @@ export async function startFakePluginServer(
     };
   }
 
-  /** 첨부 하나를 카드 없이도 상태에 심는다 — 보드가 없으면 만든다. */
+  /** Seeds one attachment into state even without a card — creates the board if missing. */
   function seedAttachment(input: {
     board: string;
     taskId: string;
@@ -1110,7 +1111,7 @@ export async function startFakePluginServer(
     return { status: 200, body: orchestration };
   }
 
-  // ---- 크론 ---------------------------------------------------------------
+  // ---- Cron -------------------------------------------------------------
 
   function jobOf(state: CronState, id: string): CronJob {
     const job = state.jobs.get(id);
@@ -1120,7 +1121,7 @@ export async function startFakePluginServer(
 
   function createJob(profile: string, body: Record<string, unknown>): Reply {
     if (typeof body.schedule !== "string" || !body.schedule) throw badRequest("schedule_required");
-    // 스크립트 전용 잡은 프롬프트가 없어도 된다(Hermes 와 같은 규칙).
+    // Script-only jobs don't need a prompt (same rule as Hermes).
     const prompt = typeof body.prompt === "string" ? body.prompt : "";
     if (!prompt && typeof body.script !== "string") throw badRequest("prompt_required");
     const paused = body.paused === true;
@@ -1174,8 +1175,8 @@ export async function startFakePluginServer(
 
   function runJob(profile: string, state: CronState, id: string): Reply {
     const job = jobOf(state, id);
-    // 실제 플러그인은 비동기로 돌린다(202). 여기서는 즉시 끝난 것으로 기록해 이벤트
-    // 두 개(started/finished)를 한 번에 스트림에 싣는다.
+    // The real plugin runs it asynchronously (202). Here we record it as finished immediately and put both
+    // events (started/finished) on the stream at once.
     const startedAt = nowIso();
     const sessionId = nextId("sess");
     const run: CronRun = {
@@ -1221,14 +1222,14 @@ export async function startFakePluginServer(
     return createJob(profile, { schedule, prompt: blueprint.command, name: blueprint.title });
   }
 
-  // ---- 아티팩트(0.8.0+) -----------------------------------------------------
+  // ---- Artifacts (0.8.0+) -----------------------------------------------
 
   /**
-   * 칸반·아티팩트의 시각 — **실제 플러그인과 같은 epoch 초(정수)**(플러그인 `docs/contracts.md`).
+   * Kanban and artifact timestamps — **epoch seconds (integer), same as the real plugin** (plugin `docs/contracts.md`).
    *
-   * 예전에 칸반 쪽은 ISO 문자열을 냈다. 그래서 `Date.parse` 를 직접 부르던 화면 코드가 여기서는
-   * 멀쩡히 돌고 실제 게이트웨이에서만 시각이 사라졌다 — 가짜가 진짜보다 너그러우면 테스트가
-   * 결함을 덮는다. 크론만 ISO 이고(`nowIso`), 그것도 계약이 그렇게 정해서다.
+   * The kanban side used to emit ISO strings. So screen code that called `Date.parse` directly ran
+   * fine here and timestamps vanished only on the real gateway — when the fake is more lenient than the real
+   * thing, tests hide defects. Only cron is ISO (`nowIso`), and that's because the contract says so.
    */
   function nowEpochSeconds(): number {
     return Math.floor(Date.now() / 1000);
@@ -1417,11 +1418,11 @@ export async function startFakePluginServer(
     return { status: 200, body: { ok: true } };
   }
 
-  // ---- 카드 제안 ----------------------------------------------------------
+  // ---- Card proposals -------------------------------------------------
   //
-  // 플러그인의 판정을 그대로 흉내낸다: 404 는 없는 id, 409 는 단일 UPDATE 가 아무 행도
-  // 바꾸지 못한 것(이미 해소됨 / 되돌릴 수 없음). "한 번만 해소" 의 근거는 여기서도 그 한
-  // 번의 상태 전이 하나다.
+  // Mimics the plugin's verdicts as-is: 404 is an unknown id, 409 is when the single UPDATE changed no rows
+  // (already resolved / can't be undone). The basis for "resolve only once" here too is that single
+  // state transition.
 
   function resolveCardProposal(proposalId: string, body: Record<string, unknown>): Reply {
     const record = cardProposals.get(proposalId);
@@ -1461,7 +1462,7 @@ export async function startFakePluginServer(
     if (!record) throw new HttpError(404, { error: "card_proposal_not_found", detail: proposalId });
     const taskId = body.task_id;
     if (typeof taskId !== "string" || !taskId) throw badRequest("invalid_field", "task_id");
-    // 해소된 제안에 딱 한 번만 — 덮어쓰기도 미해소 기록도 없다.
+    // Only once on a resolved proposal — no overwriting and no recording on unresolved ones.
     if (!record.resolvedAt || record.resolvedTaskId) {
       throw new HttpError(409, {
         error: "card_proposal_task_not_recordable",
@@ -1472,7 +1473,7 @@ export async function startFakePluginServer(
     return { status: 200, body: { recorded: true } };
   }
 
-  // ---- 라우팅 -------------------------------------------------------------
+  // ---- Routing ---------------------------------------------------------
 
   function routeOwner(req: ParsedRequest): Reply {
     const { method, pathname, params, json } = req;
@@ -1558,7 +1559,7 @@ export async function startFakePluginServer(
       };
     }
 
-    // 아래는 전부 ?board= 를 요구한다.
+    // Everything below requires ?board=.
     if (pathname === "/deskrpg/kanban/board" && method === "GET") {
       const board = boardOf(params);
       return { status: 200, body: renderBoard(board, params.get("include_archived") === "true") };
@@ -1695,7 +1696,7 @@ export async function startFakePluginServer(
   }
 
   function authFailure(): HttpError {
-    // Hermes 실측 모양(plugin-errors.ts 모듈 주석) — code 는 객체 안에 있다.
+    // Measured Hermes shape (plugin-errors.ts module comment) — code is inside the object.
     return new HttpError(401, {
       error: {
         message: "Invalid gateway API key (API_SERVER_KEY)",
@@ -1836,7 +1837,7 @@ export async function startFakePluginServer(
 }
 
 // ---------------------------------------------------------------------------
-// 도우미
+// Helpers
 // ---------------------------------------------------------------------------
 
 type ParsedRequest = {
@@ -1847,7 +1848,7 @@ type ParsedRequest = {
   contentType: string | null;
   json: Record<string, unknown>;
   raw: Buffer;
-  /** 소문자 키로 정규화한 요청 헤더 전부. */
+  /** All request headers, normalized to lowercase keys. */
   headers: Record<string, string>;
 };
 
@@ -1871,7 +1872,7 @@ function stringOrNull(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
-/** `body` 에서 문자열 값만 골라 낸다 — 카드 필드는 전부 문자열이라 이것으로 충분하다. */
+/** Picks only string values from `body` — card fields are all strings, so this is enough. */
 function pick(body: Record<string, unknown>, keys: readonly string[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const key of keys) {
@@ -1882,8 +1883,8 @@ function pick(body: Record<string, unknown>, keys: readonly string[]): Record<st
 }
 
 /**
- * multipart/form-data 에서 첫 파일 파트의 filename 과 크기만 뽑는다. 첨부 업로드
- * 왕복(경로·content-type·파일명·크기)을 고정하는 데 필요한 만큼만 파싱한다.
+ * Extracts only the filename and size of the first file part from multipart/form-data. Parses just enough
+ * to pin down the attachment upload round trip (path, content-type, filename, size).
  */
 function parseMultipartFile(
   contentType: string | null,
@@ -1895,7 +1896,7 @@ function parseMultipartFile(
   let cursor = raw.indexOf(delimiter);
   while (cursor !== -1) {
     const partStart = cursor + delimiter.length;
-    // 닫는 구분자(`--boundary--`)면 끝.
+    // A closing delimiter (`--boundary--`) means the end.
     if (raw.slice(partStart, partStart + 2).toString() === "--") break;
     const next = raw.indexOf(delimiter, partStart);
     const partEnd = next === -1 ? raw.length : next;
@@ -1905,7 +1906,7 @@ function parseMultipartFile(
       const headers = part.slice(0, headerEnd).toString("utf8");
       const filenameMatch = /filename="([^"]*)"/.exec(headers);
       if (filenameMatch) {
-        // 본문은 헤더 뒤 CRLF 두 개 다음부터, 다음 구분자 앞의 CRLF 전까지.
+        // The body starts after the two CRLFs following the headers and runs until the CRLF before the next delimiter.
         let content = part.slice(headerEnd + 4);
         if (content.slice(-2).toString() === "\r\n") content = content.slice(0, -2);
         return { filename: filenameMatch[1], size: content.length, content };

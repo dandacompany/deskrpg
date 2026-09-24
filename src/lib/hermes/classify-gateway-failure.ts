@@ -1,23 +1,23 @@
 import type { HermesErrorCode } from "./hermes-client";
 
 /**
- * 어댑터 호출이 던진 예외를 **사용자에게 보여줄 원인**으로 접는다.
+ * Folds an exception thrown by an adapter call into a **cause to show the user**.
  *
- * 예전에는 게이트웨이가 꺼졌든, 키가 거부됐든, 30분째 응답이 없든 화면에는 언제나
- * "AI 게이트웨이 오류" 한 줄만 나왔다. 실제 원인은 서버 콘솔에만 남아서, 자기 서버를
- * 직접 호스팅하는 사용자조차 무엇을 고쳐야 하는지 알 수 없었다.
+ * Previously, whether the gateway was down, the key was rejected, or there had been no response for 30 minutes,
+ * the screen always showed the single line "AI 게이트웨이 오류". The real cause stayed only in the server console,
+ * so even users self-hosting their own server couldn't tell what to fix.
  *
- * 판정 순서가 곧 규칙이다:
- *   1. **중단/타임아웃 먼저.** `HermesClient.request` 는 `fetch` 가 던진 것을 전부
- *      `HermesError("unreachable")` 로 싸기 때문에(hermes-client.ts:93-97), 취소·타임아웃도
- *      "못 닿았다" 로 도착한다. 코드만 보면 타임아웃을 영원히 도달 불가로 오진한다.
- *   2. **구조화된 코드**(`HermesError.code`). 문자열 매칭보다 언제나 우선한다.
- *   3. 마지막에만 메시지/`cause.code` 휴리스틱 — 어댑터가 `HermesError` 가 아닌 것을
- *      던지는 경로(플러그인 클라이언트·원시 `fetch`)가 있어서 필요하다.
+ * The order of checks is the rule:
+ *   1. **Abort/timeout first.** `HermesClient.request` wraps everything `fetch` throws as
+ *      `HermesError("unreachable")` (hermes-client.ts:93-97), so cancellations and timeouts also
+ *      arrive as "couldn't reach". Looking only at the code would always misdiagnose a timeout as unreachable.
+ *   2. **Structured code** (`HermesError.code`). Always takes precedence over string matching.
+ *   3. Message/`cause.code` heuristics only last — needed because there are paths where the adapter throws
+ *      something other than `HermesError` (plugin client, raw `fetch`).
  */
 export type GatewayFailureKind = "unreachable" | "auth" | "timeout" | "unknown";
 
-/** `HermesError` 를 구조로 알아본다 — 클래스를 import 하면 전송 계층까지 딸려 온다. */
+/** Recognizes `HermesError` by structure — importing the class would drag in the transport layer. */
 function hermesCode(err: unknown): HermesErrorCode | null {
   if (typeof err !== "object" || err === null) return null;
   const record = err as { name?: unknown; code?: unknown };
@@ -25,7 +25,7 @@ function hermesCode(err: unknown): HermesErrorCode | null {
   return typeof record.code === "string" ? (record.code as HermesErrorCode) : null;
 }
 
-/** `TypeError: fetch failed` 는 진짜 원인을 `cause.code`(ECONNREFUSED 등)에 숨긴다. */
+/** `TypeError: fetch failed` hides the real cause in `cause.code` (ECONNREFUSED etc.). */
 function causeCode(err: unknown): string {
   if (typeof err !== "object" || err === null) return "";
   const cause = (err as { cause?: unknown }).cause;
@@ -76,11 +76,11 @@ export function classifyGatewayFailure(err: unknown): GatewayFailureKind {
   const name = errorName(err);
   const message = errorMessage(err);
 
-  // 1. 중단·타임아웃 — 코드 판정보다 먼저다(모듈 주석 참조).
+  // 1. Abort/timeout — before the code check (see module comment).
   if (name === "AbortError" || name === "TimeoutError") return "timeout";
   if (TIMEOUT_CAUSE_CODES.has(cause)) return "timeout";
 
-  // 2. 구조화된 코드.
+  // 2. Structured code.
   const code = hermesCode(err);
   if (code === "unauthorized") return "auth";
   if (code === "unreachable") {
@@ -90,7 +90,7 @@ export function classifyGatewayFailure(err: unknown): GatewayFailureKind {
   if (code === "unknown_profile" || code === "http_error" || code === "run_failed")
     return "unknown";
 
-  // 3. 휴리스틱 — HermesError 가 아닌 예외 경로.
+  // 3. Heuristics — the non-HermesError exception path.
   if (UNREACHABLE_CAUSE_CODES.has(cause)) return "unreachable";
   if (AUTH_MESSAGE_RE.test(message)) return "auth";
   if (TIMEOUT_MESSAGE_RE.test(message)) return "timeout";
@@ -99,7 +99,7 @@ export function classifyGatewayFailure(err: unknown): GatewayFailureKind {
   return "unknown";
 }
 
-/** 분류 결과를 `npc:response` 가 싣는 메시지 코드로 옮긴다. */
+/** Maps the classification result to the message code carried by `npc:response`. */
 export const GATEWAY_FAILURE_MESSAGE_CODE = {
   unreachable: "gateway_unreachable",
   auth: "gateway_auth_failed",

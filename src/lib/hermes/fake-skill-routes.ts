@@ -1,6 +1,7 @@
 /**
- * 가짜 플러그인 서버의 0.15.0 스킬 라우트 — **테스트 전용**. 플러그인의 동작 중 DeskRPG 가 의존하는 모양만
- * 흉내 낸다: 경로·상태 코드·오류 코드·응답 필드. 권한 판정은 하지 않는다(플러그인은 프로필 키만 본다).
+ * The fake plugin server's 0.15.0 skill routes — **test only**. Mimics only the parts of the plugin's behavior that
+ * DeskRPG depends on: paths, status codes, error codes, response fields. No authorization (the plugin only looks at
+ * the profile key).
  */
 import { createHash } from "node:crypto";
 
@@ -24,11 +25,11 @@ export type FakeSkillJob = {
 export type FakeSkillState = {
   skills: Map<string, FakeSkill>;
   archived: Map<string, FakeSkill>;
-  /** 파일 메모리 조각 — 노드 id 는 `memory:memory:<index>`. */
+  /** File memory fragments — node id is `memory:memory:<index>`. */
   memory: string[];
   jobs: Map<string, FakeSkillJob>;
   paused: boolean;
-  /** 마지막으로 받은 `X-DeskRPG-Actor` 값. */
+  /** The last received `X-DeskRPG-Actor` value. */
   lastActor: string | null;
   seed(
     name: string,
@@ -336,7 +337,7 @@ function routeSkillArea(
     if (method !== "PUT") return err(404, "not_found");
     if (!editable(s, path)) return err(403, "path_not_editable");
     const cur = s.files.get(path);
-    // 새 파일은 baseHash null — 이미 있으면 충돌. 기존 파일은 현재 해시와 같아야 한다.
+    // A new file has baseHash null — conflict if it already exists. An existing file must match the current hash.
     if (body.baseHash === null) {
       if (cur !== undefined) return err(409, "file_exists");
     } else if (cur === undefined || sha(cur) !== body.baseHash) {
@@ -364,7 +365,10 @@ function routeSkillArea(
   return err(404, "not_found");
 }
 
-/** `/deskrpg/skills…`·`/deskrpg/curator…`·`/deskrpg/learning…` 가 아니면 null — 호출부가 원래 라우팅을 계속한다. */
+/**
+ * null unless `/deskrpg/skills…`·`/deskrpg/curator…`·`/deskrpg/learning…` — the caller continues its original
+ * routing.
+ */
 export function routeSkills(state: FakeSkillState, req: Req): Reply | null {
   const m = /^\/deskrpg\/(skills|curator|learning)(\/.*)?$/.exec(req.pathname);
   if (!m) return null;

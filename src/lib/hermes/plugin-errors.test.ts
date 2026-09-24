@@ -6,12 +6,12 @@ import { supportsSwarm, swarmGate } from "./plugin-capability";
 import type { PluginInfo } from "./deskrpg-plugin-types";
 
 describe("mapPluginFailure", () => {
-  it("2xx 는 실패가 아니다", () => {
+  it("2xx is not a failure", () => {
     assert.equal(mapPluginFailure({ status: 200, body: { body: "hi" } }), null);
   });
 
-  it("unreadable 은 200 이어도 편집기를 막는다", () => {
-    // 빈 편집기를 열면 사용자가 저장 버튼으로 남의 인격을 지운다.
+  it("unreadable blocks the editor even with 200", () => {
+    // If an empty editor opens, the user wipes someone else's persona with the save button.
     const got = mapPluginFailure({
       status: 200,
       body: { body: null, isDefaultTemplate: null, revision: null, unreadable: true },
@@ -21,7 +21,7 @@ describe("mapPluginFailure", () => {
     assert.equal(got.blocksEditor, true);
   });
 
-  it("409 identity_unreadable 은 쓰지 않았음을 말한다", () => {
+  it("409 identity_unreadable says nothing was written", () => {
     const got = mapPluginFailure({
       status: 409,
       body: { error: "identity_unreadable", reason: "SOUL.md 을 읽을 수 없다: UnicodeDecodeError" },
@@ -32,7 +32,7 @@ describe("mapPluginFailure", () => {
     assert.match(got.message, /UnicodeDecodeError/);
   });
 
-  it("409 config_unreadable 도 같은 규약이다", () => {
+  it("409 config_unreadable follows the same convention", () => {
     const got = mapPluginFailure({
       status: 409,
       body: { error: "config_unreadable", reason: "기존 model 키가 매핑이 아니다" },
@@ -42,7 +42,7 @@ describe("mapPluginFailure", () => {
     assert.equal(got.blocksEditor, true);
   });
 
-  it("409 profile_has_service 는 셸 명령을 그대로 보여준다", () => {
+  it("409 profile_has_service shows the shell command as-is", () => {
     const got = mapPluginFailure({
       status: 409,
       body: {
@@ -58,36 +58,36 @@ describe("mapPluginFailure", () => {
     assert.equal(got.showsShellCommand, "hermes profile delete noah");
   });
 
-  it("409 revision_conflict 는 다시 읽으라는 뜻이다", () => {
+  it("409 revision_conflict means re-read", () => {
     const got = mapPluginFailure({ status: 409, body: { error: "revision_conflict" } });
     assert.ok(got);
     assert.equal(got.code, "revision_conflict");
     assert.equal(got.blocksEditor, false);
   });
 
-  it("409 already_exists 는 이름 충돌이다", () => {
+  it("409 already_exists is a name collision", () => {
     const got = mapPluginFailure({ status: 409, body: { error: "already_exists", name: "noah" } });
     assert.ok(got);
     assert.equal(got.code, "already_exists");
   });
 
-  it("모르는 오류도 코드를 잃지 않는다", () => {
+  it("an unknown error does not lose its code", () => {
     const got = mapPluginFailure({ status: 500, body: {} });
     assert.ok(got);
     assert.equal(got.code, "plugin_error");
   });
 
-  it("본문이 객체가 아니어도 던지지 않는다", () => {
+  it("does not throw even when the body is not an object", () => {
     const got = mapPluginFailure({ status: 400, body: "bad request" });
     assert.ok(got);
     assert.equal(got.code, "plugin_error");
   });
 });
 
-// I-2: error/reason 외 구조화 필드(currentRevision·name·unit …)가 화면에 필요한데
-// 지금은 버려진다. details 로 그대로 옮겨야 재읽기·병합·이름 충돌 안내가 가능하다.
-describe("mapPluginFailure — details (I-2 복구)", () => {
-  it("revision_conflict 의 currentRevision 은 재읽기에 필요하다 — details 에 남는다", () => {
+// I-2: structured fields besides error/reason (currentRevision·name·unit …) are needed by the UI
+// but are currently dropped. They must be carried over to details for re-read, merge and name-collision guidance.
+describe("mapPluginFailure — details (I-2 recovery)", () => {
+  it("revision_conflict's currentRevision is needed for re-reading — it stays in details", () => {
     const got = mapPluginFailure({
       status: 409,
       body: { error: "revision_conflict", currentRevision: "zzz" },
@@ -96,13 +96,13 @@ describe("mapPluginFailure — details (I-2 복구)", () => {
     assert.equal(got.details.currentRevision, "zzz");
   });
 
-  it("already_exists 의 name 이 details 에 남아야 '이미 있다' 는 문장을 만들 수 있다", () => {
+  it("already_exists's name must stay in details to build the 'already exists' sentence", () => {
     const got = mapPluginFailure({ status: 409, body: { error: "already_exists", name: "noah" } });
     assert.ok(got);
     assert.equal(got.details.name, "noah");
   });
 
-  it("profile_has_service 의 unit 도 details 에 남는다", () => {
+  it("profile_has_service's unit also stays in details", () => {
     const got = mapPluginFailure({
       status: 409,
       body: {
@@ -118,17 +118,17 @@ describe("mapPluginFailure — details (I-2 복구)", () => {
     assert.equal(got.details.name, "noah");
   });
 
-  it("code/message 가 없는 경우도 details 는 빈 객체다 — undefined 로 던지지 않는다", () => {
+  it("details is an empty object even without code/message — never undefined", () => {
     const got = mapPluginFailure({ status: 500, body: {} });
     assert.ok(got);
     assert.deepEqual(got.details, {});
   });
 });
 
-// M-3: 셸 명령 추출이 코드와 무관하게 문장 끝 모양만 보고 붙는다. 우연히 같은 모양으로
-// 끝나는 무관한 코드에서 명령 버튼이 뜨면 안 된다 — 화이트리스트로 좁힌다.
-describe("mapPluginFailure — showsShellCommand 는 화이트리스트 코드에만 (M-3)", () => {
-  it("profile_has_service 는 셸 명령을 보여준다 (기존 동작 유지)", () => {
+// M-3: shell command extraction attaches based only on the sentence's ending shape, regardless of code. A command
+// button must not appear for an unrelated code that happens to end the same way — narrow it with a whitelist.
+describe("mapPluginFailure — showsShellCommand only for whitelisted codes (M-3)", () => {
+  it("profile_has_service shows the shell command (existing behavior kept)", () => {
     const got = mapPluginFailure({
       status: 409,
       body: {
@@ -140,7 +140,7 @@ describe("mapPluginFailure — showsShellCommand 는 화이트리스트 코드�
     assert.equal(got.showsShellCommand, "hermes profile delete noah");
   });
 
-  it("revision_conflict 의 설명이 우연히 같은 모양으로 끝나도 셸 명령을 보여주지 않는다", () => {
+  it("does not show a shell command even if a revision_conflict description happens to end the same way", () => {
     const got = mapPluginFailure({
       status: 409,
       body: {
@@ -153,32 +153,32 @@ describe("mapPluginFailure — showsShellCommand 는 화이트리스트 코드�
   });
 });
 
-// M-4: unreachable 과 5xx(plugin_error) 는 둘 다 "서버가 응답을 못 줬다"인데
-// blocksEditor 가 반대였다. 5xx 에서 편집기가 열리면 저장 시점에 다시 실패한다.
-describe("mapPluginFailure — 5xx 도 편집기를 막는다 (M-4)", () => {
-  it("500 은 blocksEditor: true 다", () => {
+// M-4: unreachable and 5xx (plugin_error) both mean "the server could not respond", yet
+// blocksEditor was opposite. If the editor opens on 5xx, it fails again at save time.
+describe("mapPluginFailure — 5xx also blocks the editor (M-4)", () => {
+  it("500 is blocksEditor: true", () => {
     const got = mapPluginFailure({ status: 500, body: {} });
     assert.ok(got);
     assert.equal(got.blocksEditor, true);
   });
 
-  it("503 도 blocksEditor: true 다", () => {
+  it("503 is also blocksEditor: true", () => {
     const got = mapPluginFailure({ status: 503, body: {} });
     assert.ok(got);
     assert.equal(got.blocksEditor, true);
   });
 
-  it("4xx 는 이름 있는 코드가 아니면 여전히 blocksEditor: false 다 (재시도 가능한 사용자 입력 오류)", () => {
+  it("4xx is still blocksEditor: false unless it is a named code (retryable user input error)", () => {
     const got = mapPluginFailure({ status: 400, body: "bad request" });
     assert.ok(got);
     assert.equal(got.blocksEditor, false);
   });
 });
 
-describe("profile_has_service 안내", () => {
-  it("셸 명령에 프로필 이름이 그대로 들어간다", () => {
-    // 사용자가 복붙해서 바로 실행할 수 있어야 한다. 이름을 우리가 다시
-    // 조립하면 인코딩·공백에서 틀릴 수 있으니 플러그인이 준 문자열을 쓴다.
+describe("profile_has_service guidance", () => {
+  it("the profile name goes into the shell command as-is", () => {
+    // The user must be able to copy-paste and run it right away. If we reassemble the name
+    // ourselves it can go wrong on encoding/whitespace, so use the string the plugin gave.
     const got = mapPluginFailure({
       status: 409,
       body: {
@@ -193,9 +193,9 @@ describe("profile_has_service 안내", () => {
   });
 });
 
-describe("record.error 의 세 모양 (수정 라운드 2 — 라이브 실측, MiniPC 게이트웨이, Hermes v0.21.0)", () => {
-  it("404 — error 가 평문 문장이면 코드 자리에 문장을 흘리지 않는다", () => {
-    // 실측 그대로: { "error": "Unknown or unconfigured profile" }
+describe("three shapes of record.error (fix round 2 — live measurement, MiniPC gateway, Hermes v0.21.0)", () => {
+  it("404 — when error is a plain sentence, the sentence does not leak into the code slot", () => {
+    // Exactly as measured: { "error": "Unknown or unconfigured profile" }
     const got = mapPluginFailure({
       status: 404,
       body: { error: "Unknown or unconfigured profile" },
@@ -213,8 +213,8 @@ describe("record.error 의 세 모양 (수정 라운드 2 — 라이브 실측, 
     );
   });
 
-  it("401 — error 가 객체면 안의 진짜 code 를 꺼낸다", () => {
-    // 실측 그대로: { "error": { "message": "...", "type": "gateway_auth_error",
+  it("401 — when error is an object, extract the real code inside", () => {
+    // Exactly as measured: { "error": { "message": "...", "type": "gateway_auth_error",
     //                            "code": "gateway_auth_failed" } }
     const got = mapPluginFailure({
       status: 401,
@@ -231,8 +231,8 @@ describe("record.error 의 세 모양 (수정 라운드 2 — 라이브 실측, 
     assert.equal(got.message, "Invalid gateway API key (API_SERVER_KEY)");
   });
 
-  it("409 — error 가 짧은 코드 문자열이면 기존처럼 그대로 코드로 쓴다", () => {
-    // 실측 그대로: { "error": "config_unreadable", "reason": "..." } — 우리 플러그인 모양.
+  it("409 — when error is a short code string, use it as the code as before", () => {
+    // Exactly as measured: { "error": "config_unreadable", "reason": "..." } — our plugin's shape.
     const got = mapPluginFailure({
       status: 409,
       body: { error: "config_unreadable", reason: "기존 model 키가 매핑이 아니다" },
@@ -242,7 +242,7 @@ describe("record.error 의 세 모양 (수정 라운드 2 — 라이브 실측, 
     assert.equal(got.message, "기존 model 키가 매핑이 아니다");
   });
 
-  it("객체 error 에 code 가 없으면 plugin_error 로 접되 message 는 살린다", () => {
+  it("an object error without code folds to plugin_error but keeps message", () => {
     const got = mapPluginFailure({
       status: 500,
       body: { error: { message: "internal failure" } },
@@ -252,9 +252,9 @@ describe("record.error 의 세 모양 (수정 라운드 2 — 라이브 실측, 
     assert.equal(got.message, "internal failure");
   });
 
-  it("error 가 배열이면 객체 분기(code/message 추출)를 타지 않는다", () => {
-    // typeof [] === "object" 라 Array.isArray 가드가 없으면 nested.code 를 찾다가
-    // 조용히 undefined 를 만나거나, 배열 요소를 코드로 오인할 수 있다.
+  it("an array error does not take the object branch (code/message extraction)", () => {
+    // typeof [] === "object", so without an Array.isArray guard, looking for nested.code could
+    // silently hit undefined, or mistake an array element for a code.
     const got = mapPluginFailure({
       status: 400,
       body: { error: ["one", "two"], reason: "여러 문제가 있다" },
@@ -265,10 +265,10 @@ describe("record.error 의 세 모양 (수정 라운드 2 — 라이브 실측, 
   });
 });
 
-describe("isCodeLikeString 경계 (수정 라운드 3 I-4 — 리뷰어 실증)", () => {
-  it("대문자로 시작하는 한 단어 문장은 코드로 오인되지 않고, 문장이 message 에 남는다", () => {
-    // 예전 정규식(`i` 플래그)은 이걸 코드로 통과시켰다 — 그러면 미등록 코드가 되고
-    // (화면엔 "알 수 없는 오류") reason 이 없으니 message 도 "" 라 원문이 통째로 사라졌다.
+describe("isCodeLikeString boundaries (fix round 3 I-4 — reviewer evidence)", () => {
+  it("a one-word sentence starting with an uppercase letter is not mistaken for a code, and stays in message", () => {
+    // The old regex (`i` flag) passed this as a code — then it became an unregistered code
+    // (the UI shows "알 수 없는 오류"), and with no reason, message was "" too, so the original text vanished entirely.
     for (const sentence of ["Unauthorized", "Forbidden"]) {
       const got = mapPluginFailure({ status: 401, body: { error: sentence } });
       assert.ok(got);
@@ -277,7 +277,7 @@ describe("isCodeLikeString 경계 (수정 라운드 3 I-4 — 리뷰어 실증)"
     }
   });
 
-  it("구분자(_ 또는 -) 없는 소문자 한 단어도 코드로 오인되지 않는다", () => {
+  it("a lowercase single word without a separator (_ or -) is not mistaken for a code", () => {
     for (const word of ["conflict", "error", "failed"]) {
       const got = mapPluginFailure({ status: 409, body: { error: word } });
       assert.ok(got);
@@ -286,7 +286,7 @@ describe("isCodeLikeString 경계 (수정 라운드 3 I-4 — 리뷰어 실증)"
     }
   });
 
-  it("등록된 코드처럼 밑줄이 있으면 여전히 코드로 통과한다 (회귀 방지)", () => {
+  it("with an underscore like a registered code, it still passes as a code (regression guard)", () => {
     for (const code of [
       "config_unreadable",
       "already_exists",
@@ -299,16 +299,16 @@ describe("isCodeLikeString 경계 (수정 라운드 3 I-4 — 리뷰어 실증)"
     }
   });
 
-  it("코드로 판정됐지만 reason 이 없으면 message 는 코드 문자열 자체로 채워진다", () => {
-    // I-4 (a): 코드 판정 여부와 무관하게 message 를 항상 채운다 — 빈 문자열로 두면
-    // 화면의 상세 문구가 이유 없이 사라진다.
+  it("when judged a code but with no reason, message is filled with the code string itself", () => {
+    // I-4 (a): always fill message regardless of code judgment — leaving it an empty string
+    // makes the UI's detail text vanish for no reason.
     const got = mapPluginFailure({ status: 409, body: { error: "revision_conflict" } });
     assert.ok(got);
     assert.equal(got.code, "revision_conflict");
     assert.equal(got.message, "revision_conflict");
   });
 
-  it("공백이 있으면 여전히 문장으로 취급한다 (원래도 안전했던 경로 회귀 방지)", () => {
+  it("with whitespace it is still treated as a sentence (regression guard for a path that was already safe)", () => {
     for (const sentence of ["Not Found", "Bad Request", "internal server error"]) {
       const got = mapPluginFailure({ status: 404, body: { error: sentence } });
       assert.ok(got);
@@ -318,15 +318,15 @@ describe("isCodeLikeString 경계 (수정 라운드 3 I-4 — 리뷰어 실증)"
   });
 });
 
-describe("자동화 계약 실패 코드", () => {
-  it("400 unknown_cursor 는 코드 그대로 접힌다 — 폴러가 커서를 버리고 다시 시작해야 한다", () => {
+describe("automation contract failure codes", () => {
+  it("400 unknown_cursor folds as the code itself — the poller must drop the cursor and restart", () => {
     const got = mapPluginFailure({ status: 400, body: { error: "unknown_cursor" } });
     assert.ok(got);
     assert.equal(got.code, "unknown_cursor");
     assert.equal(got.blocksEditor, false);
   });
 
-  it("pluginUpgradeRequired 는 계약 게이트 결과를 같은 실패 모양으로 옮긴다", () => {
+  it("pluginUpgradeRequired carries the contract gate result into the same failure shape", () => {
     const got = pluginUpgradeRequired({
       ok: false,
       minVersion: "0.6.0",
@@ -344,9 +344,9 @@ describe("자동화 계약 실패 코드", () => {
   });
 });
 
-// 스웜 기능 가용성 판정 (Task 5)
-describe("스웜 capability 게이트", () => {
-  it("capabilities 에 swarm 이 있으면 통과한다", () => {
+// Swarm feature availability check (Task 5)
+describe("swarm capability gate", () => {
+  it("passes when capabilities include swarm", () => {
     const info = {
       version: "0.7.0",
       capabilities: ["kanban", "cron", "events", "swarm"],
@@ -355,8 +355,8 @@ describe("스웜 capability 게이트", () => {
     assert.equal(swarmGate(info).ok, true);
   });
 
-  it("버전이 높아도 capability 가 없으면 거절한다", () => {
-    // 심볼이 없는 Hermes 빌드. 버전만 보면 "새 플러그인인데 404" 가 된다.
+  it("rejects without the capability even if the version is higher", () => {
+    // A Hermes build without the symbol. Looking only at the version gives "new plugin but 404".
     const info = { version: "0.9.0", capabilities: ["kanban", "cron", "events"] } as PluginInfo;
     assert.equal(supportsSwarm(info), false);
     const gate = swarmGate(info);
@@ -365,12 +365,12 @@ describe("스웜 capability 게이트", () => {
     assert.deepEqual(gate.ok === false && gate.missing, ["swarm"]);
   });
 
-  it("info 가 없으면 거절한다", () => {
+  it("rejects when info is missing", () => {
     assert.equal(supportsSwarm(null), false);
     assert.equal(swarmGate(null).ok, false);
   });
 
-  it("스웜 게이트 거절은 기존 업그레이드 실패 모양으로 옮겨진다", () => {
+  it("a swarm gate rejection is carried into the existing upgrade failure shape", () => {
     const gate = swarmGate({ version: "0.6.0", capabilities: ["kanban"] } as PluginInfo);
     assert.equal(gate.ok, false);
     const failure = pluginUpgradeRequired(gate as Exclude<typeof gate, { ok: true }>);
@@ -378,10 +378,10 @@ describe("스웜 capability 게이트", () => {
     assert.equal(failure.details.minVersion, "0.7.0");
   });
 
-  it("버전이 낮아도 capability 가 있으면 통과한다", () => {
-    // 게이트는 버전을 보지 않는다. 플러그인이 Hermes 빌드에 스웜이 없으면 capability 에서
-    // 빼기 때문에, capability 하나가 가용성의 정본이다. 테스트용 가짜 서버가 실제로
-    // 0.6.0 을 보고하면서 swarm capability 를 싣는다 — 이 조합이 통과해야 한다.
+  it("passes with the capability even if the version is lower", () => {
+    // The gate does not look at the version. The plugin drops swarm from capabilities when the Hermes
+    // build lacks it, so the capability alone is the source of truth for availability. The test fake server
+    // actually reports 0.6.0 while carrying the swarm capability — this combination must pass.
     const info = {
       version: "0.6.0",
       capabilities: ["kanban", "cron", "events", "swarm"],
@@ -391,8 +391,8 @@ describe("스웜 capability 게이트", () => {
   });
 });
 
-describe("mapPluginFailure — native 전이 거절 사유", () => {
-  it("플러그인 detail 문장을 코드와 함께 보존한다", () => {
+describe("mapPluginFailure — native transition rejection reasons", () => {
+  it("preserves the plugin detail sentence together with the code", () => {
     const detail = "human approval is required for this protected task";
     const got = mapPluginFailure({
       status: 409,
@@ -404,7 +404,7 @@ describe("mapPluginFailure — native 전이 거절 사유", () => {
     assert.equal(got.details.detail, detail);
   });
 
-  it("기존 reason을 우선하고 구조화 detail을 문자열로 바꾸지 않는다", () => {
+  it("prefers the existing reason and does not stringify structured detail", () => {
     assert.equal(
       mapPluginFailure({
         status: 409,

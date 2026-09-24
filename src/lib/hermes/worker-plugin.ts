@@ -1,16 +1,16 @@
 /**
- * 칸반 워커·크론에서 플러그인이 안 뜨는 직원 — 판정과 적용.
+ * Employees whose plugin does not load in kanban workers/cron — detection and fix.
  *
- * 워커는 `hermes -p <담당 프로필>` 로, 크론은 그 프로필 홈으로 뜨는데 Hermes 는 플러그인을
- * **로드하는 홈의** `plugins/`·`config.yaml` 에서만 찾는다. 루트(게이트웨이)에만 설치돼 있으면
- * 채팅에는 결과물이 쌓이는데 칸반·크론이 만든 결과 파일은 하나도 안 쌓인다 — 오류도 로그도 없다.
- * 플러그인 0.12.0 이 `/deskrpg/info` 의 `worker_plugin.missing` 으로 그 직원을 보고하고,
- * `POST /deskrpg/worker-plugin` 으로 고친다(프로필마다 링크와 활성화 항목, 백업을 남긴다).
+ * Workers start as `hermes -p <assigned profile>` and cron in that profile's home, but Hermes looks for plugins
+ * only in **the loading home's** `plugins/`·`config.yaml`. If it is installed only at the root (gateway),
+ * outputs pile up in chat but not a single result file from kanban/cron does — no error, no log.
+ * Plugin 0.12.0 reports those employees via `worker_plugin.missing` in `/deskrpg/info`,
+ * and fixes them via `POST /deskrpg/worker-plugin` (leaving a link, an enable entry and a backup per profile).
  *
- * 화면은 이것을 **보이게** 할 뿐 몰래 고치지 않는다. 운영자가 `plugins.disabled` 에 넣은 직원은
- * 플러그인이 켜지 않으므로 고칠 대상으로 세지 않는다.
+ * The UI only makes this **visible**, it does not fix it silently. Employees the operator put in `plugins.disabled`
+ * do not get the plugin enabled, so they are not counted as targets.
  *
- * 전부 순수 함수이거나 의존성을 주입받는다(브라우저 번들에도 들어간다 — `@/db` 를 끌어오지 않는다).
+ * All pure functions or dependency-injected (also goes into the browser bundle — does not pull in `@/db`).
  */
 import type { PluginInfo, WorkerPluginGap, WorkerPluginReport } from "./deskrpg-plugin-types";
 
@@ -29,9 +29,9 @@ function parseGap(value: unknown): WorkerPluginGap | null {
 }
 
 /**
- * `info.worker_plugin` 을 접는다. **`undefined` 와 `null` 을 구분한다** — 옛 플러그인에는 필드가
- * 없고(`undefined`), 새 플러그인이 판정에 실패하면 `null` 을 싣는다. 둘 다 경고를 띄우지 않지만
- * "모른다" 를 "전부 된다" 로 바꾸지는 않는다.
+ * Folds `info.worker_plugin`. **Distinguishes `undefined` from `null`** — old plugins lack the field
+ * (`undefined`), and new plugins send `null` when detection fails. Neither shows a warning, but
+ * "unknown" is not turned into "all fine".
  */
 export function parseWorkerPluginReport(value: unknown): WorkerPluginReport | null | undefined {
   if (value === undefined) return undefined;
@@ -46,13 +46,13 @@ export function parseWorkerPluginReport(value: unknown): WorkerPluginReport | nu
 }
 
 export type WorkerPluginWarning = {
-  /** 버튼으로 고칠 수 있는 직원(프로필 이름). */
+  /** Employees fixable via the button (profile names). */
   fixable: string[];
-  /** 운영자가 `plugins.disabled` 로 끈 직원 — 버튼이 켜지 않는다. 알리기만 한다. */
+  /** Employees the operator disabled via `plugins.disabled` — the button does not enable them. Only reported. */
   disabledByOperator: string[];
 };
 
-/** 경고 줄을 띄울지. 고칠 직원이 하나도 없으면 `null`(줄 자체가 없다). */
+/** Whether to show the warning line. `null` if there is no employee to fix (no line at all). */
 export function workerPluginWarning(info: PluginInfo | null): WorkerPluginWarning | null {
   if (!info || !info.capabilities.includes(WORKER_PLUGIN_CAPABILITY)) return null;
   const report = info.worker_plugin;
@@ -71,9 +71,9 @@ type EnsureResponse =
   | { ok: false; status: number; failure: { code: string } };
 
 export type ApplyWorkerPluginDeps = {
-  /** 플러그인 `POST /deskrpg/worker-plugin`(소유자 키). */
+  /** Plugin `POST /deskrpg/worker-plugin` (owner key). */
   ensure(): Promise<EnsureResponse>;
-  /** 플러그인 정보를 다시 읽어 `plugin_info_json` 캐시를 채운다. */
+  /** Re-reads plugin info to fill the `plugin_info_json` cache. */
   refreshCache(): Promise<void>;
 };
 
@@ -81,10 +81,10 @@ export type ApplyWorkerPluginOutcome =
   { ok: true; results: WorkerPluginResult[] } | { ok: false; errorCode: string };
 
 /**
- * 적용하고 **반드시** 캐시를 다시 채운다. 캐시는 최대 1시간 낡으므로(`shouldReprobePlugin`),
- * 다시 채우지 않으면 적용했는데도 경고가 남는다. 호출이 실패해도 다시 채운다 — 일부 직원은 이미
- * 바뀌었을 수 있고, 화면이 낡은 목록을 들고 있으면 안 된다. 캐시 갱신 실패는 적용 결과를 가리지
- * 않는다(다음 연결 테스트가 채운다).
+ * Applies and **always** refills the cache. The cache can be up to 1 hour stale (`shouldReprobePlugin`),
+ * so without refilling the warning remains even after applying. Refill even if the call fails — some employees
+ * may already have changed, and the UI must not hold a stale list. A cache refresh failure does not mask
+ * the apply result (the next connection test fills it).
  */
 export async function applyWorkerPlugin(
   deps: ApplyWorkerPluginDeps,
@@ -93,7 +93,7 @@ export async function applyWorkerPlugin(
   try {
     await deps.refreshCache();
   } catch {
-    // 적용 결과가 정본이다. 캐시는 다음 프로브가 채운다.
+    // The apply result is the source of truth. The next probe fills the cache.
   }
   if (!res.ok) return { ok: false, errorCode: res.failure.code };
   return { ok: true, results: res.data.results };

@@ -30,13 +30,13 @@ function info(overrides: Partial<PluginInfo> = {}): PluginInfo {
 }
 
 describe("parseWorkerPluginReport", () => {
-  it("빠진 프로필 목록을 살린다", () => {
+  it("keeps the list of missing profiles", () => {
     assert.deepEqual(parseWorkerPluginReport({ missing: [gap("sophie")] }), {
       missing: [{ profile: "sophie", link: "missing", enabled: false, disabled: false }],
     });
   });
 
-  it("0.16.0 의 propagation 을 살리고, 모르는 값은 버린다", () => {
+  it("keeps 0.16.0's propagation and drops unknown values", () => {
     assert.deepEqual(parseWorkerPluginReport({ missing: [], propagation: "disabled" }), {
       missing: [],
       propagation: "disabled",
@@ -46,12 +46,12 @@ describe("parseWorkerPluginReport", () => {
     });
   });
 
-  it("옛 플러그인(필드 없음)은 undefined, 판정 실패(null)는 null — 둘을 섞지 않는다", () => {
+  it("old plugin (no field) is undefined, detection failure (null) is null — the two are not mixed", () => {
     assert.equal(parseWorkerPluginReport(undefined), undefined);
     assert.equal(parseWorkerPluginReport(null), null);
   });
 
-  it("모양이 틀린 항목은 버리고, 모양이 틀린 본문은 null", () => {
+  it("drops malformed entries, and a malformed body is null", () => {
     assert.deepEqual(parseWorkerPluginReport({ missing: [gap("ok"), { profile: 3 }, "x"] }), {
       missing: [{ profile: "ok", link: "missing", enabled: false, disabled: false }],
     });
@@ -59,7 +59,7 @@ describe("parseWorkerPluginReport", () => {
     assert.equal(parseWorkerPluginReport("sophie"), null);
   });
 
-  it("parsePluginInfo 가 worker_plugin 을 살리고, 캐시 왕복 뒤에도 남는다", () => {
+  it("parsePluginInfo keeps worker_plugin, and it survives a cache round trip", () => {
     const body = { ...info(), worker_plugin: { missing: [gap("sophie")] } };
     const parsed = parsePluginInfo(body);
     assert.deepEqual(parsed?.worker_plugin, { missing: [gap("sophie")] });
@@ -68,28 +68,28 @@ describe("parseWorkerPluginReport", () => {
     });
   });
 
-  it("옛 플러그인 본문에서는 worker_plugin 키를 만들지 않는다", () => {
+  it("does not create a worker_plugin key from an old plugin body", () => {
     const parsed = parsePluginInfo(info());
     assert.equal(parsed && "worker_plugin" in parsed, false);
   });
 });
 
 describe("workerPluginWarning", () => {
-  it("고칠 수 있는 프로필이 있으면 경고를 낸다", () => {
+  it("warns when there are fixable profiles", () => {
     const w = workerPluginWarning(
       info({ worker_plugin: { missing: [gap("sophie"), gap("oliver")] } }),
     );
     assert.deepEqual(w, { fixable: ["sophie", "oliver"], disabledByOperator: [] });
   });
 
-  it("운영자가 끈 프로필은 고칠 대상에서 빼고 따로 말한다", () => {
+  it("excludes operator-disabled profiles from the fix targets and reports them separately", () => {
     const w = workerPluginWarning(
       info({ worker_plugin: { missing: [gap("sophie"), gap("mia", { disabled: true })] } }),
     );
     assert.deepEqual(w, { fixable: ["sophie"], disabledByOperator: ["mia"] });
   });
 
-  it("고칠 것이 없으면 줄을 띄우지 않는다 — 끈 프로필만 있어도 마찬가지다", () => {
+  it("shows no line when there is nothing to fix — even if there are only disabled profiles", () => {
     assert.equal(workerPluginWarning(info({ worker_plugin: { missing: [] } })), null);
     assert.equal(
       workerPluginWarning(info({ worker_plugin: { missing: [gap("mia", { disabled: true })] } })),
@@ -97,7 +97,7 @@ describe("workerPluginWarning", () => {
     );
   });
 
-  it("capability 가 없거나, 필드가 없거나, 판정 실패(null)면 띄우지 않는다", () => {
+  it("shows nothing when the capability is missing, the field is missing, or detection failed (null)", () => {
     assert.equal(workerPluginWarning(null), null);
     assert.equal(workerPluginWarning(info()), null);
     assert.equal(workerPluginWarning(info({ worker_plugin: null })), null);
@@ -111,7 +111,7 @@ describe("workerPluginWarning", () => {
 });
 
 describe("applyWorkerPlugin", () => {
-  it("플러그인에 적용을 요청한 뒤 **반드시** 캐시를 다시 채운다", async () => {
+  it("**always** refills the cache after asking the plugin to apply", async () => {
     const calls: string[] = [];
     const out = await applyWorkerPlugin({
       ensure: async () => {
@@ -125,7 +125,7 @@ describe("applyWorkerPlugin", () => {
         calls.push("refresh");
       },
     });
-    // 캐시는 최대 1시간 낡는다 — 다시 채우지 않으면 적용했는데도 경고가 남는다.
+    // The cache can be up to 1 hour stale — without refilling, the warning remains even after applying.
     assert.deepEqual(calls, ["ensure", "refresh"]);
     assert.deepEqual(out, {
       ok: true,
@@ -133,7 +133,7 @@ describe("applyWorkerPlugin", () => {
     });
   });
 
-  it("프로필별 실패는 그대로 싣는다", async () => {
+  it("carries per-profile failures as-is", async () => {
     const out = await applyWorkerPlugin({
       ensure: async () => ({
         ok: true,
@@ -147,8 +147,8 @@ describe("applyWorkerPlugin", () => {
     });
   });
 
-  it("플러그인 호출이 실패하면 그 코드를 돌려주고, 그래도 캐시는 다시 채운다", async () => {
-    // 일부 프로필이 이미 바뀌었을 수 있다 — 화면이 낡은 목록을 들고 있으면 안 된다.
+  it("returns the code when the plugin call fails, and still refills the cache", async () => {
+    // Some profiles may already have changed — the UI must not hold a stale list.
     let refreshed = false;
     const out = await applyWorkerPlugin({
       ensure: async () => ({
@@ -164,7 +164,7 @@ describe("applyWorkerPlugin", () => {
     assert.deepEqual(out, { ok: false, errorCode: "plugin_unreachable" });
   });
 
-  it("캐시 갱신이 실패해도 적용 결과는 잃지 않는다", async () => {
+  it("does not lose the apply result even if the cache refresh fails", async () => {
     const out = await applyWorkerPlugin({
       ensure: async () => ({ ok: true, data: { results: [] } }),
       refreshCache: async () => {

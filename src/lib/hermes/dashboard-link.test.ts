@@ -3,15 +3,16 @@ import test from "node:test";
 
 import { profileLoginUrl } from "./dashboard-link";
 
-test("프로필 로그인 링크는 대시보드 Keys 화면에 프로필을 실어 보낸다", () => {
-  // Hermes 대시보드는 `?profile=` 로 관리 대상 프로필을 고른다(0.21.3 실측: 새로 열어도 noah 가 선택됨).
+test("the profile login link sends the profile to the dashboard Keys screen", () => {
+  // The Hermes dashboard picks the managed profile via `?profile=` (measured on 0.21.3: noah is selected even on a
+  // fresh open).
   assert.equal(
     profileLoginUrl("https://deskrpg-hermes.example.com", "noah"),
     "https://deskrpg-hermes.example.com/env?profile=noah",
   );
 });
 
-test("끝 슬래시와 기존 경로를 정리하고 이름을 인코딩한다", () => {
+test("trims the trailing slash and existing path, and encodes the name", () => {
   assert.equal(
     profileLoginUrl("https://h.example.com/", "a_b-1"),
     "https://h.example.com/env?profile=a_b-1",
@@ -22,7 +23,7 @@ test("끝 슬래시와 기존 경로를 정리하고 이름을 인코딩한다",
   );
 });
 
-test("주소가 없거나 http(s) 가 아니면 링크를 만들지 않는다", () => {
+test("no link when the address is missing or not http(s)", () => {
   assert.equal(profileLoginUrl(null, "noah"), null);
   assert.equal(profileLoginUrl("", "noah"), null);
   assert.equal(profileLoginUrl("javascript:alert(1)", "noah"), null);

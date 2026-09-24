@@ -20,7 +20,7 @@ const client = () =>
     profileToken: "profile-key-1234567890",
   });
 
-test("목록·상세·파일 읽기 경로와 모양", async () => {
+test("list, detail and file read paths and shapes", async () => {
   server.skills("sophie").seed("weekly", { files: { "references/a.md": "a" } });
   const list = await client().skills.list();
   assert.ok(list.ok);
@@ -36,7 +36,7 @@ test("목록·상세·파일 읽기 경로와 모양", async () => {
   );
 });
 
-test("쓰기는 X-DeskRPG-Actor 를 싣고, 충돌은 skill_changed 로 돌아온다", async () => {
+test("writes carry X-DeskRPG-Actor, and a conflict comes back as skill_changed", async () => {
   server.skills("sophie").seed("weekly");
   const res = await client().skills.writeFile(
     "weekly",
@@ -52,17 +52,17 @@ test("쓰기는 X-DeskRPG-Actor 를 싣고, 충돌은 skill_changed 로 돌아�
   assert.equal(server.lastRequest()!.headers["x-deskrpg-actor"], "u-1");
 });
 
-test("읽기 요청에는 X-DeskRPG-Actor 가 없다", async () => {
+test("read requests carry no X-DeskRPG-Actor", async () => {
   await client().skills.list();
   assert.equal(server.lastRequest()!.headers["x-deskrpg-actor"], undefined);
 });
 
-test("이름은 한 세그먼트로 인코딩한다", async () => {
+test("the name is encoded as a single segment", async () => {
   await client().skills.detail("a/b");
   assert.equal(server.lastRequest()!.path, "/p/sophie/deskrpg/skills/a%2Fb");
 });
 
-test("Hub 검색은 source 가 없으면 source= 를 붙이지 않는다", async () => {
+test("Hub search does not append source= when source is absent", async () => {
   await client().skills.hubSearch("pdf");
   assert.equal(server.lastRequest()!.path, "/p/sophie/deskrpg/skills/hub/search?q=pdf");
   await client().skills.hubSearch("pdf", "official");
@@ -72,7 +72,7 @@ test("Hub 검색은 source 가 없으면 source= 를 붙이지 않는다", async
   );
 });
 
-test("Hub 설치·작업 조회·curator·관계도 경로", async () => {
+test("Hub install, job lookup, curator and relationship graph paths", async () => {
   const install = await client().skills.hubInstall({ identifier: "a/b" }, "u-1");
   assert.ok(install.ok);
   const job = await client().skills.job("hub", install.data.jobId);
@@ -87,7 +87,7 @@ test("Hub 설치·작업 조회·curator·관계도 경로", async () => {
   assert.equal(server.lastRequest()!.method, "DELETE");
 });
 
-test("보관→복원→영구 삭제 경로", async () => {
+test("archive→restore→permanent delete paths", async () => {
   server.skills("sophie").seed("old");
   assert.ok((await client().skills.archive("old", "u-1")).ok);
   const archived = await client().skills.listArchived();

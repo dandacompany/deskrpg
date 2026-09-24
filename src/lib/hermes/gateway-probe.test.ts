@@ -8,7 +8,7 @@ function fakeFetch(impl: (url: string) => Promise<Response> | Response) {
     Promise.resolve(impl(String(input)))) as unknown as typeof fetch;
 }
 
-/** 진짜 Hermes API Server 의 실측 응답. /health 는 무인증 200, /v1/models 는 401 JSON. */
+/** Measured responses from a real Hermes API Server. /health is unauthenticated 200, /v1/models is 401 JSON. */
 function apiServerFetch(onCall?: (url: string) => void) {
   return fakeFetch((url) => {
     onCall?.(url);
@@ -20,7 +20,7 @@ function apiServerFetch(onCall?: (url: string) => void) {
   });
 }
 
-/** Hermes 대시보드(SPA). 실측: 아무 경로에나 200 + HTML 을 돌려준다. */
+/** The Hermes dashboard (SPA). Measured: returns 200 + HTML for any path. */
 function dashboardFetch() {
   return fakeFetch(
     () =>
@@ -32,7 +32,7 @@ function dashboardFetch() {
 }
 
 test("probeHermesGateway", async (t) => {
-  await t.test("/health 200이면 hermes로 판정한다", async () => {
+  await t.test("classifies /health 200 as hermes", async () => {
     let called = "";
     const result = await probeHermesGateway("http://127.0.0.1:8642", {
       fetchImpl: apiServerFetch((url) => {
@@ -43,7 +43,7 @@ test("probeHermesGateway", async (t) => {
     assert.equal(called, "http://127.0.0.1:8642/health");
   });
 
-  await t.test("끝의 슬래시를 중복시키지 않는다", async () => {
+  await t.test("does not duplicate the trailing slash", async () => {
     let called = "";
     await probeHermesGateway("http://127.0.0.1:8642/", {
       fetchImpl: apiServerFetch((url) => {
@@ -53,14 +53,14 @@ test("probeHermesGateway", async (t) => {
     assert.equal(called, "http://127.0.0.1:8642/health");
   });
 
-  await t.test("응답은 왔지만 200이 아니면 not-hermes다", async () => {
+  await t.test("a response that is not 200 is not-hermes", async () => {
     const result = await probeHermesGateway("http://127.0.0.1:8642", {
       fetchImpl: fakeFetch(() => new Response("nope", { status: 404 })),
     });
     assert.deepEqual(result, { kind: "not-hermes", status: 404 });
   });
 
-  await t.test("연결 자체가 실패하면 unreachable이다", async () => {
+  await t.test("a failed connection is unreachable", async () => {
     const result = await probeHermesGateway("http://127.0.0.1:8642", {
       fetchImpl: (() => Promise.reject(new Error("ECONNREFUSED"))) as unknown as typeof fetch,
     });
@@ -68,9 +68,9 @@ test("probeHermesGateway", async (t) => {
     assert.match((result as { error: string }).error, /ECONNREFUSED/);
   });
 
-  await t.test("응답이 늦으면 타임아웃되고 매달리지 않는다", async () => {
-    // 이 프로브가 존재하는 이유가 이것이다 — 옛 게이트웨이 테스트는 OpenClaw WS
-    // 핸드셰이크를 재시도하며 24초를 매달렸다.
+  await t.test("a slow response times out instead of hanging", async () => {
+    // This is why this probe exists — the old gateway test hung for 24 seconds
+    // retrying the OpenClaw WS handshake.
     const started = Date.now();
     const result = await probeHermesGateway("http://127.0.0.1:8642", {
       timeoutMs: 30,
@@ -83,7 +83,7 @@ test("probeHermesGateway", async (t) => {
     assert.ok(Date.now() - started < 5000, "타임아웃이 걸려야 한다");
   });
 
-  await t.test("profile을 주면 /p/<이름>/health 를 찌른다", async () => {
+  await t.test("with a profile, hits /p/<name>/health", async () => {
     let called = "";
     const result = await probeHermesGateway("http://127.0.0.1:8642", {
       profile: "sophie",
@@ -95,8 +95,8 @@ test("probeHermesGateway", async (t) => {
     assert.equal(called, "http://127.0.0.1:8642/p/sophie/health");
   });
 
-  await t.test("없는 프로필은 404 — not-hermes 로 구분된다", async () => {
-    // 실측: /p/nosuch/health → 404, /p/sophie/health → 200.
+  await t.test("a missing profile is 404 — distinguished as not-hermes", async () => {
+    // Measured: /p/nosuch/health → 404, /p/sophie/health → 200.
     const result = await probeHermesGateway("http://127.0.0.1:8642", {
       profile: "nosuch",
       fetchImpl: fakeFetch(() => new Response("no", { status: 404 })),
@@ -104,7 +104,7 @@ test("probeHermesGateway", async (t) => {
     assert.deepEqual(result, { kind: "not-hermes", status: 404 });
   });
 
-  await t.test("프로필 이름은 URL 인코딩된다", async () => {
+  await t.test("the profile name is URL-encoded", async () => {
     let called = "";
     await probeHermesGateway("http://127.0.0.1:8642", {
       profile: "a b",
@@ -115,18 +115,18 @@ test("probeHermesGateway", async (t) => {
     assert.equal(called, "http://127.0.0.1:8642/p/a%20b/health");
   });
 
-  await t.test("대시보드는 hermes 가 아니다 — /health 200 만으로 통과시키지 않는다", async () => {
-    // 오늘 우리를 가장 오래 막은 오탐이다. Hermes 대시보드(9119)는 /health 에 200 을
-    // 내고, SPA catch-all 이라 /v1/models 에도 200 + HTML 을 낸다. 상태 코드만 보면
-    // 진짜 API 서버(8643)와 구분되지 않아, 틀린 포트가 "연결됨"으로 통과했다.
+  await t.test("the dashboard is not hermes — /health 200 alone does not pass", async () => {
+    // The false positive that blocked us the longest today. The Hermes dashboard (9119) returns 200 on /health,
+    // and being an SPA catch-all it returns 200 + HTML on /v1/models too. Looking only at status codes,
+    // it is indistinguishable from the real API server (8643), so the wrong port passed as "connected".
     const result = await probeHermesGateway("http://127.0.0.1:9119", {
       fetchImpl: dashboardFetch(),
     });
     assert.deepEqual(result, { kind: "dashboard", status: 200 });
   });
 
-  await t.test("판별은 상태 코드가 아니라 content-type 으로 한다", async () => {
-    // 대시보드도 200 을 낸다. 갈리는 것은 본문이 JSON 이냐 HTML 이냐다.
+  await t.test("discrimination uses content-type, not the status code", async () => {
+    // The dashboard also returns 200. What differs is whether the body is JSON or HTML.
     const result = await probeHermesGateway("http://127.0.0.1:8642", {
       fetchImpl: fakeFetch((url) =>
         url.endsWith("/health")
@@ -140,7 +140,7 @@ test("probeHermesGateway", async (t) => {
     assert.equal(result.kind, "hermes");
   });
 
-  await t.test("두 번째 요청도 프로필 스코프를 지킨다", async () => {
+  await t.test("the second request also keeps the profile scope", async () => {
     const urls: string[] = [];
     await probeHermesGateway("http://127.0.0.1:8642", {
       profile: "sophie",
@@ -152,9 +152,9 @@ test("probeHermesGateway", async (t) => {
     ]);
   });
 
-  await t.test("확인을 끝내지 못하면 hermes 라고 하지 않는다", async () => {
-    // /health 는 통과했지만 두 번째 요청이 실패한 경우. 여기서 hermes 로 통과시키면
-    // 지금 고치려는 오탐이 그대로 남는다 — 긍정적 증거가 있을 때만 hermes 다.
+  await t.test("does not say hermes if the check cannot be completed", async () => {
+    // /health passed but the second request failed. Passing it as hermes here would
+    // leave the very false positive we are fixing — it is hermes only with positive evidence.
     const result = await probeHermesGateway("http://127.0.0.1:8642", {
       fetchImpl: fakeFetch((url) => {
         if (url.endsWith("/health")) return new Response("ok", { status: 200 });

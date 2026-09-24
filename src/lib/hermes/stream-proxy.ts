@@ -1,11 +1,11 @@
 /**
- * 플러그인 바이트 응답을 브라우저로 흘린다. 본문은 `ReadableStream` 그대로 — 모으지 않는다.
- * 헤더는 허용 목록만 옮긴다(게이트웨이 앞단이 붙인 쿠키·내부 헤더가 새지 않게). Range(206/416)는
- * 상태와 `content-range` 를 그대로 둔다. 토큰은 요청 쪽에서만 쓰였고 여기엔 없다(하드 게이트 2).
+ * Streams a plugin byte response to the browser. The body stays a `ReadableStream` — not collected.
+ * Only allowlisted headers are copied (so cookies/internal headers added in front of the gateway do not leak). Range
+ * (206/416) keeps the status and `content-range` as-is. The token was used only on the request side and is not here (hard gate 2).
  *
- * `content-security-policy: sandbox` 와 `x-content-type-options: nosniff` 는 업스트림이 무엇을
- * 보내든 항상 강제한다 — 사용자가 올린 HTML/SVG 를 DeskRPG 원점에서 쿠키를 쥔 채 인라인 렌더링하지
- * 못하게 막는 마지막 방어선이다(업스트림 신뢰 금지).
+ * `content-security-policy: sandbox` and `x-content-type-options: nosniff` are always enforced no matter what the
+ * upstream sends — the last line of defense against inline-rendering user-uploaded HTML/SVG on the DeskRPG origin
+ * while holding cookies (never trust the upstream).
  */
 import { NextResponse } from "next/server";
 
@@ -23,13 +23,13 @@ const PASS_HEADERS = [
 ] as const;
 
 export interface StreamProxyOptions {
-  /** 항상 다운로드시킨다(칸반 첨부처럼 임의 사용자 업로드일 때) — inline 을 절대 허용하지 않는다. */
+  /** Always force download (for arbitrary user uploads like kanban attachments) — never allow inline. */
   forceAttachment?: boolean;
-  /** 업스트림이 filename 파라미터를 안 줬을 때 attachment 에 쓸 이름(RFC 6266 인코딩). */
+  /** Name to use in attachment when the upstream gives no filename parameter (RFC 6266 encoding). */
   filename?: string;
 }
 
-/** 기존 disposition 의 filename 파라미터는 보존하면서 타입만 attachment 로 바꾼다. */
+/** Changes only the type to attachment while preserving the existing disposition's filename parameter. */
 function forceAttachmentDisposition(existing: string | null, filename: string | undefined): string {
   if (existing !== null) {
     const semiIdx = existing.indexOf(";");
@@ -57,7 +57,7 @@ export function streamProxyResponse(upstream: Response, opts?: StreamProxyOption
   return new Response(upstream.body, { status: upstream.status, headers });
 }
 
-/** `pluginFailureResponse` 와 같은 규약 — 상태는 플러그인 것, 닿지 못하면 503/504. */
+/** Same convention as `pluginFailureResponse` — the status is the plugin's; 503/504 when unreachable. */
 export function rawFailureResponse(res: Extract<RawPluginResponse, { ok: false }>): NextResponse {
   const status = res.status > 0 ? res.status : res.failure.code === "timeout" ? 504 : 503;
   return cronError(status, res.failure.code, res.failure.message, res.failure.details);

@@ -8,7 +8,7 @@ export type HermesCapabilities = {
 export type HermesRunEventName =
   | "run.started"
   | "message.started"
-  // 회의 경로(/v1/runs)는 assistant.* 대신 message.* 를 쓴다 — 같은 서버, 다른 방언.
+  // The meeting path (/v1/runs) uses message.* instead of assistant.* — same server, different dialect.
   | "assistant.delta"
   | "message.delta"
   | "tool.progress"

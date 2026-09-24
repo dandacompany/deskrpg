@@ -53,10 +53,10 @@ describe("createSseParser", () => {
   });
 });
 
-// 실측 회귀 — /v1/runs/<id>/events 프레임을 그대로 옮긴 것이다(Hermes v0.20.2).
-// 이 엔드포인트는 SSE `event:` 줄을 쓰지 않고 이름을 data JSON 안에 넣는다.
-describe("SSE — /v1/runs 방언", () => {
-  test("event: 줄이 없으면 payload 의 event 필드를 이름으로 쓴다", () => {
+// Measured regression — frames copied verbatim from /v1/runs/<id>/events (Hermes v0.20.2).
+// This endpoint does not use SSE `event:` lines and puts the name inside the data JSON.
+describe("SSE — /v1/runs dialect", () => {
+  test("uses the payload's event field as the name when there is no event: line", () => {
     const parser = createSseParser();
     const events = parser.push(
       'data: {"event": "message.delta", "run_id": "run_1", "delta": "S"}\n\n' +
@@ -69,13 +69,13 @@ describe("SSE — /v1/runs 방언", () => {
     assert.equal(events[0].data.delta, "S");
   });
 
-  test("event: 줄이 있으면 그쪽이 우선한다 — 1:1 방언은 그대로 동작한다", () => {
+  test("an event: line takes precedence — the 1:1 dialect keeps working", () => {
     const parser = createSseParser();
     const [e] = parser.push('event: assistant.delta\ndata: {"event": "ignored", "delta": "x"}\n\n');
     assert.equal(e.event, "assistant.delta", "명시적 event: 줄을 payload 필드가 덮으면 안 된다");
   });
 
-  test("event 필드도 event: 줄도 없으면 기존대로 message 다", () => {
+  test("with neither an event field nor an event: line, it is message as before", () => {
     const parser = createSseParser();
     const [e] = parser.push('data: {"delta": "x"}\n\n');
     assert.equal(e.event, "message");

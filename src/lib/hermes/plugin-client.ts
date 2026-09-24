@@ -1,27 +1,27 @@
 import { transportFetch } from "./setup/transport";
 /**
- * `deskrpg-hermes-plugin` 라우트 호출 래퍼.
+ * Wrapper for calling `deskrpg-hermes-plugin` routes.
  *
- * **토큰 선택을 이 파일 밖으로 새어 나가지 않게 한다.** Hermes 의 인증은
- * 프로필별 fail-closed 라, 어떤 경로에 어떤 키를 쓰는지 틀리면 전부 401 이다:
+ * **Keeps token selection from leaking outside this file.** Hermes auth is
+ * fail-closed per profile, so getting which key goes with which path wrong means 401 everywhere:
  *
- *     /deskrpg/*            → default(게이트웨이) 토큰
- *     /p/{name}/deskrpg/*   → 그 프로필의 토큰
+ *     /deskrpg/*            → default (gateway) token
+ *     /p/{name}/deskrpg/*   → that profile's token
  *
- * 호출부마다 이 규칙을 기억하게 하면 언젠가 틀린다. 여기 한 곳에 가둔다.
+ * Making every call site remember this rule means it will be wrong someday. It is confined to this one place.
  *
- * 어떤 메서드도 **던지지 않는다** — 네트워크 실패까지 `{ok:false}` 로 돌려준다.
- * 프록시 라우트가 그것을 200 + errorCode 로 옮기기 때문이다.
+ * No method **throws** — even network failures come back as `{ok:false}`.
+ * That is because the proxy routes carry it over as 200 + errorCode.
  *
- * 리뷰 라운드 1:
- * - I-1: 200 인데 JSON 이 아니면(게이트웨이 앞단이 HTML 오류 페이지를 주는 경우가
- *   실제로 있었다) 예전엔 `{ok:true, data:null}` 을 내보내 호출부가 그 다음 줄에서
- *   던졌다. 형제 모듈 `plugin-capability.ts` 와 같은 기준으로 접는다 — 성공을
- *   자칭하지 않는다. (204 를 쓰는 라우트는 이 API 에 없다.)
- * - I-3: `probeDeskrpgPlugin` 은 타임아웃이 있는데 정작 데이터를 주고받는 이 파일은
- *   없어서, 게이트웨이가 소켓을 열어두면 라우트 핸들러가 무한정 매달렸다. 재시도할
- *   문제(`unreachable`)와 주소를 확인할 문제(`timeout`)는 사용자가 할 일이 달라 코드를
- *   분리한다.
+ * Review round 1:
+ * - I-1: on a 200 with non-JSON (it really happened that something in front of the gateway served
+ *   an HTML error page) we used to emit `{ok:true, data:null}`, and the caller threw on the very
+ *   next line. Fold it by the same criterion as the sibling module `plugin-capability.ts` — do not
+ *   claim success. (No route in this API uses 204.)
+ * - I-3: `probeDeskrpgPlugin` has a timeout but this file, which actually exchanges data, did
+ *   not, so when the gateway kept the socket open the route handler hung indefinitely. A problem
+ *   to retry (`unreachable`) and a problem to check the address (`timeout`) call for different user
+ *   actions, so the codes are separated.
  */
 
 import { mapPluginFailure, type PluginFailure } from "./plugin-errors";
@@ -76,8 +76,8 @@ const UNREACHABLE: PluginFailure = {
   details: {},
 };
 
-// I-3: 게이트웨이에 닿았고 응답을 기다리는 중에 시간이 다 됐다. `unreachable` 과
-// 사용자가 할 일이 다르다 — 재시도가 아니라 주소·상태를 먼저 확인해야 한다.
+// I-3: the gateway was reached and time ran out while waiting for the response. The user action differs
+// from `unreachable` — check the address/state first rather than retrying.
 const TIMEOUT: PluginFailure = {
   code: "timeout",
   message: "",
@@ -86,8 +86,8 @@ const TIMEOUT: PluginFailure = {
   details: {},
 };
 
-// I-1: 2xx 인데 본문이 JSON 객체가 아니면(HTML 오류 페이지, `null`, 파싱 실패 등)
-// 성공을 자칭하지 않는다. `plugin-capability.ts:28` 의 판정 기준과 맞춘다.
+// I-1: on a 2xx whose body is not a JSON object (HTML error page, `null`, parse failure, etc.)
+// do not claim success. Matches the criterion in `plugin-capability.ts:28`.
 const MALFORMED_RESPONSE: PluginFailure = {
   code: "malformed_response",
   message: "",
@@ -106,17 +106,17 @@ type TransportInput = {
 
 type CallInit = {
   method?: string;
-  /** JSON 본문. `formData` 와 함께 쓰지 않는다. */
+  /** JSON body. Not used together with `formData`. */
   body?: unknown;
-  /** multipart 본문(첨부 업로드). content-type 은 fetch 가 boundary 와 함께 붙인다. */
+  /** multipart body (attachment upload). fetch adds the content-type together with the boundary. */
   formData?: FormData;
   headers?: Record<string, string>;
 };
 
 /**
- * 세 클라이언트(`createPluginClient`·`createOwnerPluginClient`·`createProfilePluginClient`)가
- * 공유하는 한 겹 — 타임아웃·도달 실패·JSON 판정·`mapPluginFailure` 를 여기 한 곳에 둔다.
- * 토큰은 호출마다 받되, 어느 토큰을 쓸지는 바깥의 각 클라이언트가 생성 시점에 고정한다.
+ * The one layer shared by the three clients (`createPluginClient`·`createOwnerPluginClient`·`createProfilePluginClient`)
+ * — timeout, unreachable, JSON check and `mapPluginFailure` live here in one place.
+ * The token is taken per call, but which token to use is fixed by each outer client at creation time.
  */
 function createPluginTransport(input: TransportInput) {
   const fetchImpl = input.fetchImpl ?? transportFetch;
@@ -148,7 +148,7 @@ function createPluginTransport(input: TransportInput) {
         signal: controller.signal,
       });
     } catch {
-      // 중단이 우리가 건 타이머 때문이었는지로 재시도(unreachable)와 타임아웃을 가른다.
+      // Whether the abort came from our own timer separates retry (unreachable) from timeout.
       return controller.signal.aborted
         ? { ok: false, failure: TIMEOUT, status: 0 }
         : { ok: false, failure: UNREACHABLE, status: 0 };
@@ -164,8 +164,8 @@ function createPluginTransport(input: TransportInput) {
       parseFailed = true;
     }
 
-    // 2xx 인데 본문이 객체가 아니면(HTML 오류 페이지, 파싱 실패, `null` 등) 그것도
-    // 실패다 — 성공을 자칭한 채 null 을 실어 보내면 호출부가 다음 줄에서 던진다.
+    // A 2xx whose body is not an object (HTML error page, parse failure, `null`, etc.) is also a
+    // failure — sending null while claiming success makes the caller throw on the next line.
     const isSuccessStatus = res.status >= 200 && res.status < 300;
     if (isSuccessStatus && (parseFailed || typeof body !== "object" || body === null)) {
       return { ok: false, failure: MALFORMED_RESPONSE, status: res.status };
@@ -185,7 +185,7 @@ function createPluginTransport(input: TransportInput) {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let res: Response;
     try {
-      // 타임아웃은 응답 머리까지만 — 본문은 스트림이라 오래 걸려도 정상이다.
+      // The timeout covers only up to the response head — the body is a stream, so taking long is normal.
       res = await fetchImpl(`${base}${path}`, {
         method: "GET",
         headers: { authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
@@ -212,7 +212,7 @@ function createPluginTransport(input: TransportInput) {
   return { call, callRaw };
 }
 
-/** 쿼리스트링 조립. `undefined` 값은 빼고, 있는 것만 인코딩한다. 비면 빈 문자열. */
+/** Builds a query string. Drops `undefined` values and encodes only what is present. Empty string if none. */
 function query(params: Record<string, string | number | boolean | undefined>): string {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(params)) {
@@ -225,7 +225,7 @@ function query(params: Record<string, string | number | boolean | undefined>): s
 export function createPluginClient(input: TransportInput & { defaultToken: string }): PluginClient {
   const { call } = createPluginTransport(input);
 
-  // 프로필 이름은 검증을 통과하지 않은 채 들어올 수 있는 경로가 있다(사용자 입력).
+  // There are paths where the profile name can come in without passing validation (user input).
   const seg = (name: string) => encodeURIComponent(name);
 
   return {
@@ -247,7 +247,7 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
         },
       }),
 
-    // `confirm` 이 경로의 이름과 정확히 같아야 플러그인이 지운다(400 가드).
+    // The plugin deletes only if `confirm` exactly matches the name in the path (400 guard).
     deleteProfile: (name) =>
       call(
         `/deskrpg/profiles/${seg(name)}?confirm=${encodeURIComponent(name)}`,
@@ -264,13 +264,13 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
 
     getConfig: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/config`, profileToken),
 
-    // 모델·프로바이더 목록. 프로필 스코프다 — 인증 상태가 프로필별로 갈릴 수 있다.
+    // Model/provider list. Profile-scoped — auth state can differ per profile.
     getCatalog: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/catalog`, profileToken),
 
     putConfig: (name, profileToken, patch) =>
       call(`/p/${seg(name)}/deskrpg/config`, profileToken, { method: "PUT", body: patch }),
 
-    // 직원 설정 피커(0.9.0). 프로필 스코프 — 스킬 폴더와 키 설정 여부가 프로필마다 다르다.
+    // Employee settings picker (0.9.0). Profile-scoped — skill folders and key settings differ per profile.
     getToolsets: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/toolsets`, profileToken),
     getSkills: (name, profileToken) => call(`/p/${seg(name)}/deskrpg/skills`, profileToken),
     getToolProviders: (name, profileToken, toolset) =>
@@ -281,7 +281,7 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
         body,
       }),
 
-    // 프로바이더 인증(0.9.0). 전부 프로필 스코프·프로필 토큰 — 세그먼트는 전부 인코딩한다.
+    // Provider auth (0.9.0). All profile-scoped with the profile token — every segment is encoded.
     startOAuth: (name, profileToken, provider) =>
       call(`/p/${seg(name)}/deskrpg/oauth/${seg(provider)}/start`, profileToken, {
         method: "POST",
@@ -310,14 +310,14 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
 }
 
 // ---------------------------------------------------------------------------
-// 자동화 계약(v0.6.0+) — 오너 키 클라이언트(칸반·이벤트) / 프로필 키 클라이언트(크론)
+// Automation contract (v0.6.0+) — owner-key client (kanban·events) / profile-key client (cron)
 //
-// 토큰을 **생성 시점에** 고정한다. `PluginClient` 처럼 메서드마다 토큰을 받으면 칸반
-// 호출에 프로필 키를 넘기는 실수가 타입으로 막히지 않는다(둘 다 string). 오너 클라이언트에는
-// 프로필 경로가 없고 프로필 클라이언트에는 오너 경로가 없으니, 섞을 자리 자체가 없다.
+// The token is fixed **at creation time**. If, like `PluginClient`, each method took a token, the mistake of passing
+// a profile key to a kanban call would not be caught by types (both are string). The owner client has no
+// profile paths and the profile client has no owner paths, so there is nowhere to mix them.
 // ---------------------------------------------------------------------------
 
-/** 오너(게이트웨이) 키로만 부르는 표면 — `/deskrpg/info`, `/deskrpg/kanban/*`, `/deskrpg/events`. */
+/** The surface called only with the owner (gateway) key — `/deskrpg/info`, `/deskrpg/kanban/*`, `/deskrpg/events`. */
 export function createOwnerPluginClient(
   input: TransportInput & { ownerToken: string },
 ): OwnerPluginClient {
@@ -493,14 +493,14 @@ export function createOwnerPluginClient(
   };
 }
 
-/** 한 프로필의 키로만 부르는 표면 — `/p/{profile}/deskrpg/cron/*` 와 스킬 관리(`skills|curator|learning/*`). */
+/** The surface called only with one profile's key — `/p/{profile}/deskrpg/cron/*` and skill management (`skills|curator|learning/*`). */
 export function createProfilePluginClient(
   input: TransportInput & { profileName: string; profileToken: string },
 ): ProfilePluginClient {
   const { call } = createPluginTransport(input);
   const token = input.profileToken;
   const seg = (value: string) => encodeURIComponent(value);
-  // `hermes-client.ts` 와 같은 프리픽스 규약 — 프로필 스코프는 `/p/<name>` 뒤에 붙는다.
+  // Same prefix convention as `hermes-client.ts` — profile scope is appended after `/p/<name>`.
   const root = `/p/${seg(input.profileName)}/deskrpg/cron`;
   const job = (id: string, suffix = "") => `${root}/jobs/${seg(id)}${suffix}`;
 
@@ -526,7 +526,7 @@ export function createProfilePluginClient(
 
   const prof = `/p/${seg(input.profileName)}/deskrpg`;
   const skill = (name: string, suffix = "") => `${prof}/skills/${seg(name)}${suffix}`;
-  // 변경 요청만 사용자 id 를 싣는다 — 플러그인이 ledger 에 변경자로 남긴다.
+  // Only mutating requests carry the user id — the plugin records it as the changer in the ledger.
   const as = (actor: string) => ({ headers: { "x-deskrpg-actor": actor } });
 
   const skills: SkillAdminApi = {

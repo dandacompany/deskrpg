@@ -24,8 +24,8 @@ function recorder(responses: Array<{ status: number; json: unknown }>) {
   return { calls, fetchImpl };
 }
 
-describe("plugin client — 토큰 스코프", () => {
-  it("프로필 목록·생성·삭제는 프리픽스 없이 default 토큰을 쓴다", async () => {
+describe("plugin client — token scope", () => {
+  it("profile list/create/delete use the default token without a prefix", async () => {
     const { calls, fetchImpl } = recorder([
       { status: 200, json: { profiles: [] } },
       { status: 201, json: { name: "noah", apiKey: "k".repeat(20), keyIssued: true } },
@@ -44,7 +44,7 @@ describe("plugin client — 토큰 스코프", () => {
     assert.equal(calls[0].url, "http://gw:8642/deskrpg/profiles");
     assert.equal(calls[1].url, "http://gw:8642/deskrpg/profiles");
     assert.equal(calls[1].method, "POST");
-    // confirm 가드는 플러그인의 요구사항이다 — 없으면 400 이 난다.
+    // The confirm guard is a plugin requirement — without it you get 400.
     assert.equal(calls[2].url, "http://gw:8642/deskrpg/profiles/noah?confirm=noah");
     assert.equal(calls[2].method, "DELETE");
     for (const call of calls) {
@@ -52,7 +52,7 @@ describe("plugin client — 토큰 스코프", () => {
     }
   });
 
-  it("인격·설정은 프로필 프리픽스와 프로필 토큰을 쓴다", async () => {
+  it("identity/config use the profile prefix and the profile token", async () => {
     const { calls, fetchImpl } = recorder([
       { status: 200, json: { body: "hi", isDefaultTemplate: false, revision: "abc" } },
       { status: 200, json: { model: "gpt-5.6-sol" } },
@@ -68,20 +68,20 @@ describe("plugin client — 토큰 스코프", () => {
 
     assert.equal(calls[0].url, "http://gw:8642/p/noah/deskrpg/identity");
     assert.equal(calls[1].url, "http://gw:8642/p/noah/deskrpg/config");
-    // default 토큰을 쓰면 fail-closed 인증에 막혀 401 이 난다.
+    // Using the default token gets blocked by fail-closed auth with 401.
     for (const call of calls) {
       assert.equal(call.auth, "Bearer profile-key-0987654321");
     }
   });
 
-  it("프로필 이름을 URL 에 인코딩한다", async () => {
+  it("encodes the profile name in the URL", async () => {
     const { calls, fetchImpl } = recorder([{ status: 200, json: {} }]);
     const client = createPluginClient({ baseUrl: "http://gw:8642", defaultToken: "t", fetchImpl });
     await client.getConfig("a b/c", "pt");
     assert.equal(calls[0].url, "http://gw:8642/p/a%20b%2Fc/deskrpg/config");
   });
 
-  it("putIdentity 는 ifRevision 을 본문에 싣는다", async () => {
+  it("putIdentity puts ifRevision in the body", async () => {
     const { calls, fetchImpl } = recorder([{ status: 200, json: { revision: "def" } }]);
     const client = createPluginClient({ baseUrl: "http://gw:8642", defaultToken: "t", fetchImpl });
     await client.putIdentity("noah", "pt", { body: "새 인격", ifRevision: "abc" });
@@ -89,8 +89,8 @@ describe("plugin client — 토큰 스코프", () => {
   });
 });
 
-describe("plugin client — 실패", () => {
-  it("409 는 던지지 않고 failure 로 돌아온다", async () => {
+describe("plugin client — failures", () => {
+  it("409 comes back as a failure instead of throwing", async () => {
     const { fetchImpl } = recorder([
       { status: 409, json: { error: "revision_conflict", currentRevision: "zzz" } },
     ]);
@@ -102,7 +102,7 @@ describe("plugin client — 실패", () => {
     assert.equal(res.status, 409);
   });
 
-  it("200 + unreadable 도 실패로 돌아온다", async () => {
+  it("200 + unreadable also comes back as a failure", async () => {
     const { fetchImpl } = recorder([
       {
         status: 200,
@@ -116,7 +116,7 @@ describe("plugin client — 실패", () => {
     assert.equal(res.failure.blocksEditor, true);
   });
 
-  it("네트워크 실패도 던지지 않는다", async () => {
+  it("network failures don't throw either", async () => {
     const fetchImpl = (async () => {
       throw new Error("ECONNREFUSED");
     }) as unknown as typeof fetch;
@@ -127,10 +127,10 @@ describe("plugin client — 실패", () => {
     assert.equal(res.failure.code, "unreachable");
   });
 
-  // I-1 / M-2: 200 인데 JSON 이 아니면(HTML 오류 페이지 등) {ok:true, data:null} 을 내보내
-  // 호출부가 `res.data.body` 에서 던졌다. 형제 모듈 plugin-capability.ts 와 같은 기준으로
-  // 접어야 한다 — 성공을 자칭하면서 null 을 실어 보내지 않는다.
-  it("200 인데 JSON 이 아니면(HTML 등) 성공을 자칭하지 않는다", async () => {
+  // I-1 / M-2: a 200 that isn't JSON (an HTML error page, etc.) used to emit {ok:true, data:null}, and
+  // the caller threw on `res.data.body`. It must be folded by the same standard as the sibling module
+  // plugin-capability.ts — never claim success while sending null.
+  it("a 200 that isn't JSON (HTML etc.) does not claim success", async () => {
     const fetchImpl = (async () =>
       new Response("<html>gateway error</html>", {
         status: 200,
@@ -143,7 +143,7 @@ describe("plugin client — 실패", () => {
     assert.equal(res.failure.code, "malformed_response");
   });
 
-  it("200 인데 JSON 배열처럼 객체가 아닌 값이 와도 성공을 자칭하지 않는다", async () => {
+  it("a 200 with a non-object value such as a JSON array does not claim success", async () => {
     const fetchImpl = (async () =>
       new Response("null", {
         status: 200,
@@ -157,10 +157,10 @@ describe("plugin client — 실패", () => {
   });
 });
 
-describe("plugin client — 타임아웃 (I-3)", () => {
-  it("게이트웨이가 응답 없이 소켓을 열어두면 timeoutMs 뒤 timeout 코드로 접는다", async () => {
-    // fetchImpl 이 신호가 중단될 때까지 매달렸다가 AbortError 로 거부한다 — 실제
-    // undici/fetch 가 signal 을 받았을 때의 동작을 흉내낸다.
+describe("plugin client — timeout (I-3)", () => {
+  it("folds into the timeout code after timeoutMs when the gateway holds the socket open without responding", async () => {
+    // fetchImpl hangs until the signal aborts, then rejects with AbortError — mimicking how the real
+    // undici/fetch behaves when given a signal.
     const fetchImpl = ((_url: string, init?: RequestInit) =>
       new Promise((_resolve, reject) => {
         init?.signal?.addEventListener("abort", () => {
@@ -179,11 +179,11 @@ describe("plugin client — 타임아웃 (I-3)", () => {
     const res = await client.listProfiles();
     assert.equal(res.ok, false);
     if (res.ok) return;
-    // 재시도(unreachable)와 주소 확인(timeout)은 사용자가 할 일이 다르다.
+    // Retrying (unreachable) and checking the address (timeout) are different things for the user to do.
     assert.equal(res.failure.code, "timeout");
   });
 
-  it("타임아웃 전에 응답이 오면 정상 처리된다", async () => {
+  it("handles a response that arrives before the timeout normally", async () => {
     const fetchImpl = (async () =>
       new Response(JSON.stringify({ profiles: [] }), {
         status: 200,
@@ -200,8 +200,8 @@ describe("plugin client — 타임아웃 (I-3)", () => {
   });
 });
 
-describe("plugin client — 직원 설정 피커(0.9.0)", () => {
-  it("툴셋·스킬 목록은 프로필 경로와 프로필 토큰으로 부른다", async () => {
+describe("plugin client — staff settings pickers (0.9.0)", () => {
+  it("toolset/skill lists are called with the profile path and profile token", async () => {
     const { calls, fetchImpl } = recorder([
       { status: 200, json: { platform: "api_server", toolsets: [] } },
       { status: 200, json: { skills: [] } },
@@ -218,7 +218,7 @@ describe("plugin client — 직원 설정 피커(0.9.0)", () => {
     assert.equal(calls[1].url, "http://gw:8642/p/noah/deskrpg/skills");
   });
 
-  it("cloneFrom 은 있을 때만 본문에 싣는다", async () => {
+  it("puts cloneFrom in the body only when present", async () => {
     const { calls, fetchImpl } = recorder([
       { status: 201, json: { name: "noah", keyIssued: false } },
     ]);
@@ -233,7 +233,7 @@ describe("plugin client — 직원 설정 피커(0.9.0)", () => {
     assert.deepEqual(JSON.parse(calls[1].body!), { name: "noah", cloneFrom: "default" });
   });
 
-  it("cloneKeys 는 있을 때만 cloneFrom 과 함께 싣는다", async () => {
+  it("puts cloneKeys only when present, together with cloneFrom", async () => {
     const { calls, fetchImpl } = recorder([
       {
         status: 201,
@@ -259,8 +259,8 @@ describe("plugin client — 직원 설정 피커(0.9.0)", () => {
   });
 });
 
-describe("plugin client — 프로바이더 인증", () => {
-  it("여섯 호출이 프로필 경로·토큰·메서드·본문으로 나간다", async () => {
+describe("plugin client — provider auth", () => {
+  it("the six calls go out with the profile path, token, method and body", async () => {
     const { calls, fetchImpl } = recorder([{ status: 200, json: {} }]);
     const client = createPluginClient({
       baseUrl: "http://gw:8642",

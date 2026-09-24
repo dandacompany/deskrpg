@@ -7,15 +7,15 @@ import type { buildPluginCacheUpdate as BuildPluginCacheUpdateFn } from "./plugi
 
 const require = createRequire(import.meta.url);
 
-// PostgreSQL: `timestamp(withTimezone)` 컬럼은 date 모드라 드라이버가 `Date` 를 기대한다.
-// SQLite: `text` 컬럼은 문자열을 기대한다. `buildPluginCacheUpdate()` 는 이제 스스로
-// `nowForDb()` 를 부르므로(호출자가 값을 주입할 자리가 없다 — Task 9 라운드 3), 그
-// 방언 분기를 관찰하려면 `nowForDb()` 가 캡처된 시점의 `src/db/index.ts` 자체를
-// 다시 읽어야 한다. `isPostgres` 는 그 모듈 로드 시점의 상수라
-// (task-manager-timestamps.test.ts 와 같은 사고), require 캐시를 지우고 환경변수를
-// 바꿔 같은 프로세스 안에서 `db/index.ts` 와 `plugin-cache-update.ts` 를 함께
-// 다시 읽는다 — plugin-cache-update.ts 의 `import { nowForDb } from "@/db"` 가 새로
-// 읽힌 db/index.ts 를 다시 가리키게 하기 위해서다.
+// PostgreSQL: a `timestamp(withTimezone)` column is in date mode, so the driver expects a `Date`.
+// SQLite: a `text` column expects a string. `buildPluginCacheUpdate()` now calls
+// `nowForDb()` itself (there is no slot for the caller to inject a value — Task 9 round 3), so to
+// observe that dialect branch we must re-load `src/db/index.ts` itself at the point `nowForDb()` is captured.
+// `isPostgres` is a constant fixed at that module's load time
+// (same incident as task-manager-timestamps.test.ts), so we clear the require cache, change the env var,
+// and re-load `db/index.ts` and `plugin-cache-update.ts` together in the same process —
+// so that plugin-cache-update.ts's `import { nowForDb } from "@/db"` points at the freshly
+// loaded db/index.ts again.
 function loadBuildPluginCacheUpdate(env: {
   DB_TYPE: string;
   DATABASE_URL?: string;
@@ -42,18 +42,18 @@ function loadBuildPluginCacheUpdate(env: {
   return buildPluginCacheUpdate;
 }
 
-// 판정 D·F 회귀 방어: 게이트웨이 테스트 라우트가 db.update(...).set(...) 에 넘길 payload 의
-// 값 TYPE 을 방언별로 고정한다. `nowForDb()` 를 `new Date().toISOString()` 으로 되돌리면
-// PG 방언 케이스가 실패해야 한다 — 실제로 되돌려 확인함(task-9-report.md 참조).
+// Regression guard for verdicts D·F: pins, per dialect, the value TYPE of the payload the gateway test route
+// passes to db.update(...).set(...). Reverting `nowForDb()` to `new Date().toISOString()`
+// must make the PG dialect case fail — verified by actually reverting it (see task-9-report.md).
 //
-// 최종 리뷰 I-1 후속: `plugin-capability.test.ts` 에서 이 파일로 옮겼다 —
-// `buildPluginCacheUpdate` 자체가 `plugin-capability.ts` 에서 `plugin-cache-update.ts`
-// (서버 전용)로 옮겨졌기 때문이다(그 파일이 클라이언트 컴포넌트에서 직접 import 되며
-// `@/db` 를 더는 담을 수 없게 됐다 — 모듈 헤더 주석 참조).
+// Final review I-1 follow-up: moved here from `plugin-capability.test.ts` —
+// because `buildPluginCacheUpdate` itself moved from `plugin-capability.ts` to `plugin-cache-update.ts`
+// (server-only) (that file is imported directly from client components and
+// can no longer carry `@/db` — see the module header comment).
 describe("buildPluginCacheUpdate", () => {
   const plugin: PluginCapability = { status: "plugin_ready", version: "0.3.0" };
 
-  it("PostgreSQL 방언: 스스로 부른 nowForDb() 가 Date 를 낸다", () => {
+  it("PostgreSQL dialect: the nowForDb() it calls itself yields a Date", () => {
     const buildPluginCacheUpdate = loadBuildPluginCacheUpdate({
       DB_TYPE: "postgresql",
       DATABASE_URL: "postgres://fake:fake@localhost:5432/fake",
@@ -64,7 +64,7 @@ describe("buildPluginCacheUpdate", () => {
     assert.ok(payload.updatedAt instanceof Date);
   });
 
-  it("SQLite 방언: 스스로 부른 nowForDb() 가 ISO 문자열을 낸다", () => {
+  it("SQLite dialect: the nowForDb() it calls itself yields an ISO string", () => {
     const buildPluginCacheUpdate = loadBuildPluginCacheUpdate({ DB_TYPE: "sqlite" });
 
     const payload = buildPluginCacheUpdate(plugin);
@@ -73,12 +73,12 @@ describe("buildPluginCacheUpdate", () => {
   });
 });
 
-// 자동화 계약 블록(`/deskrpg/info` 의 capabilities·timezone·kanban)은
-// `gateway_resources.plugin_info_json`(텍스트 컬럼, 병행 태스크가 추가) 에 JSON 문자열로
-// 보관한다. 컬럼이 이 워크트리에 아직 없으므로 helper 는 문자열만 주고받는다 — 컬럼이
-// 생기면 라우트가 `{ pluginInfoJson }` 을 `.set()` 에 합치면 된다.
-describe("plugin_info_json 직렬화", () => {
-  it("info 가 있으면 JSON 문자열, 없으면 null 을 pluginInfoJson 에 싣는다", async () => {
+// The automation contract block (capabilities·timezone·kanban of `/deskrpg/info`) is stored
+// as a JSON string in `gateway_resources.plugin_info_json` (text column, added by a parallel task).
+// The column does not exist in this worktree yet, so the helper only exchanges strings — once the column
+// exists the route just merges `{ pluginInfoJson }` into `.set()`.
+describe("plugin_info_json serialization", () => {
+  it("puts a JSON string in pluginInfoJson when info exists, null otherwise", async () => {
     const { buildPluginInfoCacheUpdate, restorePluginInfo } = await import("./plugin-cache-update");
     const info = {
       plugin: "deskrpg" as const,
@@ -86,7 +86,8 @@ describe("plugin_info_json 직렬화", () => {
       capabilities: ["kanban", "cron", "events"],
       timezone: "Asia/Seoul",
       kanban: { dispatcher_present: true, attachments: false },
-      // 게이트웨이 목록이 이 캐시에서 대시보드 주소를 꺼낸다 — 왕복에서 빠지면 버튼이 사라진다.
+      // The gateway list pulls the dashboard address from this cache — dropping it from the round trip makes the
+      // button vanish.
       dashboard_url: "https://deskrpg-hermes.srv1.hstgr.cloud",
     };
     const payload = buildPluginInfoCacheUpdate(info);
@@ -97,7 +98,7 @@ describe("plugin_info_json 직렬화", () => {
     assert.equal(absent.pluginInfoJson, null);
   });
 
-  it("restorePluginInfo 는 깨진 JSON·낯선 모양을 null 로 접는다", async () => {
+  it("restorePluginInfo folds broken JSON and unfamiliar shapes into null", async () => {
     const { restorePluginInfo } = await import("./plugin-cache-update");
     assert.equal(restorePluginInfo(null), null);
     assert.equal(restorePluginInfo("{not json"), null);

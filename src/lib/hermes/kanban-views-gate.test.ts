@@ -19,13 +19,13 @@ function info(capabilities: string[], version = "0.11.0"): PluginInfo {
   } as PluginInfo;
 }
 
-test("capability 가 가용성의 정본이다 — 버전을 보지 않는다", () => {
-  // 버전으로 판단하면 "0.11.0 인데 404" 라는 진단 불가능한 상태가 생긴다.
+test("the capability is the source of truth for availability — the version is not checked", () => {
+  // Judging by version creates the undiagnosable state "0.11.0 but 404".
   assert.equal(supportsKanbanViews(info(["kanban", "kanban_views"], "0.9.0")), true);
   assert.equal(supportsKanbanViews(info(["kanban"], "9.9.9")), false);
 });
 
-test("info 가 없으면 no_info, capability 만 없으면 missing_capability", () => {
+test("no_info when info is missing, missing_capability when only the capability is missing", () => {
   assert.deepEqual(kanbanViewsGate(null), {
     ok: false,
     minVersion: KANBAN_VIEWS_MIN_VERSION,
@@ -40,11 +40,11 @@ test("info 가 없으면 no_info, capability 만 없으면 missing_capability", 
   });
 });
 
-test("있으면 통과한다", () => {
+test("passes when present", () => {
   assert.deepEqual(kanbanViewsGate(info(["kanban", "kanban_views"])), { ok: true });
 });
 
-test("자동화 최소 버전과 따로 둔다 — 없다고 칸반이 통째로 잠기지 않는다", async () => {
+test("kept separate from the automation minimum version — its absence does not lock kanban entirely", async () => {
   const { AUTOMATION_MIN_VERSION, meetsAutomationContract } = await import("./plugin-capability");
   const withoutViews = info(["kanban", "cron", "events"], AUTOMATION_MIN_VERSION);
   assert.equal(meetsAutomationContract(withoutViews).ok, true, "칸반은 계속 돌아야 한다");

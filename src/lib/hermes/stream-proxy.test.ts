@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { streamProxyResponse } from "./stream-proxy";
 
-test("허용 헤더만 옮기고 상태를 그대로 둔다", () => {
+test("copies only allowed headers and keeps the status as-is", () => {
   const upstream = new Response("abc", {
     status: 206,
     headers: {
@@ -25,11 +25,11 @@ test("허용 헤더만 옮기고 상태를 그대로 둔다", () => {
   assert.equal(res.headers.get("cache-control"), "private, no-store");
 });
 
-test("본문을 모으지 않고 흘린다 — 끝나지 않는 스트림의 첫 조각을 바로 읽는다", async () => {
+test("streams the body without buffering — reads the first chunk of a never-ending stream right away", async () => {
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(new TextEncoder().encode("first"));
-      // close 하지 않는다 — 버퍼링하면 여기서 영원히 기다린다.
+      // Don't close — if it buffered, it would wait here forever.
     },
   });
   const res = streamProxyResponse(new Response(body, { status: 200 }));
@@ -39,7 +39,7 @@ test("본문을 모으지 않고 흘린다 — 끝나지 않는 스트림의 첫
   await reader.cancel();
 });
 
-test("업스트림이 CSP·nosniff 를 안 보내도 강제로 붙인다", () => {
+test("forces CSP and nosniff even if upstream doesn't send them", () => {
   const upstream = new Response("<script>alert(1)</script>", {
     status: 200,
     headers: { "content-type": "text/html" },
@@ -49,7 +49,7 @@ test("업스트림이 CSP·nosniff 를 안 보내도 강제로 붙인다", () =>
   assert.equal(res.headers.get("x-content-type-options"), "nosniff");
 });
 
-test("업스트림의 약한 CSP 를 sandbox 로 덮어쓴다", () => {
+test("overrides upstream's weak CSP with sandbox", () => {
   const upstream = new Response("abc", {
     status: 200,
     headers: { "content-security-policy": "default-src *" },
@@ -58,7 +58,7 @@ test("업스트림의 약한 CSP 를 sandbox 로 덮어쓴다", () => {
   assert.equal(res.headers.get("content-security-policy"), "sandbox");
 });
 
-test("forceAttachment 는 inline 을 attachment 로 바꾸고, 없으면 새로 붙인다", () => {
+test("forceAttachment turns inline into attachment, and adds it if absent", () => {
   const withInline = streamProxyResponse(
     new Response("abc", {
       status: 200,

@@ -17,7 +17,7 @@ after(async () => server.close());
 
 const client = () => createOwnerPluginClient({ baseUrl: server.baseUrl, ownerToken: OWNER });
 
-test("목록은 profiles·board·taskId 를 쿼리로 보내고 페이지를 돌려준다", async () => {
+test("list sends profiles·board·taskId as query params and returns a page", async () => {
   server.seedArtifact({
     id: "a1",
     title: "보고서",
@@ -41,7 +41,7 @@ test("목록은 profiles·board·taskId 를 쿼리로 보내고 페이지를 돌
   assert.match(server.lastRequest()!.path, /profiles=sophie&board=b1.*task_id=t1/);
 });
 
-test("content 는 원시 Response 를 주고 Range 를 전달한다", async () => {
+test("content returns the raw Response and forwards Range", async () => {
   server.seedArtifact({ id: "a2", title: "t", profile: "sophie", body: "0123456789" });
   const res = await client().artifacts.content("a2", 1, { range: "bytes=2-5" });
   assert.equal(res.ok, true);
@@ -51,7 +51,7 @@ test("content 는 원시 Response 를 주고 Range 를 전달한다", async () =
   assert.equal(res.response.headers.get("content-security-policy"), "sandbox");
 });
 
-test("content 실패는 PluginFailure 로 접힌다", async () => {
+test("content failure folds into PluginFailure", async () => {
   const res = await client().artifacts.content("nope", 1, {});
   assert.equal(res.ok, false);
   if (res.ok) return;
@@ -59,7 +59,7 @@ test("content 실패는 PluginFailure 로 접힌다", async () => {
   assert.equal(res.failure.code, "artifact_not_found");
 });
 
-test("addVersion·remove 는 X-DeskRPG-User 를 붙인다", async () => {
+test("addVersion·remove attach X-DeskRPG-User", async () => {
   server.seedArtifact({ id: "a3", title: "t", profile: "sophie", body: "v1" });
   const added = await client().artifacts.addVersion(
     "a3",
@@ -72,12 +72,12 @@ test("addVersion·remove 는 X-DeskRPG-User 를 붙인다", async () => {
   assert.equal(removed.ok, true);
 });
 
-test("events.poll 은 include 를 쿼리로 보낸다", async () => {
+test("events.poll sends include as a query param", async () => {
   await client().events.poll({ board: "b1", include: "artifacts" });
   assert.match(server.lastRequest()!.path, /include=artifacts/);
 });
 
-test("첨부 바이트는 attachmentContent 로 스트림된다", async () => {
+test("attachment bytes are streamed via attachmentContent", async () => {
   const board = server.seedAttachment({
     board: "b1",
     taskId: "t1",

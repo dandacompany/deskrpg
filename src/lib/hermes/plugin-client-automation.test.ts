@@ -4,9 +4,9 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import { startFakePluginServer, type FakePluginServer } from "./fake-plugin-server";
 import { createOwnerPluginClient, createProfilePluginClient } from "./plugin-client";
 
-// 오너 키 스코프(칸반·이벤트)와 프로필 키 스코프(크론)를 실제 클라이언트 → 가짜 플러그인
-// 서버로 왕복시킨다. 가짜 서버는 스펙 A.1/A.2/A.3 을 재현할 뿐 해석하지 않는다 — 여기서
-// 고정하는 것은 "어떤 경로에 어떤 키·어떤 본문이 나가고 어떤 모양이 돌아오는가" 다.
+// Round-trips the owner-key scope (kanban·events) and the profile-key scope (cron) from the real client → a fake plugin
+// server. The fake server only reproduces spec A.1/A.2/A.3 and does not interpret it — what we
+// pin here is "which key and which body go to which path, and what shape comes back".
 
 const OWNER = "owner-key-1234567890";
 const SOPHIE = "sophie-key-0987654321";
@@ -47,7 +47,7 @@ function unwrap<T>(res: { ok: true; data: T } | { ok: false; failure: { code: st
 }
 
 describe("owner client — info", () => {
-  it("/deskrpg/info 를 오너 키로 부르고 계약 블록을 그대로 돌려준다", async () => {
+  it("calls /deskrpg/info with the owner key and returns the contract block as-is", async () => {
     const info = unwrap(await owner().info());
     assert.equal(info.plugin, "deskrpg");
     assert.equal(info.version, "0.6.0");
@@ -66,7 +66,7 @@ describe("owner client — info", () => {
     assert.equal(server.lastRequest()?.auth, `Bearer ${OWNER}`);
   });
 
-  it("가짜 서버의 버전·capabilities 를 바꿀 수 있다", async () => {
+  it("the fake server's version·capabilities can be changed", async () => {
     server.setInfo({ version: "0.5.9", capabilities: ["kanban"] });
     const info = unwrap(await owner().info());
     assert.equal(info.version, "0.5.9");
@@ -75,7 +75,7 @@ describe("owner client — info", () => {
 });
 
 describe("auth — A.3", () => {
-  it("오너 스코프에 프로필 키를 보내면 401 로 접힌다", async () => {
+  it("sending a profile key to the owner scope folds into 401", async () => {
     const wrong = createOwnerPluginClient({ baseUrl: server.baseUrl, ownerToken: SOPHIE });
     const res = await wrong.kanban.listBoards();
     assert.equal(res.ok, false);
@@ -84,7 +84,7 @@ describe("auth — A.3", () => {
     assert.equal(res.failure.code, "gateway_auth_failed");
   });
 
-  it("프로필 스코프에 오너 키를 보내면 401 로 접힌다", async () => {
+  it("sending the owner key to the profile scope folds into 401", async () => {
     const wrong = createProfilePluginClient({
       baseUrl: server.baseUrl,
       profileName: "sophie",
@@ -97,7 +97,7 @@ describe("auth — A.3", () => {
     assert.equal(res.failure.code, "gateway_auth_failed");
   });
 
-  it("모르는 프로필은 404 다", async () => {
+  it("an unknown profile is 404", async () => {
     const ghost = createProfilePluginClient({
       baseUrl: server.baseUrl,
       profileName: "ghost",
@@ -110,8 +110,8 @@ describe("auth — A.3", () => {
   });
 });
 
-describe("kanban — 보드", () => {
-  it("생성 → 같은 slug 재생성은 200 + 기존 보드 → 목록·수정", async () => {
+describe("kanban — boards", () => {
+  it("create → re-creating the same slug is 200 + existing board → list·update", async () => {
     const api = owner().kanban;
     const created = unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
     assert.equal(created.board.slug, "dev");
@@ -135,7 +135,7 @@ describe("kanban — 보드", () => {
     assert.equal(server.lastRequest()?.path, "/deskrpg/kanban/boards/dev");
   });
 
-  it("slug 형식이 틀리면 400", async () => {
+  it("400 when the slug format is wrong", async () => {
     const res = await owner().kanban.createBoard({ slug: "Bad Slug", name: "x" });
     assert.equal(res.ok, false);
     if (res.ok) return;
@@ -144,8 +144,8 @@ describe("kanban — 보드", () => {
   });
 });
 
-describe("kanban — 카드", () => {
-  it("생성·조회·수정·코멘트·액션·삭제가 ?board= 를 달고 왕복한다", async () => {
+describe("kanban — cards", () => {
+  it("create·get·update·comment·action·delete round-trip with ?board=", async () => {
     const api = owner().kanban;
     unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
 
@@ -206,14 +206,14 @@ describe("kanban — 카드", () => {
     assert.equal(gone.failure.code, "not_found");
   });
 
-  it("board 파라미터가 없거나 모르는 보드면 실패한다", async () => {
+  it("fails when the board param is missing or the board is unknown", async () => {
     const res = await owner().kanban.getBoard("nope");
     assert.equal(res.ok, false);
     if (res.ok) return;
     assert.equal(res.status, 404);
   });
 
-  it("include_archived 가 아니면 archived 카드는 보드에 안 실린다", async () => {
+  it("archived cards are not on the board unless include_archived", async () => {
     const api = owner().kanban;
     unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
     const { task } = unwrap(await api.createTask("dev", { title: "보관" }));
@@ -229,7 +229,7 @@ describe("kanban — 카드", () => {
     );
   });
 
-  it("링크·디스패치·로그·오케스트레이션·프로필", async () => {
+  it("links·dispatch·logs·orchestration·profiles", async () => {
     const api = owner().kanban;
     unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
     const parent = unwrap(await api.createTask("dev", { title: "부모" })).task;
@@ -284,7 +284,7 @@ describe("kanban — 카드", () => {
     );
   });
 
-  it("첨부는 multipart 로 올리고 목록·조회·삭제한다", async () => {
+  it("uploads attachments as multipart and lists·gets·deletes them", async () => {
     const api = owner().kanban;
     unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
     const { task } = unwrap(await api.createTask("dev", { title: "첨부" }));
@@ -312,7 +312,7 @@ describe("kanban — 카드", () => {
   });
 });
 
-describe("kanban — 스웜", () => {
+describe("kanban — swarm", () => {
   function swarmBody() {
     return {
       goal: "목표",
@@ -322,7 +322,7 @@ describe("kanban — 스웜", () => {
     };
   }
 
-  it("본문을 그대로 스웜 엔드포인트로 보내고 루트·워커·검증·합성 카드를 만든다", async () => {
+  it("sends the body as-is to the swarm endpoint and creates root·worker·verify·synthesis cards", async () => {
     const api = owner().kanban;
     unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
 
@@ -341,7 +341,7 @@ describe("kanban — 스웜", () => {
     );
   });
 
-  it("goal 이 비면 400 invalid_field 다", async () => {
+  it("an empty goal is 400 invalid_field", async () => {
     const api = owner().kanban;
     unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
     const res = await api.createSwarm("dev", { ...swarmBody(), goal: "" });
@@ -350,7 +350,7 @@ describe("kanban — 스웜", () => {
     assert.equal(res.status, 400);
   });
 
-  it("워커가 0명이면 400 이다", async () => {
+  it("zero workers is 400", async () => {
     const api = owner().kanban;
     unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
     const res = await api.createSwarm("dev", { ...swarmBody(), workers: [] });
@@ -359,7 +359,7 @@ describe("kanban — 스웜", () => {
     assert.equal(res.status, 400);
   });
 
-  it("워커 title 이 비면 400 invalid_field 다 — kanban-routes.ts 검증을 우회해도 플러그인이 거절한다", async () => {
+  it("an empty worker title is 400 invalid_field — the plugin rejects it even if kanban-routes.ts validation is bypassed", async () => {
     const api = owner().kanban;
     unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
     const res = await api.createSwarm("dev", {
@@ -372,7 +372,7 @@ describe("kanban — 스웜", () => {
     assert.equal(res.failure.code, "invalid_field");
   });
 
-  it("getBlackboard 는 스웜이 남긴 topology 를 돌려준다", async () => {
+  it("getBlackboard returns the topology left by the swarm", async () => {
     const api = owner().kanban;
     unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
     const created = unwrap(await api.createSwarm("dev", swarmBody()));
@@ -387,7 +387,7 @@ describe("kanban — 스웜", () => {
     assert.equal(topology.root_id, created.root_id);
   });
 
-  it("모르는 카드의 블랙보드는 404 task_not_found 다", async () => {
+  it("the blackboard of an unknown card is 404 task_not_found", async () => {
     const api = owner().kanban;
     unwrap(await api.createBoard({ slug: "dev", name: "Dev" }));
     const res = await api.getBlackboard("dev", "no-such-task");
@@ -398,7 +398,7 @@ describe("kanban — 스웜", () => {
   });
 });
 
-describe("events — 커서", () => {
+describe("events — cursor", () => {
   it("new board k/d positions ignore older events from other boards", async () => {
     const api = owner();
     unwrap(await api.kanban.createBoard({ slug: "old", name: "Old" }));
@@ -505,7 +505,7 @@ describe("events — 커서", () => {
     assert.equal(absent.ok, false);
     if (!absent.ok) assert.equal(absent.status, 404);
   });
-  it("커서 없이 부르면 빈 목록 + 지금 토큰, 그 다음부터 새 이벤트를 준다", async () => {
+  it("without a cursor returns an empty list + the current token, then new events after that", async () => {
     const client = owner();
     unwrap(await client.kanban.createBoard({ slug: "dev", name: "Dev" }));
     unwrap(await client.kanban.createTask("dev", { title: "이전" }));
@@ -538,7 +538,7 @@ describe("events — 커서", () => {
     assert.deepEqual(empty.events, []);
   });
 
-  it("limit 을 넘으면 has_more 가 참이고 이어서 받을 수 있다", async () => {
+  it("past limit, has_more is true and the rest can be fetched", async () => {
     const client = owner();
     const start = unwrap(await client.events.poll({}));
     server.pushEvent({ kind: "cron.run.started", profile: "sophie", payload: { job_id: "j1" } });
@@ -554,7 +554,7 @@ describe("events — 커서", () => {
     assert.equal(p2.has_more, false);
   });
 
-  it("board 필터는 다른 보드 이벤트를 걸러낸다", async () => {
+  it("the board filter drops events from other boards", async () => {
     const client = owner();
     const start = unwrap(await client.events.poll({ board: "a" }));
     server.pushEvent({ kind: "task.created", board: "a", task_id: "t1", payload: {} });
@@ -566,7 +566,7 @@ describe("events — 커서", () => {
     );
   });
 
-  it("모르는 커서는 400 unknown_cursor 로 접힌다", async () => {
+  it("an unknown cursor folds into 400 unknown_cursor", async () => {
     const res = await owner().events.poll({ cursor: "nope" });
     assert.equal(res.ok, false);
     if (res.ok) return;
@@ -576,7 +576,7 @@ describe("events — 커서", () => {
 });
 
 describe("profile client — cron", () => {
-  it("모든 크론 경로가 /p/sophie/ 프리픽스와 프로필 키를 쓴다", async () => {
+  it("every cron path uses the /p/sophie/ prefix and the profile key", async () => {
     const api = sophie().cron;
 
     const created = unwrap(
@@ -625,7 +625,7 @@ describe("profile client — cron", () => {
     assert.equal(gone.status, 404);
   });
 
-  it("전달 대상·블루프린트·인스턴스화", async () => {
+  it("delivery targets·blueprints·instantiation", async () => {
     const api = sophie().cron;
     server.setDeliveryTargets("sophie", [
       { id: "slack", name: "Slack", home_target_set: true, home_env_var: "SLACK_HOME" },
@@ -660,7 +660,7 @@ describe("profile client — cron", () => {
     assert.equal(unknown.status, 404);
   });
 
-  it("크론 실행 이벤트가 통합 이벤트 스트림에 실린다", async () => {
+  it("cron run events appear in the unified event stream", async () => {
     const start = unwrap(await owner().events.poll({}));
     const { job } = unwrap(
       await sophie().cron.createJob({ schedule: "every 1h", prompt: "p", name: "n" }),
@@ -677,8 +677,8 @@ describe("profile client — cron", () => {
   });
 });
 
-describe("경로 인코딩", () => {
-  it("프로필 이름·보드·id 를 URL 에 인코딩한다", async () => {
+describe("path encoding", () => {
+  it("URL-encodes profile name·board·id", async () => {
     const client = createProfilePluginClient({
       baseUrl: server.baseUrl,
       profileName: "a b",

@@ -1,25 +1,25 @@
 /**
- * `deskrpg-hermes-plugin` 자동화 계약(v0.6.0+)의 와이어 타입.
+ * Wire types for the `deskrpg-hermes-plugin` automation contract (v0.6.0+).
  *
- * 플러그인 스펙 A.1(오너 키 스코프 — 칸반·이벤트)과 A.2(프로필 키 스코프 — 크론)의
- * JSON 모양을 **그대로** 옮긴 것이다. 여기서는 해석하지 않는다 — 카드 상태 전이 규칙,
- * 담당자 권한, 커서 의미 같은 판단은 전부 서버(DeskRPG)나 플러그인 쪽 몫이고, 이 파일은
- * 응답을 타입으로만 고정한다.
+ * Transcribes the JSON shapes of plugin spec A.1 (owner key scope — kanban, events) and A.2 (profile key scope —
+ * cron) **as-is**. Nothing is interpreted here — judgments like card state transition rules,
+ * assignee permissions and cursor meaning all belong to the server (DeskRPG) or the plugin; this file
+ * only pins the responses as types.
  *
- * 브라우저·서버 양쪽에서 import 된다. **타입만** 둔다 — 값(런타임 코드)을 넣지 않는다.
- * 유일한 예외는 `KANBAN_TASK_STATUSES`/`CRON_JOB_STATES` 같은 리터럴 배열인데, 그것도
- * Node 전용 모듈을 끌어오지 않는 순수 상수다.
+ * Imported by both the browser and the server. Holds **types only** — no values (runtime code).
+ * The only exceptions are literal arrays like `KANBAN_TASK_STATUSES`/`CRON_JOB_STATES`, and those are
+ * pure constants that pull in no Node-only modules.
  */
 
 // ---------------------------------------------------------------------------
-// 공통 — /deskrpg/info
+// Common — /deskrpg/info
 // ---------------------------------------------------------------------------
 
 /**
- * `GET /deskrpg/info` 의 본문. `capabilities` 에 kanban·cron·events 가 있어야 자동화가 켜진다.
+ * Body of `GET /deskrpg/info`. Automation turns on only if `capabilities` has kanban, cron and events.
  *
- * `timezone` 이 `null` 일 수 있는 것은 0.6.0 이전 플러그인이 그 필드를 주지 않기 때문이다 —
- * 파서(`parsePluginInfo`)가 구버전 본문도 이 모양으로 접어 캐시에 남긴다.
+ * `timezone` can be `null` because plugins before 0.6.0 don't send that field —
+ * the parser (`parsePluginInfo`) folds old bodies into this shape too and keeps them in the cache.
  */
 export type PluginInfo = {
   plugin: "deskrpg";
@@ -28,36 +28,37 @@ export type PluginInfo = {
   timezone: string | null;
   kanban: { dispatcher_present: boolean; attachments: boolean };
   /**
-   * 0.7.1 — Hermes 대시보드 공개 주소. 대시보드가 꺼졌거나 주소가 없으면 null.
-   * 파서가 http(s) 만 남긴다. 구버전 플러그인·기존 캐시에는 키가 없어 선택으로 둔다.
+   * 0.7.1 — Public URL of the Hermes dashboard. null if the dashboard is off or has no URL.
+   * The parser keeps only http(s). Older plugins and existing caches lack the key, so it's optional.
    */
   dashboard_url?: string | null;
   /**
-   * 0.12.0 — 칸반 워커·크론에서 플러그인이 안 뜨는 직원(`worker-plugin.ts`). 옛 플러그인에는
-   * 키가 없고(undefined), 판정 실패면 null 이다. 둘을 섞지 않는다.
+   * 0.12.0 — Employees whose plugin doesn't load in kanban workers/cron (`worker-plugin.ts`). Old plugins
+   * lack the key (undefined), and a failed check is null. The two are not mixed.
    */
   worker_plugin?: WorkerPluginReport | null;
 };
 
-/** 한 직원의 워커 플러그인 상태. `link`: linked · missing · other. */
+/** Worker plugin status for one employee. `link`: linked · missing · other. */
 export type WorkerPluginGap = {
   profile: string;
   link: string;
   enabled: boolean;
-  /** 운영자가 `plugins.disabled` 로 끈 직원 — 적용해도 켜지지 않는다. */
+  /** Employee disabled by the operator via `plugins.disabled` — applying won't enable it. */
   disabled: boolean;
 };
 
 export type WorkerPluginReport = {
   missing: WorkerPluginGap[];
   /**
-   * 0.16.0 — 워커 전파 옵트인 상태. `disabled` 면 플러그인이 새 프로필에 링크·활성화를 하지 않고
-   * `POST /deskrpg/worker-plugin` 은 409 `worker_propagation_disabled`. 옛 플러그인에는 키가 없다(undefined).
+   * 0.16.0 — Worker propagation opt-in state. When `disabled`, the plugin doesn't link/enable itself on new profiles
+   * and `POST /deskrpg/worker-plugin` returns 409 `worker_propagation_disabled`. Old plugins lack the key (undefined).
    */
   propagation?: WorkerPropagation;
 };
 
-/** 0.16.0 워커 전파 옵트인. 루트 `config.yaml` 의 설정 키 또는 환경변수로 운영자가 켠다(기본 꺼짐). */
+/** 0.16.0 worker propagation opt-in. The operator turns it on via a root `config.yaml` setting key or env var
+ * (off by default). */
 export type WorkerPropagation = "enabled" | "disabled";
 export const WORKER_PROPAGATION_DISABLED = "worker_propagation_disabled";
 export const WORKER_PROPAGATION_CONFIG_KEY = "plugins.entries.deskrpg.worker_propagation";
@@ -65,14 +66,14 @@ export const WORKER_PROPAGATION_ENV = "DESKRPG_WORKER_PROPAGATION";
 export const WORKER_PROPAGATION_ENABLE_COMMAND = `hermes config set ${WORKER_PROPAGATION_CONFIG_KEY} true`;
 export const WORKER_PROPAGATION_MIN_VERSION = "0.16.0";
 
-/** 프로필 생성 응답의 `workerPlugin` — 적용 결과 또는 0.16.0 의 건너뜀. */
+/** `workerPlugin` in the profile creation response — the apply result or the 0.16.0 skip. */
 export type WorkerPluginCreateResult =
   | { profile: string; link: string; enabled: string }
   | { skipped: "propagation_disabled" }
   | { error: string };
 
 // ---------------------------------------------------------------------------
-// A.1 칸반 — 보드·카드
+// A.1 Kanban — boards, cards
 // ---------------------------------------------------------------------------
 
 export const KANBAN_TASK_STATUSES = [
@@ -120,13 +121,13 @@ export type Diagnostic = {
 };
 
 /**
- * 플러그인이 보내는 시각. **epoch 초(정수)가 정본**이고(플러그인 `docs/contracts.md`), 가짜
- * 플러그인 서버는 ISO 문자열을 보낸다. 읽을 때는 `taskTimeMs()` 를 쓴다 — `Date.parse` 를
- * 직접 부르면 정수에서 NaN 이 나와 시각이 조용히 사라진다.
+ * Timestamps sent by the plugin. **Epoch seconds (integer) is canonical** (plugin `docs/contracts.md`), while the
+ * fake plugin server sends ISO strings. Read with `taskTimeMs()` — calling `Date.parse`
+ * directly yields NaN on integers and the time silently disappears.
  */
 export type PluginTime = string | number;
 
-/** 보드 열에 실리는 카드 요약. */
+/** Card summary carried in a board column. */
 export type KanbanReviewPolicy = {
   version: 1;
   mode: "human" | "agent";
@@ -177,7 +178,7 @@ export type KanbanTask = {
   last_heartbeat_at?: PluginTime;
 };
 
-/** 카드 상세(`GET /kanban/tasks/{id}`)에서만 오는 필드까지 포함한 전체 모양. */
+/** Full shape including fields that only come from card detail (`GET /kanban/tasks/{id}`). */
 export type KanbanTaskFull = KanbanTask & {
   result?: string;
   created_by?: string;
@@ -213,7 +214,7 @@ export type KanbanComment = {
   created_at: PluginTime;
 };
 
-/** 카드 상세에 실리는 카드별 이력. 통합 이벤트 스트림(`Event`)과는 다른 모양이다. */
+/** Per-card history carried in card detail. A different shape from the unified event stream (`Event`). */
 export type KanbanEvent = {
   id: string;
   kind: string;
@@ -228,9 +229,9 @@ export type KanbanAttachment = {
 };
 
 /**
- * 보드 전체 첨부 목록의 한 건(`GET /deskrpg/kanban/attachments`, capability `kanban_attachment_list`).
- * 카드 하나의 첨부와 같은 모양에 **어느 카드의 것인지** 를 더했다. 카드가 지워졌으면
- * `task_title` 이 null 일 수 있다(플러그인 계약).
+ * One entry of the board-wide attachment list (`GET /deskrpg/kanban/attachments`, capability `kanban_attachment_list`).
+ * Same shape as a single card's attachment plus **which card it belongs to**. If the card was deleted,
+ * `task_title` may be null (plugin contract).
  */
 export type KanbanBoardAttachment = KanbanAttachment & {
   content_type?: string | null;
@@ -257,11 +258,11 @@ export type KanbanBoard = {
 };
 
 /**
- * 타임라인용 실행 기록(`GET /kanban/runs`, capability `kanban_views`).
+ * Run records for the timeline (`GET /kanban/runs`, capability `kanban_views`).
  *
- * 카드별 `runs[]`(`KanbanRun`)보다 넓다 — 어느 카드·어느 서브프로젝트·어느 보드의 실적인지가
- * 응답만 보고 가려져야 카드 목록과 다시 조인하지 않는다. 카드가 지워진 실행도 남으므로
- * `tenant`·`task_title` 은 없을 수 있다(일한 사실이 없어지지는 않는다).
+ * Broader than per-card `runs[]` (`KanbanRun`) — which card, subproject and board a run belongs to must be
+ * clear from the response alone, so no rejoining with the card list. Runs of deleted cards remain too, so
+ * `tenant`/`task_title` may be absent (the fact that work happened doesn't go away).
  */
 export type KanbanTimelineRun = KanbanRun & {
   task_id: string;
@@ -271,19 +272,19 @@ export type KanbanTimelineRun = KanbanRun & {
   step_key?: string;
 };
 
-/** `GET /kanban/runs` 의 본문. `window` 는 epoch 초. */
+/** Body of `GET /kanban/runs`. `window` is in epoch seconds. */
 export type KanbanRunsPage = {
   runs: KanbanTimelineRun[];
   board: string;
   window: { from: number; to: number };
   /**
-   * 상한에 걸려 **최근 것만** 남았는가. 화면은 이걸 반드시 보여야 한다 — 잘린 창을 그대로
-   * 그리면 "그 시간대에 아무도 일하지 않았다" 로 읽힌다.
+   * Whether the cap was hit and **only the most recent** remain. The screen must show this — drawing a truncated
+   * window as-is reads as "nobody worked in that time range".
    */
   truncated: boolean;
 };
 
-/** `GET /kanban/links` 의 본문. 쌍만 온다 — 카드 본문의 정본은 보드 응답이다. */
+/** Body of `GET /kanban/links`. Only pairs come — the source of truth for card bodies is the board response. */
 export type KanbanLinksPage = {
   links: Array<{ parent_id: string; child_id: string }>;
   board: string;
@@ -293,7 +294,7 @@ export type KanbanTaskDetail = {
   task: KanbanTaskFull;
   comments: KanbanComment[];
   events: KanbanEvent[];
-  /** 플러그인에 첨부 기능이 없으면(`info.kanban.attachments === false`) null */
+  /** null if the plugin has no attachment feature (`info.kanban.attachments === false`) */
   attachments: KanbanAttachment[] | null;
   links: { parents: string[]; children: string[] };
   runs: KanbanRun[];
@@ -322,14 +323,14 @@ export type CreateTaskBody = {
   reasoning_effort?: string;
   project_id?: string;
   /**
-   * 생성 시점에만 지정할 수 있는 상태. 플러그인이 `{"running","blocked"}` 만 받는다.
-   * `blocked` 는 Hermes 에서 sticky 라 사람이 풀 때까지 디스패치되지 않는다 —
-   * 실행 전 승인 관문이 쓰는 자리다(`triage` 는 게이트웨이가 자동 분해해 쓸 수 없다).
+   * Status that can only be set at creation time. The plugin only accepts `{"running","blocked"}`.
+   * `blocked` is sticky in Hermes, so it isn't dispatched until a person releases it —
+   * the slot used by the pre-run approval gate (`triage` can't be used since the gateway auto-decomposes it).
    */
   initial_status?: "running" | "blocked";
 };
 
-/** `PATCH /kanban/tasks/{id}` — 부분 갱신. */
+/** `PATCH /kanban/tasks/{id}` — partial update. */
 export type UpdateTaskBody = Partial<Omit<CreateTaskBody, "idempotency_key">> & {
   status?: KanbanTaskStatus;
   expected_revision?: number;
@@ -347,7 +348,7 @@ export type UpdateBoardBody = {
   default_workdir?: string;
 };
 
-/** `POST /kanban/tasks/{id}/{action}` 의 액션 이름 집합. */
+/** Set of action names for `POST /kanban/tasks/{id}/{action}`. */
 export const KANBAN_TASK_ACTIONS = [
   "reassign",
   "reclaim",
@@ -399,7 +400,7 @@ export type DispatchResult = {
 };
 
 // ---------------------------------------------------------------------------
-// A.1 통합 이벤트 — /deskrpg/events
+// A.1 Unified events — /deskrpg/events
 // ---------------------------------------------------------------------------
 
 export const PLUGIN_EVENT_KINDS = [
@@ -421,7 +422,8 @@ export const PLUGIN_EVENT_KINDS = [
 
 export type PluginEventKind = (typeof PLUGIN_EVENT_KINDS)[number];
 
-/** 제목·설명·우선순위·담당·첨부 변경 — 바뀐 필드 이름 목록. 화면은 보드 재조회로 반영한다. */
+/** Title, description, priority, assignee or attachment change — list of changed field names. The screen
+ * reflects it by refetching the board. */
 export type TaskUpdatedEventPayload = { fields: string[] };
 
 export type TaskStatusEventPayload = {
@@ -433,9 +435,9 @@ export type TaskStatusEventPayload = {
 };
 
 /**
- * NPC 가 대화 중 발견한 "업무 카드로 남길 만한 요청". 카드가 **아니다** — Hermes 쪽 제안
- * 레코드의 사본이고, 카드 등록 여부는 사용자가 방 알림에서 고른다.
- * `body`·`acceptance` 는 없으면 **키 자체가 빠진다**(빈 문자열이 아니다).
+ * A "request worth keeping as a work card" found by an NPC during conversation. It is **not** a card — it's a copy
+ * of the Hermes-side proposal record, and whether to register a card is chosen by the user in the room notice.
+ * If `body`/`acceptance` are absent, **the key itself is omitted** (not an empty string).
  */
 export type CardProposalEventPayload = {
   proposal_id: string;
@@ -462,7 +464,7 @@ export type CronRunFinishedPayload = CronRunStartedPayload & {
 
 export type PluginEvent = {
   id: string;
-  /** epoch 초(플러그인 0.6.0+ 전 출처). 화면은 epochSecondsToMs 로 바꾼다 */
+  /** Epoch seconds (all sources, plugin 0.6.0+). The screen converts with epochSecondsToMs */
   ts: number;
   kind: PluginEventKind;
   board?: string;
@@ -480,7 +482,7 @@ export type EventsPage = {
 };
 
 // ---------------------------------------------------------------------------
-// A.2 크론 — /p/{profile}/deskrpg/cron
+// A.2 Cron — /p/{profile}/deskrpg/cron
 // ---------------------------------------------------------------------------
 
 export const CRON_JOB_STATES = [
@@ -533,9 +535,9 @@ export type CronRun = {
 
 export type CreateCronJobBody = {
   schedule: string;
-  /** 스크립트 전용 잡이 아니면 필수. 서버 라우트가 `script` 부재 시에만 요구한다. */
+  /** Required unless it's a script-only job. The server route requires it only when `script` is absent. */
   prompt?: string;
-  /** 스크립트 전용 잡 — Hermes 가 프롬프트 대신 실행한다. 그대로 전달한다. */
+  /** Script-only job — Hermes runs it instead of a prompt. Passed through as-is. */
   script?: string;
   name: string;
   deliver?: string;
@@ -593,10 +595,10 @@ export type InstantiateBlueprintBody = {
 };
 
 // ---------------------------------------------------------------------------
-// 스웜(v0.7.0+) — /deskrpg/kanban/swarm, /deskrpg/kanban/tasks/{id}/blackboard
+// Swarm (v0.7.0+) — /deskrpg/kanban/swarm, /deskrpg/kanban/tasks/{id}/blackboard
 // ---------------------------------------------------------------------------
 
-/** `POST /deskrpg/kanban/swarm` 의 본문. 프로필 이름은 **서버가** NPC id 에서 푼 값이다. */
+/** Body of `POST /deskrpg/kanban/swarm`. The profile name is resolved **by the server** from the NPC id. */
 export type SwarmRequest = {
   goal: string;
   workers: Array<{ profile: string; title: string; body?: string; skills?: string[] }>;
@@ -607,7 +609,7 @@ export type SwarmRequest = {
   idempotency_key?: string;
 };
 
-/** Hermes `SwarmCreated.as_dict()` 그대로. 키 이름을 바꾸지 않는다. */
+/** Hermes `SwarmCreated.as_dict()` as-is. Key names are not changed. */
 export type SwarmCreated = {
   root_id: string;
   worker_ids: string[];
@@ -615,11 +617,11 @@ export type SwarmCreated = {
   synthesizer_id: string;
 };
 
-/** 루트 카드의 블랙보드. key 별 최신값 + `_authors`. 값의 모양은 Hermes 가 정한다. */
+/** Blackboard of the root card. Latest value per key + `_authors`. The value shape is decided by Hermes. */
 export type Blackboard = Record<string, unknown>;
 
 // ---------------------------------------------------------------------------
-// 아티팩트(0.8.0+) — /deskrpg/artifacts
+// Artifacts (0.8.0+) — /deskrpg/artifacts
 // ---------------------------------------------------------------------------
 
 export const ARTIFACT_KINDS = [
@@ -637,9 +639,9 @@ export const ARTIFACT_SOURCES = ["chat", "kanban", "cron"] as const;
 export type ArtifactSource = (typeof ARTIFACT_SOURCES)[number];
 
 /**
- * 화면 탭 묶음(2026-09-18 follow-up). `media`=image+media, `file`=document+web+react+data+file,
- * `link`=link. 순서가 탭 표시 순서다(전체 다음 미디어·파일·링크). 플러그인 쪽 매핑은
- * deskrpg-hermes-plugin `GET /deskrpg/artifacts?kind=<쉼표 목록>`(0.8.4+)이 받는다.
+ * UI tab groups (2026-09-18 follow-up). `media`=image+media, `file`=document+web+react+data+file,
+ * `link`=link. Order is the tab display order (after All: media, files, links). The plugin-side mapping is
+ * accepted by deskrpg-hermes-plugin `GET /deskrpg/artifacts?kind=<comma list>` (0.8.4+).
  */
 export const ARTIFACT_CATEGORIES = {
   media: ["image", "media"],
@@ -697,6 +699,6 @@ export type ArtifactEventPayload = {
   captured_via?: string;
 };
 
-/** 0.15.0 — NPC 스킬 관리(`/p/{profile}/deskrpg/skills|curator|learning/**`). */
+/** 0.15.0 — NPC skill management (`/p/{profile}/deskrpg/skills|curator|learning/**`). */
 export const SKILL_ADMIN_MIN_VERSION = "0.15.0";
 export const SKILL_ADMIN_CAPABILITY = "profile_skill_admin";

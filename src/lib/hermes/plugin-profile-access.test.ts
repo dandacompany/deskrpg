@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { selectProfileToken } from "./plugin-profile-access";
 
 describe("selectProfileToken", () => {
-  it("등록된 프로필의 토큰을 복호화해서 준다", () => {
+  it("decrypts and returns the registered profile's token", () => {
     const got = selectProfileToken({
       rows: [{ profileName: "noah", tokenEncrypted: "enc-noah" }],
       profileName: "noah",
@@ -13,9 +13,9 @@ describe("selectProfileToken", () => {
     assert.deepEqual(got, { ok: true, profileToken: "dec(enc-noah)" });
   });
 
-  it("등록되지 않은 프로필이면 no_profile 이다", () => {
-    // 여기서 default 키로 폴백하면 안 된다 — 프로필 스코프 경로에 default 키를
-    // 보내면 Hermes 가 401 을 내고, 사용자는 '토큰이 틀렸다'는 잘못된 진단을 받는다.
+  it("an unregistered profile is no_profile", () => {
+    // Must not fall back to the default key here — sending the default key on a profile-scoped path
+    // makes Hermes return 401, and the user gets the wrong diagnosis 'the token is wrong'.
     const got = selectProfileToken({
       rows: [{ profileName: "sophie", tokenEncrypted: "enc-sophie" }],
       profileName: "noah",
@@ -24,7 +24,7 @@ describe("selectProfileToken", () => {
     assert.deepEqual(got, { ok: false, reason: "no_profile" });
   });
 
-  it("복호화가 실패하면 no_profile 이다 — 던지지 않는다", () => {
+  it("a decryption failure is no_profile — doesn't throw", () => {
     const got = selectProfileToken({
       rows: [{ profileName: "noah", tokenEncrypted: "corrupt" }],
       profileName: "noah",

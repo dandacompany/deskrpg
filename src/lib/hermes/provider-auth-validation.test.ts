@@ -7,15 +7,15 @@ import {
   validateToolProviderBody,
 } from "./provider-auth-validation";
 
-describe("프로바이더 인증 입력 검증", () => {
-  it("경로 세그먼트는 좁은 문자만", () => {
+describe("provider auth input validation", () => {
+  it("path segments allow only a narrow character set", () => {
     assert.equal(validateAuthSegment("openai-codex"), true);
     assert.equal(validateAuthSegment("abc_DEF.1-2"), true);
     for (const bad of ["", "a/b", "..%2f", "x".repeat(129), "a b", ".", ".."]) {
       assert.equal(validateAuthSegment(bad), false);
     }
   });
-  it("키 본문은 문자열 value 만, 값을 오류에 싣지 않는다", () => {
+  it("key body accepts only a string value and never puts the value in errors", () => {
     assert.deepEqual(validateKeyBody({ value: "sk-VALUE-123" }), {
       ok: true,
       value: "sk-VALUE-123",
@@ -36,8 +36,8 @@ describe("프로바이더 인증 입력 검증", () => {
   });
 });
 
-describe("validateToolProviderBody — 도구 프로바이더 선택 본문", () => {
-  it("프로바이더와 키 맵을 받는다", () => {
+describe("validateToolProviderBody — tool provider selection body", () => {
+  it("accepts a provider and a key map", () => {
     assert.deepEqual(
       validateToolProviderBody({ provider: "OpenAI TTS", env: { VOICE_TOOLS_OPENAI_KEY: "sk-x" } }),
       { ok: true, provider: "OpenAI TTS", env: { VOICE_TOOLS_OPENAI_KEY: "sk-x" } },
@@ -49,7 +49,7 @@ describe("validateToolProviderBody — 도구 프로바이더 선택 본문", ()
     });
   });
 
-  it("모양이 틀리면 bad_request 이고 값을 싣지 않는다", () => {
+  it("a wrong shape is bad_request and carries no values", () => {
     const secret = "sk-SECRET-should-not-echo";
     for (const input of [
       null,

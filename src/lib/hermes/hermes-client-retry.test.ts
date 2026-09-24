@@ -24,29 +24,29 @@ function clientWith(responses: Array<{ status: number; retryAfter?: string }>) {
       profileName: "sophie",
       token: "t",
       fetchImpl,
-      // 테스트가 실제로 기다리지 않게 한다.
+      // Keep the test from actually waiting.
       sleepImpl: async () => {},
     }),
   };
 }
 
-test("429 를 받으면 다시 걸고, 성공하면 그 결과를 돌려준다", async () => {
+test("retries on 429 and returns the result on success", async () => {
   const { client, calls } = clientWith([{ status: 429, retryAfter: "0" }, { status: 200 }]);
   await client.getCapabilities();
   assert.deepEqual(calls, [429, 200]);
 });
 
-test("계속 429 면 결국 던진다 — 조용히 성공한 척하지 않는다", async () => {
+test("throws eventually on repeated 429 — never silently pretends to succeed", async () => {
   const { client, calls } = clientWith([{ status: 429, retryAfter: "0" }]);
   await assert.rejects(
     () => client.getCapabilities(),
     (err: unknown) => err instanceof HermesError && err.status === 429,
   );
-  // 최초 1회 + 재시도 2회.
+  // 1 initial attempt + 2 retries.
   assert.equal(calls.length, 3);
 });
 
-test("429 가 아닌 실패는 재시도하지 않는다", async () => {
+test("does not retry failures other than 429", async () => {
   const { client, calls } = clientWith([{ status: 401 }]);
   await assert.rejects(() => client.getCapabilities());
   assert.equal(calls.length, 1);
