@@ -208,3 +208,17 @@ test("setupFailureLogEntry logs only the opaque setup_failed code", () => {
   const entry = setupFailureLogEntry("setup_failed", "a string, not an Error");
   assert.deepEqual(entry, { code: "setup_failed", errorName: "string", stackFrames: [] });
 });
+
+test("setupFailureLogEntry drops message lines that merely start with 'at' and odd error names", () => {
+  const error = new Error(
+    "remote stderr\n    at https://user:tok3n@example.com/repo.git\n    at token=abc123",
+  );
+  error.name = "Leak token=abc123";
+  const entry = setupFailureLogEntry("setup_failed", error);
+  assert.ok(entry);
+  const serialized = JSON.stringify(entry);
+  assert.equal(serialized.includes("tok3n"), false);
+  assert.equal(serialized.includes("abc123"), false);
+  assert.equal(entry.errorName, "Error");
+  assert.ok(entry.stackFrames.every((frame) => /:\d+:\d+\)?$/.test(frame)));
+});
