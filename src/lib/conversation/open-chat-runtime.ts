@@ -32,6 +32,12 @@ export type TurnContext = {
    * human's intro would misidentify who's speaking.
    */
   callerContext?: UserContext | null;
+  /**
+   * Language of the human who started this chain. Unlike `callerContext` it is kept on chained turns — the
+   * whole exchange answers that person. `undefined` keeps the original Korean script; `null` (no language
+   * cookie) gets English.
+   */
+  callerLocale?: string | null;
 };
 
 export type OpenChatCallbacks = {
@@ -128,6 +134,7 @@ export class OpenChatRuntime {
     callerSocketId: string | null = null,
     sourceMessageId: string = randomUUID(),
     callerContext: UserContext | null = null,
+    callerLocale?: string | null,
   ): Promise<void> {
     if (this.disposed) return;
     this.quota.resetByHuman();
@@ -147,6 +154,7 @@ export class OpenChatRuntime {
       sourceMessageId,
       recent,
       callerContext,
+      callerLocale,
     );
   }
 
@@ -162,6 +170,7 @@ export class OpenChatRuntime {
     sourceMessageId: string,
     recent: ChatLine[],
     callerContext: UserContext | null = null,
+    callerLocale?: string | null,
   ): Promise<void> {
     if (this.disposed) return;
     const work: Promise<void>[] = [];
@@ -182,6 +191,7 @@ export class OpenChatRuntime {
         sourceMessageId,
         callerSocketId,
         callerContext: fromHuman ? callerContext : null,
+        callerLocale,
       };
       this.callbacks.onTurnQueued?.(npcId, runtime.displayName, context);
       // The chain runs after this job releases its queue slot, avoiding A -> B -> A deadlocks.
@@ -198,6 +208,8 @@ export class OpenChatRuntime {
               callerSocketId,
               result.messageId ?? sourceMessageId,
               this.deps.recent().map((line) => ({ ...line })),
+              null,
+              callerLocale,
             );
         }),
       );
@@ -218,13 +230,14 @@ export class OpenChatRuntime {
       this.callbacks.onTurnStart?.(npcId, runtime.displayName, context.callerSocketId, context);
       const others = this.deps.participants
         .filter((p) => p.npcId !== npcId)
-        .map((p) => ({ displayName: p.displayName, role: p.role || "동료" }));
+        .map((p) => ({ displayName: p.displayName, role: p.role ?? "" }));
       const prompt = formatOpenChatMessage(
         { displayName: runtime.displayName },
         others,
         recent,
         calledBy,
         context.callerContext,
+        context.callerLocale,
       );
       const outcome = await withStreamDiagnosticRequest(context.requestId, () =>
         runtime.speakWithPrompt(prompt, {

@@ -9,12 +9,13 @@ import { registerRoomHandlers } from "./room-socket";
 
 type Emitted = [string, unknown];
 
-function fakeSocket(emitted: Emitted[], id = "s1") {
+function fakeSocket(emitted: Emitted[], id = "s1", cookie?: string) {
   const handlers = new Map<string, (p: unknown) => unknown>();
   const joined = new Set<string>();
   return {
     id,
     joined,
+    handshake: { headers: { cookie } },
     data: {} as Record<string, unknown>,
     on(e: string, h: (p: unknown) => unknown) {
       handlers.set(e, h);
@@ -50,19 +51,29 @@ function fakeIo(emitted: Emitted[]) {
 
 type Seeded = Awaited<ReturnType<typeof seedChannelWithProfiles>>;
 
-function setup(opts: { allowed?: boolean; player?: boolean; userId?: string } = {}) {
+function setup(
+  opts: {
+    allowed?: boolean;
+    player?: boolean;
+    userId?: string;
+    cookie?: string;
+    createRoom?: typeof rooms.createRoom;
+  } = {},
+) {
   const emitted: Emitted[] = [];
-  const socket = fakeSocket(emitted);
+  const socket = fakeSocket(emitted, "s1", opts.cookie);
   const io = fakeIo(emitted);
   const players = new Map();
   const woke: { roomId: string; text: string }[] = [];
   const callerContexts: unknown[] = [];
+  const callerLocales: unknown[] = [];
   return {
     emitted,
     socket,
     players,
     woke,
     callerContexts,
+    callerLocales,
     async register(seeded: Seeded) {
       // Default identity is the channel owner. Given `userId`, registers as that person — for permission branches.
       const actingUserId = opts.userId ?? seeded.userId;
@@ -89,7 +100,7 @@ function setup(opts: { allowed?: boolean; player?: boolean; userId?: string } = 
           lastChatTime: new Map(),
           cooldownMs: 2000,
           getParticipationAccess: async () => ({ access: { allowed: opts.allowed ?? true } }),
-          rooms,
+          rooms: opts.createRoom ? { ...rooms, createRoom: opts.createRoom } : rooms,
           getRuntime: async (_io, room) =>
             ({
               handleHumanMessage: async (
@@ -98,9 +109,11 @@ function setup(opts: { allowed?: boolean; player?: boolean; userId?: string } = 
                 _socketId: string,
                 _sourceMessageId: string,
                 callerContext: unknown,
+                callerLocale: unknown,
               ) => {
                 woke.push({ roomId: room.id, text });
                 callerContexts.push(callerContext);
+                callerLocales.push(callerLocale);
               },
             }) as never,
           invalidateRuntime: () => {},
@@ -175,6 +188,42 @@ test("room:send passes the caller's name and bio planted by player:join to the r
   await t.socket.trigger("room:open", { roomId: office.id });
   await t.socket.trigger("room:send", { roomId: office.id, message: "@[소피] 안녕" });
   assert.deepEqual(t.callerContexts, [{ name: "곽지호", bio: "단테랩스 대표" }]);
+});
+
+test("room:send passes the sender's language cookie to the runtime, and null without one", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
+  const withCookie = setup({ cookie: "other=1; deskrpg-locale=ja" });
+  await withCookie.register(seeded);
+  await withCookie.socket.trigger("room:open", { roomId: office.id });
+  await withCookie.socket.trigger("room:send", { roomId: office.id, message: "@[소피] hi" });
+  assert.deepEqual(withCookie.callerLocales, ["ja"]);
+
+  const without = setup();
+  await without.register(seeded);
+  await without.socket.trigger("room:open", { roomId: office.id });
+  await without.socket.trigger("room:send", { roomId: office.id, message: "@[소피] hi" });
+  assert.deepEqual(without.callerLocales, [null]);
+});
+
+test("room:create passes the creator's language so an unnamed room gets a name in it", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const seen: unknown[] = [];
+  const t = setup({
+    cookie: "deskrpg-locale=zh",
+    createRoom: async (args) => {
+      seen.push(args.locale);
+      return rooms.createRoom(args);
+    },
+  });
+  await t.register(seeded);
+  await t.socket.trigger("room:create", {
+    channelId: seeded.channelId,
+    name: "",
+    npcIds: [seeded.npcIds[0]],
+    userIds: [],
+  });
+  assert.deepEqual(seen, ["zh"]);
 });
 
 test("a socket not in players gets not_joined", async () => {

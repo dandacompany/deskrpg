@@ -92,6 +92,7 @@ class RoomChatRuntime extends OpenChatRuntime {
     callerSocketId: string | null = null,
     sourceMessageId?: string,
     callerContext: UserContext | null = null,
+    callerLocale?: string | null,
   ): Promise<void> {
     if (sourceMessageId) {
       // Admission must stay synchronous: an awaited refresh lets a later send overtake this one.
@@ -106,6 +107,7 @@ class RoomChatRuntime extends OpenChatRuntime {
       callerSocketId,
       sourceMessageId,
       callerContext,
+      callerLocale,
     );
   }
 }

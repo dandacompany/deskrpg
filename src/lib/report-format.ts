@@ -16,25 +16,46 @@
  * paragraph would clutter the screen there.
  */
 
-export const REPORT_FORMAT_HEADER = "[보고 형식]";
+import { promptLocale, type PromptLocale } from "@/lib/i18n/prompt-locale";
+
+const HEADERS: Record<PromptLocale, string> = {
+  ko: "[보고 형식]",
+  en: "[Report format]",
+};
+
+/** The Korean header — what the rule block starts with when no locale is given. */
+export const REPORT_FORMAT_HEADER = HEADERS.ko;
 
 /** Keep entries as single lines only — a long prefix pushes the real script back. */
-const RULES: readonly string[] = [
-  "이미지는 브라우저가 열 수 있는 URL 로 ![설명](URL) 마크다운으로 넣는다. 서버 파일 경로만 적지 않는다.",
-  "이미지 URL 이 없으면 결과물로 저장한 뒤 그 링크를 쓴다. 만들지 못했으면 만들었다고 말하지 않는다.",
-  "참고한 사이트는 문장 안에 묻지 말고 한 줄에 URL 하나씩 적는다.",
-  "표·코드·목록은 마크다운 문법을 쓴다.",
-];
+const RULES: Record<PromptLocale, readonly string[]> = {
+  ko: [
+    "이미지는 브라우저가 열 수 있는 URL 로 ![설명](URL) 마크다운으로 넣는다. 서버 파일 경로만 적지 않는다.",
+    "이미지 URL 이 없으면 결과물로 저장한 뒤 그 링크를 쓴다. 만들지 못했으면 만들었다고 말하지 않는다.",
+    "참고한 사이트는 문장 안에 묻지 말고 한 줄에 URL 하나씩 적는다.",
+    "표·코드·목록은 마크다운 문법을 쓴다.",
+  ],
+  en: [
+    "Put images in as ![description](URL) markdown with a URL the browser can open. Do not write only a server file path.",
+    "If there is no image URL, save it as an artifact and use that link. If you could not make it, do not say you made it.",
+    "List referenced sites one URL per line instead of burying them in sentences.",
+    "Use markdown syntax for tables, code and lists.",
+  ],
+};
 
-export function formatReportFormat(): string {
-  return [REPORT_FORMAT_HEADER, ...RULES.map((r) => `- ${r}`)].join("\n");
+/** Omitting `locale` keeps the original Korean text (Korean deployments are unchanged). */
+export function formatReportFormat(locale: string | null | undefined = "ko"): string {
+  const lang = promptLocale(locale);
+  return [HEADERS[lang], ...RULES[lang].map((r) => `- ${r}`)].join("\n");
 }
 
 /**
  * Prefixes the rule onto the script. An empty script is returned as-is — this prevents
  * sending only the rule when there's nothing to say.
  */
-export function prefixReportFormat(prompt: string): string {
+export function prefixReportFormat(
+  prompt: string,
+  locale: string | null | undefined = "ko",
+): string {
   if (!prompt) return prompt;
-  return `${formatReportFormat()}\n\n${prompt}`;
+  return `${formatReportFormat(locale)}\n\n${prompt}`;
 }

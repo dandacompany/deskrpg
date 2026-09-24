@@ -65,7 +65,11 @@ export async function rewriteRoomNotices(input: {
       });
     }
   } catch (error) {
-    console.warn("[room-notice] 알림을 되쓰지 못했다", { channelId: input.channelId }, error);
+    console.warn(
+      "[room-notice] failed to rewrite the notice",
+      { channelId: input.channelId },
+      error,
+    );
   }
   return rewritten;
 }

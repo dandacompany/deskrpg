@@ -109,10 +109,16 @@ async function loadRoutes(): Promise<Routes> {
   };
 }
 
-function req(userId: string, method: string, url: string, body?: unknown): NextRequest {
+function req(
+  userId: string,
+  method: string,
+  url: string,
+  body?: unknown,
+  cookie?: string,
+): NextRequest {
   return new NextRequest(url, {
     method,
-    headers: authHeaders(userId),
+    headers: cookie ? { ...authHeaders(userId), cookie } : authHeaders(userId),
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
@@ -185,9 +191,10 @@ async function createTask(
   userId: string,
   channelId: string,
   overrides: Record<string, unknown> = {},
+  cookie?: string,
 ) {
   const res = await routes.tasks.POST(
-    req(userId, "POST", `${base(channelId)}/tasks`, { title: "첫 카드", ...overrides }),
+    req(userId, "POST", `${base(channelId)}/tasks`, { title: "첫 카드", ...overrides }, cookie),
     ctx(channelId),
   );
   return { status: res.status, body: await res.json() };
@@ -398,16 +405,26 @@ test("card creation — a requester line at the end of the body if the creator h
       .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks?"))
       .map((r) => (r.json as Record<string, unknown>).body);
 
+  // The requester line is written in the requester's language (their language cookie).
+  const ko = "deskrpg-locale=ko";
   let before = server.requests().length;
   assert.equal(
-    (await createTask(routes, withChar.id, seed.channelId, { body: "본문" })).status,
+    (await createTask(routes, withChar.id, seed.channelId, { body: "본문" }, ko)).status,
     201,
   );
   assert.deepEqual(sentBodies(before), ["본문\n\n요청자: 곽지호 — 단테랩스 대표"]);
 
   before = server.requests().length;
-  assert.equal((await createTask(routes, withChar.id, seed.channelId)).status, 201);
+  assert.equal((await createTask(routes, withChar.id, seed.channelId, {}, ko)).status, 201);
   assert.deepEqual(sentBodies(before), ["요청자: 곽지호 — 단테랩스 대표"]);
+
+  // No language cookie falls back to English, like every other server-written text.
+  before = server.requests().length;
+  assert.equal(
+    (await createTask(routes, withChar.id, seed.channelId, { body: "body" })).status,
+    201,
+  );
+  assert.deepEqual(sentBodies(before), ["body\n\nRequested by: 곽지호 — 단테랩스 대표"]);
 
   before = server.requests().length;
   assert.equal(

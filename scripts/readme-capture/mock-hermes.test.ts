@@ -223,6 +223,11 @@ test("a priming room request stays busy briefly and later greetings are not mist
       "좋은 아침이에요. 오늘 일정부터 함께 확인할게요.",
       600,
     ],
+    [
+      "[Recent conversation]\nDante: 잠깐 준비해 주세요.\nDante: 좋은 아침이에요\n\n[How to reply]\nReply briefly.",
+      "좋은 아침이에요. 오늘 일정부터 함께 확인할게요.",
+      600,
+    ],
   ] as const) {
     const response = await fetch(`${server.baseUrl}/p/sophie/v1/runs`, {
       method: "POST",

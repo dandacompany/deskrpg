@@ -444,13 +444,19 @@ export function resolveNpcInstructions(
   oc: Record<string, unknown>,
   requestLocale?: string | null,
 ): string | undefined {
-  if (typeof oc.meetingProtocol === "string" && oc.meetingProtocol.trim()) {
-    return composeNpcInstructions({ meetingProtocol: oc.meetingProtocol, taskConfirmation: true });
-  }
   const locale = requestLocale || (typeof oc.locale === "string" ? oc.locale : undefined);
+  // The task-registration layer follows the same language; with nothing known it is English (`null`).
+  if (typeof oc.meetingProtocol === "string" && oc.meetingProtocol.trim()) {
+    return composeNpcInstructions({
+      meetingProtocol: oc.meetingProtocol,
+      taskConfirmation: true,
+      locale: locale ?? null,
+    });
+  }
   return composeNpcInstructions({
     meetingProtocol: getDefaultMeetingProtocol(locale),
     taskConfirmation: true,
+    locale: locale ?? null,
   });
 }
 
@@ -550,7 +556,12 @@ async function streamNpcResponse(
   const sessionKey = sessionKeyOverride || `${sessionKeyPrefix || npcId}-dm-${userId}`;
   // The conversation-partner line and report-format rules are prepended to the message — the system prompt
   // (instructions) isn't touched. Order is "who you're talking to" → "how to report" → the actual body.
-  const prompt = prefixUserContext(prefixReportFormat(message), userContextOf(socket));
+  const locale = socketLocale(socket);
+  const prompt = prefixUserContext(
+    prefixReportFormat(message, locale),
+    userContextOf(socket),
+    locale,
+  );
 
   const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
 
@@ -675,6 +686,7 @@ async function streamMeetingNpcResponse(
   senderName: string,
   userId: string,
   userContext: UserContext | null,
+  locale: string | null,
 ): Promise<void> {
   const { id: npcId, agentId, sessionKeyPrefix, _name, adapterType, hermesProfileId } = npcConfig;
   const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
@@ -707,8 +719,9 @@ async function streamMeetingNpcResponse(
   const sessionKey = `${sessionKeyPrefix || _name}-meeting-${channelId}`;
   // Prepend the speaker's name/bio and report format (the meeting counterpart is the speaker).
   const prompt = prefixUserContext(
-    prefixReportFormat(`${senderName}: ${userMessage}`),
+    prefixReportFormat(`${senderName}: ${userMessage}`, locale),
     userContext,
+    locale,
   );
 
   let hermesAdapter: Awaited<ReturnType<typeof createHermesAdapterForNpc>> = null;
@@ -1582,7 +1595,9 @@ export function setupSocketHandlers(io: Server) {
                   }
                 }
                 extractedFiles = await Promise.all(
-                  files.map((f) => extractFileContent(Buffer.from(f.data), f.name, f.type)),
+                  files.map((f) =>
+                    extractFileContent(Buffer.from(f.data), f.name, f.type, socketLocale(socket)),
+                  ),
                 );
                 fileAttachments = buildAttachments(extractedFiles);
                 chatLog(
@@ -1596,7 +1611,7 @@ export function setupSocketHandlers(io: Server) {
                 );
               }
 
-              const fileSection = buildFilePromptSection(extractedFiles);
+              const fileSection = buildFilePromptSection(extractedFiles, socketLocale(socket));
               if (!isActive()) return;
               const messageToSend = trimmed + fileSection;
 
@@ -1800,6 +1815,8 @@ export function setupSocketHandlers(io: Server) {
                     player?.characterName || "Unknown",
                     user.userId,
                     userContextOf(socket),
+                    // Same language the protocol above was resolved in.
+                    socketLocale(socket),
                   );
                 } catch (err) {
                   console.error(`[meeting] NPC ${npc._name} failed:`, err);

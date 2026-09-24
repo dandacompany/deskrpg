@@ -25,6 +25,7 @@ import {
 
 export type { RoomMessage, RoomNotice, RoomRow } from "./chat-rooms-policy";
 import type { RoomRow } from "./chat-rooms-policy";
+import { translateServer } from "@/lib/i18n/server";
 
 function toIso(value: Date | string | null): string | null {
   if (value == null) return null;
@@ -78,7 +79,9 @@ export async function ensureOfficeRoom(channelId: string, ownerId: string): Prom
       .values({
         channelId,
         kind: "office",
-        name: "오피스",
+        // The screen names the office room from its kind (`t("room.office")`); this stored value is only a
+        // fallback, so it is language-neutral. Rows created before this change keep their old name.
+        name: "Office",
         replyPolicy: "mention",
         createdBy: ownerId,
       })
@@ -286,6 +289,8 @@ export async function createRoom(args: {
   createdBy: string;
   npcIds: string[];
   userIds: string[];
+  /** The creator's language, for the fallback name. Omitted keeps Korean; null (no cookie) gets English. */
+  locale?: string | null;
 }): Promise<RoomRow> {
   let name = args.name.trim();
   if (!name) {
@@ -298,7 +303,11 @@ export async function createRoom(args: {
             .innerJoin(hermesProfiles, eq(hermesProfiles.id, npcs.hermesProfileId))
             .where(inArray(npcs.id, args.npcIds));
     const names = npcRows.map((r) => projectNpcRow(r.npc, r.profile, "").name);
-    name = (names.join(", ") || "새 대화방").slice(0, 60);
+    const fallback = translateServer(
+      args.locale === undefined ? "ko" : args.locale,
+      "room.defaultName",
+    );
+    name = (names.join(", ") || fallback).slice(0, 60);
   }
 
   const [created] = await db

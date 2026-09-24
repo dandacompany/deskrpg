@@ -152,3 +152,23 @@ test("inviting an NPC member ignores duplicates, and deleting a room cascades", 
   await deleteRoom(room.id);
   assert.deepEqual(await recentRoomMessages(room.id, 10), []);
 });
+
+test('a new office room is stored as "Office" — the screen names it from its kind, so display is unchanged', async () => {
+  const { ensureOfficeRoom } = await import("./chat-rooms");
+  const owner = await seedUser("office-name");
+  const ch = await seedChannel(owner.id);
+  const office = await ensureOfficeRoom(ch.id, owner.id);
+  assert.equal(office.name, "Office");
+});
+
+test("an unnamed room without NPC names is named in the creator's language", async () => {
+  const { createRoom } = await import("./chat-rooms");
+  const owner = await seedUser("default-name");
+  const ch = await seedChannel(owner.id);
+  const base = { channelId: ch.id, name: "  ", createdBy: owner.id, npcIds: [], userIds: [] };
+  assert.equal((await createRoom({ ...base })).name, "새 대화방", "omitted keeps Korean");
+  assert.equal((await createRoom({ ...base, locale: "ko" })).name, "새 대화방");
+  assert.equal((await createRoom({ ...base, locale: "ja" })).name, "新しいチャット");
+  assert.equal((await createRoom({ ...base, locale: "zh" })).name, "新聊天");
+  assert.equal((await createRoom({ ...base, locale: null })).name, "New chat");
+});

@@ -3221,6 +3221,7 @@ const ko: Record<string, string> = {
   "errors.sessionKickedElsewhere": "다른 위치에서 접속하여 현재 세션이 종료되었습니다.",
   // --- /content-i18n:A ---
   // --- content-i18n:B ---
+  "room.defaultName": "새 대화방",
   // --- /content-i18n:B ---
   // --- content-i18n:C ---
   "room.cronResult.failed": "실행 실패",
