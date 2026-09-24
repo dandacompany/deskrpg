@@ -7,6 +7,7 @@ import {
   type OfficeEnvironmentId,
 } from "@/game/three/office-environments";
 import { OFFICE_ROOMS } from "@/game/three/office-room-layout";
+import { roomLabel } from "@/game/three/room-labels";
 import { tiledSnapshot } from "@/game/three/tiled-preview";
 import { OFFICE_LOOKS, officeLookAppearance } from "@/game/three/office-looks";
 import { furnitureSeats } from "@/game/three/seating";
@@ -66,7 +67,7 @@ function makeFixture(id: OfficeEnvironmentId) {
       direction: seat.direction,
       walking: false,
       appearance: officeLookAppearance(OFFICE_LOOKS[i].id),
-      bubble: i < 10 ? "렌더러 검증 말풍선" : undefined,
+      bubble: i < 10 ? "Renderer check bubble" : undefined,
     };
   });
   const routes = actors.slice(0, 10).map((actor) => {
@@ -129,7 +130,7 @@ export default function ReviewClient() {
   const [auditRoom, setAuditRoom] = useState<string>("");
   const [metrics, setMetrics] = useState<FrameMetrics | null>(null);
   const [busy, setBusy] = useState(false),
-    [status, setStatus] = useState("렌더러 준비 중");
+    [status, setStatus] = useState("Preparing renderer");
   const [report, setReport] = useState<unknown>(null);
 
   const frameRoom = (id: OfficeEnvironmentId, roomId: string) => {
@@ -217,7 +218,7 @@ export default function ReviewClient() {
     instance.attach(bridge);
     instance.showOverview();
     const timer = window.setInterval(() => setMetrics(instance.readMetrics()), 500);
-    setStatus("준비 상태를 확인한 뒤 측정을 시작하세요.");
+    setStatus("Check readiness, then start measuring.");
     return () => {
       mounted.current = false;
       matrixAbort.current?.abort("Review unmounted");
@@ -247,13 +248,17 @@ export default function ReviewClient() {
     const context = metadata();
     setBusy(true);
     setReport(null);
-    setStatus("워밍업 10초 + 측정 30초. 탭과 화면 크기를 유지하세요.");
+    setStatus("10 s warm-up + 30 s measurement. Keep the tab and window size unchanged.");
     try {
       renderer.current!.startBenchmark((result) => {
         if (!mounted.current) return;
         setReport({ ...context, benchmark: result });
         setBusy(false);
-        setStatus(result.status === "complete" ? "측정 완료" : `측정 무효: ${result.reason}`);
+        setStatus(
+          result.status === "complete"
+            ? "Measurement complete"
+            : `Measurement invalid: ${result.reason}`,
+        );
       });
     } catch (error) {
       setBusy(false);
@@ -333,7 +338,7 @@ export default function ReviewClient() {
           progress = { ...progress, index: raw.length + 1, environment: entry.id, scene };
           setMatrix(progress);
           setStatus(
-            `전체 ${progress.index}/${progress.total} · ${entry.nameKo} / ${scene} · 에셋 준비 대기`,
+            `All ${progress.index}/${progress.total} · ${entry.nameEn} / ${scene} · waiting for assets`,
           );
           // Wait for the new map generation, rather than accepting the previous map's ready flag.
           selectEnvironment(entry.id, false);
@@ -353,7 +358,7 @@ export default function ReviewClient() {
           guard();
           capturing = true;
           setStatus(
-            `전체 ${progress.index}/${progress.total} · ${entry.nameKo} / ${scene} · 워밍업 10초 + 측정 30초`,
+            `All ${progress.index}/${progress.total} · ${entry.nameEn} / ${scene} · 10 s warm-up + 30 s measurement`,
           );
           const result = await new Promise<BenchmarkReport>((resolve) =>
             renderer.current!.startBenchmark(resolve),
@@ -387,9 +392,7 @@ export default function ReviewClient() {
       progress = { ...progress, status: "complete" };
       setMatrix(progress);
       setReport({ ...context, matrixStatus: "complete", results: raw });
-      setStatus(
-        `전체 ${progress.total}장면 측정 완료 · 전체 프레임 JSON은 아래에서 펼칠 수 있습니다.`,
-      );
+      setStatus(`All ${progress.total} scenes measured · expand the full frame JSON below.`);
     } catch (error) {
       cancel(String(error));
       if (mounted.current) {
@@ -402,7 +405,7 @@ export default function ReviewClient() {
           results: progress.results,
         });
         setStatus(
-          `전체 측정 중단 · ${progress.results.filter((result) => result.status === "complete").length}/${progress.total}장면 유효 · ${String(error)}`,
+          `Full run stopped · ${progress.results.filter((result) => result.status === "complete").length}/${progress.total} scenes valid · ${String(error)}`,
         );
       }
     } finally {
@@ -447,7 +450,7 @@ export default function ReviewClient() {
       const startIndex = OFFICE_ENVIRONMENTS.findIndex((entry) => entry.id === original);
       for (let step = 1; step <= 10; step++) {
         const id = OFFICE_ENVIRONMENTS[(startIndex + step) % OFFICE_ENVIRONMENTS.length].id;
-        setStatus(`실제 렌더러 맵 전환 ${step}/10 · ${id}`);
+        setStatus(`Live renderer map switch ${step}/10 · ${id}`);
         selectEnvironment(id);
         samples.push({ step, environment: id, metrics: await settle() });
       }
@@ -466,7 +469,7 @@ export default function ReviewClient() {
         sameMapSecondCycleDeltas: deltas,
         note: "Inspect same-map cycles for sustained growth; cache warm-up can establish a bounded plateau.",
       });
-      setStatus("10회 전환 완료 · 원래 환경 복귀");
+      setStatus("10 switches done · back to the original environment");
     } catch (error) {
       if (mounted.current) {
         setReport({ ...context, transitionStatus: "invalid", reason: String(error), samples });
@@ -482,16 +485,15 @@ export default function ReviewClient() {
   };
   return (
     <main style={{ padding: 16, background: "#f7f2e6", color: "#1a1a1a" }}>
-      <h1>UI2 개발 렌더러 검증실</h1>
+      <h1>UI2 renderer review (development)</h1>
       <p>
-        Renderer fixture: NPC 10명 + 플레이어 모형 2명. 실제 AI 응답·멀티플레이 검증 증거가
-        아닙니다.
+        Renderer fixture: 10 NPCs + 2 player models. Not evidence of real AI replies or multiplayer.
       </p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0" }}>
         <label>
-          환경{" "}
+          Environment{" "}
           <select
-            aria-label="환경"
+            aria-label="Environment"
             value={environment}
             disabled={busy}
             onChange={(e) => {
@@ -502,15 +504,15 @@ export default function ReviewClient() {
           >
             {OFFICE_ENVIRONMENTS.map((entry) => (
               <option key={entry.id} value={entry.id}>
-                {entry.nameKo}
+                {entry.nameEn}
               </option>
             ))}
           </select>
         </label>
         <label>
-          장면{" "}
+          Scene{" "}
           <select
-            aria-label="장면"
+            aria-label="Scene"
             value={mode}
             disabled={busy}
             onChange={(e) => {
@@ -521,15 +523,15 @@ export default function ReviewClient() {
               frameCamera(environment, next);
             }}
           >
-            <option value="overview">전체 보기</option>
-            <option value="close">미팅룸 근접</option>
-            <option value="moving">NPC 10명 이동·말풍선</option>
+            <option value="overview">Overview</option>
+            <option value="close">Meeting room close-up</option>
+            <option value="moving">10 NPCs moving with bubbles</option>
           </select>
         </label>
         <label>
-          공간 시각 점검{" "}
+          Room inspection{" "}
           <select
-            aria-label="공간 시각 점검"
+            aria-label="Room inspection"
             value={auditRoom}
             disabled={busy}
             onChange={(e) => {
@@ -539,11 +541,11 @@ export default function ReviewClient() {
               else frameCamera(environment, mode);
             }}
           >
-            <option value="">장면 카메라 복원</option>
+            <option value="">Restore scene camera</option>
             {(environment === "agency" ? studioReviewRooms : (OFFICE_ROOMS[environment] ?? [])).map(
               (room) => (
                 <option key={room.id} value={room.id}>
-                  {room.label} 근접
+                  {roomLabel(room.label, "en")} close-up
                 </option>
               ),
             )}
@@ -559,13 +561,13 @@ export default function ReviewClient() {
             setTimeout(() => renderer.current?.showOverview(), 100);
           }}
         >
-          크리에이티브 스튜디오 레퍼런스 1748×900
+          Creative studio reference 1748×900
         </button>
         <button disabled={busy || !metrics?.assetsReady || !showLabels} onClick={benchmark}>
-          성능 측정
+          Measure performance
         </button>
         <button disabled={busy || !metrics?.assetsReady || !showLabels} onClick={benchmarkMatrix}>
-          전체 15장면 측정
+          Measure all 15 scenes
         </button>
         {matrixAbort.current && (
           <button
@@ -574,7 +576,7 @@ export default function ReviewClient() {
               renderer.current?.cancelBenchmark("Cancelled by user");
             }}
           >
-            전체 측정 중지
+            Stop full run
           </button>
         )}
         <button
@@ -583,50 +585,48 @@ export default function ReviewClient() {
           onClick={() => {
             setSmallViewport((value) => !value);
             setReferenceViewport(false);
-            setStatus(
-              "렌더러 컨테이너 크기를 바꿨습니다. 준비 상태와 실제 계측 크기를 확인하세요.",
-            );
+            setStatus("Renderer container resized. Check readiness and the measured size.");
           }}
         >
-          {smallViewport ? "기본 화면 복원" : "작은 화면 390px"}
+          {smallViewport ? "Restore default size" : "Small screen 390px"}
         </button>
         <button
           disabled={busy}
           aria-pressed={showLabels}
           onClick={() => setShowLabels((value) => !value)}
         >
-          {showLabels ? "이름·말풍선 숨기기" : "이름·말풍선 표시"}
+          {showLabels ? "Hide names and bubbles" : "Show names and bubbles"}
         </button>
         <button disabled={busy || !metrics?.assetsReady} onClick={transitions}>
-          맵 전환 10회
+          Switch maps 10 times
         </button>
         <button disabled={busy} onClick={() => renderer.current?.rotateCamera(2)}>
-          90도 회전
+          Rotate 90°
         </button>
         <button disabled={busy} onClick={() => renderer.current?.zoom(0.8)}>
-          확대
+          Zoom in
         </button>
         <button disabled={busy} onClick={() => renderer.current?.zoom(1.25)}>
-          축소
+          Zoom out
         </button>
       </div>
       <p role="status">{status}</p>
       <p>
-        공간 시각 점검은 환경을 바꿔도 선택한 방을 보여줍니다. 성능 측정·맵 전환을 시작하면 장면
-        카메라로 복원하며, 측정의 근접 장면은 항상 미팅룸입니다.
+        Room inspection keeps showing the selected room when the environment changes. Measuring or
+        switching maps restores the scene camera; the close-up scene is always the meeting room.
       </p>
       <p>
-        전체 측정은 5개 환경 × 3개 장면을 순서대로 실행하며 약 10분 이상 걸립니다. 숨김 전환, 화면
-        크기 변경, 에셋 오류 또는 중지 시 남은 장면은 실행하지 않고 무효 사유와 완료된 결과만
-        남깁니다.
+        The full run measures 5 environments × 3 scenes in order and takes 10+ minutes. Hiding the
+        tab, resizing, an asset error or stopping skips the remaining scenes and keeps only the
+        reason and the finished results.
       </p>
       <p>
-        작은 화면 fixture는 렌더러 컨테이너만 실제 390×600 CSS px로 만듭니다. Chrome viewport
-        변경이나 전체 제품의 모바일 검증이 아닙니다. 현재:{" "}
-        {smallViewport ? "390×600 CSS px" : "기본 반응형 컨테이너"}.
+        The small-screen fixture only sizes the renderer container to 390×600 CSS px. It is not a
+        Chrome viewport change or a mobile check of the product. Current:{" "}
+        {smallViewport ? "390×600 CSS px" : "default responsive container"}.
       </p>
       <div
-        aria-label="렌더러 검증 영역"
+        aria-label="Renderer check area"
         style={{
           position: "relative",
           pointerEvents: busy ? "none" : undefined,
@@ -643,23 +643,23 @@ export default function ReviewClient() {
         />
       </div>
       <details open>
-        <summary>실시간 렌더러 계측</summary>
-        <pre aria-label="실시간 계측">{JSON.stringify(metrics, null, 2)}</pre>
+        <summary>Live renderer metrics</summary>
+        <pre aria-label="Live metrics">{JSON.stringify(metrics, null, 2)}</pre>
       </details>
       {matrix && (
-        <section aria-label="전체 장면 측정 결과">
+        <section aria-label="All-scene results">
           <p>
-            상태: {matrix.status} · {matrix.index}/{matrix.total} · {matrix.environment} /{" "}
+            Status: {matrix.status} · {matrix.index}/{matrix.total} · {matrix.environment} /{" "}
             {matrix.scene}
           </p>
           <p>
-            마지막 결과:{" "}
+            Last result:{" "}
             {matrix.results.at(-1)
               ? `${matrix.results.at(-1)!.environment} / ${matrix.results.at(-1)!.scene} · ${matrix.results.at(-1)!.status} · median ${matrix.results.at(-1)!.medianFps?.toFixed(1) ?? "—"} FPS`
-              : "아직 없음"}
+              : "none yet"}
           </p>
           <pre
-            aria-label="15장면 측정 진행"
+            aria-label="15-scene progress"
             style={{ maxHeight: 400, overflow: "auto", whiteSpace: "pre-wrap" }}
           >
             {JSON.stringify(matrix, null, 2)}
@@ -668,10 +668,10 @@ export default function ReviewClient() {
       )}
       <details open={!matrix}>
         <summary>
-          {matrix?.status === "complete" ? "전체 프레임 측정 결과 JSON 펼치기" : "측정 결과 JSON"}
+          {matrix?.status === "complete" ? "Full frame results JSON" : "Results JSON"}
         </summary>
         <pre
-          aria-label="측정 결과"
+          aria-label="Results"
           style={{ maxHeight: 500, overflow: "auto", whiteSpace: "pre-wrap" }}
         >
           {JSON.stringify(report, null, 2)}
