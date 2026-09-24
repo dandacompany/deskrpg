@@ -120,6 +120,8 @@ export type EngineConfig = {
   /** Two-tier turn timeout (§3.5). If omitted: idleMs 180s (same as the old
    * turnTimeoutMs)/maxMs 600s. */
   turnTimeout?: Partial<TurnTimeoutConfig>;
+  /** Language of the turn prompts — the meeting opener's (NpcRuntimeDeps.locale). Omitted means Korean. */
+  locale?: string | null;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -186,6 +188,7 @@ export class ChannelRuntime {
             maxMs: config.turnTimeout?.maxMs ?? DEFAULT_MAX_MS,
           },
           now: this.now,
+          locale: config.locale,
         }),
       ]),
     );

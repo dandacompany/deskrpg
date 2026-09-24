@@ -24,6 +24,7 @@ export type ResummarizerDeps<Npc extends NpcRef> = {
     topic: string,
     transcript: string,
     participants?: OutcomeParticipant[],
+    locale?: string | null,
   ) => Promise<ParsedMeetingOutcome>;
 };
 
@@ -46,6 +47,7 @@ export function createResummarizer<Npc extends NpcRef>(deps: ResummarizerDeps<Np
         input.topic,
         input.transcript,
         input.participants,
+        input.locale,
       );
     }
     // Retrying gives the same result — distinguish it from a failure.

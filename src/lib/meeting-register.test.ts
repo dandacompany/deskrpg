@@ -254,3 +254,22 @@ test("if not a single card was created, returns the reason and saves nothing", a
   assert.deepEqual(result, { ok: false, status: 502, errorCode: "no_tasks_created" });
   assert.deepEqual(d.saved, []);
 });
+
+// The card body is written in the language of whoever registers it; omitted keeps the Korean labels.
+for (const [locale, acceptance, source] of [
+  ["en", "Acceptance: 조사 완료 조건", "Source: meeting minutes m1 — 가격 회의"],
+  ["ja", "完了条件: 조사 완료 조건", "出典: 議事録 m1 — 가격 회의"],
+  [null, "Acceptance: 조사 완료 조건", "Source: meeting minutes m1 — 가격 회의"],
+  ["ko", "완료 조건: 조사 완료 조건", "출처: 회의록 m1 — 가격 회의"],
+] as const) {
+  test(`a ${String(locale)} registration labels the card body in that language`, async () => {
+    const d = deps();
+    await registerMeetingOutcome(
+      { minutesId: "m1", userId: "host", locale, body: body([{ index: 0, npcId: "npc-1" }]) },
+      d,
+    );
+    const cardBody = d.batches[0].items[0].body ?? "";
+    assert.ok(cardBody.includes(acceptance), cardBody);
+    assert.ok(cardBody.includes(source), cardBody);
+  });
+}

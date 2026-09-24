@@ -15,6 +15,8 @@ export type ResummarizeInput = {
   transcript: string;
   /** Employees who attended the meeting. Candidates both for producing the summary and for follow-up work. */
   participants: OutcomeParticipant[];
+  /** Language of the new summary — the requester's (null when the request carries no language cookie). */
+  locale?: string | null;
 };
 
 export type MeetingHooks = {

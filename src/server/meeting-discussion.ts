@@ -112,6 +112,8 @@ type MeetingBrokerConfig = {
   quota: {
     maxTotalTurns: number;
   };
+  /** The meeting opener's language — turn prompts and minutes follow it. Omitted means Korean. */
+  locale?: string | null;
 };
 
 /** `outcome`/`status` are optional — without them it is treated as a successful summary with no structured result. */
@@ -191,6 +193,9 @@ type RegisterMeetingDiscussionHandlersArgs = {
     players: Map<string, MeetingPlayer>;
     user: MeetingUser;
     adapterRegistry: AdapterRegistry;
+    /** The socket's language cookie (null when absent). A meeting opened from this socket speaks it:
+     * turn prompts, minutes and the summary. Omitted means Korean, as before locales existed. */
+    locale?: string | null;
     getNpcConfigsForChannel: (channelId: string) => Promise<MeetingNpcConfig[]>;
     canControlMeeting: (channelId: string, userId: string) => Promise<boolean> | boolean;
     spatial?: MeetingSpatialCoordinator;
@@ -220,6 +225,8 @@ type RegisterMeetingDiscussionHandlersArgs = {
       transcript: string,
       /** Candidates to own follow-up work — only staff who attended the meeting. */
       participants?: OutcomeParticipant[],
+      /** Language of the summary — the meeting opener's. */
+      locale?: string | null,
     ) => Promise<MeetingSummary>;
     persistMeetingMinutes: (input: PersistMeetingMinutesInput) => Promise<string | null>;
   };
@@ -389,17 +396,18 @@ export async function defaultCreateMeetingBroker(
       initialRunMode: toRunMode(config.settings?.initialMode),
       hybridMode: Boolean(config.settings?.hybridMode),
       hybridAutoResumeMs: (config.settings?.hybridAutoResumeMs as number) ?? null,
+      locale: config.locale,
     },
     {
       onPollStart: () => callbacks.onPollStart?.(),
       onPollResult: (raises, passes, failures) => {
         meetingLog(
-          "폴링 결과: raises=",
-          raises.map((r) => r.npcId).join(",") || "(없음)",
+          "poll result: raises=",
+          raises.map((r) => r.npcId).join(",") || "(none)",
           "passes=",
-          passes.join(",") || "(없음)",
+          passes.join(",") || "(none)",
           "failures=",
-          (failures ?? []).map((f) => f.npcId).join(",") || "(없음)",
+          (failures ?? []).map((f) => f.npcId).join(",") || "(none)",
         );
         callbacks.onPollResult?.(
           raises
@@ -418,7 +426,7 @@ export async function defaultCreateMeetingBroker(
         );
       },
       onTurnStart: (npcId) => {
-        meetingLog("턴 시작:", npcId);
+        meetingLog("turn start:", npcId);
         const agent = participantByNpcId.get(npcId);
         if (agent) callbacks.onTurnStart?.(agent);
       },
@@ -437,6 +445,7 @@ export async function defaultCreateMeetingBroker(
             displayName: participant.displayName,
             role: participant.role,
           })),
+          config.locale,
         );
         const durationSeconds = Math.floor((Date.now() - startedAt) / 1000);
         void callbacks.onMeetingEnd?.(transcript, durationSeconds);
@@ -484,7 +493,11 @@ export function settleMeeting(
   state.activeBrokers.delete(channelId);
   state.discussionInitiators.delete(channelId);
   void state.spatial?.cancel(channelId).catch((error) => {
-    console.error(`[meeting] ${opts.context} 후 복귀 정산 실패`, { channelId }, error);
+    console.error(
+      `[meeting] ${opts.context} — failed to settle the return trip`,
+      { channelId },
+      error,
+    );
   });
 }
 
@@ -515,7 +528,11 @@ export function registerMeetingDiscussionHandlers({
       selectedNpcIds?: string[];
     };
 
-    meetingLog("start-discussion 수신:", { channelId, topic: topic?.slice(0, 40), selectedNpcIds });
+    meetingLog("start-discussion received:", {
+      channelId,
+      topic: topic?.slice(0, 40),
+      selectedNpcIds,
+    });
     if (typeof channelId !== "string" || typeof topic !== "string" || !topic.trim()) return;
     if (
       selectedNpcIds !== undefined &&
@@ -565,8 +582,8 @@ export function registerMeetingDiscussionHandlers({
     }
 
     meetingLog(
-      "후보 NPC:",
-      candidateNpcs.map((n) => `${n.name}(${n.adapterType})`).join(", ") || "(없음)",
+      "candidate NPCs:",
+      candidateNpcs.map((n) => `${n.name}(${n.adapterType})`).join(", ") || "(none)",
     );
     if (candidateNpcs.length === 0) {
       socket.emit("meeting:error", { error: "No AI NPCs in this channel" });
@@ -601,6 +618,8 @@ export function registerMeetingDiscussionHandlers({
     }
 
     const meetingId = `meet-${Date.now()}`;
+    // Captured once at start: the whole meeting keeps the opener's language.
+    const meetingLocale = deps.locale;
     const sessionKeyPrefix = candidateNpcs[0].sessionKeyPrefix || channelId.slice(0, 8);
 
     // The summary adapter is resolved once, **separately** from meeting participants. The broker's config.participants
@@ -628,6 +647,7 @@ export function registerMeetingDiscussionHandlers({
         quota: {
           maxTotalTurns: settings?.maxTotalTurns || 50,
         },
+        locale: meetingLocale,
       },
       {
         onPollStart: () => {
@@ -744,7 +764,7 @@ export function registerMeetingDiscussionHandlers({
           io.to(getMeetingRoomId(channelId)).emit("meeting:turn-aborted", { npcId });
         },
         onParticipantsExcluded: (excluded) => {
-          meetingLog("제외:", excluded.map((e) => `${e.displayName}=${e.reason}`).join(", "));
+          meetingLog("excluded:", excluded.map((e) => `${e.displayName}=${e.reason}`).join(", "));
           const names = excluded.map((e) => e.displayName).join(", ");
           io.to(getMeetingRoomId(channelId)).emit("meeting:error", {
             error: `Excluded from the meeting (no usable backend): ${names}`,
@@ -754,7 +774,7 @@ export function registerMeetingDiscussionHandlers({
           const agent = brokerInstance.config.participants.find(
             (participant) => participant.npcId === npcId,
           );
-          meetingLog("지목 건너뜀:", `${agent?.displayName || npcId}=${reason}`);
+          meetingLog("mention skipped:", `${agent?.displayName || npcId}=${reason}`);
           // Display text is not built here — only npcId/reason are passed and the client
           // renders it via i18n (meeting.mentionSkipped.*).
           io.to(getMeetingRoomId(channelId)).emit("meeting:mention-skipped", {
@@ -786,6 +806,7 @@ export function registerMeetingDiscussionHandlers({
               meetingParticipants
                 .filter((participant) => participant.type === "npc")
                 .map((participant) => ({ npcId: participant.id, name: participant.name })),
+              meetingLocale,
             );
           }
 
@@ -828,12 +849,12 @@ export function registerMeetingDiscussionHandlers({
             summaryStatus: summary.status ?? "ok",
           });
 
-          settleMeeting(deps, channelId, { context: "회의 종료" });
+          settleMeeting(deps, channelId, { context: "meeting end" });
         },
         onError: (error) => {
           // Carrying the adapter's thrown value (HermesError etc.) as-is makes the screen draw [object Object].
           const failure = describeMeetingFailure(error);
-          console.warn("[meeting] NPC 응답 실패", { channelId, code: failure.error }, error);
+          console.warn("[meeting] NPC response failed", { channelId, code: failure.error }, error);
           io.to(getMeetingRoomId(channelId)).emit("meeting:error", failure);
         },
       },
@@ -870,7 +891,7 @@ export function registerMeetingDiscussionHandlers({
     }
 
     meetingLog(
-      "브로커 시작:",
+      "broker started:",
       brokerInstance.config.participants.map((p) => p.displayName).join(", "),
     );
     brokerInstance.discussionState = {
@@ -893,7 +914,7 @@ export function registerMeetingDiscussionHandlers({
     brokerInstance.run().catch((error) => {
       if (activeBrokers.get(channelId) !== brokerInstance) return;
       console.error("[meeting] Broker error:", error);
-      settleMeeting(deps, channelId, { context: "오류 종료" });
+      settleMeeting(deps, channelId, { context: "error end" });
       io.to(getMeetingRoomId(channelId)).emit("meeting:error", {
         error: "Meeting ended due to error",
       });

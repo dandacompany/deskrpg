@@ -1,7 +1,23 @@
 /**
  * Meeting message formatter (CommonJS)
  * Ported from claw-meet/broker/src/message-formatter.ts
+ *
+ * Every template comes in two variants. The Korean one is the original text, byte-for-byte —
+ * the Korean meeting protocol teaches its "📋 [회의 알림:" markers. Every other locale gets the
+ * English template. `locale` is the last, optional argument: omitted means Korean (the behavior
+ * before locales existed), while null (a request without a language cookie) means English.
  */
+
+/**
+ * Same rule as promptLocale() in i18n/prompt-locale.ts, kept local so this CommonJS module
+ * doesn't require a TypeScript file.
+ * @param {string|null|undefined} locale
+ * @returns {boolean}
+ */
+function isKorean(locale) {
+  if (locale === undefined) return true;
+  return typeof locale === "string" && locale.toLowerCase().slice(0, 2) === "ko";
+}
 
 /**
  * A lightweight polling message — informs the agent of the recent remarks and asks whether
@@ -13,6 +29,7 @@
  * @param {number} maxTurns
  * @param {number} remainingTurns
  * @param {string|null} [passPolicy]
+ * @param {string|null} [locale]
  * @returns {string}
  */
 function formatPollMessage(
@@ -23,12 +40,32 @@ function formatPollMessage(
   maxTurns,
   remainingTurns,
   passPolicy,
+  locale,
 ) {
   const recentSummary = recentTurns
     .map(
       (t) => `[${t.displayName}] ${t.content.slice(0, 150)}${t.content.length > 150 ? "..." : ""}`,
     )
     .join("\n");
+
+  if (!isKorean(locale)) {
+    let english = `📋 [Meeting poll: ${topic}]
+Turn: ${currentTurn}/${maxTurns} | Your remaining turns: ${remainingTurns}
+
+Recent conversation:
+${recentSummary}
+
+---`;
+    if (passPolicy) {
+      english += `\n[Speaking guideline] ${passPolicy}\n`;
+    }
+    english += `
+If you want to speak → SPEAK: (one-line reason)
+To pass → PASS
+
+Answer with exactly one of SPEAK: or PASS on the first line.`;
+    return english;
+  }
 
   let message = `📋 [회의 알림: ${topic}]
 현재 턴: ${currentTurn}/${maxTurns} | 당신의 남은 발언: ${remainingTurns}
@@ -60,6 +97,7 @@ ${recentSummary}
  * @param {number} currentTurn
  * @param {number} maxTurns
  * @param {number} remainingTurns
+ * @param {string|null} [locale]
  * @returns {string}
  */
 function formatSpeakMessage(
@@ -70,10 +108,25 @@ function formatSpeakMessage(
   currentTurn,
   maxTurns,
   remainingTurns,
+  locale,
 ) {
   const participantList = participants.map((p) => `${p.displayName}(${p.role})`).join(", ");
 
   const historyText = turns.map((t) => `[${t.displayName}] ${t.content}`).join("\n\n");
+
+  if (!isKorean(locale)) {
+    return `📋 [Meeting: ${topic}]
+Participants: ${participantList}
+Turn: ${currentTurn}/${maxTurns} | Your remaining turns: ${remainingTurns}
+
+---
+${historyText}
+
+---
+${agent.displayName}, please share your view.
+⚠️ Rules: 3–5 sentences, spoken the way you'd talk to a colleague. Never use bullet (-) or numbered (1. 2. 3.) lists. No bold (**). No headers (##). Just talk.
+💬 If you want a specific participant to answer, write "TO: Name" on the first line or call them with "@[Name]" in the text. That person answers next. Use exactly the part of the name before the parentheses in the participant list above (without the role), and don't drop the brackets. Example: if the participant is "Danbi(Lead)", write "TO: Danbi" or "@[Danbi]".`;
+  }
 
   return `📋 [회의: ${topic}]
 참석자: ${participantList}
@@ -93,10 +146,33 @@ ${agent.displayName}님, 의견을 말씀해 주세요.
  * @param {string} topic
  * @param {Array<{seq: number, displayName: string, content: string, timestamp: number}>} turns
  * @param {Array<{displayName: string, role: string}>} participants
+ * @param {string|null} [locale]
  * @returns {string}
  */
-function generateTranscript(topic, turns, participants) {
+function generateTranscript(topic, turns, participants, locale) {
   const date = new Date().toISOString().split("T")[0];
+  if (!isKorean(locale)) {
+    const english = [
+      `# Meeting minutes: ${topic}`,
+      "",
+      `- **Date**: ${date}`,
+      `- **Participants**: ${participants.map((p) => `${p.displayName}(${p.role})`).join(", ")}`,
+      `- **Total turns**: ${turns.length}`,
+      "",
+      "---",
+      "",
+      "## Conversation",
+      "",
+    ];
+    for (const turn of turns) {
+      const time = new Date(turn.timestamp).toLocaleTimeString(locale || "en");
+      english.push(`### [${turn.seq}] ${turn.displayName} (${time})`);
+      english.push("");
+      english.push(turn.content);
+      english.push("");
+    }
+    return english.join("\n");
+  }
   const lines = [
     `# 회의록: ${topic}`,
     "",
@@ -124,9 +200,10 @@ function generateTranscript(topic, turns, participants) {
 /**
  * Parses the SPEAK/PASS intent from the agent's response
  * @param {string} response
+ * @param {string|null} [locale]
  * @returns {{ wantsToSpeak: boolean, reason: string }}
  */
-function parseHandRaise(response) {
+function parseHandRaise(response, locale) {
   if (!response || typeof response !== "string") {
     return { wantsToSpeak: false, reason: "" };
   }
@@ -135,7 +212,10 @@ function parseHandRaise(response) {
 
   if (/^SPEAK/i.test(firstLine)) {
     const reason = firstLine.replace(/^SPEAK:?\s*/i, "").trim();
-    return { wantsToSpeak: true, reason: reason || "(발언 희망)" };
+    return {
+      wantsToSpeak: true,
+      reason: reason || (isKorean(locale) ? "(발언 희망)" : "(wants to speak)"),
+    };
   }
 
   return { wantsToSpeak: false, reason: "" };

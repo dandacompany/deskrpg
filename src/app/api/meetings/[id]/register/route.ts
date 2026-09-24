@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db, channels, jsonForDb, meetingMinutes } from "@/db";
 import { formatRequester } from "@/lib/approval-requester";
 import { createApprovalBatch } from "@/lib/approvals";
+import { readLocaleCookie } from "@/lib/i18n/server";
 import { getUserId } from "@/lib/internal-rpc";
 import { resolveKanbanChannelContext, reviewPolicyFailure } from "@/lib/kanban-access";
 import { markMeetingOutcomeNoticeRegistered } from "@/lib/meeting-outcome-notice";
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   try {
     const result = await registerMeetingOutcome(
-      { minutesId: id, userId, body },
+      { minutesId: id, userId, body, locale: readLocaleCookie(req.headers.get("cookie")) },
       {
         loadMinutes: async (minutesId) => {
           const [row] = await db

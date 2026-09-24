@@ -35,7 +35,7 @@ import {
 import { describeActivity } from "@/lib/npc-activity";
 import { readLocaleCookie } from "@/lib/i18n/server";
 import { composeNpcInstructions } from "@/lib/npc-prompt-layers";
-import { getDefaultMeetingProtocol } from "@/lib/npc-agent-defaults";
+import { getDefaultMeetingProtocol } from "@/lib/meeting-protocol";
 import {
   appendNpcChatMessage,
   characterBelongsToUser,
@@ -836,6 +836,7 @@ async function generateMeetingSummary(
   topic: string,
   transcript: string,
   participants: OutcomeParticipant[] = [],
+  locale?: string | null,
 ): Promise<ParsedMeetingOutcome> {
   try {
     // multiParty: true — the summary must be a one-off run, not that NPC's persistent conversation session.
@@ -843,7 +844,7 @@ async function generateMeetingSummary(
     const { response } = await Promise.race([
       adapter.execute({
         sessionKey,
-        prompt: buildMeetingSummaryPrompt(topic, transcript, participants),
+        prompt: buildMeetingSummaryPrompt(topic, transcript, participants, locale),
         multiParty: true,
         conversationHistory: [],
       }),
@@ -1252,7 +1253,7 @@ export function setupSocketHandlers(io: Server) {
           const prevSocket = io.sockets.sockets.get(prevSocketId);
           if (prevSocket) {
             prevSocket.emit("session:kicked", {
-              reason: "다른 위치에서 접속하여 현재 세션이 종료되었습니다.",
+              reason: "errors.sessionKickedElsewhere",
             });
             prevSocket.disconnect(true);
           }
@@ -1866,6 +1867,8 @@ export function setupSocketHandlers(io: Server) {
         players,
         user,
         adapterRegistry,
+        // The meeting speaks the language of whoever opened it: turn prompts, minutes and summary.
+        locale: socketLocale(socket),
         // Carry the protocol in the UI language of whoever opened the meeting.
         getNpcConfigsForChannel: (channelId: string) =>
           getNpcConfigsForChannel(channelId, socketLocale(socket)),
@@ -1938,7 +1941,7 @@ export function setupSocketHandlers(io: Server) {
         if (room && room.participants.size === 0) {
           settleMeeting({ activeBrokers, discussionInitiators, spatial }, channelId, {
             stopBroker: true,
-            context: "주재자 이탈",
+            context: "host left",
           });
         }
       }

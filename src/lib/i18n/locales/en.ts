@@ -824,26 +824,6 @@ const en: Record<string, string> = {
   "characters.group.outerwear": "Outerwear",
   "characters.group.fantasy": "Fantasy",
   "characters.group.other": "Other",
-  "characters.preset.devA": "Developer A",
-  "characters.preset.devB": "Developer B",
-  "characters.preset.designerA": "Designer A",
-  "characters.preset.designerB": "Designer B",
-  "characters.preset.plannerA": "Planner A",
-  "characters.preset.plannerB": "Planner B",
-  "characters.preset.pmA": "PM A",
-  "characters.preset.pmB": "PM B",
-  "characters.preset.marketerA": "Marketer A",
-  "characters.preset.marketerB": "Marketer B",
-  "characters.preset.ceoA": "CEO A",
-  "characters.preset.ceoB": "CEO B",
-  "characters.preset.internA": "Intern A",
-  "characters.preset.internB": "Intern B",
-  "characters.preset.dataAnalyst": "Data Analyst",
-  "characters.preset.hrManager": "HR Manager",
-  "characters.preset.freelancer": "Freelancer",
-  "characters.preset.seniorDesigner": "Sr. Designer",
-  "characters.preset.backendDev": "Backend Dev",
-  "characters.preset.qaEngineer": "QA Engineer",
   "characters.cat.eye_color": "Eye Color",
   "characters.cat.eyebrows": "Eyebrows",
   "characters.cat.nose": "Nose",
@@ -3258,6 +3238,10 @@ const en: Record<string, string> = {
     "Turn it on from the gateway page, then press [Apply] to include this employee",
   "hermes.wizard.result.workerPropagationLink": "How to turn it on",
   // --- content-i18n:A ---
+  "meeting.cardAcceptance": "Acceptance: {acceptance}",
+  "meeting.cardSource": "Source: meeting minutes {id} — {topic}",
+  "errors.sessionKickedElsewhere":
+    "You connected from another location, so this session was ended.",
   // --- /content-i18n:A ---
   // --- content-i18n:B ---
   // --- /content-i18n:B ---
