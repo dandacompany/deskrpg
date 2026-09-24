@@ -32,35 +32,36 @@ export class HermesAdapter implements NpcAdapter {
         this.lastRunId = event.data.run_id;
         options.onRunStarted?.(event.data.run_id);
       }
-      // 두 엔드포인트가 델타 이벤트 이름을 달리 쓴다(실측 v0.20.2):
-      //   1:1  /api/sessions/<id>/chat/stream → assistant.delta
-      //   회의 /v1/runs/<id>/events          → message.delta
-      // assistant.* 만 보던 탓에 회의에서는 onDelta 가 한 번도 불리지 않았다. 응답 자체는
-      // execute() 의 반환값으로 왔으므로 NPC 는 멀쩡히 발언했지만, 스트리밍 청크가 없으니
-      // 클라이언트의 스트림 버퍼가 비었고 done:true 를 받아도 확정할 말풍선이 없었다 —
-      // 회의는 완전히 돌아가는데 화면만 비어 있었다.
+      // The two endpoints use different delta event names (measured live, v0.20.2):
+      //   1:1     /api/sessions/<id>/chat/stream → assistant.delta
+      //   meeting /v1/runs/<id>/events           → message.delta
+      // Because only assistant.* was being watched, onDelta was never called even once in
+      // meetings. The response itself arrived via execute()'s return value, so the NPC spoke
+      // fine, but with no streaming chunks the client's stream buffer stayed empty and there
+      // was no bubble to finalize even when done:true arrived — the meeting ran completely
+      // normally while the screen stayed blank.
       if (
         (event.event === "assistant.delta" || event.event === "message.delta") &&
         typeof event.data.delta === "string"
       ) {
         options.onDelta?.(event.data.delta);
       }
-      // 실제 도구 사용은 tool.started / tool.completed 로 온다. tool.progress 만 보면
-      // 거의 아무것도 못 본다 — 실측(2026-08-28, 도구 3회 사용): started 3, completed 3,
-      // progress 는 `_thinking` 단 1회였다.
+      // Real tool use comes through as tool.started / tool.completed. Looking only at
+      // tool.progress shows almost nothing — measured live (2026-08-28, 3 tool uses):
+      // started 3, completed 3, progress was `_thinking` only once.
       //
-      // preview 는 넘기지 않는다. tool.progress 의 `_thinking` preview 는 완성된 답변
-      // 전체라, 예전에 이걸 채팅 청크로 흘리다가 답이 두 번 보였다. 소비자에게는
-      // **이름만** 준다.
+      // preview isn't passed through. tool.progress's `_thinking` preview is the entire
+      // finished answer, and streaming that as a chat chunk used to make the answer show up
+      // twice. Consumers get **only the name**.
       if (event.event === "tool.started" || event.event === "tool.progress") {
         const name = typeof event.data.tool_name === "string" ? event.data.tool_name : "";
         options.onToolProgress?.(name, "");
       }
-      // tool.completed 로는 끄지 않는다. started 와 completed 가 순식간에 교차하면
-      // 두 상태 갱신이 한 배치에 묶여 중간 상태가 렌더되지 않는다 — 실측(2026-08-28)에서
-      // web_search 를 3회 썼는데 화면에는 아무것도 나타나지 않았다. 마지막 도구 이름을
-      // 그대로 두었다가 스트림이 끝날 때 한 번에 끄면, 사용자는 "무슨 일 하는 중"을
-      // 끊김 없이 본다.
+      // Not cleared by tool.completed. If started and completed cross paths in an instant,
+      // the two state updates get batched together and the intermediate state never
+      // renders — measured live (2026-08-28), web_search was used 3 times and nothing showed
+      // up on screen. Leaving the last tool name in place and clearing it all at once when
+      // the stream ends lets the user see "something's happening" with no gaps.
     };
   }
 
