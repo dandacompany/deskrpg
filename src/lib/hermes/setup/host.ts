@@ -227,12 +227,16 @@ async function invoke(
   const timeout =
     action === "install" || action === "install-service"
       ? 170
-      : action === "verify"
-        ? 110
-        : // 호스트가 CLI 를 45초까지 기다린다 — 바깥 상한이 그보다 좁으면 판정이 늘 timeout 이 된다.
-          action === "check-model"
-          ? 60
-          : 45;
+      : // 헬퍼는 서비스 정지 한도 + 기동 여유를 최대 300초까지 기다린다(RESTART_MAX). 바깥이 먼저 끊기면
+        // 원인이 command_timeout 으로 바뀌고 헬퍼의 gateway_restart_failed 판정을 잃는다.
+        action === "restart"
+        ? 330
+        : action === "verify"
+          ? 110
+          : // 호스트가 CLI 를 45초까지 기다린다 — 바깥 상한이 그보다 좁으면 판정이 늘 timeout 이 된다.
+            action === "check-model"
+            ? 60
+            : 45;
   try {
     // 파이썬이 하나도 없으면 Hermes 도 없다 — 탐색은 빈 목록(→ 설치 제안), 그 밖은 hermes_not_found.
     const none = action === "discover" ? '{"candidates": []}' : '{"error": "hermes_not_found"}';

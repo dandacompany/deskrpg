@@ -407,6 +407,110 @@ print(json.dumps(calls))
   );
   assert.deepEqual(result.body, [["systemctl", "--user", "restart", "hermes-gateway.service"]]);
 });
+// --- 재시작 제한: 게이트웨이의 정상 종료(드레인)를 기다린다 ------------------------------------
+// Hermes 유닛은 TimeoutStopSec(기본 70초, cron 드레인 설정에 따라 더 길다), launchd 는 ExitTimeOut 60초다.
+// 예전 25초 제한은 성공한 재시작을 host_operation_failed 로 보고했다(실측 종료 31초).
+test("재시작은 서비스 정지 한도에 기동 여유를 더한 만큼 기다린다(하한 90·상한 300초)", () => {
+  const result = fixture(
+    String.raw`
+seen = []
+def capture(argv, timeout):
+    seen.append(timeout)
+    return type('Result',(),{'returncode':0})()
+run = capture
+id = main('discover')['candidates'][0]['id']
+for stop in (70, None, 1000, 10):
+    def scoped(name, home, stop=stop):
+        result = fixture_identity(name, home)
+        result['stop'] = stop
+        return result
+    identity = scoped
+    main('restart', id)
+print(json.dumps(seen))
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, [100, 90, 300, 90]);
+});
+test("제한 안에 끝나는 느린 재시작은 성공이다", () => {
+  const result = fixture(
+    String.raw`
+def slow(name, home):
+    result = fixture_identity(name, home)
+    result['command'] = [sys.executable, '-c', 'import time; time.sleep(1.5)']
+    return result
+identity = slow
+id = main('discover')['candidates'][0]['id']
+entry('restart', id)
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, { ok: true });
+});
+test("제한을 넘긴 재시작은 원인 없는 host_operation_failed 가 아니라 gateway_restart_failed 다", () => {
+  const result = fixture(
+    String.raw`
+RESTART_MIN = 1
+RESTART_START_MARGIN = 0
+def hung(name, home):
+    result = fixture_identity(name, home)
+    result['command'] = [sys.executable, '-c', 'import time; time.sleep(30)']
+    result['stop'] = 0
+    return result
+identity = hung
+id = main('discover')['candidates'][0]['id']
+entry('restart', id)
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, { error: "gateway_restart_failed" });
+});
+test("정지 한도는 Hermes 가 쓴 유닛의 TimeoutStopSec 과 plist 의 ExitTimeOut 에서 읽는다", () => {
+  const result = fixture(
+    String.raw`
+print(json.dumps([
+    unit_stop_seconds('[Service]\nExecStart=x\nTimeoutStopSec=70\n'),
+    unit_stop_seconds('[Service]\nTimeoutStopSec=190\n'),
+    unit_stop_seconds('[Service]\nExecStart=x\n'),
+    unit_stop_seconds('[Service]\nTimeoutStopSec=1min\n'),
+    plist_stop_seconds({'ExitTimeOut': 60}),
+    plist_stop_seconds({}),
+    plist_stop_seconds({'ExitTimeOut': True}),
+]))
+`,
+  );
+  assert.deepEqual(result.body, [70, 190, null, null, 60, null, null]);
+});
+test("재시작 호출의 바깥 제한은 헬퍼의 최대 재시작 제한보다 넉넉하다", async () => {
+  const seen: (number | undefined)[] = [];
+  const execute: HostExecutor = async (_command, _args, options) => {
+    seen.push(options?.timeoutMs);
+    const action = JSON.parse(options!.input!).action;
+    const reply =
+      action === "inspect"
+        ? {
+            candidate: { ...candidate, pluginInstalled: true, pluginEnabled: true, hasToken: true },
+            pluginStatus: "plugin_ready",
+            changes: ["restarting_gateway"],
+          }
+        : action === "verify"
+          ? {
+              prepared: {
+                baseUrl: "http://127.0.0.1:8642",
+                token: "existing-private-token",
+                profiles: [],
+              },
+            }
+          : { ok: true };
+    return { code: 0, stdout: JSON.stringify(reply), stderr: "" };
+  };
+  const steps: string[] = [];
+  await prepareHost(execute, candidate.id, (s) => steps.push(s));
+  const restartIndex = steps.indexOf("restarting_gateway");
+  assert.ok(restartIndex > 0);
+  // 헬퍼 상한 300초 + 파이썬 기동·잠금 여유. 이보다 짧으면 바깥이 먼저 끊겨 원인이 command_timeout 으로 바뀐다.
+  assert.ok((seen[restartIndex] ?? 0) >= 330_000, String(seen[restartIndex]));
+});
 test("SSH host-key failures retain an actionable sanitized code", async () => {
   const f = fake([new Error("ssh_host_key_failed")]);
   await assert.rejects(discoverHost(f.execute), /^Error: ssh_host_key_failed$/);

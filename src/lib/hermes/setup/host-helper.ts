@@ -362,6 +362,11 @@ TIMEZONE = re.compile(r'^[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-.]+)*$')
 LOCK = None
 PORT_MIN = 8642
 PORT_MAX = 8699
+# 재시작은 게이트웨이의 정상 종료(드레인)를 기다린다. 서비스 정지 한도 + 기동 여유, 90초(Hermes 자신이
+# systemctl restart·launchctl kickstart -k 에 쓰는 값) 아래로는 내리지 않고 300초 위로는 올리지 않는다.
+RESTART_MIN = 90
+RESTART_MAX = 300
+RESTART_START_MARGIN = 30
 # 플러그인 0.16.0 워커 전파 옵트인. 플러그인은 이 값을 읽기만 한다 — 켜는 것은 운영자(와 이 마법사)다.
 WORKER_ENV = 'DESKRPG_WORKER_PROPAGATION'
 WORKER_TRUTHY = ('1', 'true', 'yes', 'on')
@@ -432,6 +437,18 @@ def same_path(left, right):
 def unxml(value):
     # 상류 작업 XML 은 xml.sax.saxutils.escape 를 쓴다 — & < > 만 바뀌므로 되돌릴 것도 그 셋뿐이다.
     return value.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+def unit_stop_seconds(definition):
+    # Hermes 가 쓰는 systemd 유닛은 TimeoutStopSec=<정수> 다(gateway_service_unit.py). 다른 모양은 모른다.
+    match = re.search(r'^TimeoutStopSec=(\d+)\s*$', definition, re.M)
+    return int(match.group(1)) if match else None
+def plist_stop_seconds(data):
+    # launchd 의 ExitTimeOut(Hermes 는 60 — 사용자 도메인이 60초로 누른다). bool 은 int 의 하위형이라 따로 막는다.
+    value = data.get('ExitTimeOut')
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+def restart_timeout(owner):
+    stop = owner.get('stop')
+    wait = (stop if isinstance(stop, int) and stop > 0 else 0) + RESTART_START_MARGIN
+    return min(RESTART_MAX, max(RESTART_MIN, wait))
 def launches(arguments, target):
     # wscript.exe 는 스위치(//B, //Nologo)가 아닌 '첫' 인자를 실행한다. 진짜 실행되는 그 하나만 본다 —
     # 뒤에 우리 런처 경로를 덧붙여 놓은 남의 작업이 통과하면 안 된다.
@@ -453,6 +470,8 @@ def homes():
 def identity(name, home):
     suffix = '' if name == 'default' else '-' + name
     definition, service, command, pid, warning = '', 'manual', None, 0, 'managed_service_required'
+    # 서비스가 정상 종료에 쓸 수 있는 시간(초). 모르면 None — 재시작 제한은 하한을 쓴다.
+    stop = None
     python = str(pathlib.Path(sys.executable))
     if sys.platform == 'darwin':
         label = 'ai.hermes.gateway' + suffix
@@ -460,6 +479,7 @@ def identity(name, home):
         if path.exists():
             definition = read(path)
             data = plistlib.loads(definition.encode())
+            stop = plist_stop_seconds(data)
             args = data.get('ProgramArguments', [])
             env = data.get('EnvironmentVariables', {})
             valid = data.get('Label') == label and env.get('HERMES_HOME') == str(home) and len(args) >= 4
@@ -505,6 +525,7 @@ def identity(name, home):
         path = pathlib.Path.home() / '.config' / 'systemd' / 'user' / service
         if path.exists():
             definition = read(path)
+            stop = unit_stop_seconds(definition)
             state = run(['systemctl', '--user', 'show', service, '--property=FragmentPath,DropInPaths,MainPID,Environment,ExecStart'])
             props = dict(line.split('=',1) for line in state.stdout.splitlines() if '=' in line)
             pinned = 'HERMES_HOME=' + str(home)
@@ -584,7 +605,7 @@ def identity(name, home):
                 else: warning = 'managed_service_required'
             else: warning = 'service_identity_mismatch'
     digest = hashlib.sha256((str(INSTALL.resolve()) + '\0' + str(home) + '\0' + service + '\0' + definition).encode()).hexdigest()
-    return {'id': digest, 'service': service, 'command': command, 'pid': pid, 'warning': warning}
+    return {'id': digest, 'service': service, 'command': command, 'pid': pid, 'warning': warning, 'stop': stop}
 
 def plugin(home, cfg):
     manifests = []
@@ -1069,7 +1090,10 @@ def main(action, candidate_id=None, option=None):
             # Empty assignment is absent; append wins in Hermes's canonical parser.
             atomic(home / '.env', old.rstrip('\n') + '\nAPI_SERVER_KEY=' + secrets.token_hex(32) + '\n')
     elif action == 'restart':
-        if run(owner['command'],timeout=25).returncode: fail('gateway_restart_failed')
+        # 제한을 넘기면 원인 있는 코드로 알린다 — 잡지 않으면 최상위 except 가 host_operation_failed 로 뭉갠다.
+        try: code = run(owner['command'], timeout=restart_timeout(owner)).returncode
+        except subprocess.TimeoutExpired: fail('gateway_restart_failed')
+        if code: fail('gateway_restart_failed')
     elif action == 'verify':
         ready = False
         for attempt in range(20):
