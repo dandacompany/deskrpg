@@ -64,12 +64,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ errorCode: result.error, error: result.error }, { status: 403 });
   }
 
-  // 프로필 = NPC 다. 이 게이트웨이가 이미 묶여 있는 채널에는 지금 바로 출근시킨다 —
-  // 채널을 다시 열거나 게이트웨이를 다시 연결할 때까지 기다리지 않는다.
+  // Profile = NPC. Clock it into the channels this gateway is already bound to right now —
+  // without waiting until the channel is reopened or the gateway reconnected.
   //
-  // 고용은 **부수효과**지 성공 조건이 아니다. 여기서 던지면 프로필은 이미 만들어진
-  // 채로 500 이 나가고, 사용자는 같은 이름으로 다시 시도하다 충돌만 본다.
-  // channels/route.ts 의 게이트웨이 바인딩과 같은 규약으로 삼킨다.
+  // Hiring is a **side effect**, not a success condition. Throwing here would send 500 with the profile
+  // already created, and the user would only hit conflicts retrying with the same name.
+  // Swallowed with the same convention as the gateway binding in channels/route.ts.
   try {
     await hireProfileIntoBoundChannels(result.profile.id);
   } catch (hireErr) {

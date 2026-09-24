@@ -1,5 +1,5 @@
-// GET    /api/channels/:id/kanban/attachments/:attachmentId — 첨부 조회
-// DELETE /api/channels/:id/kanban/attachments/:attachmentId — 첨부 삭제
+// GET    /api/channels/:id/kanban/attachments/:attachmentId — read an attachment
+// DELETE /api/channels/:id/kanban/attachments/:attachmentId — delete an attachment
 import type { NextRequest } from "next/server";
 
 import { deleteAttachment, getAttachment, type AttachmentParams } from "@/lib/kanban-routes";

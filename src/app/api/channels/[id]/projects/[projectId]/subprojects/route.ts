@@ -1,5 +1,5 @@
-// GET /api/channels/:id/projects/:projectId/subprojects — 등록된 메타 + 관측된 미등록 테넌트
-// POST — 서브프로젝트 등록
+// GET /api/channels/:id/projects/:projectId/subprojects — registered metadata + observed unregistered tenants
+// POST — register a subproject
 import type { NextRequest } from "next/server";
 
 import { listProjectSubprojects, postSubproject, type ChannelParams } from "@/lib/project-routes";

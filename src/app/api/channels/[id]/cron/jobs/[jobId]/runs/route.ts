@@ -1,4 +1,4 @@
-// GET /api/channels/:id/cron/jobs/:jobId/runs?npcId=&limit= — 실행 이력
+// GET /api/channels/:id/cron/jobs/:jobId/runs?npcId=&limit= — run history
 import type { NextRequest } from "next/server";
 
 import { listCronJobRuns } from "@/lib/cron-routes";

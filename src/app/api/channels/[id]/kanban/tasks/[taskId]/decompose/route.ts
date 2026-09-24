@@ -1,4 +1,4 @@
-// POST /api/channels/:id/kanban/tasks/:taskId/decompose — 그대로 프록시 (채널 멤버)
+// POST /api/channels/:id/kanban/tasks/:taskId/decompose — proxied as is (channel members)
 import type { NextRequest } from "next/server";
 
 import { runTaskAction, type TaskParams } from "@/lib/kanban-routes";

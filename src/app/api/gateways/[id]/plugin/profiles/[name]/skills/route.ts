@@ -7,10 +7,10 @@ import {
 } from "@/lib/hermes/profile-route";
 
 /**
- * 스킬 목록을 중계한다. 읽기 전용이라 게이트웨이 접근 권한이면 충분하다.
- * 목록을 캐시하지 않는다 — 키 설정 여부는 사용자가 방금 바꿨을 수 있다.
+ * Relays the skill list. Read-only, so gateway access is enough.
+ * The list is not cached — the user may have just changed whether keys are set.
  *
- * 해석기는 `resolveProfileRoute`(`@/lib/hermes/profile-route`)로 옮겼다.
+ * The resolver moved to `resolveProfileRoute` (`@/lib/hermes/profile-route`).
  */
 export async function GET(req: NextRequest, ctx: ProfileRouteCtx) {
   const r = await resolveProfileRoute(req, await ctx.params);

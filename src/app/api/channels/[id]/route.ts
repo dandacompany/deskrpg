@@ -186,7 +186,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         mapData: effectiveMap.mapData,
         meetingSpace: effectiveMap.meetingSpace,
         mapConfig: parsedMapConfig,
-        // 비어 있으면 기본값 — 클라이언트가 빈 값을 따로 해석하지 않게 여기서 접는다.
+        // Default when empty — fold it here so the client does not interpret empty values separately.
         motionConfig: normalizeNpcMotionConfig(parseDbJson(channel.motionConfig)),
         isOwner,
         isMember,
@@ -280,7 +280,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
     if (body.mapConfig !== undefined) updates.mapConfig = jsonForDb(body.mapConfig);
-    // NPC 걸음 속도. 믿지 않고 접어서 저장한다 — 틀린 값이 채널의 모든 NPC 를 멈추게 두지 않는다.
+    // NPC walking speed. Do not trust it; clamp before saving — a bad value must not freeze every NPC in the channel.
     const motionConfig =
       body.motionConfig !== undefined ? normalizeNpcMotionConfig(body.motionConfig) : undefined;
     if (motionConfig) updates.motionConfig = jsonForDb(motionConfig);
@@ -323,8 +323,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       updatedAt: channels.updatedAt,
     });
 
-    // 이름이 실제로 바뀌었고 보드 연결 행이 있으면 보드 표시 이름도 맞춘다(R2).
-    // 실패해도 개명은 이미 성공했다 — 삼키고 기록만 남기면 다음 폴링이 재시도한다.
+    // If the name actually changed and a board link row exists, match the board display name too (R2).
+    // The rename already succeeded even if this fails — swallow and log; the next poll retries.
     if (body.name !== undefined && updated.name !== previousName) {
       try {
         if (await getChannelBoard(id)) {
@@ -349,7 +349,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         body: JSON.stringify({
           event: "channel:updated",
           room: id,
-          // `motionConfig` 는 바뀐 때만 싣는 선택 필드다 — 새 이벤트를 만들지 않는다.
+          // `motionConfig` is an optional field included only when changed — it does not create a new event.
           payload: {
             name: updated.name,
             isPublic: updated.isPublic,

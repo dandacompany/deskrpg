@@ -1,4 +1,4 @@
-// GET /api/channels/:id/artifacts/:artifactId — 상세(버전 목록). DELETE — 결과물 삭제.
+// GET /api/channels/:id/artifacts/:artifactId — detail (version list). DELETE — delete the artifact.
 import type { NextRequest } from "next/server";
 
 import { deleteArtifact, getArtifact, type ArtifactParams } from "@/lib/artifact-routes";

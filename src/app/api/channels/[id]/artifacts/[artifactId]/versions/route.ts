@@ -1,4 +1,4 @@
-// POST /api/channels/:id/artifacts/:artifactId/versions — 새 버전 추가
+// POST /api/channels/:id/artifacts/:artifactId/versions — add a new version
 import type { NextRequest } from "next/server";
 
 import { addArtifactVersion, type ArtifactParams } from "@/lib/artifact-routes";

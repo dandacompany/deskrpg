@@ -4,10 +4,10 @@ import { validateAuthSegment } from "@/lib/hermes/provider-auth-validation";
 import { proxyFailure, resolveProfileRoute } from "@/lib/hermes/profile-route";
 
 /**
- * 진행 중인 OAuth 디바이스 로그인 취소. 정적 `sessions` 세그먼트라 형제
- * `oauth/[provider]` 보다 먼저 매칭된다.
+ * Cancel an OAuth device login in progress. The static `sessions` segment matches before its sibling
+ * `oauth/[provider]`.
  *
- * 소유자 전용(docs/security.md 44행). 순서: 세그먼트 검증 → 해석(소유자) → 플러그인 호출.
+ * Owner only (docs/security.md line 44). Order: segment validation → resolve (owner) → plugin call.
  */
 type Ctx = { params: Promise<{ id: string; name: string; sessionId: string }> };
 

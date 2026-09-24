@@ -13,18 +13,18 @@ import {
 } from "@/test-setup/npc-seed";
 import { startFakePluginServer, type FakePluginServer } from "@/lib/hermes/fake-plugin-server";
 
-// T7. 크론 REST 와 출처 장부(cron_job_origins).
+// T7. Cron REST and the origin ledger (cron_job_origins).
 //
-// Hermes 가 정본이고 DeskRPG 는 "누가 어느 채널에서 만들었는가" 만 기록한다. 여기서
-// 고정하는 것은 권한표(보기 = 멤버, 만들기 = 멤버, 고치기 = 출처 채널 멤버만)와 장부의
-// 생명주기(성공 뒤에만 기록, 삭제 때 제거, 게이트웨이가 바뀌면 무시, 프로필이 사라지면
-// 정리)다. 라우트 핸들러를 직접 부르고 플러그인은 가짜 서버가 받는다.
+// Hermes is the source of truth and DeskRPG records only "who created it in which channel". What we pin
+// here is the permission table (view = member, create = member, modify = origin channel members only) and the
+// ledger lifecycle (recorded only after success, removed on delete, ignored when the gateway changes, cleaned up
+// when the profile disappears). Route handlers are called directly and a fake server plays the plugin.
 //
-// `[id]` 세그먼트 밖에 둔다 — node 테스트 러너가 `[id]` 를 문자 클래스로 오인해 그 안의
-// *.test.ts 를 못 줍는다.
+// Kept outside the `[id]` segment — the node test runner mistakes `[id]` for a character class and misses
+// the *.test.ts inside it.
 setupThrowawaySqlite("cron-routes-test");
 
-// npc-seed 의 씨앗이 쓰는 토큰과 같아야 가짜 서버가 인증을 통과시킨다.
+// Must match the token the npc-seed seeds use so the fake server lets authentication through.
 const OWNER_TOKEN = "gateway-owner-key-1234567890";
 const PROFILE_TOKEN = "profile-key-1234567890";
 
@@ -76,12 +76,12 @@ function req(userId: string, method: string, url: string, body?: unknown): NextR
 }
 
 const base = (channelId: string) => `http://localhost/api/channels/${channelId}/cron`;
-// jobId 가 없는 라우트(RouteParams 는 jobId 를 선택으로 둔다)에도 같은 모양으로 넘긴다.
+// Pass the same shape to routes without a jobId too (RouteParams makes jobId optional).
 const ctx = (id: string, jobId = "") => ({ params: Promise.resolve({ id, jobId }) });
 
 /**
- * 채널 하나 + 가짜 플러그인 서버를 가리키는 게이트웨이 + 프로필 `sophie` 의 active NPC.
- * `extraProfiles` 로 같은 게이트웨이에 다른 프로필/NPC 를 더 붙일 수 있다.
+ * One channel + a gateway pointing at a fake plugin server + an active NPC for profile `sophie`.
+ * `extraProfiles` attaches more profiles/NPCs to the same gateway.
  */
 async function seedCronChannel(opts: { extraProfiles?: string[]; displayName?: string } = {}) {
   const owner = await seedUser("cron-owner");
@@ -126,7 +126,7 @@ async function seedCronChannel(opts: { extraProfiles?: string[]; displayName?: s
   };
 }
 
-/** 같은 게이트웨이(프로필 sophie)를 다른 채널에 묶고, 거기에도 sophie NPC 를 둔다. */
+/** Bind the same gateway (profile sophie) to another channel and put a sophie NPC there too. */
 async function seedSiblingChannel(gatewayId: string, profileId: string) {
   const member = await seedUser("sibling-owner");
   const channel = await seedChannel(member.id, "Sibling Channel");
@@ -177,7 +177,7 @@ async function countOrigins(gatewayId: string) {
     .length;
 }
 
-test("멤버가 아니면 403, 로그인 없으면 401", async () => {
+test("non-members get 403, no login gets 401", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
@@ -197,14 +197,14 @@ test("멤버가 아니면 403, 로그인 없으면 401", async () => {
   assert.equal(anonymous.status, 401);
 });
 
-test("생성 → 출처 기록(성공 뒤에만), 출처 채널 멤버는 편집·멈춤·재개·실행·삭제 가능", async () => {
+test("create → origin recorded (only after success); origin channel members can edit, pause, resume, run and delete", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
   const member = await seedUser("member");
   await addMember(seed.channelId, member.id);
 
-  // 실패한 생성(schedule 없음 → 플러그인 400)은 장부에 남지 않는다.
+  // A failed create (no schedule → plugin 400) is not left in the ledger.
   const failed = await createJob(routes, member.id, seed.channelId, seed.npcId, {
     schedule: "",
   });
@@ -220,14 +220,14 @@ test("생성 → 출처 기록(성공 뒤에만), 출처 채널 멤버는 편집
   assert.equal(job.editable, true);
   assert.equal(await countOrigins(seed.gatewayId), 1);
 
-  // 플러그인으로 나간 본문에 npcId 가 섞이지 않고, deliver 기본값은 local 이다.
+  // The body sent to the plugin has no npcId mixed in, and deliver defaults to local.
   const sent = server.requests().find((r) => r.method === "POST" && r.path.endsWith("/jobs"));
   assert.ok(sent);
   assert.equal(sent.auth, `Bearer ${PROFILE_TOKEN}`, "프로필 토큰으로 부른다");
   assert.equal((sent.json as Record<string, unknown>).npcId, undefined);
   assert.equal((sent.json as Record<string, unknown>).deliver, "local");
 
-  // 수정
+  // edit
   const updated = await routes.job.PUT(
     req(seed.ownerId, "PUT", `${base(seed.channelId)}/jobs/${job.id}`, {
       npcId: seed.npcId,
@@ -238,7 +238,7 @@ test("생성 → 출처 기록(성공 뒤에만), 출처 채널 멤버는 편집
   assert.equal(updated.status, 200);
   assert.equal((await updated.json()).job.name, "저녁 브리핑");
 
-  // 멈춤 / 재개
+  // pause / resume
   const paused = await routes.pause.POST(
     req(member.id, "POST", `${base(seed.channelId)}/jobs/${job.id}/pause`, { npcId: seed.npcId }),
     ctx(seed.channelId, job.id),
@@ -254,7 +254,7 @@ test("생성 → 출처 기록(성공 뒤에만), 출처 채널 멤버는 편집
   assert.equal(resumed.status, 200);
   assert.equal((await resumed.json()).job.state, "scheduled");
 
-  // 지금 실행 → 202
+  // run now → 202
   const ran = await routes.run.POST(
     req(member.id, "POST", `${base(seed.channelId)}/jobs/${job.id}/run`, { npcId: seed.npcId }),
     ctx(seed.channelId, job.id),
@@ -262,7 +262,7 @@ test("생성 → 출처 기록(성공 뒤에만), 출처 채널 멤버는 편집
   assert.equal(ran.status, 202);
   assert.deepEqual(await ran.json(), { accepted: true });
 
-  // 이력
+  // history
   const runs = await routes.runs.GET(
     req(
       member.id,
@@ -276,7 +276,7 @@ test("생성 → 출처 기록(성공 뒤에만), 출처 채널 멤버는 편집
   assert.equal(runsBody.limit, 5);
   assert.equal(runsBody.runs.length, 1);
 
-  // 상세
+  // detail
   const detail = await routes.job.GET(
     req(member.id, "GET", `${base(seed.channelId)}/jobs/${job.id}?npcId=${seed.npcId}`),
     ctx(seed.channelId, job.id),
@@ -286,7 +286,7 @@ test("생성 → 출처 기록(성공 뒤에만), 출처 채널 멤버는 편집
   assert.equal(detailBody.job.editable, true);
   assert.equal(detailBody.timezone, "Asia/Seoul");
 
-  // 삭제 → 장부 제거
+  // delete → ledger removal
   const deleted = await routes.job.DELETE(
     req(member.id, "DELETE", `${base(seed.channelId)}/jobs/${job.id}?npcId=${seed.npcId}`),
     ctx(seed.channelId, job.id),
@@ -296,7 +296,7 @@ test("생성 → 출처 기록(성공 뒤에만), 출처 채널 멤버는 편집
   assert.equal(await countOrigins(seed.gatewayId), 0, "삭제하면 출처도 지운다");
 });
 
-test("같은 NPC 의 다른 채널 멤버는 보이지만 고칠 수 없다(403 cron_read_only)", async () => {
+test("members of another channel with the same NPC can see it but not modify it (403 cron_read_only)", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
@@ -359,7 +359,7 @@ test("같은 NPC 의 다른 채널 멤버는 보이지만 고칠 수 없다(403 
   assert.equal(await countOrigins(seed.gatewayId), 1, "장부는 그대로");
 });
 
-test("DeskRPG 밖에서 만든 크론(출처 없음)은 출처 채널 소유자에게도 읽기 전용이다", async () => {
+test("cron jobs created outside DeskRPG (no origin) are read-only even for the origin channel owner", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
@@ -398,7 +398,7 @@ test("DeskRPG 밖에서 만든 크론(출처 없음)은 출처 채널 소유자�
   assert.equal((await res.json()).code, "cron_read_only");
 });
 
-test("목록은 채널의 active NPC 합집합이고 npcId 로 거른다; 휴면 NPC 는 빠진다", async () => {
+test("the list is the union over the channel's active NPCs, filtered by npcId; sleeping NPCs are excluded", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel({ extraProfiles: ["noah"] });
@@ -438,7 +438,7 @@ test("목록은 채널의 active NPC 합집합이고 npcId 로 거른다; 휴면
   assert.equal(filteredBody.jobs[0].name, "노아의 일");
   assert.equal(filteredBody.jobs[0].npcName, "noah", "display_name 이 없으면 profile_name");
 
-  // noah 를 재우면 합집합에서 빠진다.
+  // Putting noah to sleep drops them from the union.
   const { setNpcActive } = await import("@/lib/npc-roster");
   await setNpcActive(noah.npcId, false);
   const afterSleep = await routes.jobs.GET(
@@ -454,11 +454,11 @@ test("목록은 채널의 active NPC 합집합이고 npcId 로 거른다; 휴면
   assert.equal(unknown.status, 404, "휴면 NPC 는 이 채널의 active NPC 가 아니다");
 });
 
-test("한 프로필의 호출이 실패해도 목록은 살아남고 errors 에 그 NPC 만 실린다", async () => {
+test("if one profile's call fails the list survives and errors carries only that NPC", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
-  // 게이트웨이에는 있지만 가짜 서버가 모르는 프로필 → 404 Unknown profile.
+  // A profile the gateway has but the fake server does not know → 404 Unknown profile.
   const ghost = await seedHermesProfile(seed.gatewayId, { profileName: "ghost" });
   const ghostNpc = await seedNpc({
     channelId: seed.channelId,
@@ -480,7 +480,7 @@ test("한 프로필의 호출이 실패해도 목록은 살아남고 errors 에 
   assert.equal(typeof body.errors[0].code, "string");
 });
 
-test("게이트웨이를 바꾸면 옛 게이트웨이의 출처는 무시된다", async () => {
+test("after switching gateways, origins from the old gateway are ignored", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
@@ -488,7 +488,7 @@ test("게이트웨이를 바꾸면 옛 게이트웨이의 출처는 무시된다
   assert.equal(created.status, 201);
   const jobId = created.body.job.id;
 
-  // 같은 가짜 서버를 가리키는 두 번째 게이트웨이 + 같은 이름의 프로필로 갈아탄다.
+  // Switch to a second gateway pointing at the same fake server + a profile of the same name.
   const gatewayB = await seedGateway(seed.ownerId, server.baseUrl);
   const profileB = await seedHermesProfile(gatewayB.id, { profileName: "sophie" });
   const { bindGatewayToChannel } = await import("@/lib/gateway-resources");
@@ -519,14 +519,14 @@ test("게이트웨이를 바꾸면 옛 게이트웨이의 출처는 무시된다
   assert.equal(await countOrigins(seed.gatewayId), 1, "행 자체는 지우지 않는다");
 });
 
-test("프로필이 사라진 출처 행은 목록 조회 때 정리된다", async () => {
+test("origin rows whose profile is gone are cleaned up when the list is read", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
   const { db, cronJobOrigins, hermesProfiles } = await import("@/db");
   const { eq } = await import("drizzle-orm");
 
-  // 지금은 없는 프로필 이름의 출처 행(프로필이 지워진 뒤 남은 고아).
+  // An origin row for a profile name that no longer exists (an orphan left after the profile was deleted).
   await db.insert(cronJobOrigins).values({
     gatewayId: seed.gatewayId,
     profileName: "departed",
@@ -534,7 +534,7 @@ test("프로필이 사라진 출처 행은 목록 조회 때 정리된다", asyn
     channelId: seed.channelId,
     createdByUserId: seed.ownerId,
   });
-  // 살아 있는 프로필의 출처 행은 남아야 한다.
+  // Origin rows of live profiles must remain.
   await db.insert(cronJobOrigins).values({
     gatewayId: seed.gatewayId,
     profileName: "sophie",
@@ -557,7 +557,7 @@ test("프로필이 사라진 출처 행은 목록 조회 때 정리된다", asyn
     rows.map((r) => r.profileName),
     ["sophie"],
   );
-  // 살아 있는 프로필 수는 그대로다(정리는 장부만 건드린다).
+  // The number of live profiles is unchanged (cleanup touches only the ledger).
   const live = await db
     .select({ id: hermesProfiles.id })
     .from(hermesProfiles)
@@ -565,7 +565,7 @@ test("프로필이 사라진 출처 행은 목록 조회 때 정리된다", asyn
   assert.equal(live.length, 1);
 });
 
-test("캐시가 0.5.0 이라고 하면 Hermes 를 부르지 않고 428 plugin_upgrade_required", async () => {
+test("if the cache says 0.5.0, Hermes is not called and it is 428 plugin_upgrade_required", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
@@ -598,7 +598,7 @@ test("캐시가 0.5.0 이라고 하면 Hermes 를 부르지 않고 428 plugin_up
   assert.equal(body.minVersion, "0.6.0");
   assert.equal(server.requests().length, before, "신선한 캐시면 재확인하지 않는다");
 
-  // 캐시가 오래됐으면 /deskrpg/info 로 다시 확인해 캐시를 갱신한다.
+  // If the cache is stale, recheck via /deskrpg/info and refresh the cache.
   await db
     .update(gatewayResources)
     .set({ pluginCheckedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() as never })
@@ -616,7 +616,7 @@ test("캐시가 0.5.0 이라고 하면 Hermes 를 부르지 않고 428 plugin_up
   assert.equal(row.pluginVersion, "0.6.0");
 });
 
-test("플러그인이 시간대를 주지 않으면 timezone 은 null 이다", async () => {
+test("timezone is null when the plugin does not give one", async () => {
   server.reset();
   server.setInfo({ timezone: null });
   try {
@@ -633,7 +633,7 @@ test("플러그인이 시간대를 주지 않으면 timezone 은 null 이다", a
   }
 });
 
-test("Hermes 오류는 상태 코드와 {code, message} 그대로 전달한다", async () => {
+test("Hermes errors are passed through with their status code and {code, message}", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
@@ -647,7 +647,7 @@ test("Hermes 오류는 상태 코드와 {code, message} 그대로 전달한다",
   assert.equal(typeof body.message, "string");
 });
 
-test("전달 대상·템플릿 조회와 템플릿 인스턴스화(출처 기록)", async () => {
+test("reading delivery targets and templates, and instantiating a template (origin recorded)", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
@@ -696,7 +696,7 @@ test("전달 대상·템플릿 조회와 템플릿 인스턴스화(출처 기록
   assert.equal(await countOrigins(seed.gatewayId), 1);
 });
 
-test("스크립트 전용 잡은 prompt 없이 만들 수 있고, prompt 도 script 도 없으면 400", async () => {
+test("script-only jobs can be created without a prompt; with neither prompt nor script it is 400", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
@@ -724,14 +724,14 @@ test("스크립트 전용 잡은 prompt 없이 만들 수 있고, prompt 도 scr
   assert.equal("npcId" in json, false);
 });
 
-test("게이트 진단은 뭉치지 않는다 — plugin_absent 는 404, 도달 실패는 503 unreachable", async () => {
+test("gate diagnoses are not lumped together — plugin_absent is 404, unreachable is 503 unreachable", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
   const { db, gatewayResources, nowForDb } = await import("@/db");
   const { eq } = await import("drizzle-orm");
 
-  // 신선한 plugin_absent 캐시 → Hermes 를 부르지 않고 404. 예전에는 이것을 428 로 오진했다.
+  // A fresh plugin_absent cache → 404 without calling Hermes. This used to be misdiagnosed as 428.
   await db
     .update(gatewayResources)
     .set({ pluginStatus: "plugin_absent", pluginCheckedAt: nowForDb(), pluginInfoJson: null })
@@ -745,7 +745,7 @@ test("게이트 진단은 뭉치지 않는다 — plugin_absent 는 404, 도달 
   assert.equal((await absent.json()).code, "plugin_absent");
   assert.equal(server.requests().length, before, "신선한 캐시면 재확인하지 않는다");
 
-  // unknown 캐시는 신선해도 다시 찌른다. 게이트웨이가 죽어 있으면 503 unreachable.
+  // An unknown cache is probed again even when fresh. If the gateway is dead, 503 unreachable.
   await db
     .update(gatewayResources)
     .set({ baseUrl: "http://127.0.0.1:1", pluginStatus: "unknown", pluginCheckedAt: nowForDb() })
@@ -758,12 +758,12 @@ test("게이트 진단은 뭉치지 않는다 — plugin_absent 는 404, 도달 
   assert.equal((await dead.json()).code, "unreachable");
 });
 
-test("본문 검증 — npcId 없음/다른 채널의 NPC 는 400/404 이고 Hermes 를 부르지 않는다", async () => {
+test("body validation — missing npcId or another channel's NPC is 400/404 and Hermes is not called", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedCronChannel();
   const other = await seedCronChannel();
-  // reset() 은 요청 기록을 비우지 않는다 — 여기부터 늘어난 것만 센다.
+  // reset() does not clear the request log — count only what was added from here.
   const before = server.requests().length;
 
   const missing = await routes.jobs.POST(

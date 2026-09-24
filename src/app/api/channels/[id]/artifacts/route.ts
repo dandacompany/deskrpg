@@ -1,4 +1,4 @@
-// GET /api/channels/:id/artifacts — 채널 결과물 목록
+// GET /api/channels/:id/artifacts — the channel's artifact list
 import type { NextRequest } from "next/server";
 
 import { listArtifacts, type ArtifactParams } from "@/lib/artifact-routes";

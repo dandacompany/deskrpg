@@ -1,6 +1,6 @@
-// GET    /api/channels/:id/cron/jobs/:jobId?npcId=  — 상세
-// PUT    /api/channels/:id/cron/jobs/:jobId         — {npcId, updates} (출처 채널 멤버만)
-// DELETE /api/channels/:id/cron/jobs/:jobId?npcId=  — 삭제 + 출처 제거 (출처 채널 멤버만)
+// GET    /api/channels/:id/cron/jobs/:jobId?npcId=  — detail
+// PUT    /api/channels/:id/cron/jobs/:jobId         — {npcId, updates} (origin channel members only)
+// DELETE /api/channels/:id/cron/jobs/:jobId?npcId=  — delete + remove origin (origin channel members only)
 import type { NextRequest } from "next/server";
 
 import {

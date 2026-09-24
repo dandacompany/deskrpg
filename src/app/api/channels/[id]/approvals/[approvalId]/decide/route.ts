@@ -1,4 +1,4 @@
-// POST /api/channels/:id/approvals/:approvalId/decide — {decision, note?, targets?} (채널 멤버)
+// POST /api/channels/:id/approvals/:approvalId/decide — {decision, note?, targets?} (channel members)
 import type { NextRequest } from "next/server";
 
 import { decideApproval, type ApprovalParams } from "@/lib/approval-routes";

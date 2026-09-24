@@ -5,11 +5,11 @@ import { NextRequest } from "next/server";
 import { authHeaders, seedUser, setupThrowawaySqlite } from "@/test-setup/npc-seed";
 
 /**
- * 채널 목록(`GET /api/channels`)은 카드에 맵 썸네일과 참여자를 그릴 재료를 싣는다 —
- * `environmentId`(맵으로 판정), `memberCount`(소유자 + channel_members), `participants`(앞 다섯 명의
- * 닉네임·최근 캐릭터 외형). 하드코딩돼 있던 `playerCount` 는 더 싣지 않는다.
+ * The channel list (`GET /api/channels`) carries what cards need to draw a map thumbnail and participants —
+ * `environmentId` (judged from the map), `memberCount` (owner + channel_members), `participants` (the first five people's
+ * nicknames and latest character appearance). The hard-coded `playerCount` is no longer included.
  *
- * `[id]` 세그먼트 밖에 둔다 — node 테스트 러너가 `[id]` 를 문자 클래스로 오인한다.
+ * Kept outside the `[id]` segment — the node test runner mistakes `[id]` for a character class.
  */
 setupThrowawaySqlite("channel-list-summary-test");
 
@@ -32,7 +32,7 @@ async function seedOwnerWithGroup() {
   return { owner, groupId: group.id };
 }
 
-// 테스트 DB 는 SQLite 라 JSON·시각 컬럼이 text 다 — 저장 모양을 그대로 흉내 낸다.
+// The test DB is SQLite, so JSON and time columns are text — mimic the stored shape as is.
 async function addCharacter(
   userId: string,
   appearance: Record<string, unknown>,
@@ -48,7 +48,7 @@ async function addCharacter(
   } as never);
 }
 
-test("목록은 환경 ID·참여자 수·앞 다섯 명 미리보기를 싣고 playerCount 는 싣지 않는다", async () => {
+test("the list carries environment ID, participant count and a preview of the first five, and no playerCount", async () => {
   const { owner, groupId } = await seedOwnerWithGroup();
   await addCharacter(owner.id, { officeLookId: "old-look" }, "2026-01-01T00:00:00.000Z");
   await addCharacter(owner.id, { officeLookId: "office-eun" }, "2026-02-01T00:00:00.000Z");

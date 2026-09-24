@@ -8,10 +8,10 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 
-// `POST /api/gateways/[id]/plugin/worker-plugin` — 칸반·크론 결과물이 쌓이지 않는 직원을 고치고
-// **캐시를 다시 채운다**. 적용만 하고 캐시를 두면(최대 1시간 낡는다) 경고가 그대로 남는다 —
-// 그 배선을 순수 함수 테스트로는 못 잡으므로 라우트를 실제로 돌린다(gateway-test-route.test.ts 와
-// 같은 수법: 버리는 SQLite + 로컬 스텁 Hermes). `[id]` 밖에 두는 이유도 같다.
+// `POST /api/gateways/[id]/plugin/worker-plugin` — fixes employees whose kanban/cron artifacts do not accumulate and
+// **refills the cache**. Applying while leaving the cache (up to an hour stale) keeps the warning —
+// pure function tests cannot catch that wiring, so the route is actually run (same technique as
+// gateway-test-route.test.ts: a throwaway SQLite + a local stub Hermes). The reason for staying outside `[id]` is the same too.
 
 const sqlitePath = path.join(os.tmpdir(), `worker-plugin-route-test-${crypto.randomUUID()}.db`);
 process.env.DESKRPG_HOME = os.tmpdir();
@@ -61,7 +61,7 @@ function postReq(url: string, userId: string, origin = "http://localhost"): Next
 
 const GAP = { profile: "sophie", link: "missing", enabled: false, disabled: false };
 
-/** 적용 전에는 sophie 가 빠져 있고, `POST /deskrpg/worker-plugin` 뒤에는 빈 목록을 보고한다. */
+/** sophie is missing before applying, and after `POST /deskrpg/worker-plugin` an empty list is reported. */
 function startStubHermes() {
   const state = { applied: false, ensureCalls: 0 };
   const server = http.createServer((req, res) => {
@@ -105,14 +105,14 @@ async function cachedWarning(gatewayId: string) {
   return workerPluginWarning(restorePluginInfo(row.pluginInfoJson));
 }
 
-describe("워커 플러그인 적용 라우트", () => {
-  test("적용하고 캐시를 다시 채워 경고가 사라진다", async () => {
+describe("worker plugin apply route", () => {
+  test("applies and refills the cache so the warning disappears", async () => {
     const { server, state } = startStubHermes();
     const baseUrl = await listen(server);
     try {
       const owner = await seedUser();
       const gateway = await seedGateway(owner.id, baseUrl);
-      // 적용 전 캐시: sophie 가 빠져 있다(연결 테스트가 채워 둔 상태를 흉내 낸다).
+      // Cache before applying: sophie is missing (mimics the state the connection test filled in).
       const { db, gatewayResources } = await loadDb();
       const { eq } = await import("drizzle-orm");
       await db
@@ -144,14 +144,14 @@ describe("워커 플러그인 적용 라우트", () => {
         results: [{ profile: "sophie", link: "created", enabled: "added" }],
       });
       assert.equal(state.ensureCalls, 1);
-      // 핵심: 캐시가 다시 채워져 경고가 없다.
+      // The key point: the cache was refilled and there is no warning.
       assert.equal(await cachedWarning(gateway.id), null);
     } finally {
       server.close();
     }
   });
 
-  test("소유자가 아니면 404 이고 플러그인을 부르지 않는다", async () => {
+  test("non-owners get 404 and the plugin is not called", async () => {
     const { server, state } = startStubHermes();
     const baseUrl = await listen(server);
     try {
@@ -172,7 +172,7 @@ describe("워커 플러그인 적용 라우트", () => {
     }
   });
 
-  test("다른 출처의 요청은 403 이고 플러그인을 부르지 않는다", async () => {
+  test("cross-origin requests get 403 and the plugin is not called", async () => {
     const { server, state } = startStubHermes();
     const baseUrl = await listen(server);
     try {

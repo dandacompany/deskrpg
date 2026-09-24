@@ -3,10 +3,10 @@ import { isValidProfileName } from "@/lib/hermes/profile-name";
 /** Hermes rejects profile-scoped keys under 16 chars (hermes_cli.auth.has_usable_secret). */
 const MIN_TOKEN_LENGTH = 16;
 
-/** 프로필 이름 문법의 정본은 `src/lib/hermes/profile-name.ts` 하나다 — 파일시스템
- * 경로나 게이트웨이 URL 세그먼트를 프로필 이름으로 만드는 곳(local-discovery
- * 라우트, probe 라우트, readProfileToken)은 전부 그것을 import 한다. 여기서는
- * 기존 호출자를 위해 다시 export 만 한다. 규칙 자체를 여기에 복사하지 말 것. */
+/** The single source of truth for profile name grammar is `src/lib/hermes/profile-name.ts` — every place that turns
+ * profile names into filesystem paths or gateway URL segments (the local-discovery
+ * route, the probe route, readProfileToken) imports it. Here it is only re-exported
+ * for existing callers. Do not copy the rules themselves here. */
 export { isValidProfileName };
 
 export type RegistrationValidation =

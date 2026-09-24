@@ -4,9 +4,9 @@ import { validateAuthSegment } from "@/lib/hermes/provider-auth-validation";
 import { proxyFailure, resolveProfileRoute } from "@/lib/hermes/profile-route";
 
 /**
- * 프로필의 OAuth 연결 해제(저장된 토큰 삭제).
+ * Disconnect a profile's OAuth (delete the stored token).
  *
- * 소유자 전용(docs/security.md 44행). 순서: 세그먼트 검증 → 해석(소유자) → 플러그인 호출.
+ * Owner only (docs/security.md line 44). Order: segment validation → resolve (owner) → plugin call.
  */
 type Ctx = { params: Promise<{ id: string; name: string; provider: string }> };
 

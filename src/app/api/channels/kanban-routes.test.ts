@@ -13,22 +13,22 @@ import {
 } from "@/test-setup/npc-seed";
 import { startFakePluginServer, type FakePluginServer } from "@/lib/hermes/fake-plugin-server";
 
-// T6. 칸반 REST + 자동화 상태 + 즉시 폴링 배선.
+// T6. Kanban REST + automation status + immediate polling wiring.
 //
-// Hermes 가 정본이고 카드는 한 장도 여기 저장하지 않는다. 여기서 고정하는 것은
-// 권한표(보기·카드 조작 = 멤버, 보드 작업 폴더 = 채널 소유자, 호스트 운영 설정 읽기 = 채널
-// 소유자, 수정 = 게이트웨이 소유자), 담당자 검증(채널의 active NPC 만), 생성·상태 변경 뒤의
-// dispatch 한 번 + 즉시 폴링, 그리고 게이트(428·409·503·404 attachments_unsupported)다.
+// Hermes is the source of truth and not a single card is stored here. What we pin here is the
+// permission table (view and card operations = member, board work folder = channel owner, reading host operation settings = channel
+// owner, modifying = gateway owner), assignee validation (only the channel's active NPCs), one
+// dispatch + immediate poll after create and status changes, and the gates (428, 409, 503, 404 attachments_unsupported).
 //
-// `[id]` 세그먼트 밖에 둔다 — node 테스트 러너가 `[id]` 를 문자 클래스로 오인해 그 안의
-// *.test.ts 를 못 줍는다.
+// Kept outside the `[id]` segment — the node test runner mistakes `[id]` for a character class and misses
+// the *.test.ts inside it.
 setupThrowawaySqlite("kanban-routes-test");
 
 const OWNER_TOKEN = "gateway-owner-key-1234567890";
 const PROFILE_TOKEN = "profile-key-1234567890";
 
 let server: FakePluginServer;
-/** 라우트가 요청한 즉시 폴링의 채널 id 들 — 실제 폴러 대신 여기에 쌓인다. */
+/** Channel ids of the immediate polls the routes requested — collected here instead of by a real poller. */
 let polled: string[] = [];
 
 before(async () => {
@@ -36,7 +36,7 @@ before(async () => {
     ownerToken: OWNER_TOKEN,
     profileTokens: { sophie: PROFILE_TOKEN, noah: PROFILE_TOKEN },
   });
-  // 라우트는 `@/server/*` 를 직접 보지 않고 레지스트리로 폴러를 만난다 — 여기에 기록기를 꽂는다.
+  // Routes do not look at `@/server/*` directly; they meet the poller through the registry — plug a recorder in here.
   const { registerAutomationHooks } = await import("@/lib/automation-registry");
   registerAutomationHooks({
     pollNow: async (channelId) => {
@@ -123,8 +123,8 @@ const ctx = (id: string, taskId = "", attachmentId = "") => ({
 });
 
 /**
- * 채널 하나 + 가짜 플러그인 서버를 가리키는 게이트웨이(소유자 = 채널 소유자) + 프로필
- * `sophie` 의 active NPC. `gatewayOwnerId` 를 주면 게이트웨이 소유자를 따로 둔다.
+ * One channel + a gateway pointing at a fake plugin server (owner = channel owner) + an active NPC for profile
+ * `sophie`. Passing `gatewayOwnerId` sets a separate gateway owner.
  */
 async function seedKanbanChannel(
   opts: { extraProfiles?: string[]; gatewayOwnerId?: string; baseUrl?: string } = {},
@@ -200,7 +200,7 @@ function dispatchCalls(sinceIndex: number) {
     .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/dispatch"));
 }
 
-test("보드 보기 — 멤버는 200 + 로스터, 비멤버 403, 로그인 없음 401", async () => {
+test("viewing the board — members get 200 + roster, non-members 403, no login 401", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel({ extraProfiles: ["noah"] });
@@ -208,7 +208,7 @@ test("보드 보기 — 멤버는 200 + 로스터, 비멤버 403, 로그인 없�
   await addMember(seed.channelId, member.id);
   const stranger = await seedUser("stranger");
 
-  // noah 를 재워도 로스터에는 active=false 로 남는다(assignee → npc 매핑용).
+  // Even asleep, noah stays in the roster with active=false (for mapping assignee → npc).
   const { setNpcActive } = await import("@/lib/npc-roster");
   await setNpcActive(seed.extras[0].npcId, false);
 
@@ -257,7 +257,7 @@ test("보드 보기 — 멤버는 200 + 로스터, 비멤버 403, 로그인 없�
   assert.equal(anonymous.status, 401);
 });
 
-test("게이트웨이가 안 묶였으면 409 gateway_not_bound", async () => {
+test("409 gateway_not_bound when no gateway is bound", async () => {
   server.reset();
   const routes = await loadRoutes();
   const owner = await seedUser("unbound-owner");
@@ -270,7 +270,7 @@ test("게이트웨이가 안 묶였으면 409 gateway_not_bound", async () => {
   assert.equal((await res.json()).code, "gateway_not_bound");
 });
 
-test("캐시가 0.5.0 이라고 하면 Hermes 를 부르지 않고 428 plugin_upgrade_required", async () => {
+test("if the cache says 0.5.0, Hermes is not called and it is 428 plugin_upgrade_required", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -304,11 +304,11 @@ test("캐시가 0.5.0 이라고 하면 Hermes 를 부르지 않고 428 plugin_up
   assert.equal(server.requests().length, before, "신선한 캐시면 Hermes 를 부르지 않는다");
 });
 
-test("보드를 확보할 수 없으면 503 {code, message}", async () => {
+test("503 {code, message} when the board cannot be secured", async () => {
   server.reset();
   const routes = await loadRoutes();
-  // 게이트웨이는 닿지 않는 주소를 가리키되, 플러그인 캐시는 신선한 "준비됨" 이라
-  // 428 게이트는 통과한다 — 보드 확보(createBoard)에서 막혀야 한다.
+  // The gateway points at an unreachable address, but the plugin cache is a fresh "ready", so
+  // the 428 gate passes — it must be blocked at securing the board (createBoard).
   const seed = await seedKanbanChannel({ baseUrl: "http://127.0.0.1:1" });
   const { db, gatewayResources, nowForDb } = await import("@/db");
   const { eq } = await import("drizzle-orm");
@@ -338,7 +338,7 @@ test("보드를 확보할 수 없으면 503 {code, message}", async () => {
   assert.equal(typeof body.message, "string");
 });
 
-test("카드 생성 — assignee 는 npcId 로 받아 profile_name 으로 보내고, dispatch 한 번 + 즉시 폴링", async () => {
+test("card creation — assignee is taken as npcId and sent as profile_name, one dispatch + immediate poll", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -378,7 +378,7 @@ test("카드 생성 — assignee 는 npcId 로 받아 profile_name 으로 보내
   assert.deepEqual(polled, [seed.channelId], "생성 직후 즉시 폴링을 요청한다");
 });
 
-test("카드 생성 — 만든 사람의 캐릭터가 있으면 본문 끝에 요청자 줄, 없으면 본문 그대로", async () => {
+test("card creation — a requester line at the end of the body if the creator has a character, otherwise the body as is", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -418,7 +418,7 @@ test("카드 생성 — 만든 사람의 캐릭터가 있으면 본문 끝에 �
   assert.deepEqual(sentBodies(before), ["본문"]);
 });
 
-test("담당자 검증 — 잠든 NPC·다른 채널 NPC 는 400 assignee_not_in_channel 이고 Hermes 를 부르지 않는다", async () => {
+test("assignee validation — sleeping NPCs and other channels' NPCs are 400 assignee_not_in_channel and Hermes is not called", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel({ extraProfiles: ["noah"] });
@@ -442,13 +442,13 @@ test("담당자 검증 — 잠든 NPC·다른 채널 NPC 는 400 assignee_not_in
   );
   assert.deepEqual(polled, []);
 
-  // 담당 없이 만들면 Hermes 규칙대로(triage) — 여기서는 상태를 재해석하지 않는다.
+  // Created without an assignee, it follows Hermes rules (triage) — the status is not reinterpreted here.
   const none = await createTask(routes, seed.ownerId, seed.channelId, { title: "담당 없음" });
   assert.equal(none.status, 201);
   assert.equal(none.body.task.assignee, undefined);
 });
 
-test("title 없는 생성은 400 이고, Hermes 400/404 는 상태 코드와 {code, message} 그대로", async () => {
+test("creation without a title is 400, and Hermes 400/404 pass through with status code and {code, message}", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -460,14 +460,14 @@ test("title 없는 생성은 400 이고, Hermes 400/404 는 상태 코드와 {co
   assert.equal(missing.status, 400);
   assert.equal((await missing.json()).code, "invalid_body");
 
-  // 없는 부모 → 플러그인 404 unknown_parent 그대로.
+  // A missing parent → the plugin's 404 unknown_parent as is.
   const bad = await createTask(routes, seed.ownerId, seed.channelId, { parents: ["ghost"] });
   assert.equal(bad.status, 404);
   assert.equal(bad.body.code, "unknown_parent");
   assert.equal(typeof bad.body.message, "string");
   assert.deepEqual(polled, [], "실패한 생성은 폴링하지 않는다");
 
-  // 잘못된 상태 → 플러그인 400 invalid_status 그대로.
+  // An invalid status → the plugin's 400 invalid_status as is.
   const created = await createTask(routes, seed.ownerId, seed.channelId);
   const patched = await routes.task.PATCH(
     req(seed.ownerId, "PATCH", `${base(seed.channelId)}/tasks/${created.body.task.id}`, {
@@ -479,7 +479,7 @@ test("title 없는 생성은 400 이고, Hermes 400/404 는 상태 코드와 {co
   assert.equal((await patched.json()).code, "invalid_status");
 });
 
-test("상세·PATCH·삭제·댓글·링크·로그·dispatch — 멤버 누구나, 변경 뒤 즉시 폴링", async () => {
+test("detail, PATCH, delete, comments, links, log, dispatch — any member, immediate poll after changes", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel({ extraProfiles: ["noah"] });
@@ -492,7 +492,7 @@ test("상세·PATCH·삭제·댓글·링크·로그·dispatch — 멤버 누구�
   const childId = child.body.task.id as string;
   polled = [];
 
-  // PATCH — status 와 assignee(npcId → profile). status 변경 뒤 dispatch 한 번.
+  // PATCH — status and assignee (npcId → profile). One dispatch after a status change.
   const before = server.requests().length;
   const patched = await routes.task.PATCH(
     req(member.id, "PATCH", `${base(seed.channelId)}/tasks/${childId}`, {
@@ -506,11 +506,11 @@ test("상세·PATCH·삭제·댓글·링크·로그·dispatch — 멤버 누구�
   const patchedBody = await patched.json();
   assert.equal(patchedBody.task.assignee, "noah");
   assert.equal(patchedBody.task.title, "자식(수정)");
-  // 가짜 서버의 dispatch 는 ready 카드를 running 으로 띄운다.
+  // The fake server's dispatch launches ready cards as running.
   assert.equal(dispatchCalls(before).length, 1);
   assert.deepEqual(polled, [seed.channelId]);
 
-  // title 만 고치면 dispatch 는 없다(상태 변경이 아니다).
+  // Editing only the title does not dispatch (it is not a status change).
   const before2 = server.requests().length;
   const renamed = await routes.task.PATCH(
     req(member.id, "PATCH", `${base(seed.channelId)}/tasks/${parentId}`, { title: "부모2" }),
@@ -519,7 +519,7 @@ test("상세·PATCH·삭제·댓글·링크·로그·dispatch — 멤버 누구�
   assert.equal(renamed.status, 200);
   assert.equal(dispatchCalls(before2).length, 0);
 
-  // 댓글 — author 는 deskrpg:<닉네임>.
+  // Comments — author is deskrpg:<nickname>.
   const { db, users } = await import("@/db");
   const { eq } = await import("drizzle-orm");
   const [memberRow] = await db.select().from(users).where(eq(users.id, member.id));
@@ -532,7 +532,7 @@ test("상세·PATCH·삭제·댓글·링크·로그·dispatch — 멤버 누구�
   assert.equal(commented.status, 201);
   assert.equal((await commented.json()).comment.author, `deskrpg:${memberRow.nickname}`);
 
-  // 링크 추가/삭제
+  // add/delete links
   const linked = await routes.links.POST(
     req(member.id, "POST", `${base(seed.channelId)}/links`, {
       parent_id: parentId,
@@ -558,7 +558,7 @@ test("상세·PATCH·삭제·댓글·링크·로그·dispatch — 멤버 누구�
   );
   assert.equal(unlinked.status, 200);
 
-  // 로그 tail
+  // log tail
   server.setTaskLog(seed.boardSlug, childId, "a\nb\nc\n");
   const log = await routes.log.GET(
     req(member.id, "GET", `${base(seed.channelId)}/tasks/${childId}/log?tail=1`),
@@ -569,7 +569,7 @@ test("상세·PATCH·삭제·댓글·링크·로그·dispatch — 멤버 누구�
   assert.equal(logBody.content, "c\n");
   assert.equal(logBody.truncated, true);
 
-  // 명시적 dispatch
+  // explicit dispatch
   const dispatched = await routes.dispatch.POST(
     req(member.id, "POST", `${base(seed.channelId)}/dispatch`),
     ctx(seed.channelId),
@@ -577,7 +577,7 @@ test("상세·PATCH·삭제·댓글·링크·로그·dispatch — 멤버 누구�
   assert.equal(dispatched.status, 200);
   assert.ok(Array.isArray((await dispatched.json()).spawned));
 
-  // 삭제
+  // delete
   const deleted = await routes.task.DELETE(
     req(member.id, "DELETE", `${base(seed.channelId)}/tasks/${parentId}`),
     ctx(seed.channelId, parentId),
@@ -590,12 +590,12 @@ test("상세·PATCH·삭제·댓글·링크·로그·dispatch — 멤버 누구�
   );
   assert.equal(gone.status, 404);
 
-  // 모든 변경이 즉시 폴링을 요청했다: PATCH×2, 댓글, 링크×2, dispatch, 삭제.
+  // Every change requested an immediate poll: PATCH×2, comment, link×2, dispatch, delete.
   assert.equal(polled.length, 7);
   assert.ok(polled.every((id) => id === seed.channelId));
 });
 
-test("dispatch — max 쿼리를 넘기면 플러그인 호출에 실린다, 무인자면 안 실린다", async () => {
+test("dispatch — a max query is carried into the plugin call; without arguments it is not", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -622,7 +622,7 @@ test("dispatch — max 쿼리를 넘기면 플러그인 호출에 실린다, 무
   assert.equal(noMaxCalls.length, 1);
   assert.doesNotMatch(noMaxCalls[0].path, /[?&]max=/);
 
-  // 음수·비정수는 무시한다 — max 없이 호출한다.
+  // Negative and non-integer values are ignored — called without max.
   const before3 = server.requests().length;
   const badMax = await routes.dispatch.POST(
     req(member.id, "POST", `${base(seed.channelId)}/dispatch?max=-1`),
@@ -634,7 +634,7 @@ test("dispatch — max 쿼리를 넘기면 플러그인 호출에 실린다, 무
   assert.doesNotMatch(badMaxCalls[0].path, /[?&]max=/);
 });
 
-test("카드 액션 — approve/request-changes/unblock/reassign/reclaim/terminate/archive/specify", async () => {
+test("card actions — approve/request-changes/unblock/reassign/reclaim/terminate/archive/specify", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel({ extraProfiles: ["noah"] });
@@ -644,7 +644,7 @@ test("카드 액션 — approve/request-changes/unblock/reassign/reclaim/termina
   const taskId = created.body.task.id as string;
   const url = (action: string) => `${base(seed.channelId)}/tasks/${taskId}/${action}`;
 
-  // reassign — {npcId} → {profile, reclaim_first:true}; 잠든/다른 채널 NPC 는 400.
+  // reassign — {npcId} → {profile, reclaim_first:true}; sleeping/other-channel NPCs are 400.
   const before = server.requests().length;
   const reassigned = await routes.reassign.POST(
     req(member.id, "POST", url("reassign"), { npcId: seed.extras[0].npcId }),
@@ -668,7 +668,7 @@ test("카드 액션 — approve/request-changes/unblock/reassign/reclaim/termina
   assert.equal(badReassign.status, 400);
   assert.equal((await badReassign.json()).code, "assignee_not_in_channel");
 
-  // request-changes 는 comment 필수.
+  // request-changes requires comment.
   const noComment = await routes.requestChanges.POST(
     req(member.id, "POST", url("request-changes"), {}),
     ctx(seed.channelId, taskId),
@@ -721,7 +721,7 @@ test("카드 액션 — approve/request-changes/unblock/reassign/reclaim/termina
   assert.equal(archived.status, 200);
   assert.equal((await archived.json()).task.status, "archived");
 
-  // 비멤버는 어떤 액션도 못 한다.
+  // Non-members cannot perform any action.
   const stranger = await seedUser("stranger");
   const denied = await routes.approve.POST(
     req(stranger.id, "POST", url("approve"), {}),
@@ -730,7 +730,7 @@ test("카드 액션 — approve/request-changes/unblock/reassign/reclaim/termina
   assert.equal(denied.status, 403);
 });
 
-test("첨부 — 목록·업로드·조회·삭제; 플러그인이 지원하지 않으면 404 attachments_unsupported", async () => {
+test("attachments — list, upload, read, delete; 404 attachments_unsupported when the plugin does not support them", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -775,7 +775,7 @@ test("첨부 — 목록·업로드·조회·삭제; 플러그인이 지원하지
   );
   assert.equal(removed.status, 200);
 
-  // 플러그인이 첨부를 지원하지 않는다고 하면 — 캐시를 갱신시켜 라우트가 그것을 보게 한다.
+  // When the plugin says it does not support attachments — refresh the cache so the route sees it.
   server.setInfo({ kanban: { dispatcher_present: true, attachments: false } });
   try {
     const { db, gatewayResources } = await import("@/db");
@@ -804,7 +804,7 @@ test("첨부 — 목록·업로드·조회·삭제; 플러그인이 지원하지
   }
 });
 
-test("첨부 — HTML 업로드도 항상 attachment 로 내려받고 CSP sandbox·nosniff 를 강제한다", async () => {
+test("attachments — even HTML uploads always download as attachment with CSP sandbox and nosniff enforced", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -834,7 +834,7 @@ test("첨부 — HTML 업로드도 항상 attachment 로 내려받고 CSP sandbo
   assert.equal(fetched.headers.get("x-content-type-options"), "nosniff");
 });
 
-test("설정 — 멤버는 orchestration:null, 채널 소유자는 보드 폴더 편집, 게이트웨이 소유자는 운영 설정 편집", async () => {
+test("settings — members get orchestration:null, the channel owner edits the board folder, the gateway owner edits operation settings", async () => {
   server.reset();
   const routes = await loadRoutes();
   const gatewayOwner = await seedUser("gateway-owner");
@@ -843,7 +843,7 @@ test("설정 — 멤버는 orchestration:null, 채널 소유자는 보드 폴더
   const member = await seedUser("member");
   await addMember(seed.channelId, member.id);
 
-  // 멤버: 보드는 보이되 editable=false, orchestration 은 null.
+  // Member: sees the board with editable=false, orchestration is null.
   const asMember = await routes.settings.GET(
     req(member.id, "GET", `${base(seed.channelId)}/settings`),
     ctx(seed.channelId),
@@ -856,7 +856,7 @@ test("설정 — 멤버는 orchestration:null, 채널 소유자는 보드 폴더
   assert.equal(memberBody.orchestration, null);
   assert.deepEqual(memberBody.hints, { default_assignee_recommend_empty: true });
 
-  // 채널 소유자: 보드 editable, orchestration 은 보이지만 editable=false(게이트웨이 소유자가 아니다).
+  // Channel owner: board editable; orchestration visible but editable=false (not the gateway owner).
   const asOwner = await routes.settings.GET(
     req(seed.ownerId, "GET", `${base(seed.channelId)}/settings`),
     ctx(seed.channelId),
@@ -866,7 +866,7 @@ test("설정 — 멤버는 orchestration:null, 채널 소유자는 보드 폴더
   assert.equal(ownerBody.orchestration.editable, false);
   assert.equal(typeof ownerBody.orchestration.auto_decompose, "boolean");
 
-  // 멤버가 보드 폴더를 고치면 403 settings_forbidden — Hermes 를 부르기 전에.
+  // A member editing the board folder gets 403 settings_forbidden — before calling Hermes.
   const before = server.requests().length;
   const memberPatch = await routes.settings.PATCH(
     req(member.id, "PATCH", `${base(seed.channelId)}/settings`, {
@@ -884,7 +884,7 @@ test("설정 — 멤버는 orchestration:null, 채널 소유자는 보드 폴더
     0,
   );
 
-  // 채널 소유자가 운영 설정을 고치면 403(게이트웨이 소유자가 아니다).
+  // A channel owner editing operation settings gets 403 (not the gateway owner).
   const ownerPatchOrch = await routes.settings.PATCH(
     req(seed.ownerId, "PATCH", `${base(seed.channelId)}/settings`, {
       orchestration: { auto_decompose: true },
@@ -894,7 +894,7 @@ test("설정 — 멤버는 orchestration:null, 채널 소유자는 보드 폴더
   assert.equal(ownerPatchOrch.status, 403);
   assert.equal((await ownerPatchOrch.json()).code, "settings_forbidden");
 
-  // 채널 소유자의 보드 폴더 변경은 된다.
+  // The channel owner can change the board folder.
   const ownerPatch = await routes.settings.PATCH(
     req(seed.ownerId, "PATCH", `${base(seed.channelId)}/settings`, {
       board: { default_workdir: "/srv/work" },
@@ -904,7 +904,7 @@ test("설정 — 멤버는 orchestration:null, 채널 소유자는 보드 폴더
   assert.equal(ownerPatch.status, 200, JSON.stringify(await ownerPatch.clone().json()));
   assert.equal((await ownerPatch.json()).board.default_workdir, "/srv/work");
 
-  // 게이트웨이 소유자(멤버)는 운영 설정을 고칠 수 있다.
+  // The gateway owner (a member) can edit operation settings.
   const gwPatch = await routes.settings.PATCH(
     req(gatewayOwner.id, "PATCH", `${base(seed.channelId)}/settings`, {
       orchestration: { auto_decompose: true, max_in_progress: 3 },
@@ -917,7 +917,7 @@ test("설정 — 멤버는 orchestration:null, 채널 소유자는 보드 폴더
   assert.equal(gwBody.orchestration.max_in_progress, 3);
   assert.equal(gwBody.orchestration.editable, true);
 
-  // 비멤버는 설정도 못 본다.
+  // Non-members cannot even see the settings.
   const stranger = await seedUser("stranger");
   const denied = await routes.settings.GET(
     req(stranger.id, "GET", `${base(seed.channelId)}/settings`),
@@ -926,7 +926,7 @@ test("설정 — 멤버는 orchestration:null, 채널 소유자는 보드 폴더
   assert.equal(denied.status, 403);
 });
 
-test("자동화 상태 — 멤버에게 플러그인·보드·폴링·작업 중 요약", async () => {
+test("automation status — a summary of plugin, board, polling and in-progress work for members", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -967,7 +967,7 @@ test("자동화 상태 — 멤버에게 플러그인·보드·폴링·작업 중
   );
   assert.equal(denied.status, 403);
 
-  // 묶이지 않은 채널은 409.
+  // An unbound channel is 409.
   const owner = await seedUser("unbound-owner");
   const channel = await seedChannel(owner.id);
   const unbound = await routes.status.GET(
@@ -978,7 +978,7 @@ test("자동화 상태 — 멤버에게 플러그인·보드·폴링·작업 중
   assert.equal((await unbound.json()).code, "gateway_not_bound");
 });
 
-test("크론 변경도 즉시 폴링을 요청한다", async () => {
+test("cron changes also request an immediate poll", async () => {
   server.reset();
   const routes = await import("./[id]/cron/jobs/route");
   const jobRoute = await import("./[id]/cron/jobs/[jobId]/route");
@@ -1006,7 +1006,7 @@ test("크론 변경도 즉시 폴링을 요청한다", async () => {
   assert.deepEqual(polled, [seed.channelId, seed.channelId]);
 });
 
-test("첨부 — '.'·'..'·'a/b' 같은 id 는 플러그인을 부르기 전에 404 attachment_not_found", async () => {
+test("attachments — ids like '.', '..', 'a/b' are 404 attachment_not_found before the plugin is called", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -1036,12 +1036,12 @@ test("첨부 — '.'·'..'·'a/b' 같은 id 는 플러그인을 부르기 전에
 });
 
 // ---------------------------------------------------------------------------
-// `?board=` — 채널이 보드를 여러 개 갖는다(설계 2026-09-21 project-registry)
+// `?board=` — a channel has several boards (design 2026-09-21 project-registry)
 //
-// 보드 응답에는 slug 가 실리지 않으므로 "어느 보드를 봤는가" 는 **그 보드의 카드**로 가린다.
+// The board response carries no slug, so "which board did we see" is told apart **by that board's cards**.
 // ---------------------------------------------------------------------------
 
-/** 이 채널에 보드를 하나 더 붙이고 그 slug 를 돌려준다. 사건 수신 보드는 첫 보드 그대로다. */
+/** Attach one more board to this channel and return its slug. The event-receiving board stays the first board. */
 async function addSecondBoard(channelId: string): Promise<string> {
   const { ensureChannelBoard, newChannelBoardSlug } = await import("@/lib/kanban-boards");
   const slug = newChannelBoardSlug(channelId);
@@ -1050,7 +1050,7 @@ async function addSecondBoard(channelId: string): Promise<string> {
   return slug;
 }
 
-/** 그 보드에 보이는 카드 제목들. `board` 가 없으면 기본(사건 수신) 보드를 본다. */
+/** Card titles visible on that board. Without `board`, looks at the default (event-receiving) board. */
 async function boardTitles(
   routes: Routes,
   userId: string,
@@ -1075,7 +1075,7 @@ async function createOn(
   return routes.tasks.POST(req(userId, "POST", url, { title }), ctx(channelId));
 }
 
-test("?board= 없이 부르면 사건 수신 보드를 쓴다 — 옛 클라이언트의 뜻이 바뀌지 않는다", async () => {
+test("calling without ?board= uses the event-receiving board — old clients keep their meaning", async () => {
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
   const second = await addSecondBoard(seed.channelId);
@@ -1089,7 +1089,7 @@ test("?board= 없이 부르면 사건 수신 보드를 쓴다 — 옛 클라이�
   assert.deepEqual(await boardTitles(routes, seed.ownerId, seed.channelId), ["첫 보드 카드"]);
 });
 
-test("두 보드의 카드는 서로 섞이지 않는다", async () => {
+test("cards of two boards do not mix", async () => {
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
   const second = await addSecondBoard(seed.channelId);
@@ -1103,7 +1103,7 @@ test("두 보드의 카드는 서로 섞이지 않는다", async () => {
   ]);
 });
 
-test("다른 채널의 보드는 slug 를 알아도 404 다", async () => {
+test("another channel's board is 404 even when the slug is known", async () => {
   const routes = await loadRoutes();
   const mine = await seedKanbanChannel();
   const theirs = await seedKanbanChannel();
@@ -1116,7 +1116,7 @@ test("다른 채널의 보드는 slug 를 알아도 404 다", async () => {
   assert.equal(((await res.json()) as { code?: string }).code, "board_not_bound");
 });
 
-test("남의 보드로 카드를 만들려 해도 404 이고 카드가 생기지 않는다", async () => {
+test("trying to create a card on someone else's board is 404 and no card is created", async () => {
   const routes = await loadRoutes();
   const mine = await seedKanbanChannel();
   const theirs = await seedKanbanChannel();
@@ -1136,7 +1136,7 @@ test("남의 보드로 카드를 만들려 해도 404 이고 카드가 생기지
   );
 });
 
-test("형식이 아닌 board 값은 400 이고 Hermes 를 부르지 않는다", async () => {
+test("a malformed board value is 400 and Hermes is not called", async () => {
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
   const res = await routes.board.GET(
@@ -1147,7 +1147,7 @@ test("형식이 아닌 board 값은 400 이고 Hermes 를 부르지 않는다", 
   assert.equal(((await res.json()) as { code?: string }).code, "invalid_board");
 });
 
-test("빈 board 값은 지정하지 않은 것과 같다", async () => {
+test("an empty board value is the same as not specifying one", async () => {
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
   await createOn(routes, seed.ownerId, seed.channelId, "기본 카드");
@@ -1163,7 +1163,7 @@ test("빈 board 값은 지정하지 않은 것과 같다", async () => {
   );
 });
 
-test("채널에 보드가 여럿이어도 사건 수신 보드는 하나뿐이다", async () => {
+test("even with several boards in a channel there is only one event-receiving board", async () => {
   const seed = await seedKanbanChannel();
   await addSecondBoard(seed.channelId);
   await addSecondBoard(seed.channelId);
@@ -1180,10 +1180,10 @@ test("채널에 보드가 여럿이어도 사건 수신 보드는 하나뿐이�
 });
 
 // ---------------------------------------------------------------------------
-// 묶음 조회 (capability kanban_views) — 목록 트리·실적 타임라인이 쓴다
+// Bulk reads (capability kanban_views) — used by the list tree and the activity timeline
 // ---------------------------------------------------------------------------
 
-test("GET /kanban/links 는 보드 전체의 부모·자식 쌍을 준다", async () => {
+test("GET /kanban/links returns parent/child pairs across the whole board", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -1210,7 +1210,7 @@ test("GET /kanban/links 는 보드 전체의 부모·자식 쌍을 준다", asyn
   );
 });
 
-test("GET /kanban/runs 는 창과 잘림 여부를 함께 준다", async () => {
+test("GET /kanban/runs returns the window together with whether it was truncated", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -1222,13 +1222,13 @@ test("GET /kanban/runs 는 창과 잘림 여부를 함께 준다", async () => {
   assert.equal(res.status, 200, JSON.stringify(await res.clone().json()));
   const body = await res.json();
   assert.deepEqual(body.window, { from: 0, to: 9999 });
-  // 잘렸는지를 화면이 알아야 한다 — 잘린 창을 그대로 그리면 "아무도 일하지 않았다" 로 읽힌다.
+  // The screen must know whether it was truncated — drawing a truncated window as is reads as "nobody worked".
   assert.equal(body.truncated, false);
   assert.ok(Array.isArray(body.runs));
 });
 
-test("GET /kanban/runs 의 잘못된 쿼리는 플러그인 판정을 그대로 전달한다", async () => {
-  // 검증을 REST 계층에서 한 번 더 하면 두 곳의 규칙이 갈린다.
+test("invalid GET /kanban/runs queries pass the plugin's verdict through", async () => {
+  // Validating once more in the REST layer would let the rules in two places drift apart.
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -1240,7 +1240,7 @@ test("GET /kanban/runs 의 잘못된 쿼리는 플러그인 판정을 그대로 
   assert.equal(res.status, 400);
 });
 
-test("묶음 조회도 비멤버는 403", async () => {
+test("bulk reads are 403 for non-members too", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -1260,10 +1260,10 @@ test("묶음 조회도 비멤버는 403", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// 카드 제안 해소 (T7)
+// Resolving card proposals (T7)
 // ---------------------------------------------------------------------------
 
-/** 제안 알림 한 줄을 그 채널의 사무실 방에 심고, 플러그인에도 같은 제안을 등록한다. */
+/** Plant one proposal notice in the channel's office room and register the same proposal with the plugin. */
 async function seedProposal(
   seed: { channelId: string; ownerId: string; npcId: string },
   proposalId = "cp_1",
@@ -1322,7 +1322,7 @@ function resolveReq(userId: string, channelId: string, proposalId: string, body:
   );
 }
 
-test("제안 해소 — 비멤버 403, 로그인 없음 401, 잘못된 choice 400", async () => {
+test("resolving a proposal — non-member 403, no login 401, invalid choice 400", async () => {
   server.reset();
   const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
   const seed = await seedKanbanChannel();
@@ -1352,13 +1352,13 @@ test("제안 해소 — 비멤버 403, 로그인 없음 401, 잘못된 choice 40
   assert.equal(bad.status, 400);
   assert.equal((await bad.json()).code, "invalid_field");
 
-  // 어느 갈래도 플러그인의 제안을 건드리지 않았다.
+  // No branch touched the plugin's proposal.
   assert.equal(server.cardProposal(proposal.proposalId)?.resolvedChoice, null);
   const untouched = await readNotice(proposal.messageId);
   assert.equal(untouched?.kind === "card_proposal" ? untouched.resolved : "gone", undefined);
 });
 
-test("제안 해소 — 카드 갈래는 카드를 만들고 알림에 결정을 쓴다, 둘째 호출은 409", async () => {
+test("resolving a proposal — the card branch creates the card and writes the decision into the notice; a second call is 409", async () => {
   server.reset();
   const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
   const seed = await seedKanbanChannel();
@@ -1377,7 +1377,7 @@ test("제안 해소 — 카드 갈래는 카드를 만들고 알림에 결정을
   assert.equal(body.assigneeDropped, false);
   assert.ok(body.taskId);
 
-  // 카드는 담당(profile_name)까지 붙어 만들어졌고, 완료 조건은 본문에 실렸다.
+  // The card was created with its assignee (profile_name), and the completion criteria went into the body.
   const created = server
     .requests()
     .slice(before)
@@ -1387,7 +1387,7 @@ test("제안 해소 — 카드 갈래는 카드를 만들고 알림에 결정을
   assert.equal(sent.assignee, "sophie");
   assert.match(String(sent.body), /본문[\s\S]*표로 정리/);
 
-  // 알림에 결정이 남는다 → 화면의 버튼이 사라지는 근거.
+  // The decision stays in the notice → the basis for the buttons disappearing on screen.
   const notice = await readNotice(proposal.messageId);
   assert.equal(notice?.kind, "card_proposal");
   assert.deepEqual(
@@ -1397,11 +1397,11 @@ test("제안 해소 — 카드 갈래는 카드를 만들고 알림에 결정을
     { choice: "card", by: member.id, taskId: body.taskId },
   );
 
-  // dispatch 한 번 + 즉시 폴링.
+  // One dispatch + immediate poll.
   assert.equal(dispatchCalls(before).length, 1);
   assert.deepEqual(polled, [seed.channelId]);
 
-  // 두 번째 해소는 409 — 카드는 하나뿐이다.
+  // A second resolve is 409 — there is only one card.
   const again = await route.POST(
     resolveReq(member.id, seed.channelId, proposal.proposalId, { choice: "card" }),
     proposalCtx(seed.channelId, proposal.proposalId),
@@ -1415,7 +1415,7 @@ test("제안 해소 — 카드 갈래는 카드를 만들고 알림에 결정을
   assert.equal(tasks.length, 1);
 });
 
-test("제안 해소 — inline 갈래는 카드를 만들지 않는다", async () => {
+test("resolving a proposal — the inline branch creates no card", async () => {
   server.reset();
   const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
   const seed = await seedKanbanChannel();
@@ -1439,7 +1439,7 @@ test("제안 해소 — inline 갈래는 카드를 만들지 않는다", async (
   assert.equal(notice?.kind === "card_proposal" ? notice.resolved?.choice : null, "inline");
 });
 
-test("제안 해소 — 없는 제안은 404, 플러그인을 부르지 않는다", async () => {
+test("resolving a proposal — a missing proposal is 404 and the plugin is not called", async () => {
   server.reset();
   const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
   const seed = await seedKanbanChannel();
@@ -1459,7 +1459,7 @@ test("제안 해소 — 없는 제안은 404, 플러그인을 부르지 않는�
   );
 });
 
-test("제안 해소 — 제안한 직원이 퇴근했으면 담당 없이 만들고 그 사실을 알린다", async () => {
+test("resolving a proposal — if the proposing employee has clocked out, the card is created without an assignee and that is reported", async () => {
   server.reset();
   const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
   const seed = await seedKanbanChannel();
@@ -1482,10 +1482,10 @@ test("제안 해소 — 제안한 직원이 퇴근했으면 담당 없이 만들
 });
 
 // ---------------------------------------------------------------------------
-// 보드 전체 첨부 — 결과물 갤러리가 아티팩트 뒤에 잇는다.
+// Board-wide attachments — the artifact gallery continues after artifacts with these.
 //
-// 워커가 만든 파일은 카드가 끝나면 scratch 와 함께 지워지고 첨부만 남는다. 갤러리가 이 목록을
-// 모르면 끝난 카드의 결과물이 어디에도 안 보인다.
+// Files a worker made are deleted along with scratch when the card ends, leaving only attachments. If the gallery
+// does not know this list, finished cards' outputs show up nowhere.
 // ---------------------------------------------------------------------------
 
 async function withBoardAttachmentList<T>(
@@ -1497,7 +1497,7 @@ async function withBoardAttachmentList<T>(
   server.setInfo({ capabilities: enabled ? [...caps, "kanban_attachment_list"] : caps });
   const { db, gatewayResources } = await import("@/db");
   const { eq } = await import("drizzle-orm");
-  // 능력 캐시를 비워 라우트가 새 capability 를 보게 한다.
+  // Clear the capability cache so the route sees the new capability.
   await db
     .update(gatewayResources)
     .set({ pluginCheckedAt: null, pluginInfoJson: null })
@@ -1509,7 +1509,7 @@ async function withBoardAttachmentList<T>(
   }
 }
 
-test("보드 첨부 목록 — 어느 카드의 첨부인지와 함께, 최신 것부터 준다", async () => {
+test("board attachment list — with which card each belongs to, newest first", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -1537,7 +1537,7 @@ test("보드 첨부 목록 — 어느 카드의 첨부인지와 함께, 최신 �
   });
 });
 
-test("보드 첨부 목록 — 첨부가 없는 보드는 빈 목록이다(지원 안 함과 구별된다)", async () => {
+test("board attachment list — a board without attachments is an empty list (distinct from unsupported)", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -1552,7 +1552,7 @@ test("보드 첨부 목록 — 첨부가 없는 보드는 빈 목록이다(지�
   });
 });
 
-test("보드 첨부 목록 — 커서로 이어지는 두 쪽을 겹치지 않게 준다", async () => {
+test("board attachment list — two pages chained by a cursor do not overlap", async () => {
   server.reset();
   server.setInfo({ capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"] });
   const routes = await loadRoutes();
@@ -1590,7 +1590,7 @@ test("보드 첨부 목록 — 커서로 이어지는 두 쪽을 겹치지 않�
   });
 });
 
-test("보드 첨부 목록 — 목록을 모르는 옛 플러그인에는 부르지 않고 supported:false 로 답한다", async () => {
+test("board attachment list — old plugins that do not know the list are not called and it answers supported:false", async () => {
   server.reset();
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
@@ -1615,7 +1615,7 @@ test("보드 첨부 목록 — 목록을 모르는 옛 플러그인에는 부르
   });
 });
 
-test("혼합 승인: 새 카드는 기본 사람 정책이고 null 정책으로 우회할 수 없다", async () => {
+test("mixed approval: new cards default to the human policy and a null policy cannot bypass it", async () => {
   server.reset();
   server.setInfo({ capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"] });
   const routes = await loadRoutes();
@@ -1635,7 +1635,7 @@ test("혼합 승인: 새 카드는 기본 사람 정책이고 null 정책으로 
   assert.equal(invalid.status, 400);
 });
 
-test("혼합 승인: 미지원 코어는 새 카드 쓰기를 차단한다", async () => {
+test("mixed approval: an unsupported core blocks writing new cards", async () => {
   server.reset();
   server.setInfo({ capabilities: ["kanban", "cron", "events"] });
   const routes = await loadRoutes();
@@ -1652,7 +1652,7 @@ test("혼합 승인: 미지원 코어는 새 카드 쓰기를 차단한다", asy
   );
 });
 
-test("혼합 승인: 다른 active 직원만 AI 검토자로 지정한다", async () => {
+test("mixed approval: only other active employees can be set as AI reviewers", async () => {
   server.reset();
   server.setInfo({ capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"] });
   const routes = await loadRoutes();
@@ -1678,7 +1678,7 @@ test("혼합 승인: 다른 active 직원만 AI 검토자로 지정한다", asyn
   });
 });
 
-test("혼합 승인: 승인 사용자와 제출은 서버 인증과 명시한 snapshot에서만 온다", async () => {
+test("mixed approval: the approving user and the submission come only from server auth and the stated snapshot", async () => {
   server.reset();
   server.setInfo({ capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"] });
   const routes = await loadRoutes();

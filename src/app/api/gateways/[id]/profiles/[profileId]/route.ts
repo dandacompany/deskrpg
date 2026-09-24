@@ -12,13 +12,13 @@ import {
 } from "@/game/three/office-appearance";
 
 /**
- * 프로필 조회·수정·삭제.
+ * Read, edit and delete a profile.
  *
- * 수정·삭제가 없어서, 토큰을 잘못 넣은 프로필은 화면에서 손댈 방법이 없었다 —
- * 만들 수만 있고 고칠 수도 지울 수도 없는 막다른 길이었다.
+ * Without edit and delete, a profile with a wrongly entered token could not be touched from the screen —
+ * a dead end where you could only create, never fix or remove.
  */
 
-/** 삭제 확인 문구가 "NPC 2개 · 채널 2곳이 사라집니다"라고 말할 수 있도록 수치를 준다. */
+/** Provide counts so the delete confirmation can say "NPC 2개 · 채널 2곳이 사라집니다". */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; profileId: string }> },
@@ -28,14 +28,14 @@ export async function GET(
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
   const { id, profileId } = await params;
-  // 수치도 게이트웨이에 접근할 수 있는 사람만 본다 — 남의 인격이 어느 채널에
-  // 몇 개 나가 있는지는 알려 줄 이유가 없다.
+  // Counts are visible only to those with gateway access too — there is no reason to reveal how many
+  // of someone else's personas are out in which channels.
   if (!(await getAccessibleGatewayResource(userId, id))) {
     return NextResponse.json({ errorCode: "not_found", error: "not found" }, { status: 404 });
   }
-  // URL 의 게이트웨이와 프로필이 실제로 한 몸인지 본다 — 접근 가능한 게이트웨이
-  // 하나만 있으면 남의 게이트웨이 프로필 수치를 캐낼 수 있으면 안 된다
-  // (PATCH·DELETE 는 updateHermesProfile/deleteHermesProfile 안에서 이미 검사한다).
+  // Check that the gateway and profile in the URL really belong together — having access to just one
+  // gateway must not let you pry out counts for profiles of someone else's gateway
+  // (PATCH and DELETE already check this inside updateHermesProfile/deleteHermesProfile).
   const [row] = await db
     .select({ gatewayId: hermesProfiles.gatewayId })
     .from(hermesProfiles)
@@ -66,9 +66,9 @@ export async function PATCH(
     appearance?: unknown;
   };
 
-  // 외형은 프로필이 정본이라 이 프로필이 나가는 **모든** 채널의 렌더링을 한꺼번에
-  // 좌우한다 — 모양이 깨진 값이 들어오면 그 인격 전부가 동시에 망가진다.
-  // 캐릭터 라우트(api/characters)와 같은 검증·같은 에러코드를 쓴다.
+  // The profile is the source of truth for appearance, so it governs rendering in **every** channel this profile
+  // is out in at once — a malformed value breaks all of that persona simultaneously.
+  // Uses the same validation and error code as the character route (api/characters).
   if (Object.hasOwn(body, "appearance")) {
     const validationError = validateOfficeAppearance(body.appearance);
     if (validationError) {
@@ -80,10 +80,10 @@ export async function PATCH(
   }
 
   const result = await updateHermesProfile(userId, profileId, {
-    // 토큰은 보낼 때만 바뀐다 — 화면이 빈 칸을 아예 보내지 않는 규약이다.
+    // The token changes only when sent — the convention is that the screen never sends an empty field.
     token: typeof body.token === "string" ? body.token : undefined,
     displayName: typeof body.displayName === "string" ? body.displayName : undefined,
-    // 외형도 보낼 때만 바뀐다. 소유자만 쓸 수 있다(updateHermesProfile 이 판정한다).
+    // Appearance also changes only when sent. Only the owner can write it (updateHermesProfile decides).
     appearance: Object.hasOwn(body, "appearance")
       ? normalizeOfficeAppearance(body.appearance)
       : undefined,
@@ -115,8 +115,8 @@ export async function DELETE(
       { status: result.errorCode === "forbidden" ? 403 : 404 },
     );
   }
-  // 프로필을 지우면 그 NPC 행도 CASCADE 로 함께 사라진다 — 몇 개가 몇 채널에서
-  // 없어졌는지 돌려준다.
+  // Deleting the profile also removes its NPC rows via CASCADE — return how many disappeared
+  // from how many channels.
   return NextResponse.json({
     ok: true,
     deletedNpcs: result.deletedNpcs,

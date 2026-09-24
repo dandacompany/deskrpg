@@ -7,18 +7,18 @@ import { getUserId } from "@/lib/internal-rpc";
 export const runtime = "nodejs";
 
 /**
- * 이미 등록된 게이트웨이의 플러그인을 고정 버전으로 올린다(소유자 전용).
+ * Upgrade the plugin of an already registered gateway to the pinned version (owner only).
  *
- * 마법사와 같은 호스트 파이프라인을 타지만 갱신 단계만 돌리고, 게이트웨이의 이름·주소·토큰은
- * 건드리지 않는다. 오래 걸리는 작업이라 잡 id 를 즉시 돌려주고 진행은 `/api/gateways/setup`
- * 의 잡 조회로 본다 — 마법사가 쓰는 그 화면을 그대로 쓴다.
+ * It rides the same host pipeline as the wizard but runs only the update step, and does not touch the gateway's
+ * name, address or token. It is a long operation, so a job id is returned immediately and progress is read through the
+ * `/api/gateways/setup` job query — the same screen the wizard uses.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
-  // 호스트에서 명령을 돌리는 동작이다 — 다른 사이트가 링크 한 번으로 걸 수 없게 한다.
+  // This runs commands on the host — another site must not be able to trigger it with a single link.
   if (
     !sameOriginMutation(
       req.headers.get("origin"),

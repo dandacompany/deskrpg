@@ -1,4 +1,4 @@
-// POST /api/channels/:id/kanban/tasks — 카드 생성(assignee 는 npcId), 직후 dispatch 한 번
+// POST /api/channels/:id/kanban/tasks — create a card (assignee is npcId), then one dispatch right after
 import type { NextRequest } from "next/server";
 
 import { createTask, type ChannelParams } from "@/lib/kanban-routes";

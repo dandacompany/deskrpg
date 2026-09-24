@@ -1,5 +1,5 @@
-// GET /api/channels/:id/projects/:projectId — 상세 + 서브프로젝트
-// PATCH — 메타 수정(이름·설명은 Hermes 로 위임)
+// GET /api/channels/:id/projects/:projectId — detail + subprojects
+// PATCH — edit metadata (name and description are delegated to Hermes)
 import type { NextRequest } from "next/server";
 
 import { getProject, patchProject, type ChannelParams } from "@/lib/project-routes";

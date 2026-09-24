@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
 
     const [character] = await db
       .insert(characters)
-      // 검증을 통과한 값도 저장 전에 정규화한다 — bodyType 은 룩의 값으로 맞춘다.
+      // Normalize even validated values before saving — bodyType is aligned with the look's value.
       .values({
         userId,
         name,

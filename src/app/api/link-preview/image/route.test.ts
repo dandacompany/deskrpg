@@ -7,7 +7,7 @@ import { NextRequest } from "next/server";
 import { withPreviewSlot } from "@/lib/link-preview/service";
 import { GET } from "./route";
 
-test("이미지 GET 은 HTML 조회가 8개 슬롯을 점유하면 즉시 204를 반환한다", async () => {
+test("image GET returns 204 immediately when HTML fetches occupy all 8 slots", async () => {
   const releases: Array<() => void> = [];
   const pending = Array.from({ length: 8 }, () =>
     withPreviewSlot(() => new Promise<void>((resolve) => releases.push(resolve))),

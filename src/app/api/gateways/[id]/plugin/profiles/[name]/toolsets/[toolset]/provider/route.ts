@@ -7,11 +7,11 @@ import {
 import { proxyFailure, resolveProfileRoute } from "@/lib/hermes/profile-route";
 
 /**
- * 도구 프로바이더 선택 + 그 행의 API 키 저장(플러그인 0.10.0).
+ * Choose a tool provider + save that row's API key (plugin 0.10.0).
  *
- * 키 값은 이 라우트를 통과만 한다 — 본문을 로깅하지 않고 실패 응답에 싣지 않는다. 게이트웨이
- * 자격이라 소유자 전용이다(docs/security.md 권한표, 프로바이더 키 PUT 과 같다).
- * 순서: 세그먼트 검증 → 해석(소유자) → 본문 검증 → 플러그인 호출.
+ * Key values only pass through this route — the body is not logged or put in failure responses. These are gateway
+ * credentials, so it is owner only (docs/security.md permission table, same as the provider key PUT).
+ * Order: segment validation → resolve (owner) → body validation → plugin call.
  */
 type Ctx = { params: Promise<{ id: string; name: string; toolset: string }> };
 

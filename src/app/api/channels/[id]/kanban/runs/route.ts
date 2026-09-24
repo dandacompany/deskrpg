@@ -1,4 +1,4 @@
-// GET /api/channels/:id/kanban/runs?from=&to=&limit= — 창 안의 실행 기록(실적 타임라인)
+// GET /api/channels/:id/kanban/runs?from=&to=&limit= — run records within the window (activity timeline)
 import type { NextRequest } from "next/server";
 
 import { listRuns, type ChannelParams } from "@/lib/kanban-routes";

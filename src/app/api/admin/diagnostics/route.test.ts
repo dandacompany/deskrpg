@@ -32,18 +32,18 @@ async function user(role: string) {
   return row.id;
 }
 
-test("비관리자와 익명 요청은 403 이 아니라 404 를 받는다", async () => {
+test("non-admins and anonymous requests get 404, not 403", async () => {
   const { GET } = await import("./route");
   assert.equal((await GET(req())).status, 404);
   const ordinary = await user("user");
   const denied = await GET(req(ordinary));
   assert.equal(denied.status, 404);
   assert.equal((await denied.json()).errorCode, "not_found");
-  // 존재하지 않는 사용자 id 를 헤더로 밀어 넣어도 같은 404 다.
+  // Pushing a nonexistent user id through the header gives the same 404.
   assert.equal((await GET(req(randomUUID()))).status, 404);
 });
 
-test("관리자는 환경·DB·호스트 설정·게이트웨이 항목을 받는다", async () => {
+test("admins get the environment, DB, host settings and gateway sections", async () => {
   const { GET } = await import("./route");
   const admin = await user("system_admin");
   const { db, gatewayResources } = await import("@/db");
@@ -66,7 +66,7 @@ test("관리자는 환경·DB·호스트 설정·게이트웨이 항목을 받�
   assert.equal(body.environment.dbTarget, "sqlite");
   assert.equal(typeof body.database.ok, "boolean");
   assert.equal(typeof body.database.message, "string");
-  // 2026-09-19 부터 기본은 관리자에게 켜짐이다 — 운영자가 0 으로 끄지 않은 한 둘 다 true.
+  // Since 2026-09-19 the default is on for admins — both are true unless the operator turned them off with 0.
   assert.deepEqual(body.hostSetup, { wizard: true, hermesInstall: true });
   const row = body.gateways.find((entry: { id: string }) => entry.id === gateway.id);
   assert.ok(row, "등록한 게이트웨이가 목록에 있어야 한다");
@@ -75,7 +75,7 @@ test("관리자는 환경·DB·호스트 설정·게이트웨이 항목을 받�
   assert.equal(row.checkedAt, null);
 });
 
-test("응답 본문에 게이트웨이 토큰·baseUrl 문자열이 실리지 않는다", async () => {
+test("the response body carries no gateway token or baseUrl string", async () => {
   const { GET } = await import("./route");
   const admin = await user("system_admin");
   const { db, gatewayResources } = await import("@/db");
@@ -92,11 +92,11 @@ test("응답 본문에 게이트웨이 토큰·baseUrl 문자열이 실리지 �
   assert.equal(text.includes("tokenEncrypted"), false);
 });
 
-test("DB 가 닿지 않아도 200 으로 진단을 돌려준다", async () => {
+test("returns diagnostics with 200 even when the DB is unreachable", async () => {
   const { GET } = await import("./route");
   const admin = await user("system_admin");
   const original = process.env.SQLITE_PATH;
-  // 존재하지도, 만들 수도 없는 경로 — 프로브는 실패하지만 진단은 계속돼야 한다.
+  // A path that neither exists nor can be created — the probe fails but diagnostics must continue.
   process.env.SQLITE_PATH = "/deskrpg-does-not-exist-root/data/deskrpg.db";
   try {
     const res = await GET(req(admin));

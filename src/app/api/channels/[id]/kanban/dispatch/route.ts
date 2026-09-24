@@ -1,4 +1,4 @@
-// POST /api/channels/:id/kanban/dispatch — ready 카드를 띄운다(수동)
+// POST /api/channels/:id/kanban/dispatch — launch ready cards (manual)
 import type { NextRequest } from "next/server";
 
 import { dispatchBoard, type ChannelParams } from "@/lib/kanban-routes";

@@ -13,13 +13,13 @@ import {
 } from "@/test-setup/npc-seed";
 import { startFakePluginServer, type FakePluginServer } from "@/lib/hermes/fake-plugin-server";
 
-// 프로젝트 목록표 REST (설계 2026-09-21 project-registry).
+// Project registry REST (design 2026-09-21 project-registry).
 //
-// 여기서 고정하는 것: 보드 = 프로젝트라는 대응, 메타 행의 지연 생성(이관 전 채널이 막히지 않게),
-// 권한층(보기 = 멤버, 변경 = 채널 소유자), 테넌트 슬러그 규칙, 보관 시 사건 수신 보드 이전,
-// 그리고 **이름·진행률을 우리가 저장하지 않는다**는 것(Hermes 값이 그대로 실려 나온다).
+// What we pin here: the board = project correspondence, lazy creation of metadata rows (so pre-migration channels are not blocked),
+// permission layers (view = member, change = channel owner), tenant slug rules, moving the event-receiving board on archive,
+// and that **we do not store names or progress** (Hermes values come through as is).
 //
-// `[id]` 세그먼트 밖에 둔다 — node 테스트 러너가 `[id]` 를 문자 클래스로 오인한다.
+// Kept outside the `[id]` segment — the node test runner mistakes `[id]` for a character class.
 setupThrowawaySqlite("project-routes-test");
 
 const OWNER_TOKEN = "gateway-owner-key-1234567890";
@@ -116,10 +116,10 @@ async function listProjects(routes: Routes, userId: string, channelId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// 지연 생성 — 이관 전 채널이 "프로젝트 없음" 으로 막히지 않는다
+// Lazy creation — pre-migration channels are not blocked with "no project"
 // ---------------------------------------------------------------------------
 
-test("메타 행이 없던 기존 채널도 목록에서 프로젝트 하나를 받는다", async () => {
+test("existing channels without a metadata row also get one project in the list", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
 
@@ -133,7 +133,7 @@ test("메타 행이 없던 기존 채널도 목록에서 프로젝트 하나를 
   assert.equal(projects[0].status, "planned");
 });
 
-test("지연 생성은 멱등이다 — 두 번 읽어도 프로젝트 id 가 같다", async () => {
+test("lazy creation is idempotent — reading twice gives the same project id", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const first = await listProjects(routes, seed.ownerId, seed.channelId);
@@ -141,11 +141,11 @@ test("지연 생성은 멱등이다 — 두 번 읽어도 프로젝트 id 가 �
   assert.equal(first[0].id, second[0].id, "읽을 때마다 새 프로젝트가 생깁니다");
 });
 
-test("메타 행 없던 채널에 서브프로젝트만 추가하는 경로가 열려 있다", async () => {
+test("the path to add only a subproject to a channel without a metadata row is open", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
 
-  // 덩어리 1의 기본 경로: 목록에서 기본 프로젝트 id 를 얻어 서브프로젝트만 붙인다.
+  // The default path of chunk 1: get the default project id from the list and attach only a subproject.
   const projectId = (await listProjects(routes, seed.ownerId, seed.channelId))[0].id;
   const res = await routes.subprojects.POST(
     req(seed.ownerId, "POST", `${base(seed.channelId)}/${projectId}/subprojects`, {
@@ -160,10 +160,10 @@ test("메타 행 없던 채널에 서브프로젝트만 추가하는 경로가 �
 });
 
 // ---------------------------------------------------------------------------
-// 생성
+// Creation
 // ---------------------------------------------------------------------------
 
-test("프로젝트를 만들면 보드가 하나 더 붙고 이름은 Hermes 가 갖는다", async () => {
+test("creating a project attaches one more board and Hermes holds the name", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
 
@@ -188,7 +188,7 @@ test("프로젝트를 만들면 보드가 하나 더 붙고 이름은 Hermes 가
     ["리서치"],
   );
 
-  // 이름을 우리 표에 저장하지 않는다 — Hermes 에서 읽어 온 것이어야 한다.
+  // The name is not stored in our table — it must come from Hermes.
   const { db, channelProjects } = await import("@/db");
   const rows = await db.select().from(channelProjects);
   assert.ok(
@@ -200,7 +200,7 @@ test("프로젝트를 만들면 보드가 하나 더 붙고 이름은 Hermes 가
   assert.equal(projects.length, 2);
 });
 
-test("이름에 글자·숫자가 없으면 슬러그를 만들 수 없다고 갈라 답한다", async () => {
+test("a name without letters or digits gets a distinct answer that no slug can be made", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const projectId = (await listProjects(routes, seed.ownerId, seed.channelId))[0].id;
@@ -215,7 +215,7 @@ test("이름에 글자·숫자가 없으면 슬러그를 만들 수 없다고 �
   assert.equal(((await res.json()) as { code: string }).code, "tenant_slug_underivable");
 });
 
-test("형식이 아닌 슬러그를 직접 주면 다른 코드로 거절한다", async () => {
+test("a malformed slug given directly is rejected with a different code", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const projectId = (await listProjects(routes, seed.ownerId, seed.channelId))[0].id;
@@ -231,7 +231,7 @@ test("형식이 아닌 슬러그를 직접 주면 다른 코드로 거절한다"
   assert.equal(((await res.json()) as { code: string }).code, "invalid_tenant_slug");
 });
 
-test("같은 슬러그는 한 프로젝트에 두 번 들어가지 않는다", async () => {
+test("the same slug does not go into one project twice", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const projectId = (await listProjects(routes, seed.ownerId, seed.channelId))[0].id;
@@ -255,10 +255,10 @@ test("같은 슬러그는 한 프로젝트에 두 번 들어가지 않는다", a
 });
 
 // ---------------------------------------------------------------------------
-// 권한
+// Permissions
 // ---------------------------------------------------------------------------
 
-test("멤버는 볼 수 있고 만들 수는 없다", async () => {
+test("members can view but not create", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const member = await seedUser("proj-member");
@@ -281,7 +281,7 @@ test("멤버는 볼 수 있고 만들 수는 없다", async () => {
   assert.equal(((await create.json()) as { code: string }).code, "forbidden");
 });
 
-test("비멤버는 목록도 못 본다", async () => {
+test("non-members cannot even see the list", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const stranger = await seedUser("proj-stranger");
@@ -292,7 +292,7 @@ test("비멤버는 목록도 못 본다", async () => {
   assert.equal(res.status, 403);
 });
 
-test("다른 채널의 프로젝트 id 로는 열리지 않는다", async () => {
+test("a project id of another channel does not open", async () => {
   const routes = await loadRoutes();
   const mine = await seedProjectChannel();
   const theirs = await seedProjectChannel();
@@ -307,10 +307,10 @@ test("다른 채널의 프로젝트 id 로는 열리지 않는다", async () => 
 });
 
 // ---------------------------------------------------------------------------
-// 수정·보관
+// Edit and archive
 // ---------------------------------------------------------------------------
 
-test("이름 수정은 Hermes 보드로 간다", async () => {
+test("name edits go to the Hermes board", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const projectId = (await listProjects(routes, seed.ownerId, seed.channelId))[0].id;
@@ -329,11 +329,11 @@ test("이름 수정은 Hermes 보드로 간다", async () => {
   assert.equal(body.project.status, "in_progress");
   assert.equal(body.project.leadNpcId, seed.npcId);
 
-  // 다시 읽어도 Hermes 쪽 이름이 그대로 보인다.
+  // Reading again still shows the Hermes-side name.
   assert.equal((await listProjects(routes, seed.ownerId, seed.channelId))[0].name, "새 이름");
 });
 
-test("다른 채널의 NPC 는 리드가 될 수 없다", async () => {
+test("an NPC of another channel cannot be lead", async () => {
   const routes = await loadRoutes();
   const mine = await seedProjectChannel();
   const theirs = await seedProjectChannel();
@@ -347,7 +347,7 @@ test("다른 채널의 NPC 는 리드가 될 수 없다", async () => {
   assert.equal(((await res.json()) as { code: string }).code, "lead_npc_not_in_channel");
 });
 
-test("마지막 활성 프로젝트는 보관되지 않는다", async () => {
+test("the last active project is not archived", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const projectId = (await listProjects(routes, seed.ownerId, seed.channelId))[0].id;
@@ -360,7 +360,7 @@ test("마지막 활성 프로젝트는 보관되지 않는다", async () => {
   assert.equal(((await res.json()) as { code: string }).code, "last_board");
 });
 
-test("사건 수신 보드를 보관하면 그 자리가 다른 보드로 옮겨진다", async () => {
+test("archiving the event-receiving board moves that role to another board", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
 
@@ -395,7 +395,7 @@ test("사건 수신 보드를 보관하면 그 자리가 다른 보드로 옮겨
   assert.equal(rows.find((r) => r.isEventCarrier)?.boardSlug, secondSlug);
 });
 
-test("사건 수신 자리를 옮겨도 대상 보드의 미수신 카드 사건을 받는다", async () => {
+test("after moving the event-receiving role, unreceived card events of the target board are still received", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const created = await routes.projects.POST(
@@ -404,7 +404,7 @@ test("사건 수신 자리를 옮겨도 대상 보드의 미수신 카드 사건
   );
   const secondSlug = ((await created.json()) as { project: ProjectView }).project.boardSlug;
 
-  // 대상 보드의 실제 첫 폴링 토큰을 저장한 뒤, 아직 받지 않은 카드 사건을 만든다.
+  // Store the target board's real first polling token, then create a card event not yet received.
   const { db, channelKanbanBoards } = await import("@/db");
   const { eq } = await import("drizzle-orm");
   const { createOwnerPluginClient } = await import("@/lib/hermes/plugin-client");
@@ -449,7 +449,7 @@ test("사건 수신 자리를 옮겨도 대상 보드의 미수신 카드 사건
   );
 });
 
-test("보관해도 보드 연결은 남는다 — 폴링이 계속되어야 한다", async () => {
+test("archiving keeps the board link — polling must continue", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const created = await routes.projects.POST(
@@ -474,15 +474,15 @@ test("보관해도 보드 연결은 남는다 — 폴링이 계속되어야 한�
 });
 
 // ---------------------------------------------------------------------------
-// 관측된 테넌트
+// Observed tenants
 // ---------------------------------------------------------------------------
 
-test("밖에서 만든 카드의 테넌트는 숨기지 않고 미등록으로 싣는다", async () => {
+test("tenants of cards made outside are not hidden but included as unregistered", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const projectId = (await listProjects(routes, seed.ownerId, seed.channelId))[0].id;
 
-  // DeskRPG 를 거치지 않고 보드에 카드가 생긴 상황 — Hermes CLI 나 다른 도구가 만든 것.
+  // Cards appeared on the board without going through DeskRPG — made by the Hermes CLI or another tool.
   const kanban = await import("./[id]/kanban/tasks/route");
   const made = await kanban.POST(
     new NextRequest(`http://localhost/api/channels/${seed.channelId}/kanban/tasks`, {
@@ -504,7 +504,7 @@ test("밖에서 만든 카드의 테넌트는 숨기지 않고 미등록으로 �
   assert.equal(body.subprojects.length, 0);
 });
 
-test("등록한 서브프로젝트의 표시 이름은 바꿔도 슬러그는 고정이다", async () => {
+test("a registered subproject's display name can change but its slug is fixed", async () => {
   const routes = await loadRoutes();
   const seed = await seedProjectChannel();
   const projectId = (await listProjects(routes, seed.ownerId, seed.channelId))[0].id;

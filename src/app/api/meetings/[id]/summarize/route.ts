@@ -7,7 +7,7 @@ import { normalizeMeetingMinutesRecord } from "@/lib/meeting-minutes";
 import { getMeetingHooks } from "@/lib/meeting-registry";
 import { resummarizeMinutes } from "@/lib/meeting-summarize";
 
-/** 저장된 트랜스크립트로 요약을 다시 만든다. 회의 주재자·채널 소유자만. */
+/** Rebuild the summary from the stored transcript. Meeting host and channel owner only. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {

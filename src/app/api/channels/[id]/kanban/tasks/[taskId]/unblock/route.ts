@@ -1,4 +1,4 @@
-// POST /api/channels/:id/kanban/tasks/:taskId/unblock — {comment?} → ready (채널 멤버)
+// POST /api/channels/:id/kanban/tasks/:taskId/unblock — {comment?} → ready (channel members)
 import type { NextRequest } from "next/server";
 
 import { runTaskAction, type TaskParams } from "@/lib/kanban-routes";

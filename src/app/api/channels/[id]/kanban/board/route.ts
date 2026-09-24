@@ -1,4 +1,4 @@
-// GET /api/channels/:id/kanban/board?include_archived= — 보드 + NPC 로스터(assignee → npc 매핑용)
+// GET /api/channels/:id/kanban/board?include_archived= — board + NPC roster (for mapping assignee → npc)
 import type { NextRequest } from "next/server";
 
 import { getBoard, type ChannelParams } from "@/lib/kanban-routes";

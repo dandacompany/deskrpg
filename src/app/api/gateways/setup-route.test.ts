@@ -46,7 +46,7 @@ test("actual setup route rejects anonymous, ordinary user and disabled operator 
   const denied = await POST(req(ordinary, { action: "discover", mode: "local" }));
   assert.equal(denied.status, 403);
   assert.equal((await denied.json()).errorCode, "setup_forbidden");
-  // 2026-09-19 부터 관리자는 기본 허용이다 — 운영자가 0 으로 끈 경우만 거절한다.
+  // Since 2026-09-19 admins are allowed by default — refused only when the operator turned it off with 0.
   process.env.DESKRPG_HOST_SETUP_ENABLED = "0";
   assert.equal((await POST(req(admin, { action: "discover", mode: "local" }))).status, 403);
   const cap = await (await GET(req(admin))).json();
@@ -79,7 +79,7 @@ test("job progress and cancellation cannot be accessed by another user", async (
   assert.equal((await POST(req(stranger, { action: "cancel", jobId: job.id }))).status, 404);
   assert.equal(jobs.cancelled(owner, job.id), false);
 });
-test("잘못된 시간대는 호스트를 건드리기 전에 400 으로 거부된다", async () => {
+test("an invalid timezone is rejected with 400 before touching the host", async () => {
   const { POST } = await import("./setup/route");
   const admin = await user("system_admin");
   const result = await POST(
@@ -94,10 +94,10 @@ test("잘못된 시간대는 호스트를 건드리기 전에 400 으로 거부�
   assert.equal(result.status, 400);
   assert.equal((await result.json()).errorCode, "timezone_invalid");
 });
-test("시간대를 보내지 않아도 준비 요청은 그대로 진행된다", async () => {
+test("the prepare request proceeds as is without a timezone", async () => {
   const { POST } = await import("./setup/route");
   const admin = await user("system_admin");
-  // 운영자가 스위치를 꺼 두었으므로 timezone 검증을 통과한 뒤 권한 게이트에서 멈춘다.
+  // The operator turned the switch off, so after passing timezone validation it stops at the permission gate.
   process.env.DESKRPG_HOST_SETUP_ENABLED = "0";
   const result = await POST(
     req(admin, {
@@ -110,7 +110,7 @@ test("시간대를 보내지 않아도 준비 요청은 그대로 진행된다",
   assert.equal((await result.json()).errorCode, "setup_forbidden");
   delete process.env.DESKRPG_HOST_SETUP_ENABLED;
 });
-test("워커 전파 체크박스 값이 불리언이 아니면 호스트를 건드리기 전에 400 이다", async () => {
+test("a non-boolean worker propagation checkbox value is 400 before touching the host", async () => {
   const { POST } = await import("./setup/route");
   const admin = await user("system_admin");
   for (const workerPropagation of ["yes", 1, {}]) {
@@ -127,10 +127,10 @@ test("워커 전파 체크박스 값이 불리언이 아니면 호스트를 건�
     assert.equal((await result.json()).errorCode, "setup_invalid_request");
   }
 });
-test("워커 전파 체크박스 true·false 는 검증을 통과한다", async () => {
+test("worker propagation checkbox true and false pass validation", async () => {
   const { POST } = await import("./setup/route");
   const admin = await user("system_admin");
-  // 운영자 스위치를 꺼 두어 검증을 지난 뒤 권한 게이트에서 멈추게 한다 — 호스트에는 닿지 않는다.
+  // The operator switch is off so it stops at the permission gate after validation — it never reaches the host.
   process.env.DESKRPG_HOST_SETUP_ENABLED = "0";
   try {
     for (const workerPropagation of [true, false]) {

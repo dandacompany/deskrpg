@@ -6,9 +6,9 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 
-// "설정에서 켜기"(게이트웨이 화면)의 진입점 — 워커 전파 운영자 설정을 호스트에 쓴다.
-// 호스트에서 명령을 돌리는 동작이라 플러그인 갱신 라우트와 같은 문을 지난다: 로그인·같은 출처·소유자·
-// 호스트 정책. 호스트 쪽 동작(설정 쓰기·적용)은 host.test.ts·worker-propagation.test.ts 가 고정한다.
+// The entry point for "설정에서 켜기" (gateway screen) — writes the worker propagation operator setting to the host.
+// It runs commands on the host, so it passes the same doors as the plugin update route: login, same origin, owner,
+// host policy. Host-side behavior (writing the setting, applying) is pinned by host.test.ts and worker-propagation.test.ts.
 const home = mkdtempSync(path.join(tmpdir(), "worker-propagation-route-"));
 process.env.DESKRPG_HOME = home;
 process.env.SQLITE_PATH = path.join(home, "test.db");
@@ -61,7 +61,7 @@ async function gateway(ownerUserId: string, baseUrl: string) {
   });
 }
 
-test("비로그인은 401, 다른 출처의 요청은 403 이다", async () => {
+test("unauthenticated is 401 and cross-origin requests are 403", async () => {
   const { POST } = await import("./[id]/plugin/worker-propagation/route");
   const owner = await user();
   const row = await gateway(owner, "http://127.0.0.1:18742");
@@ -74,7 +74,7 @@ test("비로그인은 401, 다른 출처의 요청은 403 이다", async () => {
   assert.equal((await cross.json()).errorCode, "setup_bad_origin");
 });
 
-test("enabled 가 불리언이 아니면 호스트에 닿기 전에 400 이다", async () => {
+test("a non-boolean enabled is 400 before reaching the host", async () => {
   const { POST } = await import("./[id]/plugin/worker-propagation/route");
   const owner = await user();
   const row = await gateway(owner, "http://127.0.0.1:18743");
@@ -85,7 +85,7 @@ test("enabled 가 불리언이 아니면 호스트에 닿기 전에 400 이다",
   }
 });
 
-test("남의 게이트웨이는 404 다 — 공유받았어도 호스트 설정을 바꿀 수 없다", async () => {
+test("someone else's gateway is 404 — even a shared one cannot change host settings", async () => {
   const { POST } = await import("./[id]/plugin/worker-propagation/route");
   const owner = await user();
   const other = await user();
@@ -95,7 +95,7 @@ test("남의 게이트웨이는 404 다 — 공유받았어도 호스트 설정�
   assert.equal((await res.json()).errorCode, "setup_not_found");
 });
 
-test("명령을 돌릴 수 없는 호스트는 이유를 말한다 — 화면은 명령 복사로 떨어진다", async () => {
+test("hosts where commands cannot run say why — the screen falls back to copying the command", async () => {
   process.env.DESKRPG_HOST_SETUP_ENABLED = "1";
   const { POST } = await import("./[id]/plugin/worker-propagation/route");
   const owner = await user();
@@ -105,7 +105,7 @@ test("명령을 돌릴 수 없는 호스트는 이유를 말한다 — 화면은
   assert.equal((await res.json()).errorCode, "plugin_update_unsupported_host");
 });
 
-test("관리자가 아니거나 운영자가 호스트 설정을 꺼 두면 막힌다", async () => {
+test("blocked for non-admins or when the operator turned host setup off", async () => {
   const { POST } = await import("./[id]/plugin/worker-propagation/route");
   const ordinary = await user("user");
   const ordinaryRow = await gateway(ordinary, "http://127.0.0.1:18745");

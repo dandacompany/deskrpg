@@ -42,7 +42,7 @@ async function readUser(id: string) {
   return row;
 }
 
-test("익명과 일반 사용자는 재설정할 수 없고 대상 해시도 그대로다", async () => {
+test("anonymous and regular users cannot reset, and the target hash is unchanged", async () => {
   const { POST } = await import("./route");
   const target = await seedUser();
 
@@ -57,7 +57,7 @@ test("익명과 일반 사용자는 재설정할 수 없고 대상 해시도 그
   assert.equal((await readUser(target.id)).passwordHash, target.passwordHash);
 });
 
-test("관리자는 임시 비밀번호를 1회 돌려받고 대상은 강제 변경 상태가 된다", async () => {
+test("an admin gets the temporary password once and the target is put into forced-change state", async () => {
   const { POST } = await import("./route");
   const admin = await seedUser("system_admin");
   const target = await seedUser();
@@ -77,13 +77,13 @@ test("관리자는 임시 비밀번호를 1회 돌려받고 대상은 강제 변
   assert.notEqual(stored.passwordHash, target.passwordHash);
   assert.equal(stored.mustChangePassword, true);
 
-  // 임시 비밀번호는 평문으로 저장되지 않는다 — 해시만 남는다.
+  // The temporary password is not stored in plaintext — only the hash remains.
   assert.notEqual(stored.passwordHash, payload.temporaryPassword);
   const { verifyPassword } = await import("@/lib/password");
   assert.ok(await verifyPassword(payload.temporaryPassword, stored.passwordHash));
 });
 
-test("임시 비밀번호는 매번 다르고 계정 비밀번호 정책을 만족한다", async () => {
+test("the temporary password differs every time and satisfies the account password policy", async () => {
   const { POST } = await import("./route");
   const { isAccountPasswordValid } = await import("@/lib/security-policy");
   const admin = await seedUser("system_admin");
@@ -96,7 +96,7 @@ test("임시 비밀번호는 매번 다르고 계정 비밀번호 정책을 만�
   assert.ok(isAccountPasswordValid(first.temporaryPassword));
 });
 
-test("없는 사용자를 재설정하면 404 다", async () => {
+test("resetting a nonexistent user is 404", async () => {
   const { POST } = await import("./route");
   const admin = await seedUser("system_admin");
   const missing = randomUUID();

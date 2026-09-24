@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 
-/** 감시(watchHermesFs)가 같은 객체를 패치할 수 있도록 별칭 하나만 쓴다. */
+/** Use a single alias so the watcher (watchHermesFs) can patch the same object. */
 const fs = nodeFs;
 
 // Task 4 review, Critical 1 + Important 1 regression coverage.
@@ -25,13 +25,13 @@ const fs = nodeFs;
 const sqlitePath = path.join(os.tmpdir(), `local-discovery-route-test-${crypto.randomUUID()}.db`);
 process.env.DESKRPG_HOME = os.tmpdir();
 process.env.SQLITE_PATH = sqlitePath;
-// 최종 리뷰 C1: 로컬 발견은 이제 운영자가 켜야 하는 인스턴스 레벨 스위치 뒤에 있다.
-// 기본값은 꺼짐이므로, 이 파일의 "정상 동작" 테스트는 명시적으로 켠 상태를 쓴다.
+// Final review C1: local discovery now sits behind an instance-level switch the operator must turn on.
+// The default is off, so this file's "normal behavior" tests use the explicitly enabled state.
 process.env.DESKRPG_LOCAL_DISCOVERY_ENABLED = "true";
 
-// 게이트웨이 URL은 루프백이어야 한다(스펙 §4 1단계). 실제로 아무것도 듣고 있지
-// 않은 포트를 골라 탐침이 즉시 ECONNREFUSED로 떨어지게 한다 — 테스트가 바깥
-// 네트워크나 DNS에 의존하지 않는다.
+// The gateway URL must be loopback (spec §4 step 1). Pick a port where nothing is actually listening
+// so the probe drops immediately with ECONNREFUSED — the test does not depend on the outside
+// network or DNS.
 const LOOPBACK_URL = "http://127.0.0.1:59321";
 const REMOTE_URL = "https://attacker.example";
 for (const ext of ["", "-wal", "-shm"]) {
@@ -100,15 +100,15 @@ async function optIn(gatewayId: string, ownerId: string) {
 }
 
 /**
- * Hermes 프로필 트리에 대한 **실제** 파일시스템 접근을 기록한다.
+ * Record **real** filesystem access to the Hermes profile tree.
  *
- * 스펙 §10 완료 기준 6 — "옵인하지 않은 게이트웨이에서는 서버가 파일시스템을
- * 건드리지 않는다 (테스트로 고정)". 상태 코드만 보면 게이트를 지워도 테스트가
- * 통과한다(최종 리뷰 I1의 변이 실험이 실증했다). 그래서 응답이 아니라 **행위**를
- * 본다.
+ * Spec §10 completion criterion 6 — "on a gateway that has not opted in the server does not touch the
+ * filesystem (pinned by a test)". Looking only at status codes, the test passes even with the gate removed
+ * (final review I1's mutation experiment proved it). So we watch the **behavior**, not the
+ * response.
  *
- * hermesHome 아래 경로만 센다 — 모듈 로딩·SQLite 같은 무관한 fs 사용을 잡으면
- * 의미 없는 실패가 된다.
+ * Only paths under hermesHome are counted — catching unrelated fs use like module loading or SQLite
+ * would give meaningless failures.
  */
 function watchHermesFs() {
   const original = {
@@ -138,7 +138,7 @@ function watchHermesFs() {
   };
 }
 
-/** HERMES_HOME + fs 감시를 걸고 한 번의 요청을 돌린다. */
+/** Set up HERMES_HOME + fs watching and run one request. */
 async function withWatchedFs<T>(run: () => Promise<T>) {
   const priorEnv = process.env.HERMES_HOME;
   process.env.HERMES_HOME = hermesHome;
@@ -287,11 +287,11 @@ describe("GET /api/gateways/[id]/local-discovery (owner gate)", () => {
   });
 });
 
-describe("local discovery gates — 게이트를 지우면 빨개져야 하는 테스트들", () => {
-  // 최종 리뷰 I1. 아래 네 개는 전부 "응답 모양"이 아니라 "파일시스템을 건드렸는가"를
-  // 함께 본다. 상태 코드만 보는 단정은 게이트를 지워도 통과했다.
+describe("local discovery gates — tests that must go red if the gate is removed", () => {
+  // Final review I1. All four below check "was the filesystem touched" along with the
+  // "response shape". Assertions on status codes alone passed even with the gate removed.
 
-  test("옵인하지 않은 게이트웨이 GET → optedIn:false, candidates:[], 파일 미접촉", async () => {
+  test("GET on a gateway that has not opted in → optedIn:false, candidates:[], no file access", async () => {
     const { owner, gateway } = await seedOwnerAndGateway();
     const { GET } = await import("./[id]/local-discovery/route");
     const { value: body, calls } = await withWatchedFs(async () => {
@@ -315,7 +315,7 @@ describe("local discovery gates — 게이트를 지우면 빨개져야 하는 �
     );
   });
 
-  test("옵인한 소유자 GET은 실제로 파일을 읽는다 (감시 자체의 대조군)", async () => {
+  test("GET by an opted-in owner actually reads files (the control group for the watcher itself)", async () => {
     const { owner, gateway } = await seedOwnerAndGateway();
     await optIn(gateway.id, owner.id);
     const { GET } = await import("./[id]/local-discovery/route");
@@ -327,14 +327,14 @@ describe("local discovery gates — 게이트를 지우면 빨개져야 하는 �
     });
     assert.equal(body.optedIn, true);
     assert.ok(body.candidates.some((c: { name: string }) => c.name === "sophie"));
-    // 이 단정이 없으면 감시가 조용히 고장 났을 때 위 테스트들이 가짜로 통과한다.
+    // Without this assertion the tests above would pass falsely if the watcher silently broke.
     assert.ok(
       calls.some((c) => c.includes("sophie")),
       "감시가 실제 접근을 잡아내야 한다",
     );
   });
 
-  test("옵인하지 않은 게이트웨이 POST {profiles} → 403 not_opted_in, 파일 미접촉", async () => {
+  test("POST {profiles} on a gateway that has not opted in → 403 not_opted_in, no file access", async () => {
     const { owner, gateway } = await seedOwnerAndGateway();
     const { POST } = await import("./[id]/local-discovery/route");
     const { value, calls } = await withWatchedFs(async () => {
@@ -348,9 +348,9 @@ describe("local discovery gates — 게이트를 지우면 빨개져야 하는 �
     assert.deepEqual(calls, [], "동의 전에는 파일시스템을 건드리지 않는다");
   });
 
-  test("share-only 사용자 POST {profiles} → 403 forbidden, 파일 미접촉", async () => {
-    // 이 게이트를 지우면 share-only 사용자가 readProfileToken 까지 도달한다.
-    // registerHermesProfile 이 뒤에서 forbidden 을 돌려주지만 **파일은 이미 읽힌 뒤**다.
+  test("POST {profiles} by a share-only user → 403 forbidden, no file access", async () => {
+    // Removing this gate lets share-only users reach readProfileToken.
+    // registerHermesProfile returns forbidden later, but **the file has already been read** by then.
     const { owner, gateway } = await seedOwnerAndGateway();
     await optIn(gateway.id, owner.id);
     const { db, gatewayShares, users } = await loadDb();
@@ -380,12 +380,12 @@ describe("local discovery gates — 게이트를 지우면 빨개져야 하는 �
   });
 });
 
-describe("local discovery gates — 스펙 §4 1단계(루프백)와 인스턴스 스위치", () => {
-  // 최종 리뷰 C1. 이 둘이 없으면 인증된 아무 사용자나 임의 URL로 게이트웨이를
-  // 만들어 호스트의 Hermes 키를 읽고, "프로필 테스트" 버튼으로 그 키를 자기
-  // 서버에 Bearer 로 보낼 수 있다.
+describe("local discovery gates — spec §4 step 1 (loopback) and the instance switch", () => {
+  // Final review C1. Without these two, any authenticated user could create a gateway with an arbitrary URL,
+  // read the host's Hermes keys, and send those keys to their own server as Bearer
+  // through the "profile test" button.
 
-  test("루프백이 아닌 게이트웨이는 GET에서 available:false 이고 파일을 건드리지 않는다", async () => {
+  test("a non-loopback gateway is available:false on GET and touches no files", async () => {
     const { owner, gateway } = await seedOwnerAndGateway(REMOTE_URL);
     await optIn(gateway.id, owner.id).catch(() => undefined);
     const { GET } = await import("./[id]/local-discovery/route");
@@ -400,7 +400,7 @@ describe("local discovery gates — 스펙 §4 1단계(루프백)와 인스턴�
     assert.deepEqual(calls, [], "프로필 루트 존재 확인조차 하지 않는다");
   });
 
-  test("루프백이 아닌 게이트웨이는 옵인도 등록도 403 local_discovery_unavailable", async () => {
+  test("a non-loopback gateway gets 403 local_discovery_unavailable for both opt-in and registration", async () => {
     const { owner, gateway } = await seedOwnerAndGateway(REMOTE_URL);
     const { POST } = await import("./[id]/local-discovery/route");
     const { value, calls } = await withWatchedFs(async () => {
@@ -425,7 +425,7 @@ describe("local discovery gates — 스펙 §4 1단계(루프백)와 인스턴�
     assert.equal(value.register.body.errorCode, "local_discovery_unavailable");
     assert.deepEqual(calls, []);
 
-    // 동의 자체가 기록되지 않아야 한다 — 나중에 스위치가 켜졌을 때 되살아나면 안 된다.
+    // Consent itself must not be recorded — it must not come back to life when the switch is later turned on.
     const { db, gatewayResources } = await loadDb();
     const [row] = await db
       .select()
@@ -434,7 +434,7 @@ describe("local discovery gates — 스펙 §4 1단계(루프백)와 인스턴�
     assert.equal(row.localDiscoveryOptedInAt, null);
   });
 
-  test("인스턴스 스위치가 꺼져 있으면 루프백이어도 보이지 않는다 (기본값)", async () => {
+  test("with the instance switch off it is invisible even on loopback (default)", async () => {
     const { owner, gateway } = await seedOwnerAndGateway();
     await optIn(gateway.id, owner.id);
     const { GET, POST } = await import("./[id]/local-discovery/route");

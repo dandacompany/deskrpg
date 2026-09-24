@@ -9,11 +9,11 @@ import { getUserId } from "@/lib/internal-rpc";
 import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 
 /**
- * 프로필 삭제는 게이트웨이 전체를 다루는 default 키를 쓰므로 `system_admin` 전용이다.
+ * Deleting a profile uses the default key, which covers the whole gateway, so it is `system_admin` only.
  *
- * 플러그인이 `409 profile_has_service` 로 거절할 수 있다 — 그 프로필이 자기 systemd
- * 유닛을 가진 경우다. 그때 응답의 셸 명령을 **그대로** 화면에 옮긴다. 우리가
- * 대신 지우면 고아 유닛이 남고, Hermes 의 delete_profile 에 맡기면 게이트웨이가 죽는다.
+ * The plugin may refuse with `409 profile_has_service` — when the profile has its own systemd
+ * unit. Then the shell command in the response is carried to the screen **as is**. If we
+ * deleted it ourselves an orphan unit would remain, and leaving it to Hermes's delete_profile kills the gateway.
  */
 const proxyInit = (errorCode: string) => ({
   status: 200,
@@ -39,11 +39,11 @@ export async function DELETE(
 
   const { id, name } = await ctx.params;
 
-  // M-1: 이름을 검증 없이 원격 경로에 끼우면 encodeURIComponent 가 "." 을 이스케이프하지
-  // 않아 name==".." 일 때 URL 정규화로 프로필 스코프가 조용히 사라진다(profile-name.ts
-  // 의 경고 그대로). 삭제 대상은 *기존* 프로필이라 관대한 isValidProfileName 을 쓴다 —
-  // 새 이름 문법(isCreatableProfileName)을 쓰면 과거에 만들어진 대문자·마침표 이름의
-  // 프로필을 지울 수 없게 된다.
+  // M-1: inserting an unvalidated name into the remote path — encodeURIComponent does not escape "." —
+  // makes the profile scope silently disappear through URL normalization when name==".." (exactly the warning
+  // in profile-name.ts). Deletion targets *existing* profiles, so the lenient isValidProfileName is used —
+  // the new-name grammar (isCreatableProfileName) would make it impossible to delete profiles
+  // created in the past with uppercase or dotted names.
   if (!isValidProfileName(name)) {
     return NextResponse.json({ errorCode: "invalid_profile_name" }, { status: 400 });
   }
@@ -70,9 +70,9 @@ export async function DELETE(
     );
   }
 
-  // M-4: 원격 삭제가 성공했는데 로컬 등록 행을 남겨두면 게이트웨이에는 없는 프로필이
-  // DeskRPG 목록에 계속 보이고, 거기 묶인 NPC 는 대화 시점에야 실패한다. 이 행이
-  // 없어도(애초에 등록 안 된 프로필을 지운 경우) 삭제는 no-op 이라 안전하다.
+  // M-4: if the remote delete succeeds but the local registration row remains, a profile the gateway no longer has
+  // keeps showing in the DeskRPG list, and NPCs bound to it fail only at conversation time. Even without this row
+  // (deleting a profile that was never registered) the delete is a no-op, so it is safe.
   await db
     .delete(hermesProfiles)
     .where(and(eq(hermesProfiles.gatewayId, id), eq(hermesProfiles.profileName, name)));

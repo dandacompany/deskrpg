@@ -7,10 +7,10 @@ import { buildOfficeEnvironment } from "@/game/three/office-environments";
 import { seatingMapFor } from "@/lib/seat-assignment";
 
 /**
- * 배치 라우트의 계약. 자리는 채널 안에서 유일해야 하고
- * (`npcs_channel_position_unique`), 그 충돌은 **409** 로 나가야 한다 —
- * 클라이언트는 409 를 보고 배치 모드를 유지한 채 다음 칸을 기다린다. 500 이면
- * "배치 실패" 토스트가 뜨고 배치 모드가 끝나 버린다.
+ * The contract of the placement route. Seats must be unique within a channel
+ * (`npcs_channel_position_unique`), and that conflict must go out as **409** —
+ * the client sees 409, keeps placement mode and waits for the next cell. With 500
+ * a "배치 실패" toast shows and placement mode ends.
  */
 setupThrowawaySqlite("npc-placement-route-test");
 
@@ -26,8 +26,8 @@ async function put(npcId: string, userId: string, body: Record<string, unknown>)
   );
 }
 
-test("이미 누가 선 칸으로 옮기면 409 tile_already_occupied 다", async () => {
-  // 배치된 둘은 (0,0) 과 (1,0) 에 선다.
+test("moving onto a cell someone already stands on is 409 tile_already_occupied", async () => {
+  // The two placed NPCs stand at (0,0) and (1,0).
   const { npcIds, userId } = await seedChannelWithProfiles({ placedActive: 2 });
 
   const res = await put(npcIds[1], userId, { positionX: 0, positionY: 0 });
@@ -37,7 +37,7 @@ test("이미 누가 선 칸으로 옮기면 409 tile_already_occupied 다", asyn
   assert.equal(body.errorCode, "tile_already_occupied");
 });
 
-test("빈 칸으로는 옮겨진다", async () => {
+test("moving onto an empty cell works", async () => {
   const { npcIds, userId } = await seedChannelWithProfiles({ placedActive: 2 });
 
   const res = await put(npcIds[1], userId, { positionX: 5, positionY: 7 });
@@ -48,7 +48,7 @@ test("빈 칸으로는 옮겨진다", async () => {
   assert.equal(body.npc.positionY, 7);
 });
 
-test("자리 미정 NPC 에 자리를 준다 — 만들지 않고 자리만 채운다", async () => {
+test("gives a seat to an NPC without one — fills only the seat without creating anything", async () => {
   const { npcIds, userId } = await seedChannelWithProfiles({ placedActive: 1, unplaced: 1 });
 
   const res = await put(npcIds[1], userId, { positionX: 3, positionY: 4 });
@@ -59,7 +59,7 @@ test("자리 미정 NPC 에 자리를 준다 — 만들지 않고 자리만 채�
   assert.equal(body.npc.positionX, 3);
 });
 
-test("데스크 좌석이 아닌 칸은 400 not_a_desk_seat", async () => {
+test("a cell that is not a desk seat is 400 not_a_desk_seat", async () => {
   const mapData = buildOfficeEnvironment("executive");
   const { npcIds, userId } = await seedChannelWithProfiles({ unplaced: 1, mapData });
   const { standing, seats } = seatingMapFor({ mapData })!;

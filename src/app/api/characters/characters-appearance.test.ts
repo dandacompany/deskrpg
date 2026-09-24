@@ -5,9 +5,9 @@ import { NextRequest } from "next/server";
 import { authHeaders, seedUser, setupThrowawaySqlite } from "@/test-setup/npc-seed";
 
 /**
- * 외형의 정본 형태는 `{ officeLookId, bodyType }` 뿐이다. 캐릭터 라우트는
- * `officeLookId` 가 없거나 모르는 값이면 400 `character_appearance_invalid` 로 거절하고,
- * 통과한 값은 저장 전에 정규화한다(bodyType 을 룩의 값으로 맞춘다).
+ * The canonical form of an appearance is only `{ officeLookId, bodyType }`. Character routes
+ * reject a missing or unknown `officeLookId` with 400 `character_appearance_invalid`,
+ * and normalize passing values before saving (aligning bodyType with the look's value).
  */
 setupThrowawaySqlite("characters-appearance-test");
 
@@ -45,7 +45,7 @@ const INVALID_APPEARANCES: Array<[string, unknown]> = [
   ["배열", []],
 ];
 
-test("POST 는 officeLookId 가 없거나 모르는 외형을 400 으로 거절한다", async () => {
+test("POST rejects a missing officeLookId or an unknown appearance with 400", async () => {
   const user = await seedUser("char-post");
   for (const [label, appearance] of INVALID_APPEARANCES) {
     const res = await post(user.id, { name: "테스터", appearance });
@@ -54,7 +54,7 @@ test("POST 는 officeLookId 가 없거나 모르는 외형을 400 으로 거절�
   }
 });
 
-test("POST 는 유효한 룩을 저장하고 bodyType 을 룩의 값으로 맞춘다", async () => {
+test("POST saves a valid look and aligns bodyType with the look's value", async () => {
   const user = await seedUser("char-post-ok");
   const res = await post(user.id, {
     name: "테스터",
@@ -69,7 +69,7 @@ test("POST 는 유효한 룩을 저장하고 bodyType 을 룩의 값으로 맞�
   });
 });
 
-test("PATCH 는 모르는 외형을 400 으로 거절하고 유효한 외형은 정규화해 저장한다", async () => {
+test("PATCH rejects an unknown appearance with 400 and normalizes and saves a valid one", async () => {
   const user = await seedUser("char-patch");
   const created = await post(user.id, {
     name: "테스터",
@@ -91,7 +91,7 @@ test("PATCH 는 모르는 외형을 400 으로 거절하고 유효한 외형은 
     bodyType: "female",
   });
 
-  // 이름만 바꾸는 요청은 외형 검증을 타지 않는다.
+  // A request that only changes the name does not go through appearance validation.
   const nameOnly = await patch(user.id, id, { name: "새 이름" });
   assert.equal(nameOnly.status, 200);
   assert.equal((await nameOnly.json()).character.name, "새 이름");

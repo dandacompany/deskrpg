@@ -10,11 +10,11 @@ import {
 } from "@/test-setup/npc-seed";
 import { buildOfficeEnvironment } from "@/game/three/office-environments";
 
-// `GET /api/npcs?channelId=` 의 계약을 고정한다. 이 응답은 맵 시뮬레이션이 그대로 먹는다 —
-// 형태가 조용히 바뀌면 맵이 깨지고, 그 사실은 브라우저에서야 드러난다.
+// Pin the contract of `GET /api/npcs?channelId=`. The map simulation consumes this response as is —
+// if the shape silently changes the map breaks, and that only shows up in the browser.
 //
-// `db` 는 지연 초기화 싱글턴이고 node:test 는 파일마다 프로세스를 나누므로, 모듈
-// 최상단에서 한 번 임시 DB 를 잡으면 이 파일의 모든 테스트가 그 DB 를 쓴다.
+// `db` is a lazily initialized singleton and node:test splits processes per file, so grabbing a temporary DB
+// once at the top of the module makes every test in this file use that DB.
 setupThrowawaySqlite("npcs-contract-test");
 
 type NpcBody = {
@@ -44,7 +44,7 @@ async function get(query: string, userId: string): Promise<NpcBody> {
   return (await res.json()) as NpcBody;
 }
 
-test("roster 없이 부르면 자리 미정·휴면 NPC 는 절대 나오지 않는다", async () => {
+test("called without roster, NPCs without a seat or asleep never appear", async () => {
   const { channelId, userId } = await seedChannelWithProfiles({
     placedActive: 1,
     unplaced: 1,
@@ -66,7 +66,7 @@ test("roster 없이 부르면 자리 미정·휴면 NPC 는 절대 나오지 않
   }
 });
 
-test("roster=1 이면 셋 다 나오고 placed 가 구분한다", async () => {
+test("with roster=1 all three appear and placed tells them apart", async () => {
   const { channelId, userId } = await seedChannelWithProfiles({
     placedActive: 1,
     unplaced: 1,
@@ -83,7 +83,7 @@ test("roster=1 이면 셋 다 나오고 placed 가 구분한다", async () => {
   ]);
 });
 
-test("응답의 name 은 프로필 표시 이름이다 — npcs.name 의 옛 값이 아니다", async () => {
+test("the name in the response is the profile display name — not the old value of npcs.name", async () => {
   const { channelId, userId } = await seedChannelWithProfiles({
     placedActive: 1,
     staleNpcName: "옛이름",
@@ -96,7 +96,7 @@ test("응답의 name 은 프로필 표시 이름이다 — npcs.name 의 옛 값
   assert.equal(body.npcs[0].name, "올리버");
 });
 
-test("channelId 없이 부르면 400 이다 — 전 채널 NPC 를 흘리지 않는다", async () => {
+test("calling without channelId is 400 — NPCs of all channels are not leaked", async () => {
   const { GET } = await import("./route");
   const user = await seedUser("no-channel");
   const res = await GET(
@@ -107,10 +107,10 @@ test("channelId 없이 부르면 400 이다 — 전 채널 NPC 를 흘리지 않
   assert.equal(body.errorCode, "channel_id_required");
 });
 
-// I6: roster=1 은 `profile.{gatewayId, profileName, displayName, ownerUserId}` 를 싣는다.
-// 채널 UUID 만 아는 아무 로그인 사용자나 남의 사무실에 어떤 인격이 누구 소유로 몇 명
-// 나와 있는지 읽을 수 있으면 안 된다.
-test("채널 멤버가 아니면 출근부를 읽지 못한다", async () => {
+// I6: roster=1 carries `profile.{gatewayId, profileName, displayName, ownerUserId}`.
+// Any logged-in user who only knows a channel UUID must not be able to read which personas, owned by whom and how many,
+// are out in someone else's office.
+test("non-members of the channel cannot read the attendance roster", async () => {
   const { channelId } = await seedChannelWithProfiles({ placedActive: 1 });
   const outsider = await seedUser("outsider");
 
@@ -123,14 +123,14 @@ test("채널 멤버가 아니면 출근부를 읽지 못한다", async () => {
   assert.equal(plain.status, 403, "맵용 기본 응답도 같은 경계를 쓴다");
 });
 
-test("로그인하지 않으면 401 이다", async () => {
+test("not logged in is 401", async () => {
   const { channelId } = await seedChannelWithProfiles({ placedActive: 1 });
   const { GET } = await import("./route");
   const res = await GET(new NextRequest(`http://localhost/api/npcs?channelId=${channelId}`));
   assert.equal(res.status, 401);
 });
 
-test("roster=1 은 좌석 번호를 싣는다 — 데스크 좌석이면 번호, 서 있으면 null", async () => {
+test("roster=1 carries the seat number — a number for desk seats, null when standing", async () => {
   const { channelId, userId } = await seedChannelWithProfiles({
     unplaced: 5,
     mapData: buildOfficeEnvironment("executive"),
@@ -143,7 +143,7 @@ test("roster=1 은 좌석 번호를 싣는다 — 데스크 좌석이면 번호,
   const numbers = body.npcs.map((n) => (n as unknown as { seatNumber: number | null }).seatNumber);
   assert.deepEqual(
     numbers.filter((n): n is number => n !== null).sort((a, b) => a - b),
-    [1, 2, 3], // executive 맵은 데스크 3석 — 대표석은 직원 지정석이 아니다
+    [1, 2, 3], // The executive map has 3 desk seats — the CEO seat is not an assigned employee seat
   );
   assert.equal(numbers.filter((n) => n === null).length, 2);
 });

@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     user: {
       id: user.id,
       nickname: user.nickname,
-      // 임시 비밀번호로 들어온 세션은 화면이 곧바로 변경으로 보낸다.
+      // The screen sends a session that came in with a temporary password straight to the change screen.
       mustChangePassword: user.mustChangePassword === true,
     },
   });

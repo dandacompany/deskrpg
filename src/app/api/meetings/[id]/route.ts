@@ -65,7 +65,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .limit(1);
     return NextResponse.json({
       minutes: normalizeMeetingMinutesRecord(row),
-      // 등록·요약 재시도 버튼을 그릴지는 서버가 정한다. 라우트도 같은 함수로 다시 막는다.
+      // The server decides whether to draw the register and retry-summary buttons. The route blocks again with the same function.
       canManage: canManageMeetingMinutes({
         userId,
         ownerId: channel?.ownerId ?? null,

@@ -10,20 +10,20 @@ import { seatingMapFor } from "@/lib/seat-assignment";
 import type { TiledMap } from "@/lib/tiled-map";
 
 /**
- * 채널 맵을 저장할 때 데스크 좌석이 하나도 없으면 400 을 낸다 — 그대로 저장되면
- * 자리 배정이 조용히 전원을 서 있는 채로 남기고, 지정자리 배정 UI 는 빈 명부만 본다.
+ * Saving a channel map with no desk seats at all gives 400 — saved as is, seat assignment
+ * would silently leave everyone standing, and the assigned-seat UI would see an empty roster.
  *
- * "의자를 전부 뺀다" 는 회의실 탁자 옆 공용 의자까지 지워 맵 자체를 무효로 만든다
- * (`normalizeMeetingMap` 이 회의 테이블 주변에 앉을 자리를 요구한다). 개인 데스크
- * 좌석(공용 테이블에 붙지 않은 `chair`)만 걸러낸다 — `deskSeats`/`commonAreaSeats`
- * (`src/game/three/seating.ts`) 가 가르는 것과 같은 경계다.
+ * "Remove every chair" also removes the shared chairs by the meeting table and invalidates the map itself
+ * (`normalizeMeetingMap` requires seats around the meeting table). Only personal desk
+ * seats (`chair`s not attached to a shared table) are filtered — the same boundary that `deskSeats`/`commonAreaSeats`
+ * (`src/game/three/seating.ts`) draw.
  */
 setupThrowawaySqlite("channel-map-seat-guard-test");
 
 function stripDeskChairs(map: TiledMap): TiledMap {
-  // `projectMeetingMap` 은 Tiled 오브젝트를 픽셀→타일(col/row) 좌표로 투영한다. 원본
-  // Tiled 오브젝트는 `x`/`y` 픽셀만 갖고 있어, 공용 좌석과 같은 타일인지는 그 투영된
-  // 좌표로만 비교할 수 있다.
+  // `projectMeetingMap` projects Tiled objects from pixel to tile (col/row) coordinates. The original
+  // Tiled objects only have `x`/`y` pixels, so whether they share a tile with a common seat can only be compared
+  // in those projected coordinates.
   const projected = projectMeetingMap(map);
   const keep = new Set(
     commonAreaSeats(projected.objects).map(
@@ -45,12 +45,12 @@ function stripDeskChairs(map: TiledMap): TiledMap {
   };
 }
 
-test("의자를 뺀 픽스처는 좌석이 0개다 — 이 단언이 깨지면 아래 테스트는 의미가 없다", () => {
+test("the chairless fixture has 0 seats — if this assertion breaks, the tests below are meaningless", () => {
   const stripped = stripDeskChairs(buildOfficeEnvironment("executive"));
   assert.equal(seatingMapFor({ mapData: stripped })!.seats.length, 0);
 });
 
-test("데스크 의자가 하나도 없는 맵은 400 map_has_no_desk_seats", async () => {
+test("a map with no desk chairs is 400 map_has_no_desk_seats", async () => {
   const { channelId, userId } = await seedChannelWithProfiles({
     mapData: buildOfficeEnvironment("executive"),
   });
@@ -70,7 +70,7 @@ test("데스크 의자가 하나도 없는 맵은 400 map_has_no_desk_seats", as
   assert.equal((await res.json()).errorCode, "map_has_no_desk_seats");
 });
 
-test("원본 맵(의자 포함)은 그대로 저장된다", async () => {
+test("the original map (with chairs) is saved as is", async () => {
   const { channelId, userId } = await seedChannelWithProfiles({
     mapData: buildOfficeEnvironment("executive"),
   });

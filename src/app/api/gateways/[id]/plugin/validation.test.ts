@@ -3,15 +3,15 @@ import { describe, it } from "node:test";
 
 import { validateConfigPatch, validateCreateOptions } from "./validation";
 
-describe("validateConfigPatch — 피커 키", () => {
-  it("enabledToolsets·disabledSkills 를 통과시킨다", () => {
+describe("validateConfigPatch — picker keys", () => {
+  it("passes enabledToolsets and disabledSkills", () => {
     const got = validateConfigPatch({ enabledToolsets: ["web"], disabledSkills: [] });
     assert.equal(got.ok, true);
   });
 });
 
 describe("validateCreateOptions", () => {
-  it("cloneFrom 은 default 만 받는다", () => {
+  it("cloneFrom accepts only default", () => {
     assert.deepEqual(validateCreateOptions({ name: "n" }), { ok: true });
     assert.deepEqual(validateCreateOptions({ name: "n", cloneFrom: "default" }), {
       ok: true,
@@ -26,7 +26,7 @@ describe("validateCreateOptions", () => {
       errorCode: "bad_request",
     });
   });
-  it("cloneKeys 는 cloneFrom 과 함께일 때 referenced·api_keys 만 받는다", () => {
+  it("cloneKeys accepts only referenced and api_keys, and only together with cloneFrom", () => {
     assert.deepEqual(
       validateCreateOptions({ name: "n", cloneFrom: "default", cloneKeys: "api_keys" }),
       { ok: true, cloneFrom: "default", cloneKeys: "api_keys" },

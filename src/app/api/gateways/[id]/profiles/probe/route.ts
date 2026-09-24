@@ -5,12 +5,12 @@ import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import { isValidProfileName } from "@/lib/hermes/profile-name";
 import { getUserId } from "@/lib/internal-rpc";
 
-// 이름 문법의 정본은 @/lib/hermes/profile-name 하나다 (최종 리뷰 I2).
+// The single source of truth for name grammar is @/lib/hermes/profile-name (final review I2).
 //
-// 검증 없이 탐침에 넘기면 위험하다: encodeURIComponent는 "."을 이스케이프하지
-// 않으므로 ".."이 경로 세그먼트로 살아 들어가고, URL 정규화가 `/p/../health`를
-// `/health`로 접는다. 그러면 게이트웨이 루트 health가 200을 돌려주고, 존재하지
-// 않는 프로필에 "확인됨"이 뜬다.
+// Passing it to the probe unvalidated is dangerous: encodeURIComponent does not escape "."
+// so ".." survives as a path segment, and URL normalization folds `/p/../health` into
+// `/health`. Then the gateway root health returns 200, and "확인됨" shows for a profile
+// that does not exist.
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
@@ -30,15 +30,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!profileName) {
     return NextResponse.json({ status: "unknown" });
   }
-  // 게이트웨이를 찌르기 전에 이름 규칙을 적용한다 — 통과하지 못하면 아예 fetch를
-  // 호출하지 않는다.
+  // Apply the name rules before probing the gateway — if they fail, fetch is never
+  // called at all.
   if (!isValidProfileName(profileName)) {
     return NextResponse.json({ status: "not_found" });
   }
   const probe = await probeHermesGateway(accessible.resource.baseUrl, {
     profile: profileName,
   });
-  // 세 상태를 뭉개지 않는다 — "없는 프로필"과 "게이트웨이가 죽었다"는 다른 문제다.
+  // Do not merge the three states — "no such profile" and "the gateway is dead" are different problems.
   const status =
     probe.kind === "hermes" ? "ok" : probe.kind === "not-hermes" ? "not_found" : "unknown";
   return NextResponse.json({ status });

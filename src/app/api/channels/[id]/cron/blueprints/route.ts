@@ -1,4 +1,4 @@
-// GET /api/channels/:id/cron/blueprints?npcId= — 템플릿 갤러리 목록
+// GET /api/channels/:id/cron/blueprints?npcId= — template gallery list
 import type { NextRequest } from "next/server";
 
 import { listCronBlueprints, type RouteParams } from "@/lib/cron-routes";

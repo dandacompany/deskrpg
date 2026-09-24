@@ -1,4 +1,4 @@
-// GET /api/channels/:id/kanban/attachments?board=&cursor= — 보드 전체의 카드 첨부(결과물 갤러리)
+// GET /api/channels/:id/kanban/attachments?board=&cursor= — card attachments across the whole board (artifact gallery)
 import type { NextRequest } from "next/server";
 
 import { listBoardAttachments, type ChannelParams } from "@/lib/kanban-routes";

@@ -22,7 +22,7 @@ const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport
   getInternalSocketBaseUrl: () => string;
 };
 
-/** 바인딩이 바뀌면 폴러 표를 다시 읽게 한다 — 기다리지 않고, 실패해도 응답에 섞지 않는다. */
+/** When the binding changes, make the poller reread its table — without waiting, and failures never mix into the response. */
 function refreshPollersInBackground() {
   void requestRefreshPollers().catch((err: unknown) => {
     console.warn(
@@ -38,9 +38,9 @@ function buildResponseGatewayConfig(input: {
   const boundGateway = input.binding?.resource ?? null;
   const canEditCredentials = !boundGateway || boundGateway.ownerUserId === input.userId;
 
-  // 복호화된 토큰은 응답에 싣지 않는다(하드 게이트 2). 소유자에게만 준다는 조건이 붙어도
-  // 브라우저 메모리·프록시 로그·확장 프로그램으로 흘러간다. 화면이 실제로 필요한 것은
-  // "키가 저장돼 있는가" 뿐이고, 바꿀 때는 새 값을 입력받는다.
+  // The decrypted token is not put in the response (hard gate 2). Even restricted to owners it
+  // leaks into browser memory, proxy logs and extensions. All the screen actually needs is
+  // "is a key stored", and changing it takes a newly entered value.
   const hasToken = Boolean(boundGateway && decryptGatewayToken(boundGateway.tokenEncrypted).trim());
 
   return {
@@ -135,8 +135,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const currentBinding = await getChannelGatewayBinding(id);
   const requestedUrl = typeof body.url === "string" ? body.url.trim() || null : null;
-  // 화면이 더 이상 기존 키를 받아 두지 않으므로, 본문에 token 이 없으면 "그대로 두라"는 뜻이다.
-  // 예전처럼 빈 문자열로 덮어쓰면 URL 만 고친 저장이 키를 지워 버린다.
+  // The screen no longer holds the existing key, so a body without token means "leave it as is".
+  // Overwriting with an empty string as before would wipe the key on a save that only fixed the URL.
   const rawToken: unknown = body.token;
   const tokenProvided = typeof rawToken === "string";
   const requestedToken = tokenProvided ? rawToken.trim() || null : null;
@@ -178,15 +178,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     await unbindGatewayFromChannel(id);
   }
 
-  // 게이트웨이 교체는 더 이상 NPC 를 지우지 않는다. 옛 게이트웨이의 NPC 는 자리를
-  // 기억한 채 휴면하고(다시 연결하면 그 자리로 돌아온다), 새 게이트웨이의 프로필이
-  // 출근한다. 회의록·작업 같은 채널 아티팩트도 그대로 남는다.
+  // Switching gateways no longer deletes NPCs. The old gateway's NPCs sleep remembering their
+  // seats (reconnecting brings them back to those seats), and the new gateway's profiles
+  // clock in. Channel artifacts such as minutes and tasks stay as well.
   if (previousGatewayId && previousGatewayId !== nextGatewayId) {
     await sleepChannelNpcs(id, previousGatewayId);
   }
-  // 고용은 **연결이 바뀔 때만** 한다. 같은 게이트웨이를 다시 저장하는 PUT 이 매번
-  // 고용을 돌면, 사용자가 개별적으로 재운 NPC 가 설정 저장 한 번에 조용히
-  // 되살아난다(Task 7 의 NPC 별 토글이 그 상태를 만든다).
+  // Hiring happens **only when the connection changes**. If a PUT that re-saves the same gateway ran
+  // hiring every time, NPCs the user had individually put to sleep would silently come back to life
+  // with a single settings save (Task 7's per-NPC toggle creates that state).
   if (nextGatewayId && isBindingChanging) {
     await hireGatewayProfilesIntoChannel(id, nextGatewayId);
   }
@@ -195,8 +195,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   refreshPollersInBackground();
 
   const nextBinding = await getChannelGatewayBinding(id);
-  // 다른 게이트웨이로 옮겼다 — 보드는 새 게이트웨이에 확보됐지만(bindGatewayToChannel 안에서),
-  // 카드와 크론은 이전 게이트웨이에 남는다(R4). 사용자에게 그 사실을 알린다.
+  // Moved to another gateway — the board was secured on the new gateway (inside bindGatewayToChannel),
+  // but cards and cron jobs stay on the previous gateway (R4). Tell the user.
   const movedToAnotherGateway = Boolean(previousGatewayId && nextGatewayId && isBindingChanging);
   return NextResponse.json({
     ok: true,
@@ -218,9 +218,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (channel.ownerId !== userId)
     return NextResponse.json({ errorCode: "forbidden", error: "forbidden" }, { status: 403 });
 
-  // 연결 해제도 교체와 같다 — 지우는 것이 아니라 재우는 것이다. 자리와 회의록은
-  // 그대로 남고, 다시 연결하면 그 자리로 되돌아온다. 그래서 확인을 받을 일도
-  // (예전의 409 gateway_disconnect_requires_npc_reset) 없다.
+  // Disconnecting is the same as switching — it puts NPCs to sleep rather than deleting them. Seats and minutes
+  // stay, and reconnecting brings them back to those seats. So there is nothing to confirm
+  // (the former 409 gateway_disconnect_requires_npc_reset).
   const previousGatewayId = (await getChannelGatewayBinding(id))?.resource.id ?? null;
 
   await unbindGatewayFromChannel(id);

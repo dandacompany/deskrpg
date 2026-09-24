@@ -49,7 +49,7 @@ async function gateway(ownerUserId: string, baseUrl: string) {
   return row;
 }
 
-test("비로그인은 401, 다른 출처의 요청은 403 이다 — 호스트에서 명령을 돌리는 동작이다", async () => {
+test("unauthenticated is 401 and cross-origin requests are 403 — this runs commands on the host", async () => {
   const { POST } = await import("./[id]/plugin/update/route");
   const owner = await user();
   const row = await gateway(owner, "http://127.0.0.1:18642");
@@ -60,7 +60,7 @@ test("비로그인은 401, 다른 출처의 요청은 403 이다 — 호스트�
   );
 });
 
-test("남의 게이트웨이는 404 다 — 공유받았어도 호스트를 건드릴 수 없다", async () => {
+test("someone else's gateway is 404 — even a shared one cannot touch the host", async () => {
   const { POST } = await import("./[id]/plugin/update/route");
   const owner = await user();
   const other = await user();
@@ -70,7 +70,7 @@ test("남의 게이트웨이는 404 다 — 공유받았어도 호스트를 건�
   assert.equal((await res.json()).errorCode, "setup_not_found");
 });
 
-test("명령을 돌릴 수 없는 호스트는 이유를 말한다 — 컨테이너에서 본 호스트 주소", async () => {
+test("hosts where commands cannot run say why — the host address as seen from the container", async () => {
   process.env.DESKRPG_HOST_SETUP_ENABLED = "1";
   const { POST } = await import("./[id]/plugin/update/route");
   const owner = await user();
@@ -80,8 +80,8 @@ test("명령을 돌릴 수 없는 호스트는 이유를 말한다 — 컨테이
   assert.equal((await res.json()).errorCode, "plugin_update_unsupported_host");
 });
 
-test("관리자가 아니거나 운영자가 꺼 두면 갱신이 막힌다", async () => {
-  // 정책은 관리자에게 기본으로 열려 있고 `=0` 이 운영자의 거절 스위치다(policy.ts:16-18).
+test("updating is blocked for non-admins or when the operator turned it off", async () => {
+  // The policy is open to admins by default and `=0` is the operator's refusal switch (policy.ts:16-18).
   const { POST } = await import("./[id]/plugin/update/route");
   const ordinary = await user("user");
   const ordinaryRow = await gateway(ordinary, "http://127.0.0.1:18645");

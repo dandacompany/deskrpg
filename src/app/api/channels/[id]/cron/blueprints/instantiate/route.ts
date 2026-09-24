@@ -1,4 +1,4 @@
-// POST /api/channels/:id/cron/blueprints/instantiate — {npcId, blueprint, values} → 201, 출처 기록
+// POST /api/channels/:id/cron/blueprints/instantiate — {npcId, blueprint, values} → 201, records the origin
 import type { NextRequest } from "next/server";
 
 import { instantiateCronBlueprint, type RouteParams } from "@/lib/cron-routes";

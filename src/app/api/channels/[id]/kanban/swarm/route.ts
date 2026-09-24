@@ -1,4 +1,4 @@
-// POST /api/channels/:id/kanban/swarm — Hermes 스웜 그래프를 만든다
+// POST /api/channels/:id/kanban/swarm — build a Hermes swarm graph
 import type { NextRequest } from "next/server";
 
 import { createSwarm, type ChannelParams } from "@/lib/kanban-routes";

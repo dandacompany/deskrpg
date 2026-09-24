@@ -12,17 +12,17 @@ import {
   startStubHermesGateway,
 } from "@/test-setup/npc-seed";
 
-// T4. 채널이 게이트웨이에 묶이는 순간 DeskRPG 는 그 게이트웨이에 칸반 보드를 확보한다.
+// T4. The moment a channel is bound to a gateway, DeskRPG secures a kanban board on that gateway.
 //
-// - 보드는 Hermes 가 정본이다. 여기 남기는 것은 (채널, 게이트웨이, slug) 연결 기록뿐이다.
-// - 확보 실패는 바인딩을 막지 않는다 — `last_error` 에 이유를 남기고 다음 진입 때 재시도한다.
-// - 게이트웨이를 바꾸면 카드와 크론은 이전 게이트웨이에 남는다(응답에 경고를 실어 준다).
+// - Hermes is the source of truth for boards. All we keep here is the (channel, gateway, slug) link record.
+// - A failure to secure does not block binding — the reason goes to `last_error` and it retries on the next entry.
+// - When the gateway changes, cards and cron jobs stay on the previous gateway (a warning is included in the response).
 //
-// `[id]` 세그먼트 밖에 둔다 — node 테스트 러너가 `[id]` 를 문자 클래스로 오인해 그 안의
-// *.test.ts 를 못 줍는다(gateway-bind-hires.test.ts 와 같은 이유).
+// Kept outside the `[id]` segment — the node test runner mistakes `[id]` for a character class and misses
+// the *.test.ts inside it (same reason as gateway-bind-hires.test.ts).
 setupThrowawaySqlite("kanban-board-ensure-test");
 
-// `seedGateway` 가 심는 오너 키와 같아야 가짜 서버가 오너 경로를 열어 준다.
+// Must match the owner key `seedGateway` plants so the fake server opens the owner paths.
 const OWNER_TOKEN = "gateway-owner-key-1234567890";
 const SLUG_RE = /^deskrpg-[0-9a-f]{32}$/;
 
@@ -76,7 +76,7 @@ function boardRequests(server: FakePluginServer) {
   return server.requests().filter((r) => r.path.startsWith("/deskrpg/kanban/boards"));
 }
 
-test("channelBoardSlug — `deskrpg-` + 하이픈 뺀 UUID 32자 소문자", async () => {
+test("channelBoardSlug — `deskrpg-` + the 32-character lowercase UUID without hyphens", async () => {
   const { channelBoardSlug } = await import("@/lib/kanban-boards");
   assert.equal(
     channelBoardSlug("0F8FAD5B-D9CB-469F-A165-70867728950E"),
@@ -85,7 +85,7 @@ test("channelBoardSlug — `deskrpg-` + 하이픈 뺀 UUID 32자 소문자", asy
   assert.match(channelBoardSlug(crypto.randomUUID()), SLUG_RE);
 });
 
-test("최초 바인딩은 보드를 만든다 — slug 규칙, 표시 이름 = 채널 이름, 연결 행 기록", async () => {
+test("the first binding creates the board — slug rule, display name = channel name, link row recorded", async () => {
   const plugin = await startPlugin();
   const user = await seedUser("board-owner");
   const gateway = await seedGateway(user.id, plugin.baseUrl);
@@ -112,7 +112,7 @@ test("최초 바인딩은 보드를 만든다 — slug 규칙, 표시 이름 = �
   assert.ok(row.boardNameSyncedAt, "이름을 맞춘 시각이 찍힌다");
 });
 
-test("같은 게이트웨이에 다시 바인딩하면 보드를 재사용한다 — 중복 생성 없음", async () => {
+test("rebinding to the same gateway reuses the board — no duplicate creation", async () => {
   const plugin = await startPlugin();
   const user = await seedUser("board-owner");
   const gateway = await seedGateway(user.id, plugin.baseUrl);
@@ -140,7 +140,7 @@ test("같은 게이트웨이에 다시 바인딩하면 보드를 재사용한다
   assert.equal(boards.data.boards.length, 1, "보드는 하나뿐");
 });
 
-test("플러그인이 없어도(404) 바인딩은 성공하고 행에 이유가 남는다 — 칸반 호출 없음", async () => {
+test("without the plugin (404) binding still succeeds and the row records the reason — no kanban calls", async () => {
   const stub = await startStubHermesGateway();
   try {
     const user = await seedUser("board-owner");
@@ -161,7 +161,7 @@ test("플러그인이 없어도(404) 바인딩은 성공하고 행에 이유가 
   }
 });
 
-test("오너 키가 틀리면(401) 바인딩은 성공하고 last_error 는 plugin_unauthorized", async () => {
+test("with a wrong owner key (401) binding succeeds and last_error is plugin_unauthorized", async () => {
   const plugin = await startPlugin();
   const user = await seedUser("board-owner");
   const { db, gatewayResources } = await import("@/db");
@@ -185,7 +185,7 @@ test("오너 키가 틀리면(401) 바인딩은 성공하고 last_error 는 plug
   assert.equal(boardRequests(plugin).length, 0, "칸반 경로는 건드리지 않는다");
 });
 
-test("플러그인 0.6.0 미만이면 확보를 시도하지 않고 plugin_upgrade_required 를 남긴다", async () => {
+test("below plugin 0.6.0 it does not try to secure and records plugin_upgrade_required", async () => {
   const plugin = await startPlugin({ version: "0.5.9" });
   const user = await seedUser("board-owner");
   const gateway = await seedGateway(user.id, plugin.baseUrl);
@@ -198,7 +198,7 @@ test("플러그인 0.6.0 미만이면 확보를 시도하지 않고 plugin_upgra
   assert.equal(row.lastError, "plugin_upgrade_required");
   assert.equal(boardRequests(plugin).length, 0, "칸반 경로는 건드리지 않는다");
 
-  // 판정 근거(info 블록)는 게이트웨이 캐시에 남는다.
+  // The basis of the verdict (the info block) stays in the gateway cache.
   const { db, gatewayResources } = await import("@/db");
   const { eq } = await import("drizzle-orm");
   const [cached] = await db
@@ -220,9 +220,9 @@ test("플러그인 0.6.0 미만이면 확보를 시도하지 않고 plugin_upgra
   ]);
 });
 
-test("캐시가 신선한 plugin_ready 인데 info_json 이 없으면 재프로브한 뒤 보드를 확보한다", async () => {
-  // 설정 마법사(setup/service.ts)가 예전에 남긴 캐시 모양 — status/version 만 있고 info 는 없다.
-  // 이것을 "계약 미달" 로 읽으면 한 시간 동안 보드 확보가 막힌다(독립 검토 지적).
+test("a fresh plugin_ready cache without info_json is reprobed, then the board is secured", async () => {
+  // The cache shape the setup wizard (setup/service.ts) used to leave — only status/version, no info.
+  // Reading it as "contract not met" blocks board securing for an hour (flagged by independent review).
   const plugin = await startPlugin();
   const user = await seedUser("board-owner");
   const gateway = await seedGateway(user.id, plugin.baseUrl);
@@ -256,7 +256,7 @@ test("캐시가 신선한 plugin_ready 인데 info_json 이 없으면 재프로�
   assert.ok(cached.pluginInfoJson, "재프로브 결과의 info 가 캐시에 채워진다");
 });
 
-test("게이트웨이를 바꾸면 새 게이트웨이에 보드를 확보하고 이전 보드는 남는다 + 경고", async () => {
+test("switching gateways secures a board on the new gateway and the old board remains + warning", async () => {
   const pluginA = await startPlugin();
   const pluginB = await startPlugin();
   const user = await seedUser("board-owner");
@@ -282,12 +282,12 @@ test("게이트웨이를 바꾸면 새 게이트웨이에 보드를 확보하고
     "이전 게이트웨이의 보드는 지우지 않는다",
   );
 
-  // 같은 게이트웨이를 다시 저장하는 것은 교체가 아니다 — 경고 없음.
+  // Re-saving the same gateway is not a switch — no warning.
   const same = await (await bind(channel.id, user.id, gatewayB.id)).json();
   assert.equal(same.warning, undefined);
 });
 
-test("게이트웨이 연결을 해제해도 연결 행은 남는다(보드도 Hermes 에 남는다)", async () => {
+test("disconnecting the gateway leaves the link row (the board also stays in Hermes)", async () => {
   const plugin = await startPlugin();
   const user = await seedUser("board-owner");
   const gateway = await seedGateway(user.id, plugin.baseUrl);
@@ -307,7 +307,7 @@ test("게이트웨이 연결을 해제해도 연결 행은 남는다(보드도 H
   assert.equal(boardRequests(plugin).filter((r) => r.method === "DELETE").length, 0);
 });
 
-test("채널 이름을 바꾸면 보드 이름도 PATCH 로 맞추고 synced_at 을 갱신한다", async () => {
+test("renaming the channel matches the board name with a PATCH and updates synced_at", async () => {
   const plugin = await startPlugin();
   const user = await seedUser("board-owner");
   const gateway = await seedGateway(user.id, plugin.baseUrl);
@@ -337,7 +337,7 @@ test("채널 이름을 바꾸면 보드 이름도 PATCH 로 맞추고 synced_at 
   assert.equal(boards.data.boards[0].name, "새 이름");
 });
 
-test("이름이 그대로인 PUT 은 보드를 건드리지 않는다", async () => {
+test("a PUT with an unchanged name does not touch the board", async () => {
   const plugin = await startPlugin();
   const user = await seedUser("board-owner");
   const gateway = await seedGateway(user.id, plugin.baseUrl);
@@ -349,7 +349,7 @@ test("이름이 그대로인 PUT 은 보드를 건드리지 않는다", async ()
   assert.equal(plugin.requests().length, countBefore, "요청이 나가지 않는다");
 });
 
-test("보드 이름 동기화가 실패해도 채널 개명은 200 이고 synced_at 은 그대로다", async () => {
+test("if the board name sync fails, the channel rename is still 200 and synced_at stays", async () => {
   const plugin = await startPlugin();
   const user = await seedUser("board-owner");
   const gateway = await seedGateway(user.id, plugin.baseUrl);
@@ -357,7 +357,7 @@ test("보드 이름 동기화가 실패해도 채널 개명은 200 이고 synced
   assert.equal((await bind(channel.id, user.id, gateway.id)).status, 200);
   const before = (await readBoardRow(channel.id))!.boardNameSyncedAt;
 
-  // 게이트웨이가 죽는다. 플러그인 판정 캐시는 아직 신선하므로 PATCH 까지는 가고 거기서 실패한다.
+  // The gateway dies. The plugin verdict cache is still fresh, so it gets as far as the PATCH and fails there.
   await plugin.close();
   servers.splice(servers.indexOf(plugin), 1);
 

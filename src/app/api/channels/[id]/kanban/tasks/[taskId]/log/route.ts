@@ -1,4 +1,4 @@
-// GET /api/channels/:id/kanban/tasks/:taskId/log?tail= — 워커 로그
+// GET /api/channels/:id/kanban/tasks/:taskId/log?tail= — worker log
 import type { NextRequest } from "next/server";
 
 import { getTaskLog, type TaskParams } from "@/lib/kanban-routes";

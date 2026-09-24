@@ -97,7 +97,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           { status: 400 },
         );
       }
-      // 검증을 통과한 값도 저장 전에 정규화한다 — bodyType 은 룩의 값으로 맞춘다.
+      // Normalize even validated values before saving — bodyType is aligned with the look's value.
       updates.appearance = jsonForDb(normalizeOfficeAppearance(appearance));
     }
 

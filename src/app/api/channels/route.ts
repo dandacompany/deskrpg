@@ -180,7 +180,7 @@ export async function GET(req: NextRequest) {
           requiresPassword: detailAccess.requiresPassword,
           groupId: r.groupId,
           groupName: r.groupName,
-          // 카드 썸네일용. 채널은 환경 ID 를 저장하지 않으므로 맵으로 판정한다(모르면 null).
+          // For card thumbnails. Channels do not store an environment ID, so judge from the map (null if unknown).
           environmentId: detectOfficeEnvironmentId(r.mapData),
         };
       })
@@ -208,8 +208,8 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * 채널별 참여자(소유자 + channel_members, 사람만). 미리보기 외형은 각 사용자의 가장 최근 캐릭터다 —
- * 캐릭터는 사용자당 여럿일 수 있고 채널별 선택을 저장하지 않는다.
+ * Participants per channel (owner + channel_members, people only). The preview appearance is each user's latest character —
+ * a user may have several characters and no per-channel choice is stored.
  */
 async function loadParticipants(list: Array<{ id: string; ownerId: string | null }>) {
   const out = new Map<string, ReturnType<typeof summarizeParticipants>>();
@@ -298,7 +298,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 맵 템플릿 표는 없어졌다. 옛 계약으로 오는 요청은 조용히 무시하지 않고 거부한다.
+    // The map template table is gone. Requests on the old contract are rejected rather than silently ignored.
     if (body.mapTemplateId !== undefined) {
       return NextResponse.json(
         {
@@ -373,8 +373,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 환경 배치는 코드가 만든다. 채널은 그 사본을 갖고, 이후 환경 버전 업그레이드는
-    // GET /api/channels/:id 의 업그레이드 경로가 맡는다.
+    // Code builds the environment layout. The channel keeps a copy, and later environment version upgrades
+    // are handled by the upgrade path in GET /api/channels/:id.
     const environmentMap = buildOfficeEnvironment(environmentId);
     const spawn = effectiveMapSpawn(environmentMap);
     if (!spawn) {
@@ -481,7 +481,7 @@ export async function POST(req: NextRequest) {
           gatewayId: resource.id,
           boundByUserId: userId,
         });
-        // 연결 = 출근. 채널의 NPC 명단은 이 게이트웨이의 프로필이 정한다.
+        // Connecting = clocking in. This gateway's profiles decide the channel's NPC roster.
         await hireGatewayProfilesIntoChannel(channel.id, resource.id);
       } catch (gatewayErr) {
         console.error("Failed to bind gateway resource during channel creation:", gatewayErr);

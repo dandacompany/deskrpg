@@ -8,9 +8,9 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 
-// 프로바이더 키·OAuth 프록시 라우트(소유자 전용) 배선 검증. 실제 route.ts 를 import 해
-// 핸들러를 직접 부른다 — plugin-proxy-route.test.ts 와 같은 수법(throwaway SQLite +
-// 로컬 스텁 게이트웨이). `[id]` 세그먼트 밖에 두는 이유도 같다(테스트 러너 glob).
+// Wiring verification for the provider key and OAuth proxy routes (owner only). Imports the real route.ts and
+// calls the handlers directly — same technique as plugin-proxy-route.test.ts (throwaway SQLite +
+// local stub gateway). The reason for staying outside the `[id]` segment is the same too (test runner glob).
 
 const sqlitePath = path.join(os.tmpdir(), `provider-auth-route-test-${crypto.randomUUID()}.db`);
 process.env.DESKRPG_HOME = os.tmpdir();
@@ -104,7 +104,7 @@ function keyPut(gatewayId: string, userId: string, provider: string, body: unkno
   );
 }
 
-/** console.* 출력을 모아 테스트 끝에 키 값 부재를 단언한다. */
+/** Collect console.* output and assert at the end of the test that key values are absent. */
 function captureConsole() {
   const lines: string[] = [];
   const methods = ["log", "info", "warn", "error", "debug"] as const;
@@ -120,8 +120,8 @@ function captureConsole() {
   };
 }
 
-describe("provider-keys PUT — 소유자 전용", () => {
-  test("소유자 PUT → 200, 프로필 토큰으로 값을 플러그인에 넘기고 응답·로그에 값이 없다", async () => {
+describe("provider-keys PUT — owner only", () => {
+  test("owner PUT → 200, hands the value to the plugin with the profile token, and the value is absent from the response and logs", async () => {
     const stub = await startStub(() => ({
       status: 200,
       body: { provider: "openrouter", configured: true },
@@ -149,7 +149,7 @@ describe("provider-keys PUT — 소유자 전용", () => {
     assert.equal(logs.lines.join("\n").includes(KEY_VALUE), false, "로그에 키 값이 없어야 한다");
   });
 
-  test("공유 사용자 PUT → 403 forbidden, 플러그인을 부르지 않는다", async () => {
+  test("shared user PUT → 403 forbidden, the plugin is not called", async () => {
     const stub = await startStub(() => ({ status: 200, body: {} }));
     try {
       const owner = await seedUser();
@@ -170,7 +170,7 @@ describe("provider-keys PUT — 소유자 전용", () => {
     }
   });
 
-  test("잘못된 본문·세그먼트 → 400 bad_request, 값을 되돌려 주지 않는다", async () => {
+  test("bad body or segment → 400 bad_request, the value is not echoed back", async () => {
     const stub = await startStub(() => ({ status: 200, body: {} }));
     try {
       const owner = await seedUser();
@@ -194,7 +194,7 @@ describe("provider-keys PUT — 소유자 전용", () => {
     }
   });
 
-  test("플러그인 실패는 HTTP 200 + errorCode 로 옮기고 요청 본문을 섞지 않는다", async () => {
+  test("plugin failures are carried as HTTP 200 + errorCode without mixing in the request body", async () => {
     const stub = await startStub(() => ({
       status: 422,
       body: { error: "invalid_key_format", reason: "invalid_key_format" },
@@ -216,8 +216,8 @@ describe("provider-keys PUT — 소유자 전용", () => {
   });
 });
 
-describe("OAuth 라우트 — 소유자 전용", () => {
-  test("공유 사용자의 OAuth start/poll/cancel/disconnect 와 키 DELETE → 전부 403, 플러그인 미호출", async () => {
+describe("OAuth routes — owner only", () => {
+  test("a shared user's OAuth start/poll/cancel/disconnect and key DELETE → all 403, plugin not called", async () => {
     const stub = await startStub(() => ({ status: 200, body: {} }));
     try {
       const owner = await seedUser();
@@ -263,7 +263,7 @@ describe("OAuth 라우트 — 소유자 전용", () => {
     }
   });
 
-  test("소유자 OAuth start → 200, 프로필 스코프 경로로 나간다", async () => {
+  test("owner OAuth start → 200, goes out on the profile-scoped path", async () => {
     const stub = await startStub(() => ({
       status: 200,
       body: { sessionId: "s1", verificationUri: "https://example.test/device", userCode: "ABCD" },

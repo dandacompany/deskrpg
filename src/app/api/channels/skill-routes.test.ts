@@ -13,13 +13,13 @@ import {
 } from "@/test-setup/npc-seed";
 import { startFakePluginServer, type FakePluginServer } from "@/lib/hermes/fake-plugin-server";
 
-// NPC 스킬 관리 REST(`/api/channels/:id/npcs/:npcId/skills/**`).
+// NPC skill management REST (`/api/channels/:id/npcs/:npcId/skills/**`).
 //
-// 고정하는 것: 권한표(조회 = 채널 멤버, 변경·Hub·curator 제어·관계도 노드 조작·메모리 노드 = 게이트웨이
-// 소유자), NPC 가 이 채널의 active NPC 여야 한다는 것, capability 가 없을 때 목록만 되는 것, 고정 세그먼트가
-// 스킬 이름보다 먼저라는 것, 플러그인 오류 코드를 그대로 전달하는 것, 응답에 키가 없다는 것.
+// What we pin: the permission table (read = channel member; changes, Hub, curator control, graph node operations and memory nodes = gateway
+// owner), that the NPC must be an active NPC of this channel, that only the list works without the capability, that fixed segments
+// come before skill names, that plugin error codes pass through as is, and that responses carry no keys.
 //
-// `[id]` 세그먼트 밖에 둔다 — node 테스트 러너가 `[id]` 를 문자 클래스로 오인해 그 안의 *.test.ts 를 못 줍는다.
+// Kept outside the `[id]` segment — the node test runner mistakes `[id]` for a character class and misses the *.test.ts inside it.
 setupThrowawaySqlite("skill-routes-test");
 
 const FULL_INFO = {
@@ -91,7 +91,7 @@ function call(
   return handler(req, { params: Promise.resolve({ id: channelId, npcId, path }) });
 }
 
-test("멤버는 목록을 읽고 canManage=false, 소유자는 true, 공유 채널 수를 준다", async () => {
+test("members read the list with canManage=false, the owner gets true, and the shared channel count is given", async () => {
   const { owner, member, channel, npc } = await seed();
   server.skills("sophie").seed("weekly");
   const m = await call(member.id, "GET", channel.id, npc.id, []);
@@ -105,7 +105,7 @@ test("멤버는 목록을 읽고 canManage=false, 소유자는 true, 공유 채�
   assert.equal(o.canManage, true);
 });
 
-test("비로그인은 401, 비멤버는 403, 다른 채널의 NPC 는 404", async () => {
+test("unauthenticated 401, non-member 403, another channel's NPC 404", async () => {
   const { stranger, owner, channel, npc } = await seed();
   const anon = await route.GET(
     new NextRequest(`http://localhost/api/channels/${channel.id}/npcs/${npc.id}/skills`),
@@ -119,7 +119,7 @@ test("비로그인은 401, 비멤버는 403, 다른 채널의 NPC 는 404", asyn
   assert.equal((await res.json()).code, "npc_not_found");
 });
 
-test("잠든 NPC 는 404 npc_not_found", async () => {
+test("a sleeping NPC is 404 npc_not_found", async () => {
   const { owner, channel, gateway } = await seed();
   const noah = await seedHermesProfile(gateway.id, { profileName: "noah" });
   const sleeping = await seedNpc({
@@ -132,7 +132,7 @@ test("잠든 NPC 는 404 npc_not_found", async () => {
   assert.equal((await res.json()).code, "npc_not_found");
 });
 
-test("멤버는_변경과_메모리_노드를_못_부른다", async () => {
+test("members_cannot_call_changes_or_memory_nodes", async () => {
   const { member, channel, npc } = await seed();
   server.skills("sophie").seed("weekly");
   server.skills("sophie").memory.splice(0, Infinity, "기억");
@@ -153,7 +153,7 @@ test("멤버는_변경과_메모리_노드를_못_부른다", async () => {
     "?id=memory:memory:0",
   );
   assert.equal(mem.status, 403);
-  // 거절은 플러그인의 스킬 라우트에 닿기 전에 난다.
+  // The rejection happens before reaching the plugin's skill route.
   const skillCalls = server
     .requests()
     .slice(before)
@@ -176,7 +176,7 @@ test("멤버는_변경과_메모리_노드를_못_부른다", async () => {
   assert.equal(skillNode.status, 200);
 });
 
-test("소유자 변경은 X-DeskRPG-Actor 로 사용자 id 를 싣고 플러그인 코드를 그대로 전달한다", async () => {
+test("owner changes carry the user id in X-DeskRPG-Actor and pass plugin codes through as is", async () => {
   const { owner, channel, npc } = await seed();
   server.skills("sophie").seed("weekly");
   const res = await call(owner.id, "PUT", channel.id, npc.id, ["weekly", "file"], {
@@ -189,14 +189,14 @@ test("소유자 변경은 X-DeskRPG-Actor 로 사용자 id 를 싣고 플러그�
   assert.equal(server.skills("sophie").lastActor, owner.id);
 });
 
-test("소유자의 관계도는 includeMemory=1", async () => {
+test("the owner's graph uses includeMemory=1", async () => {
   const { owner, channel, npc } = await seed();
   await call(owner.id, "GET", channel.id, npc.id, ["learning", "graph"]);
   assert.match(server.lastRequest()!.path, /includeMemory=1$/);
 });
 
-test("capability 가 없으면 목록만 되고 나머지는 428", async () => {
-  // 게이트웨이를 채널에 묶을 때 플러그인 info 가 게이트웨이 행에 캐시된다 — 씨앗 전에 옛 플러그인으로 바꾼다.
+test("without the capability only the list works and the rest are 428", async () => {
+  // Binding a gateway to a channel caches the plugin info in the gateway row — switch to the old plugin before seeding.
   server.setInfo({
     capabilities: ["kanban", "cron", "events", "profile_skills"],
     version: "0.14.0",
@@ -214,7 +214,7 @@ test("capability 가 없으면 목록만 되고 나머지는 428", async () => {
   }
 });
 
-test("고정_세그먼트가_이름보다_먼저다", async () => {
+test("fixed_segments_come_before_names", async () => {
   const { owner, channel, npc } = await seed();
   server.skills("sophie").seed("archive");
   const res = await call(owner.id, "GET", channel.id, npc.id, ["archive"]);
@@ -222,7 +222,7 @@ test("고정_세그먼트가_이름보다_먼저다", async () => {
   assert.ok("archived" in (await res.json()));
 });
 
-test("이름에 / 가 든 스킬은 한 세그먼트로 간다", async () => {
+test("a skill whose name contains / goes as one segment", async () => {
   const { owner, channel, npc } = await seed();
   server.skills("sophie").seed("a/b");
   const res = await call(owner.id, "GET", channel.id, npc.id, ["a/b"]);
@@ -230,7 +230,7 @@ test("이름에 / 가 든 스킬은 한 세그먼트로 간다", async () => {
   assert.equal(server.lastRequest()!.path, "/p/sophie/deskrpg/skills/a%2Fb");
 });
 
-test("설치는 202 와 jobId 를 그대로, 작업 조회는 kind 를 경로로 고른다", async () => {
+test("install passes 202 and jobId through; the job read picks kind by path", async () => {
   const { owner, channel, npc } = await seed();
   const res = await call(owner.id, "POST", channel.id, npc.id, ["hub", "installs"], {
     identifier: "a/b",
@@ -241,7 +241,7 @@ test("설치는 202 와 jobId 를 그대로, 작업 조회는 kind 를 경로로
   assert.equal((await job.json()).kind, "hub_install");
 });
 
-test("새 스킬은 201, 모르는 경로는 404", async () => {
+test("a new skill is 201, an unknown path is 404", async () => {
   const { owner, channel, npc } = await seed();
   const created = await call(owner.id, "POST", channel.id, npc.id, [], {
     name: "fresh",
@@ -253,7 +253,7 @@ test("새 스킬은 201, 모르는 경로는 404", async () => {
   assert.equal((await unknown.json()).code, "not_found");
 });
 
-test("응답에 프로필 키가 없다", async () => {
+test("responses carry no profile key", async () => {
   const { owner, channel, npc } = await seed();
   const text = await (await call(owner.id, "GET", channel.id, npc.id, [])).text();
   assert.equal(text.includes("profile-key-1234567890"), false);

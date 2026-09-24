@@ -1,5 +1,5 @@
-// GET /api/channels/:id/projects — 프로젝트 목록(보드 메타 + 우리 메타 + 진행률)
-// POST — 프로젝트(= Hermes 보드) 생성
+// GET /api/channels/:id/projects — project list (board metadata + our metadata + progress)
+// POST — create a project (= a Hermes board)
 import type { NextRequest } from "next/server";
 
 import { listProjects, postProject, type ChannelParams } from "@/lib/project-routes";

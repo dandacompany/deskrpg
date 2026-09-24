@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       id: accessible.resource.id,
       displayName: accessible.resource.displayName,
       baseUrl: accessible.resource.baseUrl,
-      // 복호화된 키는 응답에 싣지 않는다(하드 게이트 2) — 저장 여부만 알린다.
+      // The decrypted key is not put in the response (hard gate 2) — only whether one is stored.
       hasToken: Boolean(decryptGatewayToken(accessible.resource.tokenEncrypted).trim()),
       boundChannelCount: accessible.isOwner ? await countChannelBindingsForGateway(id) : undefined,
       ownerUserId: accessible.resource.ownerUserId,
@@ -153,8 +153,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const bindings = await listChannelBindingsForGateway(id, userId);
   if (bindings.length > 0) {
-    // 개수만 돌려주면 사용자가 어느 채널인지 찾아 헤맨다. 이름과 "풀면 무엇이 사라지는가"
-    // 까지 실어 보내, 게이트웨이 화면에서 그대로 결정할 수 있게 한다.
+    // Returning only a count leaves the user hunting for which channels. Send names and "what disappears if you
+    // unbind" too, so the decision can be made right on the gateway screen.
     return NextResponse.json(
       {
         errorCode: "gateway_in_use_by_channels",

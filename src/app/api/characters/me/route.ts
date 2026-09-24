@@ -6,7 +6,7 @@ function getUserId(req: NextRequest): string | null {
   return req.headers.get("x-user-id");
 }
 
-/** 내 캐릭터 — 사용자당 하나. 없으면 null(화면은 등록 폼을 보인다). */
+/** My character — one per user. null if none (the screen shows the registration form). */
 export async function GET(req: NextRequest) {
   const userId = getUserId(req);
   if (!userId) {

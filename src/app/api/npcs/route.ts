@@ -1,9 +1,9 @@
 import { deriveChannelMotionLayout } from "@/lib/channel-motion-layout";
 import { isCreativeStudioMap } from "@/lib/effective-map-spawn";
-// NPC 생성 라우트는 없다. NPC 는 사용자가 만드는 것이 아니라 "게이트웨이의 프로필이
-// 채널에 갖는 자리" 이고, 그 자리는 게이트웨이 연결(hireGatewayProfilesIntoChannel)과
-// 프로필 등록(hireProfileIntoBoundChannels)이 만든다. 여기서 다시 만들 수 있으면
-// 프로필 없는 NPC 나 중복 자리가 생긴다.
+// There is no NPC creation route. NPCs are not made by users but are "the seat a gateway's profile
+// holds in a channel", and those seats are made by gateway connection (hireGatewayProfilesIntoChannel) and
+// profile registration (hireProfileIntoBoundChannels). If they could be made again here,
+// NPCs without profiles or duplicate seats would appear.
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db, channelMembers, channels } from "@/db";
@@ -16,9 +16,9 @@ import { resolveMeetingMinutesAccess } from "../meetings/meeting-access";
 
 export async function GET(req: NextRequest) {
   try {
-    // 이 라우트는 오래도록 로그인만 확인하고 채널 소속은 보지 않았다. `roster=1` 이
-    // 프로필의 소유자·게이트웨이까지 싣게 된 뒤로는 채널 UUID 만 알면 남의 사무실
-    // 명부를 읽을 수 있었다. 회의록 라우트가 쓰는 것과 같은 경계를 건다.
+    // For a long time this route only checked login and not channel membership. Once `roster=1`
+    // started carrying the profile's owner and gateway, anyone knowing a channel UUID could read someone else's office
+    // roster. Apply the same boundary the minutes route uses.
     const userId = getUserId(req);
     if (!userId) {
       return NextResponse.json(
@@ -28,12 +28,12 @@ export async function GET(req: NextRequest) {
     }
 
     const channelId = req.nextUrl.searchParams.get("channelId");
-    // roster=1 은 "고용 명부" — 아직 자리를 못 잡았거나 퇴근한 NPC 까지 준다.
-    // 기본 응답(맵용)은 예전 그대로 배치·출근한 것만 낸다.
+    // roster=1 is the "hiring roster" — it also includes NPCs that have no seat yet or have clocked out.
+    // The default response (for the map) returns only placed, clocked-in ones as before.
     const roster = req.nextUrl.searchParams.get("roster") === "1";
     if (!channelId) {
-      // 예전에는 channelId 가 없으면 전 채널의 NPC 를 통째로 돌려줬다. 호출부가
-      // 하나도 없는 경로였고, 채널 경계를 넘어 새는 응답이었다.
+      // Without channelId this used to return the NPCs of all channels wholesale. A path with no
+      // callers at all, and a response leaking across channel boundaries.
       return NextResponse.json(
         { errorCode: "channel_id_required", error: "channelId required" },
         { status: 400 },
@@ -77,8 +77,8 @@ export async function GET(req: NextRequest) {
     }
 
     const list = await selectChannelNpcs(channelId, { roster });
-    // roster 는 "고용 명부" 화면이 자리 번호를 보여줘야 한다 — 맵용 기본 응답은 좌석을
-    // 계산할 필요가 없으니 여기서만 채널 맵을 한 번 더 읽는다.
+    // The roster must show seat numbers on the "hiring roster" screen — the default map response does not need to
+    // compute seats, so read the channel map once more only here.
     const seats = roster ? await channelSeats(channelId) : null;
     const [mapChannel] = !roster
       ? await db

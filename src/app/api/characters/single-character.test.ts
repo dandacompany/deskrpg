@@ -5,7 +5,7 @@ import { NextRequest } from "next/server";
 import { seedUser } from "@/test-setup/npc-seed";
 import { QUICK_START_APPEARANCE } from "@/lib/quick-start";
 
-// 빠른 시작이 쓰는 외형을 그대로 쓴다 — validateOfficeAppearance 를 통과하는 오피스 룩이다.
+// Use the appearance quick start uses — an office look that passes validateOfficeAppearance.
 const APPEARANCE = QUICK_START_APPEARANCE;
 
 function req(url: string, userId: string, method = "GET", body?: unknown) {
@@ -16,7 +16,7 @@ function req(url: string, userId: string, method = "GET", body?: unknown) {
   });
 }
 
-test("내 캐릭터가 없으면 me 는 null, 만들면 그것이 me 다", async () => {
+test("without my character, me is null; once created, it is me", async () => {
   const user = await seedUser("solo");
   const { GET: ME } = await import("./me/route");
   const { POST } = await import("./route");
@@ -30,7 +30,7 @@ test("내 캐릭터가 없으면 me 는 null, 만들면 그것이 me 다", async
   assert.equal((await res.json()).character.name, "나");
 });
 
-test("이미 있으면 둘째를 만들지 않는다 — 409", async () => {
+test("if one already exists, a second is not created — 409", async () => {
   const user = await seedUser("dup");
   const { POST } = await import("./route");
   await POST(
@@ -43,7 +43,7 @@ test("이미 있으면 둘째를 만들지 않는다 — 409", async () => {
   assert.equal((await res.json()).errorCode, "character_already_exists");
 });
 
-test("bio 는 저장되고 2,000자를 넘으면 400", async () => {
+test("bio is saved and over 2,000 characters is 400", async () => {
   const user = await seedUser("bio");
   const { POST } = await import("./route");
   const { PATCH } = await import("./[id]/route");

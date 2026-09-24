@@ -94,12 +94,12 @@ test("meeting minutes owner access allows only the channel owner", async () => {
   });
 });
 
-test("canManageMeetingMinutes: 채널 소유자와 회의 주재자만 참이다", () => {
+test("canManageMeetingMinutes: true only for the channel owner and the meeting host", () => {
   const minutes = { initiatorId: "host" };
   assert.equal(canManageMeetingMinutes({ userId: "owner", ownerId: "owner", minutes }), true);
   assert.equal(canManageMeetingMinutes({ userId: "host", ownerId: "owner", minutes }), true);
   assert.equal(canManageMeetingMinutes({ userId: "member", ownerId: "owner", minutes }), false);
-  // 주재자가 지워진(탈퇴한) 회의록은 소유자만 다룬다.
+  // Minutes whose host was deleted (left) are handled only by the owner.
   assert.equal(
     canManageMeetingMinutes({ userId: "member", ownerId: "owner", minutes: { initiatorId: null } }),
     false,

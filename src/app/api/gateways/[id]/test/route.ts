@@ -21,16 +21,16 @@ import { getUserId } from "@/lib/internal-rpc";
 import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 
 /**
- * 프로브 실패는 **200 으로** 돌려준다. 사용자가 입력한 외부 주소가 응답하지 않은 것은
- * 우리 서버의 실패가 아니라 요청 처리의 정상적인 결과이고, 5xx 로 답하면 진단이 사라진다 —
- * 실측: Cloudflare 가 오리진의 5xx 를 자기 에러 페이지로 통째로 갈아치운다.
+ * Probe failures are returned **as 200**. An external address the user entered not responding is
+ * not our server's failure but a normal outcome of handling the request, and answering with 5xx loses the diagnosis —
+ * measured: Cloudflare replaces the origin's 5xx wholesale with its own error page.
  *
- *     컨테이너 내부  502  body={"errorCode":"probe_502_marker",...}
- *     Caddy 까지     502  body 그대로
- *     인터넷 경유    502  server: cloudflare · body="error code: 502"
+ *     inside the container  502  body={"errorCode":"probe_502_marker",...}
+ *     up to Caddy           502  body as is
+ *     via the internet      502  server: cloudflare · body="error code: 502"
  *
- * 그래서 브라우저는 `502 {}` 만 받았고 화면에는 generic 폴백만 떴다. 4xx 는 통과하므로
- * 인증·권한 응답은 그대로 둔다. 코드는 헤더에도 실어 다른 프록시 뒤에서도 살아남게 한다.
+ * So the browser received only `502 {}` and the screen showed only the generic fallback. 4xx passes through, so
+ * auth and permission responses are left as is. The code is also carried in a header so it survives behind other proxies.
  */
 const PROBE_RESULT_INIT = (errorCode: string) => ({
   status: 200,
@@ -52,20 +52,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  // 게이트웨이 레벨에서 확인할 수 있는 것은 도달성뿐이다 — Hermes 의 인증은 프로필
-  // 스코프라 토큰 검증은 프로필 테스트가 담당한다. 예전에는 프로브가 hermes 로 판정하지
-  // 못하면 OpenClaw 의 WS 핸드셰이크로 폴백했지만, 그 백엔드는 제거됐다.
+  // All that can be checked at the gateway level is reachability — Hermes auth is profile-
+  // scoped, so token validation belongs to the profile test. The probe used to fall back to OpenClaw's
+  // WS handshake when it could not identify hermes, but that backend has been removed.
   const probe = await probeHermesGateway(accessible.resource.baseUrl);
 
   if (probe.kind === "hermes") {
-    // Hermes 임이 확인된 뒤에만 플러그인을 찌른다 — API Server 가 아닌 곳에 우리
-    // 경로를 보낼 이유가 없다.
-    // 응답 모양(`plugin: {status, version}`)은 그대로 두고, 자동화 계약 블록(info)만
-    // `plugin_info_json` 캐시에 함께 남긴다 — 보드 확보(kanban-boards.ts)가 그것으로 판정한다.
+    // Probe the plugin only after it is confirmed to be Hermes — no reason to send our
+    // paths to something that is not an API Server.
+    // The response shape (`plugin: {status, version}`) stays as is, and only the automation contract block (info)
+    // is also kept in the `plugin_info_json` cache — board securing (kanban-boards.ts) decides with it.
     const probed = await probeDeskrpgPluginWithInfo({
       fetchImpl: transportFetch,
       baseUrl: accessible.resource.baseUrl,
-      // deskrpg-allow-token-arg: 응답이 아니라 서버가 Hermes 를 부를 때 쓰는 인자다.
+      // deskrpg-allow-token-arg: an argument the server uses to call Hermes, not a response.
       token: decryptGatewayToken(accessible.resource.tokenEncrypted),
     });
     const plugin = probed.capability;
@@ -74,11 +74,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .set({ ...buildPluginCacheUpdate(plugin), ...buildPluginInfoCacheUpdate(probed.info) })
       .where(eq(gatewayResources.id, id));
 
-    // 프로브 결과를 **검증 상태로도** 남긴다. 예전에는 plugin_* 만 쓰고
-    // last_validation_status 를 비워 둬서, 연결 테스트를 아무리 눌러도 목록이
-    // "아직 테스트하지 않음" 에 머물렀다(스테이징 실측 2026-09-07).
-    // persistGatewayValidationState 는 이 브랜치 이전부터 있었지만 **아무도 부르지
-    // 않는 죽은 코드**였다.
+    // Also record the probe result **as the validation state**. It used to write only plugin_* and
+    // leave last_validation_status empty, so no matter how often the connection test was pressed the list
+    // stayed at "아직 테스트하지 않음" (staging measurement 2026-09-07).
+    // persistGatewayValidationState existed before this branch but was **dead code nobody
+    // called**.
     await persistGatewayValidationState(id, { status: "valid", error: null });
 
     return NextResponse.json({
@@ -90,8 +90,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   if (probe.kind === "dashboard") {
-    // 주소는 Hermes 인데 API Server 가 아니다. 대시보드(기본 9119)에 붙은 경우가
-    // 대부분이라, 고쳐야 할 것은 토큰이 아니라 포트다.
+    // The address is Hermes but not the API Server. Most often it is attached to the dashboard (default 9119),
+    // so what needs fixing is the port, not the token.
     await persistGatewayValidationState(id, {
       status: "error",
       error: `gateway_is_not_api_server (HTTP ${probe.status})`,
@@ -107,8 +107,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   if (probe.kind === "unreachable") {
-    // 왜 못 닿았는지까지 좁힌다. 가장 흔한 원인은 주소가 아니라 **어디서 보는 주소인가**다
-    // — 컨테이너 안에서 127.0.0.1 은 Hermes 가 아니라 컨테이너 자신이다.
+    // Narrow down why it could not be reached. The most common cause is not the address but **from where the address is seen**
+    // — inside a container 127.0.0.1 is the container itself, not Hermes.
     const errorCode = diagnoseUnreachable({
       baseUrl: accessible.resource.baseUrl,
       inContainer: existsSync("/.dockerenv"),
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  // 응답은 왔지만 Hermes API Server 가 아니다. 고쳐야 할 것은 자격증명이 아니라 주소다.
+  // A response came, but it is not a Hermes API Server. What needs fixing is the address, not credentials.
   await persistGatewayValidationState(id, {
     status: "error",
     error: `not_a_hermes_gateway (HTTP ${probe.status})`,

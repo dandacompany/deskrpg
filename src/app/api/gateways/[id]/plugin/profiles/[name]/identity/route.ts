@@ -11,9 +11,9 @@ import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 import { validateIdentityPutBody } from "../../../validation";
 
 /**
- * 인격은 프로필 스코프라 게이트웨이 접근 권한이면 충분하다(생성·삭제와 달리
- * `system_admin` 을 요구하지 않는다). **프로필 토큰만** 쓴다 — default 로
- * 폴백하지 않는다(`plugin-profile-access.ts` 참조).
+ * The persona is profile-scoped, so gateway access is enough (unlike create/delete it does not
+ * require `system_admin`). Uses **only the profile token** — no fallback
+ * to default (see `plugin-profile-access.ts`).
  */
 const proxyInit = (errorCode: string) => ({
   status: 200,

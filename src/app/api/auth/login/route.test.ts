@@ -34,7 +34,7 @@ async function seedUser(mustChangePassword: boolean) {
   return row;
 }
 
-test("임시 비밀번호로 들어오면 로그인 응답이 변경을 요구한다", async () => {
+test("logging in with a temporary password makes the login response require a change", async () => {
   const { POST } = await import("./route");
   const user = await seedUser(true);
 
@@ -45,7 +45,7 @@ test("임시 비밀번호로 들어오면 로그인 응답이 변경을 요구�
   assert.equal(payload.user.mustChangePassword, true);
 });
 
-test("평소 로그인은 변경을 요구하지 않는다", async () => {
+test("a normal login does not require a change", async () => {
   const { POST } = await import("./route");
   const user = await seedUser(false);
 

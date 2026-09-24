@@ -1,4 +1,4 @@
-// POST /api/channels/:id/kanban/tasks/:taskId/comments — {body}; author 는 deskrpg:<닉네임>
+// POST /api/channels/:id/kanban/tasks/:taskId/comments — {body}; author is deskrpg:<nickname>
 import type { NextRequest } from "next/server";
 
 import { addComment, type TaskParams } from "@/lib/kanban-routes";

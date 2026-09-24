@@ -8,29 +8,29 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 
-// Task 9 라운드 2·3 회귀 방어.
+// Regression guard for Task 9 rounds 2 and 3.
 //
-// 라운드 1 은 `buildPluginCacheUpdate` 를 순수 함수로 뽑아 `nowForDb()` 의 방언별
-// 출력(Date/문자열)이 그 함수를 그대로 통과한다는 것만 고정했다. 그런데 그 테스트는
-// `buildPluginCacheUpdate` 를 직접 부를 뿐 `src/app/api/gateways/[id]/test/route.ts` 의
-// POST 핸들러를 한 번도 실행하지 않는다 — 라우트 호출부를 바꿔치기해도 아무 테스트도
-// 못 잡는 구멍이 있었다(팀리드 실측).
+// Round 1 extracted `buildPluginCacheUpdate` as a pure function and pinned only that `nowForDb()`'s per-dialect
+// output (Date/string) passes through it unchanged. But that test only calls
+// `buildPluginCacheUpdate` directly and never runs the POST handler of
+// `src/app/api/gateways/[id]/test/route.ts` — a hole where swapping the route's call site would be
+// caught by no test (measured by the team lead).
 //
-// 라운드 3 이 그 구멍을 구조적으로 닫았다: `buildPluginCacheUpdate(plugin)` 가 이제
-// `now` 를 주입받지 않고 스스로 `nowForDb()` 를 부른다(plugin-capability.ts) — 그래서
-// 라우트 호출부에는 애초에 틀린 값을 넘길 자리가 없고, 그 사실은 round-1 의 방언
-// 테스트(plugin-capability.test.ts, require.cache 로 PG/SQLite 재평가)가 함수 몸통
-// 안의 실제 `nowForDb()` 호출을 직접 관찰해 잠근다. 그 결과 여기서 소스 텍스트를
-// 정규식으로 고정하던 테스트는 더 필요 없어 지웠다(포매팅이나 변수 추출로 깨지고
-// 반대로 의미가 바뀌어도 통과할 수 있는 취약한 방식이었다).
+// Round 3 closed that hole structurally: `buildPluginCacheUpdate(plugin)` no longer receives
+// `now` but calls `nowForDb()` itself (plugin-capability.ts) — so the route's call site has
+// no place to pass a wrong value in the first place, and round 1's dialect test
+// (plugin-capability.test.ts, reevaluating PG/SQLite via require.cache) locks that by directly observing
+// the real `nowForDb()` call inside the function body. As a result, the test here that pinned the source text
+// with a regex was no longer needed and was deleted (a brittle approach that broke on formatting or variable
+// extraction and could pass when the meaning changed).
 //
-// 이 파일에 남기는 것은 **배선 검증**이다 — 타임스탬프 타입과는 별개로, POST 핸들러가
-// 실제로 실행되어 `probeHermesGateway` → `probeDeskrpgPlugin` → `db.update` 로
-// 이어지는지, 응답과 DB 에 쓰인 값이 실제로 맞는지를 본다. plugin-proxy-route.test.ts
-// 와 같은 수법(throwaway SQLite + 로컬 스텁 Hermes 서버)을 그대로 쓴다.
+// What stays in this file is **wiring verification** — independent of timestamp types, it checks that the POST handler
+// actually runs and continues `probeHermesGateway` → `probeDeskrpgPlugin` → `db.update`, and that the
+// values in the response and the DB are really correct. It uses the same technique as plugin-proxy-route.test.ts
+// (throwaway SQLite + a local stub Hermes server).
 //
-// 최상위 경로(`[id]` 세그먼트 밖)에 둔다 — plugin-proxy-route.test.ts 와 같은 이유:
-// node 테스트 러너가 `[id]` 를 문자 클래스로 오인해 그 안의 *.test.ts 를 못 줍는다.
+// Kept at the top level (outside the `[id]` segment) — same reason as plugin-proxy-route.test.ts:
+// the node test runner mistakes `[id]` for a character class and misses the *.test.ts inside it.
 
 const sqlitePath = path.join(os.tmpdir(), `gateway-test-route-test-${crypto.randomUUID()}.db`);
 process.env.DESKRPG_HOME = os.tmpdir();
@@ -75,9 +75,9 @@ function postReq(url: string, userId: string): NextRequest {
   return new NextRequest(url, { method: "POST", headers: { "x-user-id": userId } });
 }
 
-// probeHermesGateway 가 API Server 로 판정하려면 /health 는 2xx, /v1/models 는
-// content-type 이 JSON 이어야 한다(gateway-probe.ts 주석 참조 — 대시보드는
-// text/html 을 낸다). 그 뒤 probeDeskrpgPlugin 이 /deskrpg/info 를 찌른다.
+// For probeHermesGateway to judge it an API Server, /health must be 2xx and /v1/models must have a
+// JSON content-type (see the gateway-probe.ts comment — the dashboard serves
+// text/html). Then probeDeskrpgPlugin probes /deskrpg/info.
 function startStubHermesServer(pluginVersion: string) {
   const server = http.createServer((req, res) => {
     if (req.url === "/health") {
@@ -101,8 +101,8 @@ function startStubHermesServer(pluginVersion: string) {
   return server;
 }
 
-describe("게이트웨이 테스트 라우트 — 플러그인 캐시를 실제로 쓴다 (Task 9)", () => {
-  test("Hermes 로 판정되면 POST 가 gatewayResources 의 plugin_* 컬럼을 방금 만든 값으로 갱신한다", async () => {
+describe("gateway test route — actually writes the plugin cache (Task 9)", () => {
+  test("once judged Hermes, POST updates gatewayResources' plugin_* columns with freshly made values", async () => {
     const server = startStubHermesServer("0.4.2");
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
     const address = server.address();
@@ -137,19 +137,19 @@ describe("게이트웨이 테스트 라우트 — 플러그인 캐시를 실제�
 
       assert.equal(row.pluginStatus, "plugin_ready");
       assert.equal(row.pluginVersion, "0.4.2");
-      // T4: 자동화 계약 블록도 같은 호출에서 캐시된다(0.6.0 이전 본문은 capabilities 가 빈 배열).
+      // T4: the automation contract block is cached in the same call too (bodies before 0.6.0 have an empty capabilities array).
       assert.ok(row.pluginInfoJson, "plugin_info_json 이 채워져야 한다");
       assert.deepEqual(JSON.parse(row.pluginInfoJson as string).capabilities, []);
-      // 화면의 "아직 테스트하지 않음" 은 last_validation_status 를 본다. 예전에는
-      // 이 라우트가 plugin_* 만 쓰고 검증 상태를 비워 둬서, 연결 테스트를 아무리
-      // 눌러도 목록이 그대로였다(스테이징 실측 2026-09-07). persistGatewayValidationState
-      // 는 이 브랜치 이전부터 있었지만 **아무도 부르지 않는 죽은 코드**였다.
+      // The screen's "아직 테스트하지 않음" looks at last_validation_status. This route used to
+      // write only plugin_* and leave the validation state empty, so no matter how often the connection test
+      // was pressed the list did not change (staging measurement 2026-09-07). persistGatewayValidationState
+      // existed before this branch but was **dead code nobody called**.
       assert.equal(row.lastValidationStatus, "valid");
       assert.equal(row.lastValidationError, null);
       assert.ok(row.lastValidatedAt, "lastValidatedAt 이 채워져야 한다");
-      // SQLite 방언에서 쓰인 값이 정말 방금 만든 시각인지만 본다 — "그 값이
-      // nowForDb() 에서 나왔는가"는 함수 몸통이 nowForDb() 를 스스로 부르는
-      // 구조(라운드 3) + plugin-capability.test.ts 의 방언 재평가 테스트가 잠근다.
+      // Only check that the value written in the SQLite dialect really is the time just made — "did that value
+      // come from nowForDb()" is locked by the structure where the function body calls nowForDb() itself
+      // (round 3) + the dialect reevaluation test in plugin-capability.test.ts.
       assert.equal(typeof row.pluginCheckedAt, "string");
       const checkedAtMs = Date.parse(row.pluginCheckedAt as unknown as string);
       assert.ok(

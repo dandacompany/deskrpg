@@ -8,9 +8,9 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 
-// 도구 프로바이더 프록시 라우트(0.10.0) 배선 검증 — 읽기는 게이트웨이 접근, 쓰기는 소유자 전용. 실제 route.ts 를 import 해
-// 핸들러를 직접 부른다 — plugin-proxy-route.test.ts 와 같은 수법(throwaway SQLite +
-// 로컬 스텁 게이트웨이). `[id]` 세그먼트 밖에 두는 이유도 같다(테스트 러너 glob).
+// Wiring verification for the tool provider proxy routes (0.10.0) — reads need gateway access, writes are owner only. Imports the real route.ts and
+// calls the handlers directly — same technique as plugin-proxy-route.test.ts (throwaway SQLite +
+// local stub gateway). The reason for staying outside the `[id]` segment is the same too (test runner glob).
 
 const sqlitePath = path.join(os.tmpdir(), `tool-provider-route-test-${crypto.randomUUID()}.db`);
 process.env.DESKRPG_HOME = os.tmpdir();
@@ -114,8 +114,8 @@ function toolGet(gatewayId: string, userId: string, toolset: string) {
 const PUT_PATH = "./[id]/plugin/profiles/[name]/toolsets/[toolset]/provider/route";
 const GET_PATH = "./[id]/plugin/profiles/[name]/toolsets/[toolset]/providers/route";
 
-describe("도구 프로바이더 PUT — 소유자 전용, 키 값은 통과만", () => {
-  test("소유자 PUT → 프로필 토큰으로 선택과 키를 넘기고 응답에 값이 없다", async () => {
+describe("tool provider PUT — owner only, key values only pass through", () => {
+  test("owner PUT → hands the choice and key over with the profile token, and the response has no value", async () => {
     const stub = await startStub(() => ({
       status: 200,
       body: { provider: "OpenAI TTS", isSet: { VOICE_TOOLS_OPENAI_KEY: true } },
@@ -146,7 +146,7 @@ describe("도구 프로바이더 PUT — 소유자 전용, 키 값은 통과만"
     }
   });
 
-  test("공유 사용자 PUT → 403, 플러그인을 부르지 않는다", async () => {
+  test("shared user PUT → 403, the plugin is not called", async () => {
     const stub = await startStub(() => ({ status: 200, body: {} }));
     try {
       const owner = await seedUser();
@@ -165,7 +165,7 @@ describe("도구 프로바이더 PUT — 소유자 전용, 키 값은 통과만"
     }
   });
 
-  test("잘못된 본문 → 400 이고 값을 되돌려 주지 않는다", async () => {
+  test("bad body → 400 and the value is not echoed back", async () => {
     const stub = await startStub(() => ({ status: 200, body: {} }));
     try {
       const owner = await seedUser();
@@ -184,7 +184,7 @@ describe("도구 프로바이더 PUT — 소유자 전용, 키 값은 통과만"
     }
   });
 
-  test("플러그인이 설치가 필요하다고 거절하면 그 코드를 옮긴다", async () => {
+  test("when the plugin refuses because an install is needed, that code is carried", async () => {
     const stub = await startStub(() => ({
       status: 409,
       body: { error: "provider_needs_cli", detail: "hermes -p noah tools" },
@@ -203,8 +203,8 @@ describe("도구 프로바이더 PUT — 소유자 전용, 키 값은 통과만"
   });
 });
 
-describe("도구 프로바이더 GET — 게이트웨이 접근이면 읽는다", () => {
-  test("공유 사용자도 행을 읽는다(키 값은 원래 오지 않는다)", async () => {
+describe("tool provider GET — readable with gateway access", () => {
+  test("shared users can read the rows too (key values never come anyway)", async () => {
     const stub = await startStub(() => ({
       status: 200,
       body: {
@@ -232,7 +232,7 @@ describe("도구 프로바이더 GET — 게이트웨이 접근이면 읽는다"
     }
   });
 
-  test("구버전 플러그인(라우트 없음 404)은 업그레이드 필요로, 모르는 툴셋 404 는 그 코드로", async () => {
+  test("an old plugin (no route, 404) means upgrade needed; an unknown toolset 404 keeps its code", async () => {
     let mode: "missing" | "unknown" = "missing";
     const stub = await startStub(() =>
       mode === "missing"

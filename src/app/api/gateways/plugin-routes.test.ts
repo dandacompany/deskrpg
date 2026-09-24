@@ -14,7 +14,7 @@ describe("validateCreatableProfileName", () => {
   });
 
   test("rejects an uppercase name (existing-profile regex would have allowed it)", () => {
-    // 판정 A: Hermes 는 새 프로필 생성 시 `^[a-z0-9][a-z0-9_-]{0,63}$` 만 받는다.
+    // Verdict A: when creating a new profile Hermes only accepts `^[a-z0-9][a-z0-9_-]{0,63}$`.
     const result = validateCreatableProfileName({ name: "MyBot" });
     assert.deepEqual(result, { ok: false, errorCode: "invalid_profile_name" });
   });
@@ -83,13 +83,13 @@ describe("validateConfigPatch", () => {
   });
 
   test("passes reasoning_effort through", () => {
-    // 플러그인이 받는 키인데 여기서 막히면 화면의 드롭다운이 조용히 무력해진다.
+    // The plugin accepts this key; if it were blocked here the screen's dropdown would silently stop working.
     const result = validateConfigPatch({ reasoning_effort: "high" });
     assert.deepEqual(result, { ok: true, patch: { reasoning_effort: "high" } });
   });
 
   test("passes an empty reasoning_effort through (means unset)", () => {
-    // 빈 문자열은 "지정 안 함" 이라는 뜻이다 — 여기서 떨구면 해제할 방법이 없다.
+    // An empty string means "not specified" — dropping it here would leave no way to unset.
     const result = validateConfigPatch({ reasoning_effort: "" });
     assert.deepEqual(result, { ok: true, patch: { reasoning_effort: "" } });
   });

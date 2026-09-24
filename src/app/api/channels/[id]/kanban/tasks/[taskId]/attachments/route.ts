@@ -1,6 +1,6 @@
-// GET  /api/channels/:id/kanban/tasks/:taskId/attachments — 목록
-// POST /api/channels/:id/kanban/tasks/:taskId/attachments — multipart `file` 그대로 전달
-// 플러그인이 첨부를 지원하지 않으면 404 attachments_unsupported.
+// GET  /api/channels/:id/kanban/tasks/:taskId/attachments — list
+// POST /api/channels/:id/kanban/tasks/:taskId/attachments — multipart `file` passed through as is
+// If the plugin does not support attachments, 404 attachments_unsupported.
 import type { NextRequest } from "next/server";
 
 import { listAttachments, uploadAttachment, type TaskParams } from "@/lib/kanban-routes";

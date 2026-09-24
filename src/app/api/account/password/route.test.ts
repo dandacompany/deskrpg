@@ -46,7 +46,7 @@ async function readUser(id: string) {
   return row;
 }
 
-test("로그인하지 않은 요청은 401 이다", async () => {
+test("an unauthenticated request is 401", async () => {
   const { POST } = await import("./route");
   const response = await POST(
     req({ currentPassword: "old-password", newPassword: "new-password" }),
@@ -55,7 +55,7 @@ test("로그인하지 않은 요청은 401 이다", async () => {
   assert.equal((await response.json()).errorCode, "unauthorized");
 });
 
-test("현재 비밀번호가 틀리면 401 이고 해시는 그대로다", async () => {
+test("a wrong current password is 401 and the hash is unchanged", async () => {
   const { POST } = await import("./route");
   const user = await seedUser("old-password");
 
@@ -68,7 +68,7 @@ test("현재 비밀번호가 틀리면 401 이고 해시는 그대로다", async
   assert.equal((await readUser(user.id)).passwordHash, user.passwordHash);
 });
 
-test("새 비밀번호가 8자 미만이면 400 이다", async () => {
+test("a new password shorter than 8 characters is 400", async () => {
   const { POST } = await import("./route");
   const user = await seedUser("old-password");
 
@@ -80,7 +80,7 @@ test("새 비밀번호가 8자 미만이면 400 이다", async () => {
   assert.equal((await response.json()).errorCode, "password_length_invalid");
 });
 
-test("성공하면 해시가 바뀌고 강제 변경 표시가 내려가며 토큰이 재발급된다", async () => {
+test("on success the hash changes, the forced-change flag is cleared and the token is reissued", async () => {
   const { POST } = await import("./route");
   const user = await seedUser("old-password", true);
 
@@ -96,11 +96,11 @@ test("성공하면 해시가 바뀌고 강제 변경 표시가 내려가며 토�
   const { verifyPassword } = await import("@/lib/password");
   assert.ok(await verifyPassword("new-password", stored.passwordHash));
   assert.ok(response.cookies.get("token"));
-  // 새 비밀번호를 응답에 실어 보내지 않는다.
+  // The new password is not sent back in the response.
   assert.equal(JSON.stringify(await response.json()).includes("new-password"), false);
 });
 
-test("현재 비밀번호와 같은 값으로는 바꿀 수 없다", async () => {
+test("cannot change to the same value as the current password", async () => {
   const { POST } = await import("./route");
   const user = await seedUser("old-password");
 

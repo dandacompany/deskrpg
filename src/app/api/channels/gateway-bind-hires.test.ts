@@ -10,18 +10,18 @@ import {
   setupThrowawaySqlite,
 } from "@/test-setup/npc-seed";
 
-// Task 6. 게이트웨이 연결은 "고용"이고 교체는 "휴면"이다.
+// Task 6. Connecting a gateway is "hiring" and switching is "sleeping".
 //
-// 예전에는 바인딩이 바뀌면 409 `gateway_change_requires_npc_reset` 을 던지고,
-// 확인을 받으면 NPC 와 회의록을 **지웠다**. 프로필이 NPC 의 정본이 된 뒤로 그 파괴는
-// 근거가 없다 — 옛 게이트웨이의 NPC 는 자리를 기억한 채 잠들고, 새 게이트웨이의
-// 프로필이 출근하며, 채널 아티팩트는 그대로 남는다.
+// Binding changes used to throw 409 `gateway_change_requires_npc_reset` and, after confirmation,
+// **deleted** NPCs and minutes. Once profiles became the NPC's source of truth that destruction had
+// no basis — the old gateway's NPCs sleep remembering their seats, the new gateway's
+// profiles clock in, and channel artifacts stay as they are.
 //
-// `[id]` 세그먼트 밖(채널 API 루트)에 둔다 — node 테스트 러너가 `[id]` 를 문자
-// 클래스로 오인해 그 안의 *.test.ts 를 못 줍는다.
+// Kept outside the `[id]` segment (at the channel API root) — the node test runner mistakes `[id]` for a character
+// class and misses the *.test.ts inside it.
 setupThrowawaySqlite("gateway-bind-hires-test");
 
-test("게이트웨이를 연결하면 출근하고, 다른 게이트웨이로 바꾸면 옛 NPC 는 휴면이고 회의록은 남는다", async () => {
+test("connecting a gateway clocks NPCs in; switching to another gateway puts the old NPCs to sleep and the minutes remain", async () => {
   const { userId, channelId, gatewayA, gatewayB } = await seedTwoGateways({ profilesEach: 2 });
   const { selectChannelNpcs } = await import("@/lib/npc-projection");
   const { PUT } = await import("./[id]/gateway/route");
@@ -48,7 +48,7 @@ test("게이트웨이를 연결하면 출근하고, 다른 게이트웨이로 �
   assert.equal(await countMeetingMinutes(channelId), 1, "회의록은 지우지 않는다");
 });
 
-test("옛 게이트웨이로 되돌리면 잠들어 있던 NPC 가 그대로 되살아난다", async () => {
+test("switching back to the old gateway revives the sleeping NPCs as they were", async () => {
   const { userId, channelId, gatewayA, gatewayB } = await seedTwoGateways({ profilesEach: 1 });
   const { selectChannelNpcs } = await import("@/lib/npc-projection");
   const { PUT } = await import("./[id]/gateway/route");
@@ -71,7 +71,7 @@ test("옛 게이트웨이로 되돌리면 잠들어 있던 NPC 가 그대로 되
   assert.equal(roster.filter((n) => n.active).length, 1, "A 의 NPC 만 다시 출근");
 });
 
-test("연결을 해제하면 NPC 는 지워지지 않고 잠든다 — 자리도 회의록도 그대로", async () => {
+test("disconnecting does not delete NPCs but puts them to sleep — seats and minutes stay", async () => {
   const { userId, channelId, gatewayA } = await seedTwoGateways({ profilesEach: 2 });
   const { selectChannelNpcs } = await import("@/lib/npc-projection");
   const { db, npcs } = await import("@/db");
@@ -89,7 +89,7 @@ test("연결을 해제하면 NPC 는 지워지지 않고 잠든다 — 자리도
     );
 
   assert.equal((await put()).status, 200);
-  // 자리를 준다 — 휴면이 자리를 기억하는지 보려면 자리가 있어야 한다.
+  // Give them seats — to see whether sleeping remembers seats, there must be seats.
   const hired = await selectChannelNpcs(channelId, { roster: true });
   assert.equal(hired.length, 2);
   for (const [i, npc] of hired.entries()) {
@@ -97,7 +97,7 @@ test("연결을 해제하면 NPC 는 지워지지 않고 잠든다 — 자리도
   }
   await seedMeetingMinutes(channelId);
 
-  // 예전에는 확인 없이 부르면 409 gateway_disconnect_requires_npc_reset 였다.
+  // Calling this without confirmation used to be 409 gateway_disconnect_requires_npc_reset.
   const res = await DELETE(
     new NextRequest(`http://localhost/api/channels/${channelId}/gateway`, {
       method: "DELETE",
@@ -120,7 +120,7 @@ test("연결을 해제하면 NPC 는 지워지지 않고 잠든다 — 자리도
   );
   assert.equal(await countMeetingMinutes(channelId), 1, "회의록은 지우지 않는다");
 
-  // 다시 연결하면 새로 만드는 것이 아니라 되살린다 — 잠든 수만큼 정확히.
+  // Reconnecting revives rather than creates — exactly as many as were sleeping.
   const { hireGatewayProfilesIntoChannel } = await import("@/lib/npc-roster");
   assert.deepEqual(
     await hireGatewayProfilesIntoChannel(channelId, gatewayA),
@@ -128,7 +128,7 @@ test("연결을 해제하면 NPC 는 지워지지 않고 잠든다 — 자리도
     "되살림 2, 신규 0",
   );
 
-  // 라우트로 다시 연결해도 행이 늘거나 자리가 흐트러지지 않는다(멱등).
+  // Reconnecting through the route does not add rows or disturb seats either (idempotent).
   assert.equal((await put()).status, 200);
   const back = await selectChannelNpcs(channelId, { roster: true });
   assert.equal(back.length, 2);
@@ -143,7 +143,7 @@ test("연결을 해제하면 NPC 는 지워지지 않고 잠든다 — 자리도
   );
 });
 
-test("연결이 그대로면 설정만 저장하는 PUT 은 잠든 NPC 를 되살리지 않는다", async () => {
+test("when the connection is unchanged, a PUT that only saves settings does not revive sleeping NPCs", async () => {
   const { userId, channelId, gatewayA } = await seedTwoGateways({ profilesEach: 2 });
   const { selectChannelNpcs } = await import("@/lib/npc-projection");
   const { setNpcActive } = await import("@/lib/npc-roster");
@@ -162,8 +162,8 @@ test("연결이 그대로면 설정만 저장하는 PUT 은 잠든 NPC 를 되�
   const [first] = await selectChannelNpcs(channelId, { roster: true });
   await setNpcActive(first.id, false);
 
-  // 같은 게이트웨이를 다시 저장. 여기서 고용을 돌면 사용자가 직접 재운 NPC 가
-  // 조용히 되살아난다.
+  // Re-save the same gateway. If hiring ran here, NPCs the user put to sleep themselves
+  // would silently come back to life.
   assert.equal((await put({ gatewayId: gatewayA })).status, 200);
 
   const roster = await selectChannelNpcs(channelId, { roster: true });

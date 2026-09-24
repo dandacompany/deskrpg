@@ -31,7 +31,7 @@ async function seedUser(role: string) {
   return row.id;
 }
 
-test("목록 응답이 호출자가 시스템 관리자인지 알려 준다", async () => {
+test("the list response tells whether the caller is a system admin", async () => {
   const { GET } = await import("./route");
 
   const admin = await seedUser("system_admin");

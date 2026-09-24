@@ -9,10 +9,10 @@ import {
   setupThrowawaySqlite,
 } from "@/test-setup/npc-seed";
 
-// Task 6. 프로필 삭제는 이제 **해고**다 — `npcs.hermes_profile_id` 의 CASCADE 가
-// NPC 행을 함께 지운다. 예전 응답 필드 `unboundNpcs`("연결만 풀렸다")는 더 이상
-// 사실이 아니라 `deletedNpcs` + `channels` 로 바뀌었고, 삭제 전에 그 수를 미리
-// 보여줄 수 있도록 GET 이 같은 수치를 준다.
+// Task 6. Deleting a profile is now **firing** — the CASCADE on `npcs.hermes_profile_id` removes
+// the NPC rows too. The old response field `unboundNpcs` ("only unbound") is no longer
+// true and became `deletedNpcs` + `channels`, and GET provides the same numbers so they can be
+// shown before deleting.
 setupThrowawaySqlite("profile-usage-delete-test");
 
 async function hiredProfile() {
@@ -23,7 +23,7 @@ async function hiredProfile() {
   return { gatewayId, channelIds, userId, profileId };
 }
 
-test("GET 은 이 프로필이 몇 개의 NPC 로 몇 채널에 나가 있는지 알려준다", async () => {
+test("GET reports how many NPCs in how many channels this profile is out as", async () => {
   const { gatewayId, userId, profileId } = await hiredProfile();
   const { GET } = await import("./[id]/profiles/[profileId]/route");
 
@@ -37,7 +37,7 @@ test("GET 은 이 프로필이 몇 개의 NPC 로 몇 채널에 나가 있는지
   assert.deepEqual((await res.json()).usage, { npcs: 2, channels: 2 });
 });
 
-test("DELETE 는 지워진 NPC 수와 채널 수를 돌려주고, npcs 에 그 프로필 행이 남지 않는다", async () => {
+test("DELETE returns the numbers of deleted NPCs and channels, and no rows of that profile remain in npcs", async () => {
   const { gatewayId, userId, profileId } = await hiredProfile();
   const { DELETE } = await import("./[id]/profiles/[profileId]/route");
 
@@ -57,12 +57,12 @@ test("DELETE 는 지워진 NPC 수와 채널 수를 돌려주고, npcs 에 그 �
   assert.deepEqual(await profileUsage(profileId), { npcs: 0, channels: 0 });
 });
 
-// 외형의 정본 형태는 `{ officeLookId, bodyType }` 다(office-appearance.ts) — api/characters 가
-// 쓰는 것과 같은 모양의 픽스처를 쓴다.
+// The canonical form of an appearance is `{ officeLookId, bodyType }` (office-appearance.ts) — use a fixture shaped like
+// the one api/characters uses.
 const MALE_APPEARANCE = { officeLookId: "office-jun", bodyType: "male" };
 const FEMALE_APPEARANCE = { officeLookId: "office-nari", bodyType: "female" };
 
-test("외형은 소유자만 바꾼다 — 공유받은 사용자는 forbidden", async () => {
+test("only the owner changes the appearance — shared users get forbidden", async () => {
   const { gatewayId, userId, profileId } = await hiredProfile();
   const { PATCH } = await import("./[id]/profiles/[profileId]/route");
   const patch = (actorId: string, appearance: unknown) =>
@@ -100,7 +100,7 @@ test("외형은 소유자만 바꾼다 — 공유받은 사용자는 forbidden",
   assert.equal((await patch(other.id, FEMALE_APPEARANCE)).status, 403);
 });
 
-test("망가진 외형은 400 으로 막는다 — 프로필이 정본이라 모든 채널이 한꺼번에 깨진다", async () => {
+test("a broken appearance is blocked with 400 — the profile is the source of truth, so every channel would break at once", async () => {
   const { gatewayId, userId, profileId } = await hiredProfile();
   const { PATCH } = await import("./[id]/profiles/[profileId]/route");
 
@@ -123,16 +123,16 @@ test("망가진 외형은 400 으로 막는다 — 프로필이 정본이라 모
   assert.equal(unknownLook.status, 400);
   assert.equal((await unknownLook.json()).errorCode, "character_appearance_invalid");
   assert.equal(res.status, 400);
-  // api/characters 두 라우트와 같은 코드를 쓴다 — 화면의 번역이 이미 있다.
+  // Uses the same code as the two api/characters routes — the screen already has the translation.
   assert.equal((await res.json()).errorCode, "character_appearance_invalid");
 });
 
-test("GET 은 URL 의 게이트웨이에 속하지 않은 프로필을 404 로 막는다", async () => {
+test("GET blocks with 404 a profile that does not belong to the gateway in the URL", async () => {
   const a = await hiredProfile();
   const b = await hiredProfile();
   const { GET } = await import("./[id]/profiles/[profileId]/route");
 
-  // A 의 게이트웨이 URL 로 B 의 프로필 수치를 캐낼 수 없다.
+  // B's profile counts cannot be pried out through A's gateway URL.
   const res = await GET(
     new NextRequest(`http://localhost/api/gateways/${a.gatewayId}/profiles/${b.profileId}`, {
       headers: authHeaders(a.userId),

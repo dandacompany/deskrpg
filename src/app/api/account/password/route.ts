@@ -6,7 +6,7 @@ import { getAuthenticatedUserId, unauthorizedResponse } from "@/lib/rbac/group-a
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 
-/** 본인이 자기 비밀번호를 바꾼다. 현재 비밀번호를 아는 사람만 통과한다. */
+/** A user changes their own password. Only someone who knows the current password gets through. */
 export async function POST(req: NextRequest) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) return unauthorizedResponse();
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  // 세션은 있는데 사용자가 사라진 경우까지 "자격 없음"으로 같이 닫는다.
+  // A session whose user has disappeared is closed as "not authorized" too.
   if (!user) return unauthorizedResponse();
 
   if (!(await verifyPassword(currentPassword, user.passwordHash))) {
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     .set({ passwordHash: await hashPassword(newPassword), mustChangePassword: false })
     .where(eq(users.id, user.id));
 
-  // 쿠키 수명을 새로 시작한다 — 임시 비밀번호로 들어온 세션이 그대로 7일을 쓰지 않도록.
+  // Restart the cookie lifetime — so a session that came in with a temporary password does not keep its full 7 days.
   const token = await signJWT({ userId: user.id, nickname: user.nickname });
   const response = NextResponse.json({ ok: true });
   response.cookies.set("token", token, {

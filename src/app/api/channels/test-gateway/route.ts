@@ -7,17 +7,17 @@ function getUserId(req: NextRequest): string | null {
 }
 
 /**
- * POST /api/channels/test-gateway — 인라인으로 입력한 게이트웨이 주소가 살아 있는지 본다.
+ * POST /api/channels/test-gateway — check whether an inline-entered gateway address is alive.
  *
- * 예전에는 OpenClaw 의 WS 핸드셰이크(testGatewayConnection)를 걸고 그 응답으로 에이전트
- * 목록까지 받아 왔다. Hermes 는 HTTP+SSE 라 그 핸드셰이크에 403 을 돌려주고, 클라이언트는
- * 재시도하며 20초 넘게 매달린다 — 실측으로 이 경로가 "연결 테스트가 멈춘다"의 원인이었다.
+ * This used to perform OpenClaw's WS handshake (testGatewayConnection) and fetch the agent list
+ * from its response. Hermes is HTTP+SSE, so it answers that handshake with 403, and the client
+ * retries and hangs for over 20 seconds — measurement showed this path was the cause of "the connection test freezes".
  *
- * 이제 `/health` 프로브만 건다. 게이트웨이 레벨에서 확인 가능한 사실은 "이 주소에 Hermes
- * API Server 가 떠 있는가" 하나뿐이다. Hermes 의 인증은 프로필 스코프이므로 토큰이 맞는지는
- * 프로필 테스트가 따로 본다. `agents` 는 OpenClaw 개념이라 사라졌고, 응답에서도 뺀다 —
- * 빈 배열을 계속 돌려주면 호출부가 "에이전트가 0개"와 "에이전트라는 개념이 없음"을
- * 구분하지 못한다.
+ * Now only a `/health` probe is made. The only fact checkable at the gateway level is "is a Hermes
+ * API Server running at this address". Hermes auth is profile-scoped, so whether the token is right is
+ * checked separately by the profile test. `agents` was an OpenClaw concept and is gone, and it is dropped from the response too —
+ * returning an empty array would keep callers from telling "0 agents" apart from "there is no
+ * such thing as agents".
  */
 export async function POST(req: NextRequest) {
   const userId = getUserId(req);
@@ -81,8 +81,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 주소에 무언가는 떠 있지만 Hermes API Server 가 아니다. 사용자가 고쳐야 할 것은
-  // 자격증명이 아니라 주소이므로, 인증 실패와 구분해서 알린다.
+  // Something is running at the address, but it is not a Hermes API Server. What the user must fix is
+  // the address, not credentials, so report it separately from an auth failure.
   return NextResponse.json(
     {
       ok: false,

@@ -1,4 +1,4 @@
-// NPC 스킬 관리 REST — 분기표는 `@/lib/skill-routes`.
+// NPC skill management REST — the dispatch table is `@/lib/skill-routes`.
 import type { NextRequest } from "next/server";
 
 import { handleSkillRoute } from "@/lib/skill-routes";

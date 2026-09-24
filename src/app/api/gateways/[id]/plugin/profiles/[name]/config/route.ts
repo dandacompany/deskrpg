@@ -11,9 +11,9 @@ import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 import { validateConfigPatch } from "../../../validation";
 
 /**
- * 설정은 인격과 마찬가지로 프로필 스코프라 게이트웨이 접근 권한이면 충분하다.
- * `resolve` 는 identity 라우트와 같은 형태를 그대로 복제한다 — 두 라우트가
- * 각자 독립적으로 읽히는 편이 낫다(브리프 판단).
+ * Like the persona, config is profile-scoped, so gateway access is enough.
+ * `resolve` copies the identity route's shape as is — better that the two routes
+ * read independently (brief's call).
  */
 const proxyInit = (errorCode: string) => ({
   status: 200,

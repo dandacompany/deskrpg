@@ -1,8 +1,8 @@
 /**
- * 플러그인 프록시 라우트(profiles/identity/config)의 순수 검증 함수.
+ * Pure validation functions for the plugin proxy routes (profiles/identity/config).
  *
- * `src/app/api/gateways/[id]/profiles/validation.ts` 의 관례를 따른다 — 검증을
- * 핸들러 밖으로 뽑아 라우트를 띄우지 않고도 고정할 수 있게 한다.
+ * Follows the convention of `src/app/api/gateways/[id]/profiles/validation.ts` — validation is pulled
+ * out of the handlers so it can be pinned without starting a route.
  */
 
 import { isCreatableProfileName } from "@/lib/hermes/creatable-profile-name";
@@ -12,10 +12,10 @@ export type CreatableNameValidation =
   { ok: true; name: string } | { ok: false; errorCode: "invalid_profile_name" };
 
 /**
- * **새로 만들** 프로필 이름만 검증한다. `isCreatableProfileName` 을 쓴다 —
- * `PROFILE_NAME_RE`(기존 프로필 등록용, 관대함)가 아니다. Hermes 는 생성 시
- * `^[a-z0-9][a-z0-9_-]{0,63}$` 와 예약어 거부를 실제로 강제한다(라이브 게이트웨이
- * 실측). 여기서 막지 않으면 원격이 400 을 내는데 그 이유가 화면에 닿지 않는다.
+ * Validates only profile names **to be newly created**. Uses `isCreatableProfileName` —
+ * not `PROFILE_NAME_RE` (for registering existing profiles, lenient). Hermes actually enforces
+ * `^[a-z0-9][a-z0-9_-]{0,63}$` and rejects reserved words on creation (measured on a live
+ * gateway). Without blocking here the remote gives 400 and the reason never reaches the screen.
  */
 export function validateCreatableProfileName(input: unknown): CreatableNameValidation {
   const name =
@@ -31,7 +31,7 @@ export function validateCreatableProfileName(input: unknown): CreatableNameValid
 export type IdentityPutValidation =
   { ok: true; body: string; ifRevision: string } | { ok: false; errorCode: "bad_request" };
 
-/** `ifRevision` 이 없으면 낙관적 잠금이 통째로 사라진다 — 여기서 막는다. */
+/** Without `ifRevision` optimistic locking disappears entirely — block it here. */
 export function validateIdentityPutBody(input: unknown): IdentityPutValidation {
   const record =
     typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
@@ -58,10 +58,10 @@ export type ConfigPutValidation =
   | { ok: false; errorCode: "unsupported_config_key"; unknownKeys: string[] };
 
 /**
- * 플러그인이 허용하는 여섯 키(`model`/`provider`/`toolsets`/`reasoning_effort`/
- * `enabledToolsets`/`disabledSkills`)만 통과시킨다. 화면이
- * 실수로 다른 키를 보내면 원격이 400 을 내는데, 여기서 막으면 왜 막혔는지가
- * 분명해진다.
+ * Passes only the six keys the plugin allows (`model`/`provider`/`toolsets`/`reasoning_effort`/
+ * `enabledToolsets`/`disabledSkills`). If the screen
+ * accidentally sends another key the remote gives 400; blocking it here makes it clear
+ * why it was blocked.
  */
 export function validateConfigPatch(input: unknown): ConfigPutValidation {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
@@ -82,8 +82,8 @@ export type CreateOptionsValidation =
 const CLONE_KEY_SCOPES: readonly CloneKeyScope[] = ["referenced", "api_keys"];
 
 /**
- * 복제 원본은 지금 `default` 뿐이다 — 플러그인이 400 을 내기 전에 여기서 이유를 분명히 한다.
- * `cloneKeys`(키 복제 범위)는 `cloneFrom` 과 함께일 때만, `referenced`·`api_keys` 둘 중 하나.
+ * The only clone source for now is `default` — make the reason clear here before the plugin gives 400.
+ * `cloneKeys` (key clone scope) only together with `cloneFrom`, and one of `referenced` or `api_keys`.
  */
 export function validateCreateOptions(input: unknown): CreateOptionsValidation {
   const record = (input ?? {}) as { cloneFrom?: unknown; cloneKeys?: unknown };

@@ -1,4 +1,4 @@
-// POST /api/channels/:id/kanban/tasks/:taskId/reassign — {npcId} → {profile, reclaim_first:true} (채널 멤버)
+// POST /api/channels/:id/kanban/tasks/:taskId/reassign — {npcId} → {profile, reclaim_first:true} (channel members)
 import type { NextRequest } from "next/server";
 
 import { runTaskAction, type TaskParams } from "@/lib/kanban-routes";

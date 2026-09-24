@@ -4,26 +4,26 @@ import path from "node:path";
 import test from "node:test";
 
 /**
- * 하드 게이트 2: 복호화된 게이트웨이·프로필 토큰은 응답 본문에 실리지 않는다.
+ * Hard gate 2: decrypted gateway and profile tokens are not put in response bodies.
  *
- * 2026-09-15 실측으로 세 군데가 이 게이트를 깨고 있었다 —
- * `GET /api/channels/:id/gateway`, `GET /api/gateways/:id`, `PATCH /api/gateways/:id` 가
- * `token: decryptGatewayToken(...)` 를 그대로 돌려줬다. 소유자에게만 준다는 조건이 붙어도
- * 브라우저 메모리·프록시 로그·확장 프로그램으로 흘러간다.
+ * Measured on 2026-09-15, three places broke this gate —
+ * `GET /api/channels/:id/gateway`, `GET /api/gateways/:id` and `PATCH /api/gateways/:id`
+ * returned `token: decryptGatewayToken(...)` as is. Even restricted to owners it
+ * leaks into browser memory, proxy logs and extensions.
  *
- * 이 테스트는 라우트 소스에서 "응답 객체에 token 키를 담는" 모양을 금지한다. 서버가
- * Hermes 를 부르려고 복호화하는 것(변수·함수 인자)은 막지 않는다.
+ * This test forbids the shape "put a token key in a response object" in route sources. It does not block
+ * the server decrypting to call Hermes (variables, function arguments).
  */
 const API_DIR = path.join(process.cwd(), "src", "app", "api");
 
 /**
- * `token:` 필드에 복호화된 값을 담는 줄을 전부 잡는다.
+ * Catch every line that puts a decrypted value into a `token:` field.
  *
- * 응답 객체가 `NextResponse.json(...)` 안에 직접 쓰였는지, 헬퍼가 만들어 돌려주는지는 구분하지
- * 않는다 — 2026-09-15 에 실제로 샌 곳(`buildResponseGatewayConfig`)이 바로 헬퍼였다.
+ * It does not distinguish whether the response object is written directly inside `NextResponse.json(...)` or built and
+ * returned by a helper — the place that actually leaked on 2026-09-15 (`buildResponseGatewayConfig`) was exactly a helper.
  *
- * 서버가 Hermes 를 부르려고 복호화해 **함수 인자로** 넘기는 것은 정상이므로, 그런 줄에는
- * 바로 위에 `deskrpg-allow-token-arg` 주석을 달아 명시적으로 면제한다. 면제는 눈에 보여야 한다.
+ * Decrypting to pass **as a function argument** so the server can call Hermes is normal, so such lines are
+ * explicitly exempted with a `deskrpg-allow-token-arg` comment right above them. Exemptions must be visible.
  */
 const ALLOW_MARKER = "deskrpg-allow-token-arg";
 
@@ -32,7 +32,7 @@ function findDecryptedTokenFields(source: string): number[] {
   const hits: number[] = [];
   lines.forEach((line, index) => {
     if (!/(^|[^A-Za-z])token:/.test(line)) return;
-    // 포매터가 `token:` 과 값을 다른 줄로 나눈다 — 뒤 두 줄까지 한 문장으로 본다.
+    // The formatter splits `token:` and its value across lines — treat the next two lines as one statement.
     const statement = lines.slice(index, index + 3).join("\n");
     if (!statement.includes("decryptGatewayToken")) return;
     const previous = lines.slice(Math.max(0, index - 3), index).join("\n");
@@ -50,7 +50,7 @@ function* walk(dir: string): Generator<string> {
   }
 }
 
-test("API 라우트는 복호화된 게이트웨이 토큰을 응답에 싣지 않는다", () => {
+test("API routes do not put decrypted gateway tokens in responses", () => {
   const offenders: string[] = [];
   for (const file of walk(API_DIR)) {
     for (const line of findDecryptedTokenFields(fs.readFileSync(file, "utf8"))) {

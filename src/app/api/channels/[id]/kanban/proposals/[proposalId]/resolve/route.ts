@@ -1,4 +1,4 @@
-// POST /api/channels/:id/kanban/proposals/:proposalId/resolve — {choice:"card"|"inline"} (채널 멤버)
+// POST /api/channels/:id/kanban/proposals/:proposalId/resolve — {choice:"card"|"inline"} (channel members)
 import type { NextRequest } from "next/server";
 
 import { resolveCardProposal, type ProposalParams } from "@/lib/kanban-routes";

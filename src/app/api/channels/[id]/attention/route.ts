@@ -1,4 +1,4 @@
-// GET /api/channels/:id/attention — 사람이 답해야 하는 것만 (채널 멤버)
+// GET /api/channels/:id/attention — only what a person needs to answer (channel members)
 import type { NextRequest } from "next/server";
 
 import { getAttentionInbox, type ChannelParams } from "@/lib/attention-routes";

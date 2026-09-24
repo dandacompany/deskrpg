@@ -1,4 +1,4 @@
-// POST /api/channels/:id/kanban/tasks/:taskId/approve — review → done (채널 멤버)
+// POST /api/channels/:id/kanban/tasks/:taskId/approve — review → done (channel members)
 import type { NextRequest } from "next/server";
 
 import { runTaskAction, type TaskParams } from "@/lib/kanban-routes";

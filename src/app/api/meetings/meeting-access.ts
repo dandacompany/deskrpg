@@ -72,8 +72,8 @@ export async function resolveMeetingMinutesOwnerAccess(args: {
 }
 
 /**
- * 회의 결과를 등록하거나 요약을 다시 시킬 수 있는가. 회의를 제어하던 기준
- * (`canControlMeeting` — 주재자 또는 채널 소유자)과 같다.
+ * Whether one can register a meeting's result or have its summary redone. Same as the criterion for
+ * controlling a meeting (`canControlMeeting` — the host or the channel owner).
  */
 export function canManageMeetingMinutes(args: {
   userId: string;

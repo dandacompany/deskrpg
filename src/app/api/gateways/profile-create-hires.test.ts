@@ -8,13 +8,13 @@ import {
   setupThrowawaySqlite,
 } from "@/test-setup/npc-seed";
 
-// Task 6. 프로필 등록은 그 자체로 고용이다 — 게이트웨이가 이미 묶여 있는 채널
-// **전부**에 즉시 출근한다. 예전에는 사용자가 채널마다 NPC 를 따로 만들어야 했다.
+// Task 6. Registering a profile is itself hiring — it clocks in immediately to **every** channel the gateway
+// is already bound to. Users used to have to create NPCs separately per channel.
 //
-// 최상위(`[id]` 밖)에 둔다 — node 테스트 러너가 `[id]` 안의 *.test.ts 를 못 줍는다.
+// Kept at the top level (outside `[id]`) — the node test runner misses *.test.ts inside `[id]`.
 setupThrowawaySqlite("profile-create-hires-test");
 
-test("프로필을 등록하면 그 게이트웨이가 묶인 모든 채널의 명단에 한 개씩 들어간다", async () => {
+test("registering a profile adds one entry to the roster of every channel the gateway is bound to", async () => {
   const { gatewayId, channelIds, userId } = await seedGatewayBoundToChannels({ channels: 2 });
   const { selectChannelNpcs } = await import("@/lib/npc-projection");
   const { POST } = await import("./[id]/profiles/route");
@@ -38,13 +38,13 @@ test("프로필을 등록하면 그 게이트웨이가 묶인 모든 채널의 �
   }
 });
 
-test("고용이 실패해도 프로필 등록은 201 이다 — 되돌릴 수 없는 반쪽 상태를 만들지 않는다", async () => {
+test("profile registration is 201 even if hiring fails — no irreversible half-done state", async () => {
   const { gatewayId, userId } = await seedGatewayBoundToChannels({ channels: 1 });
   const { getDb, npcs } = await import("@/db");
   const { POST } = await import("./[id]/profiles/route");
 
-  // `npcs` 삽입만 골라 터뜨린다 — 프로필 등록(hermes_profiles 삽입)은 그대로 성공해야
-  // 이 테스트가 의미 있다. drizzle 인스턴스의 own property 로 덮고 끝나면 되돌린다.
+  // Blow up only the `npcs` insert — this test is meaningful only if profile registration (the hermes_profiles insert)
+  // still succeeds. Override it as an own property of the drizzle instance and restore afterwards.
   const instance = getDb() as unknown as { insert: (table: unknown) => unknown };
   const original = instance.insert.bind(instance);
   instance.insert = (table: unknown) => {

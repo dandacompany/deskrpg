@@ -4,11 +4,11 @@ import { validateAuthSegment, validateKeyBody } from "@/lib/hermes/provider-auth
 import { proxyFailure, resolveProfileRoute } from "@/lib/hermes/profile-route";
 
 /**
- * 프로필의 프로바이더 API 키 저장(PUT)·삭제(DELETE).
+ * Save (PUT) or delete (DELETE) a profile's provider API key.
  *
- * 키 값은 이 라우트를 통과만 한다 — 본문을 로깅하지 않고, 실패 응답에 요청 본문을
- * 섞지 않는다. 소유자 전용(docs/security.md 44행 — 게이트웨이 자격은 소유자만).
- * 순서: 세그먼트 검증 → 해석(소유자) → 본문 검증 → 플러그인 호출.
+ * Key values only pass through this route — the body is not logged, and the request body is not mixed
+ * into failure responses. Owner only (docs/security.md line 44 — gateway credentials are owner-only).
+ * Order: segment validation → resolve (owner) → body validation → plugin call.
  */
 type Ctx = { params: Promise<{ id: string; name: string; provider: string }> };
 

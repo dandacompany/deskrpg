@@ -1,4 +1,4 @@
-// POST /api/channels/:id/cron/jobs/:jobId/pause — {npcId} (출처 채널 멤버만)
+// POST /api/channels/:id/cron/jobs/:jobId/pause — {npcId} (origin channel members only)
 import type { NextRequest } from "next/server";
 
 import { mutateFromBody } from "@/lib/cron-routes";

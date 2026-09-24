@@ -12,8 +12,8 @@ import { registerMeetingOutcome } from "@/lib/meeting-register";
 import { createSubproject, ensureProjectRow, ProjectRegistryError } from "@/lib/project-registry";
 
 /**
- * 회의 결과의 후속 업무를 등록한다 — 카드는 승인 대기로 서고 실행은 승인 뒤에 시작한다.
- * 판단은 전부 `registerMeetingOutcome` 에 있다. 여기는 실제 DB·Hermes 를 꽂기만 한다.
+ * Register the follow-up work from a meeting's result — cards stand awaiting approval and execution starts after approval.
+ * All the judgment lives in `registerMeetingOutcome`. This only plugs in the real DB and Hermes.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               originMeetingId: minutesId,
             });
           } catch (err) {
-            // 같은 슬러그가 이미 있다 — 기존 서브프로젝트에 등록하는 것이거나 재시도다. 그대로 쓴다.
+            // The same slug already exists — either registering into an existing subproject or a retry. Use it as is.
             if (err instanceof ProjectRegistryError && err.code === "subproject_exists") return;
             throw err;
           }
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             .update(meetingMinutes)
             .set({ outcomeJson: jsonForDb({ ...outcome, registered }) })
             .where(eq(meetingMinutes.id, minutesId));
-          // 사무실 방의 "프로젝트로 등록할까요?" 줄이 결과를 말하게 한다. 던지지 않는다.
+          // Make the office room's "프로젝트로 등록할까요?" line report the result. Do not throw.
           await markMeetingOutcomeNoticeRegistered({
             channelId: row.channelId,
             minutesId,
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (result.ok) {
       return NextResponse.json({ registered: result.registered, approvalId: result.approvalId });
     }
-    // 칸반 관문의 거절(409·428·404·503)은 그 모양 그대로 돌려준다.
+    // Kanban gate refusals (409, 428, 404, 503) are returned in their shape as is.
     if ("response" in result) return result.response;
     return NextResponse.json(
       {

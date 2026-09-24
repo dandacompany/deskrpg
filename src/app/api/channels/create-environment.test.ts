@@ -9,15 +9,15 @@ import { effectiveMapSpawn } from "@/lib/effective-map-spawn";
 import { parseDbJson } from "@/lib/db-json";
 
 /**
- * 채널 생성은 `map_templates` 표 없이 환경 ID 만 받는다.
+ * Channel creation takes only an environment ID, without the `map_templates` table.
  *
- * 서버가 `buildOfficeEnvironment(environmentId)` 로 배치를 만들어 채널에 사본으로 저장한다.
- * 저장 결과는 예전 템플릿 경로(`ensureOfficeEnvironmentTemplate` → `mapTemplateId`)가
- * 남기던 것과 같아야 한다 — `normalizeMeetingMap` 을 거친 `map_data`, 그리고
- * cols·rows·spawnCol·spawnRow 네 키의 `map_config`.
+ * The server builds the layout with `buildOfficeEnvironment(environmentId)` and stores a copy on the channel.
+ * The stored result must match what the old template path (`ensureOfficeEnvironmentTemplate` → `mapTemplateId`)
+ * left behind — `map_data` passed through `normalizeMeetingMap`, and a `map_config` with the four keys
+ * cols, rows, spawnCol, spawnRow.
  *
- * `[id]` 세그먼트 밖(채널 API 루트)에 둔다 — node 테스트 러너가 `[id]` 를 문자
- * 클래스로 오인해 그 안의 *.test.ts 를 못 줍는다.
+ * Kept outside the `[id]` segment (at the channel API root) — the node test runner mistakes `[id]` for a character
+ * class and misses the *.test.ts inside it.
  */
 setupThrowawaySqlite("channel-create-environment-test");
 
@@ -70,7 +70,7 @@ for (const environment of OFFICE_ENVIRONMENTS) {
       .from(channels)
       .where(eq(channels.id, created.id));
 
-    // 예전 템플릿 경로와 같은 계산: 환경 배치 → 실제 입구 spawn → normalizeMeetingMap.
+    // The same computation as the old template path: environment layout → actual entrance spawn → normalizeMeetingMap.
     const map = buildOfficeEnvironment(environment.id);
     const spawn = effectiveMapSpawn(map);
     assert.ok(spawn, "환경 배치에는 spawn 이 있다");
@@ -84,7 +84,7 @@ for (const environment of OFFICE_ENVIRONMENTS) {
       spawnRow: spawn.row,
     });
 
-    // 하드 게이트: 채널마다 kind=office 방이 정확히 하나.
+    // Hard gate: exactly one kind=office room per channel.
     const offices = await db
       .select({ id: chatRooms.id })
       .from(chatRooms)
@@ -93,7 +93,7 @@ for (const environment of OFFICE_ENVIRONMENTS) {
   });
 }
 
-test("environmentId 가 없으면 400 environment_required", async () => {
+test("without environmentId it is 400 environment_required", async () => {
   const { userId, groupId } = await seedGroupAdmin();
   const { response, body } = await createChannel(userId, {
     name: "환경 없음",
@@ -104,7 +104,7 @@ test("environmentId 가 없으면 400 environment_required", async () => {
   assert.equal(body.errorCode, "environment_required");
 });
 
-test("알 수 없는 environmentId 는 400 environment_unknown", async () => {
+test("an unknown environmentId is 400 environment_unknown", async () => {
   const { userId, groupId } = await seedGroupAdmin();
   const { response, body } = await createChannel(userId, {
     name: "미상 환경",
@@ -116,7 +116,7 @@ test("알 수 없는 environmentId 는 400 environment_unknown", async () => {
   assert.equal(body.errorCode, "environment_unknown");
 });
 
-test("mapTemplateId 를 보내면 400 map_template_removed — 환경 ID 가 같이 와도 거부한다", async () => {
+test("sending mapTemplateId is 400 map_template_removed — rejected even when an environment ID comes along", async () => {
   const { userId, groupId } = await seedGroupAdmin();
   const { response, body } = await createChannel(userId, {
     name: "옛 계약",

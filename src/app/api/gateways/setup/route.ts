@@ -66,14 +66,14 @@ function failure(error: unknown) {
             code === "port_write_failed"
           ? 409
           : 400;
-  // 충돌에만 숫자 하나가 더 붙는다. 제안이 없으면 지금처럼 코드만 나간다.
+  // Only conflicts get one extra number. Without a suggestion only the code goes out, as now.
   const suggestion =
     error instanceof SetupPortConflictError && error.suggestedPort !== undefined
       ? { suggestedPort: error.suggestedPort }
       : {};
   return response({ error: code, errorCode: code, ...suggestion }, status);
 }
-/** 호스트에 넘기기 전에 서버가 같은 규칙으로 다시 본다. 호스트는 이것을 신뢰하지 않고 또 검증한다. */
+/** The server rechecks with the same rules before handing it to the host. The host does not trust this and validates again. */
 function readProvision(body: Record<string, unknown>): SetupProvisionRequest | undefined {
   const request: SetupProvisionRequest = {};
   const created = body.createProfile;
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
       throw new Error("setup_invalid_request");
     if (body.action === "cancel") return response({ job: cancelSetupJob(userId, body.jobId) });
     if (body.action === "connect-url") return response(await connectSetupUrl(userId, body));
-    // 관리 SSH(전용 키·확인한 호스트 키). 관리자 전용 — 서비스 계층이 판정한다.
+    // Managed SSH (dedicated key, verified host key). Admin only — the service layer decides.
     if (body.action === "ssh-public-key") return response(await sshPublicKey(userId));
     if (body.action === "ssh-scan") return response(await sshScanHost(userId, body));
     if (body.action === "ssh-register") return response(await sshRegisterHost(userId, body));
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
         : { mode: "ssh", hostId: typeof body.hostId === "string" ? body.hostId : "" };
     if (body.action === "discover")
       return response({ candidates: await discoverSetupHost(userId, target) });
-    // 설치 전에는 후보가 존재하지 않는다 — 그때만 candidateId 를 비울 수 있고, 서버가 설치 뒤 다시 찾는다.
+    // Before install the candidate does not exist — only then may candidateId be empty, and the server finds it again after install.
     const installHermes = body.action === "prepare" && body.installHermes === true;
     if (
       !installHermes &&
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
       throw new Error("setup_invalid_request");
     if (body.action === "inspect")
       return response(await inspectSetupHost(userId, target, body.candidateId));
-    // 잡을 만들지 않는 즉시 응답이다. 결과는 판정 하나뿐이고 명령 출력은 실리지 않는다.
+    // An immediate response that creates no job. The result is just one verdict and no command output is included.
     if (body.action === "check-model")
       return response({ model: await checkSetupModel(userId, target, body.candidateId) });
     if (body.action === "prepare") {
@@ -157,12 +157,12 @@ export async function POST(req: NextRequest) {
         body.profiles.some((name: unknown) => typeof name !== "string" || !isValidProfileName(name))
       )
         throw new Error("setup_invalid_request");
-      // 후보에 이미 시간대가 있으면 호스트가 무시한다. 여기서는 모양만 본다.
+      // If the candidate already has a timezone the host ignores this. Here only the shape is checked.
       const timezone =
         body.timezone === undefined || body.timezone === null
           ? undefined
           : validateTimezone(body.timezone);
-      // 재개 대상. 같은 사용자·같은 대상·실패한 잡인지는 서비스 계층이 판정한다.
+      // The resume target. Whether it is the same user, same target and a failed job is decided by the service layer.
       if (
         body.resumeFrom !== undefined &&
         body.resumeFrom !== null &&
@@ -170,12 +170,12 @@ export async function POST(req: NextRequest) {
       )
         throw new Error("setup_invalid_request");
       const resumeFrom = typeof body.resumeFrom === "string" ? body.resumeFrom : undefined;
-      // 화면이 제안을 수락했을 때만 실린다. 값은 여기서 한 번, 호스트에서 또 한 번 검증한다.
+      // Included only when the screen accepted the suggestion. The value is validated once here and once more on the host.
       const setPort =
         body.setPort === undefined || body.setPort === null
           ? undefined
           : validateSetupPort(body.setPort);
-      // 워커 전파 체크박스. 없으면 호스트 설정을 건드리지 않는다(옛 화면·URL 연결).
+      // The worker propagation checkbox. When absent, host settings are not touched (old screens, URL connections).
       if (
         body.workerPropagation !== undefined &&
         body.workerPropagation !== null &&

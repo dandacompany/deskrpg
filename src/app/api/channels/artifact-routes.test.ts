@@ -13,11 +13,11 @@ import {
 } from "@/test-setup/npc-seed";
 import { startFakePluginServer, type FakePluginServer } from "@/lib/hermes/fake-plugin-server";
 
-// T7. 결과물(아티팩트) REST — 목록·상세. 채널 범위는 서버가 정한다(채널 NPC 프로필 전부(잠든
-// NPC 포함) OR 채널 보드). 브라우저가 넘긴 profiles 는 무시한다.
+// T7. Artifact REST — list and detail. The server decides channel scope (all channel NPC profiles (including sleeping
+// NPCs) OR the channel board). profiles sent by the browser are ignored.
 //
-// `[id]` 세그먼트 밖에 둔다 — node 테스트 러너가 `[id]` 를 문자 클래스로 오인해 그 안의
-// *.test.ts 를 못 줍는다.
+// Kept outside the `[id]` segment — the node test runner mistakes `[id]` for a character class and misses
+// the *.test.ts inside it.
 setupThrowawaySqlite("artifact-routes-test");
 
 let server: FakePluginServer;
@@ -65,8 +65,8 @@ const ctx = (id: string, artifactId = "", v = "") => ({
 });
 
 /**
- * 채널 하나 + 가짜 플러그인 서버를 가리키는 게이트웨이(소유자 = 채널 소유자) + 프로필
- * `sophie` 의 active NPC.
+ * One channel + a gateway pointing at a fake plugin server (owner = channel owner) + an active NPC
+ * for profile `sophie`.
  */
 async function seedArtifactChannel() {
   const owner = await seedUser("artifact-owner");
@@ -87,7 +87,7 @@ async function seedArtifactChannel() {
   return { owner, channel, boardSlug: channelBoardSlug(channel.id) };
 }
 
-test("목록은 채널 NPC 프로필과 채널 보드를 서버가 붙이고, 브라우저의 profiles 값은 무시한다", async () => {
+test("the server attaches channel NPC profiles and the channel board to the list, ignoring the browser's profiles value", async () => {
   const { owner, channel, boardSlug } = await seedArtifactChannel();
   server.seedArtifact({ id: "mine", title: "내 것", profile: "sophie", body: "x" });
   server.seedArtifact({ id: "card", title: "카드", profile: "other", board: boardSlug, body: "x" });
@@ -108,7 +108,7 @@ test("목록은 채널 NPC 프로필과 채널 보드를 서버가 붙이고, �
   assert.match(server.lastRequest()!.path, /profiles=sophie&board=/);
 });
 
-test("profile 필터는 채널 NPC 만 받는다", async () => {
+test("the profile filter accepts only channel NPCs", async () => {
   const { owner, channel } = await seedArtifactChannel();
   const bad = await routes.list.GET(
     req(owner.id, "GET", `${base(channel.id)}?profile=stranger`),
@@ -118,7 +118,7 @@ test("profile 필터는 채널 NPC 만 받는다", async () => {
   assert.equal((await bad.json()).code, "invalid_field");
 });
 
-test("category 는 쉼표 목록으로 플러그인에 전달된다", async () => {
+test("category is forwarded to the plugin as a comma-separated list", async () => {
   const { owner, channel } = await seedArtifactChannel();
   const res = await routes.list.GET(
     req(owner.id, "GET", `${base(channel.id)}?category=media`),
@@ -128,7 +128,7 @@ test("category 는 쉼표 목록으로 플러그인에 전달된다", async () =
   assert.match(server.lastRequest()!.path, /kind=image%2Cmedia|kind=image,media/);
 });
 
-test("모르는 category 는 400 invalid_field", async () => {
+test("an unknown category is 400 invalid_field", async () => {
   const { owner, channel } = await seedArtifactChannel();
   const res = await routes.list.GET(
     req(owner.id, "GET", `${base(channel.id)}?category=bogus`),
@@ -138,7 +138,7 @@ test("모르는 category 는 400 invalid_field", async () => {
   assert.equal((await res.json()).code, "invalid_field");
 });
 
-test("category 와 kind 를 함께 주면 400 invalid_field", async () => {
+test("category and kind together are 400 invalid_field", async () => {
   const { owner, channel } = await seedArtifactChannel();
   const res = await routes.list.GET(
     req(owner.id, "GET", `${base(channel.id)}?category=media&kind=image`),
@@ -148,9 +148,9 @@ test("category 와 kind 를 함께 주면 400 invalid_field", async () => {
   assert.equal((await res.json()).code, "invalid_field");
 });
 
-test("taskId 는 플러그인 0.8.4 미만이면 428", async () => {
-  // 플러그인 게이트는 게이트웨이 바인딩 시점에 프로브해 캐시한다(~1h) — 바뀐 버전을
-  // 보게 하려면 setInfo 를 먼저 하고 그 뒤에 채널+게이트웨이를 새로 심는다.
+test("taskId is 428 when the plugin is below 0.8.4", async () => {
+  // The plugin gate is probed and cached at gateway binding time (~1h) — to see a changed version,
+  // call setInfo first and only then seed the channel + gateway fresh.
   server.setInfo({ version: "0.8.3" });
   const { owner, channel } = await seedArtifactChannel();
   const res = await routes.list.GET(
@@ -161,7 +161,7 @@ test("taskId 는 플러그인 0.8.4 미만이면 428", async () => {
   server.setInfo({ version: "0.8.4" });
 });
 
-test("상세는 채널 범위 밖이면 404 artifact_not_found", async () => {
+test("detail outside the channel scope is 404 artifact_not_found", async () => {
   const { owner, channel } = await seedArtifactChannel();
   server.seedArtifact({ id: "foreign2", title: "남", profile: "stranger", body: "x" });
   const res = await routes.item.GET(
@@ -172,7 +172,7 @@ test("상세는 채널 범위 밖이면 404 artifact_not_found", async () => {
   assert.equal((await res.json()).code, "artifact_not_found");
 });
 
-test("게이트: 비로그인 401, 비멤버 403/404, artifacts 능력 없음 428", async () => {
+test("gates: unauthenticated 401, non-member 403/404, no artifacts capability 428", async () => {
   const { channel } = await seedArtifactChannel();
   const stranger = await seedUser("stranger");
   assert.equal(
@@ -190,7 +190,7 @@ test("게이트: 비로그인 401, 비멤버 403/404, artifacts 능력 없음 42
   server.setInfo({ capabilities: ["kanban", "cron", "events", "artifacts"] });
 });
 
-test("내용은 Range 를 넘기고 206 스트림을, 범위 밖은 404 를 준다", async () => {
+test("content forwards Range and returns a 206 stream, out of scope gives 404", async () => {
   const { owner, channel } = await seedArtifactChannel();
   server.seedArtifact({
     id: "c1",
@@ -219,7 +219,7 @@ test("내용은 Range 를 넘기고 206 스트림을, 범위 밖은 404 를 준�
   assert.equal(bad.status, 400);
 });
 
-test("새 버전은 사용자 id 를 X-DeskRPG-User 로 붙여 201", async () => {
+test("a new version attaches the user id as X-DeskRPG-User and returns 201", async () => {
   const { owner, channel } = await seedArtifactChannel();
   server.seedArtifact({ id: "e1", title: "t", profile: "sophie", body: "v1" });
   const res = await routes.versions.POST(
@@ -239,7 +239,7 @@ test("새 버전은 사용자 id 를 X-DeskRPG-User 로 붙여 201", async () =>
   assert.equal(bad.status, 400);
 });
 
-test("삭제는 범위 안이면 ok, 밖이면 404", async () => {
+test("delete is ok within scope, 404 outside", async () => {
   const { owner, channel } = await seedArtifactChannel();
   server.seedArtifact({ id: "d1", title: "t", profile: "sophie", body: "x" });
   const ok = await routes.item.DELETE(
@@ -256,8 +256,8 @@ test("삭제는 범위 안이면 ok, 밖이면 404", async () => {
 });
 
 /**
- * 같은 게이트웨이에 묶인 채널 A·B. 프로필 `sophie` 는 두 채널 모두에 고용, `solo` 는 A 에만.
- * (플러그인 게이트는 게이트웨이마다 캐시한다 — 두 채널이 한 게이트웨이를 공유하는 것이 이 경우다.)
+ * Channels A and B bound to the same gateway. Profile `sophie` is hired in both channels, `solo` only in A.
+ * (The plugin gate is cached per gateway — two channels sharing one gateway is exactly this case.)
  */
 async function seedSharedGateway() {
   const owner = await seedUser("artifact-shared-owner");
@@ -295,7 +295,7 @@ function mutatingArtifactRequests(since: number) {
     );
 }
 
-test("F3: 다른 채널과 공유한 프로필의 채팅 결과물은 읽기만 된다 — 편집·삭제 403, 플러그인에 안 보낸다", async () => {
+test("F3: chat artifacts of a profile shared with another channel are read-only — edit/delete 403, nothing sent to the plugin", async () => {
   const { owner, b } = await seedSharedGateway();
   server.seedArtifact({ id: "shared-chat", title: "공유", profile: "sophie", body: "v1" });
 
@@ -327,7 +327,7 @@ test("F3: 다른 채널과 공유한 프로필의 채팅 결과물은 읽기만 
   assert.equal(mutatingArtifactRequests(before).length, 0, "플러그인 변경 경로를 부르지 않는다");
 });
 
-test("F3: 이 채널에만 고용된 프로필의 채팅 결과물은 고칠 수 있다", async () => {
+test("F3: chat artifacts of a profile hired only in this channel can be modified", async () => {
   const { owner, a } = await seedSharedGateway();
   server.seedArtifact({ id: "solo-chat", title: "솔로", profile: "solo", body: "v1" });
   const got = await routes.item.GET(
@@ -347,7 +347,7 @@ test("F3: 이 채널에만 고용된 프로필의 채팅 결과물은 고칠 수
   assert.equal(del.status, 200);
 });
 
-test("F3: 보드 결과물은 그 보드의 채널에서만 고친다 — 다른 채널은 읽기만", async () => {
+test("F3: board artifacts are modified only from that board's channel — other channels are read-only", async () => {
   const { owner, a, b, boardA } = await seedSharedGateway();
   server.seedArtifact({
     id: "board-a",
@@ -399,7 +399,7 @@ test("F3: 보드 결과물은 그 보드의 채널에서만 고친다 — 다른
   assert.equal(delA.status, 200);
 });
 
-test("F4: '.'·'..'·'a/b' 같은 id 는 플러그인을 부르기 전에 404 artifact_not_found", async () => {
+test("F4: ids like '.', '..', 'a/b' are 404 artifact_not_found before the plugin is called", async () => {
   const { owner, channel } = await seedArtifactChannel();
   for (const bad of [".", "..", "a/b", "", "x".repeat(129), "a b"]) {
     const before = server.requests().length;
@@ -433,7 +433,7 @@ test("F4: '.'·'..'·'a/b' 같은 id 는 플러그인을 부르기 전에 404 ar
   }
 });
 
-test("F4: 플러그인 상세 응답에 artifact 가 없으면 404 로 본다", async () => {
+test("F4: a plugin detail response without artifact is treated as 404", async () => {
   const { loadScopedArtifact } = await import("@/lib/artifact-access");
   const fakeCtx = {
     userId: "u",

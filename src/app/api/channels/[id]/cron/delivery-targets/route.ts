@@ -1,4 +1,4 @@
-// GET /api/channels/:id/cron/delivery-targets?npcId= — 그 프로필의 전달 대상 목록
+// GET /api/channels/:id/cron/delivery-targets?npcId= — that profile's delivery targets
 import type { NextRequest } from "next/server";
 
 import { listCronDeliveryTargets, type RouteParams } from "@/lib/cron-routes";

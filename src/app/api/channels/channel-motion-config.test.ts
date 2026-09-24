@@ -6,13 +6,13 @@ import { authHeaders, seedChannel, seedUser, setupThrowawaySqlite } from "@/test
 import { DEFAULT_NPC_MOTION } from "@/lib/npc-motion-config";
 import { buildOfficeEnvironment } from "@/game/three/office-environments";
 
-// GET 은 회의실 맵을 정규화하므로 유효한 맵이 있어야 200 이다.
+// GET normalizes the meeting room map, so a valid map is needed for 200.
 const office = () => buildOfficeEnvironment("agency");
 
-// 채널의 NPC 걸음 속도 — 채널 공유 설정이라 DB 에 두고, 소유자만 바꾸며, 바꾸면 방송한다.
+// The channel's NPC walking speed — a shared channel setting, so it lives in the DB, only the owner changes it, and changes are broadcast.
 setupThrowawaySqlite("channel-motion-config-test");
 
-/** 채널 저장 뒤 소켓 서버로 가는 내부 방송을 가로챈다(실제 소켓 서버가 없다). */
+/** Intercept the internal broadcast to the socket server after a channel save (there is no real socket server). */
 function captureEmits() {
   const original = globalThis.fetch;
   const emits: { event: string; payload: Record<string, unknown> }[] = [];
@@ -31,7 +31,7 @@ function params(id: string) {
   return { params: Promise.resolve({ id }) };
 }
 
-test("걸음 설정이 비어 있는 채널은 기본값을 돌려준다 — 클라이언트가 빈 값을 해석하지 않는다", async () => {
+test("a channel with empty motion settings returns the defaults — the client does not interpret empty values", async () => {
   const owner = await seedUser("motion-owner-1");
   const channel = await seedChannel(owner.id, "걸음 채널", office());
   const { GET } = await route();
@@ -45,7 +45,7 @@ test("걸음 설정이 비어 있는 채널은 기본값을 돌려준다 — 클
   assert.deepEqual((await res.json()).channel.motionConfig, DEFAULT_NPC_MOTION);
 });
 
-test("소유자가 바꾸면 접어서 저장하고, 방송에 motionConfig 를 싣는다", async () => {
+test("when the owner changes it, it is clamped before saving and motionConfig is included in the broadcast", async () => {
   const owner = await seedUser("motion-owner-2");
   const channel = await seedChannel(owner.id, "걸음 채널 2", office());
   const { GET, PUT } = await route();
@@ -82,7 +82,7 @@ test("소유자가 바꾸면 접어서 저장하고, 방송에 motionConfig 를 
   assert.equal("bogus" in saved, false);
 });
 
-test("걸음 설정을 안 바꾼 저장은 방송에 motionConfig 를 싣지 않는다 — 구버전 계약 그대로", async () => {
+test("a save that does not change motion settings leaves motionConfig out of the broadcast — the old contract as is", async () => {
   const owner = await seedUser("motion-owner-3");
   const channel = await seedChannel(owner.id, "걸음 채널 3", office());
   const { PUT } = await route();
@@ -104,7 +104,7 @@ test("걸음 설정을 안 바꾼 저장은 방송에 motionConfig 를 싣지 �
   }
 });
 
-test("소유자가 아니면 걸음 설정을 바꿀 수 없다", async () => {
+test("non-owners cannot change motion settings", async () => {
   const owner = await seedUser("motion-owner-4");
   const other = await seedUser("motion-other-4");
   const channel = await seedChannel(owner.id, "걸음 채널 4", office());

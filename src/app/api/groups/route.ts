@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
   );
 
   return NextResponse.json({
-    // 여기까지 오면 시스템 관리자는 위에서 이미 반환됐다.
+    // By this point system admins have already returned above.
     isSystemAdmin: false,
     groups: groupsWithCapabilities.map((row) => ({
       id: row.id,

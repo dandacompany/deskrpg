@@ -1,4 +1,4 @@
-// POST /api/channels/:id/projects/:projectId/archive — 보관(상태 전이 + 사건 수신 보드 이전)
+// POST /api/channels/:id/projects/:projectId/archive — archive (state transition + moving the event-receiving board)
 import type { NextRequest } from "next/server";
 
 import { postProjectArchive, type ChannelParams } from "@/lib/project-routes";

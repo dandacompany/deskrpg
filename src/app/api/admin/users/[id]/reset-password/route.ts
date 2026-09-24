@@ -11,8 +11,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 
 /**
- * 시스템 관리자가 사용자의 비밀번호를 임시 값으로 재설정한다.
- * 평문은 이 응답에만 한 번 실린다 — DB 에도 로그에도 남기지 않는다.
+ * A system admin resets a user's password to a temporary value.
+ * The plaintext appears only once in this response — it is left in neither the DB nor the logs.
  */
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const actorId = getAuthenticatedUserId(req);

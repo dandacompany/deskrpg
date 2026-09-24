@@ -4,10 +4,10 @@ import { validateAuthSegment } from "@/lib/hermes/provider-auth-validation";
 import { proxyFailure, resolveProfileRoute } from "@/lib/hermes/profile-route";
 
 /**
- * OAuth 디바이스 로그인 진행 상태 폴링.
+ * Poll the progress of an OAuth device login.
  *
- * 토큰·계정 정보는 이 라우트를 통과만 한다 — 로깅하지 않는다. 소유자 전용
- * (docs/security.md 44행). 순서: 세그먼트 검증 → 해석(소유자) → 플러그인 호출.
+ * Tokens and account info only pass through this route — they are not logged. Owner only
+ * (docs/security.md line 44). Order: segment validation → resolve (owner) → plugin call.
  */
 type Ctx = {
   params: Promise<{ id: string; name: string; provider: string; sessionId: string }>;
