@@ -28,24 +28,25 @@ export interface KanbanListViewProps {
   collapsedGroups: readonly string[];
   onToggleGroup: (key: string) => void;
   onOpen: (taskId: string) => void;
-  /** 펼친 카드의 직계 자식. 없으면 아직 안 불렀다는 뜻이다(D1(a) — 펼칠 때만 상세를 부른다). */
+  /** Direct children of expanded cards. Absent means not yet fetched (D1(a) — detail is fetched only on expand). */
   childrenOf: ReadonlyMap<string, KanbanTask[]>;
-  /** 펼친 카드의 부모들. "부모 대기" 판정에 쓴다. */
+  /** Parents of expanded cards. Used for the "waiting on parent" judgment. */
   parentsOf: ReadonlyMap<string, KanbanTask[]>;
   expanded: ReadonlySet<string>;
   loadingChildren: ReadonlySet<string>;
   onToggleExpand: (taskId: string) => void;
 }
 
-/** 한 카드가 트리에서 몇 단 아래인가. 들여쓰기는 이 값에만 의존한다. */
+/** How many levels down a card is in the tree. Indentation depends only on this value. */
 const INDENT_PX = 20;
 const MAX_DEPTH = 6;
 
 /**
- * 목록 뷰 — 보드와 **같은 데이터의 다른 표현**이다.
+ * List view — **the same data, presented differently** from the board.
  *
- * 행에는 이동 손잡이가 없다. 목록에서의 끌기가 순서인지 상태인지 모호하고, 기존 이동 규약은
- * "보이는 상태 열" 을 전제한다. 상태 변경은 상세의 액션 버튼으로만 한다(설계 D5).
+ * Rows have no move handle. In a list, dragging is ambiguous between reordering and changing
+ * status, and the existing move convention presupposes "visible status columns." Status changes
+ * happen only through the detail's action buttons (design D5).
  */
 export default function KanbanListView({
   groups,
@@ -66,9 +67,9 @@ export default function KanbanListView({
   const collapsed = new Set(collapsedGroups);
 
   /**
-   * 펼쳐진 부모 아래에 이미 그려지는 카드는 최상위에서 뺀다 — 같은 카드가 두 번 나오면
-   * 개수가 맞지 않아 보인다. 부모가 접혀 있거나 이 목록에 없으면 최상위에 그대로 남는다
-   * (부모를 잃은 자식이 사라지지 않게 하는 규칙).
+   * Cards already rendered under an expanded parent are excluded from the top level — showing the
+   * same card twice makes the count look wrong. If the parent is collapsed or not in this list,
+   * the card stays at the top level (this keeps an orphaned child from disappearing).
    */
   const nested = new Set<string>();
   for (const taskId of expanded) {
@@ -141,7 +142,7 @@ export default function KanbanListView({
   );
 }
 
-/** 한 카드와 (펼쳐져 있으면) 그 아래 자식들. 재귀는 `MAX_DEPTH` 에서 멈춘다. */
+/** One card and, if expanded, its children below. Recursion stops at `MAX_DEPTH`. */
 function Rows({
   task,
   depth,
@@ -272,7 +273,7 @@ function groupLabel(
 ): string {
   if (group.key === OTHER_STATUS_GROUP_KEY) return t("kanban.list.group.otherStatus");
   if (group.key === UNSET_GROUP_KEY) {
-    // 상태·묶기없음에는 빈 값이 생기지 않는다 — 실제로 비는 셋만 문구를 갖는다.
+    // Status and "no grouping" never produce an empty value — only the three that actually can have wording.
     if (groupBy === "tenant") return t("kanban.list.group.unset.tenant");
     if (groupBy === "assignee") return t("kanban.list.group.unset.assignee");
     return t("kanban.list.group.unset.priority");
@@ -280,7 +281,7 @@ function groupLabel(
   if (groupBy === "status") return t(`kanban.column.${group.key}`);
   if (groupBy === "assignee") return assigneeLabel(group.value, npcs) ?? group.key;
   if (groupBy === "none") return t("kanban.list.group.all");
-  // 테넌트는 슬러그 그대로. 표시 이름은 프로젝트 메타 표가 생기면 붙는다.
+  // Tenant is shown as the raw slug. A display name gets attached once a project meta table exists.
   return group.value ?? group.key;
 }
 
@@ -293,8 +294,8 @@ const UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
 ];
 
 /**
- * `Intl.RelativeTimeFormat` 으로 "2일 전" 을 만든다. 로케일마다 문구를 네 벌 적지 않아도
- * 되고, 단수·복수 규칙도 플랫폼이 맡는다.
+ * Builds a string like "2 days ago" via `Intl.RelativeTimeFormat`. This avoids writing out
+ * wording per locale, and the platform handles singular/plural rules too.
  */
 function relativeTime(value: PluginTime | undefined, now: number, locale: string): string {
   const at = taskTimeMs(value);

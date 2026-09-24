@@ -16,9 +16,9 @@ interface TaskEditorDialogProps {
   mode: "create" | "edit";
   initial: TaskFormValues;
   npcs: readonly BoardNpc[];
-  /** 선행 카드 후보(같은 보드). 수정 모드에서는 자기 자신을 뺀다. */
+  /** Prerequisite-card candidates (same board). Excludes itself in edit mode. */
   candidates: readonly KanbanTask[];
-  /** 서버 400 메시지 등 — 그대로 보여 준다(R8). */
+  /** The server's 400 message, etc. — shown as-is (R8). */
   serverError: string | null;
   submitting: boolean;
   confirmChatDraft?: boolean;
@@ -34,7 +34,7 @@ const REASONING_EFFORTS = ["low", "medium", "high"] as const;
 const FIELD = "w-full rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-text";
 const LABEL = "block text-[11px] font-semibold text-text-secondary mb-1";
 
-/** 생성/수정 폼(R8). 값의 해석은 `taskFormToBody` 가 한다 — 여기는 입력만 모은다. */
+/** Create/edit form (R8). Value interpretation is `taskFormToBody`'s job — this only collects input. */
 export default function TaskEditorDialog({
   mode,
   initial,

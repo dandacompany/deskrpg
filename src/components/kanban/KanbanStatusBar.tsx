@@ -5,11 +5,12 @@ import type { KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-types";
 import { segmentWidths, type StatusSegment } from "@/lib/kanban-view-state";
 
 /**
- * 묶음 진행률 — 상태 분포 세그먼트 바.
+ * Bundle progress — a status-distribution segment bar.
  *
- * 카드 진행률(자식 완료 수)과 **다른 수치**라서 모양도 다르다. 카드 쪽은 한 색 바이고
- * 이쪽은 상태별로 칸이 나뉜다. 셀 카드가 없으면(`counted === 0`) 아무것도 그리지 않는다 —
- * 빈 0% 바는 "아무도 일을 안 했다" 로 읽힌다.
+ * This is a **different metric** from card progress (child completion count), so it looks
+ * different too. The card side is a single-color bar; this one splits into cells per status.
+ * If there are no countable cards (`counted === 0`), nothing is drawn — an empty 0% bar reads as
+ * "nobody has done any work."
  */
 const SEGMENT_CLASS: Record<KanbanTaskStatus, string> = {
   triage: "bg-text-dim",
@@ -20,7 +21,7 @@ const SEGMENT_CLASS: Record<KanbanTaskStatus, string> = {
   blocked: "bg-danger",
   review: "bg-meeting",
   done: "bg-success",
-  // 분모에서 빠지므로 그려질 일이 없지만, 색 표가 상태 집합을 통째로 덮게 둔다.
+  // Excluded from the denominator, so it never actually gets drawn, but this lets the color table cover the whole status set.
   archived: "bg-surface-raised",
 };
 

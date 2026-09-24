@@ -1,11 +1,13 @@
 /**
- * 칸반 REST(`/api/channels/:id/kanban/**`, `/automation/status`)의 브라우저 쪽 호출.
+ * Browser-side calls for the Kanban REST API (`/api/channels/:id/kanban/**`, `/automation/status`).
  *
- * 브라우저는 Hermes 를 직접 부르지 않는다 — 전부 같은 출처의 DeskRPG 라우트이고, 인증은
- * 앱의 다른 fetch 와 같이 세션 쿠키로 간다. 실패는 서버가 내려 준 `{code, message, …}` 를
- * 그대로 `KanbanApiError` 에 실어 던진다(R32) — 여기서 번역하거나 접지 않는다.
+ * The browser never calls Hermes directly — everything goes through same-origin DeskRPG routes,
+ * and auth rides the session cookie like every other fetch in the app. Failures are thrown as-is
+ * via `KanbanApiError` carrying the server's `{code, message, …}` (R32) — no translation or
+ * folding happens here.
  *
- * 낙관적 갱신은 없다(R26). 조작 함수는 응답만 돌려주고, 화면이 성공 후 재조회한다.
+ * No optimistic updates (R26). Mutation functions just return the response; the screen refetches
+ * after success.
  */
 
 import type {
@@ -70,11 +72,11 @@ export type BoardSettings = {
 
 export type CreateTaskResponse = { task: KanbanTask; warning?: string };
 
-/** 카드 상세 응답에 `warning` 은 없다 — 생성 응답의 경고는 화면이 따로 들고 있는다(R9). */
+/** The task detail response has no `warning` — the screen holds onto the create response's warning separately (R9). */
 
 export type FetchLike = typeof fetch;
 
-/** 프로젝트 목록 한 줄 — 선택기가 쓰는 만큼만. 전체 모양은 `ProjectView`(서버). */
+/** One row of the project list — only what the picker needs. Full shape is `ProjectView` (server). */
 export type ProjectSummary = {
   id: string;
   boardSlug: string;
@@ -82,8 +84,9 @@ export type ProjectSummary = {
   status: string;
   isEventCarrier: boolean;
   /**
-   * `YYYY-MM-DD` 또는 null. 서버(`project-registry.ts` 의 `ProjectView`)는 처음부터 보냈고
-   * 이 타입만 선택기용으로 좁혀져 있었다. 타임라인의 목표일 선이 이 값을 읽는다.
+   * `YYYY-MM-DD` or null. The server (`ProjectView` in `project-registry.ts`) sent this from the
+   * start; only this type had been narrowed for the picker. The timeline's target-date line reads
+   * this value.
    */
   targetDate: string | null;
 };
@@ -98,7 +101,7 @@ async function parseFailure(res: Response): Promise<KanbanApiError> {
     const parsed: unknown = await res.json();
     if (typeof parsed === "object" && parsed !== null) body = parsed as Record<string, unknown>;
   } catch {
-    // 본문이 JSON 이 아니면 상태 코드만으로 만든다.
+    // If the body isn't JSON, build the failure from the status code alone.
   }
   const code =
     typeof body.code === "string"
@@ -144,15 +147,17 @@ function json(method: string, body?: unknown): RequestInit {
 }
 
 /**
- * 채널 하나에 묶인 호출 모음. `fetchImpl` 은 테스트용 — 기본은 전역 fetch 를 **호출 시점에**
- * 읽는다(테스트가 전역을 바꿔 끼우기 때문에 생성 시점에 붙잡으면 안 된다).
+ * The set of calls bound to a single channel. `fetchImpl` is for tests — by default this reads
+ * the global fetch **at call time** (must not capture it at creation time, since tests swap out
+ * the global).
  *
- * `boardSlug` 를 주면 칸반 경로로 나가는 **모든** 호출에 `?board=` 가 붙는다. 호출마다 손으로
- * 붙이지 않는 이유는, 그러면 새 호출을 더하는 사람이 잊기 때문이다 — 잊으면 조용히 기본 보드를
- * 만지게 되고, 사용자는 다른 프로젝트를 열어 둔 채 엉뚱한 보드를 고치게 된다. 주입은 fetch 를
- * 한 겹 감싸서 하고, `/automation/status` 처럼 칸반 경로가 아닌 곳에는 붙지 않는다.
+ * When `boardSlug` is given, `?board=` is appended to **every** call that goes out a kanban path.
+ * It isn't appended by hand at each call site because whoever adds a new call would forget — and
+ * forgetting silently touches the default board, so the user ends up editing the wrong board while
+ * a different project is open. The injection wraps fetch in one layer and does not apply to
+ * non-kanban paths like `/automation/status`.
  *
- * 생략하면 그 채널의 사건 수신 보드(= 기본 프로젝트)를 쓴다.
+ * If omitted, this uses the channel's event-carrier board (= default project).
  */
 export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardSlug?: string) {
   const root = base(channelId);
@@ -171,8 +176,8 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
         `/api/channels/${encodeURIComponent(channelId)}/automation/status`,
       ),
     /**
-     * 이 채널의 프로젝트(= 보드) 목록. 칸반 경로 밖이라 `?board=` 가 붙지 않는다 — 붙으면
-     * 목록을 읽을 때마다 고른 보드에 갇힌다.
+     * The list of this channel's projects (= boards). This is outside kanban paths, so `?board=`
+     * is not appended — appending it would lock every list read to the currently chosen board.
      */
     projects: () =>
       request<{ projects: ProjectSummary[] }>(
@@ -183,11 +188,11 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
       request<BoardResponse>(f, `${root}/board${includeArchived ? "?include_archived=true" : ""}`),
     taskDetail: (taskId: string) => request<KanbanTaskDetail>(f, task(taskId)),
     /**
-     * 묶음 조회 — 보드 전체의 부모·자식 쌍. 플러그인에 `kanban_views` 가 없으면 404 로 실패한다.
-     * 화면은 그때 카드마다 `taskDetail()` 을 부르는 길로 내려앉는다.
+     * Bulk link lookup — parent/child pairs across the whole board. Fails with 404 if the plugin
+     * lacks `kanban_views`. The screen then falls back to calling `taskDetail()` per card.
      */
     links: () => request<KanbanLinksPage>(f, `${root}/links`),
-    /** 창 안의 실행 기록. `from`·`to` 는 epoch 초, 생략하면 플러그인이 최근 7일을 준다. */
+    /** Run history within a window. `from`/`to` are epoch seconds; if omitted, the plugin gives the last 7 days. */
     runs: (opts?: { from?: number; to?: number; limit?: number }) => {
       const qs = new URLSearchParams();
       for (const key of ["from", "to", "limit"] as const) {
@@ -203,7 +208,7 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
     deleteTask: (taskId: string) => request<{ ok: true }>(f, task(taskId), { method: "DELETE" }),
     addComment: (taskId: string, body: string) =>
       request<{ comment: KanbanComment }>(f, `${task(taskId)}/comments`, json("POST", { body })),
-    /** `reassign` 은 `{npcId}`, `request-changes`/`unblock` 은 `{comment}`, 나머지는 본문 없음. */
+    /** `reassign` takes `{npcId}`, `request-changes`/`unblock` take `{comment}`, everything else has no body. */
     action: (taskId: string, action: KanbanTaskAction, body?: Record<string, unknown>) =>
       request<{ task: KanbanTask | Record<string, unknown> }>(
         f,
@@ -226,8 +231,8 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
       request<{ ok: true }>(f, `${root}/attachments/${encodeURIComponent(attachmentId)}`, {
         method: "DELETE",
       }),
-    // 브라우저가 직접 여는 주소라 fetch 를 거치지 않는다 — 여기만 손으로 붙인다.
-    /** 보드 전체 첨부. 플러그인이 목록을 모르면 `supported: false` 로 온다(오류가 아니다). */
+    // This is a URL the browser opens directly, so it doesn't go through fetch — appended by hand only here.
+    /** Board-wide attachments. If the plugin doesn't know the list, it returns `supported: false` (not an error). */
     boardAttachments: (cursor?: string) =>
       request<{
         supported: boolean;
@@ -264,8 +269,9 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
     blackboard: (taskId: string) =>
       request<{ blackboard: Record<string, unknown> }>(f, `${task(taskId)}/blackboard`),
     /**
-     * 카드 제안 해소. 200 `{choice, taskId?, assigneeDropped?}`. 실패는 서버 코드를 그대로
-     * 실은 `KanbanApiError` — 409 `already_resolved` 를 화면이 가려 안내할 수 있다.
+     * Resolve a card proposal. 200 `{choice, taskId?, assigneeDropped?}`. Failures are a
+     * `KanbanApiError` carrying the server code as-is — the screen can catch 409
+     * `already_resolved` to show guidance.
      */
     resolveProposal: (proposalId: string, choice: "card" | "inline") =>
       request<{ choice: "card" | "inline"; taskId?: string; assigneeDropped?: boolean }>(
@@ -283,7 +289,7 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
 
 export type KanbanApi = ReturnType<typeof createKanbanApi>;
 
-/** 아무 예외를 `KanbanFailure` 로. 이미 `KanbanApiError` 면 그대로. */
+/** Coerces any exception into a `KanbanFailure`. If it's already a `KanbanApiError`, pass it through. */
 export function toFailure(err: unknown): KanbanFailure {
   if (err instanceof KanbanApiError) {
     return { status: err.status, code: err.code, message: err.message, minVersion: err.minVersion };

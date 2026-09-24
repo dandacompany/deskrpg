@@ -32,7 +32,7 @@ import {
 interface KanbanCardProps {
   task: KanbanTask;
   npcs: readonly BoardNpc[];
-  /** 경과 시간 계산 기준(ms). 보드가 1초마다 올려 준다. */
+  /** Reference time (ms) for computing elapsed time. The board bumps this every second. */
   now: number;
   selected: boolean;
   onOpen: (taskId: string) => void;
@@ -47,7 +47,7 @@ const SEVERITY_CLASS: Record<"critical" | "error" | "warning", string> = {
   warning: "bg-npc-dark/15 text-npc-dark",
 };
 
-/** 카드 요약 한 장 — 제목·담당·우선순위·진행률·경고·실행 중·댓글·링크. 상세는 드로어가. */
+/** One card summary — title, assignee, priority, progress, warnings, running, comments, links. The drawer holds the detail. */
 export default function KanbanCard({
   task,
   npcs,
@@ -147,9 +147,10 @@ export default function KanbanCard({
     [announce, moveRoot, onMoveInteraction, t, task.id, task.status],
   );
 
-  // 언마운트 정리는 언마운트에서만 돌아야 한다. 의존성에 콜백이나 task 를 넣으면
-  // 부모가 새 콜백 신원으로 다시 그릴 때마다 cleanup 이 발화해, 진행 중인 드래그의
-  // 강조와 잠금 표시를 지우고 "teardown" 취소까지 보낸다(실제 브라우저에서 관측).
+  // Unmount cleanup must run only on unmount. Adding the callback or task to the dependencies
+  // would fire cleanup every time the parent re-renders with a new callback identity, clearing the
+  // highlight and lock markers of an in-progress drag and even sending a "teardown" cancel
+  // (observed in a real browser).
   const teardownRef = useRef({ moveRoot, onMoveInteraction, task });
   useEffect(() => {
     teardownRef.current = { moveRoot, onMoveInteraction, task };
@@ -195,12 +196,14 @@ export default function KanbanCard({
   };
 
   /**
-   * 드래그로 끝난 포인터는 뒤이어 click 을 낳는다. 그 click 을 한 번만, 어디로 가든 삼킨다.
+   * A pointer that ends via drag subsequently fires a click. That click is swallowed exactly
+   * once, wherever it lands.
    *
-   * 캡처를 끌기 시작 시점에 걸기 때문에 이 click 은 카드가 아니라 **포인터 아래 요소**로 간다.
-   * 카드에서만 막으면 보드 밖에 떨어뜨렸을 때 모달 배경이 click 을 받아 칸반이 닫힌다
-   * (e2e 로 확인). 상세가 열리는 이중 동작(R2)도 같은 자리에서 막힌다.
-   * click 은 pointerup 과 같은 태스크에서 나오므로 타이머로 거두면 다음 탭은 건드리지 않는다.
+   * Because capture is attached at drag-start, this click goes not to the card but to the
+   * **element under the pointer**. Blocking it only at the card would let the modal backdrop
+   * receive the click when dropped outside the board, closing the kanban (confirmed via e2e). The
+   * double-action of opening the detail (R2) is blocked at the same spot. Since the click comes in
+   * the same task as pointerup, collecting it with a timer leaves the next tap untouched.
    */
   const swallowDragClick = () => {
     const swallow = (event: MouseEvent) => {
@@ -244,10 +247,11 @@ export default function KanbanCard({
     grabRef.current = rect
       ? { x: event.clientX - rect.left, y: event.clientY - rect.top, width: rect.width }
       : { x: 0, y: 0, width: 0 };
-    // 포인터를 캡처하지 않는다. 캡처된 포인터의 click 은 안쪽 상세 버튼이 아니라 이 article 로
-    // 재지정돼, 카드를 그냥 눌렀을 때 드로어가 열리지 않는다(실제 브라우저에서 확인).
-    // 끌기 시작 때 캡처하는 것도 안 된다 — 6px 판정 전에 포인터가 카드 밖으로 나가면 move 가
-    // 카드에 오지 않아 끌기가 시작조차 안 된다. 누른 동안만 창에서 move/up 을 듣는다.
+    // Never capture the pointer. A captured pointer's click gets retargeted to this article
+    // instead of the inner detail button, so simply clicking the card would not open the drawer
+    // (confirmed in a real browser). Capturing at drag-start doesn't work either — if the pointer
+    // leaves the card before the 6px threshold, move never reaches the card and dragging never
+    // even starts. Only listen for window move/up while the pointer is pressed.
     listenWhilePressed();
   };
 
@@ -311,13 +315,13 @@ export default function KanbanCard({
     cancel("pointer-cancel");
   };
 
-  // 창 리스너는 한 번 걸리면 그대로 남으므로, 늘 최신 렌더의 핸들러를 부르게 ref 로 잇는다.
+  // A window listener stays attached once set, so a ref keeps it calling the latest render's handler.
   const pressHandlersRef = useRef({
     move: onMovePointerMove,
     up: onMovePointerUp,
     cancel: onMovePointerCancel,
   });
-  // 누른 채로 카드가 사라지면(보드 새로고침·이동 확정) 창 리스너가 남지 않게 거둔다.
+  // If the card disappears while pressed (board refresh, a move confirming), tear down the window listener so it doesn't linger.
   useEffect(() => stopListening, []);
   useEffect(() => {
     pressHandlersRef.current = {

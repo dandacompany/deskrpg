@@ -47,7 +47,7 @@ async function mount(options: { disabled?: boolean } = {}) {
     host,
     events,
     opened: () => opened,
-    /** 부모가 새 콜백 신원으로 다시 그리는 상황(보드가 상태를 올릴 때마다 일어난다). */
+    /** Simulates the parent re-rendering with a new callback identity (happens whenever the board bumps state). */
     rerender: async () =>
       await act(async () =>
         root.render(
@@ -302,9 +302,10 @@ test("R2: pointer movement activates after the threshold and drops on an empty v
 });
 
 test("R2: the card never captures the pointer — capture retargets the click to the card and the detail button never hears it", async () => {
-  // 실제 브라우저에서 확인한 동작(2026-09-20): article 이 포인터를 캡처하면 뒤따르는 click 은
-  // 안쪽 상세 버튼이 아니라 article 로 간다. 그래서 카드를 눌러도 드로어가 열리지 않았다.
-  // jsdom 은 그 재지정을 흉내 내지 않으므로 "캡처를 부르지 않는다" 자체를 고정한다.
+  // Behavior confirmed in a real browser (2026-09-20): when the article captures the pointer, the
+  // following click goes to the article instead of the inner detail button. So clicking the card
+  // did not open the drawer. jsdom does not emulate that retargeting, so this pins down "never
+  // calls capture" itself.
   const f = await mount();
   const card = f.host.querySelector<HTMLElement>('[data-task-id="task-1"]')!;
   const captured: number[] = [];
@@ -323,7 +324,7 @@ test("R2: the card never captures the pointer — capture retargets the click to
     await act(async () => detail.click());
     assert.equal(f.opened(), 1, "카드를 누르면 상세가 열린다");
 
-    // 끌기는 캡처 없이도 추적된다 — 포인터가 카드 밖(다른 요소)에서 움직이고 떼어져도.
+    // Dragging is tracked without capture — even when the pointer moves and releases outside the card (a different element).
     await act(async () =>
       detail.dispatchEvent(pointerEvent("pointerdown", { clientX: 10, clientY: 10 })),
     );
@@ -543,13 +544,13 @@ test("R2: the click that ends a card-body drag does not open details", async () 
     await act(async () =>
       card.dispatchEvent(pointerEvent("pointermove", { clientX: 30, clientY: 10 })),
     );
-    // 브라우저는 pointerup 과 그 click 을 같은 태스크에서 낸다 — 사이에 타이머가 끼지 않는다.
+    // The browser fires pointerup and its click within the same task — no timer runs in between.
     await act(async () => {
       card.dispatchEvent(pointerEvent("pointerup", { clientX: 30, clientY: 10 }));
       body.click();
     });
     assert.equal(f.opened(), 0, "a drag must not fall through to the detail click");
-    // 삼키는 것은 그 한 번뿐이다 — 다음 탭은 상세를 연다.
+    // Only that one tap is swallowed — the next tap opens details.
     await act(async () => await new Promise((resolve) => setTimeout(resolve, 5)));
     await act(async () => body.click());
     assert.equal(f.opened(), 1, "the next genuine tap opens details");

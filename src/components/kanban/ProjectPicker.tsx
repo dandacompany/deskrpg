@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * 헤더의 프로젝트(= 보드) 선택기.
+ * The header's project (= board) picker.
  *
- * 채널에 보드가 하나뿐이면 **아무것도 그리지 않는다** — 고를 것이 없는데 선택기를 두면 화면만
- * 복잡해진다. 둘 이상일 때만 나타난다.
+ * If a channel has only one board, this **renders nothing** — a picker with nothing to pick from
+ * just clutters the screen. It only appears with two or more.
  *
- * 고른 값은 사용자별 `localStorage` 에 남는다(결정 B-1). 서버에 두지 않는 이유는 같은 채널을
- * 보는 사람들이 서로 다른 프로젝트를 열어 둘 수 있어야 해서다. 기기를 바꾸면 기본 프로젝트로
- * 돌아간다 — 그 대가를 받아들인 선택이다.
+ * The chosen value persists per-user in `localStorage` (decision B-1). It isn't kept on the
+ * server because people viewing the same channel need to be able to have different projects open.
+ * Switching devices resets to the default project — that's an accepted trade-off.
  */
 
 import { useCallback, useState } from "react";
@@ -23,15 +23,16 @@ export type ProjectOption = {
   status: string;
   isEventCarrier: boolean;
   /**
-   * `YYYY-MM-DD` 또는 null. 선택기는 쓰지 않지만 같은 응답에서 오고, 타임라인의 목표일 선이
-   * 이 값을 읽는다. 서버(`ProjectView`)는 처음부터 보내고 있었다.
+   * `YYYY-MM-DD` or null. The picker doesn't use this, but it comes in the same response, and the
+   * timeline's target-date line reads this value. The server (`ProjectView`) had been sending it
+   * from the start.
    */
   targetDate?: string | null;
 };
 
 const STORAGE_PREFIX = "deskrpg:kanban:board:";
 
-/** 브라우저 저장소는 사생활 모드·차단 설정에서 던진다. 못 읽어도 화면은 서야 한다. */
+/** Browser storage throws in private mode or with blocked settings. The screen must still render even if this can't be read. */
 function readStored(channelId: string): string | null {
   try {
     return window.localStorage.getItem(STORAGE_PREFIX + channelId);
@@ -45,33 +46,36 @@ function writeStored(channelId: string, boardSlug: string | null) {
     if (boardSlug === null) window.localStorage.removeItem(STORAGE_PREFIX + channelId);
     else window.localStorage.setItem(STORAGE_PREFIX + channelId, boardSlug);
   } catch {
-    // 저장 못 해도 이번 세션 동안은 고른 대로 보인다.
+    // Even if this can't be saved, the choice still shows correctly for this session.
   }
 }
 
 /**
- * 고른 보드를 돌려준다. 저장된 값이 지금 목록에 없으면(보드가 사라졌거나 다른 기기의 값)
- * 기본 보드로 떨어지고 저장된 값을 지운다 — 없는 보드를 계속 요청하면 404 만 돈다.
+ * Returns the chosen board. If the stored value isn't in the current list (the board disappeared,
+ * or it's a value from another device), falls back to the default board and clears the stored
+ * value — continuing to request a nonexistent board only yields 404s.
  */
 export function useSelectedBoard(channelId: string, options: ProjectOption[]) {
-  // 저장소는 첫 렌더에서 한 번만 읽는다. 목록이 아직 비어 있어도 고른 값은 살아 있어야 한다 —
-  // 그래야 모달을 다시 열 때 전에 보던 프로젝트가 잠깐 기본 보드로 깜빡이지 않는다.
+  // Storage is read once, on the first render. The chosen value must survive even while the list
+  // is still empty — that way, reopening the modal doesn't briefly flash the default board before
+  // showing the project you'd been viewing.
   const [stored, setStored] = useState<string | null>(() =>
     typeof window === "undefined" ? null : readStored(channelId),
   );
   const [channel, setChannel] = useState(channelId);
   if (channel !== channelId) {
-    // 채널이 바뀌면 그 채널의 값으로 갈아탄다(렌더 중 상태 교체 — 효과보다 한 박자 빠르다).
+    // When the channel changes, switch to that channel's value (state swap during render — one beat ahead of an effect).
     setChannel(channelId);
     setStored(typeof window === "undefined" ? null : readStored(channelId));
   }
 
-  // 저장된 값이 지금 목록에 없으면(보드가 사라졌거나 다른 기기의 값) **파생 단계에서** 기본
-  // 보드로 떨어뜨린다 — 없는 보드를 계속 요청하면 404 만 돈다.
+  // If the stored value isn't in the current list (the board disappeared, or it's another
+  // device's value), fall back to the default board **at the derivation step** — continuing to
+  // request a nonexistent board only yields 404s.
   //
-  // 저장소를 지우지는 않는다. 목록이 잠깐 비는 경우(조회 실패)에 사용자의 선택을 영구 삭제하지
-  // 않기 위해서다 — 그 보드가 다시 목록에 나타나면 선택도 그대로 살아난다. 진짜로 사라진
-  // 보드의 값은 다음 선택이 덮어쓴다.
+  // The stored value itself is not cleared here. This is so a momentarily empty list (a fetch
+  // failure) doesn't permanently erase the user's choice — once that board reappears in the list,
+  // the selection comes right back. A board that's truly gone gets overwritten by the next choice.
   const known = options.length === 0 || options.some((o) => o.boardSlug === stored);
 
   const select = useCallback(
@@ -91,7 +95,7 @@ export function ProjectPicker({
   onSelect,
 }: {
   options: ProjectOption[];
-  /** null 이면 기본(사건 수신) 보드 */
+  /** null means the default (event-carrier) board */
   selected: string | null;
   onSelect(boardSlug: string | null): void;
 }) {

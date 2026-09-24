@@ -73,25 +73,26 @@ async function mount(
     covered?: boolean;
     artifacts?: TaskDrawerArtifacts | null;
     artifactsRefreshTick?: number;
-    /** 헤더 선택기가 읽는 프로젝트 목록. 주지 않으면 빈 목록으로 답한다. */
+    /** The project list the header picker reads. Answers with an empty list if not given. */
     projects?: unknown[];
   } = {},
 ) {
-  // 보기 방식·필터는 채널별 localStorage 에 남는다. 한 테스트가 켠 "보관함 보기" 가 다음
-  // 테스트의 조회 URL 을 바꾸지 않도록 마운트마다 비운다.
+  // View mode/filters persist per-channel in localStorage. Clear it on every mount so one test's
+  // "show archive" doesn't change the next test's fetch URL.
   try {
     globalThis.localStorage?.clear();
   } catch {
-    // 저장소가 없는 환경이면 지울 것도 없다.
+    // Nothing to clear in an environment with no storage.
   }
   const original = globalThis.fetch;
   const calls: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     calls.push(`${init?.method ?? "GET"} ${url}`);
-    // 프로젝트 목록은 헤더 선택기만 쓰는 곁가지다. 각 테스트의 handler 가 이것까지 다루게 하면
-    // "보드를 몇 번 불렀나" 같은 셈이 조용히 틀어진다 — 여기서 빈 목록으로 답하고 만다.
-    // 보드가 여럿인 화면을 보려면 그 테스트가 handler 에서 이 경로를 직접 가로채면 된다.
+    // The project list is a side path used only by the header picker. Making each test's handler
+    // deal with it too would silently throw off counts like "how many times was the board
+    // fetched" — so it's answered here with an empty list. A test that needs multiple boards can
+    // intercept this path directly in its own handler.
     if (/\/projects(\?|$)/.test(url)) return json({ projects: props.projects ?? [] });
     return handler(url, init);
   }) as typeof fetch;
@@ -108,7 +109,7 @@ async function mount(
       ),
     );
   await render();
-  // 상태 → 보드 두 번의 fetch 가 끝나도록 마이크로태스크를 비운다.
+  // Flush microtasks so both the status and board fetches complete.
   await act(async () => {
     await new Promise((r) => setTimeout(r, 0));
   });
@@ -209,7 +210,7 @@ test("R4: move PATCHes status once, keeps counts unchanged while pending, then r
       false,
     );
 
-    // 다음 페인트 콜백이 React의 서버 응답 렌더보다 먼저 실행되는 순서를 고정한다.
+    // Pins down the order where the next paint callback runs before React renders the server response.
     globalThis.requestAnimationFrame = (callback) => {
       callback(performance.now());
       return 0;
@@ -626,7 +627,7 @@ test("R6: columns render in the fixed order and archived only after the toggle",
     );
     assert.equal(f.host.textContent?.includes("보관 카드"), false);
 
-    // 툴바에 체크박스가 여럿이라(경고만·보관함) 첫 번째를 집으면 엉뚱한 것을 누른다.
+    // The toolbar has multiple checkboxes (attention-only, archive) — grabbing the first one would click the wrong one.
     const toggle = f.host.querySelector<HTMLInputElement>("input[data-kanban-archive-toggle]");
     assert.ok(toggle);
     await act(async () => {
@@ -716,7 +717,7 @@ test("R9/E6: dispatcherPresent=false and lastError show as banners above the boa
     assert.deepEqual(banners, ["dispatcher", "lastError"]);
     assert.match(f.host.textContent ?? "", /디스패처가 없어/);
     assert.match(f.host.textContent ?? "", /poll timeout/);
-    // 열은 그대로 그려진다 — 배너는 막지 않는다.
+    // Columns still render as usual — the banner doesn't block them.
     assert.ok(f.host.querySelector("[data-column]"));
   } finally {
     await f.cleanup();
@@ -734,7 +735,7 @@ test("R7: the create form lists only active NPCs as assignee options", async () 
       ["", "(미배정)"],
       ["n1", "소피"],
     ]);
-    // 선행 카드 후보는 같은 보드의 카드 전부.
+    // Prerequisite-card candidates are all cards on the same board.
     const parents = Array.from(
       f.host.querySelectorAll<HTMLInputElement>('form input[type="checkbox"]'),
     );
@@ -808,7 +809,7 @@ test("R8/R9: create posts to the server, shows the 400 message verbatim, and sur
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));
     });
-    // 성공하면 폼이 닫히고 경고가 보드 상단과 드로어에 뜬다.
+    // On success the form closes and the warning shows at the top of the board and in the drawer.
     assert.equal(f.host.querySelector("#kanban-title"), null);
     assert.equal(
       f.host
@@ -830,8 +831,8 @@ test("R8/R9: create posts to the server, shows the 400 message verbatim, and sur
 });
 
 test("R26: a kanban:event tick refetches the board after the debounce", async () => {
-  // 디바운스 창을 넉넉히 둔다 — 1ms 면 전체 스위트 부하에서 두 render 사이에 타이머가 먼저 터져
-  // 두 번 fetch 되는 일이 실제로 있었다(간헐 실패). 창 안에 두 tick 이 확실히 들어가게 50ms.
+  // Use a generous debounce window — with 1ms, under full suite load the timer actually fired
+  // before the two renders, causing a double fetch (flaky). 50ms so both ticks reliably land within the window.
   const f = await mount(happy, { refreshTick: 0, debounceMs: 50 });
   try {
     const before = f.calls.filter((c) => c.endsWith("/kanban/board")).length;
@@ -918,7 +919,7 @@ test("unbound gateway offers connection to owners and guidance to members", asyn
 const findButton = (host: HTMLElement, label: string) =>
   Array.from(host.querySelectorAll("button")).find((b) => b.textContent?.trim() === label);
 
-test("스웜: capabilities 에 swarm 이 없으면 버튼이 렌더되지 않는다", async () => {
+test("swarm: the button doesn't render when swarm is absent from capabilities", async () => {
   const f = await mount((url) => {
     if (url.includes("/automation/status")) return json(status());
     if (url.includes("/kanban/board")) return json(board());
@@ -931,7 +932,7 @@ test("스웜: capabilities 에 swarm 이 없으면 버튼이 렌더되지 않는
   }
 });
 
-test("스웜 루트 카드에서 블랙보드 JSON 이 코멘트로 보이지 않는다", async () => {
+test("blackboard JSON does not show up as a comment on the swarm root card", async () => {
   const f = await mount(
     (url) => {
       if (url.includes("/automation/status")) return json(status());
@@ -961,7 +962,7 @@ test("스웜 루트 카드에서 블랙보드 JSON 이 코멘트로 보이지 �
   try {
     assert.equal(f.host.textContent?.includes("[swarm:blackboard]"), false);
     assert.equal(f.host.textContent?.includes("시작합니다"), true);
-    assert.equal(f.host.textContent?.includes("topology"), true); // 표에는 있다
+    assert.equal(f.host.textContent?.includes("topology"), true); // it's in the table
   } finally {
     await f.cleanup();
   }
@@ -981,7 +982,7 @@ const detailHandler =
     return json({ code: "not_found", message: "no route" }, { status: 404 });
   };
 
-test("출처로 이동: 이미 열린 보드에서도 focusRequest 가 오면 그 카드의 상세로 바꾼다", async () => {
+test("go to source: an incoming focusRequest switches to that card's detail even on an already-open board", async () => {
   const detailReads = new Map<string, number>();
   const first = { taskId: "t-todo", seq: 1 };
   const f = await mount(detailHandler(detailReads), {
@@ -994,7 +995,7 @@ test("출처로 이동: 이미 열린 보드에서도 focusRequest 가 오면 �
     await act(async () => new Promise((r) => setTimeout(r, 0)));
     assert.equal(detailReads.get("t-done"), 1, "새 카드의 상세를 연다");
 
-    // 다른 카드를 직접 연 뒤 같은 카드로 다시 요청해도(seq 가 오름) 그 카드로 돌아온다.
+    // Even after opening a different card directly, re-requesting the same card (with a bumped seq) returns to it.
     await act(async () =>
       f.host.querySelector<HTMLButtonElement>('[data-card-detail="t-todo"]')?.click(),
     );
@@ -1008,7 +1009,7 @@ test("출처로 이동: 이미 열린 보드에서도 focusRequest 가 오면 �
   }
 });
 
-test("결과물: 보드는 artifacts 를 카드 드로어에 그대로 넘긴다", async () => {
+test("artifacts: the board passes artifacts through to the card drawer as-is", async () => {
   const listed: string[] = [];
   const artifacts: TaskDrawerArtifacts = {
     list: async (taskId) => {
@@ -1027,7 +1028,7 @@ test("결과물: 보드는 artifacts 를 카드 드로어에 그대로 넘긴다
   }
 });
 
-test("결과물: 결과물 사건 신호가 연달아 와도 드로어는 디바운스 후 한 번만 다시 읽는다", async () => {
+test("artifacts: even with a burst of artifact event signals, the drawer refetches only once after debouncing", async () => {
   let listCalls = 0;
   const artifacts: TaskDrawerArtifacts = {
     list: async () => {
@@ -1055,7 +1056,7 @@ test("결과물: 결과물 사건 신호가 연달아 와도 드로어는 디바
   }
 });
 
-test("결과물 모달이 보드를 덮고 있으면(covered) Escape 로 보드를 닫지 않는다", async () => {
+test("when an artifacts modal is covering the board (covered), Escape does not close the board", async () => {
   const f = await mount(happy, { covered: true });
   try {
     await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
@@ -1068,7 +1069,7 @@ test("결과물 모달이 보드를 덮고 있으면(covered) Escape 로 보드�
   }
 });
 
-test("보드 위 결과물 모달: Escape 한 번은 결과물 모달만 닫고, 다음 Escape 가 보드를 닫는다", async () => {
+test("an artifacts modal over the board: one Escape closes only the artifacts modal, and the next Escape closes the board", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -1119,7 +1120,7 @@ test("보드 위 결과물 모달: Escape 한 번은 결과물 모달만 닫고,
   }
 });
 
-test("서브프로젝트 필터는 보드와 목록 양쪽에 같게 걸린다", async () => {
+test("the subproject filter applies the same way to both the board and the list", async () => {
   const tenantBoard = board({
     columns: [
       {
@@ -1141,7 +1142,7 @@ test("서브프로젝트 필터는 보드와 목록 양쪽에 같게 걸린다",
     assert.ok(f.host.textContent?.includes("웹 카드"));
     assert.ok(f.host.textContent?.includes("API 카드"));
 
-    // 툴바의 서브프로젝트 선택에서 web 만 남긴다.
+    // Keep only web selected in the toolbar's subproject filter.
     const tenantSelect = Array.from(f.host.querySelectorAll<HTMLSelectElement>("select")).find(
       (el) => el.getAttribute("aria-label") === "서브프로젝트",
     );
@@ -1164,7 +1165,7 @@ test("서브프로젝트 필터는 보드와 목록 양쪽에 같게 걸린다",
       `열 머리 개수가 거른 뒤 수가 아니다: ${todoColumn.textContent?.slice(0, 40)}`,
     );
 
-    // 같은 필터로 목록 뷰로 바꾸면 같은 카드 집합이어야 한다.
+    // Switching to list view with the same filter must show the same set of cards.
     const listButton = Array.from(f.host.querySelectorAll<HTMLButtonElement>("button")).find(
       (el) => el.getAttribute("aria-label") === "목록",
     );
@@ -1184,7 +1185,7 @@ test("서브프로젝트 필터는 보드와 목록 양쪽에 같게 걸린다",
 });
 
 // ---------------------------------------------------------------------------
-// 프로젝트(= 보드) 선택기 — 설계 2026-09-21 project-registry
+// Project (= board) picker — design 2026-09-21 project-registry
 // ---------------------------------------------------------------------------
 
 const MAIN_PROJECT = {
@@ -1206,10 +1207,10 @@ function plain(url: string) {
   return url.includes("/automation/status") ? json(status()) : json(board());
 }
 
-test("보드가 하나뿐이면 선택기를 그리지 않는다", async () => {
+test("does not render the picker when there is only one board", async () => {
   const f = await mount(plain, { projects: [MAIN_PROJECT] });
   try {
-    // 노드를 그대로 단언하지 않는다 — 실패 메시지가 DOM 트리를 직렬화하다 프로세스가 죽는다.
+    // Never assert the node directly — the failure message would serialize the DOM tree and crash the process.
     assert.equal(
       f.host.querySelector("[data-project-picker]") === null,
       true,
@@ -1220,7 +1221,7 @@ test("보드가 하나뿐이면 선택기를 그리지 않는다", async () => {
   }
 });
 
-test("보드가 둘이면 선택기가 뜨고, 고른 보드가 ?board= 로 나간다", async () => {
+test("with two boards, the picker shows up and the chosen board goes out as ?board=", async () => {
   const f = await mount(plain, { projects: [MAIN_PROJECT, SIDE_PROJECT] });
   try {
     const select = f.host.querySelector<HTMLSelectElement>("[data-project-picker]");
@@ -1249,7 +1250,7 @@ test("보드가 둘이면 선택기가 뜨고, 고른 보드가 ?board= 로 나�
   }
 });
 
-test("기본 보드를 보고 있으면 ?board= 를 붙이지 않는다 — 옛 요청과 같은 모양이다", async () => {
+test("does not append ?board= when viewing the default board — matches the shape of the old requests", async () => {
   const f = await mount(plain, { projects: [MAIN_PROJECT, SIDE_PROJECT] });
   try {
     const boardCalls = f.calls.filter((c) => c.includes("/kanban/board"));
@@ -1263,7 +1264,7 @@ test("기본 보드를 보고 있으면 ?board= 를 붙이지 않는다 — 옛 
   }
 });
 
-test("타임라인은 capability 가 있을 때만 켜지고, 열면 실행 기록을 조회한다", async () => {
+test("the timeline is enabled only with the capability, and fetches run history when opened", async () => {
   const f = await mount((url) => {
     if (url.includes("/automation/status"))
       return json(status({ capabilities: ["kanban", "cron", "events", "kanban_views"] }));
@@ -1297,8 +1298,8 @@ test("타임라인은 capability 가 있을 때만 켜지고, 열면 실행 기�
   }
 });
 
-test("capability 가 없으면 타임라인 버튼을 두지 않는다", async () => {
-  // 눌러도 안 되는 버튼은 고장으로 읽힌다. 칸반 자체는 계속 돌아야 한다.
+test("does not show the timeline button when the capability is absent", async () => {
+  // A button that does nothing when pressed reads as broken. Kanban itself must keep working.
   const f = await mount(happy);
   try {
     const button = Array.from(f.host.querySelectorAll<HTMLButtonElement>("button")).find(
@@ -1309,17 +1310,18 @@ test("capability 가 없으면 타임라인 버튼을 두지 않는다", async (
       f.calls.some((c) => c.includes("/kanban/runs")),
       false,
     );
-    // 보드는 멀쩡히 그려진다.
+    // The board still renders fine.
     assert.ok(f.host.querySelector('[data-column="todo"]'));
   } finally {
     await f.cleanup();
   }
 });
 
-test("타임라인이 목표일과 의존 화살표를 실제로 그린다 — 모달에서 값이 흘러야 한다", async () => {
-  // 조각은 각각 초록인데 조각 사이의 배선이 끊겨 목표일도 화살표도 화면에 없던 결함을 고정한다.
-  // 노드가 아니라 **값**으로 단언한다 — 선이 있는지가 아니라 그 선이 그 날짜인지를 본다.
-  // 타임라인은 "오늘" 창을 그린다 — 날짜를 박아 두면 그 날이 지나는 순간 실패한다(2026-09-22 실측).
+test("the timeline actually draws the target date and dependency arrows — values must flow through the modal", async () => {
+  // Pins down a bug where each piece was green individually, but the wiring between them was
+  // broken so neither the target date nor the arrow showed on screen.
+  // Asserts on **values**, not nodes — not whether a line exists, but whether that line is on that date.
+  // The timeline draws a "today" window — hardcoding a date would fail the instant that day passes (observed 2026-09-22).
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const dayStart = today.getTime();
@@ -1415,8 +1417,8 @@ test("타임라인이 목표일과 의존 화살표를 실제로 그린다 — �
   }
 });
 
-test("서브프로젝트 필터는 타임라인에도 먹는다", async () => {
-  // 필터가 보드·목록에만 먹으면 조용한 실패다 — 보드 뷰에서 같은 결함을 한 번 겪었다.
+test("the subproject filter also applies to the timeline", async () => {
+  // A filter that only applies to the board/list is a silent failure — this exact bug happened once in the board view.
   const runStart = Math.floor(Date.now() / 1000) - 600;
   const f = await mount((url) => {
     if (url.includes("/automation/status"))
@@ -1503,7 +1505,7 @@ test("서브프로젝트 필터는 타임라인에도 먹는다", async () => {
   }
 });
 
-test("대화 초안은 확인 폼만 열고 취소하면 카드를 등록하지 않는다", async () => {
+test("a conversation draft only opens the confirmation form, and canceling never registers the card", async () => {
   const f = await mount((url) => json(url.includes("/automation/status") ? status() : board()), {
     initialCreateDraft: { title: "주간 안내", body: "원래 요청\n수정한 초안", assigneeNpcId: "n1" },
   });
@@ -1530,7 +1532,7 @@ test("대화 초안은 확인 폼만 열고 취소하면 카드를 등록하지 
   }
 });
 
-test("검토 카드 결과는 옛 result보다 최신 Hermes summary를 보여 준다", async () => {
+test("a review card's result shows the latest Hermes summary over the old result", async () => {
   const f = await mount(
     (url) => {
       if (url.includes("/automation/status")) return json(status());
@@ -1592,7 +1594,7 @@ for (const sample of [
   });
 }
 
-test("혼합 승인: 옛 스웜 capability는 신규 생성 버튼을 켜지 않는다", async () => {
+test("mixed approval: the legacy swarm capability does not enable the new creation button", async () => {
   const f = await mount((url) =>
     url.includes("/automation/status")
       ? json(status({ capabilities: ["kanban", "swarm"] }))
@@ -1608,7 +1610,7 @@ test("혼합 승인: 옛 스웜 capability는 신규 생성 버튼을 켜지 않
   }
 });
 
-test("보호 카드의 사람 판단 화면은 AI 검토 의견 대신 승인 대상 결과를 보여 준다", async () => {
+test("a protected card's human-judgment screen shows the approval target's result instead of the AI review opinion", async () => {
   const f = await mount(
     (url) => {
       if (url.includes("/automation/status")) return json(status());
@@ -1648,7 +1650,7 @@ test("보호 카드의 사람 판단 화면은 AI 검토 의견 대신 승인 �
   }
 });
 
-test("인계 복구 오류 배너는 오류 코드 대신 설명을 보여준다", async () => {
+test("the handoff-recovery error banner shows an explanation instead of the error code", async () => {
   const f = await mount((url) => {
     if (url.includes("/automation/status"))
       return json(status({ lastError: "event_carrier_handoff_pending" }));

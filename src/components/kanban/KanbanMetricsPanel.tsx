@@ -6,13 +6,14 @@ import { hasEnoughSamples, MIN_RATE_SAMPLES, type OperationalMetrics } from "@/l
 import { formatElapsed } from "./kanban-view-model";
 
 /**
- * 운영 지표 — 실적 타임라인 위에 얹는 요약 줄.
+ * Operational metrics — a summary line layered on top of the performance timeline.
  *
- * 다섯 칸 가운데 **"손이 필요한 카드" 만 지금 행동을 부른다.** 나머지는 사후 통계라서
- * 시선 순서가 그 반대가 되지 않게 맨 앞에 둔다.
+ * Of the five cells, **only "cards needing attention" calls for action right now.** The rest are
+ * after-the-fact stats, so this stays first to keep the reading order from running backwards.
  *
- * 저장하지 않는 값이라 틀리면 계산만 고친다. 표본이 적을 때 비율을 수치로 쓰지 않는 것이
- * 이 화면의 규칙이다 — 2건 중 1건을 "50%" 로 쓰면 없는 경향을 읽게 된다.
+ * These values aren't stored, so a mistake only needs a calculation fix. Never showing a ratio as
+ * a percentage when the sample size is small is this screen's rule — writing 1 out of 2 as "50%"
+ * would read as a trend that isn't there.
  */
 export default function KanbanMetricsPanel({ metrics }: { metrics: OperationalMetrics }) {
   const t = useT();
@@ -53,7 +54,7 @@ export default function KanbanMetricsPanel({ metrics }: { metrics: OperationalMe
 
       <Cell
         label={t("kanban.metrics.successRate")}
-        // 표본이 적으면 비율 대신 건수를 그대로 보인다.
+        // When the sample size is small, show the raw count instead of a ratio.
         value={
           successRate === null
             ? t("kanban.metrics.noData")
@@ -74,7 +75,7 @@ export default function KanbanMetricsPanel({ metrics }: { metrics: OperationalMe
             ? t("kanban.metrics.noData")
             : formatElapsed(Math.round(duration.medianMs / 1000))
         }
-        // 표본 수 없이 중앙값만 보이면 추세처럼 읽힌다.
+        // Showing only the median without the sample count would read like a trend.
         detail={t("kanban.metrics.samples", { count: duration.samples })}
       />
 

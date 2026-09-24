@@ -25,17 +25,17 @@ const newRow = (npcId: string): WorkerRow => ({
 });
 
 interface SwarmDialogProps {
-  /** 출근 중(active)인 NPC 만 — 호출부가 `activeAssigneeOptions(npcs)` 로 걸러 넘긴다. */
+  /** Only NPCs who are active (checked in) — the caller filters via `activeAssigneeOptions(npcs)`. */
   npcs: readonly BoardNpc[];
   submitting: boolean;
-  /** 서버 제출 실패(호출부가 채운다) — `SwarmDialog` 는 `fixed inset-0` 로 보드 배너를 덮으므로
-   * 실패 메시지는 반드시 이 안에서 보여야 한다. */
+  /** Server submit failure (filled in by the caller) — `SwarmDialog` covers the board banner with
+   * `fixed inset-0`, so the failure message must be shown inside here. */
   error?: string | null;
   onSubmit: (values: SwarmSubmit) => void;
   onClose: () => void;
 }
 
-/** 스웜 시작 다이얼로그. 워커는 채널 NPC 중에서만 고른다(서버가 잠든 NPC 를 400 으로 거절한다). */
+/** Swarm-launch dialog. Workers are chosen only from channel NPCs (the server rejects sleeping NPCs with 400). */
 export default function SwarmDialog({
   npcs,
   submitting,
@@ -51,11 +51,11 @@ export default function SwarmDialog({
   const [synthesizer, setSynthesizer] = useState(npcs[2]?.npcId ?? first);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  // 제출마다 새로 만들면 재시도가 새 스웜을 만든다. 다이얼로그 수명 동안 하나를 쓴다.
+  // Creating a new one on every submit would make a retry create a new swarm. Use one for the dialog's lifetime.
   const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
 
-  // 클라이언트 검증 오류가 서버 실패보다 먼저 보인다 — 새 제출을 시작하면 둘 다 지운다(호출부가
-  // submitError 를 지우고, 여기서는 validationError 를 지운다).
+  // A client validation error shows before a server failure — starting a new submit clears both
+  // (the caller clears submitError, and validationError is cleared here).
   const error = validationError ?? submitError ?? null;
 
   const submit = () => {

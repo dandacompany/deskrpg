@@ -72,7 +72,7 @@ export function clearMoveTargets(root: ParentNode = document) {
   }
 }
 
-/** 강조는 `[data-move-target="true"]` 에 걸린 CSS 가 그린다(globals.css). */
+/** The highlight is drawn by CSS keyed on `[data-move-target="true"]` (globals.css). */
 export function markMoveTarget(column: HTMLElement | null, root: ParentNode = document) {
   clearMoveTargets(root);
   if (!column) return;
@@ -81,8 +81,9 @@ export function markMoveTarget(column: HTMLElement | null, root: ParentNode = do
 }
 
 /**
- * 이동이 살아 있는 동안에만 "여기엔 못 놓는다"를 열에 새긴다. 조용히 무시하면
- * 사용자는 자기 조준이 빗나간 줄 알고 같은 동작을 반복한다 — 열이 스스로 말해야 한다.
+ * Marks "can't drop here" on columns only while a move is active. Ignoring this silently would
+ * make the user think they simply missed their target and repeat the same action — the column
+ * has to say so itself.
  */
 export function markLockedColumns(root: ParentNode, source: KanbanTaskStatus) {
   clearLockedColumns(root);

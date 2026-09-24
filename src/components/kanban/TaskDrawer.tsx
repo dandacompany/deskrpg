@@ -31,7 +31,7 @@ import {
   type BoardNpc,
 } from "./kanban-view-model";
 
-/** 카드의 결과물 섹션이 쓰는 것. 배선(GamePageClient)이 채널 결과물 API 로 채운다. */
+/** What the card's artifacts section uses. Wired up (by GamePageClient) from the channel artifacts API. */
 export type TaskDrawerArtifacts = {
   list(taskId: string): Promise<ArtifactSummary[]>;
   open(artifactId: string): void;
@@ -41,27 +41,27 @@ interface TaskDrawerProps {
   api: KanbanApi;
   taskId: string;
   npcs: readonly BoardNpc[];
-  /** 보드의 카드 전부 — 링크 이름·선행 카드 선택지. */
+  /** All of the board's cards — for link names and prerequisite-card options. */
   boardTasks: readonly KanbanTask[];
-  /** `automation/status.attachments`. false 면 첨부 섹션을 숨긴다(R12). */
+  /** `automation/status.attachments`. If false, the attachments section is hidden (R12). */
   attachmentsSupported: boolean;
-  /** 생성 응답의 `warning`(디스패처 없음) — 이 카드에 한해 상단에 띄운다(R9). */
+  /** The create response's `warning` (no dispatcher) — shown at the top, only for this card (R9). */
   creationWarning: string | null;
-  /** 바뀌면 상세를 다시 읽는다(`kanban:event`, 보드 재조회). */
+  /** When this changes, the detail is refetched (`kanban:event`, board refetch). */
   refreshTick: number;
-  /** 조작이 성공했다 — 보드를 다시 읽으라는 신호(R26). */
+  /** A mutation succeeded — signal to refetch the board (R26). */
   onChanged: () => void;
   onEdit: (task: KanbanTask) => void;
   onDeleted: () => void;
   onClose: () => void;
-  /** 카드의 결과물 — null·미지정이면 섹션을 숨긴다. 플러그인이 0.8.4 미만(428)이어도 숨긴다. */
+  /** The card's artifacts — the section is hidden if null/unspecified. Also hidden when the plugin is below 0.8.4 (428). */
   artifacts?: TaskDrawerArtifacts | null;
-  /** 채널 `artifact:event` 수 — 오르면 디바운스(`artifactsDebounceMs`) 후 결과물을 다시 읽는다. */
+  /** Count of channel `artifact:event`s — when it rises, artifacts are refetched after debouncing (`artifactsDebounceMs`). */
   artifactsRefreshTick?: number;
   artifactsDebounceMs?: number;
 }
 
-/** 결과물 사건 연타를 한 번의 재조회로 접는 간격. */
+/** Interval that folds a burst of artifact events into a single refetch. */
 export const ARTIFACTS_EVENT_DEBOUNCE_MS = 300;
 
 const BTN = "px-2.5 py-1 rounded-md text-[11px] font-semibold disabled:opacity-50";
@@ -75,8 +75,9 @@ const LOG_TAIL = 16384;
 type Pending = KanbanTaskAction | "status" | "comment" | "link" | "attachment" | "delete" | null;
 
 /**
- * 카드 상세 드로어. 모든 조작은 서버 → 성공 → 재조회(R26)이며, 액션의 허용 여부는 서버가
- * 강제한다(R10) — 여기서는 상태에 맞는 버튼을 앞에 두는 것뿐, 숨기지 않는다.
+ * The card detail drawer. Every mutation follows server → success → refetch (R26), and whether an
+ * action is allowed is enforced by the server (R10) — this only puts the buttons that fit the
+ * status up front, it never hides them.
  */
 export default function TaskDrawer({
   api,
@@ -110,7 +111,7 @@ export default function TaskDrawer({
   const [log, setLog] = useState<WorkerLog | null>(null);
   const [logError, setLogError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
-  // 결과물 섹션 — null 은 읽는 중, "hidden" 은 428(taskId 필터 미지원)이라 섹션을 숨긴다.
+  // Artifacts section — null means loading, "hidden" means 428 (taskId filtering unsupported), so the section is hidden.
   const [cardArtifacts, setCardArtifacts] = useState<ArtifactSummary[] | "hidden" | null>(null);
   const [cardArtifactsError, setCardArtifactsError] = useState(false);
   const [cardArtifactsBlocker, setCardArtifactsBlocker] = useState<GateBlocker | null>(null);
@@ -124,11 +125,12 @@ export default function TaskDrawer({
   } = useMemo(() => splitBlackboardComments(detail?.comments ?? []), [detail?.comments]);
   const blackboardKeys = Object.keys(blackboard).filter((key) => key !== "_authors");
 
-  // 카드 첨부를 결과물 목록에도 함께 나열한다. 첨부는 인라인 base64(`kanban_attach`)나
-  // URL 로 들어와 디스크 파일이 아니므로, 파일 경로를 보는 자동 승격 훅의 시야에
-  // 구조적으로 들어올 수 없다 — 두 저장소가 만나는 곳은 이 화면뿐이다. 그래서 첨부가
-  // 있는데도 결과물 칸이 "없습니다" 라고 말하던 모순을 여기서 없앤다(2026-09-20 실측).
-  // `attachmentsSupported` 가 false 면 `detail.attachments` 를 신뢰하지 않는다(R12).
+  // Card attachments are also listed in the artifacts list. Attachments come in as inline base64
+  // (`kanban_attach`) or a URL rather than a disk file, so they structurally can't be seen by an
+  // auto-promotion hook that watches file paths — this screen is the only place where the two
+  // stores meet. So this is where the contradiction of the artifacts section saying "none" while
+  // attachments exist gets eliminated (observed 2026-09-20).
+  // If `attachmentsSupported` is false, `detail.attachments` is not trusted (R12).
   const cardAttachments = useMemo(
     () => (attachmentsSupported ? (detail?.attachments ?? []) : []),
     [attachmentsSupported, detail?.attachments],
@@ -170,12 +172,12 @@ export default function TaskDrawer({
       (err: unknown) => {
         if (cancelled) return;
         if (err instanceof ArtifactsApiError && err.status === 428) {
-          // 플러그인이 낮으면 결과물 기능 자체가 없다 — 섹션을 숨긴다(기존 동작).
+          // If the plugin is too old, the artifacts feature doesn't exist at all — hide the section (existing behavior).
           setCardArtifacts("hidden");
           return;
         }
         setCardArtifactsError(true);
-        // 원인을 버리지 않는다 — 전에는 401·404·503·504 가 한 줄로 뭉개졌다.
+        // The cause isn't discarded — 401/404/503/504 used to be flattened into one line.
         setCardArtifactsBlocker(
           err instanceof ArtifactsApiError
             ? classifyGateFailure({ status: err.status, code: err.code, message: err.message })
@@ -188,7 +190,7 @@ export default function TaskDrawer({
     };
   }, [artifacts, taskId, refreshTick, artifactsReload]);
 
-  // 결과물 사건 — 마운트 때 값은 이미 읽은 것이니 건너뛰고, 오를 때만 디바운스해 다시 읽는다.
+  // Artifact events — the value at mount was already fetched, so it's skipped; only rises trigger a debounced refetch.
   const seenArtifactsTick = useRef(artifactsRefreshTick);
   useEffect(() => {
     if (artifactsRefreshTick === seenArtifactsTick.current) return;
@@ -211,7 +213,7 @@ export default function TaskDrawer({
     if (detail) setReassignNpcId(npcIdForAssignee(detail.task.assignee, npcs) ?? "");
   }, [detail, npcs]);
 
-  /** 조작 공통 — 성공하면 상세·보드를 다시 읽는다. 실패 메시지는 코드·메시지 그대로. */
+  /** Common to all mutations — refetches detail/board on success. Failure messages carry the code/message as-is. */
   const run = async (kind: Exclude<Pending, null>, fn: () => Promise<unknown>) => {
     setPending(kind);
     setActionError(null);
@@ -244,8 +246,8 @@ export default function TaskDrawer({
   const linkCandidates = boardTasks.filter(
     (candidate) => candidate.id !== taskId && !(detail?.links.parents ?? []).includes(candidate.id),
   );
-  // epoch 초로 오는 값을 `new Date()` 에 그대로 넣으면 ms 로 읽혀 1970년이 찍힌다.
-  // 빈칸보다 나쁘다 — 틀린 날짜를 자신 있게 보여 준다.
+  // A value that comes in as epoch seconds, passed straight into `new Date()`, gets read as ms and shows 1970.
+  // That's worse than a blank field — it confidently shows the wrong date.
   const formatDate = (value?: PluginTime) => {
     const ms = taskTimeMs(value);
     return ms === null ? "" : new Date(ms).toLocaleString(locale);
@@ -389,7 +391,7 @@ export default function TaskDrawer({
                 </>
               )}
             </section>
-            {/* 상태 + 액션 (R10·R13) */}
+            {/* Status + actions (R10·R13) */}
             <section className="space-y-2">
               <div className="flex items-center gap-2">
                 <label
