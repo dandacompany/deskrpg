@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 
 import { db, channels, jsonForDb, meetingMinutes } from "@/db";
+import { readLocaleCookie } from "@/lib/i18n/server";
 import { getUserId } from "@/lib/internal-rpc";
 import { normalizeMeetingMinutesRecord } from "@/lib/meeting-minutes";
 import { getMeetingHooks } from "@/lib/meeting-registry";
 import { resummarizeMinutes } from "@/lib/meeting-summarize";
 
-/** Rebuild the summary from the stored transcript. Meeting host and channel owner only. */
+/**
+ * Rebuild the summary from the stored transcript. Meeting host and channel owner only.
+ * The new summary is written in the requester's language.
+ */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = getUserId(req);
   if (!userId) {
@@ -17,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   try {
     const result = await resummarizeMinutes(
-      { minutesId: id, userId },
+      { minutesId: id, userId, locale: readLocaleCookie(req.headers.get("cookie")) },
       {
         loadMinutes: async (minutesId) => {
           const [row] = await db

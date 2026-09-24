@@ -37,7 +37,7 @@ export type ResummarizeMinutesResult =
     };
 
 export async function resummarizeMinutes(
-  args: { minutesId: string; userId: string },
+  args: { minutesId: string; userId: string; locale?: string | null },
   deps: ResummarizeMinutesDeps,
 ): Promise<ResummarizeMinutesResult> {
   const minutes = await deps.loadMinutes(args.minutesId);
@@ -65,6 +65,7 @@ export async function resummarizeMinutes(
     participants: minutes.participants
       .filter((participant) => participant.type === "npc")
       .map((participant) => ({ npcId: participant.id, name: participant.name })),
+    locale: args.locale,
   });
   await deps.saveSummary(minutes.id, summary);
   return { ok: true, summary };

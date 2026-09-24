@@ -62,3 +62,17 @@ test("no employee to hand it to is skipped, not a failure", async () => {
     outcome: null,
   });
 });
+
+test("the summary is written in the requester's language", async () => {
+  const locales: unknown[] = [];
+  const resummarize = createResummarizer({
+    getNpcConfigsForChannel: async () => [{ id: "npc-1", name: "소피" }],
+    resolveAdapter: async () => ({ adapter, sessionKey: "key" }),
+    generateMeetingSummary: async (...args) => {
+      locales.push(args[5]);
+      return ok;
+    },
+  });
+  await resummarize({ ...input, locale: "en" });
+  assert.deepEqual(locales, ["en"]);
+});

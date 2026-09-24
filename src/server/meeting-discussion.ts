@@ -112,6 +112,8 @@ type MeetingBrokerConfig = {
   quota: {
     maxTotalTurns: number;
   };
+  /** The meeting opener's language — turn prompts and minutes follow it. Omitted means Korean. */
+  locale?: string | null;
 };
 
 /** `outcome`/`status` are optional — without them it is treated as a successful summary with no structured result. */
@@ -191,6 +193,9 @@ type RegisterMeetingDiscussionHandlersArgs = {
     players: Map<string, MeetingPlayer>;
     user: MeetingUser;
     adapterRegistry: AdapterRegistry;
+    /** The socket's language cookie (null when absent). A meeting opened from this socket speaks it:
+     * turn prompts, minutes and the summary. Omitted means Korean, as before locales existed. */
+    locale?: string | null;
     getNpcConfigsForChannel: (channelId: string) => Promise<MeetingNpcConfig[]>;
     canControlMeeting: (channelId: string, userId: string) => Promise<boolean> | boolean;
     spatial?: MeetingSpatialCoordinator;
@@ -220,6 +225,8 @@ type RegisterMeetingDiscussionHandlersArgs = {
       transcript: string,
       /** Candidates to own follow-up work — only staff who attended the meeting. */
       participants?: OutcomeParticipant[],
+      /** Language of the summary — the meeting opener's. */
+      locale?: string | null,
     ) => Promise<MeetingSummary>;
     persistMeetingMinutes: (input: PersistMeetingMinutesInput) => Promise<string | null>;
   };
@@ -389,6 +396,7 @@ export async function defaultCreateMeetingBroker(
       initialRunMode: toRunMode(config.settings?.initialMode),
       hybridMode: Boolean(config.settings?.hybridMode),
       hybridAutoResumeMs: (config.settings?.hybridAutoResumeMs as number) ?? null,
+      locale: config.locale,
     },
     {
       onPollStart: () => callbacks.onPollStart?.(),
@@ -437,6 +445,7 @@ export async function defaultCreateMeetingBroker(
             displayName: participant.displayName,
             role: participant.role,
           })),
+          config.locale,
         );
         const durationSeconds = Math.floor((Date.now() - startedAt) / 1000);
         void callbacks.onMeetingEnd?.(transcript, durationSeconds);
@@ -601,6 +610,8 @@ export function registerMeetingDiscussionHandlers({
     }
 
     const meetingId = `meet-${Date.now()}`;
+    // Captured once at start: the whole meeting keeps the opener's language.
+    const meetingLocale = deps.locale;
     const sessionKeyPrefix = candidateNpcs[0].sessionKeyPrefix || channelId.slice(0, 8);
 
     // The summary adapter is resolved once, **separately** from meeting participants. The broker's config.participants
@@ -628,6 +639,7 @@ export function registerMeetingDiscussionHandlers({
         quota: {
           maxTotalTurns: settings?.maxTotalTurns || 50,
         },
+        locale: meetingLocale,
       },
       {
         onPollStart: () => {
@@ -786,6 +798,7 @@ export function registerMeetingDiscussionHandlers({
               meetingParticipants
                 .filter((participant) => participant.type === "npc")
                 .map((participant) => ({ npcId: participant.id, name: participant.name })),
+              meetingLocale,
             );
           }
 

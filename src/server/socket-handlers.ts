@@ -836,6 +836,7 @@ async function generateMeetingSummary(
   topic: string,
   transcript: string,
   participants: OutcomeParticipant[] = [],
+  locale?: string | null,
 ): Promise<ParsedMeetingOutcome> {
   try {
     // multiParty: true — the summary must be a one-off run, not that NPC's persistent conversation session.
@@ -843,7 +844,7 @@ async function generateMeetingSummary(
     const { response } = await Promise.race([
       adapter.execute({
         sessionKey,
-        prompt: buildMeetingSummaryPrompt(topic, transcript, participants),
+        prompt: buildMeetingSummaryPrompt(topic, transcript, participants, locale),
         multiParty: true,
         conversationHistory: [],
       }),
@@ -1866,6 +1867,8 @@ export function setupSocketHandlers(io: Server) {
         players,
         user,
         adapterRegistry,
+        // The meeting speaks the language of whoever opened it: turn prompts, minutes and summary.
+        locale: socketLocale(socket),
         // Carry the protocol in the UI language of whoever opened the meeting.
         getNpcConfigsForChannel: (channelId: string) =>
           getNpcConfigsForChannel(channelId, socketLocale(socket)),

@@ -104,3 +104,17 @@ test("if the retry also fails, it's still saved (the state persists) and the fai
   assert.deepEqual(result, { ok: true, summary: failed });
   assert.deepEqual(d.saved, [failed]);
 });
+
+// The retry summarizes in the language of whoever retries, not the meeting opener's.
+test("a retry passes the requester's locale to the summarizer", async () => {
+  const locales: unknown[] = [];
+  const d = deps({
+    resummarize: async (input) => {
+      locales.push(input.locale);
+      return ok;
+    },
+  });
+  await resummarizeMinutes({ minutesId: "m1", userId: "host", locale: "ja" }, d);
+  await resummarizeMinutes({ minutesId: "m1", userId: "host", locale: null }, d);
+  assert.deepEqual(locales, ["ja", null]);
+});
