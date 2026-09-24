@@ -249,9 +249,12 @@ export async function startMockHermes({ host, port }: { host: string; port: numb
         const body: Buffer[] = [];
         for await (const chunk of request) body.push(Buffer.from(chunk));
         const input = String(JSON.parse(Buffer.concat(body).toString()).input ?? "");
-        const recent = input.includes("[최근 대화]")
-          ? input.split("[최근 대화]")[1].split("[답하는 법]")[0].trim().split("\n").at(-1)!
-          : input;
+        // The open-chat script has a Korean and an English variant; take the last recent line from either.
+        const block =
+          /\[(?:최근 대화|Recent conversation)\]\n([\s\S]*?)\n\[(?:답하는 법|How to reply)\]/.exec(
+            input,
+          );
+        const recent = block ? block[1].trim().split("\n").at(-1)! : input;
         const runId = `run-${++runSequence}`;
         runs.set(runId, {
           profile,

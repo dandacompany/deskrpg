@@ -1449,7 +1449,7 @@ export async function startFakePluginServer(
     if (!record.resolvedAt || record.resolvedTaskId) {
       throw new HttpError(409, {
         error: "card_proposal_not_unresolvable",
-        detail: "해소되지 않았거나 카드가 이미 기록됐다",
+        detail: "not resolved yet, or a card is already recorded",
       });
     }
     record.resolvedAt = null;
@@ -1466,7 +1466,7 @@ export async function startFakePluginServer(
     if (!record.resolvedAt || record.resolvedTaskId) {
       throw new HttpError(409, {
         error: "card_proposal_task_not_recordable",
-        detail: "해소되지 않았거나 카드가 이미 기록됐다",
+        detail: "not resolved yet, or a card is already recorded",
       });
     }
     record.resolvedTaskId = taskId;
