@@ -1,9 +1,10 @@
 /**
- * 남의 HTML 에서 OpenGraph 값만 뽑는다. 정규식으로 `<meta>` 만 훑는다 — DOM 파서를
- * 서버에 들이면 남이 준 문서를 트리로 만드는 비용·표면이 함께 늘어난다. 우리가 쓰는 값은
- * 네 개(title·description·image·site_name)뿐이다.
+ * Pulls only OpenGraph values out of someone else's HTML. Only scans `<meta>` tags via
+ * regex — bringing a DOM parser into the server would raise both the cost and the attack
+ * surface of turning someone else's document into a tree. We only ever use four values
+ * (title, description, image, site_name).
  *
- * 순수 함수다. 네트워크를 보지 않는다 — 호출부가 이미 받아 온 본문을 넘긴다.
+ * A pure function. Never touches the network — the caller passes in a body it already fetched.
  */
 
 const TITLE_MAX = 120;
@@ -49,7 +50,7 @@ function clean(value: string | null, max: number): string | null {
   return folded.length > max ? folded.slice(0, max) : folded;
 }
 
-/** `<meta>` 태그 하나를 {키, 값} 으로. 속성 순서는 정해져 있지 않다. */
+/** Turns one `<meta>` tag into {key, value}. Attribute order is not fixed. */
 function metaTags(html: string): Array<{ key: string; content: string }> {
   const out: Array<{ key: string; content: string }> = [];
   for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
@@ -90,7 +91,7 @@ export function parseOpenGraph(html: string, documentUrl: URL): LinkPreview | nu
   const image = absoluteHttpUrl(pick("og:image", "og:image:url", "twitter:image"), documentUrl);
   const siteName = clean(pick("og:site_name"), TITLE_MAX) ?? documentUrl.hostname;
 
-  // 제목도 그림도 없으면 지금의 밑줄 링크보다 나을 것이 없다 — 카드를 만들지 않는다.
+  // With neither a title nor an image, this would be no better than the current underlined link — don't build a card.
   if (!title && !image) return null;
   return { title, description, image, siteName };
 }

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parseOpenGraph } from "./parse";
 
-test("og 태그에서 제목·설명·이미지를 뽑는다", () => {
+test("extracts title, description, and image from og tags", () => {
   const html = `<html><head>
     <meta property="og:title" content="제목입니다">
     <meta property="og:description" content="설명입니다">
@@ -18,7 +18,7 @@ test("og 태그에서 제목·설명·이미지를 뽑는다", () => {
   });
 });
 
-test("og 가 없으면 <title> 과 meta description 으로 떨어진다", () => {
+test("falls back to <title> and meta description when there's no og", () => {
   const html = `<head><title>보통 제목</title>
     <meta name="description" content="보통 설명"></head>`;
   const got = parseOpenGraph(html, new URL("https://example.com/p"));
@@ -28,23 +28,23 @@ test("og 가 없으면 <title> 과 meta description 으로 떨어진다", () => 
   assert.equal(got?.siteName, "example.com");
 });
 
-test("상대 경로 이미지는 문서 주소를 기준으로 절대화한다", () => {
+test("a relative-path image is resolved to absolute against the document URL", () => {
   const html = `<meta property="og:image" content="/img/a.png"><title>t</title>`;
   const got = parseOpenGraph(html, new URL("https://example.com/dir/p"));
   assert.equal(got?.image, "https://example.com/img/a.png");
 });
 
-test("http(s) 가 아닌 이미지는 버린다", () => {
+test("drops a non-http(s) image", () => {
   const html = `<meta property="og:image" content="data:image/png;base64,AAA"><title>t</title>`;
   assert.equal(parseOpenGraph(html, new URL("https://example.com/p"))?.image, null);
 });
 
-test("속성 순서가 뒤바뀌어도(content 먼저) 읽는다", () => {
+test("reads it even with attribute order reversed (content first)", () => {
   const html = `<meta content="뒤집힘" property="og:title">`;
   assert.equal(parseOpenGraph(html, new URL("https://example.com/p"))?.title, "뒤집힘");
 });
 
-test("HTML 엔티티를 풀고 길이를 자른다", () => {
+test("decodes HTML entities and truncates length", () => {
   const html = `<meta property="og:title" content="A &amp; B &quot;C&quot;">
     <meta property="og:description" content="${"가".repeat(400)}">`;
   const got = parseOpenGraph(html, new URL("https://example.com/p"));
@@ -52,6 +52,6 @@ test("HTML 엔티티를 풀고 길이를 자른다", () => {
   assert.equal(got?.description?.length, 300);
 });
 
-test("제목도 이미지도 없으면 카드를 만들 값이 없다 — null", () => {
+test("with no title and no image, there's nothing to build a card from — null", () => {
   assert.equal(parseOpenGraph("<html><body>본문만</body></html>", new URL("https://e.com/")), null);
 });
