@@ -22,7 +22,7 @@ async function mount(node: ReactNode) {
   };
 }
 
-test("Star 버튼은 수를 줄여 보이고, 수를 모르면 숫자 없이 레포로 연결한다", async () => {
+test("the Star button shows an abbreviated count, and links to the repo without a number when the count is unknown", async () => {
   const withCount = await mount(
     <GrowthStarButton stars={1234} clicked={false} onClick={() => {}} />,
   );
@@ -41,7 +41,7 @@ test("Star 버튼은 수를 줄여 보이고, 수를 모르면 숫자 없이 레
   await noCount.cleanup();
 });
 
-test("Star 버튼을 누르면 onClick 이 불리고, 누른 뒤에는 강조 색을 쓰지 않는다", async () => {
+test("clicking the Star button calls onClick, and no longer uses the highlight color afterward", async () => {
   let clicks = 0;
   const m = await mount(<GrowthStarButton stars={3} clicked={false} onClick={() => clicks++} />);
   const a = m.host.querySelector("a")!;
@@ -55,7 +55,7 @@ test("Star 버튼을 누르면 onClick 이 불리고, 누른 뒤에는 강조 �
   await quiet.cleanup();
 });
 
-test("업데이트 안내는 열리는 순간 확인 처리하고 해당 릴리스 노트로 연결한다", async () => {
+test("the update notice marks itself seen the moment it opens and links to that release's notes", async () => {
   let seen = 0;
   const m = await mount(
     <UpdateNoticeModal
@@ -75,7 +75,7 @@ test("업데이트 안내는 열리는 순간 확인 처리하고 해당 릴리�
   await m.cleanup();
 });
 
-/** 실제 브라우저처럼 body 에서 올라가는 취소 가능한 Esc 하나. jsdom 의 리스너 순서에 기대지 않는다. */
+/** A single cancelable Esc bubbling up from body, like in a real browser. Does not rely on jsdom's listener order. */
 function pressEscape(consumedAbove = false) {
   const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
   if (consumedAbove) event.preventDefault();
@@ -85,7 +85,7 @@ function pressEscape(consumedAbove = false) {
   return event;
 }
 
-test("업데이트 안내는 Esc 로 닫히고 그 Esc 를 소비한다, 위 레이어가 소비한 Esc 는 무시한다", async () => {
+test("the update notice closes on Esc and consumes that Esc; it ignores an Esc already consumed by a layer above", async () => {
   let closed = 0;
   const m = await mount(
     <UpdateNoticeModal

@@ -32,12 +32,12 @@ import HtmlViewer from "./viewers/HtmlViewer";
 import LinkViewer from "./viewers/LinkViewer";
 import MediaViewer from "./viewers/MediaViewer";
 
-// 무겁다(pdf.js·shiki·dompurify) — 실제 쓰일 때만 지연 로드한다.
+// Heavy (pdf.js/shiki/dompurify) — lazy-load only when actually used.
 const PdfViewer = lazy(() => import("./viewers/PdfViewer"));
 const CodeViewer = lazy(() => import("./viewers/CodeViewer"));
 const SvgViewer = lazy(() => import("./viewers/SvgViewer"));
 
-/** 본문을 텍스트로 읽어야 그릴 수 있는 뷰어. 나머지는 URL 만으로 그린다. */
+/** Viewers that need the body read as text to render. The rest render with just a URL. */
 const TEXT_VIEWERS: ReadonlySet<ViewerKind> = new Set([
   "markdown",
   "text",
@@ -48,7 +48,7 @@ const TEXT_VIEWERS: ReadonlySet<ViewerKind> = new Set([
   "svg",
 ]);
 
-/** 렌더/소스 전환을 켜는 뷰어. */
+/** Viewers that turn on the render/source toggle. */
 const showsModeToggle = hasRenderedMode;
 
 type Content = { version: number; text: string; truncated: boolean };
@@ -66,7 +66,7 @@ class RenderBoundary extends Component<
   }
 }
 
-/** 뷰어(또는 그것을 담은 모달)를 닫기 전에 부른다 — 편집 중 바뀐 내용이 있으면 확인한 뒤 `proceed`. */
+/** Called before the viewer (or the modal holding it) closes — if there are unsaved edits, confirm, then `proceed`. */
 export type ArtifactViewerHandle = { requestClose(proceed: () => void): void };
 
 export type ArtifactViewerProps = {
@@ -74,8 +74,9 @@ export type ArtifactViewerProps = {
   api: ArtifactsApi;
   artifactId: string;
   /**
-   * 바뀌면 상세를 다시 읽고 최신 버전으로 돌아간다(이 결과물의 `artifact.versioned`). 편집 중이면
-   * 편집을 지키고 안내만 한 뒤, 편집이 끝나면 그때 다시 읽는다.
+   * When this changes, refetch the detail and jump back to the latest version (this artifact's
+   * `artifact.versioned`). While editing, keep the edit and just show a notice, then refetch once
+   * editing ends.
    */
   reloadKey: number;
   onOpenSource(target: SourceTarget): void;
@@ -84,8 +85,9 @@ export type ArtifactViewerProps = {
 };
 
 /**
- * 결과물 하나의 상세. 버전 선택·렌더/소스·복사·다운로드·출처 이동·삭제(모달 안 확인)를 머리에
- * 두고, 본문은 `viewerFor` 가 고른 가벼운 뷰어로 그린다. 뷰어가 던지면 다운로드로 떨어진다.
+ * One artifact's detail. Handles version selection, render/source, copy, download, go-to-source,
+ * and delete (confirmed in-modal), and renders the body with the lightweight viewer `viewerFor`
+ * picks. If the viewer throws, it falls back to download.
  */
 export default function ArtifactViewer({
   ref,
@@ -114,8 +116,9 @@ export default function ArtifactViewer({
   const [editingArtifactId, setEditingArtifactId] = useState(artifactId);
   const [appliedReload, setAppliedReload] = useState(reloadKey);
 
-  // 렌더 중 파생 상태 조정. 다른 결과물로 바뀌면 편집을 끈다. 밖에서 재조회를 시켜도(reloadKey)
-  // 편집 중이면 저장 안 한 본문을 버리지 않도록 미뤘다가 편집이 끝나면 적용한다.
+  // Adjust derived state during render. Turn off editing when switching to a different artifact.
+  // Even if an external reload is requested (reloadKey), defer applying it while editing so an
+  // unsaved body isn't discarded, and apply it once editing ends.
   if (editingArtifactId !== artifactId) {
     setEditingArtifactId(artifactId);
     if (editing) setEditing(false);
@@ -157,7 +160,7 @@ export default function ArtifactViewer({
   const viewer: ViewerKind | null = shape ? viewerFor(shape) : null;
   const needsText = !!viewer && TEXT_VIEWERS.has(viewer) && !artifact?.missing;
   const needsBlob = viewer === "pdf" && !artifact?.missing;
-  // 버전을 바꾸면 새 본문이 올 때까지 옛 본문을 보이지 않는다.
+  // When switching versions, don't show the old body until the new one arrives.
   const content = needsText && loaded?.version === version ? loaded : null;
   const blobContent = needsBlob && blobLoaded?.version === version ? blobLoaded.blob : null;
 
@@ -311,7 +314,7 @@ export default function ArtifactViewer({
           </Suspense>
         );
       default:
-        // text·code
+        // text/code
         return (
           <Suspense fallback={pre}>
             <CodeViewer text={text} language={codeLanguageFor(filename)} />
@@ -321,11 +324,11 @@ export default function ArtifactViewer({
   })();
 
   const copyable = needsText && !!content && viewer !== "link";
-  // 서버 판정이 없으면(옛 응답) 편집을 보이되, 권한은 변경 라우트가 다시 확인한다.
+  // If the server didn't send a judgment (an old response), show editing, but the mutation route re-checks permission.
   const modifiable = detail?.modifiable !== false;
   const sourceInChannel = detail?.sourceInChannel !== false;
   const editableShape = !!content && !!shape && isEditable(shape) && modifiable;
-  // 잘린 미리보기(512 KB)를 저장하면 뒷부분이 사라진 파일이 새 버전이 된다 — 편집하지 않는다.
+  // Saving a truncated preview (512 KB) would make a file missing its tail the new version — don't allow editing it.
   const editable = !editing && editableShape && !content.truncated;
 
   return (

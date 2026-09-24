@@ -19,24 +19,25 @@ import { createKanbanApi } from "@/components/kanban/kanban-api";
 export type ArtifactsModalProps = {
   channelId: string;
   npcs: ArtifactListNpc[];
-  /** `artifact:event` 마다 오른다(GamePageClient 가 소켓을 든다). 디바운스해 목록을 재조회. */
+  /** Bumps on every `artifact:event` (GamePageClient holds the socket). Debounced to reload the list. */
   refreshTick: number;
   lastEvent: { kind: string; artifactId: string } | null;
   initialArtifactId?: string | null;
-  /** 카드에서 열 때 필터 — 목록 요청마다 `taskId` 로 붙는다. */
+  /** Filter used when opening from a card — attached as `taskId` on every list request. */
   initialTaskId?: string | null;
   onOpenSource(target: SourceTarget): void;
   onClose(): void;
-  /** 사건 → 재조회 디바운스(ms). 기본 `ARTIFACTS_EVENT_DEBOUNCE_MS`. */
+  /** Event -> reload debounce (ms). Defaults to `ARTIFACTS_EVENT_DEBOUNCE_MS`. */
   debounceMs?: number;
 };
 
-/** `artifact:event` 연타를 한 번의 재조회로 접는 간격. */
+/** Interval that folds rapid-fire `artifact:event`s into a single reload. */
 export const ARTIFACTS_EVENT_DEBOUNCE_MS = 300;
 
 /**
- * 채널 결과물 모달. 왼쪽은 필터·목록, 오른쪽은 고른 결과물의 뷰어. 목록은 필터가 바뀌면 곧바로,
- * `refreshTick` 이 오르면 디바운스해 처음부터 다시 읽는다. 409·428 은 목록 대신 안내를 그린다.
+ * The channel artifacts modal. The left side is the filter/list, the right side is the viewer
+ * for the selected artifact. The list reloads immediately when the filter changes, and reloads
+ * from scratch (debounced) when `refreshTick` bumps. 409/428 render a notice instead of the list.
  */
 export default function ArtifactsModal({
   channelId,
@@ -65,7 +66,7 @@ export default function ArtifactsModal({
   const sequence = useRef(0);
   const viewerRef = useRef<ArtifactViewerHandle | null>(null);
 
-  // 모달을 닫는 모든 길(Escape·배경·X)과 다른 결과물 고르기는 편집 중 바뀐 내용을 먼저 확인한다.
+  // Every way to close the modal (Escape/backdrop/X) and picking a different artifact first confirms unsaved edits.
   const guarded = useCallback((proceed: () => void) => {
     if (viewerRef.current) viewerRef.current.requestClose(proceed);
     else proceed();
@@ -103,8 +104,8 @@ export default function ArtifactsModal({
         if (mine === sequence.current) setLoading(false);
       }
     },
-    // gateBlocker 는 useGateBlocker() 가 매 렌더 새 객체를 주므로 통째로 넣으면 load 가 매번
-    // 새로 만들어져 재조회 루프가 된다. showFromError 는 안정적이라 그것만 싣는다.
+    // useGateBlocker() gives a new object on every render, so including gateBlocker whole would
+    // recreate load every time and cause a reload loop. showFromError is stable, so only that goes in.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [api, filter, initialTaskId, gateBlocker.showFromError],
   );
@@ -113,8 +114,8 @@ export default function ArtifactsModal({
     void load();
   }, [load]);
 
-  // `artifact:event` — 디바운스 후 처음부터 재조회. 최신 `load` 는 ref 로 읽어, 필터가 바뀐
-  // 것만으로 이 타이머가 다시 걸리지 않게 한다.
+  // `artifact:event` — reload from scratch after a debounce. Reads the latest `load` via a ref
+  // so that a filter change alone doesn't re-arm this timer.
   const loadRef = useRef(load);
   loadRef.current = load;
   useEffect(() => {
@@ -133,13 +134,13 @@ export default function ArtifactsModal({
     if (lastEvent.kind === "artifact.deleted") removeItem(lastEvent.artifactId);
     else if (lastEvent.kind === "artifact.versioned" && lastEvent.artifactId === selectedId)
       setViewerReload((n) => n + 1);
-    // selectedId 는 일부러 뺀다 — 선택을 바꿨다고 지난 사건을 다시 적용하지 않는다.
+    // selectedId is deliberately left out — changing the selection shouldn't reapply a past event.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastEvent, removeItem]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // 목록의 이미지 확대 보기가 먼저 받아 preventDefault 하면 모달은 닫지 않는다.
+      // If the list's image zoom view gets it first and calls preventDefault, the modal doesn't close.
       if (e.key === "Escape" && !e.defaultPrevented) requestModalClose();
     };
     window.addEventListener("keydown", onKey);
@@ -149,7 +150,7 @@ export default function ArtifactsModal({
   const gate = error?.status === 409 ? "gateway" : error?.status === 428 ? "upgrade" : null;
 
   return (
-    // 칸반 카드의 결과물 섹션에서 열면 칸반 모달(z-50) 위에 떠야 한다.
+    // Must float above the kanban modal (z-50) when opened from a kanban card's artifacts section.
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60"
       onClick={requestModalClose}

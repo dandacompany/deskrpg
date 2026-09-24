@@ -8,12 +8,15 @@ import type { GalleryAttachment } from "./card-attachments";
 type BoardCursor = { boardSlug: string | undefined; cursor: string };
 
 /**
- * 결과물 갤러리가 잇는 카드 첨부를 채널의 **보드마다 한 번씩** 읽는다(카드 수와 무관).
+ * Reads the card attachments the artifact gallery appends, **once per board** in the channel
+ * (regardless of card count).
  *
- * - `supported` 가 false 면 플러그인이 보드 전체 목록을 모른다 — 화면은 아티팩트만 그리고
- *   왜 첨부가 없는지 한 줄 알린다. null 은 아직 모른다(조용히 둔다).
- * - 보드 목록·첨부 조회가 실패해도 갤러리를 깨지 않는다. 칸반 연결 문제는 아티팩트 쪽 안내가
- *   이미 말하고, 여기서 또 오류를 띄우면 같은 문제를 두 번 말한다.
+ * - `supported` false means the plugin doesn't know the board's full attachment list — the
+ *   screen renders only artifacts and notes in one line why there are none. null means it
+ *   doesn't know yet (stay quiet).
+ * - A failed board list/attachment lookup doesn't break the gallery. The kanban-connection
+ *   notice on the artifacts side already covers that, and raising another error here would say
+ *   the same thing twice.
  */
 export function useCardAttachments(channelId: string, fetchImpl?: FetchLike) {
   const [items, setItems] = useState<GalleryAttachment[]>([]);

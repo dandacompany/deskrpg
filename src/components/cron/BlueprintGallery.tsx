@@ -1,8 +1,9 @@
 "use client";
 /**
- * 자동화 템플릿 갤러리 (R21): 목록(제목·설명·카테고리·태그) → 선택 → 필드 폼 + 담당 NPC
- * → 인스턴스화. 필드 타입은 enum/text/time/weekdays. `strict` 가 아니면 enum·weekdays 도
- * 자유 입력을 허용한다(datalist). `deliver` 슬롯은 크론 폼과 같은 배달처 체크박스로 그린다.
+ * Automation blueprint gallery (R21): list (title/description/category/tags) -> select -> field
+ * form + assigned NPC -> instantiate. Field types are enum/text/time/weekdays. When `strict` is
+ * not set, enum/weekdays also allow free input (datalist). The `deliver` slot renders as the same
+ * delivery-target checkboxes as the cron form.
  */
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
@@ -31,7 +32,7 @@ interface BlueprintGalleryProps {
 
 const DELIVER_FIELD = "deliver";
 
-/** 필드 기본값으로 폼을 채운다. deliver 슬롯의 "origin"/빈 값은 local 로 바꾼다. */
+/** Fills the form with field defaults. The deliver slot's "origin"/empty value becomes local. */
 export function initialBlueprintValues(blueprint: AutomationBlueprint): Record<string, string> {
   const out: Record<string, string> = {};
   for (const field of blueprint.fields) {
@@ -42,7 +43,7 @@ export function initialBlueprintValues(blueprint: AutomationBlueprint): Record<s
   return out;
 }
 
-/** CronApiError 를 체크리스트가 아는 GateBlocker 로 옮긴다. 판정은 classifyGateFailure 하나다. */
+/** Maps a CronApiError to the GateBlocker the checklist understands. classifyGateFailure alone decides. */
 function blockerFromCronError(err: unknown): GateBlocker | null {
   if (!isCronApiError(err)) return null;
   return classifyGateFailure({
@@ -53,7 +54,7 @@ function blockerFromCronError(err: unknown): GateBlocker | null {
   });
 }
 
-/** 필수(optional 아님) 필드가 비어 있으면 그 이름들. */
+/** Names of required (not optional) fields that are empty. */
 export function missingRequiredFields(
   blueprint: AutomationBlueprint,
   values: Record<string, string>,
@@ -143,7 +144,7 @@ export default function BlueprintGallery({
   const [submitError, setSubmitError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
 
-  // 템플릿·배달처는 NPC 프로필의 것이다 — 담당 NPC 를 바꾸면 다시 받는다.
+  // Blueprints and delivery targets belong to the NPC's profile — refetch when the assigned NPC changes.
   useEffect(() => {
     if (!npcId) return;
     let cancelled = false;
@@ -169,7 +170,7 @@ export default function BlueprintGallery({
         }
       })
       .catch((err: unknown) => {
-        // 목록을 못 받아도 local 은 항상 고를 수 있다 — 폼을 막지 않는다.
+        // Even if the list fails to load, local can always be chosen — this doesn't block the form.
         if (cancelled) return;
         setTargets([]);
         const blocker = blockerFromCronError(err);

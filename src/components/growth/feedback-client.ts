@@ -3,14 +3,14 @@ import { BUG_REPORT_BASE_URL } from "@/lib/app-meta";
 export const DEFAULT_FEEDBACK_URL = "https://feedback.deskrpg.com";
 const INSTALL_ID_KEY = "deskrpg.feedback.installId";
 
-/** `DESKRPG_FEEDBACK_URL` 해석. 설정이 없으면 기본 서버, 빈 값이면 설문·비공개 전송을 모두 끈다. */
+/** Resolves `DESKRPG_FEEDBACK_URL`. Falls back to the default server when unset; an empty value disables both the survey and private sending. */
 export function resolveFeedbackUrl(raw: string | undefined): string | null {
   if (raw === undefined) return DEFAULT_FEEDBACK_URL;
   const trimmed = raw.trim().replace(/\/+$/, "");
   return trimmed === "" ? null : trimmed;
 }
 
-/** 계정과 무관한 무작위 설치 ID. 같은 설치의 중복 응답을 가리는 데만 쓴다. */
+/** A random install ID unrelated to any account. Used only to filter out duplicate responses from the same install. */
 export function getInstallId(storage: Storage | null): string | null {
   try {
     if (!storage) return null;
@@ -95,7 +95,7 @@ export interface SurveySet {
   questions: SurveyQuestion[];
 }
 
-/** 서버 기본 세트(version 1)와 같다 — 서버가 이 버전을 항상 받아 준다. */
+/** Matches the server's default set (version 1) — the server always accepts this version. */
 export const FALLBACK_SURVEY: SurveySet = {
   version: 1,
   intervalDays: 30,

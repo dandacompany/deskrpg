@@ -3,15 +3,16 @@
 import { useT } from "@/lib/i18n";
 
 interface SystemMessageProps {
-  /** 서버가 넣은 JSON — `{"kind":"invited","names":[…]}` 부류. */
+  /** JSON put in by the server — of the form `{"kind":"invited","names":[…]}`. */
   content: string;
 }
 
 type SystemPayload = { kind?: string; names?: unknown; name?: unknown };
 
 /**
- * 시스템 줄은 서버가 로케일을 모르는 채로 쓴다. 그래서 본문이 JSON 이고, 문장은 여기서 만든다.
- * 파싱에 실패하면(옛 형식·잘린 값) 원문을 그대로 보인다 — 삼키는 것보다 낫다.
+ * The server writes system lines without knowing the locale. So the body is JSON,
+ * and the sentence is built here. If parsing fails (old format, truncated value),
+ * shows the raw content as-is — better than swallowing it.
  */
 export function systemMessageText(
   content: string,

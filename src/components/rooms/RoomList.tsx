@@ -18,8 +18,8 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 ];
 
 /**
- * 상대 시간 한 조각. 전용 라이브러리를 들이지 않으려고 `Intl.RelativeTimeFormat` 만 쓴다.
- * 1분 미만은 "0분 전" 이 어색하므로 빈 문자열로 접는다.
+ * A short relative-time snippet. Uses only `Intl.RelativeTimeFormat` to avoid pulling in
+ * a dedicated library. Under 1 minute collapses to an empty string since "0 minutes ago" is awkward.
  */
 export function relativeTime(iso: string | null, locale: string, now = Date.now()): string {
   if (!iso) return "";
@@ -39,7 +39,7 @@ export function relativeTime(iso: string | null, locale: string, now = Date.now(
   return format.format(-Math.floor(diff / size), unit);
 }
 
-/** 멤버 이름 줄: 최대 3명 + `+N`. */
+/** Member name line: up to 3 names + `+N`. */
 function memberLine(room: RoomSummary): string {
   const names = room.members.map((member) => member.name);
   if (names.length === 0) return "";

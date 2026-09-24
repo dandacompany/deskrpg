@@ -1,13 +1,14 @@
 "use client";
 /**
- * 채널 크론 화면 (R15–R19, R26, R31/R32).
+ * The channel cron screen (R15-R19, R26, R31/R32).
  *
- * - 채널 모드: 그 채널 active NPC 프로필들의 크론 합집합 + NPC 필터·검색.
- * - 단일 NPC 모드(`npc` 지정, NPC 대화창의 크론 탭): 그 NPC 것만, 필터 없음.
+ * - Channel mode: the union of cron jobs across the channel's active NPC profiles + NPC filter/search.
+ * - Single-NPC mode (`npc` given, the cron tab in an NPC's chat window): only that NPC's jobs, no filter.
  *
- * 낙관적 갱신은 없다 — 조작이 성공하면 재조회하고, 채널 소켓의 `cron:event` 가 오면
- * 재조회한다(R26). "지금 실행" 은 202 를 받으면 토스트만 띄운다(R19). 브라우저는 Hermes 를
- * 직접 부르지 않는다 — 전부 `cron-api.ts` 의 `/api/channels/...` 다.
+ * There's no optimistic update — refetches after a successful action, and refetches when the
+ * channel socket's `cron:event` arrives (R26). "Run now" only toasts on a 202 response (R19).
+ * The browser never calls Hermes directly — everything goes through `cron-api.ts`'s
+ * `/api/channels/...`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LayoutTemplate, Pause, Pencil, Play, Plus, RefreshCw, Trash2, X, Zap } from "lucide-react";
@@ -33,12 +34,12 @@ import BlueprintGallery from "./BlueprintGallery";
 
 export type CronPanelNpc = { npcId: string; npcName: string };
 
-/** 채널 소켓에서 필요한 것만 — `on`/`off`. socket.io 의 `Socket` 이 그대로 들어간다. */
+/** Only what's needed from the channel socket — `on`/`off`. socket.io's `Socket` fits this as-is. */
 export type CronEventSource = {
   on(event: string, handler: (payload: unknown) => void): unknown;
   off(event: string, handler: (payload: unknown) => void): unknown;
 };
-// `Socket` 이 위 모양에 맞는지 컴파일 시점에 고정한다 — 배선 쪽이 소켓을 그대로 넘긴다.
+// Pins at compile time that `Socket` fits the shape above — the wiring passes the socket through as-is.
 type AssertSocketFits = Socket extends CronEventSource ? true : never;
 const _socketFits: AssertSocketFits = true;
 void _socketFits;
@@ -47,18 +48,18 @@ export const CRON_SOCKET_EVENT = "cron:event";
 
 export interface CronPanelProps {
   channelId: string;
-  /** 채널의 active NPC — 필터·담당 NPC 후보. 단일 모드에서는 `npc` 하나면 된다. */
+  /** The channel's active NPCs — candidates for the filter/assigned NPC. In single mode, just `npc` is enough. */
   npcs: CronPanelNpc[];
-  /** 단일 NPC 모드: 이 NPC 의 크론만 보이고 NPC 필터가 없다. */
+  /** Single-NPC mode: shows only this NPC's cron jobs, with no NPC filter. */
   npc?: CronPanelNpc | null;
-  /** 채널 소켓. `cron:event` 를 받으면 재조회한다. 없으면 수동 새로고침만. */
+  /** The channel socket. Refetches on `cron:event`. Without it, only manual refresh works. */
   socket?: CronEventSource | null;
-  /** 토스트 — 없으면 패널 안에 잠깐 띄운다. */
+  /** Toast — if absent, briefly shown inside the panel instead. */
   onToast?: (message: string) => void;
-  /** 있으면 헤더에 닫기 버튼이 생긴다(모달로 띄울 때). */
+  /** If present, a close button appears in the header (used when shown as a modal). */
   onClose?: () => void;
   className?: string;
-  /** 열자마자 이 잡을 골라 실행 이력 탭을 편다 — 방 알림의 "이력 열기"(R30). 마운트 시에만 읽는다. */
+  /** Opens with this job selected on the run-history tab — the room notice's "open history" (R30). Only read on mount. */
   initialJobId?: string | null;
 }
 
@@ -124,7 +125,7 @@ export default function CronPanel({
     [],
   );
 
-  // ---- 조회 (R26: 조작 뒤·사건 뒤 재조회) ---------------------------------
+  // ---- Fetch (R26: refetch after an action or an event) ---------------------------------
   const reload = useCallback(async () => {
     setLoading(true);
     try {
@@ -158,7 +159,7 @@ export default function CronPanel({
     };
   }, [socket, channelId, reload]);
 
-  // ---- 1초 틱 — 다음 실행까지 카운트다운 (R18) -------------------------------
+  // ---- 1-second tick — countdown to the next run (R18) -------------------------------
   const hasCountdown = useMemo(
     () => (jobs ?? []).some((job) => parseIsoMs(job.next_run_at) !== null),
     [jobs],
@@ -169,7 +170,7 @@ export default function CronPanel({
     return () => clearInterval(id);
   }, [hasCountdown]);
 
-  // ---- 필터·검색 (R15) --------------------------------------------------------
+  // ---- Filter/search (R15) --------------------------------------------------------
   const visibleJobs = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return (jobs ?? []).filter((job) => {
@@ -188,7 +189,7 @@ export default function CronPanel({
     [jobs, selectedId],
   );
 
-  // ---- 실행 이력 탭 --------------------------------------------------------
+  // ---- Run-history tab --------------------------------------------------------
   useEffect(() => {
     if (!selected || detailTab !== "runs") return;
     let cancelled = false;
@@ -210,7 +211,7 @@ export default function CronPanel({
     };
   }, [channelId, selected, detailTab]);
 
-  // ---- 조작 (R16: editable 일 때만) -----------------------------------------
+  // ---- Actions (R16: only when editable) -----------------------------------------
   const runAction = useCallback(
     async (job: CronJobView, action: "pause" | "resume" | "run" | "delete") => {
       if (!job.editable || busy) return;
@@ -229,7 +230,7 @@ export default function CronPanel({
             await reload();
             break;
           case "run":
-            // R19: 202 만 받고 끝. 결과는 cron:event → 재조회.
+            // R19: just gets the 202 and stops. The result is observed via cron:event -> refetch.
             await cronApi.runJob(channelId, job.id, job.npcId);
             toast(t("cron.toast.runQueued", { name: job.name }));
             break;
@@ -286,10 +287,11 @@ export default function CronPanel({
     return reason ? t(`cron.readOnly.${reason}`) : null;
   };
 
-  // 배너는 `CronErrorNotice` 가 그대로 그린다 — 여기서는 그 옆에 체크리스트를 여는 버튼만
-  // 붙인다. `isSetupBlocker` 가 참인 넷(gateway_not_bound·plugin_absent·plugin_unauthorized·
-  // plugin_upgrade_required)일 때만 보인다 — 평범한 500·네트워크 오류에 "설정이 더 필요하다"고
-  // 말하면 거짓 신호가 된다. `CronEditorDialog`·`BlueprintGallery` 의 배달처 프리로드와 같은 기준.
+  // The banner itself is rendered by `CronErrorNotice` — this only attaches a button next to it
+  // that opens the checklist. It only shows when `isSetupBlocker` is true (the net of
+  // gateway_not_bound/plugin_absent/plugin_unauthorized/plugin_upgrade_required) — saying
+  // "more setup needed" for a plain 500/network error would be a false signal. Same standard
+  // as the delivery-target preload in `CronEditorDialog`/`BlueprintGallery`.
   const gateChecklistTrigger = (err: unknown) => {
     if (!isCronApiError(err)) return null;
     const minVersion =
@@ -320,7 +322,7 @@ export default function CronPanel({
       data-testid="cron-panel"
       className={`flex flex-col min-h-0 h-full bg-bg text-text ${className}`}
     >
-      {/* 헤더 */}
+      {/* Header */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-surface/80">
         <div className="flex items-baseline gap-2 min-w-0">
           <span className="text-sm font-bold">{t("cron.title")}</span>
@@ -369,7 +371,7 @@ export default function CronPanel({
         </div>
       </div>
 
-      {/* 필터·검색 */}
+      {/* Filter/search */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
         {!single && (
           <select
@@ -429,7 +431,7 @@ export default function CronPanel({
           </div>
         )}
 
-        {/* 목록 */}
+        {/* List */}
         {jobs === null ? (
           <p className="text-sm text-text-dim py-4 text-center">{t("common.loading")}</p>
         ) : visibleJobs.length === 0 ? (
@@ -490,7 +492,7 @@ export default function CronPanel({
         )}
       </div>
 
-      {/* 상세 서랍 */}
+      {/* Detail drawer */}
       {selected && (
         <div
           data-testid="cron-detail"

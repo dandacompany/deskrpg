@@ -1,12 +1,12 @@
 import { classifyGateFailure } from "@/lib/gate-failure";
 import { PLUGIN_INSTALL_COMMAND as SHARED_PLUGIN_INSTALL_COMMAND } from "@/lib/hermes/plugin-install-command";
 /**
- * 브라우저 → `/api/channels/:id/cron/**` 호출. 하드 게이트: 브라우저는 Hermes 를 직접
- * 부르지 않는다 — 여기 있는 URL 만 쓴다. 인증은 다른 채널 API 와 같이 세션 쿠키다
- * (`ChannelSettingsModal` 의 `fetch` 와 같은 규약, 헤더 없음).
+ * Browser -> calls `/api/channels/:id/cron/**`. Hard gate: the browser never calls Hermes
+ * directly — only these URLs are used. Auth follows the other channel APIs' session cookie
+ * convention (same as `ChannelSettingsModal`'s `fetch`, no headers).
  *
- * 실패는 전부 `CronApiError` 로 던진다 — 서버의 `{code, message}` 본문(`cronError`)을
- * 그대로 싣고, 428/409 같은 특수 처리는 화면(`describeCronError`)이 결정한다.
+ * All failures are thrown as `CronApiError` — carrying the server's `{code, message}` body
+ * (`cronError`) as-is; special handling like 428/409 is decided by the screen (`describeCronError`).
  */
 
 import type {
@@ -17,7 +17,7 @@ import type {
   UpdateCronJobBody,
 } from "@/lib/hermes/deskrpg-plugin-types";
 
-/** 목록·상세 응답에 실리는 작업 — 서버의 `EnrichedCronJob` 와 같은 모양(브라우저용 사본). */
+/** The job carried in list/detail responses — same shape as the server's `EnrichedCronJob` (browser copy). */
 export type CronJobView = CronJob & {
   npcId: string;
   npcName: string;
@@ -157,7 +157,7 @@ export const cronApi = {
     );
   },
 
-  /** R19 — 202 로 바로 돌아온다. 결과는 `cron:event` 와 실행 이력으로 본다. */
+  /** R19 — returns 202 immediately. The result is observed via `cron:event` and run history. */
   runJob(channelId: string, jobId: string, npcId: string) {
     return request<{ accepted: boolean }>(
       `${base(channelId)}/jobs/${encodeURIComponent(jobId)}/run`,
@@ -193,11 +193,11 @@ export const cronApi = {
 };
 
 // ---------------------------------------------------------------------------
-// 오류 → 화면 문구 (R31/R32)
+// Error -> screen copy (R31/R32)
 // ---------------------------------------------------------------------------
 
-/** R31 안내에 넣는 설치 명령. 최소 버전은 서버 응답의 `minVersion` 이 우선한다. */
-/** 정본은 `@/lib/hermes/plugin-install-command` 다 — 여기서는 기존 import 경로를 지킨다. */
+/** Install command shown in the R31 notice. The minimum version prefers the server response's `minVersion`. */
+/** The source of truth is `@/lib/hermes/plugin-install-command` — this keeps the existing import path. */
 export const PLUGIN_INSTALL_COMMAND = SHARED_PLUGIN_INSTALL_COMMAND;
 export const PLUGIN_MIN_VERSION = "0.6.0";
 
@@ -206,7 +206,7 @@ export type CronErrorNotice =
   | { kind: "gateway" }
   | { kind: "other"; code: string; message: string; status: number };
 
-/** 오류를 세 부류로 접는다 — 업그레이드 안내 / 게이트웨이 연결 안내 / 코드·메시지 그대로. */
+/** Collapses an error into three kinds — upgrade notice / gateway connection notice / code+message as-is. */
 export function classifyCronError(err: unknown): CronErrorNotice {
   if (isCronApiError(err)) {
     const minVersion =

@@ -9,13 +9,13 @@ import { afterSurvey, shouldShowSurvey, type SurveyOutcome } from "./survey-sche
 const TICK_MS = 60_000;
 
 /**
- * 맵 화면이 보이는 동안 사용 시간을 1분 단위로 쌓고, 때가 되면 설문을 꺼내 준다.
- * 수집 서버가 꺼져 있거나 저장소를 못 쓰면 아무것도 하지 않는다.
+ * Accumulates usage time in 1-minute increments while the map screen is visible, and surfaces the survey when it's time.
+ * Does nothing if the collection server is off or storage is unusable.
  */
 export function useSurveyPrompt(feedbackUrl: string | null) {
   const [survey, setSurvey] = useState<SurveySet | null>(null);
   const [consentNeeded, setConsentNeeded] = useState(true);
-  // 설문이 떠 있는 동안에는 다시 꺼내지 않는다.
+  // Don't surface it again while the survey is already open.
   const openRef = useRef(false);
 
   useEffect(() => {

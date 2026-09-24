@@ -1,7 +1,8 @@
 "use client";
 /**
- * 채널 크론 화면의 모달 셸(R15). `CronPanel` 은 내용만 그리므로 여기서 배경·대화상자·ESC 를
- * 붙인다 — `KanbanBoardModal` 과 같은 관례. 소켓 구독(`cron:event`)은 패널이 스스로 한다.
+ * The modal shell for the channel cron screen (R15). `CronPanel` only renders the content,
+ * so the backdrop/dialog/ESC are attached here — the same convention as `KanbanBoardModal`.
+ * The socket subscription (`cron:event`) is handled by the panel itself.
  */
 import { useEffect } from "react";
 
@@ -11,12 +12,12 @@ import CronPanel, { type CronEventSource, type CronPanelNpc } from "./CronPanel"
 
 export interface CronModalProps {
   channelId: string;
-  /** 채널의 active NPC — 이름은 프로필 표시명(`npcs.name` 이 아니다). */
+  /** The channel's active NPCs — the name is the profile display name (not `npcs.name`). */
   npcs: CronPanelNpc[];
   socket?: CronEventSource | null;
   onToast?: (message: string) => void;
   onClose: () => void;
-  /** 방 알림의 "이력 열기" — 그 잡의 실행 이력으로 연다(R30). */
+  /** Room notice's "open history" — opens with that job's run history (R30). */
   initialJobId?: string | null;
 }
 

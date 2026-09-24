@@ -34,7 +34,7 @@ const BLUEPRINT: AutomationBlueprint = {
   appUrl: "",
 };
 
-test("initialBlueprintValues — 기본값을 채우고 deliver 의 origin 은 local 로", () => {
+test("initialBlueprintValues — fills defaults and turns deliver's origin into local", () => {
   assert.deepEqual(initialBlueprintValues(BLUEPRINT), {
     time: "09:00",
     days: "",
@@ -44,7 +44,7 @@ test("initialBlueprintValues — 기본값을 채우고 deliver 의 origin 은 l
   assert.deepEqual(missingRequiredFields(BLUEPRINT, initialBlueprintValues(BLUEPRINT)), ["days"]);
 });
 
-test("갤러리 — 목록(제목·설명·카테고리·태그) → 선택 → 필드 폼 → 담당 NPC 로 인스턴스화 (R21)", async () => {
+test("gallery — list (title/description/category/tags) -> select -> field form -> instantiate with assigned NPC (R21)", async () => {
   const calls: Array<{ url: string; body: unknown }> = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -95,7 +95,7 @@ test("갤러리 — 목록(제목·설명·카테고리·태그) → 선택 → 
     const submit = host.querySelector('[data-testid="bp-submit"]') as HTMLButtonElement;
     assert.equal(submit.disabled, true, "필수 필드(days)가 비어 있으면 만들기 불가");
 
-    // strict enum/weekdays 는 select 로 그려진다.
+    // strict enum/weekdays renders as a select.
     const days = Array.from(host.querySelectorAll("select")).find((s) =>
       Array.from(s.options).some((o) => o.value === "weekdays"),
     ) as HTMLSelectElement;

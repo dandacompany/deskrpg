@@ -50,7 +50,7 @@ function json(status: number, body: unknown): Response {
   });
 }
 
-/** URL 별 응답을 정하는 가짜 fetch. 호출 기록을 남긴다. */
+/** A fake fetch that decides the response per URL. Records call history. */
 function router(routes: (url: string, method: string) => Response | Promise<Response>) {
   const calls: Call[] = [];
   const handler = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -90,7 +90,7 @@ async function mount(
   await act(async () => {
     root.render(<I18nProvider initialLocale="ko">{node}</I18nProvider>);
   });
-  // 첫 조회의 fetch 가 끝나도록 한 틱 더 돈다.
+  // Run one more tick so the initial fetch finishes.
   await act(async () => {
     await Promise.resolve();
   });
@@ -116,7 +116,7 @@ async function click(node: Element | null) {
   });
 }
 
-test("시간대 라벨 — 응답 timezone 이 있으면 '기준', 없으면 미확인 (R18/E9)", async () => {
+test("timezone label — 'as of' when the response has a timezone, otherwise unknown (R18/E9)", async () => {
   const withTz = router(() => json(200, { jobs: [], timezone: "Asia/Seoul" }));
   const a = await mount(<CronPanel channelId="ch1" npcs={NPCS} />, withTz.handler);
   assert.equal(byTestId(a.host, "cron-tz")?.textContent, "Asia/Seoul 기준");
@@ -128,7 +128,7 @@ test("시간대 라벨 — 응답 timezone 이 있으면 '기준', 없으면 미
   await b.cleanup();
 });
 
-test("목록 행 — 상태 점·이름·주기·NPC 이름·카운트다운, NPC 필터와 검색 (R15)", async () => {
+test("list row — state dot/name/schedule/NPC name/countdown, plus NPC filter and search (R15)", async () => {
   const jobs = [
     job({ id: "j1", npcId: "npc-a", name: "아침 브리핑" }),
     job({ id: "j2", npcId: "npc-b", name: "주간 리포트", state: "paused", prompt: "weekly" }),
@@ -143,13 +143,13 @@ test("목록 행 — 상태 점·이름·주기·NPC 이름·카운트다운, NP
     assert.match(rows[0].textContent ?? "", /0 9 \* \* \*/);
     assert.equal(byTestId(rows[0], "cron-state-dot")?.dataset.state, "scheduled");
     assert.ok(byTestId(rows[0], "cron-state-dot")?.className.includes("bg-emerald-400"));
-    // 5분 뒤 → 상대 시간 카운트다운
+    // 5 minutes out -> relative-time countdown
     assert.match(byTestId(rows[0], "cron-countdown")?.textContent ?? "", /5분/);
-    // 멈춘 작업은 카운트다운 대신 상태 문구
+    // A paused job shows a status label instead of a countdown
     assert.equal(byTestId(rows[1], "cron-countdown")?.textContent, "멈춤");
     assert.equal(byTestId(rows[1], "cron-state-dot")?.dataset.state, "paused");
 
-    // NPC 필터
+    // NPC filter
     const filter = byTestId(host, "cron-filter-npc") as HTMLSelectElement;
     await act(async () => {
       filter.value = "npc-b";
@@ -159,7 +159,7 @@ test("목록 행 — 상태 점·이름·주기·NPC 이름·카운트다운, NP
     assert.equal(rows.length, 1);
     assert.match(rows[0].textContent ?? "", /주간 리포트/);
 
-    // 검색(프롬프트도 본다)
+    // Search (also checks the prompt)
     await act(async () => {
       filter.value = "";
       filter.dispatchEvent(new Event("change", { bubbles: true }));
@@ -174,7 +174,7 @@ test("목록 행 — 상태 점·이름·주기·NPC 이름·카운트다운, NP
     assert.equal(rows.length, 1);
     assert.match(rows[0].textContent ?? "", /주간 리포트/);
 
-    // 목록 조회는 필터에 상관없이 채널 라우트 한 번
+    // The list fetch hits the channel route once, regardless of filters
     assert.deepEqual(
       r.calls.map((c) => c.url),
       ["/api/channels/ch1/cron/jobs"],
@@ -184,7 +184,7 @@ test("목록 행 — 상태 점·이름·주기·NPC 이름·카운트다운, NP
   }
 });
 
-test("단일 NPC 모드 — npcId 로 조회하고 NPC 필터가 없다", async () => {
+test("single-NPC mode — fetches by npcId and has no NPC filter", async () => {
   const r = router(() => json(200, { jobs: [job({ id: "j1", npcId: "npc-a" })], timezone: null }));
   const { host, cleanup } = await mount(
     <CronPanel channelId="ch1" npcs={NPCS} npc={NPCS[0]} />,
@@ -199,7 +199,7 @@ test("단일 NPC 모드 — npcId 로 조회하고 NPC 필터가 없다", async 
   }
 });
 
-test("editable=false 면 조작 버튼이 전부 비활성이고 이유가 보인다 (R16)", async () => {
+test("when editable=false all action buttons are disabled and the reason is shown (R16)", async () => {
   const jobs = [
     job({
       id: "other",
@@ -225,7 +225,7 @@ test("editable=false 면 조작 버튼이 전부 비활성이고 이유가 보�
     }
     assert.match(byTestId(host, "cron-readonly-reason")?.textContent ?? "", /다른 오피스에서 만든/);
 
-    // 비활성 버튼을 눌러도 요청이 나가지 않는다.
+    // Clicking a disabled button sends no request.
     await click(byTestId(host, "cron-action-run"));
     assert.equal(r.calls.filter((c) => c.method === "POST").length, 0);
 
@@ -236,7 +236,7 @@ test("editable=false 면 조작 버튼이 전부 비활성이고 이유가 보�
   }
 });
 
-test("428 plugin_upgrade_required → 업데이트 안내와 설치 명령 (R31)", async () => {
+test("428 plugin_upgrade_required -> update notice and install command (R31)", async () => {
   const r = router(() =>
     json(428, { code: "plugin_upgrade_required", message: "old", minVersion: "0.6.0" }),
   );
@@ -256,7 +256,7 @@ test("428 plugin_upgrade_required → 업데이트 안내와 설치 명령 (R31)
   }
 });
 
-test("409 gateway_not_bound → 게이트웨이 연결 안내, 다른 오류는 코드·메시지 그대로 (R32)", async () => {
+test("409 gateway_not_bound -> gateway connection notice, other errors pass code/message through (R32)", async () => {
   const a = router(() => json(409, { code: "gateway_not_bound", message: "no gw" }));
   const first = await mount(<CronPanel channelId="ch1" npcs={NPCS} />, a.handler);
   assert.match(byTestId(first.host, "cron-error-gateway")?.textContent ?? "", /게이트웨이/);
@@ -271,7 +271,7 @@ test("409 gateway_not_bound → 게이트웨이 연결 안내, 다른 오류는 
   await second.cleanup();
 });
 
-test("지금 실행 — 202 를 받으면 토스트만, 재조회는 하지 않는다 (R19)", async () => {
+test("run now — a 202 response only toasts, no refetch (R19)", async () => {
   const jobs = [job({ id: "j1", npcId: "npc-a", name: "브리핑" })];
   const toasts: string[] = [];
   const r = router((url) => {
@@ -296,7 +296,7 @@ test("지금 실행 — 202 를 받으면 토스트만, 재조회는 하지 않�
   }
 });
 
-test("멈춤은 성공 뒤 재조회하고, cron:event 소켓 사건도 재조회한다 (R26)", async () => {
+test("pause refetches after success, and a cron:event socket event also refetches (R26)", async () => {
   const jobs = [job({ id: "j1", npcId: "npc-a" })];
   const r = router((url) => {
     if (url.endsWith("/pause")) return json(200, { job: jobs[0] });
@@ -325,7 +325,7 @@ test("멈춤은 성공 뒤 재조회하고, cron:event 소켓 사건도 재조�
     });
     assert.equal(r.calls.filter((c) => c.method === "GET").length, 3);
 
-    // 다른 채널의 사건은 무시한다.
+    // Events from other channels are ignored.
     await act(async () => {
       socket.emit("cron:event", { channelId: "other", event: {} });
     });
@@ -336,7 +336,7 @@ test("멈춤은 성공 뒤 재조회하고, cron:event 소켓 사건도 재조�
   assert.equal(socket.handlers.get("cron:event")?.size, 0, "언마운트 시 구독 해제");
 });
 
-test("실행 이력 탭은 /runs 를 부른다", async () => {
+test("the run-history tab calls /runs", async () => {
   const jobs = [job({ id: "j1", npcId: "npc-a" })];
   const r = router((url) => {
     if (url.includes("/runs"))
@@ -373,7 +373,7 @@ test("실행 이력 탭은 /runs 를 부른다", async () => {
   }
 });
 
-test("일부 NPC 조회 실패(errors)는 목록을 살린 채 경고로 보인다", async () => {
+test("a partial NPC fetch failure (errors) shows a warning while keeping the list alive", async () => {
   const r = router(() =>
     json(200, {
       jobs: [job({ id: "j1", npcId: "npc-a" })],

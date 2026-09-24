@@ -8,10 +8,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { waitFor } from "@testing-library/react";
 
 /**
- * `URL.createObjectURL` 은 이 러너 환경(happy-dom)에 없거나 실제 blob URL 을 만들지
- * 않으므로, 마지막으로 넘어온 blob 의 텍스트를 동기로 꺼낼 수 있게 부품을 가로챈다.
- * 브라우저의 `Blob` 은 파츠를 동기로 노출하지 않아서, 여기서는 우리가 만든 파츠 배열을
- * 직접 기억해 뒀다가 합친다 — 실제 렌더 결과(문자열)는 바뀌지 않는다.
+ * `URL.createObjectURL` either doesn't exist in this runner environment (happy-dom) or doesn't
+ * create a real blob URL, so we intercept the Blob constructor to synchronously pull out the
+ * text of the last blob passed in. The browser's `Blob` doesn't expose its parts synchronously,
+ * so here we remember the parts array we built ourselves and join it — the actual render output
+ * (the string) doesn't change.
  */
 let lastParts: unknown[] = [];
 const OriginalBlob = globalThis.Blob;
@@ -53,7 +54,7 @@ test.afterEach(async () => {
   container?.remove();
 });
 
-test("SvgViewer 는 script·onload 를 지운 뒤 blob <img> 로 그린다", async () => {
+test("SvgViewer strips script/onload before rendering as a blob <img>", async () => {
   const { default: SvgViewer } = await import("./SvgViewer");
   await render(
     <SvgViewer
@@ -68,7 +69,7 @@ test("SvgViewer 는 script·onload 를 지운 뒤 blob <img> 로 그린다", asy
   assert.equal(lastBlobText().includes("onload"), false);
 });
 
-test("CodeViewer 는 shiki 로 강조한 HTML 을 그린다", async () => {
+test("CodeViewer renders HTML highlighted by shiki", async () => {
   const { default: CodeViewer } = await import("./CodeViewer");
   await render(<CodeViewer text={"const a = 1;"} language="ts" />);
   await waitFor(() => {
@@ -76,7 +77,7 @@ test("CodeViewer 는 shiki 로 강조한 HTML 을 그린다", async () => {
   });
 });
 
-test("무거운 뷰어 모듈은 ArtifactViewer 가 정적으로 import 하지 않는다", () => {
+test("ArtifactViewer doesn't statically import heavy viewer modules", () => {
   const src = readFileSync("src/components/artifacts/ArtifactViewer.tsx", "utf8");
   for (const mod of ["pdfjs-dist", "shiki", "dompurify"]) {
     assert.equal(src.includes(`from "${mod}"`), false, mod);
@@ -84,11 +85,11 @@ test("무거운 뷰어 모듈은 ArtifactViewer 가 정적으로 import 하지 �
   assert.match(src, /lazy\(\(\) => import\("\.\/viewers\/PdfViewer"\)\)/);
 });
 
-/* ---------- PdfViewer: pdf.js 를 가짜 모듈로 갈아 끼운다 ---------- */
+/* ---------- PdfViewer: swaps pdf.js for a fake module ---------- */
 
 type FakeRenderTask = { promise: Promise<void>; cancel(): void };
 
-/** pdf.js 를 흉내 내는 최소 모듈. 호출을 기록하고 각 단계의 결과를 테스트가 정한다. */
+/** A minimal module mimicking pdf.js. Records calls and lets the test decide each step's result. */
 function fakePdfjs(opts: {
   load?: () => Promise<unknown>;
   getPage?: () => Promise<unknown>;
@@ -139,7 +140,7 @@ async function settle() {
   }
 }
 
-/** 렌더 중 던진 오류를 받아 표시하는 작은 경계(ArtifactViewer 의 RenderBoundary 와 같은 역할). */
+/** A small boundary that catches errors thrown during render and displays them (same role as ArtifactViewer's RenderBoundary). */
 async function withBoundary() {
   const { Component } = await import("react");
   return class Boundary extends Component<{ children: React.ReactNode }, { failed: boolean }> {
@@ -170,7 +171,7 @@ function cancelledTask(): FakeRenderTask & { cancelled: boolean } {
   return task;
 }
 
-test("PdfViewer 는 workerSrc 를 정하고 blob 바이트로 getDocument 를 부르며, 닫으면 로딩 태스크를 없앤다", async () => {
+test("PdfViewer sets workerSrc and calls getDocument with the blob's bytes, destroying the loading task on close", async () => {
   const viewerMod = await import("./PdfViewer");
   const { mod, rec } = fakePdfjs({});
   const restore = viewerMod.pdfjsLoader.load;
@@ -191,7 +192,7 @@ test("PdfViewer 는 workerSrc 를 정하고 blob 바이트로 getDocument 를 �
   }
 });
 
-test("PdfViewer: 닫을 때 렌더 취소(RenderingCancelledException)는 처리되지 않은 거부로 새지 않는다", async () => {
+test("PdfViewer: a render cancellation on close (RenderingCancelledException) doesn't leak as an unhandled rejection", async () => {
   const viewerMod = await import("./PdfViewer");
   const task = cancelledTask();
   const { mod } = fakePdfjs({ render: () => task });
@@ -215,7 +216,7 @@ test("PdfViewer: 닫을 때 렌더 취소(RenderingCancelledException)는 처리
   }
 });
 
-test("PdfViewer: getPage 가 닫힌 뒤에 풀리면 render 를 시작하지 않는다", async () => {
+test("PdfViewer: if getPage resolves after closing, render doesn't start", async () => {
   const viewerMod = await import("./PdfViewer");
   let resolvePage!: (p: unknown) => void;
   const pending = new Promise((r) => {
@@ -238,7 +239,7 @@ test("PdfViewer: getPage 가 닫힌 뒤에 풀리면 render 를 시작하지 않
   }
 });
 
-test("PdfViewer: 페이지 렌더가 실패하면 던져 오류 경계가 대체 화면을 그린다", async () => {
+test("PdfViewer: a failed page render throws, and the error boundary renders the fallback", async () => {
   const viewerMod = await import("./PdfViewer");
   const Boundary = await withBoundary();
   const { mod } = fakePdfjs({
@@ -259,7 +260,7 @@ test("PdfViewer: 페이지 렌더가 실패하면 던져 오류 경계가 대체
   }
 });
 
-test("PdfViewer: getPage 가 거부되면 대체 화면으로 떨어진다", async () => {
+test("PdfViewer: falls back to the fallback screen when getPage is rejected", async () => {
   const viewerMod = await import("./PdfViewer");
   const Boundary = await withBoundary();
   const { mod } = fakePdfjs({ getPage: () => Promise.reject(new Error("no page")) });
@@ -278,7 +279,7 @@ test("PdfViewer: getPage 가 거부되면 대체 화면으로 떨어진다", asy
   }
 });
 
-test("ArtifactViewer: getDocument 가 거부되면 renderFailed 다운로드 대체 화면을 그린다", async () => {
+test("ArtifactViewer: renders the renderFailed download fallback when getDocument is rejected", async () => {
   const viewerMod = await import("./PdfViewer");
   const { default: ArtifactViewer } = await import("../ArtifactViewer");
   const { I18nProvider } = await import("@/lib/i18n/context");
@@ -346,7 +347,7 @@ test("ArtifactViewer: getDocument 가 거부되면 renderFailed 다운로드 대
   }
 });
 
-/* ---------- CodeViewer: 강조를 건너뛰는 경우 ---------- */
+/* ---------- CodeViewer: cases that skip highlighting ---------- */
 
 async function assertStaysPlain(text: string, language: string) {
   const { default: CodeViewer } = await import("./CodeViewer");
@@ -360,14 +361,14 @@ async function assertStaysPlain(text: string, language: string) {
   assert.equal(container.querySelector("pre.shiki"), null);
 }
 
-test("CodeViewer: 모르는 언어는 평문 <pre> 로 남는다", async () => {
+test("CodeViewer: an unknown language stays as plain <pre>", async () => {
   await assertStaysPlain("hello", "definitely-not-a-language");
 });
 
-test("CodeViewer: language=text 는 shiki 를 부르지 않고 평문 <pre> 로 그린다", async () => {
+test("CodeViewer: language=text renders as plain <pre> without calling shiki", async () => {
   await assertStaysPlain("const a = 1;", "text");
 });
 
-test("CodeViewer: 100,000자를 넘는 본문은 강조를 건너뛴다", async () => {
+test("CodeViewer: a body over 100,000 characters skips highlighting", async () => {
   await assertStaysPlain("const a = 1;\n".repeat(10_000), "ts");
 });

@@ -82,7 +82,7 @@ async function click(el: HTMLElement) {
   await flush();
 }
 
-/** CodeMirror 는 지연 로드된다 — view 가 붙을 때까지 기다렸다가 dispatch 로 본문을 바꾼다. */
+/** CodeMirror loads lazily — wait until the view attaches, then change the body via dispatch. */
 async function setEditorText(text: string) {
   const view = await waitFor(() => {
     const host = container.querySelector<HTMLElement & { cmView?: unknown }>(
@@ -97,7 +97,7 @@ async function setEditorText(text: string) {
   await flush();
 }
 
-test("저장하면 새 내용과 메모로 onSave 를 부른다", async () => {
+test("saving calls onSave with the new content and note", async () => {
   const saved: Array<[string, string]> = [];
   await render({
     initial: "# a",
@@ -114,7 +114,7 @@ test("저장하면 새 내용과 메모로 onSave 를 부른다", async () => {
   assert.deepEqual(saved, [["# b", "제목 수정"]]);
 });
 
-test("링크는 한 줄 입력칸이고 http(s) 가 아니면 저장 버튼이 꺼진다", async () => {
+test("a link is a single-line input, and the save button is disabled unless it's http(s)", async () => {
   await render({
     initial: "https://x.io\n",
     filename: "a.url",
@@ -126,7 +126,7 @@ test("링크는 한 줄 입력칸이고 http(s) 가 아니면 저장 버튼이 �
   assert.equal(saveButton().disabled, true);
 });
 
-test("바뀐 내용이 있으면 취소 전에 확인한다(모달 안 확인)", async () => {
+test("with unsaved changes, cancel asks for confirmation first (in-modal confirm)", async () => {
   let cancelled = false;
   await render({
     initial: "https://x.io\n",
@@ -139,14 +139,14 @@ test("바뀐 내용이 있으면 취소 전에 확인한다(모달 안 확인)",
   });
   await type(linkInput(), "https://y.io", { replace: true });
   await click(byText("취소"));
-  // window.confirm 이 아니라 컴포넌트 안 배너로 뜬다.
+  // Shows as an in-component banner, not window.confirm.
   assert.ok(container.querySelector('[role="alertdialog"]'));
   assert.equal(cancelled, false);
   await click(byText("확인"));
   assert.equal(cancelled, true);
 });
 
-test("바뀐 내용이 없으면 취소가 바로 onCancel 을 부른다", async () => {
+test("with no unsaved changes, cancel calls onCancel immediately", async () => {
   let cancelled = false;
   await render({
     initial: "https://x.io\n",

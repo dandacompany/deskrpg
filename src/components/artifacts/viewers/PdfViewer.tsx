@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 type Pdfjs = typeof import("pdfjs-dist");
 
 /**
- * pdf.js 를 가져오는 이음매. 운영에서는 늘 동적 `import("pdfjs-dist")` 이고, 테스트만 가짜
- * 모듈로 갈아 끼운다(`heavy-viewers.test.tsx`).
+ * The seam for importing pdf.js. In production this is always the dynamic
+ * `import("pdfjs-dist")`; only tests swap in a fake module (`heavy-viewers.test.tsx`).
  */
 export const pdfjsLoader: { load(): Promise<Pdfjs> } = {
   load: () => import("pdfjs-dist"),
@@ -18,7 +18,7 @@ export default function PdfViewer({ blob }: { blob: Blob }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
-    // getDocument 는 호출마다 워커를 띄운다 — 닫을 때 로딩 태스크를 없애 문서와 워커를 함께 거둔다.
+    // getDocument spins up a worker on every call — destroy the loading task on close to reclaim the document and worker together.
     let loadingTask: { destroy(): Promise<void> } | null = null;
     void (async () => {
       try {
@@ -50,7 +50,7 @@ export default function PdfViewer({ blob }: { blob: Blob }) {
       try {
         const p = await doc.getPage(page);
         const c = canvas.current;
-        // 닫혔거나 페이지를 넘긴 뒤라면 그리지 않는다 — 같은 캔버스에 render 가 겹치면 pdf.js 가 던진다.
+        // Don't render if closed or if the page has since changed — pdf.js throws if render overlaps on the same canvas.
         if (cancelled || !c) return;
         const viewport = p.getViewport({ scale: 1.25 });
         c.width = viewport.width;
@@ -58,7 +58,7 @@ export default function PdfViewer({ blob }: { blob: Blob }) {
         task = p.render({ canvas: c, viewport });
         await task.promise;
       } catch (err) {
-        // 정리(cancel)로 끊긴 렌더는 실패가 아니다. 그 밖의 거부는 오류 경계로 보낸다.
+        // A render cut off by cleanup (cancel) is not a failure. Any other rejection goes to the error boundary.
         if ((err as { name?: string } | null)?.name === "RenderingCancelledException") return;
         if (!cancelled) setFailed(true);
       }
@@ -68,7 +68,7 @@ export default function PdfViewer({ blob }: { blob: Blob }) {
       task?.cancel();
     };
   }, [doc, page]);
-  if (failed) throw new Error("pdf_render_failed"); // ArtifactViewer 의 오류 경계가 다운로드로 떨어뜨린다
+  if (failed) throw new Error("pdf_render_failed"); // ArtifactViewer's error boundary falls back to download
   return (
     <div className="flex h-full flex-col items-center gap-2 overflow-auto">
       <canvas ref={canvas} className="max-w-full shadow" />

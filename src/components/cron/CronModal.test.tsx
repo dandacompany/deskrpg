@@ -9,8 +9,8 @@ import { I18nProvider } from "@/lib/i18n";
 import CronModal from "./CronModal";
 import type { CronJobView } from "./cron-api";
 
-// R15 진입: 헤더 버튼이 여는 모달 셸. 패널을 담고, 배경·ESC·닫기 버튼이 onClose 를 부른다.
-// R30 "이력 열기": initialJobId 가 있으면 그 잡을 고른 채 실행 이력 탭으로 연다.
+// R15 entry: the modal shell opened by the header button. Contains the panel; backdrop/ESC/close button call onClose.
+// R30 "open history": if initialJobId is set, opens with that job selected on the run-history tab.
 
 const NPCS = [{ npcId: "npc-a", npcName: "소피" }];
 
@@ -93,7 +93,7 @@ async function mount(node: React.ReactElement) {
 
 const q = (host: HTMLElement, sel: string) => host.querySelector(sel) as HTMLElement | null;
 
-test("크론 모달 — 패널을 담고, 배경 클릭·ESC·닫기 버튼이 onClose 를 부른다", async () => {
+test("cron modal — contains the panel; backdrop click/ESC/close button call onClose", async () => {
   let closed = 0;
   const { host, cleanup } = await mount(
     <CronModal channelId="ch1" npcs={NPCS} onClose={() => (closed += 1)} />,
@@ -103,18 +103,18 @@ test("크론 모달 — 패널을 담고, 배경 클릭·ESC·닫기 버튼이 o
     assert.ok(q(host, '[data-testid="cron-panel"]'), "CronPanel 이 마운트되지 않았다");
     assert.equal(host.querySelectorAll('[data-testid="cron-row"]').length, 2);
 
-    // 대화상자 안 클릭은 닫지 않는다.
+    // Clicking inside the dialog doesn't close it.
     await act(async () => q(host, '[role="dialog"]')!.click());
     assert.equal(closed, 0);
-    // 배경 클릭은 닫는다.
+    // Clicking the backdrop closes it.
     await act(async () => q(host, '[data-testid="cron-modal-backdrop"]')!.click());
     assert.equal(closed, 1);
-    // ESC 도 닫는다.
+    // ESC also closes it.
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     assert.equal(closed, 2);
-    // 패널 헤더의 닫기 버튼(onClose 를 넘겼으니 생긴다).
+    // The close button in the panel header (appears because onClose was passed).
     const closeBtn = Array.from(host.querySelectorAll("button")).find(
       (b) => b.getAttribute("aria-label") === "닫기",
     );
@@ -126,7 +126,7 @@ test("크론 모달 — 패널을 담고, 배경 클릭·ESC·닫기 버튼이 o
   }
 });
 
-test("initialJobId — 그 잡이 선택된 채 실행 이력 탭으로 열린다 (R30 이력 열기)", async () => {
+test("initialJobId — opens on the run-history tab with that job selected (R30 open history)", async () => {
   const { host, calls, cleanup } = await mount(
     <CronModal channelId="ch1" npcs={NPCS} initialJobId="j2" onClose={() => {}} />,
   );

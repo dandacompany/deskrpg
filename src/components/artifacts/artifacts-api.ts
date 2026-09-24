@@ -1,9 +1,10 @@
 /**
- * 결과물 REST(`/api/channels/:id/artifacts/**`)의 브라우저 쪽 호출.
+ * Browser-side calls to the artifacts REST API (`/api/channels/:id/artifacts/**`).
  *
- * 브라우저는 Hermes 를 직접 부르지 않는다 — 전부 같은 출처의 DeskRPG 라우트이고, 인증은
- * 앱의 다른 fetch 와 같이 세션 쿠키로 간다. 실패는 서버가 내려 준 `{code, message, …}` 를
- * 그대로 `ArtifactsApiError` 에 실어 던진다 — 여기서 번역하거나 접지 않는다.
+ * The browser never calls Hermes directly — everything goes through same-origin DeskRPG
+ * routes, and auth rides on the session cookie like any other fetch in the app. Failures are
+ * thrown as-is inside `ArtifactsApiError`, carrying the `{code, message, …}` the server sent —
+ * this layer doesn't translate or fold them.
  */
 
 import type {
@@ -29,8 +30,9 @@ export class ArtifactsApiError extends Error {
 }
 
 /**
- * 상세 응답. 서버가 플러그인 상세에 채널 기준 판정을 덧붙인다 — `modifiable`(이 채널에서 편집·삭제 가능),
- * `sourceInChannel`(출처 카드가 이 채널 보드에 있다). 권한 자체는 서버가 변경 라우트에서 다시 확인한다.
+ * The detail response. The server appends channel-scoped judgments to the plugin detail —
+ * `modifiable` (editable/deletable in this channel), `sourceInChannel` (the source card is on
+ * this channel's board). Permissions themselves are re-checked by the server on mutation routes.
  */
 export type ArtifactDetailView = ArtifactDetail & {
   modifiable?: boolean;
@@ -57,7 +59,7 @@ async function parseFailure(res: Response): Promise<ArtifactsApiError> {
     const parsed: unknown = await res.json();
     if (typeof parsed === "object" && parsed !== null) body = parsed as Record<string, unknown>;
   } catch {
-    // 본문이 JSON 이 아니면 상태 코드만으로 만든다.
+    // If the body isn't JSON, build the error from the status code alone.
   }
   const code =
     typeof body.code === "string"
@@ -97,8 +99,9 @@ function json(method: string, body?: unknown): RequestInit {
 }
 
 /**
- * 채널 하나에 묶인 호출 모음. `fetchImpl` 은 테스트용 — 기본은 전역 fetch 를 **호출 시점에**
- * 읽는다(테스트가 전역을 바꿔 끼우기 때문에 생성 시점에 붙잡으면 안 된다).
+ * A set of calls bound to one channel. `fetchImpl` is for tests — by default it reads the
+ * global fetch **at call time** (tests swap out the global, so it must not be captured at
+ * creation time).
  */
 export function createArtifactsApi(channelId: string, fetchImpl?: FetchLike) {
   const f: FetchLike = (input, init) => (fetchImpl ?? globalThis.fetch)(input, init);

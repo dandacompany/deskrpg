@@ -6,7 +6,7 @@ const KEYS = {
 } as const;
 
 export interface GrowthState {
-  /** 저장소를 쓸 수 있는가. 못 쓰면 빨간 점을 띄우지 않는다 — 꺼도 매번 다시 켜지기 때문이다. */
+  /** Whether storage is usable. If not, we don't show the red dot — it would turn back on every time. */
   ok: boolean;
   seenVersion: string | null;
   starClicked: boolean;
@@ -33,7 +33,7 @@ export function writeGrowthFlag(
   try {
     storage?.setItem(KEYS[key], value);
   } catch {
-    // 사생활 보호 모드 등 — 기억하지 못할 뿐 동작은 계속한다.
+    // Private browsing mode, etc. — we just won't remember it, but behavior continues.
   }
 }
 
@@ -47,7 +47,7 @@ export function browserStorage(): Storage | null {
 
 const SURVEY_KEY = "deskrpg.feedback.survey";
 
-/** 설문 상태. 저장소를 못 쓰면 null — 호출부는 설문을 띄우지 않는다. */
+/** Survey state. Returns null if storage is unusable — the caller then won't show the survey. */
 export function readSurveyState(storage: Storage | null): SurveyState | null {
   let raw: string | null;
   try {
@@ -64,7 +64,7 @@ export function readSurveyState(storage: Storage | null): SurveyState | null {
       nextAt: typeof v.nextAt === "number" ? v.nextAt : null,
     };
   } catch {
-    // 망가진 값은 처음부터 다시 센다.
+    // A corrupted value gets counted from scratch.
     return initialSurveyState();
   }
 }
@@ -73,6 +73,6 @@ export function writeSurveyState(storage: Storage | null, state: SurveyState): v
   try {
     storage?.setItem(SURVEY_KEY, JSON.stringify(state));
   } catch {
-    // 기억하지 못할 뿐이다.
+    // We just won't remember it.
   }
 }

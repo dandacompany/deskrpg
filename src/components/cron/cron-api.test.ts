@@ -22,8 +22,8 @@ function json(status: number, body: unknown): Response {
   });
 }
 
-describe("cron-api — 브라우저는 /api/channels/... 만 부른다", () => {
-  it("목록·상세·이력·변경이 채널 크론 라우트를 친다 (Hermes 직접 호출 없음)", async () => {
+describe("cron-api — the browser only calls /api/channels/...", () => {
+  it("list/detail/history/mutation all hit the channel cron routes (no direct Hermes calls)", async () => {
     const calls: Array<{ url: string; method: string; body: unknown }> = [];
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
@@ -75,7 +75,7 @@ describe("cron-api — 브라우저는 /api/channels/... 만 부른다", () => {
     assert.equal(calls[11].url, "/api/channels/ch1/cron/blueprints/instantiate");
   });
 
-  it("실패 응답은 서버의 {code,message} 를 실은 CronApiError 로 던진다", async () => {
+  it("a failure response throws a CronApiError carrying the server's {code,message}", async () => {
     globalThis.fetch = (async () =>
       json(403, { code: "cron_read_only", message: "nope" })) as typeof fetch;
     await assert.rejects(cronApi.pauseJob("ch1", "j", "n"), (err: unknown) => {
@@ -87,7 +87,7 @@ describe("cron-api — 브라우저는 /api/channels/... 만 부른다", () => {
     });
   });
 
-  it("본문이 JSON 이 아니어도 status 로 코드를 만든다", async () => {
+  it("builds a code from status even when the body isn't JSON", async () => {
     globalThis.fetch = (async () =>
       new Response("<html>", { status: 502, statusText: "Bad Gateway" })) as typeof fetch;
     await assert.rejects(cronApi.listJobs("ch1"), (err: unknown) => {
@@ -99,7 +99,7 @@ describe("cron-api — 브라우저는 /api/channels/... 만 부른다", () => {
 });
 
 describe("classifyCronError (R31/R32)", () => {
-  it("428 plugin_upgrade_required → 업그레이드 안내 + 설치 명령, minVersion 은 응답 우선", () => {
+  it("428 plugin_upgrade_required -> upgrade notice + install command, response minVersion wins", () => {
     const notice = classifyCronError(
       new CronApiError(428, "plugin_upgrade_required", "old", { minVersion: "0.7.0" }),
     );
@@ -114,13 +114,13 @@ describe("classifyCronError (R31/R32)", () => {
     assert.match(PLUGIN_INSTALL_COMMAND, /hermes plugins enable deskrpg/);
   });
 
-  it("409 gateway_not_bound → 게이트웨이 연결 안내", () => {
+  it("409 gateway_not_bound -> gateway connection notice", () => {
     assert.deepEqual(classifyCronError(new CronApiError(409, "gateway_not_bound", "x", {})), {
       kind: "gateway",
     });
   });
 
-  it("그 외는 코드·메시지 그대로", () => {
+  it("everything else passes the code/message through as-is", () => {
     assert.deepEqual(classifyCronError(new CronApiError(403, "cron_read_only", "nope", {})), {
       kind: "other",
       code: "cron_read_only",

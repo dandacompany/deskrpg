@@ -26,7 +26,7 @@ function memoryStorage(): Storage {
   };
 }
 
-test("설치 ID 는 한 번 만들고 계속 같은 값을 쓴다", () => {
+test("the install ID is created once and the same value is used from then on", () => {
   const s = memoryStorage();
   const id = getInstallId(s);
   assert.match(id ?? "", /^[0-9a-f-]{36}$/);
@@ -34,14 +34,14 @@ test("설치 ID 는 한 번 만들고 계속 같은 값을 쓴다", () => {
   assert.equal(getInstallId(null), null);
 });
 
-test("수집 서버 주소: 없으면 기본값, 빈 값이면 끔", () => {
+test("collection server URL: defaults when unset, off when empty", () => {
   assert.equal(resolveFeedbackUrl(undefined), "https://feedback.deskrpg.com");
   assert.equal(resolveFeedbackUrl(""), null);
   assert.equal(resolveFeedbackUrl("  "), null);
   assert.equal(resolveFeedbackUrl("https://example.test/"), "https://example.test");
 });
 
-test("최근 오류는 마지막 5건만, 한 줄로 잘라 남긴다", () => {
+test("only the last 5 recent errors are kept, each trimmed to one line", () => {
   for (let i = 0; i < 7; i++) recordClientError(`boom ${i}\nstack line`);
   const digest = recentErrorDigest();
   assert.equal(digest.split("\n").length, 5);
@@ -49,7 +49,7 @@ test("최근 오류는 마지막 5건만, 한 줄로 잘라 남긴다", () => {
   assert.ok(!digest.includes("stack line"));
 });
 
-test("GitHub 이슈 주소에는 사용자가 남긴 첨부만 들어간다", () => {
+test("the GitHub issue URL includes only the attachments the user kept", () => {
   const attachments = collectAttachments({
     version: "2026.921.3",
     userAgent: "UA/1",
@@ -75,7 +75,7 @@ test("GitHub 이슈 주소에는 사용자가 남긴 첨부만 들어간다", ()
   assert.equal(url.searchParams.get("labels"), "bug-report");
 });
 
-test("설문을 서버에서 못 받으면 내장 기본 설문을 쓴다", async () => {
+test("falls back to the built-in default survey when it can't be fetched from the server", async () => {
   const failing = async () => {
     throw new Error("offline");
   };

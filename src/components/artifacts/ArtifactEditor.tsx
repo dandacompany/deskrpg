@@ -5,7 +5,7 @@ import { useT } from "@/lib/i18n";
 
 import { safeHttpUrl } from "./artifact-view-model";
 
-/** 편집기를 감싼 화면이 닫기 전에 부른다 — 바뀐 내용이 있으면 편집기 안 배너로 확인한 뒤 `proceed`. */
+/** Called before the screen wrapping the editor closes — if there are unsaved changes, confirm via an in-editor banner, then `proceed`. */
 export type ArtifactEditorHandle = { requestClose(proceed: () => void): void };
 
 export type ArtifactEditorProps = {
@@ -17,20 +17,21 @@ export type ArtifactEditorProps = {
   onCancel(): void;
 };
 
-/** CodeMirror 6 `EditorView` 가 실제로 갖는 형태 중 이 컴포넌트가 쓰는 부분만. */
+/** Only the subset of CodeMirror 6's actual `EditorView` shape that this component uses. */
 type MinimalEditorView = {
   state: { doc: { toString(): string } };
   destroy(): void;
 };
 
 /**
- * 결과물 본문을 고쳐 새 버전으로 저장하는 편집기. 링크는 한 줄 `<input type="url">`,
- * 그 외는 CodeMirror 를 지연 로드해 붙인다. 변경 여부(`dirty`)를 추적해 취소 때
- * 모달이 아니라 컴포넌트 안 배너로 확인한다.
+ * Editor that edits an artifact's body and saves it as a new version. A link is a single-line
+ * `<input type="url">`; everything else lazy-loads and attaches CodeMirror. Tracks whether it
+ * changed (`dirty`) and, on cancel, confirms via an in-component banner rather than a modal.
  *
- * 테스트는 `data-testid="artifact-editor"` 엘리먼트에 실린 `cmView` 프로퍼티로 실제
- * CodeMirror view 를 얻어 `view.dispatch(...)` 로 본문을 바꾼다(이 컴포넌트가 상태를
- * React 로 미러링하지 않고 CodeMirror 문서를 정본으로 삼기 때문).
+ * Tests get the real CodeMirror view via the `cmView` property attached to the
+ * `data-testid="artifact-editor"` element and change the body with `view.dispatch(...)`
+ * (this component treats the CodeMirror document as the source of truth instead of
+ * mirroring its state into React).
  */
 export default function ArtifactEditor({
   ref,
@@ -50,7 +51,7 @@ export default function ArtifactEditor({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<MinimalEditorView | null>(null);
   const contentRef = useRef(initial);
-  /** 확인 배너의 "확인" 이 이어서 할 일(취소든 모달 닫기든 마지막으로 요청된 것). */
+  /** What "confirm" on the confirmation banner does next (whichever was last requested — cancel or closing the modal). */
   const pendingRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -76,7 +77,7 @@ export default function ArtifactEditor({
         try {
           extensions.push(await desc.load());
         } catch {
-          // 언어 지원을 못 불러오면 강조 없이 평문 편집으로 떨어진다.
+          // If language support fails to load, fall back to plain editing with no highlighting.
         }
       }
       if (!alive || !hostRef.current) return;
@@ -90,7 +91,7 @@ export default function ArtifactEditor({
       view?.destroy();
       viewRef.current = null;
     };
-    // filename·initial 은 편집 세션 동안 바뀌지 않는다 — isLink 로만 재마운트한다.
+    // filename/initial don't change during an editing session — remount only on isLink.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLink]);
 

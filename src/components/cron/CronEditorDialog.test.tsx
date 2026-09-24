@@ -76,7 +76,7 @@ async function mount(node: React.ReactElement) {
 const q = <T extends Element>(host: HTMLElement, id: string) =>
   host.querySelector(`[data-testid="${id}"]`) as T | null;
 
-/** React 의 값 추적기를 우회해 프로토타입 setter 로 넣고 이벤트를 쏜다. */
+/** Bypasses React's value tracker by setting via the prototype setter, then dispatches the event. */
 async function setValue(
   el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
   value: string,
@@ -91,7 +91,7 @@ async function setValue(
   });
 }
 
-test("생성 폼 — 프리셋 표현식·배달처 콤마 결합·모델 분리로 본문을 만든다 (R17)", async () => {
+test("create form — builds the body from preset expression, comma-joined delivery targets, and split model (R17)", async () => {
   const submitted: CronEditorSubmit[] = [];
   const { host, cleanup } = await mount(
     <CronEditorDialog
@@ -113,7 +113,7 @@ test("생성 폼 — 프리셋 표현식·배달처 콤마 결합·모델 분리
     await setValue(q<HTMLInputElement>(host, "cron-name")!, "주간 리포트");
     await setValue(q<HTMLTextAreaElement>(host, "cron-prompt")!, "이번 주 정리");
     await setValue(q<HTMLSelectElement>(host, "cron-preset")!, "weekdays");
-    // 배달처 체크박스는 서버 목록에서 왔다.
+    // The delivery-target checkboxes come from the server list.
     const slack = q<HTMLInputElement>(host, "cron-deliver-slack");
     assert.ok(slack, "배달처 목록이 렌더링돼야 한다");
     await act(async () => slack!.click());
@@ -137,7 +137,7 @@ test("생성 폼 — 프리셋 표현식·배달처 콤마 결합·모델 분리
   }
 });
 
-test("직접 입력 프리셋은 표현식 문자열을 그대로 보낸다 (Hermes 스케줄 문자열 포함)", async () => {
+test("the custom preset sends the expression string as-is (including Hermes schedule strings)", async () => {
   const submitted: CronEditorSubmit[] = [];
   const { host, cleanup } = await mount(
     <CronEditorDialog
@@ -167,7 +167,7 @@ test("직접 입력 프리셋은 표현식 문자열을 그대로 보낸다 (Her
   }
 });
 
-test("수정 폼 — 저장된 표현식을 프리셋으로 역매핑하고 담당 NPC 는 고정 (R17)", async () => {
+test("edit form — reverse-maps the stored expression to a preset and locks the assigned NPC (R17)", async () => {
   const { host, cleanup } = await mount(
     <CronEditorDialog
       channelId="ch1"
@@ -182,7 +182,7 @@ test("수정 폼 — 저장된 표현식을 프리셋으로 역매핑하고 담�
     const npc = q<HTMLSelectElement>(host, "cron-npc")!;
     assert.equal(npc.disabled, true);
     assert.equal(npc.value, "npc-a");
-    // `30 8 * * *` 는 모양이 daily 다.
+    // `30 8 * * *` has the shape of daily.
     assert.equal(q<HTMLSelectElement>(host, "cron-preset")!.value, "daily");
     assert.equal(q(host, "cron-custom-expr"), null);
     assert.equal(q<HTMLInputElement>(host, "cron-model")!.value, "openai:gpt-5");
@@ -194,7 +194,7 @@ test("수정 폼 — 저장된 표현식을 프리셋으로 역매핑하고 담�
   }
 });
 
-test("수정 폼 — 프리셋에 없는 표현식은 custom 으로 열리고 입력칸에 그대로 들어간다", async () => {
+test("edit form — an expression with no matching preset opens as custom with the value in the input", async () => {
   const { host, cleanup } = await mount(
     <CronEditorDialog
       channelId="ch1"
@@ -213,7 +213,7 @@ test("수정 폼 — 프리셋에 없는 표현식은 custom 으로 열리고 �
   }
 });
 
-test("저장 실패는 폼 안에 코드·메시지로 남고 닫히지 않는다", async () => {
+test("a save failure stays in the form as code/message and does not close", async () => {
   const { CronApiError } = await import("./cron-api");
   let closed = 0;
   const { host, cleanup } = await mount(

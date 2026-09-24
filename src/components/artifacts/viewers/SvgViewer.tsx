@@ -2,7 +2,7 @@
 import DOMPurify from "dompurify";
 import { useEffect, useMemo, useState } from "react";
 
-/** SVG 를 script·이벤트 핸들러를 지운 뒤 blob `<img>` 로 그린다(XSS 방지). */
+/** Strips scripts/event handlers from the SVG, then renders it as a blob `<img>` (XSS prevention). */
 export default function SvgViewer({ text }: { text: string }) {
   const clean = useMemo(
     () => DOMPurify.sanitize(text, { USE_PROFILES: { svg: true, svgFilters: true } }),
@@ -11,7 +11,7 @@ export default function SvgViewer({ text }: { text: string }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     const url = URL.createObjectURL(new Blob([clean], { type: "image/svg+xml" }));
-    // blob URL 은 외부(브라우저의 URL 레지스트리) 상태이고 여기서만 만들 수 있다.
+    // A blob URL is external state (the browser's URL registry) that can only be created here.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSrc(url);
     return () => URL.revokeObjectURL(url);
