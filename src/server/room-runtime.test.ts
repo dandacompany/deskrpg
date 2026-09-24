@@ -32,7 +32,7 @@ const settle = () => new Promise((r) => setTimeout(r, 30));
 const ev = (emitted: Emitted[], name: string) =>
   emitted.filter(([e]) => e.startsWith(name)).map(([, p]) => p);
 
-/** 정해진 답을 돌려주고, 받은 대본을 기록하는 목 어댑터. */
+/** Mock adapter that returns a fixed answer and records the transcripts it received. */
 function mockAdapter(reply: string, prompts: string[] = []): NpcAdapter {
   return {
     type: "mock",
@@ -47,8 +47,8 @@ function mockAdapter(reply: string, prompts: string[] = []): NpcAdapter {
 }
 
 /**
- * 게이트웨이·CLI 없이 이 파일의 조립 규칙만 관찰한다. 실제 배선(`getNpcConfigsForChannel`
- * + `resolveNpcAdapter`)은 DB 의 hermes 프로필과 살아 있는 백엔드를 요구한다.
+ * Observes only this file's assembly rules, without a gateway or CLI. The real wiring (`getNpcConfigsForChannel`
+ * + `resolveNpcAdapter`) requires hermes profiles in the DB and a live backend.
  */
 function injected(
   channelId: string,
@@ -96,7 +96,7 @@ async function seedRoom(opts: { npcCount: number; memberCount: number }) {
   return { seeded, room };
 }
 
-test("group 방의 참가자는 출근 NPC 전부가 아니라 그 방의 NPC 멤버뿐이다", async () => {
+test("a group room's participants are only that room's NPC members, not every on-duty NPC", async () => {
   const { seeded, room } = await seedRoom({ npcCount: 3, memberCount: 2 });
   const emitted: Emitted[] = [];
   const prompts: string[] = [];
@@ -111,7 +111,7 @@ test("group 방의 참가자는 출근 NPC 전부가 아니라 그 방의 NPC �
   const runtime = await getOrCreateRoomRuntime(fakeIo(emitted) as never, room, seeded.userId, deps);
   assert.ok(runtime);
 
-  // members 정책 — 지명이 없으면 멤버 전원이 답한다. 방 밖의 단비는 끼지 않는다.
+  // members policy — with no mention, every member answers. Danbi, outside the room, does not join.
   await runtime.handleHumanMessage("단테", "다들 어때", "s1");
   await settle();
   for (const p of ev(emitted, `room:message@room-${room.id}`) as {
@@ -121,7 +121,7 @@ test("group 방의 참가자는 출근 NPC 전부가 아니라 그 방의 NPC �
   assert.deepEqual(spoke.sort(), ["소피", "하늘"]);
 });
 
-test("mention 정책(office)은 지명한 NPC 만 깨운다", async () => {
+test("the mention policy (office) wakes only the mentioned NPC", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 2 });
   const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
   const emitted: Emitted[] = [];
@@ -139,7 +139,8 @@ test("mention 정책(office)은 지명한 NPC 만 깨운다", async () => {
   );
   assert.ok(runtime);
 
-  // office 방은 채널의 출근 NPC 전부가 참가자다(멤버 표가 아니라 출근부가 정본).
+  // In an office room every on-duty NPC in the channel participates (the attendance roster, not the member table,
+  // is the source of truth).
   await runtime.handleHumanMessage("단테", "@[소피] 안녕", "s1");
   await settle();
   const said = (
@@ -148,7 +149,7 @@ test("mention 정책(office)은 지명한 NPC 만 깨운다", async () => {
   assert.deepEqual(said, ["소피"], "지명하지 않은 하늘은 답하지 않는다");
 });
 
-test("NPC 의 답은 DB 에 남고 room-<id> 로 방송된다", async () => {
+test("NPC answers are stored in the DB and broadcast to room-<id>", async () => {
   const { seeded, room } = await seedRoom({ npcCount: 1, memberCount: 1 });
   const emitted: Emitted[] = [];
   const deps = injected(seeded.channelId, [
@@ -178,7 +179,7 @@ test("NPC 의 답은 DB 에 남고 room-<id> 로 방송된다", async () => {
   );
 });
 
-test("턴이 열리면 npc:come-to-player 가 채널 룸으로, roomId 를 달고 나간다", async () => {
+test("when a turn opens, npc:come-to-player goes out to the channel room with roomId attached", async () => {
   const { seeded, room } = await seedRoom({ npcCount: 1, memberCount: 1 });
   const emitted: Emitted[] = [];
   const deps = injected(seeded.channelId, [
@@ -204,7 +205,7 @@ test("턴이 열리면 npc:come-to-player 가 채널 룸으로, roomId 를 달�
   });
 });
 
-test("최근 대화는 10줄까지만 실리고, 같은 말이라도 다른 메시지면 둘 다 남는다", async () => {
+test("recent conversation carries at most 10 lines, and identical words from different messages both stay", async () => {
   const { seeded, room } = await seedRoom({ npcCount: 1, memberCount: 1 });
   const emitted: Emitted[] = [];
   const prompts: string[] = [];
@@ -222,7 +223,7 @@ test("최근 대화는 10줄까지만 실리고, 같은 말이라도 다른 메�
       content,
     });
   }
-  // 시스템 메시지는 프롬프트에 실리지 않아야 한다.
+  // System messages must not be put in the prompt.
   await rooms.appendRoomMessage({
     roomId: room.id,
     senderKind: "system",
@@ -230,7 +231,7 @@ test("최근 대화는 10줄까지만 실리고, 같은 말이라도 다른 메�
     senderName: "",
     content: JSON.stringify({ kind: "renamed", name: "기획 2팀" }),
   });
-  // 사람의 말은 소켓 계층이 먼저 저장한다 — 런타임은 그 뒤에 깨어난다.
+  // The socket layer stores the human's message first — the runtime wakes up after that.
   await rooms.appendRoomMessage({
     roomId: room.id,
     senderKind: "user",
@@ -253,7 +254,7 @@ test("최근 대화는 10줄까지만 실리고, 같은 말이라도 다른 메�
   assert.ok(!lines.includes("단테: m0"), "가장 오래된 줄은 밀려난다");
 });
 
-test("같은 말을 두 번 보내면 두 번 다 대본에 남는다 — 쿨다운(2초)보다 긴 간격의 정당한 반복", async () => {
+test("sending the same words twice keeps both in the transcript — a legitimate repeat at an interval longer than the cooldown (2s)", async () => {
   const { seeded, room } = await seedRoom({ npcCount: 1, memberCount: 1 });
   const emitted: Emitted[] = [];
   const prompts: string[] = [];
@@ -261,7 +262,7 @@ test("같은 말을 두 번 보내면 두 번 다 대본에 남는다 — 쿨다
     { id: seeded.npcIds[0], name: "소피", adapter: mockAdapter("응", prompts) },
   ]);
 
-  // 소켓 계층이 하는 일: 사람의 말을 먼저 저장하고 런타임을 깨운다.
+  // What the socket layer does: store the human's message first, then wake the runtime.
   const say = async (content: string) => {
     await rooms.appendRoomMessage({
       roomId: room.id,

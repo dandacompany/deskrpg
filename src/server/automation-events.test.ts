@@ -13,10 +13,10 @@ import {
   type NpcWorkingPayload,
 } from "./automation-events";
 
-// T5. 단일 사건 싱크 `ingest()` — 폴러와(나중에) 푸시 라우트가 같은 함수를 부른다(R25).
-// 여기서는 DB 없이 의존성을 전부 가짜로 꽂아 규칙만 고정한다:
-// 방송(kanban:event / cron:event), 맵 상태(npc:working 의 차분 방송), 방 알림(R28~R30),
-// 잠든·빠진 NPC 의 시스템 메시지(R22), 같은 사건 ID 의 중복 처리 금지.
+// T5. The single event sink `ingest()` — the poller and (later) the push route call the same function (R25).
+// Here every dependency is faked without a DB to pin only the rules:
+// broadcast (kanban:event / cron:event), map state (diff broadcast of npc:working), room notices (R28~R30),
+// system messages for sleeping/missing NPCs (R22), no double-processing of the same event ID.
 
 const CHANNEL = "channel-1";
 const GATEWAY = "gateway-1";
@@ -151,12 +151,12 @@ const workingEvents = (emitted: Emitted[]) =>
     .filter((e) => e.event === AUTOMATION_SOCKET_EVENTS.working)
     .map((e) => e.payload as NpcWorkingPayload);
 
-/** 직원 이름을 싣지 않는 알림 kind(회의 결과)가 있어 유니온에서 바로 읽을 수 없다. */
+/** Some notice kinds (meeting results) carry no employee name, so it cannot be read straight off the union. */
 function noticeNpcName(notice: { kind: string } | null | undefined): string | undefined {
   return notice && "npcName" in notice ? (notice as { npcName: string }).npcName : undefined;
 }
 
-test("최상위 카드의 done 진입은 담당 NPC 이름으로 사무실 방에 알림 1건 — notice 포함", async () => {
+test("a top-level card entering done posts 1 notice to the office room under the assigned NPC's name — with notice", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   await ingest(CHANNEL, [statusEvent({ to: "done", parent_count: 0 })], h.deps);
 
@@ -179,15 +179,15 @@ test("최상위 카드의 done 진입은 담당 NPC 이름으로 사무실 방�
   assert.equal(h.roomEmits[0].message.notice?.kind, "card_done");
 });
 
-test("하위 카드(parent_count > 0)의 done 은 게시하지 않는다", async () => {
+test("done of a subcard (parent_count > 0) is not posted", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   await ingest(CHANNEL, [statusEvent({ to: "done", parent_count: 2 })], h.deps);
   assert.equal(h.posted.length, 0);
 });
 
-test("승인 묶음에 든 카드는 부모가 있어도 done 을 게시한다 — 순서로 이은 독립 업무다", async () => {
-  // 회의 후속 업무는 "먼저 끝나야 함" 을 부모 링크로 옮긴다. 부모 링크는 묶음이 아니라 실행 순서라
-  // 둘째 카드가 하위 카드로 취급돼 끝나도 아무도 보고하지 않았다(스테이징 실측).
+test("a card in an approval bundle posts done even with a parent — it is independent work linked by order", async () => {
+  // Meeting follow-ups carry "must finish first" as a parent link. The parent link is execution order, not a bundle, so
+  // the second card was treated as a subcard and nobody reported it when it finished (measured on staging).
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   const asked: string[] = [];
   await ingest(
@@ -212,18 +212,18 @@ test("승인 묶음에 든 카드는 부모가 있어도 done 을 게시한다 �
       ["card_done", "root"],
     ],
   );
-  // 스웜·분해 자식은 승인을 거치지 않으니 조용하다 — 자식 10장이 알림 10개가 되지 않는다.
-  // 부모가 없는 카드는 물어볼 필요가 없다.
+  // Swarm/decomposition children skip approval, so they stay quiet — 10 children do not become 10 notices.
+  // A card without a parent need not be asked about.
   assert.deepEqual(asked, ["followup-2", "swarm-child"]);
 });
 
-test("승인 묶음 조회가 없으면 부모 있는 done 은 예전처럼 게시하지 않는다", async () => {
+test("without the approval-bundle lookup, done with a parent is not posted, as before", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   await ingest(CHANNEL, [statusEvent({ to: "done", parent_count: 1 })], h.deps);
   assert.equal(h.posted.length, 0);
 });
 
-test("blocked 진입은 하위 카드여도 게시한다", async () => {
+test("entering blocked is posted even for a subcard", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   await ingest(
     CHANNEL,
@@ -243,7 +243,7 @@ test("blocked 진입은 하위 카드여도 게시한다", async () => {
   );
 });
 
-test("승인 대기라서 blocked 인 카드는 막힘 알림을 내지 않는다 — 승인 요청 줄이 이미 말하고 있다", async () => {
+test("a card blocked because it awaits approval posts no blocked notice — the approval request line already says it", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   const asked: string[] = [];
   await ingest(
@@ -261,14 +261,14 @@ test("승인 대기라서 blocked 인 카드는 막힘 알림을 내지 않는�
     },
   );
   assert.deepEqual(asked, ["waiting", "really-stuck"]);
-  // 진짜로 막힌 카드는 여전히 알린다.
+  // A genuinely blocked card is still announced.
   assert.deepEqual(
     h.posted.map((p) => (p.notice as { cardId: string }).cardId),
     ["really-stuck"],
   );
 });
 
-test("review 진입은 하위 카드여도 게시한다 — 사람의 판단을 기다리는 자리다", async () => {
+test("entering review is posted even for a subcard — it is a spot waiting on human judgment", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   await ingest(
     CHANNEL,
@@ -289,7 +289,7 @@ test("review 진입은 하위 카드여도 게시한다 — 사람의 판단을 
   assert.equal(h.posted[0].content, "보고서 초안", "content 는 로케일 무관 폴백 = 카드 제목");
 });
 
-test("담당 NPC 가 잠들었거나 채널에 없으면 시스템 메시지 — 본문 앞에 NPC 이름(R22)", async () => {
+test("if the assigned NPC is asleep or not in the channel, a system message — NPC name before the body (R22)", async () => {
   for (const lookup of [SOPHIE_ASLEEP, SOPHIE_ABSENT]) {
     const h = harness({ npcs: { sophie: lookup } });
     await ingest(CHANNEL, [statusEvent({ to: "done" })], h.deps);
@@ -303,7 +303,7 @@ test("담당 NPC 가 잠들었거나 채널에 없으면 시스템 메시지 —
   }
 });
 
-test("프로필 자체가 게이트웨이에서 사라졌으면 프로필 이름을 그대로 쓴다 — 놓치지 않는다", async () => {
+test("if the profile itself vanished from the gateway, the profile name is used as-is — nothing is missed", async () => {
   const h = harness({ npcs: {} });
   await ingest(CHANNEL, [statusEvent({ to: "blocked", assignee: "ghost" })], h.deps);
   assert.equal(h.posted.length, 1);
@@ -311,7 +311,7 @@ test("프로필 자체가 게이트웨이에서 사라졌으면 프로필 이름
   assert.equal(h.posted[0].content, "ghost: 보고서 초안");
 });
 
-test("담당자 없는 카드의 알림은 이름 없는 시스템 메시지", async () => {
+test("a notice for an unassigned card is a nameless system message", async () => {
   const h = harness();
   await ingest(CHANNEL, [statusEvent({ to: "blocked", assignee: null })], h.deps);
   assert.equal(h.posted.length, 1);
@@ -321,7 +321,7 @@ test("담당자 없는 카드의 알림은 이름 없는 시스템 메시지", a
   assert.equal(noticeNpcName(h.posted[0].notice), "");
 });
 
-test("사무실 방을 확보하지 못하면 게시는 건너뛰되 방송은 그대로 나간다", async () => {
+test("if the office room cannot be secured, posting is skipped but the broadcast still goes out", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE }, officeRoomId: null });
   const result = await ingest(CHANNEL, [statusEvent({ to: "done" })], h.deps);
   assert.equal(h.posted.length, 0);
@@ -329,7 +329,7 @@ test("사무실 방을 확보하지 못하면 게시는 건너뛰되 방송은 �
   assert.equal(h.emitted.filter((e) => e.event === AUTOMATION_SOCKET_EVENTS.kanban).length, 1);
 });
 
-test("cron.run.finished — 출처가 이 채널이면 담당 NPC 이름으로 결과를 게시한다", async () => {
+test("cron.run.finished — if the origin is this channel, posts the result under the assigned NPC's name", async () => {
   const h = harness({
     npcs: { sophie: SOPHIE_ACTIVE },
     origins: { [`${GATEWAY}/sophie/job-1`]: { channelId: CHANNEL, gatewayId: GATEWAY } },
@@ -349,7 +349,7 @@ test("cron.run.finished — 출처가 이 채널이면 담당 NPC 이름으로 �
   });
 });
 
-test("cron 결과 — 출처가 다른 채널·출처 없음·다른 게이트웨이면 게시하지 않는다", async () => {
+test("cron result — not posted for another channel, no origin, or a different gateway", async () => {
   const cases: Array<{
     name: string;
     origins: Record<string, { channelId: string; gatewayId: string }>;
@@ -376,7 +376,7 @@ test("cron 결과 — 출처가 다른 채널·출처 없음·다른 게이트�
   }
 });
 
-test("cron 결과 — error 는 오류 요약, 빈 결과는 '결과 없음', 긴 결과는 잘라서 '…'(E8)", async () => {
+test("cron result — error is the error summary, empty result is '결과 없음', long result is truncated with '…' (E8)", async () => {
   const origins = { [`${GATEWAY}/sophie/job-1`]: { channelId: CHANNEL, gatewayId: GATEWAY } };
   const npcs = { sophie: SOPHIE_ACTIVE };
 
@@ -398,7 +398,7 @@ test("cron 결과 — error 는 오류 요약, 빈 결과는 '결과 없음', �
   assert.equal(h.posted[0].content, "가".repeat(10) + "…");
 });
 
-test("cron 결과 — 담당 NPC 가 잠들었으면 시스템 메시지 + 이름 접두", async () => {
+test("cron result — if the assigned NPC is asleep, a system message + name prefix", async () => {
   const h = harness({
     npcs: { sophie: SOPHIE_ASLEEP },
     origins: { [`${GATEWAY}/sophie/job-1`]: { channelId: CHANNEL, gatewayId: GATEWAY } },
@@ -408,7 +408,7 @@ test("cron 결과 — 담당 NPC 가 잠들었으면 시스템 메시지 + 이�
   assert.equal(h.posted[0].content, "소피: 오늘의 브리핑입니다");
 });
 
-test("cron.run.started 는 방 게시 없이 맵 상태만 바꾼다", async () => {
+test("cron.run.started changes only map state, without a room post", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   await ingest(
     CHANNEL,
@@ -429,7 +429,7 @@ test("cron.run.started 는 방 게시 없이 맵 상태만 바꾼다", async () 
   ]);
 });
 
-test("같은 사건 ID 는 두 번 처리하지 않는다 — 방송·게시·상태 모두", async () => {
+test("the same event ID is not processed twice — broadcast, post and state alike", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   const done = statusEvent({ to: "done", id: "ev_dup" });
   await ingest(CHANNEL, [done], h.deps);
@@ -440,7 +440,7 @@ test("같은 사건 ID 는 두 번 처리하지 않는다 — 방송·게시·�
   assert.equal(second.duplicates, 2);
 });
 
-test("중복 판정 집합은 크기 상한을 지킨다 — 오래된 ID 부터 잊는다", async () => {
+test("the dedup set respects its size cap — forgets the oldest IDs first", async () => {
   const h = harness({ dedupeLimit: 2 });
   await ingest(
     CHANNEL,
@@ -454,7 +454,7 @@ test("중복 판정 집합은 크기 상한을 지킨다 — 오래된 ID 부터
   assert.equal(stillB.duplicates, 1);
 });
 
-test("ingest 는 task.* 를 kanban:event 로, cron.* 를 cron:event 로 채널에 방송한다", async () => {
+test("ingest broadcasts task.* as kanban:event and cron.* as cron:event to the channel", async () => {
   const h = harness({
     npcs: { x: { profileName: "x", displayName: "엑스", npc: { id: "npc-x", active: true } } },
   });
@@ -470,7 +470,7 @@ test("ingest 는 task.* 를 kanban:event 로, cron.* 를 cron:event 로 채널�
   ]);
 });
 
-test("cron.* 는 프로필이 이 채널의 NPC 로 풀릴 때만 cron:event 로 방송한다 — 남의 프로필은 새지 않는다", async () => {
+test("cron.* is broadcast as cron:event only when the profile resolves to an NPC of this channel — other profiles do not leak", async () => {
   const cronOf = (profile: string | undefined) =>
     ev({
       kind: "cron.run.started",
@@ -482,24 +482,24 @@ test("cron.* 는 프로필이 이 채널의 NPC 로 풀릴 때만 cron:event 로
   const cronEvents = (h: ReturnType<typeof harness>) =>
     h.emitted.filter((e) => e.event === AUTOMATION_SOCKET_EVENTS.cron);
 
-  // 프로필은 게이트웨이에 있지만 이 채널에 NPC 행이 없다 → 방송 없음.
+  // The profile is on the gateway but has no NPC row in this channel → no broadcast.
   const stranger = harness({
     npcs: { noah: { profileName: "noah", displayName: "노아", npc: null } },
   });
   await ingest(CHANNEL, [cronOf("noah")], stranger.deps);
   assert.equal(cronEvents(stranger).length, 0, "채널 밖 프로필");
 
-  // 프로필 자체가 게이트웨이에 없다 → 방송 없음.
+  // The profile itself is not on the gateway → no broadcast.
   const unknown = harness();
   await ingest(CHANNEL, [cronOf("ghost")], unknown.deps);
   assert.equal(cronEvents(unknown).length, 0, "모르는 프로필");
 
-  // 프로필이 없는 사건 → 방송 없음.
+  // An event without a profile → no broadcast.
   const anonymous = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   await ingest(CHANNEL, [cronOf(undefined)], anonymous.deps);
   assert.equal(cronEvents(anonymous).length, 0, "프로필 없는 사건");
 
-  // 잠든 NPC 라도 이 채널의 NPC 면 방송한다(작업 중 집계와 같은 기준).
+  // Even a sleeping NPC is broadcast if it is an NPC of this channel (same criterion as the working tally).
   const dormant = harness({
     npcs: { sophie: { ...SOPHIE_ACTIVE, npc: { id: "npc-sophie", active: false } } },
   });
@@ -507,7 +507,7 @@ test("cron.* 는 프로필이 이 채널의 NPC 로 풀릴 때만 cron:event 로
   assert.equal(cronEvents(dormant).length, 1, "잠든 NPC");
 });
 
-test("npc:working — run started/finished 로 켜지고 꺼지며, 변화가 없으면 다시 쏘지 않는다", async () => {
+test("npc:working — turns on/off with run started/finished, and is not re-sent without a change", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   const started = (task: string, id?: string) =>
     ev({ kind: "task.run.started", id, task_id: task, profile: "sophie", run_id: `run-${task}` });
@@ -524,7 +524,7 @@ test("npc:working — run started/finished 로 켜지고 꺼지며, 변화가 �
     { npcId: "npc-sophie", working: true, sources: { runningCards: 1, cronRuns: 0 } },
   ]);
 
-  // 모르는 실행의 종료·이미 없는 카드 — 상태가 그대로면 방송도 없다.
+  // End of an unknown run, a card already gone — if the state is unchanged there is no broadcast either.
   await ingest(CHANNEL, [finished("unknown")], h.deps);
   assert.equal(workingEvents(h.emitted).length, 1);
 
@@ -551,7 +551,7 @@ test("npc:working — run started/finished 로 켜지고 꺼지며, 변화가 �
   assert.equal(workingEvents(h.emitted).length, 4);
 });
 
-test("npc:working — 카드와 크론이 함께 있으면 둘 다 끝나야 꺼진다; 잠든 NPC 도 집계한다", async () => {
+test("npc:working — with both a card and a cron, it turns off only when both finish; sleeping NPCs are counted too", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ASLEEP } });
   await ingest(
     CHANNEL,
@@ -589,7 +589,7 @@ test("npc:working — 카드와 크론이 함께 있으면 둘 다 끝나야 꺼
   assert.equal(workingEvents(h.emitted).at(-1)!.working, true);
 });
 
-test("의존성이 던져도 다른 사건은 계속 처리하고 실패를 결과에 남긴다", async () => {
+test("even if a dependency throws, other events keep processing and the failure is recorded in the result", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   let calls = 0;
   h.deps.appendRoomMessage = async () => {
@@ -608,7 +608,7 @@ test("의존성이 던져도 다른 사건은 계속 처리하고 실패를 결�
 });
 
 // ---- card_proposal.created ------------------------------------------------
-// 제안은 카드가 아니다 — Hermes 가 정본이고 DeskRPG 는 방 알림 한 건만 남긴다.
+// A proposal is not a card — Hermes is the source of truth and DeskRPG keeps only one room notice.
 
 function proposalEvent(
   payload: Record<string, unknown> = {},
@@ -627,7 +627,7 @@ function proposalEvent(
   });
 }
 
-test("card_proposal.created 는 사무실 방 알림 1건을 만든다 — 소켓 이벤트는 없다", async () => {
+test("card_proposal.created creates 1 office room notice — no socket event", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   await ingest(CHANNEL, [proposalEvent()], h.deps);
 
@@ -650,7 +650,7 @@ test("card_proposal.created 는 사무실 방 알림 1건을 만든다 — 소�
   assert.equal(h.roomEmits.length, 1, "저장한 메시지를 방 소켓으로 방송한다");
 });
 
-test("body·acceptance 는 있을 때만 알림에 싣는다", async () => {
+test("body·acceptance are included in the notice only when present", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   await ingest(CHANNEL, [proposalEvent({ body: "본문", acceptance: "완료 조건" })], h.deps);
   const notice = h.posted[0].notice;
@@ -659,14 +659,14 @@ test("body·acceptance 는 있을 때만 알림에 싣는다", async () => {
   assert.equal(notice.acceptance, "완료 조건");
 });
 
-test("프로필이 이 채널의 NPC 가 아니면 제안 알림을 만들지 않는다 — 오류도 아니다", async () => {
+test("no proposal notice if the profile is not an NPC of this channel — not an error either", async () => {
   const h = harness({ npcs: {} });
   const result = await ingest(CHANNEL, [proposalEvent()], h.deps);
   assert.equal(h.posted.length, 0);
   assert.deepEqual(result.errors, []);
 });
 
-test("잠든 NPC 의 제안도 놓치지 않는다 — 시스템 메시지로 올린다", async () => {
+test("a sleeping NPC's proposal is not missed either — posted as a system message", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ASLEEP } });
   await ingest(CHANNEL, [proposalEvent()], h.deps);
   assert.equal(h.posted.length, 1);
@@ -678,7 +678,7 @@ test("잠든 NPC 의 제안도 놓치지 않는다 — 시스템 메시지로 �
   );
 });
 
-test("proposal_id 나 제목이 없는 제안 사건은 버린다", async () => {
+test("a proposal event without proposal_id or title is dropped", async () => {
   const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
   const result = await ingest(
     CHANNEL,

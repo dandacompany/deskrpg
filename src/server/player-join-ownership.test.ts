@@ -11,8 +11,8 @@ import { setupThrowawaySqlite, seedUser, seedChannel, authHeaders } from "../tes
 import { buildOfficeEnvironment } from "../game/three/office-environments";
 setupThrowawaySqlite("player-join-ownership");
 
-// player:join 은 클라이언트가 실어 보낸 characterId 를 그대로 믿으면 안 된다 —
-// 그 캐릭터가 이 사용자 것인지 DB 로 확인하고, 이름·외형도 DB 에서 읽어야 한다.
+// player:join must not trust the characterId the client sends as-is —
+// it must check in the DB that the character belongs to this user, and read name and appearance from the DB too.
 
 const socketDeadlineMs = 10_000;
 const JOIN_OUTCOMES = ["player:spawn", "channel:access-denied", "map:refresh", "join-error"];
@@ -132,7 +132,7 @@ test("player:join as another user's character is denied without kicking the user
       (await joinOutcome(observer, h.joinPayload(foreignCharacter.id))).name,
       "player:spawn",
     );
-    // 첫 세션의 정상 방송이 관찰자에게 도착한 뒤에 거절 방송 여부를 센다.
+    // Count whether a rejection broadcast happened only after the first session's normal broadcast reached the observer.
     const firstJoined = new Promise((resolve) => observer.once("player:joined", resolve));
     const first = await h.open(h.owner.id);
     assert.equal((await joinOutcome(first, h.joinPayload(ownCharacter.id))).name, "player:spawn");

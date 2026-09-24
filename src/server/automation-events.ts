@@ -1,26 +1,26 @@
 /**
- * 자동화 사건 싱크 (T5, R25).
+ * Automation event sink (T5, R25).
  *
- * 플러그인의 통합 이벤트(`/deskrpg/events`)가 DeskRPG 안으로 들어오는 **유일한 문**이다.
- * 폴러(`automation-poller.ts`)가 부르고, 나중에 푸시 라우트가 생겨도 같은 함수를 부른다.
- * 하드 게이트 5: 방 알림·맵 상태는 다른 어떤 경로도 직접 만들지 않는다 — 모두 여기를 거친다.
+ * The **only door** through which the plugin's unified events (`/deskrpg/events`) enter DeskRPG.
+ * The poller (`automation-poller.ts`) calls it, and a future push route will call the same function.
+ * Hard gate 5: no other path creates room notices or map state directly — everything goes through here.
  *
- * 한 사건에 대해 하는 일은 셋뿐이다.
- *  (a) 채널 소켓 방송 — 허용 목록이다. `task.*` 는 `kanban:event`, `cron.*` 는 `cron:event`,
- *      `artifact.*` 는 `artifact:event`. 크론 사건은 호스트의 모든 프로필 것이 실려 오므로
- *      프로필이 **이 채널의 NPC** 로 풀릴 때만 방송한다(잠든 NPC 포함). 아티팩트 사건은 채널
- *      NPC 프로필이거나 채널 보드일 때만 방송한다. 남의 채널 프로필·보드의 것이 이 채널 화면에
- *      새면 안 된다. 목록 밖의 kind 는 어느 채널로도 방송하지 않는다.
- *  (b) 맵 상태 — NPC 에게 진행 중인 카드 실행·크론 실행이 하나라도 있으면 "작업 중"(R27).
- *      `npc:working` 은 값이 **바뀔 때만** 나간다.
- *  (c) 방 알림 — 카드의 blocked 진입(모두)·최상위 카드의 done 진입(R28), 이 채널 출처의
- *      크론 결과(R30), 그리고 NPC 가 대화 중 낸 카드 제안(`card_proposal.created`). 담당 NPC 가 잠들었거나 빠졌으면 시스템 메시지로 올리되 NPC 이름을
- *      앞에 붙인다(R22) — 놓치지 않는다.
+ * There are only three things done for an event.
+ *  (a) Channel socket broadcast — an allow list. `task.*` goes to `kanban:event`, `cron.*` to `cron:event`,
+ *      `artifact.*` to `artifact:event`. Cron events arrive for every profile on the host, so they are broadcast only
+ *      when the profile resolves to **an NPC of this channel** (including sleeping NPCs). Artifact events are
+ *      broadcast only for a channel NPC profile or the channel board. Another channel's profiles/boards must not leak
+ *      onto this channel's screen. Kinds outside the list are broadcast to no channel.
+ *  (b) Map state — an NPC is "working" if it has at least one in-flight card run or cron run (R27).
+ *      `npc:working` is emitted **only when the value changes**.
+ *  (c) Room notices — a card entering blocked (all), a top-level card entering done (R28), cron results originating
+ *      from this channel (R30), and card proposals an NPC made during conversation (`card_proposal.created`). If the
+ *      assigned NPC is asleep or gone, post a system message but prefix the NPC name (R22) — nothing is missed.
  *
- * 같은 사건 ID 는 두 번 처리하지 않는다(채널별 최근 ID 집합, 크기 상한 tunable).
+ * The same event ID is never processed twice (per-channel recent-ID set, size cap tunable).
  *
- * 핵심은 DB 를 모른다 — 조회·저장·방송을 전부 `IngestDeps` 로 받는다. 그래서 단위 테스트가
- * 규칙만 고정할 수 있고, 실제 배선은 아래 `createLiveIngestDeps` 한 곳에 있다.
+ * The core knows nothing about the DB — lookups, storage and broadcasts all come in via `IngestDeps`. So unit tests
+ * can pin just the rules, and the real wiring lives in one place, `createLiveIngestDeps` below.
  */
 
 import { eq, and } from "drizzle-orm";
@@ -39,7 +39,7 @@ import {
 } from "@/lib/hermes/deskrpg-plugin-types";
 
 // ---------------------------------------------------------------------------
-// 소켓 이벤트 이름 — 하드 게이트 10: 새 이벤트는 이 넷뿐이다.
+// Socket event names — hard gate 10: these four are the only new events.
 // ---------------------------------------------------------------------------
 
 export const AUTOMATION_SOCKET_EVENTS = {
@@ -72,7 +72,7 @@ export type NpcWorkingPayload = {
 };
 
 // ---------------------------------------------------------------------------
-// 조정값 — 환경변수로 바꿀 수 있다.
+// Tunables — can be changed via environment variables.
 // ---------------------------------------------------------------------------
 
 function envInt(name: string, fallback: number): number {
@@ -81,23 +81,23 @@ function envInt(name: string, fallback: number): number {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
-/** 크론 결과 본문 길이 상한(R30). 초과하면 앞부분 + "…". */
+/** Max cron result body length (R30). If exceeded, the leading part + "…". */
 export const DEFAULT_RESULT_MAX_CHARS = envInt("AUTOMATION_RESULT_MAX_CHARS", 2000);
-/** 채널별로 기억하는 최근 사건 ID 수. */
+/** Number of recent event IDs remembered per channel. */
 export const DEFAULT_DEDUPE_LIMIT = envInt("AUTOMATION_EVENT_DEDUPE_LIMIT", 1000);
 
 // ---------------------------------------------------------------------------
-// 프로세스 상태 — 중복 집합 + NPC 별 진행 중 실행
+// Process state — dedup set + in-flight runs per NPC
 // ---------------------------------------------------------------------------
 
 type NpcWork = { runningCards: Set<string>; cronRuns: Set<string> };
 
 type ChannelState = {
-  /** 최근 처리한 사건 ID. Set 의 삽입 순서를 그대로 LRU 로 쓴다. */
+  /** Recently processed event IDs. The Set's insertion order is used directly as LRU. */
   seen: Set<string>;
-  /** npcId → 진행 중 집합 */
+  /** npcId → in-flight set */
   work: Map<string, NpcWork>;
-  /** npcId → 마지막으로 방송한 `npc:working` 의 직렬화 값. 같으면 다시 쏘지 않는다. */
+  /** npcId → serialized value of the last broadcast `npc:working`. Not re-sent if equal. */
   lastEmitted: Map<string, string>;
 };
 
@@ -118,7 +118,7 @@ function channelState(state: AutomationState, channelId: string): ChannelState {
   return s;
 }
 
-/** 테스트·재바인딩용 — 채널 하나(또는 전부)의 상태를 버린다. */
+/** For tests / rebinding — discard the state of one channel (or all). */
 export function resetAutomationState(channelId?: string, state: AutomationState = defaultState) {
   if (channelId === undefined) state.clear();
   else state.delete(channelId);
@@ -131,8 +131,8 @@ function workingPayload(npcId: string, work: NpcWork): NpcWorkingPayload {
 }
 
 /**
- * 지금 "작업 중" 인 NPC 들의 현재 값. 채널 접속(player:join) 때 그 소켓에 한 번 보낸다(R27).
- * 끝난 NPC 는 포함하지 않는다 — 클라이언트의 기본값이 `working:false` 다.
+ * Current values of NPCs that are "working" right now. Sent once to the socket on channel join (player:join) (R27).
+ * Finished NPCs are not included — the client's default is `working:false`.
  */
 export function getWorkingSnapshot(
   channelId: string,
@@ -149,33 +149,35 @@ export function getWorkingSnapshot(
 }
 
 // ---------------------------------------------------------------------------
-// 의존성
+// Dependencies
 // ---------------------------------------------------------------------------
 
-/** 프로필 이름 → 이 채널의 NPC. 프로필이 게이트웨이에 없으면 null, NPC 행이 없으면 `npc:null`. */
+/** Profile name → NPC of this channel. null if the profile is not on the gateway; `npc:null` if there is no NPC row. */
 export type ChannelNpcLookup = {
   profileName: string;
-  /** `hermes_profiles.display_name ?? profile_name` — `npcs.name` 은 읽지 않는다. */
+  /** `hermes_profiles.display_name ?? profile_name` — `npcs.name` is not read. */
   displayName: string;
   npc: { id: string; active: boolean } | null;
 };
 
 export type IngestDeps = {
-  /** 채널의 현재 게이트웨이. 크론 출처 대조에 쓴다(R30). */
+  /** The channel's current gateway. Used to match cron origin (R30). */
   gatewayId: string;
-  /** 채널의 보드 slug. 카드 알림의 `notice.boardSlug`. */
+  /** The channel's board slug. `notice.boardSlug` of card notices. */
   boardSlug: string;
   findNpcByProfile(channelId: string, profileName: string): Promise<ChannelNpcLookup | null>;
   /**
-   * 이 카드가 **승인 대기** 라서 `blocked` 인가. 그렇다면 "막혔습니다" 알림을 내지 않는다 — 승인 요청 줄이 이미
-   * 같은 일을 말하고 있고, 승인 대기는 고장이 아니다. 선택 의존이라 없으면 예전처럼 알린다.
+   * Is this card `blocked` because it is **awaiting approval**? If so, no "막혔습니다" notice is posted — the approval
+   * request line already says the same thing, and awaiting approval is not a failure. Optional dependency; if absent,
+   * notifies as before.
    */
   isAwaitingApproval?(channelId: string, taskId: string): Promise<boolean>;
   /**
-   * 이 카드가 사람이 승인한 묶음에 **들었던** 카드인가(승인 상태와 무관). 그렇다면 부모가 있어도
-   * 독립 업무로 보고 완료를 알린다 — 회의 후속처럼 "먼저 끝나야 함" 을 부모 링크로 이은 카드다.
-   * 부모 링크는 묶음이 아니라 실행 순서이고, 그것만 보면 이 카드들이 하위 카드로 취급돼 조용해진다.
-   * 스웜·분해 자식은 승인을 거치지 않으므로 여전히 조용하다. 선택 의존이라 없으면 예전처럼 알리지 않는다.
+   * Was this card **ever part of** a human-approved bundle (regardless of approval status)? If so, even with a parent
+   * it is treated as independent work and its completion is announced — cards like meeting follow-ups linked by
+   * parent as "must finish first". The parent link is execution order, not a bundle, and looking only at it would
+   * treat these cards as subcards and silence them. Swarm/decomposition children never go through approval, so they
+   * stay silent. Optional dependency; if absent, does not notify as before.
    */
   isApprovalBatchCard?(channelId: string, taskId: string): Promise<boolean>;
   findCronOriginChannel(key: {
@@ -183,7 +185,7 @@ export type IngestDeps = {
     profileName: string;
     jobId: string;
   }): Promise<{ channelId: string; gatewayId: string } | null>;
-  /** 채널의 사무실 방 id. 못 만들면 null — 게시만 건너뛴다. */
+  /** The channel's office room id. null if it cannot be created — only posting is skipped. */
   ensureOfficeRoomId(channelId: string): Promise<string | null>;
   appendRoomMessage(args: {
     roomId: string;
@@ -197,21 +199,21 @@ export type IngestDeps = {
   emitRoomMessage(roomId: string, message: RoomMessage): void;
   maxResultLength?: number;
   dedupeLimit?: number;
-  /** 기본은 프로세스 전역. 테스트는 자기 것을 꽂는다. */
+  /** Process-global by default. Tests plug in their own. */
   state?: AutomationState;
 };
 
 export type IngestResult = {
-  /** 새로 처리한 사건 수 */
+  /** Number of newly processed events */
   processed: number;
-  /** 이미 본 ID 라 건너뛴 수 */
+  /** Number skipped because the ID was already seen */
   duplicates: number;
-  /** 사건별 처리 실패 메시지(방송·상태·게시 중 하나가 던진 것). 나머지 사건은 계속 간다. */
+  /** Per-event processing failure messages (thrown by broadcast, state or post). Remaining events continue. */
   errors: string[];
 };
 
 // ---------------------------------------------------------------------------
-// 싱크
+// Sink
 // ---------------------------------------------------------------------------
 
 export async function ingest(
@@ -253,7 +255,7 @@ function remember(seen: Set<string>, id: string, limit: number) {
   }
 }
 
-// ---- (a) 방송 -------------------------------------------------------------
+// ---- (a) Broadcast -------------------------------------------------------
 
 async function broadcast(channelId: string, event: PluginEvent, deps: IngestDeps) {
   if (KANBAN_EVENT_KINDS.has(event.kind)) {
@@ -265,8 +267,8 @@ async function broadcast(channelId: string, event: PluginEvent, deps: IngestDeps
     return;
   }
   if (event.kind.startsWith("cron.")) {
-    // 크론 사건은 프로필이 이 채널의 NPC(잠든 NPC 포함)일 때만 — `updateWorking`·`postNotice` 와
-    // 같은 조회다.
+    // Cron events only when the profile is an NPC of this channel (including sleeping NPCs) — the same lookup as
+    // `updateWorking`·`postNotice`.
     const profile = profileOf(event);
     if (!profile) return;
     const lookup = await deps.findNpcByProfile(channelId, profile);
@@ -275,10 +277,10 @@ async function broadcast(channelId: string, event: PluginEvent, deps: IngestDeps
     return;
   }
   if (event.kind === "card_proposal.created") {
-    // 제안은 방 알림으로만 나간다(`postNotice`) — 새 소켓 이벤트를 만들지 않는다.
+    // Proposals go out only as room notices (`postNotice`) — no new socket event is created.
     return;
   }
-  // 허용 목록 밖 — 채널 범위를 모르는 사건을 브라우저로 넘기지 않는다.
+  // Outside the allow list — events whose channel scope is unknown are not passed to the browser.
   console.warn(`[automation-events] ${channelId} dropped unknown event kind ${event.kind}`);
 }
 
@@ -286,7 +288,7 @@ async function broadcastArtifact(channelId: string, event: PluginEvent, deps: In
   const p = event.payload as Record<string, unknown>;
   const base = { id: event.id, ts: event.ts, kind: event.kind };
   if (event.kind === "artifact.deleted") {
-    // 삭제 사건엔 프로필·보드가 없다 — 불투명 id 만 보낸다(제목 등은 싣지 않는다).
+    // Deletion events carry no profile/board — send only the opaque id (no title etc.).
     if (typeof p.artifact_id !== "string") return;
     deps.emitChannel(channelId, AUTOMATION_SOCKET_EVENTS.artifact, {
       channelId,
@@ -308,7 +310,7 @@ async function broadcastArtifact(channelId: string, event: PluginEvent, deps: In
   });
 }
 
-// ---- (b) 맵 상태 ----------------------------------------------------------
+// ---- (b) Map state -------------------------------------------------------
 
 function profileOf(event: PluginEvent): string | null {
   if (typeof event.profile === "string" && event.profile) return event.profile;
@@ -338,7 +340,7 @@ async function updateWorking(
     const profile = profileOf(event);
     if (!profile || !key) return;
     const lookup = await deps.findNpcByProfile(channelId, profile);
-    // 잠든 NPC 도 집계한다 — 다시 출근하면 그 시점의 값이 맞아야 한다.
+    // Sleeping NPCs are counted too — when they clock in again, the value at that point must be right.
     if (!lookup?.npc) return;
     let work = state.work.get(lookup.npc.id);
     if (!work) {
@@ -349,7 +351,7 @@ async function updateWorking(
     touched.add(lookup.npc.id);
   };
 
-  // 종료 사건에는 프로필이 실리지 않을 수 있다(terminate 등). 키로 모든 NPC 를 뒤진다.
+  // Termination events may not carry a profile (terminate etc.). Search every NPC by key.
   const remove = (kind: keyof NpcWork, key: string | null) => {
     if (!key) return;
     for (const [npcId, work] of state.work) {
@@ -386,7 +388,7 @@ async function updateWorking(
   }
 }
 
-// ---- (c) 방 알림 ----------------------------------------------------------
+// ---- (c) Room notices ----------------------------------------------------
 
 type Sender = {
   senderKind: "npc" | "system";
@@ -396,8 +398,8 @@ type Sender = {
 };
 
 /**
- * 담당 NPC 를 발신자로 푼다. 출근 중이면 NPC 발화, 잠들었거나 없으면 시스템 메시지(R22).
- * 프로필조차 없으면 프로필 이름을 그대로 쓴다 — 이름을 몰라도 알림은 나가야 한다.
+ * Resolves the assigned NPC as the sender. If on duty, an NPC utterance; if asleep or missing, a system message (R22).
+ * If even the profile is missing, the profile name is used as-is — the notice must go out even without a name.
  */
 async function resolveSender(
   channelId: string,
@@ -441,9 +443,9 @@ async function post(
 }
 
 /**
- * 완료를 알리는가. 하위 카드(부모가 있음)의 완료는 부모가 보고하므로 조용히 둔다 — 스웜이 자식 10장을
- * 만들면 알림 10개가 뜨는 것을 막으려는 규칙이다. 다만 승인 묶음에 들었던 카드는 부모가 있어도
- * 사람이 목록으로 본 독립 업무라 알린다.
+ * Should completion be announced? A subcard's (has a parent) completion is reported by its parent, so it stays quiet
+ * — a rule to prevent 10 notices when a swarm creates 10 children. But a card that was part of an approval bundle,
+ * even with a parent, is independent work a human saw in a list, so it is announced.
  */
 async function announcesDone(
   channelId: string,
@@ -459,8 +461,8 @@ async function announcesDone(
 async function postNotice(channelId: string, event: PluginEvent, deps: IngestDeps) {
   if (event.kind === "task.status") {
     const p = event.payload as Partial<TaskStatusEventPayload>;
-    // `review` 는 사람의 판단을 기다리는 자리다 — `blocked` 와 같이 하위 카드여도 알린다.
-    // 알리지 않으면 NPC 가 멈춰 선 것을 사용자가 알 길이 없다.
+    // `review` is a spot waiting on human judgment — like `blocked`, it is announced even for a subcard.
+    // Without the notice, the user has no way to know the NPC has stalled.
     const kind =
       p.to === "blocked"
         ? "card_blocked"
@@ -495,13 +497,13 @@ async function postNotice(channelId: string, event: PluginEvent, deps: IngestDep
     const p = event.payload as Partial<CardProposalEventPayload>;
     const profile = profileOf(event);
     if (!profile) return;
-    // 크론 사건과 같은 조회 — 이 채널의 NPC(잠든 NPC 포함) 것만 알린다.
+    // Same lookup as cron events — only notify for NPCs of this channel (including sleeping NPCs).
     const lookup = await deps.findNpcByProfile(channelId, profile);
     if (!lookup?.npc) return;
 
     const proposalId = typeof p.proposal_id === "string" ? p.proposal_id : "";
     const title = typeof p.title === "string" ? p.title.trim() : "";
-    // 제목이 없으면 사용자가 무엇을 고르는지 알 수 없다 — 버린다(오류는 아니다).
+    // Without a title the user cannot tell what they are choosing — drop it (not an error).
     if (!proposalId || !title) return;
 
     const sender = await resolveSender(channelId, profile, deps);
@@ -513,7 +515,7 @@ async function postNotice(channelId: string, event: PluginEvent, deps: IngestDep
       npcId: lookup.npc.id,
       npcName: sender.npcName,
     };
-    // `body`·`acceptance` 는 없으면 키 자체가 빠진다 — 빈 문자열로 만들지 않는다.
+    // If `body`·`acceptance` are missing, the key itself is omitted — never turned into an empty string.
     if (typeof p.body === "string" && p.body) notice.body = p.body;
     if (typeof p.acceptance === "string" && p.acceptance) notice.acceptance = p.acceptance;
 
@@ -527,7 +529,7 @@ async function postNotice(channelId: string, event: PluginEvent, deps: IngestDep
     const jobId = event.job_id ?? p.job_id ?? null;
     if (!profileName || !jobId) return;
 
-    // 출처가 이 채널인 작업만(R30). 게이트웨이가 다르면 없는 셈 친다.
+    // Only jobs originating from this channel (R30). A different gateway counts as absent.
     const origin = await deps.findCronOriginChannel({
       gatewayId: deps.gatewayId,
       profileName,
@@ -563,7 +565,7 @@ async function postNotice(channelId: string, event: PluginEvent, deps: IngestDep
 }
 
 // ---------------------------------------------------------------------------
-// 실제 배선 — DB 조회·방 저장. 폴러(그리고 나중의 푸시 라우트)가 이걸로 deps 를 만든다.
+// Real wiring — DB lookups and room storage. The poller (and a future push route) builds deps with this.
 // ---------------------------------------------------------------------------
 
 export type LiveIngestWiring = {
@@ -581,8 +583,9 @@ export function createLiveIngestDeps(wiring: LiveIngestWiring): IngestDeps {
     emitRoomMessage: wiring.emitRoomMessage,
 
     async isApprovalBatchCard(channelId, taskId) {
-      // 상태 조건이 없다 — 반려·수정 요청 묶음의 카드가 나중에 손으로 풀려 끝나도 사람이 목록으로
-      // 본 독립 업무라는 점은 같다. (승인 대기의 blocked 를 거르는 isAwaitingApproval 과 같은 표, 다른 조건.)
+      // No status condition — even if a card from a rejected/changes-requested bundle is later resolved by hand and
+      // finished, it is still independent work a human saw in a list. (Same table as isAwaitingApproval, which
+      // filters blocked-awaiting-approval, different condition.)
       const [row] = await db
         .select({ id: approvals.id })
         .from(approvalTargets)

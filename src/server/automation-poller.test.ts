@@ -13,8 +13,8 @@ import {
 } from "@/test-setup/npc-seed";
 import type { PollerTimerHandle, PollerTimers } from "./automation-poller";
 
-// T5. 폴러 — 커서 저장, "지금" 토큰, unknown_cursor 복구, has_more 페이지 순회, last_error,
-// 그리고 실제 배선(createLiveIngestDeps)으로 사무실 방에 notice_json 이 남는지까지.
+// T5. Poller — cursor storage, the "now" token, unknown_cursor recovery, has_more paging, last_error,
+// and through the real wiring (createLiveIngestDeps), whether notice_json lands in the office room.
 setupThrowawaySqlite("automation-poller-test");
 
 const OWNER_TOKEN = "gateway-owner-key-1234567890";
@@ -36,7 +36,7 @@ after(async () => {
 
 type Emitted = { channelId: string; event: string; payload: unknown };
 
-/** 채널 하나 + 가짜 플러그인을 가리키는 게이트웨이 + 프로필 sophie 의 출근 NPC. */
+/** One channel + a gateway pointing at the fake plugin + an on-duty NPC for profile sophie. */
 async function seedBoundChannel(server: FakePluginServer, opts: { npcActive?: boolean } = {}) {
   const owner = await seedUser("poller-owner");
   const gateway = await seedGateway(owner.id, server.baseUrl);
@@ -86,10 +86,10 @@ function eventPolls(server: FakePluginServer) {
   return server.requests().filter((r) => r.path.startsWith("/deskrpg/events"));
 }
 
-test("첫 폴링(커서 없음)은 '지금' 토큰만 저장하고 아무것도 방송하지 않는다 — 과거 재생 없음", async () => {
+test("the first poll (no cursor) only stores the 'now' token and broadcasts nothing — no replay of the past", async () => {
   const plugin = await startPlugin();
   const { channel } = await seedBoundChannel(plugin);
-  // 폴러가 붙기 전에 이미 쌓여 있던 사건 — 재생되면 안 된다.
+  // Events that had already piled up before the poller attached — must not be replayed.
   plugin.pushEvent({
     kind: "task.status",
     board: slugOf(channel.id),
@@ -117,9 +117,9 @@ test("첫 폴링(커서 없음)은 '지금' 토큰만 저장하고 아무것도 
   assert.equal(h.roomEmits.length, 0);
 });
 
-test("사건 조회는 아티팩트와 카드 제안을 함께 include 한다", async () => {
-  // 제안 사건은 아티팩트와 **같은 커서**에 실려 온다. include 에 켜 두지 않으면 플러그인이
-  // 걸러 버리고, 나중에 켜도 커서가 지나가 버려 영영 오지 않는다(조용히 죽는다).
+test("event queries include artifacts and card proposals together", async () => {
+  // Proposal events ride on the **same cursor** as artifacts. If include does not enable them, the plugin
+  // filters them out, and even if enabled later the cursor has already moved past, so they never arrive (silent death).
   const plugin = await startPlugin();
   const { channel } = await seedBoundChannel(plugin);
   const { pollChannelOnce } = await import("./automation-poller");
@@ -138,7 +138,7 @@ test("사건 조회는 아티팩트와 카드 제안을 함께 include 한다", 
   );
 });
 
-test("토큰 이후의 사건은 ingest 되고 커서가 전진한다; 다음 바퀴에서 다시 처리하지 않는다", async () => {
+test("events after the token are ingested and the cursor advances; the next round does not reprocess them", async () => {
   const plugin = await startPlugin();
   const { channel, npc } = await seedBoundChannel(plugin);
   const { pollChannelOnce } = await import("./automation-poller");
@@ -157,7 +157,7 @@ test("토큰 이후의 사건은 ingest 되고 커서가 전진한다; 다음 �
   assert.equal(second.events, 1);
   assert.notEqual((await readRow(channel.id)).eventCursor, firstCursor);
 
-  // 실제 배선: 사무실 방에 NPC 발화로 저장되고 notice_json 이 되읽힌다.
+  // Real wiring: stored as an NPC utterance in the office room and notice_json is read back.
   assert.equal(h.roomEmits.length, 1);
   const message = h.roomEmits[0].message;
   assert.equal(message.senderKind, "npc");
@@ -186,7 +186,7 @@ test("토큰 이후의 사건은 ingest 되고 커서가 전진한다; 다음 �
   assert.equal(h.roomEmits.length, 1);
 });
 
-test("잠든 NPC 의 카드는 시스템 메시지로 — 실제 DB 조회 경로", async () => {
+test("a dormant NPC's card becomes a system message — real DB lookup path", async () => {
   const plugin = await startPlugin();
   const { channel } = await seedBoundChannel(plugin, { npcActive: false });
   const { pollChannelOnce } = await import("./automation-poller");
@@ -206,7 +206,7 @@ test("잠든 NPC 의 카드는 시스템 메시지로 — 실제 DB 조회 경�
   assert.equal(h.roomEmits[0].message.notice?.kind, "card_blocked");
 });
 
-test("크론 결과 — 출처 장부가 이 채널이면 게시, 다른 채널이면 게시하지 않는다(실제 장부)", async () => {
+test("cron results — posted if the origin ledger is this channel, not posted for another channel (real ledger)", async () => {
   const plugin = await startPlugin();
   const mine = await seedBoundChannel(plugin);
   const other = await seedChannel(mine.owner.id, "다른 채널");
@@ -265,14 +265,14 @@ test("크론 결과 — 출처 장부가 이 채널이면 게시, 다른 채널�
   });
 });
 
-test("unknown_cursor 를 받으면 커서 없이 다시 불러 새 토큰을 저장한다 — 재생 없음(E7)", async () => {
+test("on unknown_cursor, re-calls without a cursor and stores a new token — no replay (E7)", async () => {
   const plugin = await startPlugin();
   const { channel } = await seedBoundChannel(plugin);
   const { pollChannelOnce } = await import("./automation-poller");
   const h = await makeDeps();
   assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
 
-  // 플러그인이 재시작해 커서를 잊었다(요청 기록은 남는다 — 이후 것만 본다).
+  // The plugin restarted and forgot the cursor (request history remains — only look at what comes after).
   plugin.reset();
   const seenBefore = eventPolls(plugin).length;
   plugin.pushEvent({
@@ -305,7 +305,7 @@ test("unknown_cursor 를 받으면 커서 없이 다시 불러 새 토큰을 저
   assert.equal(h.roomEmits.length, 0);
 });
 
-test("has_more 는 페이지 상한 안에서 따라간다 — 한 바퀴에 전부 흡수", async () => {
+test("has_more is followed within the page cap — everything absorbed in one round", async () => {
   const plugin = await startPlugin();
   const { channel } = await seedBoundChannel(plugin);
   const { pollChannelOnce } = await import("./automation-poller");
@@ -329,7 +329,7 @@ test("has_more 는 페이지 상한 안에서 따라간다 — 한 바퀴에 전
   assert.equal(again.events, 0);
 });
 
-test("폴링 실패는 삼키고 last_error 에 남긴다; 다음 성공이 지운다(E6)", async () => {
+test("poll failures are swallowed and recorded in last_error; the next success clears it (E6)", async () => {
   const plugin = await startPlugin();
   const { channel } = await seedBoundChannel(plugin);
   const { pollChannelOnce } = await import("./automation-poller");
@@ -337,7 +337,7 @@ test("폴링 실패는 삼키고 last_error 에 남긴다; 다음 성공이 지�
   assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
   const cursor = (await readRow(channel.id)).eventCursor;
 
-  // 이벤트 경로만 죽인다 — 플러그인 판정 캐시는 신선하므로 여기까지 온다.
+  // Kill only the events path — the plugin verdict cache is fresh, so we get this far.
   const broken = await makeDeps({
     resolveBoard: async (id) => {
       const real = await h.deps.resolveBoard(id);
@@ -376,7 +376,7 @@ test("폴링 실패는 삼키고 last_error 에 남긴다; 다음 성공이 지�
   assert.equal(row.lastError, null);
 });
 
-test("묶이지 않은 채널은 unbound 로 끝나고 아무것도 쓰지 않는다", async () => {
+test("an unbound channel ends as unbound and writes nothing", async () => {
   const owner = await seedUser("loose-owner");
   const channel = await seedChannel(owner.id, "묶이지 않은 채널");
   const { pollChannelOnce } = await import("./automation-poller");
@@ -388,10 +388,10 @@ test("묶이지 않은 채널은 unbound 로 끝나고 아무것도 쓰지 않�
   assert.equal(await getChannelBoard(channel.id), null);
 });
 
-test("연결 행이 없으면(바인딩 때 확보 실패) 먼저 보드를 확보한 뒤 폴링한다", async () => {
+test("with no link row (ensure failed at bind time), ensures the board first and then polls", async () => {
   const plugin = await startPlugin();
   const { channel } = await seedBoundChannel(plugin);
-  // 바인딩이 만든 행을 지워 "확보 실패로 행이 없는" 상태를 만든다.
+  // Delete the row created by binding to produce the "no row because ensure failed" state.
   const { db, channelKanbanBoards } = await import("@/db");
   const { eq } = await import("drizzle-orm");
   await db.delete(channelKanbanBoards).where(eq(channelKanbanBoards.channelId, channel.id));
@@ -409,7 +409,7 @@ test("연결 행이 없으면(바인딩 때 확보 실패) 먼저 보드를 확�
   assert.ok((await readRow(channel.id)).eventCursor);
 });
 
-test("바인딩 때 게이트에 막혀 보드가 없던 채널은 플러그인을 올린 뒤 다음 바퀴에 보드를 만든다(R5)", async () => {
+test("a channel whose board was blocked by the gate at bind time creates the board on the next round after the plugin is upgraded (R5)", async () => {
   const plugin = await startPlugin({ version: "0.5.0" });
   const { channel, gateway } = await seedBoundChannel(plugin);
   let row = await readRow(channel.id);
@@ -426,8 +426,8 @@ test("바인딩 때 게이트에 막혀 보드가 없던 채널은 플러그인�
   assert.equal(blocked.ok, false);
   assert.equal(!blocked.ok && blocked.code, "plugin_upgrade_required");
 
-  // 플러그인을 0.6.0 으로 올렸다. 판정 캐시(1시간)는 지나간 것으로 둔다 — 캐시가 신선한 동안은
-  // 어느 경로도 Hermes 를 다시 찌르지 않는 것이 규칙이다.
+  // Upgraded the plugin to 0.6.0. Treat the verdict cache (1 hour) as expired — while the cache is fresh,
+  // the rule is that no path re-hits Hermes.
   plugin.setInfo({ version: "0.6.0", capabilities: ["kanban", "cron", "events"] });
   const { db, gatewayResources } = await import("@/db");
   const { eq } = await import("drizzle-orm");
@@ -450,7 +450,7 @@ test("바인딩 때 게이트에 막혀 보드가 없던 채널은 플러그인�
   assert.ok(row.eventCursor, "그 바퀴에서 바로 토큰까지 받는다");
 });
 
-test("채널 개명 뒤 이름 동기화가 뒤처져 있으면 폴링이 한 번 다시 맞추고, 맞춘 뒤에는 건드리지 않는다(R2)", async () => {
+test("if name sync lags after a channel rename, polling fixes it once and leaves it alone afterwards (R2)", async () => {
   const plugin = await startPlugin();
   const { channel } = await seedBoundChannel(plugin);
   const { pollChannelOnce } = await import("./automation-poller");
@@ -462,7 +462,7 @@ test("채널 개명 뒤 이름 동기화가 뒤처져 있으면 폴링이 한 �
       .filter((r) => r.method === "PATCH" && r.path.startsWith("/deskrpg/kanban/boards/"));
   assert.equal(patches().length, 0);
 
-  // 개명은 됐는데 보드 이름 동기화가 실패한 상태 — 채널의 updated_at 이 synced_at 보다 뒤다.
+  // Renamed, but board name sync failed — the channel's updated_at is later than synced_at.
   const { db, channels, channelKanbanBoards } = await import("@/db");
   const { eq } = await import("drizzle-orm");
   const renamedAt = new Date(Date.now() - 5_000);
@@ -490,7 +490,7 @@ test("채널 개명 뒤 이름 동기화가 뒤처져 있으면 폴링이 한 �
   assert.equal(patches().length, 1, "맞춘 뒤에는 다시 부르지 않는다");
 });
 
-test("boardNameStale — 동기화 시각이 없거나 채널 수정 시각보다 앞서면 참", async () => {
+test("boardNameStale — true when the sync time is missing or earlier than the channel's update time", async () => {
   const { boardNameStale } = await import("./automation-poller");
   const t0 = new Date("2026-09-14T00:00:00Z");
   const t1 = new Date("2026-09-14T00:00:01Z");
@@ -503,8 +503,8 @@ test("boardNameStale — 동기화 시각이 없거나 채널 수정 시각보�
 });
 
 /**
- * 가짜 시계. 폴러의 대기를 실제 시간 대신 눈금으로 돌린다 — 머신이 바쁠 때 눈금이 밀려
- * 주기 확인이 간헐 실패하던 것을 없앤다(B48).
+ * Fake clock. Runs the poller's waits on ticks instead of real time — eliminates the intermittent
+ * interval-check failures caused by ticks slipping when the machine was busy (B48).
  */
 function createFakeClock() {
   let now = 0;
@@ -523,11 +523,11 @@ function createFakeClock() {
   };
   return {
     timers,
-    /** 눈금을 밀고, 그 사이 걸린 대기를 시각 순서대로 깨운다. */
+    /** Advance the ticks and wake the waits that fell in between, in time order. */
     async advance(ms: number) {
       const target = now + ms;
       for (;;) {
-        // 폴러는 pollOnce 를 await 한 뒤에야 다음 대기를 건다 — 훑기 전에 큐를 비운다.
+        // The poller only sets the next wait after awaiting pollOnce — drain the queue before sweeping.
         await new Promise((resolve) => setImmediate(resolve));
         const due = [...pending.entries()]
           .filter(([, t]) => t.at <= target)
@@ -543,7 +543,7 @@ function createFakeClock() {
   };
 }
 
-test("타이머 레지스트리 — 접속이 켜지면 즉시 한 바퀴, 짧은 주기; 꺼지면 긴 주기; refresh 가 표를 맞춘다", async () => {
+test("timer registry — when a connection comes on, one round immediately, short interval; when off, long interval; refresh syncs the table", async () => {
   const { createAutomationPoller } = await import("./automation-poller");
   const calls: string[] = [];
   let bound = new Set(["a", "b"]);
@@ -578,7 +578,7 @@ test("타이머 레지스트리 — 접속이 켜지면 즉시 한 바퀴, 짧�
     assert.ok(outcome.ok);
     assert.equal(calls.filter((c) => c === "b").length, 1, "pollNow 는 즉시 한 바퀴");
 
-    // 서버가 뜬 뒤에 묶인 채널: setActive 가 표를 보고 시작한다. 묶이지 않았으면 무시.
+    // A channel bound after the server started: setActive checks the table and starts. Ignored if unbound.
     bound = new Set(["a", "c"]);
     await poller.setActive("c", true);
     assert.ok(poller.has("c"));
@@ -593,7 +593,7 @@ test("타이머 레지스트리 — 접속이 켜지면 즉시 한 바퀴, 짧�
   }
 });
 
-test("타이머 레지스트리 — unbound 결과가 나오면 그 채널의 폴러를 멈춘다", async () => {
+test("timer registry — an unbound result stops that channel's poller", async () => {
   const { createAutomationPoller } = await import("./automation-poller");
   const poller = createAutomationPoller({
     pollOnce: async () => ({ ok: false, code: "unbound", reason: "no binding" }),
@@ -610,7 +610,7 @@ test("타이머 레지스트리 — unbound 결과가 나오면 그 채널의 �
 });
 
 // ---------------------------------------------------------------------------
-// 다중 보드 (설계 2026-09-21 project-registry)
+// Multiple boards (design 2026-09-21 project-registry)
 // ---------------------------------------------------------------------------
 
 async function addBoard(channelId: string): Promise<string> {
@@ -621,14 +621,14 @@ async function addBoard(channelId: string): Promise<string> {
   return slug;
 }
 
-test("커서는 보드 행 id 로 저장한다 — 채널 단위로 쓰면 다른 보드를 덮는다", async () => {
+test("cursors are stored by board row id — writing per channel would overwrite other boards", async () => {
   const server = await startPlugin();
   const { channel } = await seedBoundChannel(server);
   await addBoard(channel.id);
   const { pollChannelOnce } = await import("./automation-poller");
 
-  // 저장 호출을 가로채 **무엇을 키로 썼는지** 본다. 가짜 서버는 상태가 같으면 두 보드에 같은
-  // 커서 토큰을 주므로, 저장된 값만 봐서는 덮어쓰기를 구분할 수 없다.
+  // Intercept the save call to see **what was used as the key**. The fake server gives both boards the same
+  // cursor token when their state matches, so looking only at the stored value cannot tell an overwrite.
   const saved: string[] = [];
   const base = await makeDeps();
   const h = await makeDeps({
@@ -657,7 +657,7 @@ test("커서는 보드 행 id 로 저장한다 — 채널 단위로 쓰면 다�
   );
 });
 
-test("보드가 둘이면 두 보드 모두에서 사건을 받아 온다", async () => {
+test("with two boards, events are fetched from both", async () => {
   const server = await startPlugin();
   const { channel } = await seedBoundChannel(server);
   const second = await addBoard(channel.id);
@@ -672,9 +672,10 @@ test("보드가 둘이면 두 보드 모두에서 사건을 받아 온다", asyn
   assert.equal(polledBoards.size, 2);
 });
 
-test("include 는 수신 보드에만, 그리고 아티팩트·카드 제안 두 토큰이 늘 함께 붙는다", async () => {
-  // 두 출처는 커서 `a` 를 공유한다 — 한쪽만 켜면 다른 쪽 사건을 지나친 채 커서가 전진해 조용히 사라진다.
-  // 그리고 둘 다 게이트웨이 전역이라 보드마다 붙이면 보드 수만큼 중복된다.
+test("include goes only on the receiving board, and the artifact·card-proposal tokens are always attached together", async () => {
+  // The two sources share cursor `a` — enabling only one makes the cursor advance past the other's events and they
+  // silently vanish.
+  // And both are gateway-global, so attaching them per board would duplicate them by the number of boards.
   const server = await startPlugin();
   const { channel } = await seedBoundChannel(server);
   const second = await addBoard(channel.id);
@@ -699,7 +700,7 @@ test("include 는 수신 보드에만, 그리고 아티팩트·카드 제안 두
   }
 });
 
-test("사건 수신 보드가 아닌 보드는 크론 사건을 버린다", async () => {
+test("a board that is not the event-receiving board drops cron events", async () => {
   const server = await startPlugin();
   const { channel } = await seedBoundChannel(server);
   await addBoard(channel.id);
@@ -707,7 +708,7 @@ test("사건 수신 보드가 아닌 보드는 크론 사건을 버린다", asyn
   const h = await makeDeps();
   assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
 
-  // 크론 사건은 게이트웨이 전역이라 두 보드의 응답에 모두 실려 온다.
+  // Cron events are gateway-global, so they come in both boards' responses.
   server.pushEvent({
     kind: "cron.run.finished",
     profile: "sophie",
@@ -731,7 +732,7 @@ test("사건 수신 보드가 아닌 보드는 크론 사건을 버린다", asyn
   );
 });
 
-test("사건 수신 보드가 0개인 채널은 폴링 한 바퀴에 복구된다", async () => {
+test("a channel with zero event-receiving boards recovers in one poll round", async () => {
   const server = await startPlugin();
   const { channel } = await seedBoundChannel(server);
   await addBoard(channel.id);
@@ -767,7 +768,7 @@ test("사건 수신 보드가 0개인 채널은 폴링 한 바퀴에 복구된�
   );
 });
 
-test("보관된 프로젝트의 보드는 사건 수신 자리 후보에서 빠진다", async () => {
+test("boards of archived projects are excluded from receiving-board candidates", async () => {
   const server = await startPlugin();
   const { channel } = await seedBoundChannel(server);
   const second = await addBoard(channel.id);
@@ -778,7 +779,7 @@ test("보관된 프로젝트의 보드는 사건 수신 자리 후보에서 빠�
 
   const rows = await listChannelBoards(channel.id);
   const oldest = rows[0];
-  // 가장 오래된 보드를 보관 상태로 둔다 — 그러면 둘째 보드가 자리를 맡아야 한다.
+  // Put the oldest board in the archived state — then the second board must take the slot.
   await db.insert(channelProjects).values({
     boardLinkId: oldest.id,
     channelId: channel.id,
@@ -800,10 +801,10 @@ test("보관된 프로젝트의 보드는 사건 수신 자리 후보에서 빠�
 });
 
 // ---------------------------------------------------------------------------
-// 재시작 뒤 "일하는 중" 되세우기 (설계 2026-09-21 npc-working-state, 결정 A-1)
+// Re-establishing "working" after a restart (design 2026-09-21 npc-working-state, decision A-1)
 // ---------------------------------------------------------------------------
 
-/** 그 보드에 실제 카드를 만들고 running 으로 옮긴다. */
+/** Create a real card on that board and move it to running. */
 async function seedRunningCard(
   channelId: string,
   slug: string,
@@ -821,7 +822,7 @@ async function seedRunningCard(
   return taskId;
 }
 
-/** 프로세스 재시작 — 작업 상태와 재구성 표시를 함께 버린다(커서는 DB 에 남는다). */
+/** Process restart — drops both working state and reconstruction markers (the cursor stays in the DB). */
 async function simulateRestart(channelId: string) {
   const { resetAutomationState } = await import("./automation-events");
   const { resetWorkingResyncForTests } = await import("./automation-poller");
@@ -829,7 +830,7 @@ async function simulateRestart(channelId: string) {
   resetWorkingResyncForTests(channelId);
 }
 
-test("재시작하면 일하는 중이 사라지고, 폴링 한 바퀴가 그것을 되세운다", async () => {
+test("a restart clears working, and one poll round re-establishes it", async () => {
   const server = await startPlugin();
   const { channel, npc } = await seedBoundChannel(server);
   const { pollChannelOnce } = await import("./automation-poller");
@@ -859,7 +860,7 @@ test("재시작하면 일하는 중이 사라지고, 폴링 한 바퀴가 그것
   assert.equal(restored[0].sources.runningCards, 1);
 });
 
-test("되세운 뒤 진짜 finished 가 오면 꺼진다 — 영영 켜져 있지 않는다", async () => {
+test("after re-establishing, a real finished turns it off — it does not stay on forever", async () => {
   const server = await startPlugin();
   const { channel } = await seedBoundChannel(server);
   const { pollChannelOnce } = await import("./automation-poller");
@@ -888,7 +889,7 @@ test("되세운 뒤 진짜 finished 가 오면 꺼진다 — 영영 켜져 있�
   );
 });
 
-test("재생된 옛 finished 뒤에도 running 카드의 담당은 일하는 중이다", async () => {
+test("the assignee of a running card is still working after a replayed old finished", async () => {
   const server = await startPlugin();
   const { channel } = await seedBoundChannel(server);
   const { pollChannelOnce } = await import("./automation-poller");
@@ -900,9 +901,9 @@ test("재생된 옛 finished 뒤에도 running 카드의 담당은 일하는 중
   assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
   const taskId = await seedRunningCard(channel.id, slug, "재시도로 다시 도는 카드");
 
-  // 꺼져 있던 동안 쌓인 사건: 그 카드가 한 번 끝났다가 다시 시작했다. 커서는 DB 에 남으므로
-  // 재시작 뒤 첫 폴링이 이것을 재생한다. 되세우기를 폴링 **앞**에 두면 재생된 finished 가
-  // 합성 started 를 지워 실제로 돌고 있는 카드가 "쉬는 중" 으로 뒤집힌다.
+  // Events that piled up while it was down: the card finished once and started again. The cursor stays in the DB, so
+  // the first poll after restart replays this. If re-establishing ran **before** polling, the replayed finished would
+  // erase the synthetic started and a card that is actually running would flip to "쉬는 중" (resting).
   server.pushEvent({
     kind: "task.run.finished",
     board: slug,
@@ -922,20 +923,20 @@ test("재생된 옛 finished 뒤에도 running 카드의 담당은 일하는 중
   assert.equal(snapshot[0].sources.runningCards, 1);
 });
 
-// 카드 `…72Q0M` 의 재현. 주장은 "DeskRPG 가 꺼져 있던 동안 난 제안은 영구히 사라진다" 였다.
-// 커서는 `channel_kanban_boards.event_cursor` 에 있고 재시작이 그 행을 지우지 않으므로, 재시작
-// 뒤 첫 폴링이 그 사이의 제안을 재생한다. 아래 두 단정이 그 성질을 고정한다 — 하나라도 깨지면
-// 조회 라우트가 실제로 필요해진다.
-test("꺼져 있던 동안 난 카드 제안은 재시작 뒤 첫 폴링에서 알림으로 뜬다", async () => {
+// Reproduction of card `…72Q0M`. The claim was "proposals made while DeskRPG was down are lost forever".
+// The cursor lives in `channel_kanban_boards.event_cursor` and a restart does not delete that row, so the first
+// poll after restart replays the proposals from the gap. The two assertions below pin that property — if either breaks,
+// the query route actually becomes necessary.
+test("card proposals made while down show up as notifications on the first poll after restart", async () => {
   const server = await startPlugin();
   const { channel, npc } = await seedBoundChannel(server);
   const { pollChannelOnce } = await import("./automation-poller");
   const h = await makeDeps();
 
-  // 첫 바퀴가 "지금" 토큰을 DB 에 저장한다.
+  // The first round stores the "now" token in the DB.
   assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
 
-  // 여기서부터 DeskRPG 는 꺼져 있다 — 그 사이 직원이 제안을 냈다.
+  // From here DeskRPG is down — meanwhile a staff member made a proposal.
   server.pushEvent({
     kind: "card_proposal.created",
     profile: "sophie",
@@ -961,7 +962,7 @@ test("꺼져 있던 동안 난 카드 제안은 재시작 뒤 첫 폴링에서 �
   assert.equal(notice.proposalId, "0123456789abcdef0123456789abcdef");
   assert.equal(notice.npcId, npc.id);
 
-  // 두 번째 성질: 같은 제안의 알림이 둘 생기지 않는다(커서가 전진했다).
+  // Second property: the same proposal does not produce two notifications (the cursor advanced).
   assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
   assert.equal(
     h.roomEmits.filter((e) => e.message.notice?.kind === "card_proposal").length,
@@ -970,7 +971,7 @@ test("꺼져 있던 동안 난 카드 제안은 재시작 뒤 첫 폴링에서 �
   );
 });
 
-test("되세우기는 프로세스 수명당 채널마다 한 번만 보드를 읽는다", async () => {
+test("re-establishing reads the board only once per channel per process lifetime", async () => {
   const server = await startPlugin();
   const { channel } = await seedBoundChannel(server);
   const { pollChannelOnce } = await import("./automation-poller");
@@ -1001,7 +1002,7 @@ test("되세우기는 프로세스 수명당 채널마다 한 번만 보드를 �
   );
 });
 
-test("되세우기는 담당자 없는 running 카드를 건너뛴다", async () => {
+test("re-establishing skips running cards with no assignee", async () => {
   const server = await startPlugin();
   const { channel } = await seedBoundChannel(server);
   const { pollChannelOnce } = await import("./automation-poller");
@@ -1026,7 +1027,7 @@ test("되세우기는 담당자 없는 running 카드를 건너뛴다", async ()
   );
 });
 
-test("보드 조회가 실패한 바퀴는 끝난 것으로 표시하지 않는다 — 다음 바퀴에 되세운다", async () => {
+test("a round whose board query failed is not marked done — re-established on the next round", async () => {
   const server = await startPlugin();
   const { channel } = await seedBoundChannel(server);
   const { pollChannelOnce } = await import("./automation-poller");
@@ -1039,7 +1040,7 @@ test("보드 조회가 실패한 바퀴는 끝난 것으로 표시하지 않는�
   await seedRunningCard(channel.id, slug, "재시작 때 돌고 있던 카드");
   await simulateRestart(channel.id);
 
-  // 재시작은 배포와 겹치는 일이 많다 — 되세우기가 도는 바로 그 순간 게이트웨이가 안 닿는다.
+  // Restarts often coincide with deploys — the gateway is unreachable at the very moment re-establishing runs.
   server.failNext("/deskrpg/kanban/board");
   assert.ok((await pollChannelOnce(channel.id, h.deps)).ok);
   assert.deepEqual(
@@ -1056,7 +1057,7 @@ test("보드 조회가 실패한 바퀴는 끝난 것으로 표시하지 않는�
     "실패한 바퀴를 '끝났다' 로 표시했습니다 — 그 채널은 프로세스가 사는 동안 다시 시도하지 않습니다",
   );
 
-  // 성공한 뒤에는 다시 조회하지 않는다(한가한 채널이 매 바퀴 보드를 읽지 않게).
+  // After success, do not query again (so idle channels do not read the board every round).
   const after = server.requests().filter((r) => r.path.startsWith("/deskrpg/kanban/board")).length;
   await pollChannelOnce(channel.id, h.deps);
   await pollChannelOnce(channel.id, h.deps);
@@ -1084,7 +1085,7 @@ for (const status of ["completed", "cancelled"] as const) {
         return base.deps.ingest(id, events, deps);
       },
     });
-    // 옛 보드의 k/d가 더 앞선 상태로 시작해야, k/d까지 잘못 인계하는 회귀가 드러난다.
+    // The old board's k/d must start further ahead to expose a regression that wrongly hands over k/d too.
     for (let n = 0; n < 2; n++)
       plugin.pushEvent({
         kind: "task.status",
@@ -1159,7 +1160,7 @@ for (const status of ["completed", "cancelled"] as const) {
   });
 }
 
-test("새 수신 후보가 먼저 전역 사건을 읽었어도 옛 carrier 위치에서 인계한다", async () => {
+test("hands over from the old carrier position even if the new receiving candidate read global events first", async () => {
   const plugin = await startPlugin();
   const { channel } = await seedBoundChannel(plugin);
   const second = await addBoard(channel.id);
@@ -1172,7 +1173,8 @@ test("새 수신 후보가 먼저 전역 사건을 읽었어도 옛 carrier 위�
   const target = rows.find((r) => r.boardSlug === second)!;
   const resolved = await resolveChannelBoard(channel.id);
   assert.ok(resolved.ok);
-  // a가 있는 후보 커서에서 전역 사건을 읽고 버린 상황. 대상 k/d를 섞으면 아래 카드도 사라진다.
+  // The case where global events were read and dropped at the candidate cursor holding a. Mixing in the target k/d
+  // would make the card below vanish too.
   const primed = await resolved.ownerClient.events.poll({
     board: second,
     include: "artifacts,card_proposals",

@@ -64,7 +64,7 @@ function setup(opts: { allowed?: boolean; player?: boolean; userId?: string } = 
     woke,
     callerContexts,
     async register(seeded: Seeded) {
-      // 기본 신원은 채널 소유자. `userId` 를 주면 그 사람인 척 등록한다 — 권한 갈래용.
+      // Default identity is the channel owner. Given `userId`, registers as that person — for permission branches.
       const actingUserId = opts.userId ?? seeded.userId;
       if (opts.player !== false) {
         players.set("s1", {
@@ -113,7 +113,7 @@ function setup(opts: { allowed?: boolean; player?: boolean; userId?: string } = 
 const ev = (emitted: Emitted[], name: string) =>
   emitted.filter(([e]) => e.startsWith(name)).map(([, p]) => p);
 
-test("room:list 는 office 를 포함해 내 방을 준다", async () => {
+test("room:list returns my rooms including office", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();
   await t.register(seeded);
@@ -126,11 +126,11 @@ test("room:list 는 office 를 포함해 내 방을 준다", async () => {
     res.rooms.map((r) => r.kind),
     ["office"],
   );
-  // 클라이언트는 이 값으로만 "내가 만든 방" 을 가릴 수 있다.
+  // This value is the only way the client can tell "rooms I created".
   assert.equal(res.viewerUserId, seeded.userId);
 });
 
-test("room:send 는 open 하지 않은 방이면 not_open, 빈 메시지면 empty, 쿨다운이면 cooldown — 전부 room:error 로", async () => {
+test("room:send gives not_open for an unopened room, empty for an empty message, cooldown when cooling down — all as room:error", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();
   await t.register(seeded);
@@ -146,7 +146,7 @@ test("room:send 는 open 하지 않은 방이면 not_open, 빈 메시지면 empt
   assert.deepEqual(ev(t.emitted, "room:error").at(-1), { roomId: office.id, code: "cooldown" });
 });
 
-test("room:send 성공은 저장 + 방 방송 + 런타임 호출, 채널 권한 없으면 forbidden", async () => {
+test("room:send success is store + room broadcast + runtime call; forbidden without channel permission", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();
   await t.register(seeded);
@@ -166,7 +166,7 @@ test("room:send 성공은 저장 + 방 방송 + 런타임 호출, 채널 권한 
   assert.deepEqual(ev(t2.emitted, "room:error").at(-1), { roomId: office.id, code: "forbidden" });
 });
 
-test("room:send 는 player:join 이 심은 부른 사람의 이름·소개를 런타임에 넘긴다", async () => {
+test("room:send passes the caller's name and bio planted by player:join to the runtime", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();
   await t.register(seeded);
@@ -177,7 +177,7 @@ test("room:send 는 player:join 이 심은 부른 사람의 이름·소개를 �
   assert.deepEqual(t.callerContexts, [{ name: "곽지호", bio: "단테랩스 대표" }]);
 });
 
-test("players 에 없는 소켓은 not_joined", async () => {
+test("a socket not in players gets not_joined", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup({ player: false });
   await t.register(seeded);
@@ -187,7 +187,7 @@ test("players 에 없는 소켓은 not_joined", async () => {
   assert.deepEqual(ev(t.emitted, "room:error").at(-1), { roomId: office.id, code: "not_joined" });
 });
 
-test("room:create 는 만든 사람을 멤버로 넣고 room:created 를 주며, group 방의 room:send 는 런타임을 깨운다", async () => {
+test("room:create adds the creator as a member and emits room:created, and room:send in a group room wakes the runtime", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 2 });
   const t = setup();
   await t.register(seeded);
@@ -207,12 +207,12 @@ test("room:create 는 만든 사람을 멤버로 넣고 room:created 를 주며,
   assert.equal(t.woke.at(-1)?.roomId, created.room.id);
 });
 
-test("room:created 의 requestId 는 요청한 소켓에만 되돌아온다 — 초대된 사람에게는 없다", async () => {
+test("room:created's requestId comes back only to the requesting socket — invitees don't get it", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const invitee = await seedUser("room-invitee");
   const t = setup();
   await t.register(seeded);
-  // 초대받을 사람의 소켓. `socketIdsForUsers` 가 이 목록에서 대상 소켓을 고른다.
+  // The invitee's socket. `socketIdsForUsers` picks the target sockets from this list.
   t.players.set("s2", {
     id: "s2",
     userId: invitee.id,
@@ -234,7 +234,7 @@ test("room:created 의 requestId 는 요청한 소켓에만 되돌아온다 — 
     requestId: "r1",
   });
 
-  // `ev` 는 접두어로 걸러서 `room:created@s2` 까지 잡는다 — 여기서는 두 갈래를 갈라야 한다.
+  // `ev` filters by prefix and catches up to `room:created@s2` — here the two branches must be told apart.
   const mine = t.emitted.filter(([e]) => e === "room:created").map(([, p]) => p);
   const theirs = t.emitted.filter(([e]) => e === "room:created@s2").map(([, p]) => p);
   assert.deepEqual(
@@ -249,7 +249,7 @@ test("room:created 의 requestId 는 요청한 소켓에만 되돌아온다 — 
   );
 });
 
-test("쓸 수 없는 requestId 는 무시한다 — 표 없이 방만 만든다", async () => {
+test("an unusable requestId is ignored — creates just the room without a ticket", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();
   await t.register(seeded);
@@ -265,7 +265,7 @@ test("쓸 수 없는 requestId 는 무시한다 — 표 없이 방만 만든다"
   assert.ok((created as { room: { id: string } }).room.id, "방은 정상으로 만들어진다");
 });
 
-test("room:delete 는 만든 사람만, office 는 invalid", async () => {
+test("room:delete is creator-only, office is invalid", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();
   await t.register(seeded);
@@ -274,7 +274,7 @@ test("room:delete 는 만든 사람만, office 는 invalid", async () => {
   assert.deepEqual(ev(t.emitted, "room:error").at(-1), { roomId: office.id, code: "invalid" });
 });
 
-test("room:rename 은 만든 사람만 — 멤버라도 남의 방 이름은 못 바꾼다", async () => {
+test("room:rename is creator-only — even a member can't rename someone else's room", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const owner = setup();
   await owner.register(seeded);
@@ -286,7 +286,7 @@ test("room:rename 은 만든 사람만 — 멤버라도 남의 방 이름은 못
   });
   const [created] = ev(owner.emitted, "room:created") as { room: { id: string } }[];
 
-  // 같은 방의 user 멤버지만 만든 사람은 아닌 두 번째 사람.
+  // A second person who is a user member of the same room but not its creator.
   const other = await seedUser("room-member");
   await rooms.addMembers(created.room.id, seeded.userId, [], [other.id]);
   const guest = setup({ userId: other.id });
@@ -306,13 +306,13 @@ test("room:rename 은 만든 사람만 — 멤버라도 남의 방 이름은 못
   assert.equal((await rooms.getRoom(created.room.id))?.name, "기획 2팀");
 });
 
-test("room:open 은 최근 60줄만 돌려준다 — 그보다 오래된 줄은 잘린다", async () => {
+test("room:open returns only the latest 60 lines — older lines are cut off", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();
   await t.register(seeded);
   const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);
-  // sleep 이 없다. 메시지 id 가 UUIDv7 이라 같은 밀리초에 몰아 넣어도
-  // `(created_at, id)` 정렬이 넣은 순서를 그대로 돌려준다.
+  // No sleep. Message ids are UUIDv7, so even when pushed in within the same millisecond
+  // the `(created_at, id)` ordering returns them in insertion order.
   for (let i = 0; i <= 60; i += 1) {
     await rooms.appendRoomMessage({
       roomId: office.id,
@@ -345,7 +345,7 @@ test("office list remains available to an authorized visitor before asynchronous
   assert.notEqual(officeSummary.createdBy, visitor.id);
 });
 
-test("채널이 없으면 room:list 는 방을 만들지 않고 not_found 를 준다", async () => {
+test("without a channel, room:list creates no rooms and returns not_found", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();
   await t.register(seeded);
@@ -354,19 +354,19 @@ test("채널이 없으면 room:list 는 방을 만들지 않고 not_found 를 �
   assert.deepEqual(ev(t.emitted, "room:list-response"), []);
 });
 
-// ── 사무실 방은 늘 듣는다 ─────────────────────────────────────────────────────
+// ── The office room always listens ───────────────────────────────────────────────────────────────
 //
-// 자동화 알림(카드 검토·막힘·완료, 크론 실패)은 사무실 방으로 방송된다. 예전에는 방송이
-// `room:open` 한 소켓에만 갔고 방을 옮기면 `room:close` 로 떠났다 — 그래서 DM 이나 다른
-// 그룹 방을 보고 있는 사용자, 패널을 접어 둔 사용자는 알림을 **그 방으로 돌아올 때까지**
-// 받지 못했다. "맵만 보는 사용자에게 알린다" 는 보고 기능이 정확히 그 사용자를 놓쳤다.
+// Automation notices (card review, blocked, done, cron failure) are broadcast to the office room. Previously
+// the broadcast went only to sockets that did `room:open`, and moving rooms left via `room:close` — so users
+// viewing a DM or another group room, or with the panel collapsed, didn't get notices **until they came back
+// to that room**. The reporting feature meant to "notify users who only watch the map" missed exactly those users.
 
 const officeRoomId = (emitted: Emitted[]) =>
   (ev(emitted, "room:list-response") as { rooms: { id: string; kind: string }[] }[])
     .at(-1)!
     .rooms.find((room) => room.kind === "office")!.id;
 
-test("room:list 만으로 사무실 방 방송을 듣는다 — 방을 열지 않아도", async () => {
+test("room:list alone listens to office room broadcasts — even without opening the room", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();
   await t.register(seeded);
@@ -378,7 +378,7 @@ test("room:list 만으로 사무실 방 방송을 듣는다 — 방을 열지 �
   );
 });
 
-test("room:list 는 사무실 방의 최근 줄도 내려 준다 — 접속 전에 쌓인 알림이 배지에 잡힌다", async () => {
+test("room:list also sends the office room's recent lines — notices piled up before connecting show on the badge", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();
   await t.register(seeded);
@@ -402,7 +402,7 @@ test("room:list 는 사무실 방의 최근 줄도 내려 준다 — 접속 전�
   assert.ok(office.messages.some((message) => message.content === "접속 전에 온 알림"));
 });
 
-test("다른 방으로 옮겨도(room:close) 사무실 방은 계속 듣는다 — 다만 열지 않은 방에는 못 보낸다", async () => {
+test("moving to another room (room:close) keeps listening to the office room — but can't send to an unopened room", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();
   await t.register(seeded);
@@ -414,7 +414,7 @@ test("다른 방으로 옮겨도(room:close) 사무실 방은 계속 듣는다 �
     [...t.socket.joined].some((room) => room.includes(officeId)),
     "사무실 방을 닫아도 방송은 계속 받아야 한다",
   );
-  // 듣는 것과 보내는 것은 다르다 — 닫은 방에 보내면 여전히 not_open 이다.
+  // Listening and sending are different — sending to a closed room is still not_open.
   t.emitted.length = 0;
   await t.socket.trigger("room:send", { roomId: officeId, message: "닫힌 방에 보내기" });
   assert.deepEqual(
@@ -423,7 +423,7 @@ test("다른 방으로 옮겨도(room:close) 사무실 방은 계속 듣는다 �
   );
 });
 
-test("그룹 방은 예전대로다 — 닫으면 방송을 받지 않는다", async () => {
+test("group rooms are as before — closing stops broadcasts", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup();
   await t.register(seeded);
@@ -445,7 +445,7 @@ test("그룹 방은 예전대로다 — 닫으면 방송을 받지 않는다", a
   );
 });
 
-test("채널 권한이 없으면 사무실 방에 들어가지 못한다", async () => {
+test("without channel permission, a socket can't join the office room", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 1 });
   const t = setup({ allowed: false });
   await t.register(seeded);

@@ -6,16 +6,16 @@ import { setupThrowawaySqlite, seedChannelWithProfiles } from "@/test-setup/npc-
 setupThrowawaySqlite("npc-config-assembly-test");
 
 /**
- * 회의·자유채팅 참가자 명단을 조립하는 `getNpcConfigsForChannel` 의 계약 두 가지.
+ * Two contracts of `getNpcConfigsForChannel`, which assembles the meeting/free-chat participant roster.
  *
- * 1) 새 고용 경로는 `agent_config` 를 NULL 로 둔다(프로필이 정본이므로). 그 상태로
- *    조립하면 `<team-instructions>` 층이 통째로 빠져 새로 만든 NPC 만 회의에서
- *    턴 규약 없이 말한다 — 기존 NPC 는 옛 agent_config 를 들고 있어 멀쩡하므로
- *    증상이 "새 직원만 이상하다"로 나타난다.
- * 2) 출근부에서 퇴근시킨(`active=false`) NPC 는 대화 표면에서도 빠져야 한다.
- *    자리 미정(unplaced)은 반대로 남는다 — 맵 밖에 있을 뿐 출근 중이다.
+ * 1) The new hiring path leaves `agent_config` NULL (the profile is the source of truth). Assembling in
+ *    that state drops the `<team-instructions>` layer entirely, so only newly created NPCs speak in
+ *    meetings without the turn protocol — existing NPCs carry an old agent_config and are fine, so
+ *    the symptom shows up as "only new employees act strange".
+ * 2) NPCs clocked out on the roster (`active=false`) must also drop out of conversation surfaces.
+ *    Unplaced ones, in contrast, stay — they are just off the map but still on duty.
  */
-test("고용된 NPC 는 agent_config 가 비어도 회의 규약을 받는다", async () => {
+test("a hired NPC gets the meeting protocol even with an empty agent_config", async () => {
   const { getNpcConfigsForChannel } = await import("./socket-handlers");
   const { hireGatewayProfilesIntoChannel } = await import("@/lib/npc-roster");
 
@@ -31,7 +31,7 @@ test("고용된 NPC 는 agent_config 가 비어도 회의 규약을 받는다", 
   );
 });
 
-test("휴면 NPC 는 대화 명단에서 빠지고, 자리 미정은 남는다", async () => {
+test("dormant NPCs drop out of the conversation roster, unplaced ones stay", async () => {
   const { getNpcConfigsForChannel } = await import("./socket-handlers");
   const { selectChannelNpcs } = await import("@/lib/npc-projection");
 
@@ -52,14 +52,14 @@ test("휴면 NPC 는 대화 명단에서 빠지고, 자리 미정은 남는다",
 });
 
 /**
- * 응답 언어 계약은 **요청 시점의 언어**로 정한다. 새 고용 경로는 agent_config 를 NULL 로
- * 두므로, 예전처럼 agent_config.locale 만 보면 한국어 오피스에서도 "모든 발언은 영어로"
- * 계약이 실렸다(스테이징 실측: 올리버만 회의에서 영어로 답했다).
+ * The response-language contract is decided by **the language at request time**. The new hiring path leaves
+ * agent_config NULL, so looking only at agent_config.locale as before attached the "all speech in English"
+ * contract even in a Korean office (measured on staging: only Oliver answered in English in meetings).
  */
 const KO_CONTRACT = /응답 언어 계약/;
 const EN_CONTRACT = /Response Language Contract/;
 
-test("agent_config 가 없는 직원도 한국어 사용자의 요청이면 한국어 계약을 받는다", async () => {
+test("an employee without agent_config gets the Korean contract when a Korean user makes the request", async () => {
   const { getNpcConfigsForChannel } = await import("./socket-handlers");
   const { hireGatewayProfilesIntoChannel } = await import("@/lib/npc-roster");
 
@@ -71,7 +71,7 @@ test("agent_config 가 없는 직원도 한국어 사용자의 요청이면 한�
   assert.doesNotMatch(config.instructions ?? "", EN_CONTRACT);
 });
 
-test("응답 언어 폴백 순서: 요청자 → agent_config.locale → en", async () => {
+test("response language fallback order: requester → agent_config.locale → en", async () => {
   const { resolveNpcInstructions } = await import("./socket-handlers");
 
   assert.match(resolveNpcInstructions({ locale: "en" }, "ko") ?? "", KO_CONTRACT, "요청자가 우선");
@@ -83,27 +83,27 @@ test("응답 언어 폴백 순서: 요청자 → agent_config.locale → en", as
   assert.match(resolveNpcInstructions({}, null) ?? "", EN_CONTRACT, "둘 다 없을 때만 en");
 });
 
-test("agent_config.locale=ko 인 기존 직원은 요청 언어가 없어도 그대로 한국어다", async () => {
+test("an existing employee with agent_config.locale=ko stays Korean even without a request language", async () => {
   const { resolveNpcInstructions } = await import("./socket-handlers");
   assert.match(resolveNpcInstructions({ locale: "ko" }) ?? "", KO_CONTRACT);
 });
 
-test("사용자가 직접 쓴 회의 규약은 요청 언어로 바꾸지 않는다", async () => {
+test("a meeting protocol written by the user is not changed to the request language", async () => {
   const { resolveNpcInstructions } = await import("./socket-handlers");
   const out = resolveNpcInstructions({ meetingProtocol: "MY RULES" }, "ko") ?? "";
   assert.match(out, /MY RULES/);
   assert.doesNotMatch(out, KO_CONTRACT);
 });
 
-test("회의·1:1·방 세 경로가 같은 해석 함수에 요청자 언어를 넘긴다", async () => {
+test("the meeting, 1:1 and room paths all pass the requester's language to the same resolver", async () => {
   const { readFileSync } = await import("node:fs");
   const handlers = readFileSync(new URL("./socket-handlers.ts", import.meta.url), "utf8");
   const room = readFileSync(new URL("./room-runtime.ts", import.meta.url), "utf8");
 
-  // 설정 로더 두 곳 모두 한 함수로 조립한다 — 경로별로 규약을 따로 만들지 않는다.
+  // Both config loaders assemble through one function — no per-path protocol.
   assert.equal(handlers.match(/resolveNpcInstructions\(oc, requestLocale\)/g)?.length, 2);
   assert.equal(handlers.match(/composeNpcInstructions\(/g)?.length, 2, "해석 함수 밖 조립 없음");
-  // 1:1 · 자유 회의 채팅 · 회의 토론 · 방 런타임이 소켓의 언어를 싣는다.
+  // 1:1 · free meeting chat · meeting discussion · room runtime carry the socket's language.
   assert.match(handlers, /getNpcConfig\(npcId, socketLocale\(socket\)\)/);
   assert.match(handlers, /getNpcConfigsForChannel\(channelId, socketLocale\(socket\)\)/);
   assert.match(
@@ -113,7 +113,7 @@ test("회의·1:1·방 세 경로가 같은 해석 함수에 요청자 언어를
   assert.match(room, /loadNpcConfigs\(room\.channelId, deps\.locale\)/);
 });
 
-test("옛 대화의 JSON 등록 지시는 폐기하고 현재 확인 화면을 안내한다", async () => {
+test("the JSON registration instruction from old conversations is retired and points to the current confirm screen", async () => {
   const { resolveNpcInstructions } = await import("./socket-handlers");
   for (const config of [{}, { meetingProtocol: "사용자 회의 규칙" }]) {
     const out = resolveNpcInstructions(config, "ko") ?? "";

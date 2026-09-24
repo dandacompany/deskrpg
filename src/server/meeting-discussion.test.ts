@@ -163,7 +163,7 @@ function createFakeIo(calls: RecordedCall[]) {
   };
 }
 
-test("실제 집결 전 브로커를 만들지 않고 전원 도착 뒤 정확히 한 번 시작한다", async () => {
+test("does not create a broker before the actual gathering and starts exactly once after everyone arrives", async () => {
   const calls: RecordedCall[] = [];
   const socket = createFakeSocket("socket-1", calls);
   const spatial = createMeetingSpatialCoordinator({
@@ -214,7 +214,7 @@ test("실제 집결 전 브로커를 만들지 않고 전원 도착 뒤 정확�
     topic: "topic",
     selectedNpcIds: ["n1"],
   });
-  // 파일 I/O·실제 서버 없이 async 집결 예약의 마이크로태스크를 모두 진행한다.
+  // Drive all microtasks of the async gathering schedule without file I/O or a real server.
   for (let i = 0; i < 30; i++) await Promise.resolve();
   assert.equal(created, 0);
   assert.equal(spatial.snapshot("a")?.phase, "assembling");
@@ -398,9 +398,9 @@ test("registerMeetingDiscussionHandlers starts a broker and emits mode change", 
 });
 
 // ---------------------------------------------------------------------------
-// 해석/배선 레이어 — defaultCreateMeetingBroker + resolveNpcAdapter
-// 이 층(디스패치 분류, 제외 사유, 어댑터 구성, 엔진 콜백 재매핑)은 이 커밋 전까지
-// 어떤 테스트도 실행하지 않았다(M5).
+// Resolution/wiring layer — defaultCreateMeetingBroker + resolveNpcAdapter
+// This layer (dispatch classification, exclusion reasons, adapter assembly, engine callback remapping) was not
+// exercised by any test before this commit (M5).
 // ---------------------------------------------------------------------------
 
 type ExcludedNotice = { npcId: string; displayName: string; reason: string };
@@ -451,7 +451,7 @@ function brokerConfig(npcs: ReturnType<typeof npcConfig>[], over: Record<string,
   } as unknown as Parameters<typeof defaultCreateMeetingBroker>[0];
 }
 
-test("resolution layer: 제외 사유를 각각 그 사유로 통지한다", async () => {
+test("resolution layer: notifies each exclusion with its own reason", async () => {
   const registry = new AdapterRegistry();
   const excluded: ExcludedNotice[] = [];
 
@@ -465,8 +465,8 @@ test("resolution layer: 제외 사유를 각각 그 사유로 통지한다", asy
           adapterType: "hermes",
           hermesProfileId: "p-1",
         }),
-        // OpenClaw 제거 후: adapterType 이 openclaw 로 남아 있는 NPC 는 agentId 유무와
-        // 무관하게 unbound 로 제외된다 — 쓸 백엔드가 더는 존재하지 않기 때문이다.
+        // After OpenClaw removal: an NPC whose adapterType is still openclaw is excluded as unbound regardless of
+        // agentId — because the backend it would use no longer exists.
         npcConfig({
           id: "n-oc",
           name: "LegacyOpenClaw",
@@ -478,7 +478,7 @@ test("resolution layer: 제외 사유를 각각 그 사유로 통지한다", asy
       { adapterRegistry: registry },
     ),
     { onParticipantsExcluded: (list: ExcludedNotice[]) => excluded.push(...list) },
-    { createHermesAdapter: async () => null }, // 프로필 해석 실패를 흉내낸다
+    { createHermesAdapter: async () => null }, // simulates a profile resolution failure
   );
 
   assert.deepEqual(
@@ -493,7 +493,7 @@ test("resolution layer: 제외 사유를 각각 그 사유로 통지한다", asy
   assert.deepEqual(broker.config.participants, [], "해석에 실패한 NPC는 참가자로 남지 않는다");
 });
 
-test("resolution layer: hermes / registry 디스패치가 각각 맞는 백엔드로 가고, openclaw 는 빠진다", async () => {
+test("resolution layer: hermes / registry dispatches each go to the right backend, and openclaw is dropped", async () => {
   const registry = new AdapterRegistry();
   registry.register(recordingAdapter(["PASS"]) as never);
 
@@ -526,16 +526,16 @@ test("resolution layer: hermes / registry 디스패치가 각각 맞는 백엔�
     },
   );
 
-  // hermes 갈래만 hermes 어댑터 팩토리를 거친다. contextKey는 sessionKey에서 prefix를 뗀 값이다.
+  // Only the hermes branch goes through the hermes adapter factory. contextKey is sessionKey with the prefix stripped.
   assert.deepEqual(hermesCalls, [["n-hermes", "user-1", "meeting-meet-1"]]);
-  // openclaw 는 쓸 백엔드가 없으므로 참가자로 남지 않는다. agentId 가 있어도 마찬가지다.
+  // openclaw has no backend to use, so it doesn't remain a participant. Same even if it has an agentId.
   assert.deepEqual(
     broker.config.participants.map((p) => p.npcId),
     ["n-hermes", "n-cli"],
   );
 });
 
-test("resolution layer: 개명 후에도 회의 세션키 형식이 그대로다", async () => {
+test("resolution layer: meeting session key format stays the same after a rename", async () => {
   const adapterRegistry = new AdapterRegistry();
   const resolved = await resolveNpcAdapter(
     npcConfig({
@@ -557,9 +557,9 @@ test("resolution layer: 개명 후에도 회의 세션키 형식이 그대로다
   assert.equal((resolved as { sessionKey: string }).sessionKey, "npc123-meeting-abc");
 });
 
-test("resolution layer: npc.passPolicy가 엔진까지 살아남아 폴링 프롬프트에 실린다", async () => {
-  // item 1(H1)을 되돌리면 — EngineParticipant에서 passPolicy를 빼거나 formatPollMessage에
-  // null을 다시 하드코딩하면 — 이 단언이 깨진다.
+test("resolution layer: npc.passPolicy survives to the engine and is carried in the poll prompt", async () => {
+  // Reverting item 1 (H1) — dropping passPolicy from EngineParticipant or hardcoding null into formatPollMessage
+  // again — breaks this assertion.
   const registry = new AdapterRegistry();
   const adapter = recordingAdapter(["PASS"]);
   registry.register(adapter as never);
@@ -591,7 +591,7 @@ test("resolution layer: npc.passPolicy가 엔진까지 살아남아 폴링 프�
   );
 });
 
-test("resolution layer: 잘못된 settings.initialMode는 캐스팅되지 않고 auto로 떨어진다", async () => {
+test("resolution layer: an invalid settings.initialMode is not cast and falls back to auto", async () => {
   const registry = new AdapterRegistry();
   registry.register(recordingAdapter(["PASS"]) as never);
 
@@ -604,13 +604,13 @@ test("resolution layer: 잘못된 settings.initialMode는 캐스팅되지 않고
     { onModeChanged: (mode: string, by: string) => modeChanges.push([mode, by]) },
   );
 
-  // auto로 떨어졌으면 대기 없이 전원 PASS로 자연 종료된다(directed/manual이면 여기서 멈춘다).
+  // If it fell back to auto, it ends naturally with everyone PASSing without waiting (directed/manual would stop here).
   await broker.run();
   assert.deepEqual(modeChanges, [], "생성자에 넘긴 초기 모드는 mode-changed를 만들지 않는다");
   assert.equal(broker.isRunning(), false);
 });
 
-test("resolution layer: 참가자의 role이 발언 프롬프트까지 전달된다", async () => {
+test("resolution layer: a participant's role is passed through to the speaking prompt", async () => {
   const registry = new AdapterRegistry();
   const adapter = recordingAdapter(["SPEAK: 예", "말합니다"]);
   registry.register(adapter as never);
@@ -629,25 +629,25 @@ test("resolution layer: 참가자의 role이 발언 프롬프트까지 전달된
   assert.match(speakPrompt!, /Cli\(Facilitator\)/);
 });
 
-// Hermes 세션은 `<prefix>-<scope>` 로 키가 잡힌다. 이 문자열이 바뀌면 그 NPC 의 대화
-// 맥락이 조용히 끊긴다 — 에러가 아니라 "어제 얘기를 기억 못 하는" 증상으로 나타나므로
-// 리터럴을 글자 그대로 붙들어 둔다. 실제로 요약 범위에서 `-meeting-` 이 빠진 적이 있다.
-test("회의 세션 범위는 meeting-<id> 다", () => {
+// Hermes sessions are keyed as `<prefix>-<scope>`. If this string changes, that NPC's conversation
+// context is silently cut — it shows up not as an error but as "can't remember yesterday's talk", so
+// the literal is pinned character for character. `-meeting-` actually went missing from the summary scope once.
+test("meeting session scope is meeting-<id>", () => {
   assert.equal(meetingSessionScope("meet-1"), "meeting-meet-1");
 });
 
-test("요약자 세션 범위는 회의 범위 뒤에 -summary 를 붙인다", () => {
+test("summarizer session scope appends -summary to the meeting scope", () => {
   assert.equal(meetingSummarySessionScope("meet-1"), "meeting-meet-1-summary");
 });
 
-test("요약자 범위는 회의 범위와 절대 같지 않다", () => {
-  // 같으면 요약 프롬프트가 그 NPC 의 회의 맥락에 섞여 다음 회의 발언이 오염된다.
+test("summarizer scope is never equal to the meeting scope", () => {
+  // If equal, the summary prompt would mix into that NPC's meeting context and contaminate the next meeting's speech.
   for (const id of ["meet-1", "a", "meet-1-summary"]) {
     assert.notEqual(meetingSummarySessionScope(id), meetingSessionScope(id));
   }
 });
 
-test("회의가 끝나면 구조화된 결과와 요약 상태가 저장되고 방송된다", async () => {
+test("when a meeting ends, the structured outcome and summary status are saved and broadcast", async () => {
   const calls: RecordedCall[] = [];
   const socket = createFakeSocket("socket-1", calls);
   const registry = new AdapterRegistry();
@@ -711,12 +711,13 @@ test("회의가 끝나면 구조화된 결과와 요약 상태가 저장되고 �
   await socket.trigger("meeting:start-discussion", { channelId: "a", topic: "가격" });
   await callbacks.onMeetingEnd!("전문", 10);
 
-  // 회의실 밖 사람도 알도록 사무실 방 알림을 요청한다 — 저장된 회의록 id 와 같은 결과를 넘긴다.
+  // Request an office room notice so people outside the meeting room know too — pass the saved minutes id along
+  // with the same outcome.
   assert.deepEqual(announced, [
     { channelId: "a", minutesId: "minutes-1", topic: "가격", outcome, summaryStatus: "ok" },
   ]);
 
-  // 담당 후보는 참석 **직원**만이다 — 사람 참석자는 넘기지 않는다.
+  // Assignee candidates are only attending **employees** — human attendees are not passed.
   assert.equal(Array.isArray(summaryParticipants), true);
   assert.deepEqual(
     (summaryParticipants as Array<{ npcId: string }>).map((p) => p.npcId),
@@ -734,7 +735,7 @@ test("회의가 끝나면 구조화된 결과와 요약 상태가 저장되고 �
   assert.equal(end.minutesId, "minutes-1");
 });
 
-test("브로커 onError 가 어떤 값을 넘겨도 meeting:error 는 문자열 코드와 사유를 싣는다", async () => {
+test("whatever the broker onError passes, meeting:error carries a string code and reason", async () => {
   const calls: RecordedCall[] = [];
   const socket = createFakeSocket("socket-1", calls);
   const registry = new AdapterRegistry();
@@ -771,7 +772,7 @@ test("브로커 onError 가 어떤 값을 넘겨도 meeting:error 는 문자열 
   });
   await socket.trigger("meeting:start-discussion", { channelId: "a", topic: "t" });
 
-  // 스테이징 실측과 같은 모양 — 어댑터가 HermesError 를 던졌다
+  // Same shape as observed on staging — the adapter threw a HermesError
   const usage = Object.assign(new Error("HTTP 429: The usage limit has been reached"), {
     name: "HermesError",
     code: "run_failed",
@@ -794,8 +795,9 @@ test("브로커 onError 가 어떤 값을 넘겨도 meeting:error 는 문자열 
   });
 });
 
-// 모델 백엔드 한도(429)로 모든 턴이 실패하는 회의. 실제 엔진(defaultCreateMeetingBroker)과
-// 실제 공간 조정자를 쓴다 — 가짜 브로커로는 "턴 오류 뒤 엔진이 끝나는가" 를 볼 수 없다.
+// A meeting where every turn fails due to the model backend limit (429). Uses the real engine
+// (defaultCreateMeetingBroker) and the real spatial coordinator — a fake broker can't show "does the engine end after
+// turn errors".
 async function runFailingMeeting(opts: { hang?: boolean } = {}) {
   const calls: RecordedCall[] = [];
   const socket = createFakeSocket("socket-1", calls);
@@ -817,7 +819,7 @@ async function runFailingMeeting(opts: { hang?: boolean } = {}) {
     type: "cli",
     async execute() {
       adapterCalls++;
-      // 회의가 진행 중인 채로 주재자가 떠나는 경우를 보려고 응답을 붙잡아 둔다.
+      // Hold the response to observe the host leaving while the meeting is in progress.
       if (opts.hang) return new Promise(() => {});
       throw Object.assign(new Error("HTTP 429: The usage limit has been reached"), {
         name: "HermesError",
@@ -865,7 +867,7 @@ async function runFailingMeeting(opts: { hang?: boolean } = {}) {
   spatial.arrived("a", "n1", spatial.snapshot("a")!.generation);
   await pending;
   const seatedAfterStart = spatial.snapshot("a")?.phase;
-  // 엔진이 스스로 끝날 기회를 준다(실패 누적 → consecutive_failures).
+  // Give the engine a chance to end on its own (accumulated failures → consecutive_failures).
   const deadline = Date.now() + (opts.hang ? 50 : 3000);
   while (Date.now() < deadline && activeBrokers.has("a")) {
     await new Promise((r) => setTimeout(r, 10));
@@ -883,7 +885,7 @@ async function runFailingMeeting(opts: { hang?: boolean } = {}) {
   };
 }
 
-test("모든 호출이 한도 오류로 실패한 회의는 스스로 끝나고 직원을 자리로 돌려보낸다", async () => {
+test("a meeting where every call fails with a limit error ends on its own and sends employees back to their seats", async () => {
   const r = await runFailingMeeting();
   assert.equal(r.seatedAfterStart, "ready");
   assert.equal(
@@ -894,10 +896,11 @@ test("모든 호출이 한도 오류로 실패한 회의는 스스로 끝나고 
   assert.deepEqual(r.released, ["n1"], "직원이 회의석에서 풀려나지 않았다");
 });
 
-test("주재자가 떠나 방이 빈 회의도 직원을 자리로 돌려보내고, 같은 채널에서 다시 시작할 수 있다", async () => {
+test("a meeting emptied by the host leaving also sends employees back to their seats and can restart in the same channel", async () => {
   const r = await runFailingMeeting({ hang: true });
   assert.equal(r.activeBrokers.has("a"), true, "전제: 회의가 진행 중이어야 한다");
-  // socket-handlers.ts 의 disconnect 처리와 같은 순서 — 플레이어가 빠지고, 방이 비면 정산한다.
+  // Same order as the disconnect handling in socket-handlers.ts — the player leaves, and settle once the room is
+  // empty.
   await r.spatial.leavePlayer("a", "u1", "socket-1");
   settleMeeting(r, "a", { stopBroker: true, context: "주재자 이탈" });
   for (let i = 0; i < 50; i++) await new Promise((res) => setImmediate(res));
@@ -910,15 +913,15 @@ test("주재자가 떠나 방이 빈 회의도 직원을 자리로 돌려보내�
   );
   assert.equal(r.spatial.snapshot("a")?.phase, "returning");
 
-  // 직원이 자리에 돌아오면 공간 세션이 닫히고, 다음 회의가 시작된다.
-  // 예전에는 세션이 "ready" 에 머물러 spatial.start 가 null 을 돌려주고 회의가 조용히 시작되지 않았다.
+  // When the employees return to their seats the spatial session closes, and the next meeting starts.
+  // Previously the session stayed at "ready", spatial.start returned null and the meeting silently didn't start.
   r.spatial.arrived("a", "n1", r.spatial.snapshot("a")!.generation);
   assert.equal(r.spatial.snapshot("a")?.phase, "idle");
   const next = await r.spatial.start("a", "u1", ["n1"]);
   assert.notEqual(next, null, "같은 채널에서 회의를 다시 시작할 수 없다");
 });
 
-test("턴 끝 스트림 신호는 회의 기록과 같은 최종 본문을 싣는다 — 화면이 그것으로 말풍선을 확정한다", async () => {
+test("the turn-end stream signal carries the same final body as the meeting record — the screen finalizes the bubble with it", async () => {
   const { MEETING_NPC_STREAM_EVENT } = await import("./meeting-socket");
   const calls: RecordedCall[] = [];
   const socket = createFakeSocket("socket-1", calls);

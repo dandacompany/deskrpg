@@ -162,13 +162,13 @@ interface NpcConfig {
   _name: string;
   role?: string | null;
   passPolicy?: string | null;
-  /** 이 NPC 의 회의 발언 규칙. 없으면 로케일 기본값을 쓴다. */
+  /** This NPC's meeting speaking rules. Falls back to the locale default when absent. */
   meetingProtocol?: string | null;
-  /** 프롬프트 문서의 언어. 태스크 절차를 그 언어로 만든다. */
+  /** Language of the prompt document. Task procedures are built in that language. */
   locale?: string | null;
   /**
-   * 이 NPC 의 턴에 실을 시스템 지시. getNpcConfig* 가 층을 조립해 채운다 —
-   * 호출부는 계산하지 않고 이 필드만 읽는다. 1:1·회의·채널 멘션이 같은 값을 쓴다.
+   * System instructions attached to this NPC's turn. getNpcConfig* assembles the layers to fill it —
+   * callers don't compute anything and only read this field. 1:1, meetings and channel mentions use the same value.
    */
   instructions?: string;
 }
@@ -208,8 +208,8 @@ const activeBrokers = new Map<string, any>();
 const discussionInitiators = new Map<string, string>();
 
 // NPC chat history: `${characterId}:${npcId}` -> messages.
-// 정본은 chat_messages 테이블이고 이 맵은 그 앞의 캐시다 — 프로세스가 죽으면 비지만,
-// 다음 조회에서 DB 로부터 다시 채워진다. 키는 npcHistoryKey() 하나로만 만든다.
+// The source of truth is the chat_messages table and this map is a cache in front of it — empty when the process
+// dies, but refilled from the DB on the next lookup. Keys are only ever built with npcHistoryKey().
 const npcChatHistory = new Map<string, NpcHistoryMessage[]>();
 const dmResponseQueue = new SessionQueue(8);
 const dmResetting = new Set<string>();
@@ -275,14 +275,15 @@ export function getRoomUserIds(io: Server, channelId: string): string[] {
 }
 
 /**
- * 채널 룸에 소켓이 하나라도 있는가 — 자동화 폴러의 주기(짧게/길게)를 정한다(R24).
- * `disconnect` 시점에는 소켓이 이미 룸에서 빠져 있으므로 그대로 세어도 맞다.
+ * Whether the channel room has at least one socket — decides the automation poller interval (short/long) (R24).
+ * At `disconnect` time the socket has already left the room, so counting as-is is correct.
  */
 function channelHasSockets(io: Server, channelId: string): boolean {
   return (io.sockets?.adapter?.rooms?.get(channelId)?.size ?? 0) > 0;
 }
 
-/** 폴러에 접속 유무를 알린다. 폴러 쪽 실패가 소켓 흐름을 막지 않도록 여기서 삼킨다. */
+/** Tells the poller about connection presence. Swallows poller-side failures here so they don't block the socket
+ * flow. */
 function notifyChannelActivity(io: Server, channelId: string) {
   void setChannelActive(channelId, channelHasSockets(io, channelId)).catch((err: unknown) => {
     console.warn(
@@ -312,11 +313,11 @@ export function getSocketIdsToKick(existingSocketIds: string[], joiningSocketId:
 }
 
 /**
- * 이력에 한 줄 남긴다 — 캐시와 DB 양쪽에.
+ * Records one line in the history — in both the cache and the DB.
  *
- * DB 쓰기가 실패해도 대화는 끊지 않는다. 이력을 잃는 것과 대화가 멈추는 것 중에는
- * 앞이 낫다. 다만 조용히 넘기지 않고 로그를 남긴다 — 성공을 보고하는 실패를 만들지
- * 않기 위해서다.
+ * A failed DB write doesn't cut the conversation. Between losing history and stalling the conversation,
+ * the former is better. But it isn't silently skipped; it's logged — so as not to create a failure
+ * that reports success.
  */
 async function appendNpcHistoryMessage(
   characterId: string,
@@ -362,11 +363,11 @@ async function appendNpcHistoryMessage(
 }
 
 /**
- * 이 소켓의 발화를 누구의 이력으로 남길지 정한다.
+ * Decides whose history this socket's utterances are recorded under.
  *
- * join 이 끝난 소켓은 서버가 캐릭터를 알고 있으므로 그 값을 쓴다. `players` 에 없으면
- * (재연결 직후 join 이 다시 성립하기 전) 클라이언트가 실어 보낸 값을 쓰되, 정말 그
- * 사용자의 캐릭터인지 DB 로 확인한다 — 확인 없이 믿으면 남의 이력에 쓸 수 있다.
+ * For a socket that has finished join, the server knows the character, so that value is used. If it's not in
+ * `players` (right after reconnect, before join succeeds again) the value sent by the client is used, but the DB
+ * confirms it really is that user's character — trusting it unchecked could write into someone else's history.
  */
 async function resolveHistoryCharacterId(
   socket: Socket,
@@ -405,39 +406,39 @@ async function resolveHistoryCharacterId(
   }
 }
 
-/** player:join 이 서버에서 확정한 이 소켓의 내 캐릭터 id. join 전이면 null. */
+/** This socket's own character id as confirmed by the server in player:join. null before join. */
 function myCharacterIdOf(socket: Socket): string | null {
   const id = socket.data.myCharacterId;
   return typeof id === "string" && id ? id : null;
 }
 
-/** player:join 이 심은 "이 사람이 누구인지"(이름·소개). join 전이면 null — 앞머리를 붙이지 않는다. */
+/** "Who this person is" (name, bio) set by player:join. null before join — no preamble is attached. */
 function userContextOf(socket: { data?: Record<string, unknown> }): UserContext | null {
   const ctx = socket.data?.userContext as UserContext | undefined;
   return ctx && typeof ctx.name === "string" && ctx.name ? ctx : null;
 }
 
-// 예전에는 여기에 OpenClaw 게이트웨이 커넥션 풀(getOrConnectGateway /
-// invalidateGatewayConnectionForChannel)이 있었다. 게이트웨이 런타임 상태의 진짜
-// 무효화는 gateway-resources.ts 가 설정 변경 시점에 invalidateGatewayRuntimeState 로
-// 직접 하므로, 이 풀이 사라져도 무효화가 빠지지 않는다.
+// This used to hold the OpenClaw gateway connection pool (getOrConnectGateway /
+// invalidateGatewayConnectionForChannel). The real invalidation of gateway runtime state is done
+// directly by gateway-resources.ts via invalidateGatewayRuntimeState when settings change,
+// so invalidation isn't lost with this pool gone.
 
 // ---------------------------------------------------------------------------
 // NPC config loader
 // ---------------------------------------------------------------------------
 
 /**
- * 새 고용 경로(`hireGatewayProfilesIntoChannel`·`hireProfileIntoBoundChannels`)는
- * `agent_config` 를 NULL 로 둔다 — 이름·외형·인격의 정본이 프로필로 옮겨갔기 때문이다.
- * 그래서 폴백이 없으면 이 릴리스 이후 만들어지는 모든 NPC 가 `<team-instructions>`
- * 없이 회의에 들어간다. 기존 행은 옛 `agent_config` 를 그대로 쓴다.
+ * The new hiring paths (`hireGatewayProfilesIntoChannel`, `hireProfileIntoBoundChannels`) leave
+ * `agent_config` NULL — because the source of truth for name, appearance and persona moved to the profile.
+ * So without a fallback, every NPC created after this release would join meetings without `<team-instructions>`.
+ * Existing rows keep using their old `agent_config`.
  *
- * 기본 규약에는 "응답 언어 계약" 이 붙는다. 그 언어는 **요청 시점에** 정한다:
- * 요청한 사용자의 화면 언어 → 직원의 `agent_config.locale` → 마지막에만 "en".
- * 예전에는 `agent_config.locale` 만 봐서, 그 값이 없는 새 직원은 한국어 오피스에서도
- * "모든 발언은 영어로" 라는 계약을 받았다. 사용자가 직접 쓴 `meetingProtocol` 은
- * 손대지 않는다 — 그 언어는 쓴 사람의 선택이다.
- * 회의·1:1·방 세 경로가 모두 이 함수 하나로 해석한다(경로별로 갈라지지 않게).
+ * The default protocol gets a "response language contract". That language is decided **at request time**:
+ * requesting user's UI language → the employee's `agent_config.locale` → "en" only as a last resort.
+ * Previously only `agent_config.locale` was checked, so new employees without it got an "all speech in English"
+ * contract even in a Korean office. A `meetingProtocol` written by the user is
+ * left untouched — its language is the author's choice.
+ * Meetings, 1:1 and rooms all resolve through this one function (so the paths don't diverge).
  */
 export function resolveNpcInstructions(
   oc: Record<string, unknown>,
@@ -453,7 +454,7 @@ export function resolveNpcInstructions(
   });
 }
 
-/** 이 소켓을 연 사용자의 화면 언어. 쿠키가 없으면 null. */
+/** UI language of the user who opened this socket. null if there's no cookie. */
 function socketLocale(socket: Socket): string | null {
   return readLocaleCookie(socket.handshake.headers.cookie);
 }
@@ -463,8 +464,9 @@ async function getNpcConfig(
   requestLocale?: string | null,
 ): Promise<NpcConfig | null> {
   try {
-    // 이름은 프로필이 정본이다 — `npcs.name` 을 읽으면 프로필에서 이름을 바꾼 뒤에도
-    // 옛 이름이 대화에 실린다. 투영이 이름·외형과 JSON 파싱을 한 번에 해 준다.
+    // The profile is the source of truth for the name — reading `npcs.name` would put the old name into the
+    // conversation even after it's renamed in the profile. The projection handles name, appearance and JSON parsing
+    // in one go.
     const npc = await selectNpcById(npcId);
     if (!npc) return null;
 
@@ -498,8 +500,8 @@ export async function getNpcConfigsForChannel(
   requestLocale?: string | null,
 ): Promise<NpcConfig[]> {
   try {
-    // 회의·자유채팅 참가자 명단이다. 자리 미정(맵 밖)은 남기고 휴면만 뺀다 —
-    // 출근부에서 퇴근시킨 NPC 가 자유채팅에 계속 답하면 토글이 아무 효과가 없다.
+    // Participant roster for meetings and free chat. Unplaced (off-map) NPCs stay; only dormant ones are removed —
+    // if an NPC clocked out on the roster kept answering free chat, the toggle would have no effect.
     const rows = await selectChannelNpcs(channelId, { roster: true, includeDormant: false });
 
     return rows.map((npc) => {
@@ -546,8 +548,8 @@ async function streamNpcResponse(
   const { _channelId, sessionKeyPrefix, adapterType, hermesProfileId } = npcConfig;
   const responseEvent = emitEvent || "npc:response";
   const sessionKey = sessionKeyOverride || `${sessionKeyPrefix || npcId}-dm-${userId}`;
-  // 대화 상대 한 줄과 보고 형식 규칙은 메시지 앞머리에 붙인다 — 시스템 프롬프트(instructions)는
-  // 건드리지 않는다. 순서는 "누구와 말하는가" → "어떻게 보고하는가" → 실제 본문이다.
+  // The conversation-partner line and report-format rules are prepended to the message — the system prompt
+  // (instructions) isn't touched. Order is "who you're talking to" → "how to report" → the actual body.
   const prompt = prefixUserContext(prefixReportFormat(message), userContextOf(socket));
 
   const dispatchKind = classifyNpcDispatch({ adapterType, hermesProfileId });
@@ -587,13 +589,13 @@ async function streamNpcResponse(
           onDelta: (delta: string) => {
             socket.emit(responseEvent, { npcId, chunk: delta, done: false });
           },
-          // tool.progress 는 진행 신호이지 답변이 아니다. 그래서 **도구 이름만** 쓰고
-          // delta 본문은 버린다 — 실측(v0.20.2)에서 `_thinking` 툴은 완성된 답변 전체를
-          // delta 에 한 번 더 실어 보내는데, 예전에 이걸 채팅 청크로 흘리다가 1:1 대화에서
-          // 답이 정확히 두 번 보였다. 본문 경로(onDelta)와 활동 경로를 아예 갈라 두었으니
-          // 그 버그는 구조적으로 재발할 수 없다.
+          // tool.progress is a progress signal, not an answer. So only the **tool name** is used and
+          // the delta body is discarded — measured (v0.20.2), the `_thinking` tool sends the complete answer
+          // once more in the delta; previously this was streamed as chat chunks and in 1:1 conversations
+          // the answer showed up exactly twice. The body path (onDelta) and the activity path are fully separated,
+          // so that bug structurally cannot recur.
           onToolProgress: (toolName: string) => {
-            // 빈 이름은 "도구가 끝났다"는 뜻이다(tool.completed) — 표시를 끈다.
+            // An empty name means "the tool finished" (tool.completed) — turn the indicator off.
             const notice = describeActivity(toolName);
             socket.emit("npc:activity", { npcId, activityKey: notice?.key ?? null });
           },
@@ -618,7 +620,7 @@ async function streamNpcResponse(
       return "";
     } finally {
       clearHermesRun(sessionKey);
-      // 성공이든 실패든 활동 표시는 반드시 끈다 — 남으면 "영원히 검색 중"이 된다.
+      // Always turn the activity indicator off, success or failure — if left on it becomes "searching forever".
       socket.emit("npc:activity", { npcId, activityKey: null });
     }
   }
@@ -703,7 +705,7 @@ async function streamMeetingNpcResponse(
   if (dispatchKind === "openclaw" && !agentId) return;
 
   const sessionKey = `${sessionKeyPrefix || _name}-meeting-${channelId}`;
-  // 발언한 사람의 이름·소개와 보고 형식을 앞머리에 붙인다(회의 상대는 발언자다).
+  // Prepend the speaker's name/bio and report format (the meeting counterpart is the speaker).
   const prompt = prefixUserContext(
     prefixReportFormat(`${senderName}: ${userMessage}`),
     userContext,
@@ -713,8 +715,8 @@ async function streamMeetingNpcResponse(
   let hermesContextKey = "";
 
   if (dispatchKind === "openclaw") {
-    // OpenClaw 는 제거됐다. 이 어댑터로 남아 있는 NPC 는 회의에서 조용히 빠지는 대신
-    // 다시 연결해야 한다는 것을 알린다.
+    // OpenClaw has been removed. NPCs still on this adapter announce that they need to be reconnected
+    // instead of silently dropping out of the meeting.
     emitMeetingNpcStream(io, channelId, {
       npcId,
       npcName: _name,
@@ -750,8 +752,8 @@ async function streamMeetingNpcResponse(
   room.messages.push(npcMessage);
   if (room.messages.length > 100) room.messages.splice(0, room.messages.length - 100);
 
-  // fullText는 onDelta 클로저보다 먼저 선언해야 한다 — 반대 순서는 오늘은 안전하지만
-  // (execute 안에서만 호출된다) 리팩터 한 번이면 TDZ 함정이 된다.
+  // fullText must be declared before the onDelta closure — the reverse order is safe today
+  // (only called inside execute) but one refactor away from a TDZ trap.
   let fullText = "";
   const onDelta = (delta: string) => {
     fullText += delta;
@@ -766,7 +768,7 @@ async function streamMeetingNpcResponse(
     });
   };
 
-  /** hermes 분기에서만 채워진다 — 답변을 확정 전달한 뒤에 best-effort로 영속화한다(M6). */
+  /** Filled only in the hermes branch — persisted best-effort after the answer is delivered (M6). */
   let persistSessionRef: (() => Promise<void>) | null = null;
   try {
     if (dispatchKind === "hermes") {
@@ -822,11 +824,11 @@ async function streamMeetingNpcResponse(
 }
 
 /**
- * 회의 요약. 참가자 어댑터 하나를 빌려 쓴다 — 백엔드가 무엇이든 상관없다.
+ * Meeting summary. Borrows one participant adapter — whatever the backend.
  *
- * 예전에는 OpenClaw 게이트웨이의 chatSend 에 직접 매여 있었고, 호출부가
- * `gateway && openclawAgentId` 로 감싸고 있어서 Hermes 회의는 요약을 통째로 건너뛰었다.
- * 실패가 조용해서(빈 배열 + null) 회의록에 결론이 안 남는 것으로만 보였다.
+ * It used to be tied directly to the OpenClaw gateway's chatSend, and callers wrapped it in
+ * `gateway && openclawAgentId`, so Hermes meetings skipped the summary entirely.
+ * The failure was quiet (empty array + null), so it only looked like the minutes had no conclusion.
  */
 async function generateMeetingSummary(
   adapter: NpcAdapter,
@@ -836,8 +838,8 @@ async function generateMeetingSummary(
   participants: OutcomeParticipant[] = [],
 ): Promise<ParsedMeetingOutcome> {
   try {
-    // multiParty: true — 요약은 그 NPC 의 영속 대화 세션이 아니라 일회성 실행이어야 한다.
-    // 히스토리는 비운다; 트랜스크립트는 프롬프트에 이미 통째로 들어 있다.
+    // multiParty: true — the summary must be a one-off run, not that NPC's persistent conversation session.
+    // History is emptied; the transcript is already fully in the prompt.
     const { response } = await Promise.race([
       adapter.execute({
         sessionKey,
@@ -849,7 +851,7 @@ async function generateMeetingSummary(
         setTimeout(() => reject(new Error("Summary timeout")), 60_000);
       }),
     ]);
-    // JSON 이 없거나 깨졌으면 `failed` 로 돌아온다 — 빈 값을 성공처럼 저장하지 않는다.
+    // Missing or broken JSON comes back as `failed` — an empty value isn't saved as if it succeeded.
     return parseMeetingOutcome(response || "", participants);
   } catch (err) {
     console.warn("[meeting] Summary generation failed:", err);
@@ -1099,7 +1101,7 @@ export function setupSocketHandlers(io: Server) {
       io.to(id).emit("map:refresh", { channelId: id, protocolVersion: 1, phase: "begin" });
     },
     reset: async (id) => {
-      // 이전 맵의 집결·착석·복귀와 구독은 새 맵에서 다시 승인받는다.
+      // Gathering, seating, return and subscriptions from the previous map are re-approved on the new map.
       spatial.reset(id);
       activeBrokers.get(id)?.stop();
       activeBrokers.delete(id);
@@ -1130,7 +1132,7 @@ export function setupSocketHandlers(io: Server) {
   };
   registerMapRefreshHandler(refreshChannelMap);
 
-  // 회의록의 "요약 다시 시도" 라우트가 어댑터에 닿는 길(`meeting-registry.ts`).
+  // How the minutes' "요약 다시 시도" (retry summary) route reaches the adapter (`meeting-registry.ts`).
   registerMeetingHooks({
     resummarize: createResummarizer({
       getNpcConfigsForChannel,
@@ -1139,12 +1141,14 @@ export function setupSocketHandlers(io: Server) {
     }),
   });
 
-  // 묶인 채널의 자동화 사건 폴러. 뜨지 못해도 채팅·이동은 되어야 하므로 실패는 로그만.
+  // Automation event poller for bound channels. Chat and movement must work even if it fails to start, so failures
+  // are only logged.
   void startAutomationPollers(io).catch((err: unknown) => {
     console.error("[automation-poller] failed to start:", err);
   });
 
-  // 이 기능 이전에 자리 없이 만들어진 직원을 1회 이행한다. 멱등이고, 실패해도 부팅은 계속한다.
+  // One-time migration of employees created without a seat before this feature. Idempotent; boot continues on
+  // failure.
   void import("../lib/npc-seating")
     .then(({ placeAllUnplacedNpcs }) => placeAllUnplacedNpcs())
     .then((r) => {
@@ -1176,7 +1180,7 @@ export function setupSocketHandlers(io: Server) {
     socket.on(
       "player:join",
       async (data: {
-        /** 선택 — 보내면 내 캐릭터인지 검사만 한다. 이름·외형은 서버가 채운다. */
+        /** Optional — if sent, only checks that it's my character. Name and appearance are filled by the server. */
         characterId?: string;
         characterName?: string;
         appearance?: unknown;
@@ -1206,11 +1210,11 @@ export function setupSocketHandlers(io: Server) {
           return;
         }
 
-        // "나" 는 서버가 정한다 — 클라이언트가 보낸 characterId·이름·외형은 믿지 않는다.
-        // 남의 캐릭터 id 로 들어오면 그 캐릭터로 행세하게 되므로(이력·방송) 거절한다.
-        // 거절은 아래 단일 세션 kick 보다 먼저라서 거절된 입장이 같은 사용자의 살아 있는
-        // 세션을 끊지 못한다. 조회 실패도 거절로 접는다 — 던지면 클라이언트가 응답을 못 받고
-        // 입장이 멈춘다.
+        // The server decides "me" — the characterId, name and appearance sent by the client aren't trusted.
+        // Entering with someone else's character id would impersonate that character (history, broadcasts), so it's
+        // rejected. Rejection comes before the single-session kick below, so a rejected join can't cut the same
+        // user's live session. Lookup failures are also folded into rejection — throwing would leave the client
+        // without a response and stall the join.
         let mine: MyCharacter | null;
         try {
           mine = await getMyCharacter(user.userId);
@@ -1387,8 +1391,8 @@ export function setupSocketHandlers(io: Server) {
         await coordination.joined(socket, data.mapId);
         if (!admissionCurrent()) return;
 
-        // 자동화 맵 상태의 현재 값을 이 소켓에만 한 번(R27). 작업 중인 NPC 만 실린다 —
-        // 클라이언트 기본값이 working:false 다. 이후 변화는 채널 방송으로 온다.
+        // Send the current automation map state to this socket only, once (R27). Only working NPCs are included —
+        // the client default is working:false. Later changes arrive via channel broadcast.
         for (const snapshot of getWorkingSnapshot(data.mapId)) {
           socket.emit(AUTOMATION_SOCKET_EVENTS.working, snapshot);
         }
@@ -1400,9 +1404,9 @@ export function setupSocketHandlers(io: Server) {
         );
         socket.emit("players:state", { players: mapPlayers });
 
-        // 방 목록은 서버가 밀지 않는다 — 클라이언트가 join 직후 room:list 를 부른다.
-        // 어느 방을 열지는 클라이언트의 마지막 방 기억이 정하므로, 서버가 먼저 밀면
-        // 그 판단보다 앞서 도착해 화면이 두 번 바뀐다.
+        // The server doesn't push the room list — the client calls room:list right after join.
+        // Which room to open is decided by the client's last-room memory, so if the server pushed first
+        // it would arrive ahead of that decision and the screen would change twice.
 
         // Broadcast to others in the same map
         socket.to(data.mapId).emit("player:joined", playerState);
@@ -1642,8 +1646,8 @@ export function setupSocketHandlers(io: Server) {
       },
     );
 
-    // 이력의 주인은 player:join 에서 서버가 정한 내 캐릭터다. 클라이언트가 보낸 characterId 는
-    // 무시한다 — join 전(socket.data.myCharacterId 없음)에는 빈 이력으로 답한다.
+    // The owner of the history is my character as decided by the server in player:join. The characterId sent by the
+    // client is ignored — before join (no socket.data.myCharacterId) it answers with empty history.
     socket.on("npc:history", async ({ npcId }: { npcId: string }) => {
       if (!npcId) return;
       const characterId = myCharacterIdOf(socket);
@@ -1655,7 +1659,7 @@ export function setupSocketHandlers(io: Server) {
       const historyKey = npcHistoryKey(characterId, npcId);
       let history = npcChatHistory.get(historyKey);
       if (!history) {
-        // 캐시 미스 — 재시작 직후가 여기다. DB 가 정본이므로 거기서 채운다.
+        // Cache miss — this is right after a restart. The DB is the source of truth, so fill from there.
         try {
           history = await loadNpcChatHistory(db, { chatMessages }, { characterId, npcId });
           npcChatHistory.set(historyKey, history);
@@ -1673,9 +1677,9 @@ export function setupSocketHandlers(io: Server) {
       });
     });
 
-    // 대화 목록의 DM 줄. 직원마다 마지막 발화 한 줄씩만 돌려준다 — 목록을 그리는 데
-    // 필요한 것이 그뿐이고, 이름·출근 여부는 클라이언트가 이미 아는 출근부에서 붙인다.
-    // 이력과 같은 규칙으로 주인을 정한다: join 전이면 빈 목록이다.
+    // DM rows for the conversation list. Returns only one last-utterance line per employee — that's all
+    // the list needs to draw, and name/on-duty status are attached from the roster the client already knows.
+    // Ownership follows the same rule as history: before join, the list is empty.
     socket.on("npc:dm-threads", async () => {
       const characterId = myCharacterIdOf(socket);
       if (!characterId) {
@@ -1686,7 +1690,7 @@ export function setupSocketHandlers(io: Server) {
         const threads = await loadDmThreads(db, { chatMessages }, { characterId });
         socket.emit("npc:dm-threads", { threads });
       } catch (err) {
-        // 목록을 못 그리는 것이지 대화가 사라진 것은 아니다 — 조용히 넘기지 않고 남긴다.
+        // Failing to draw the list doesn't mean the conversation is gone — don't skip silently; record it.
         console.error("[chat-history] failed to load dm threads", { characterId }, err);
         socket.emit("npc:dm-threads", { threads: [] });
       }
@@ -1718,9 +1722,9 @@ export function setupSocketHandlers(io: Server) {
 
     // NPC management broadcasts (re-broadcast to room)
     //
-    // 세 갈래 모두 그 채널의 방 런타임 캐시를 버린다. 런타임은 만들어질 때의 참가자
-    // 목록을 계속 들고 있어서, 버리지 않으면 **해고된 NPC 가 계속 대답하고 새로 온 NPC 는
-    // 불러도 오지 않는다.** 다음 지명에서 DB 를 다시 읽어 새로 만든다.
+    // All three branches drop that channel's room runtime cache. The runtime keeps holding the participant
+    // list from when it was created, so without dropping it **a fired NPC keeps answering and a newly arrived NPC
+    // doesn't come when called.** The next mention rereads the DB and builds a new one.
     socket.on("npc:broadcast-add", (npcData: unknown) => {
       const player = players.get(socket.id);
       if (!player) return;
@@ -1832,9 +1836,9 @@ export function setupSocketHandlers(io: Server) {
       },
     });
 
-    // 방 채팅. 등록 문자열(`socket.on("room:*")`)은 room-socket.ts 안에 있고,
-    // socket-event-parity.test.ts 가 세 파일의 합집합을 본다 — 여기에 이름만 다시
-    // 늘어놓으면 등록 지점이 둘이 되어 한쪽만 고치는 드리프트가 생긴다.
+    // Room chat. The registration strings (`socket.on("room:*")`) live in room-socket.ts, and
+    // socket-event-parity.test.ts looks at the union of the three files — listing the names here again
+    // would create two registration sites and drift where only one gets fixed.
     registerRoomHandlers({
       io,
       socket,
@@ -1845,7 +1849,7 @@ export function setupSocketHandlers(io: Server) {
         cooldownMs: CHAT_COOLDOWN_MS,
         getParticipationAccess: getSocketChannelParticipationAccess,
         rooms: chatRooms,
-        // 방 런타임은 방마다 캐시된다 — 규약 언어는 런타임을 처음 만든 사람의 것이다.
+        // Room runtimes are cached per room — the protocol language belongs to whoever first created the runtime.
         getRuntime: (io, room, userId) =>
           getOrCreateRoomRuntime(io, room, userId, { locale: socketLocale(socket) }),
         invalidateRuntime: invalidateRoomRuntime,
@@ -1862,7 +1866,7 @@ export function setupSocketHandlers(io: Server) {
         players,
         user,
         adapterRegistry,
-        // 회의를 연 사람의 화면 언어로 규약을 싣는다.
+        // Carry the protocol in the UI language of whoever opened the meeting.
         getNpcConfigsForChannel: (channelId: string) =>
           getNpcConfigsForChannel(channelId, socketLocale(socket)),
         canControlMeeting: async (channelId, userId) => {

@@ -20,7 +20,7 @@ import oldMap from "../lib/fixtures/official-agency-v2.json";
 import { buildOfficeEnvironment } from "../game/three/office-environments";
 import { deriveChannelMotionLayout } from "./channel-motion-layout";
 setupThrowawaySqlite("task7-real-socket");
-// 전체 테스트 병렬 실행에서도 실제 기하 투영과 인증 완료를 기다린다.
+// Even under fully parallel test runs, wait for the real geometry projection and auth completion.
 const socketDeadlineMs = 10_000;
 const event = <T>(client: Socket, name: string) =>
   new Promise<T>((resolve, reject) => {
@@ -60,7 +60,7 @@ test("real socket admission rejects absent/empty/stale map revisions after upgra
   const { setupSocketHandlers } = await import("./socket-handlers");
   const { DEV_JWT_SECRET } = await import("../lib/dev-constants");
   const user = await seedUser();
-  // player:join 은 서버가 정한 내 캐릭터로만 입장시킨다 — 캐릭터가 없으면 character_missing.
+  // player:join only admits with my character as decided by the server — no character means character_missing.
   await db.insert(characters).values({ userId: user.id, name: "Test", appearance: jsonForDb({}) });
   const channel = await seedChannel(user.id);
   const gateway = await seedGateway(user.id);

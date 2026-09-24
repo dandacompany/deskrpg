@@ -7,10 +7,10 @@ import test from "node:test";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 /**
- * server.js 는 런타임에 `import("./src/server/socket-handlers.ts")` 한다. Next 의
- * standalone 추적은 이 경로를 못 보므로 Dockerfile 이 소스를 직접 COPY 해야 하고,
- * 하나라도 빠지면 **컨테이너가 기동에서 죽는다** — 테스트도 빌드도 통과한 채로.
- * 실제로 그런 적이 있다: 2단계에서 늘어난 conversation 모듈 여덟 개가 빠져 있었다.
+ * server.js does `import("./src/server/socket-handlers.ts")` at runtime. Next's
+ * standalone tracing can't see this path, so the Dockerfile must COPY the sources directly,
+ * and if even one is missing **the container dies at startup** — with tests and build both passing.
+ * It has actually happened: eight conversation modules added in phase 2 were missing.
  */
 function transitiveLocalDeps(entry: string): Set<string> {
   const seen = new Set<string>();
@@ -20,11 +20,11 @@ function transitiveLocalDeps(entry: string): Set<string> {
     if (seen.has(file)) continue;
     seen.add(file);
     const src = readFileSync(path.join(repoRoot, file), "utf8");
-    // 상대경로와 `@/` 별칭을 모두 본다. 별칭을 빠뜨리면 조용히 구멍이 난다 —
-    // open-chat-formatter 가 `@/lib/...` 로 들어와 처음엔 추적되지 않았다.
-    // `from "..."` 만 보면 CommonJS 진입점을 놓친다 — src/db/index.ts 와 server-db.js 는
-    // 이관 모듈을 `require("./sqlite-...js")` 로 부르고, 그 파일들은 COPY 줄 없이
-    // Next 의 standalone 추적에 얹혀 살아 있었다.
+    // Check both relative paths and the `@/` alias. Missing the alias silently leaves a hole —
+    // open-chat-formatter came in via `@/lib/...` and at first was not traced.
+    // Looking only at `from "..."` misses CommonJS entry points — src/db/index.ts and server-db.js
+    // load migration modules via `require("./sqlite-...js")`, and those files survived without COPY lines
+    // by riding on Next's standalone tracing.
     const specs = [
       ...[...src.matchAll(/from\s+"((?:\.|@\/)[^"]+)"/g)].map((m) => m[1]),
       ...[...src.matchAll(/require\(\s*"((?:\.|@\/)[^"]+)"\s*\)/g)].map((m) => m[1]),
@@ -44,14 +44,14 @@ function transitiveLocalDeps(entry: string): Set<string> {
 
 test("Dockerfile copies every source file the socket server loads at runtime", () => {
   const dockerfile = readFileSync(path.join(repoRoot, "Dockerfile"), "utf8");
-  // COPY 는 파일도 디렉토리도 받는다. 디렉토리 복사면 그 아래 전부가 덮인다.
+  // COPY takes files and directories. A directory copy covers everything under it.
   const copied = [...dockerfile.matchAll(/COPY --from=builder \/app\/(\S+)/g)].map((m) => m[1]);
   const covered = (file: string) =>
     copied.some((c) => file === c || file.startsWith(c.replace(/\/?$/, "/")));
 
-  // 진입점은 둘이다. server.js 자체가 require 하는 것도 이미지에 있어야 한다 —
-  // socket-handlers 만 훑던 때 server.js 에 새로 더한 require 가 그대로 빠져나가
-  // 스테이징이 MODULE_NOT_FOUND 로 재시작 루프에 빠졌다(실측).
+  // There are two entry points. Whatever server.js itself requires must also be in the image —
+  // back when only socket-handlers was scanned, a require newly added to server.js slipped through
+  // and staging fell into a MODULE_NOT_FOUND restart loop (observed).
   const missing = [
     ...new Set([
       ...transitiveLocalDeps("src/server/socket-handlers.ts"),
@@ -70,8 +70,8 @@ test("Dockerfile copies every source file the socket server loads at runtime", (
 });
 
 test("Dockerfile never copies a file that no longer exists", () => {
-  // 삭제된 meeting-broker.js·openclaw-gateway.js 를 계속 COPY 해 docker build 가
-  // 넉 달 만에 깨졌다. 빌드는 릴리스 때만 도므로 그때까지 아무도 몰랐다.
+  // Continuing to COPY the deleted meeting-broker.js/openclaw-gateway.js broke docker build
+  // for four months. The build only runs at release, so nobody noticed until then.
   const dockerfile = readFileSync(path.join(repoRoot, "Dockerfile"), "utf8");
   const dead = [...dockerfile.matchAll(/COPY --from=builder \/app\/(\S+)/g)]
     .map((m) => m[1])
@@ -91,11 +91,11 @@ test("npm allowlist includes every socket server runtime source dependency", () 
   assert.deepEqual(missing.sort(), [], "npm package would omit runtime dependencies");
 });
 
-test("이미지의 레이어 수가 overlay2 한도에서 멀다", () => {
-  // Linux 의 overlay2 는 레이어가 125개를 넘는 이미지를 풀지 못한다(`failed to register layer: max depth
-  // exceeded`). 2026.921.2 가 126 레이어로 공개돼 `docker pull` 이 실패했다 — 빌드·푸시·매니페스트 확인은
-  // 전부 초록이었고, 실제로 pull 해 보기 전에는 아무도 몰랐다. COPY·RUN·ADD 한 줄이 레이어 하나다.
-  // 기반 이미지(node:22-bookworm-slim)가 5개 안팎을 쓰므로 여유를 크게 둔다.
+test("the image's layer count stays well below the overlay2 limit", () => {
+  // Linux overlay2 can't unpack images with more than 125 layers (`failed to register layer: max depth
+  // exceeded`). 2026.921.2 was published with 126 layers and `docker pull` failed — build, push and manifest checks
+  // were all green, and nobody knew until actually pulling it. Each COPY/RUN/ADD line is one layer.
+  // The base image (node:22-bookworm-slim) uses around 5, so leave a wide margin.
   const dockerfile = readFileSync(path.join(repoRoot, "Dockerfile"), "utf8");
   const runner = dockerfile.slice(dockerfile.lastIndexOf("\nFROM "));
   const layers = runner.split("\n").filter((line) => /^(COPY|RUN|ADD)\b/.test(line)).length;

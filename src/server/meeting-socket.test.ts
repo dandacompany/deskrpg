@@ -213,7 +213,7 @@ test("availability denies wrong channel, missing player/access, forbidden access
   }
 });
 
-test("좌석 예약 await 중 회의실을 나가면 구독과 예약을 모두 되돌린다", async () => {
+test("leaving the meeting room while awaiting a seat reservation rolls back both the subscription and the reservation", async () => {
   const calls: RecordedCall[] = [];
   const socket = createFakeSocket("s1", calls);
   let inside = true;
@@ -581,10 +581,10 @@ test("meeting socket contract uses the stream event name shared by UI and runtim
   assert.equal(MEETING_NPC_STREAM_EVENT, "meeting:npc-stream");
 });
 
-test("deliverMeetingNpcAnswer가 세션 참조 영속화 실패에도 답변과 done:true를 지켜낸다", async () => {
-  // M6 회귀 가드: 예전에는 persistHermesSessionRef를 종료 emit보다 먼저 await했고 감싸지도
-  // 않아서, 일시적인 DB 오류 하나로 (1) 답변이 room.messages에서 pop되고 (2) done:true가
-  // 나가지 않아 클라이언트 말풍선이 열린 채 남고 (3) meeting:message도 안 나갔다.
+test("deliverMeetingNpcAnswer keeps the answer and done:true even when session ref persistence fails", async () => {
+  // M6 regression guard: previously persistHermesSessionRef was awaited before the final emit and wasn't
+  // wrapped, so a single transient DB error (1) popped the answer from room.messages, (2) kept done:true
+  // from going out, leaving the client bubble open, and (3) also kept meeting:message from going out.
   const order: string[] = [];
   let loggedError: unknown = null;
 
@@ -604,7 +604,7 @@ test("deliverMeetingNpcAnswer가 세션 참조 영속화 실패에도 답변과 
   assert.equal((loggedError as Error)?.message, "db down", "영속화 실패는 삼키지 않고 로깅한다");
 });
 
-test("deliverMeetingNpcAnswer는 영속화 대상이 없으면(openclaw/registry) 전달만 한다", async () => {
+test("deliverMeetingNpcAnswer only delivers when there is no persistence target (openclaw/registry)", async () => {
   const order: string[] = [];
   await deliverMeetingNpcAnswer({
     emitDone: () => order.push("done"),

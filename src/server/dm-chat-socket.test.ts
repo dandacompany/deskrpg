@@ -111,8 +111,8 @@ test("DM socket sends correlated live state, restores history without duplicate 
       (p) => p.responseRequestId === final.requestId,
     ),
   );
-  // 이력의 주인은 player:join 이 확정한 내 캐릭터다(socket.data.myCharacterId). 이 가짜 소켓은
-  // join 을 거치지 않으므로 그 결과만 심는다. 클라이언트가 보내는 characterId 는 무시된다.
+  // The history owner is my character as settled by player:join (socket.data.myCharacterId). This fake socket
+  // does not go through join, so we plant only its result. The characterId sent by the client is ignored.
   socket.data.myCharacterId = character.id;
   await handlers.get("npc:history")!({ npcId });
   const history = payloads<{ messages: { id: string; responseRequestId?: string }[] }>(

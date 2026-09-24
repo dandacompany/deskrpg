@@ -10,9 +10,9 @@ import {
   type IngestDeps,
 } from "./automation-events";
 
-// T6. 방송 허용 목록 — 모르는 kind 는 어느 채널로도 나가지 않는다. 아티팩트 사건은
-// 채널 NPC 프로필이거나 채널 보드일 때만 `artifact:event` 로 나가고, 삭제 사건은
-// `artifact_id` 만 싣는다. 방·작업 중 표시는 `artifact.*` 에 반응하지 않는다.
+// T6. Broadcast allowlist — an unknown kind goes out to no channel. Artifact events go out as
+// `artifact:event` only for a channel NPC profile or a channel board, and delete events carry
+// only `artifact_id`. Room and working indicators do not react to `artifact.*`.
 
 const GATEWAY = "gateway-1";
 
@@ -72,13 +72,13 @@ function ev(
   };
 }
 
-test("모르는 kind 는 어느 채널로도 방송하지 않는다", async () => {
+test("an unknown kind is broadcast to no channel", async () => {
   const { deps, emitted } = makeDeps();
   await ingest("ch-1", [ev({ kind: "foo.bar" as never })], deps);
   assert.deepEqual(emitted, []);
 });
 
-test("아티팩트 사건은 채널 NPC 프로필이나 채널 보드일 때만 artifact:event 로 간다", async () => {
+test("artifact events go out as artifact:event only for a channel NPC profile or a channel board", async () => {
   const { deps, emitted } = makeDeps({ npcProfiles: ["sophie"], boardSlug: "b1" });
   await ingest(
     "ch-1",
@@ -118,7 +118,7 @@ test("아티팩트 사건은 채널 NPC 프로필이나 채널 보드일 때만 
   );
 });
 
-test("artifact.deleted 는 범위 정보가 없어 artifact_id 만 싣고 보낸다", async () => {
+test("artifact.deleted has no scope info, so it is sent carrying only artifact_id", async () => {
   const { deps, emitted } = makeDeps();
   await ingest(
     "ch-1",
@@ -131,7 +131,7 @@ test("artifact.deleted 는 범위 정보가 없어 artifact_id 만 싣고 보낸
   );
 });
 
-test("아티팩트 사건은 방 알림·작업 중 표시를 만들지 않는다", async () => {
+test("artifact events create no room notice or working indicator", async () => {
   const { deps, emitted, appended } = makeDeps({ npcProfiles: ["sophie"] });
   await ingest(
     "ch-1",

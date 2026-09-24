@@ -4,7 +4,7 @@ import type { Server, Socket } from "socket.io";
 import { createNpcCoordination } from "./npc-coordination";
 import { createMeetingSpatialCoordinator } from "./meeting-spatial-coordinator";
 
-test("기존 소유권·좌석 정본이 회의 집결을 검증하고 클라이언트 도착 주장은 승인하지 않는다", async () => {
+test("existing ownership/seat source of truth validates meeting gathering and client arrival claims are not approved", async () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const events: Array<{ room: string; event: string; payload: unknown }> = [];
   const socket = {

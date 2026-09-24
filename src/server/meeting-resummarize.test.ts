@@ -25,7 +25,7 @@ const input = {
 };
 const adapter = { type: "fake" } as unknown as NpcAdapter;
 
-test("채널에 남아 있고 어댑터가 풀리는 첫 참석 직원에게 요약을 맡긴다", async () => {
+test("hands the summary to the first attending employee still in the channel whose adapter resolves", async () => {
   const tried: string[] = [];
   let sessionKey = "";
   const resummarize = createResummarizer({
@@ -44,12 +44,12 @@ test("채널에 남아 있고 어댑터가 풀리는 첫 참석 직원에게 요
     },
   });
   assert.deepEqual(await resummarize(input), ok);
-  // 떠난 직원은 시도하지 않고, 풀리지 않은 소피 다음에 노아로 넘어간다.
+  // The departed employee is not tried; after Sophie (who does not resolve) it moves on to Noah.
   assert.deepEqual(tried, ["npc-1", "npc-2"]);
   assert.equal(sessionKey, "key-npc-2");
 });
 
-test("맡길 직원이 없으면 실패가 아니라 skipped 다", async () => {
+test("no employee to hand it to is skipped, not a failure", async () => {
   const resummarize = createResummarizer({
     getNpcConfigsForChannel: async () => [],
     resolveAdapter: async () => ({ excluded: true }),

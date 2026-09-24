@@ -2,25 +2,25 @@
 //
 // TOOL PROGRESS LEAK GUARD
 // ------------------------
-// Hermes 의 tool.progress 는 "에이전트가 아직 살아 있다"는 진행 신호다. 실측(v0.20.2)에서
-// `_thinking` 툴은 완성된 답변 **전체**를 그 delta 에 한 번 더 실어 보낸다:
+// Hermes's tool.progress is a progress signal meaning "the agent is still alive". Measured (v0.20.2):
+// the `_thinking` tool sends the **entire** finished answer once more in its delta:
 //
-//   assistant.delta "사"/"과"/"딸"/"기"
-//   tool.progress   tool_name="_thinking"  delta="사과딸기"   ← 통째로 다시
-//   assistant.completed content="사과딸기"
+//   assistant.delta "app"/"le"/"pi"/"e"
+//   tool.progress   tool_name="_thinking"  delta="applepie"   ← resent whole
+//   assistant.completed content="applepie"
 //
-// 1:1 대화 경로가 이 preview 를 채팅 청크로 그대로 emit 하던 탓에 화면에 답이 정확히
-// 두 번 보였다. 회의 경로(ConversationEngine)는 같은 콜백을 처음부터 timeout.touch()
-// 로만 썼다 — 어댑터는 옳았고, 두 소비자 중 한쪽만 어긋나 있었다.
+// Because the 1:1 conversation path emitted this preview verbatim as a chat chunk, the answer appeared exactly
+// twice on screen. The meeting path (ConversationEngine) used the same callback only for timeout.touch()
+// from the start — the adapter was right; only one of its two consumers was off.
 //
-// 어댑터 단위 테스트로는 이 회귀를 잡을 수 없다(어댑터는 원래부터 두 통로를 나눠 준다).
-// 결함은 소비 지점에 있으므로, 소비 지점을 직접 본다.
+// An adapter unit test cannot catch this regression (the adapter always split the two channels).
+// The defect is at the consumption point, so we look at the consumption point directly.
 //
-// 두 번째 테스트는 특정 파일이 아니라 src/lib/conversation/ 디렉토리 전체를 훑는다 —
-// 이 가드가 지키는 건 "회의 경로가 tool.progress 를 발언 본문에 섞지 않는다"는 불변식이지,
-// 그 핸들러가 conversation-engine.ts 안에 있어야 한다는 파일 위치가 아니다. NpcRuntime
-// 추출(2026-08)로 핸들러가 npc-runtime.ts 로 옮겨갔고, 향후 리팩터(예: 채널 런타임 분리)에서
-// 또 옮겨갈 수 있다 — 그때마다 이 테스트를 고치지 않아도 되게 한다.
+// The second test scans the whole src/lib/conversation/ directory rather than a specific file —
+// what this guard protects is the invariant "the meeting path does not mix tool.progress into utterance bodies",
+// not the file location requiring the handler to be in conversation-engine.ts. The NpcRuntime
+// extraction (2026-08) moved the handler to npc-runtime.ts, and future refactors (e.g. splitting a channel runtime)
+// may move it again — this keeps the test from needing edits each time.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -34,7 +34,7 @@ function read(relPath: string): string {
   return readFileSync(path.join(repoRoot, relPath), "utf8");
 }
 
-/** 주석을 지운 실행 코드만 남긴다 — 설명문에 적힌 예시가 오탐을 내지 않도록. */
+/** Keeps only executable code with comments stripped — so examples in prose do not cause false positives. */
 function codeOnly(src: string): string {
   return src
     .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -43,10 +43,10 @@ function codeOnly(src: string): string {
     .join("\n");
 }
 
-test("1:1 대화 경로가 tool progress 를 답변 청크로 흘리지 않는다", () => {
+test("the 1:1 conversation path does not leak tool progress into answer chunks", () => {
   const src = codeOnly(read("src/server/socket-handlers.ts"));
 
-  // onToolProgress 콜백 본문 안에서 responseEvent 를 emit 하면 본문 스트림 오염이다.
+  // Emitting responseEvent inside the onToolProgress callback body pollutes the body stream.
   const offenders: string[] = [];
   for (const m of src.matchAll(/onToolProgress\s*:\s*\(([^)]*)\)\s*=>\s*\{([\s\S]*?)\n\s*\},/g)) {
     const body = m[2];
@@ -64,14 +64,14 @@ test("1:1 대화 경로가 tool progress 를 답변 청크로 흘리지 않는�
   );
 });
 
-test("회의 경로는 tool progress 를 진행 신호로만 쓴다", () => {
+test("the meeting path uses tool progress only as a progress signal", () => {
   const dir = "src/lib/conversation";
   const files = readdirSync(path.join(repoRoot, dir))
     .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
     .sort();
 
-  // 파일 하나에 정해두지 않는다 — 회의 경로의 tool.progress 소비 지점이 지금 어느 파일에
-  // 있는지는 리팩터마다 바뀔 수 있다. 디렉토리 전체에서 핸들러를 찾는다.
+  // Not pinned to one file — which file holds the meeting path's tool.progress consumption point
+  // can change with each refactor. Search the whole directory for the handler.
   const found: Array<{ file: string; body: string }> = [];
   for (const file of files) {
     const src = codeOnly(read(`${dir}/${file}`));
@@ -80,9 +80,9 @@ test("회의 경로는 tool progress 를 진행 신호로만 쓴다", () => {
     }
   }
 
-  // 0개면 회의 경로에서 tool.progress 처리 자체가 사라진 것 — 이 가드가 지키려던 대상이
-  // 증발했다는 뜻이다. 2개 이상이면 두 곳에서 서로 다르게 처리한다는 뜻으로, 애초에 이
-  // 회귀(1:1 은 새고 회의는 안 새는 불일치)를 낳았던 것과 같은 구조다. 둘 다 실패시킨다.
+  // Zero means tool.progress handling vanished from the meeting path — the thing this guard was protecting
+  // has evaporated. Two or more means two places handle it differently, which is the same structure
+  // that produced this regression in the first place (1:1 leaks, meeting does not). Both fail.
   assert.equal(
     found.length,
     1,

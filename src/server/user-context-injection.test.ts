@@ -19,13 +19,13 @@ import { deriveChannelMotionLayout } from "./channel-motion-layout";
 import { formatReportFormat } from "../lib/report-format";
 setupThrowawaySqlite("user-context-injection");
 
-// 직원에게 가는 본문 앞머리의 "[대화 상대]" 한 줄(스펙 2026-09-18)을 실제 소켓으로 고정한다.
-// 값의 출처는 player:join 이 DB 의 내 캐릭터에서 심은 socket.data.userContext 다 — 이 테스트는
-// 그 배선 전체(join → DM/회의 → 어댑터 prompt)를 지난다. 자유채팅은 room-socket.test(소켓→런타임)와
-// open-chat-runtime.test(런타임→prompt)가 나눠 고정한다.
+// Pins, over a real socket, the single "[대화 상대]" line at the head of the body sent to an employee (spec 2026-09-18).
+// The value comes from socket.data.userContext, which player:join plants from my character in the DB — this test
+// goes through that whole wiring (join → DM/meeting → adapter prompt). Free chat is pinned split between
+// room-socket.test (socket→runtime) and open-chat-runtime.test (runtime→prompt).
 
 const deadlineMs = 10_000;
-// 대화 상대 한 줄 뒤에 보고 형식 규칙이 따라온다 — 둘 다 메시지 앞머리이고, SOUL 은 건드리지 않는다.
+// The report-format rule follows the conversation-partner line — both are at the head of the message; SOUL is untouched.
 const EXPECTED_HEADER =
   "[대화 상대] 이름: 곽지호 · 소개: 단테랩스 대표. 존댓말 선호.\n\n" +
   `${formatReportFormat()}\n\n`;
@@ -39,7 +39,7 @@ const event = <T>(client: Socket, name: string) =>
     });
   });
 
-test("DM·회의에서 게이트웨이로 나간 본문 앞머리에 [대화 상대]·[보고 형식] 이 있다", async (t) => {
+test("the body sent to the gateway from DM/meeting starts with [대화 상대]·[보고 형식]", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval"] });
   const { db, channels, characters, channelMembers, jsonForDb } = await import("../db");
   const { setupSocketHandlers, adapterRegistry } = await import("./socket-handlers");
@@ -112,7 +112,7 @@ test("DM·회의에서 게이트웨이로 나간 본문 앞머리에 [대화 상
       await new Promise((r) => setTimeout(r, 10));
     }
 
-    // 회의 공간 입구에서 입장한다 — meeting:join 이 받아 주는 자리다.
+    // Enter at the meeting space entrance — a spot that meeting:join accepts.
     const entry = deriveChannelMotionLayout({ mapData: oldMap }, [])!.meetingSpace!.entry;
     await db.insert(channelMembers).values({
       channelId: channel.id,
@@ -124,7 +124,7 @@ test("DM·회의에서 게이트웨이로 나간 본문 앞머리에 [대화 상
     client.emit("player:join", { mapId: channel.id, x: entry.x * 32, y: entry.y * 32 });
     await spawned;
 
-    // 회의: 발언자의 이름·소개가 "발언자: 내용" 앞에 붙는다.
+    // Meeting: the speaker's name and bio are prepended before "speaker: content".
     const admitted = event<unknown>(client, "meeting:state");
     client.emit("meeting:join", { channelId: channel.id });
     await admitted;
@@ -135,7 +135,7 @@ test("DM·회의에서 게이트웨이로 나간 본문 앞머리에 [대화 상
     assert.match(meeting.sessionKey, /-meeting-/);
     assert.equal(meeting.prompt, `${EXPECTED_HEADER}곽지호: 회의 시작할게요`);
 
-    // DM: 소켓 채팅 쿨다운(2초)이 회의와 공유되므로 그 뒤에 보낸다.
+    // DM: the socket chat cooldown (2s) is shared with the meeting, so send after it.
     await new Promise((r) => setTimeout(r, Math.max(0, meetingSentAt + 2_100 - Date.now())));
     const dmPrompt = nextPrompt();
     client.emit("npc:chat", { npcId: npc.id, message: "안녕하세요", sourceMessageId: "dm-1" });

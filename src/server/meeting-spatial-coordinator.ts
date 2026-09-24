@@ -5,8 +5,9 @@ type Dependencies = {
   timeoutMs?: number;
   layout(channelId: string): Promise<{ spaceId: string; targets: Target[] }>;
   /**
-   * 돌아올 자리를 잡는다. `takeFromSocketId` 는 회의를 여는 사람의 소켓 — 그 소켓이 부른 직원은
-   * 풀고 데려간다. 남이 부른 직원은 null(지금처럼 `actor_unavailable`).
+   * Reserves the seat to return to. `takeFromSocketId` is the socket of whoever opens the meeting — employees
+   * summoned by that socket are released and brought along. Employees summoned by others get null (as now,
+   * `actor_unavailable`).
    */
   capture(channelId: string, actorId: string, takeFromSocketId?: string): Promise<Target | null>;
   reserve(channelId: string, actorId: string, target: Target): Promise<boolean>;
@@ -19,8 +20,9 @@ type Dependencies = {
   ): Promise<boolean>;
   release(channelId: string, actorId: string): Promise<void>;
   /**
-   * 그 소켓이 **지금** 자기 예약 좌석에 있는가. 이동 핸들러가 도착을 알리는 것과 같은 판정이어야 한다.
-   * 사람의 도착 통지는 이동에서만 오므로, 예약하는 순간 이미 그 자리에 앉아 있으면 이것으로 본다.
+   * Whether that socket is in its own reserved seat **right now**. Must be the same judgment the movement handler
+   * uses to report arrival. A person's arrival notice only comes from movement, so if they're already seated there
+   * at reservation time, this is what detects it.
    */
   atReservation?(channelId: string, socketId: string): Promise<boolean>;
   returnTarget(channelId: string, actorId: string, origin: Target): Promise<Target | null>;
@@ -36,7 +38,8 @@ type Session = {
   cancelRequested?: boolean;
 };
 
-/** 회의 공간 상태만 관리한다. 실제 좌석과 이동 소유권은 기존 motion 정본에 위임한다. */
+/** Manages only the meeting space state. Actual seats and movement ownership are delegated to the existing motion
+ * source of truth. */
 export function createMeetingSpatialCoordinator(deps: Dependencies) {
   const sessions = new Map<string, Session>();
   const playerSockets = new Map<string, string>();
@@ -82,7 +85,8 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
     const previous = sessions.get(channelId);
     if (previous && previous.state.phase !== "idle" && previous.state.phase !== "blocked")
       return null;
-    // 실패한 준비의 선택 수정은 원래 위치 기록을 유지한 채 같은 참가자를 재배치한다.
+    // Correcting the selection of a failed preparation relocates the same participants while keeping the original
+    // position record.
     if (
       previous?.state.phase === "blocked" &&
       previous.state.participants.some((p) => p.kind === "npc" && !npcIds.includes(p.actorId))
@@ -232,10 +236,10 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
           p.target = { x: target.x, y: target.y };
           p.seatId = target.seatId;
           publish(s);
-          // 이미 그 자리에 있으면 지금 도착 처리한다. 도착 통지는 **이동**에서만 오므로, 좌석에
-          // 앉아 가만히 있는 사람(재접속·재시도로 좌석을 다시 예약한 경우 포함)은 여기서 보지 않으면
-          // 영영 `이동 중` 에 남아 집결이 시간 초과로 깨진다(스테이징 실측). 세대·취소 검사는
-          // `arrived` 가 그대로 한다.
+          // If already in that seat, handle arrival now. Arrival notices only come from **movement**, so a person
+          // sitting still in the seat (including one who re-reserved it via reconnect/retry) would, unless checked
+          // here, stay `in transit` forever and the gathering would break on timeout (observed on staging).
+          // Generation and cancellation checks are done by `arrived` as usual.
           if (await deps.atReservation?.(channelId, socketId)) {
             if (!current() || playerSockets.get(key) !== socketId) return true;
             arrived(channelId, userId, s.state.generation);

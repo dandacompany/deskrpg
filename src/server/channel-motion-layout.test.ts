@@ -176,7 +176,7 @@ test("v3 runtime repairs invalid and colliding NPC homes without editing persist
   assert.deepEqual(rows, before);
 });
 
-test("공유 lib 투영은 오래된 설정 스폰을 무시하고 v3 회의실과 홈 보정을 함께 보존한다", async () => {
+test("shared lib projection ignores stale configured spawns and preserves both v3 meeting rooms and home corrections", async () => {
   const shared = await import("../lib/channel-motion-layout");
   assert.equal(shared.deriveChannelMotionLayout, deriveChannelMotionLayout);
   const map = buildOfficeEnvironment("agency");

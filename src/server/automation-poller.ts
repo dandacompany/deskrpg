@@ -1,26 +1,26 @@
 /**
- * 자동화 사건 폴러 (T5, R23·R24·E6·E7).
+ * Automation event poller (T5, R23·R24·E6·E7).
  *
- * 묶인 채널마다 플러그인의 변화 목록(`/deskrpg/events?board=…&cursor=…`)을 주기적으로 읽어
- * 사건 싱크 `ingest()` 에 넘긴다. 브라우저는 Hermes 를 직접 부르지 않는다(R26) — 이 폴러가
- * 서버 안에서 유일하게 사건을 끌어온다.
+ * For each bound channel, periodically reads the plugin's change list (`/deskrpg/events?board=…&cursor=…`) and
+ * hands it to the event sink `ingest()`. The browser never calls Hermes directly (R26) — this poller is the
+ * only thing inside the server that pulls events.
  *
- * - 기준점 토큰은 채널(+게이트웨이) 단위로 `channel_kanban_boards.event_cursor` 에 산다.
- *   토큰이 없으면(첫 연결·게이트웨이 교체) cursor 없이 불러 "지금" 토큰만 받고 **과거는
- *   재생하지 않는다**(R23). 플러그인이 400 `unknown_cursor` 를 주면 같은 방법으로 다시
- *   시작한다(E7).
- * - 주기: 채널에 접속 소켓이 있으면 짧게(기본 5초), 없으면 길게(기본 60초). 화면에서
- *   조작한 직후에는 `pollNow(channelId)` 로 한 번 즉시(R24).
- * - 실패는 던지지 않고 `last_error` 에 남긴다. 성공하면 null 로 지우고 `last_polled_at` 을
- *   찍는다(E6).
- * - 보드 확보 실패(`board_name_synced_at` 이 한 번도 찍히지 않음)는 바퀴마다 다시 확보한다 —
- *   플러그인을 올린 뒤 다음 바퀴가 보드를 만든다(R5). 채널 개명 뒤 이름 동기화가 실패했으면
- *   (`board_name_synced_at` 이 채널 `updated_at` 보다 앞섬) 게이트를 통과한 바퀴에서 한 번 다시
- *   맞춘다(R2).
- * - 타이머는 전부 `unref()` 다 — 테스트 러너와 CLI 종료를 붙들지 않는다.
+ * - The baseline token lives per channel (+gateway) in `channel_kanban_boards.event_cursor`.
+ *   Without a token (first connection, gateway swap) it calls without a cursor, takes only the "now" token and
+ *   **does not replay the past** (R23). If the plugin returns 400 `unknown_cursor`, it restarts the same way
+ *   (E7).
+ * - Interval: short when the channel has connected sockets (default 5s), long otherwise (default 60s). Right
+ *   after an on-screen action, `pollNow(channelId)` runs once immediately (R24).
+ * - Failures are not thrown but recorded in `last_error`. On success it clears it to null and stamps
+ *   `last_polled_at` (E6).
+ * - A failed board ensure (`board_name_synced_at` never stamped) is retried every tick — once the plugin is
+ *   installed, the next tick creates the board (R5). If name sync failed after a channel rename
+ *   (`board_name_synced_at` earlier than the channel's `updated_at`), a tick that passes the gate re-syncs it
+ *   once (R2).
+ * - Every timer is `unref()` — they don't hold the test runner or CLI exit.
  *
- * 순수 한 바퀴(`pollChannelOnce`)와 타이머 레지스트리(`createAutomationPoller`)를 나눠 둔다.
- * 테스트는 앞을 직접 부르고, 서버는 뒤의 프로세스 전역 인스턴스를 쓴다.
+ * The pure single tick (`pollChannelOnce`) is kept separate from the timer registry (`createAutomationPoller`).
+ * Tests call the former directly; the server uses the process-global instance of the latter.
  */
 
 import { withChannelAutomationLock } from "@/lib/channel-automation-lock";
@@ -50,7 +50,7 @@ import {
 } from "./automation-events";
 
 // ---------------------------------------------------------------------------
-// 조정값
+// Tunables
 // ---------------------------------------------------------------------------
 
 function envInt(name: string, fallback: number): number {
@@ -60,38 +60,38 @@ function envInt(name: string, fallback: number): number {
 }
 
 export const POLL_DEFAULTS = {
-  /** 채널에 접속 소켓이 있을 때 */
+  /** When the channel has connected sockets */
   activeMs: envInt("AUTOMATION_POLL_ACTIVE_MS", 5_000),
-  /** 아무도 없을 때 */
+  /** When nobody is there */
   idleMs: envInt("AUTOMATION_POLL_IDLE_MS", 60_000),
-  /** 한 페이지에 받을 사건 수 */
+  /** Number of events to fetch per page */
   pageLimit: envInt("AUTOMATION_POLL_PAGE_LIMIT", 200),
-  /** `has_more` 를 따라가는 페이지 수 상한 — 한 바퀴가 무한히 길어지지 않게 */
+  /** Cap on pages followed via `has_more` — keeps one tick from growing unbounded */
   maxPages: envInt("AUTOMATION_POLL_MAX_PAGES", 10),
 } as const;
 
 // ---------------------------------------------------------------------------
-// 한 바퀴
+// Single tick
 // ---------------------------------------------------------------------------
 
 export type PollOnceDeps = {
   resolveBoard: typeof resolveChannelBoard;
   ensureBoard: typeof ensureChannelBoard;
-  /** 그 채널에 붙은 보드 **전부**. 보드마다 커서가 따로라 한 바퀴에 모두 돈다. */
+  /** **All** boards attached to the channel. Each board has its own cursor, so one tick covers them all. */
   readRows: typeof listChannelBoards;
-  /** carrier 가 0개로 떨어진 채널을 되살린다 — 읽는 쪽이 고치는 자가 복구. */
+  /** Revives a channel whose carrier count dropped to 0 — self-healing by the reader. */
   ensureCarrier: typeof ensureChannelCarrier;
-  /** 재시작 뒤 "일하는 중" 을 보드에서 되세운다. 프로세스 수명당 채널마다 한 번. */
+  /** Re-establishes "working" from the board after a restart. Once per channel per process lifetime. */
   resyncWorking(
     channelId: string,
     rows: ChannelBoardRow[],
     resolved: Extract<ResolvedChannelBoard, { ok: true }>,
     deps: PollOnceDeps,
   ): Promise<void>;
-  /** 채널 이름과 마지막 수정 시각 — 보드 이름 동기화가 뒤처졌는지 판정한다(R2). */
+  /** Channel name and last modified time — to judge whether the board name sync is lagging (R2). */
   readChannel(channelId: string): Promise<{ name: string; updatedAt: Date | string | null } | null>;
   syncBoardName: typeof syncBoardName;
-  /** **연결 행 id** 로 쓴다. channel_id 로 쓰면 그 채널의 다른 보드 커서까지 덮어쓴다. */
+  /** Writes by **binding row id**. Writing by channel_id would overwrite the other boards' cursors too. */
   saveRow(
     boardLinkId: string,
     patch: { eventCursor?: string; lastError: string | null },
@@ -102,7 +102,7 @@ export type PollOnceDeps = {
   maxPages: number;
 };
 
-/** 보드 하나의 결과. */
+/** Result for one board. */
 export type BoardPollOutcome =
   | {
       ok: true;
@@ -115,8 +115,8 @@ export type BoardPollOutcome =
   | { ok: false; boardSlug: string; code: string; reason: string };
 
 /**
- * 채널 한 바퀴의 결과. `events` 는 보드들의 합이고 `cursor` 는 **사건 수신 보드**의 것이다 —
- * 채널 단위 결과를 기대하던 호출자가 뜻을 잃지 않게 한다. 보드별 결과는 `boards` 에 있다.
+ * Result of one channel tick. `events` is the sum over boards and `cursor` is the **event-receiving board**'s —
+ * so callers expecting a per-channel result keep their meaning. Per-board results are in `boards`.
  */
 export type PollOutcome =
   | {
@@ -156,7 +156,7 @@ async function readChannelNameAndUpdatedAt(
   return row ? { name: row.name, updatedAt: row.updatedAt } : null;
 }
 
-/** SQLite 는 ISO 문자열, PostgreSQL 은 Date — 둘 다 밀리초로. 못 읽으면 null. */
+/** SQLite gives an ISO string, PostgreSQL a Date — both to milliseconds. null if unreadable. */
 function toMillis(value: Date | string | null | undefined): number | null {
   if (!value) return null;
   const at = value instanceof Date ? value.getTime() : Date.parse(value);
@@ -164,8 +164,9 @@ function toMillis(value: Date | string | null | undefined): number | null {
 }
 
 /**
- * 보드 이름이 채널 이름보다 뒤처졌는가 — 동기화 시각이 없거나 채널 `updated_at` 보다 앞서면 참.
- * 채널의 `updated_at` 을 모르면(옛 행) 동기화 시각이 있는 한 맞다고 본다.
+ * Whether the board name lags the channel name — true if the sync time is missing or earlier than the channel's
+ * `updated_at`. If the channel's `updated_at` is unknown (old row), it's considered in sync as long as a sync
+ * time exists.
  */
 export function boardNameStale(
   row: Pick<ChannelBoardRow, "boardNameSyncedAt">,
@@ -203,26 +204,27 @@ export function createDefaultPollDeps(
 }
 
 /**
- * 채널 하나를 한 바퀴 폴링한다. 어떤 경우에도 던지지 않는다 — 실패는 `last_error` 와
- * 반환값에만 남는다(E6).
+ * Polls one channel for one tick. Never throws — failures stay only in `last_error` and
+ * the return value (E6).
  */
 /**
- * 이 프로세스에서 "일하는 중" 을 이미 되세운 채널들.
+ * Channels in this process whose "working" state has already been re-established.
  *
- * 조건을 "채널 상태가 비어 있으면" 으로 잡으면 안 된다 — `ingest` 는 일이 끝나면 엔트리를
- * 지우므로(`automation-events.ts` 의 `if (!payload.working) state.work.delete(npcId)`) 그 조건은
- * 한가한 채널에서도 늘 참이 되고, 아무 일도 없는 채널이 매 바퀴 보드를 조회하게 된다.
- * 프로세스가 죽으면 이 집합도 사라지므로 재시작마다 정확히 한 번 돈다.
+ * The condition must not be "if the channel state is empty" — `ingest` deletes the entry when work finishes
+ * (`if (!payload.working) state.work.delete(npcId)` in `automation-events.ts`), so that condition is always true
+ * even for idle channels, and a channel with nothing going on would query the board every tick.
+ * The set dies with the process, so it runs exactly once per restart.
  *
- * **보드를 다 읽은 바퀴에만 넣는다.** 재시작은 배포와 겹치는 일이 많아, 이 코드가 도는 바로 그 순간
- * 게이트웨이가 잠깐 안 닿을 수 있다 — 읽기 전에 표시하면 그 채널은 프로세스가 사는 동안 다시
- * 시도하지 않고, 되세우기가 존재하는 이유인 장면에서 조용히 실패한다.
+ * **Only added on a tick that read the board successfully.** Restarts often coincide with deploys, so the gateway
+ * may be briefly unreachable at the very moment this runs — marking before reading would mean the channel is never
+ * retried for the process lifetime, silently failing in exactly the scenario re-establishing exists for.
  */
 const resyncedChannels = new Set<string>();
-/** 지금 되세우는 중인 채널. 같은 채널의 두 바퀴가 겹쳐 합성 사건을 두 번 만들지 않게 한다. */
+/** Channels currently being re-established. Keeps two overlapping ticks of the same channel from creating the
+ * synthetic event twice. */
 const resyncInFlight = new Set<string>();
 
-/** 테스트용 — 프로세스 수명 경계를 흉내낸다. */
+/** For tests — simulates the process lifetime boundary. */
 export function resetWorkingResyncForTests(channelId?: string) {
   if (channelId === undefined) {
     resyncedChannels.clear();
@@ -234,19 +236,19 @@ export function resetWorkingResyncForTests(channelId?: string) {
 }
 
 /**
- * 재시작 뒤 "일하는 중" 을 **보드에서 되세운다**(설계 2026-09-21 npc-working-state, 결정 A-1).
+ * Re-establishes "working" **from the board** after a restart (design 2026-09-21 npc-working-state, decision A-1).
  *
- * 상태의 정본은 프로세스 메모리라 재시작 한 번에 전부 사라지고, 폴러는 커서 이후만 읽으므로
- * 지나간 `task.run.started` 는 다시 오지 않는다 — 그대로 두면 카드가 돌고 있는데 화면은
- * "아무도 일하지 않는다" 고 말한다. 보드의 `running` 열에는 담당자와 시작 시각이 남아 있으므로
- * 그것으로 다시 세운다.
+ * The source of truth for this state is process memory, so one restart wipes it, and the poller only reads past
+ * the cursor, so a past `task.run.started` never arrives again — left alone, a card would be running while the
+ * screen says "nobody is working". The board's `running` column still holds the assignee and start time, so
+ * we rebuild from that.
  *
- * **`npc:working` 을 여기서 쏘지 않는다.** 방송은 `ingest` 하나가 한다는 불변식(`src/server/AGENTS.md`)을
- * 지키려고, 읽은 카드를 `task.run.started` **모양의 합성 사건**으로 만들어 평소 경로에 흘린다.
- * 그래서 중복 제거(`state.seen`)와 차분 방송(`lastEmitted`)이 그대로 걸리고, 나중에 오는 **진짜**
- * `task.run.finished` 가 같은 `task_id` 로 닫아 준다.
+ * **`npc:working` is not emitted here.** To keep the invariant that only `ingest` broadcasts
+ * (`src/server/AGENTS.md`), the cards read are turned into **synthetic events shaped like** `task.run.started`
+ * and fed through the normal path. So dedup (`state.seen`) and diff broadcasting (`lastEmitted`) apply as usual,
+ * and the **real** `task.run.finished` arriving later closes it with the same `task_id`.
  *
- * 사건 id 는 결정적이다 — 랜덤이면 한 바퀴마다 다시 방송된다.
+ * Event ids are deterministic — random ones would be rebroadcast every tick.
  */
 async function resyncWorkingFromBoards(
   channelId: string,
@@ -263,7 +265,7 @@ async function resyncWorkingFromBoards(
         includeArchived: false,
       });
       if (!view.ok) {
-        // 이 바퀴는 실패로 끝난다 — 표시하지 않고 다음 바퀴에 다시 시도한다.
+        // This tick ends in failure — don't mark it; retry on the next tick.
         readAll = false;
         continue;
       }
@@ -296,12 +298,12 @@ async function resyncWorkingFromBoards(
 }
 
 /**
- * 보드 하나를 한 바퀴 폴링한다. 던지지 않는다 — 실패는 `last_error` 와 반환값에만 남는다(E6).
+ * Polls one board for one tick. Never throws — failures stay only in `last_error` and the return value (E6).
  *
- * **사건 수신 보드가 아니면 크론 사건을 버린다.** 플러그인의 `/deskrpg/events` 는 커서를 보드별로
- * 주면서도 크론은 게이트웨이 전역으로 늘 섞어 보내고 옵트아웃이 없다(`events.py` 의 `cron_tail`).
- * 그래서 보드 N개를 각각 폴링하면 같은 크론 사건이 N번 들어온다. 아티팩트는 `include` 로 빼면
- * 되지만 크론은 여기서 거르는 수밖에 없다. 버린 사건은 사건 수신 보드가 이미 받았거나 받는다.
+ * **Drops cron events unless this is the event-receiving board.** The plugin's `/deskrpg/events` hands out
+ * cursors per board but always mixes in cron gateway-wide with no opt-out (`cron_tail` in `events.py`).
+ * So polling N boards separately brings in the same cron event N times. Artifacts can be excluded via `include`,
+ * but cron can only be filtered here. Dropped events have been or will be received by the event-receiving board.
  */
 async function pollBoardOnce(
   channelId: string,
@@ -324,16 +326,17 @@ async function pollBoardOnce(
       board: boardSlug,
       cursor: cursor ?? undefined,
       limit: deps.pageLimit,
-      // 아티팩트는 게이트웨이 전역이라 사건 수신 보드에서만 받는다.
-      // 제안 사건은 아티팩트와 같은 `artifact_events` 표·같은 커서(`a`)로 온다. 그래서 **두 토큰은 늘 함께**
-      // 켠다 — `artifacts` 만 켜면 아티팩트를 읽으며 커서가 지나가 그 사이의 제안이 오류도 로그도 없이
-      // 영영 오지 않는다. 제안도 게이트웨이 전역(보드·채널 컬럼이 없다)이라 수신 보드에만 붙인다.
-      // 구버전 플러그인은 모르는 토큰을 무시하므로 버전·capability 분기가 필요 없다.
+      // Artifacts are gateway-wide, so only the event-receiving board takes them.
+      // Proposal events come from the same `artifact_events` table and the same cursor (`a`) as artifacts, so **the
+      // two tokens are always enabled together** — enabling only `artifacts` would advance the cursor while reading
+      // artifacts and the proposals in between would never arrive, with no error or log. Proposals are also
+      // gateway-wide (no board/channel column), so they're attached only to the receiving board.
+      // Older plugins ignore unknown tokens, so no version/capability branching is needed.
       ...(row.isEventCarrier ? { include: "artifacts,card_proposals" } : {}),
     });
 
     if (!res.ok) {
-      // E7. 플러그인이 커서를 모르면 "지금" 부터 다시 — 재생 없음.
+      // E7. If the plugin doesn't know the cursor, restart from "now" — no replay.
       if (res.failure.code === "unknown_cursor" && cursor !== null) {
         cursor = null;
         restarted = true;
@@ -344,7 +347,7 @@ async function pollBoardOnce(
     }
 
     if (cursor === null) {
-      // 커서 없이 부른 응답은 토큰만 받는 것이다. 사건이 실려 와도 재생하지 않는다(R23).
+      // A response to a cursor-less call only gives the token. Even if events come along, don't replay them (R23).
       cursor = res.data.cursor;
       break;
     }
@@ -362,7 +365,7 @@ async function pollBoardOnce(
   }
 
   if (cursor === null) {
-    // 페이지 상한의 마지막 바퀴에서 unknown_cursor 가 났다 — 토큰 없이 끝났으니 다음 바퀴가 다시 받는다.
+    // unknown_cursor hit on the last tick of the page cap — it ended without a token, so the next tick refetches.
     await deps.saveRow(row.id, { lastError: "cursor_unresolved" });
     return {
       ok: false,
@@ -379,8 +382,8 @@ async function pollBoardOnce(
 }
 
 /**
- * 채널 하나를 한 바퀴 폴링한다 — 그 채널에 붙은 **보드 전부**를 돈다. 어떤 경우에도 던지지
- * 않는다(E6). 게이트·오너 클라이언트는 채널당 한 번만 만든다.
+ * Polls one channel for one tick — goes through **every board** attached to the channel. Never throws
+ * (E6). The gate and owner client are created only once per channel.
  */
 export async function pollChannelOnce(channelId: string, deps: PollOnceDeps): Promise<PollOutcome> {
   return withChannelAutomationLock(channelId, () => pollChannelOnceUnlocked(channelId, deps));
@@ -396,9 +399,9 @@ async function pollChannelOnceUnlocked(
     if (!resolved.ok) return { ok: false, code: resolved.code, reason: resolved.reason };
     const gatewayId = resolved.binding.resource.id;
 
-    // 연결 행이 없거나, 게이트웨이가 바뀌었거나, 보드가 한 번도 확보된 적이 없으면(바인딩 때
-    // 게이트·생성 실패 — `board_name_synced_at` 이 비어 있다) 기본 보드부터 다시 세운다(R5).
-    // 게이트 실패는 `ensureBoard` 가 `last_error` 에 남기므로 여기서 다시 쓰지 않는다.
+    // If there's no binding row, the gateway changed, or the board has never been ensured (gate/create failure at
+    // bind time — `board_name_synced_at` is empty), rebuild starting from the default board (R5).
+    // Gate failures are recorded in `last_error` by `ensureBoard`, so they aren't written again here.
     let rows = await deps.readRows(channelId);
     const carrier = rows.find((row) => row.isEventCarrier) ?? rows[0];
     if (!carrier || carrier.gatewayId !== gatewayId || carrier.boardNameSyncedAt === null) {
@@ -412,12 +415,12 @@ async function pollChannelOnceUnlocked(
       return { ok: false, code: resolved.pluginGate.code, reason: resolved.pluginGate.reason };
     }
 
-    // carrier 가 0개로 떨어졌으면 여기서 되살린다 — 아니면 이 채널은 크론 사건을 아무도 안 받는다.
+    // If carriers dropped to 0, revive them here — otherwise nobody in this channel receives cron events.
     await deps.ensureCarrier(channelId);
     rows = await deps.readRows(channelId);
 
-    // R2. 채널 개명 뒤 이름 동기화가 실패해 남아 있으면 한 바퀴에 한 번 다시 맞춘다. 채널 이름은
-    // **사건 수신 보드**(= 기본 보드)의 것이다 — 다른 보드는 프로젝트마다 제 이름을 갖는다.
+    // R2. If name sync failed after a channel rename and is still pending, re-sync once per tick. The channel name
+    // belongs to the **event-receiving board** (= default board) — other boards have their own per-project names.
     let syncError: string | null = null;
     const channel = await deps.readChannel(channelId);
     const nameTarget = rows.find((row) => row.isEventCarrier);
@@ -429,10 +432,11 @@ async function pollChannelOnceUnlocked(
     const boards: BoardPollOutcome[] = [];
     for (const row of rows) boards.push(await pollBoardOnce(channelId, row, resolved, deps));
 
-    // 재시작 뒤 "일하는 중" 되세우기 — **폴링을 다 비운 뒤에** 돈다(결정 A-1).
-    // 커서는 DB 에 남으므로 재시작 뒤 첫 폴링은 꺼져 있던 동안의 사건을 재생한다. 이것을 앞에 두면
-    // 재생된 **이전 실행의** `task.run.finished` 가 합성 `started` 와 같은 task_id 를 지워, 실제로
-    // 돌고 있는 카드가 "쉬는 중" 으로 뒤집힌다. 뒤에 두면 그 시점의 사실이 마지막에 놓인다.
+    // Re-establish "working" after restart — runs **after polling is drained** (decision A-1).
+    // Cursors persist in the DB, so the first poll after restart replays events from while it was down. Doing this
+    // first would let a replayed `task.run.finished` **from a previous run** clear the same task_id as the synthetic
+    // `started`, flipping a card that is actually running to "idle". Doing it after puts the facts as of that moment
+    // last.
     await deps.resyncWorking(channelId, rows, resolved, deps);
 
     const carrierOutcome = boards.find((b) => b.boardSlug === nameTarget?.boardSlug) ?? boards[0];
@@ -473,7 +477,7 @@ async function pollChannelOnceUnlocked(
 }
 
 // ---------------------------------------------------------------------------
-// 타이머 레지스트리
+// Timer registry
 // ---------------------------------------------------------------------------
 
 export type PollerRegistryDeps = {
@@ -482,8 +486,8 @@ export type PollerRegistryDeps = {
   isChannelBound(channelId: string): Promise<boolean>;
   intervals: { activeMs: number; idleMs: number };
   /**
-   * 대기를 거는 방법. 테스트가 가짜 시계를 넣어 실제로 기다리지 않고 주기를 확인한다.
-   * 넣지 않으면 전역 타이머를 쓴다.
+   * How to schedule a wait. Tests inject a fake clock to check intervals without actually waiting.
+   * If omitted, the global timers are used.
    */
   timers?: PollerTimers;
 };
@@ -504,7 +508,7 @@ type Entry = {
   timer: PollerTimerHandle | null;
   active: boolean;
   running: Promise<PollOutcome> | null;
-  /** 실행 중에 `pollNow` 가 또 왔다 — 끝나면 한 번 더 돈다. */
+  /** `pollNow` came in again while running — run once more when done. */
   again: boolean;
 };
 
@@ -513,11 +517,11 @@ export type AutomationPoller = {
   stop(channelId: string): void;
   has(channelId: string): boolean;
   isActive(channelId: string): boolean;
-  /** 접속 소켓 유무가 바뀌면 주기를 바꾼다. 켜질 때는 즉시 한 번 돈다. */
+  /** Changes the interval when connected-socket presence changes. Runs once immediately when switched on. */
   setActive(channelId: string, hasSockets: boolean): Promise<void>;
-  /** 즉시 한 바퀴. 이미 도는 중이면 끝난 뒤 한 번 더. */
+  /** One tick immediately. If already running, once more after it finishes. */
   pollNow(channelId: string): Promise<PollOutcome>;
-  /** 바인딩 표를 다시 읽어 새 채널은 시작하고 풀린 채널은 멈춘다. */
+  /** Rereads the binding table, starting new channels and stopping unbound ones. */
   refresh(): Promise<void>;
   stopAll(): void;
 };
@@ -558,7 +562,7 @@ export function createAutomationPoller(deps: PollerRegistryDeps): AutomationPoll
       }))
       .then((outcome) => {
         entry.running = null;
-        // 바인딩이 풀린 채널은 더 돌지 않는다 — 다시 묶이면 refresh/setActive 가 되살린다.
+        // An unbound channel stops ticking — if rebound, refresh/setActive revives it.
         if (!outcome.ok && outcome.code === "unbound") {
           poller.stop(channelId);
           return outcome;
@@ -591,7 +595,7 @@ export function createAutomationPoller(deps: PollerRegistryDeps): AutomationPoll
     async setActive(channelId, hasSockets) {
       let entry = entries.get(channelId);
       if (!entry) {
-        // 서버가 뜬 뒤에 묶인 채널일 수 있다 — 표를 보고 있으면 여기서 시작한다.
+        // It may be a channel bound after the server started — if the table shows it, start here.
         if (!hasSockets || !(await deps.isChannelBound(channelId))) return;
         poller.start(channelId);
         entry = entries.get(channelId)!;
@@ -620,7 +624,7 @@ export function createAutomationPoller(deps: PollerRegistryDeps): AutomationPoll
 }
 
 // ---------------------------------------------------------------------------
-// 프로세스 전역 인스턴스 — 소켓 서버가 켜고, REST 라우트·소켓 핸들러가 부른다.
+// Process-global instance — the socket server starts it; REST routes and socket handlers call it.
 // ---------------------------------------------------------------------------
 
 type ChannelIo = Pick<Server, "to">;
@@ -644,8 +648,8 @@ async function isChannelBound(channelId: string): Promise<boolean> {
 }
 
 /**
- * 소켓 서버가 뜰 때 한 번. 묶인 채널 전부의 폴러를 시작한다. 실패해도 던지지 않는다 —
- * 폴러가 못 떠도 채팅·이동은 되어야 한다.
+ * Once when the socket server starts. Starts pollers for every bound channel. Doesn't throw on failure —
+ * chat and movement must work even if the poller fails to start.
  */
 export async function startAutomationPollers(io: ChannelIo): Promise<AutomationPoller> {
   if (live) return live;
@@ -659,8 +663,8 @@ export async function startAutomationPollers(io: ChannelIo): Promise<AutomationP
     isChannelBound,
     intervals: { activeMs: POLL_DEFAULTS.activeMs, idleMs: POLL_DEFAULTS.idleMs },
   });
-  // REST 라우트(칸반·크론·게이트웨이)는 `@/server/*` 를 직접 import 하지 않고 레지스트리로
-  // 이 폴러를 만난다 — 소켓 서버 모듈이 Next 번들에 실리면 빌드가 깨진다.
+  // REST routes (kanban, cron, gateway) don't import `@/server/*` directly; they reach this poller through the
+  // registry — if the socket server module ended up in the Next bundle the build would break.
   registerAutomationHooks({
     pollNow,
     refreshPollers,
@@ -683,7 +687,7 @@ export function stopAutomationPollers(): void {
   unregisterAutomationHooks();
 }
 
-/** 바인딩이 생기거나 풀렸을 때(게이트웨이 라우트가 부른다). 폴러가 아직 없으면 아무 일 없음. */
+/** When a binding is created or removed (called by the gateway route). No-op if the poller doesn't exist yet. */
 export async function refreshPollers(): Promise<void> {
   await live?.refresh();
 }
@@ -696,12 +700,12 @@ export function stopChannelPoller(channelId: string): void {
   live?.stop(channelId);
 }
 
-/** 채널에 접속 소켓이 있는지 알려 준다. 켜질 때 즉시 한 바퀴 돈다(R24). */
+/** Reports whether the channel has connected sockets. Runs one tick immediately when switched on (R24). */
 export async function setChannelActive(channelId: string, hasSockets: boolean): Promise<void> {
   await live?.setActive(channelId, hasSockets);
 }
 
-/** 화면에서 조작한 직후 한 번 즉시 폴링(R24). REST 라우트가 부른다. 폴러가 없으면 null. */
+/** One immediate poll right after an on-screen action (R24). Called by REST routes. null if there's no poller. */
 export async function pollNow(channelId: string): Promise<PollOutcome | null> {
   return live ? live.pollNow(channelId) : null;
 }

@@ -1,8 +1,8 @@
 /**
- * `player:join` 의 "나" 는 서버가 정한다(스펙 2026-09-18, Task 5).
+ * The "me" in `player:join` is decided by the server (spec 2026-09-18, Task 5).
  *
- * 클라이언트가 실어 보낸 `characterId` 는 믿지 않는다 — 남의 캐릭터 id 로 들어오면 거절하고,
- * 생략하면 서버가 `getMyCharacter(userId)` 로 채운다. 캐릭터가 아예 없으면 입장시키지 않는다.
+ * The `characterId` the client sends is not trusted — joining with someone else's character id is rejected,
+ * and if omitted the server fills it via `getMyCharacter(userId)`. With no character at all, joining is refused.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -31,7 +31,7 @@ const event = <T>(client: Socket, name: string) =>
     client.once(name, listener);
   });
 
-/** join 의 결말 이벤트 하나를 기다린다 — 성공(player:spawn)이든 거절이든. */
+/** Waits for one terminal event of join — whether success (player:spawn) or rejection. */
 const joinOutcome = (client: Socket, payload: unknown) =>
   new Promise<{ name: string; data: unknown }>((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -52,7 +52,7 @@ const joinOutcome = (client: Socket, payload: unknown) =>
     client.emit("player:join", payload);
   });
 
-test("player:join 은 클라이언트의 characterId 를 믿지 않고 서버가 내 캐릭터를 정한다", async (t) => {
+test("player:join does not trust the client's characterId; the server decides my character", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval"] });
   const { db, channels, characters, channelMembers, jsonForDb } = await import("../db");
   const { setupSocketHandlers } = await import("./socket-handlers");
@@ -115,7 +115,7 @@ test("player:join 은 클라이언트의 characterId 를 믿지 않고 서버가
   const base = { mapId: channel.id, mapRevision: mapContentRevision(mapData), x: 496, y: 624 };
 
   try {
-    // 1) 남의 characterId 로 들어오면 거절 — 방에 넣지 않는다.
+    // 1) Joining with someone else's characterId is rejected — not put in the room.
     const intruder = await open(userA.id);
     const denied = await joinOutcome(intruder, {
       ...base,
@@ -133,7 +133,7 @@ test("player:join 은 클라이언트의 characterId 를 믿지 않고 서버가
     assert.equal(io.sockets.adapter.rooms.get(channel.id)?.has(intruder.id!) ?? false, false);
     intruder.close();
 
-    // 2) characterId 없이 들어오면 서버가 내 캐릭터로 채운다. 이름·외형도 서버 값이다.
+    // 2) Joining without a characterId, the server fills in my character. Name and appearance are server values too.
     const observer = await open(userB.id);
     assert.equal((await joinOutcome(observer, { ...base })).name, "player:spawn");
     const joined = event<{ characterId: string; characterName: string; appearance: unknown }>(
@@ -148,10 +148,10 @@ test("player:join 은 클라이언트의 characterId 를 믿지 않고 서버가
     const seen = await joined;
     assert.equal(seen.characterId, a1.id);
     assert.equal(seen.characterName, "Alice");
-    // 옛 외형(`{ bodyType }`)도 방송 전에 정본 형태로 접힌다(normalizeOfficeAppearance).
+    // The old appearance (`{ bodyType }`) is also folded into the canonical shape before broadcast (normalizeOfficeAppearance).
     assert.deepEqual(seen.appearance, { officeLookId: "office-nari", bodyType: "female" });
 
-    // 3) 캐릭터가 아예 없으면 입장시키지 않는다.
+    // 3) With no character at all, joining is refused.
     const nobody = await open(userC.id);
     const missing = await joinOutcome(nobody, { ...base });
     assert.equal(missing.name, "channel:access-denied");

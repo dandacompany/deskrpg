@@ -11,14 +11,14 @@ type RosterIo = {
   to(room: string): { emit(event: string, payload: unknown): void };
 };
 
-/** 토론 브로커 — `config.participants` 가 이 회의에 실제로 앉은 NPC 의 정본이다. */
+/** Discussion broker — `config.participants` is the authority on which NPCs actually sit in this meeting. */
 type MeetingBrokerLike = { config: { participants: Array<{ npcId: string }> } };
 
 export type RegisterNpcRosterHandlersArgs = {
   io: RosterIo;
   socket: RosterSocket;
   deps: {
-    /** 토론이 돌고 있는 채널 — `channelId` 하나가 키다. 값이 참가자 명단을 들고 있다. */
+    /** Channels with a running discussion — keyed by `channelId`. The value holds the participant list. */
     activeBrokers: Map<string, MeetingBrokerLike>;
     user: { userId: string };
     isChannelOwner: (channelId: string, userId: string) => Promise<boolean>;
@@ -28,20 +28,20 @@ export type RegisterNpcRosterHandlersArgs = {
 };
 
 /**
- * NPC 하나를 출근/퇴근시킨다.
+ * Clocks one NPC in or out.
  *
- * REST 가 아니라 소켓인 이유는 회의 상태가 소켓 핸들러의 클로저(`activeBrokers`)에만
- * 있기 때문이다 — 라우트에서는 보이지 않는다. 회의 도중 참가자를 맵에서 빼면 진행 중인
- * 턴이 갈 곳을 잃으므로, 퇴근만 막는다(출근은 언제나 허용).
+ * It's a socket rather than REST because the meeting state lives only in the socket handler's closure
+ * (`activeBrokers`) — routes can't see it. Removing a participant from the map mid-meeting leaves the
+ * in-progress turn with nowhere to go, so only clocking out is blocked (clocking in is always allowed).
  *
- * "이 NPC 가 회의 중인가" 의 정본은 **브로커의 `config.participants`** 다. 토론은 채널의
- * NPC 전체를 잡지 않는다 — `start-discussion` 이 `selectedNpcIds` 로 걸러낸 부분집합만
- * 참가자가 된다(meeting-discussion.ts:477-480). 그래서 채널 단위 판정
- * (`activeBrokers.has(channelId)`)은 회의에 부르지 않은 NPC 까지 함께 묶어 버린다.
+ * The authority on "is this NPC in a meeting" is **the broker's `config.participants`**. A discussion does not
+ * take all of the channel's NPCs — only the subset `start-discussion` filtered with `selectedNpcIds`
+ * become participants (meeting-discussion.ts:477-480). So a channel-level check
+ * (`activeBrokers.has(channelId)`) would also lock NPCs that weren't invited to the meeting.
  *
- * `meetingRooms` 의 participants 는 **사람의 socket.id** 이고 여기에 쓰면 안 된다.
- * NPC id 로 조회하면 영원히 false 이고, 반대로 "비어 있지 않은가" 로 보면 회의 패널을
- * 열어 둔 사람 하나가 소유자의 퇴근을 무기한 막는다(방은 지워지지 않는다).
+ * The participants in `meetingRooms` are **human socket.ids** and must not be used here.
+ * Looking up by NPC id is always false, and conversely checking "is it non-empty" lets one person with the
+ * meeting panel open block the owner's clock-out indefinitely (the room is never deleted).
  */
 export function registerNpcRosterHandlers({ io, socket, deps }: RegisterNpcRosterHandlersArgs) {
   const {
@@ -65,8 +65,8 @@ export function registerNpcRosterHandlers({ io, socket, deps }: RegisterNpcRoste
       return;
     }
 
-    // 채널 소유는 그 채널의 NPC 에게만 권한을 준다. npcId 를 검사 없이 그대로 쓰면
-    // 자기 채널 하나만 가지고 남의 채널 NPC 를 퇴근시킬 수 있다.
+    // Channel ownership grants rights only over that channel's NPCs. Using npcId unchecked would let
+    // someone with just their own channel clock out NPCs in another's channel.
     const target = await selectNpcById(npcId);
     if (!target || target.channelId !== channelId) {
       socket.emit("npc:set-active:error", { npcId, errorCode: "npc_not_found" });
@@ -80,7 +80,7 @@ export function registerNpcRosterHandlers({ io, socket, deps }: RegisterNpcRoste
 
     await setNpcActive(npcId, active);
     const npc = await selectNpcById(npcId);
-    // 채널 전체에 알린다 — 다른 뷰어의 맵도 스프라이트를 넣거나 빼야 한다.
+    // Notify the whole channel — other viewers' maps also have to add or remove the sprite.
     io.to(channelId).emit("npc:updated", { npc });
   });
 }

@@ -2,17 +2,17 @@
 //
 // SOCKET EVENT PARITY GUARD
 // -------------------------
-// 프로덕션은 `node server.js`, 개발은 `npx tsx dev-server.ts` → socket-handlers.ts 를 쓴다.
-// 2026-08 이전까지 두 파일은 각자 핸들러를 갖고 있었고, 한쪽에만 기능이 추가되는
-// 드리프트가 실제로 발생했다(프로덕션에 Hermes/CLI 어댑터 디스패치가 없었다).
-// P1b에서 server.js 가 setupSocketHandlers 를 호출하도록 통합했으므로,
-// 이 테스트는 server.js 안에 소켓 핸들러가 다시 생겨나는 것을 막는다.
+// Production runs `node server.js`, dev runs `npx tsx dev-server.ts` → both use socket-handlers.ts.
+// Until 2026-08 the two files each had their own handlers, and drift where a feature was added
+// to only one side actually happened (production lacked Hermes/CLI adapter dispatch).
+// P1b unified them so that server.js calls setupSocketHandlers,
+// and this test keeps socket handlers from reappearing inside server.js.
 //
-// 추출 정규식은 `/socket\.on\(\s*"([^"]+)"/g` — `\s*`가 개행을 포함하므로
-// socket.on(\n  "player:join",\n  ...) 같은 여러 줄 등록도 잡는다. 실측 확인:
-// socket-handlers.ts에서 `\s*` 없는 단순 단일행 정규식은 18개만 잡지만
-// 이 정규식은 23개를 잡는다 — multi-line 등록을 놓치는 위험이 이 파일에
-// 실제로 존재한다는 뜻이다. 아래 별도 테스트가 이 위험을 직접 가드한다.
+// The extraction regex is `/socket\.on\(\s*"([^"]+)"/g` — `\s*` includes newlines, so it
+// also catches multi-line registrations like socket.on(\n  "player:join",\n  ...). Measured:
+// on socket-handlers.ts a plain single-line regex without `\s*` catches only 18,
+// while this regex catches 23 — meaning the risk of missing multi-line registrations really
+// exists in this file. A separate test below guards that risk directly.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -35,10 +35,10 @@ function socketEventsIn(...relPaths: string[]): string[] {
 }
 
 /**
- * 소켓 핸들러는 더 이상 한 파일에 있지 않다. socket-handlers.ts 가 방·출근부 핸들러를
- * 각 모듈에 위임하고, 그 모듈이 자기 `socket.on` 을 등록한다 — 그래서 "이 이벤트가
- * 배선돼 있는가" 는 세 파일의 합집합으로 봐야 한다. socket-handlers.ts 안에 이름만
- * 다시 늘어놓아 이 가드를 만족시키는 것은 등록 지점을 둘로 만드는 꼼수다.
+ * Socket handlers no longer live in one file. socket-handlers.ts delegates room and roster handlers
+ * to their modules, and each module registers its own `socket.on` — so "is this event
+ * wired" must be checked across the union of the three files. Re-listing only the names inside
+ * socket-handlers.ts to satisfy this guard would be a trick that creates two registration points.
  */
 const HANDLER_FILES = [
   "src/server/socket-handlers.ts",
@@ -89,8 +89,8 @@ test("socket-handlers still registers the events server.js used to own", () => {
   }
 });
 
-// 2026-04 태스크 시스템은 2026-09 에 데이터째 폐기됐다(스펙 R33·R34, 0012). 그 소켓 이벤트가
-// 어느 핸들러 파일에든 다시 등록되면 서버는 지워진 태스크·보고 테이블을 다시 찾게 된다.
+// The 2026-04 task system was retired along with its data in 2026-09 (spec R33·R34, 0012). If its socket events
+// were registered again in any handler file, the server would go looking for the deleted task/report tables.
 test("legacy task-system socket events are not registered anywhere", () => {
   const events = socketEventsIn(...HANDLER_FILES);
   const revived = events.filter(
@@ -103,15 +103,15 @@ test("legacy task-system socket events are not registered anywhere", () => {
   );
 });
 
-test("게이트웨이 설정이 바뀌면 런타임 상태 캐시가 무효화된다", () => {
-  // 원래 이 자리에는 "server.js 가 invalidateGatewayConnectionForChannel 을 부르는가"를
-  // 보는 가드가 있었다. 게이트웨이 연결 캐시가 두 곳(server.js 의 channelId 키,
-  // socket-handlers 의 gatewayId 키)으로 갈라져 한쪽만 지워지던 조용한 회귀를 고정한
-  // 것이었다. OpenClaw 가 사라지면서 그 WS 커넥션 풀도 둘 다 없어졌다.
+test("the runtime state cache is invalidated when gateway settings change", () => {
+  // This spot originally held a guard checking "does server.js call invalidateGatewayConnectionForChannel".
+  // It pinned a silent regression where the gateway connection cache was split in two (server.js keyed
+  // by channelId, socket-handlers keyed by gatewayId) and only one side got cleared.
+  // With OpenClaw gone, both of those WS connection pools are gone too.
   //
-  // 지켜야 할 것은 남아 있다: 설정이 바뀌면 게이트웨이 런타임 상태 캐시가 무효화되어야
-  // 한다. 그 호출은 gateway-resources.ts 가 변경 시점에 직접 한다 — 여기서는 그 사실이
-  // 유지되는지만 본다.
+  // What must hold still remains: when settings change, the gateway runtime state cache must be
+  // invalidated. gateway-resources.ts makes that call directly at change time — here we only check
+  // that this stays true.
   const src = readFileSync(path.join(repoRoot, "src/lib/gateway-resources.ts"), "utf8");
   assert.match(
     src,
@@ -138,17 +138,17 @@ test("socket-handlers enforces single-session-per-user by emitting session:kicke
 });
 
 test("socket-handlers extraction regex captures multi-line socket.on() registrations", () => {
-  // 회귀 방지: 단순 `/socket\.on\("/` 정규식은 여러 줄에 걸친
+  // Regression guard: a plain `/socket\.on\("/` regex misses the multi-line
   //   socket.on(
   //     "player:join",
   //     async (data) => { ... },
   //   );
-  // 형태를 놓친다. socket-handlers.ts는 실제로 "player:join"을 이 여러 줄
-  // 형태로 등록한다 — 매직 카운트(예: "N개 이상")는 핸들러가 정당하게
-  // 늘거나 옮겨질 때마다 깨지고, 다음 사람이 추출기 동작을 확인하지 않은
-  // 채 숫자만 올려서 고치게 만든다. 그러면 가드가 있으나 마나 해진다.
-  // 그래서 위험 자체를 직접 단언한다: "player:join"이 빠지면 추출기가
-  // 여러 줄 등록을 못 잡는 것이고, 이 가드 전체를 신뢰할 수 없다는 뜻이다.
+  // form. socket-handlers.ts actually registers "player:join" in this multi-line
+  // form — a magic count (e.g. "at least N") breaks whenever handlers legitimately
+  // grow or move, and nudges the next person to just bump the number without checking
+  // the extractor's behavior. Then the guard might as well not exist.
+  // So we assert the risk itself directly: if "player:join" is missing, the extractor
+  // fails to catch multi-line registrations, and this whole guard cannot be trusted.
   const events = socketEventsIn("src/server/socket-handlers.ts");
   assert.ok(
     events.includes("player:join"),
@@ -159,16 +159,16 @@ test("socket-handlers extraction regex captures multi-line socket.on() registrat
   );
 });
 
-// 이 브랜치의 서명 결함 가드: 자유채팅 서버가 쏘는 이벤트에 맵 클라이언트 리스너가 있는가.
+// This branch's signature-defect guard: do events fired by the free-chat server have a map client listener?
 //
-// C1 이 정확히 이 모양이었다 — 서버는 npc:come-to-player 를 쐈지만 클라이언트 리스너의
-// 조건(targetPlayerId === socket.id)이 절대 참이 될 수 없어 아무도 반응하지 않았다.
-// 이름이 있어도 소비자가 없으면 검증할 수 없는 죽은 배선이므로, 이름 존재만이라도 묶어 둔다.
+// C1 was exactly this shape — the server fired npc:come-to-player, but the client listener's
+// condition (targetPlayerId === socket.id) could never be true, so nobody reacted.
+// A name without a consumer is dead wiring that cannot be verified, so at least bind the name's existence.
 test("map chat events emitted by the server have a listener in the map client", () => {
   const client = readFileSync(path.join(repoRoot, "src/app/game/GamePageClient.tsx"), "utf8");
   for (const event of ["npc:come-to-player", "room:mention-skipped", "room:npc-aborted"]) {
-    // 공백에 둔감하게 — 포매터가 `socketInstance.on(` 다음에서 줄을 바꿔도
-    // 리스너는 그대로 있다. 형식이 바뀌었을 뿐인데 빨개지는 가드는 신뢰를 잃는다.
+    // Whitespace-insensitive — even if the formatter breaks the line after `socketInstance.on(`
+    // the listener is still there. A guard that goes red when only the formatting changed loses trust.
     assert.ok(
       new RegExp(`socketInstance\\.on\\(\\s*"${event}"`).test(client),
       `서버가 ${event} 를 쏘지만 맵 클라이언트에 리스너가 없습니다 — 죽은 배선입니다.`,
@@ -176,12 +176,12 @@ test("map chat events emitted by the server have a listener in the map client", 
   }
 });
 
-// 회의 전용 이벤트를 맵 룸으로 재사용하면 회의 중인 사람의 트랜스크립트에 남의 맵 사건이
-// 삽입된다(회의 참가자는 맵 룸을 떠나지 않는다).
+// Reusing meeting-only events on the map room would inject other people's map events into the transcript
+// of someone in a meeting (meeting participants do not leave the map room).
 test("socket-handlers never broadcasts meeting-only events to the map room", () => {
   const src = readFileSync(path.join(repoRoot, "src/server/socket-handlers.ts"), "utf8");
-  // 회의 전용 이벤트 자체는 정상이다 — 문제는 **어느 방으로** 쏘느냐다. 회의 룸
-  // (`meeting-<id>`)이 아닌 방으로 나가는 meeting:* 만 잡는다.
+  // Meeting-only events themselves are fine — the problem is **which room** they are sent to. Only catch
+  // meeting:* going out to a room other than the meeting room (`meeting-<id>`).
   const leaked = [...src.matchAll(/\.to\(([^)]*)\)\s*\.emit\(\s*"(meeting:[^"]+)"/g)]
     .filter((m) => !m[1].includes("meeting-"))
     .map((m) => `${m[2]} → ${m[1]}`);
@@ -192,10 +192,10 @@ test("socket-handlers never broadcasts meeting-only events to the map room", () 
   );
 });
 
-// 위 가드는 **이름**만 본다. C1 은 이름이 멀쩡한 채로 죽어 있던 결함이었다 — 서버가
-// targetPlayerId: null 을 실었고, 클라이언트 조건(=== socket.id)이 어떤 소켓에서도 참이
-// 될 수 없었다. 그래서 그 두 끝을 각각 못박는다. 이 테스트가 없으면 C1 을 되돌리는
-// 한 줄짜리 뮤테이션이 684개 테스트를 전부 초록으로 통과한다(재리뷰에서 실측).
+// The guard above only looks at **names**. C1 was a defect that was dead while its name was intact — the server
+// sent targetPlayerId: null, and the client condition (=== socket.id) could never be true on any
+// socket. So we pin each of those two ends. Without this test, a one-line mutation reverting C1
+// passes all 684 tests green (measured in re-review).
 test("npc:come-to-player always carries a real caller socket id", () => {
   const src = readFileSync(path.join(repoRoot, "src/server/npc-coordination.ts"), "utf8");
   assert.match(src, /targetPlayerId:\s*socket\.id/);
@@ -219,18 +219,18 @@ test("the map client still gates A* on being the caller", () => {
   );
 });
 
-// 자유채팅 런타임은 첫 지명 때의 참가자 목록을 채널 수명 내내 들고 산다(회의 브로커와
-// 달리 종료 시점이 없다). NPC 가 추가·수정·해고될 때 캐시를 버리지 않으면 해고된 NPC 가
-// 계속 대답하고 새 NPC 는 불러도 오지 않는다 — 에러가 아니라 "왜 아직 대답하지" 로만
-// 드러나므로 배선 자체를 붙들어 둔다.
+// The free-chat runtime keeps the participant list from the first summon for the channel's whole lifetime
+// (unlike the meeting broker, it has no end point). If the cache is not dropped when an NPC is added, edited
+// or fired, the fired NPC keeps answering and a new NPC does not come when called — it shows up not as an
+// error but only as "why is it still answering", so we hold onto the wiring itself.
 test("every npc:broadcast-* handler drops the room runtime cache", () => {
   const src = readFileSync(path.join(repoRoot, "src/server/socket-handlers.ts"), "utf8");
   for (const event of ["npc:broadcast-add", "npc:broadcast-update", "npc:broadcast-remove"]) {
     const start = src.indexOf(`socket.on("${event}"`);
     assert.notEqual(start, -1, `socket-handlers.ts 에 ${event} 핸들러가 없습니다.`);
-    // 창을 **그 핸들러 본문으로** 잘라야 한다. 고정 길이로 자르면 창이 다음
-    // socket.on 까지 넘어가 옆 갈래의 delete 를 보고 통과한다 — 실제로 첫 판이
-    // 그랬고, update 갈래의 무효화를 지워도 빨개지지 않았다.
+    // The window must be cut **to that handler's body**. Cutting at a fixed length lets the window run
+    // past the next socket.on and pass by seeing the neighboring branch's delete — the first draft
+    // actually did that, and removing the update branch's invalidation did not turn it red.
     const next = src.indexOf("socket.on(", start + 1);
     const body = src.slice(start, next === -1 ? undefined : next);
     assert.ok(
@@ -240,13 +240,13 @@ test("every npc:broadcast-* handler drops the room runtime cache", () => {
   }
 });
 
-// 프로브 실패를 5xx 로 답하면 진단이 사용자에게 도달하지 않는다 — Cloudflare 가 오리진의
-// 5xx 를 자기 에러 페이지로 갈아치우기 때문이다(실측: 컨테이너 내부와 Caddy 까지는 본문이
-// 멀쩡한데, 인터넷 경유에서 `server: cloudflare` · `body="error code: 502"` 가 된다).
-// 그래서 브라우저는 `502 {}` 만 받았고 화면에는 generic 폴백만 떴다.
+// Answering a probe failure with 5xx keeps the diagnosis from reaching the user — Cloudflare replaces
+// the origin's 5xx with its own error page (measured: inside the container and up to Caddy the body is
+// intact, but over the internet it becomes `server: cloudflare` · `body="error code: 502"`).
+// So the browser got only `502 {}` and the screen showed only the generic fallback.
 //
-// 4xx 는 통과하므로 인증·권한 응답은 대상이 아니다. 이 가드는 게이트웨이 테스트 라우트가
-// 5xx 로 되돌아가는 것만 막는다.
+// 4xx passes through, so auth/permission responses are out of scope. This guard only stops the gateway
+// test route from reverting to 5xx.
 test("the gateway test route never answers with 5xx", () => {
   const src = readFileSync(path.join(repoRoot, "src/app/api/gateways/[id]/test/route.ts"), "utf8");
   const serverErrors = [...src.matchAll(/status:\s*(5\d\d)/g)].map((m) => m[1]);
@@ -258,9 +258,9 @@ test("the gateway test route never answers with 5xx", () => {
   );
 });
 
-// 프로필은 만들 수만 있고 고칠 수도 지울 수도 없었다 — 토큰을 잘못 넣으면 화면에서
-// 손댈 방법이 없는 막다른 길이었다. 게이트웨이 쪽에는 PATCH·DELETE 가 있는데 프로필
-// 쪽에만 없던, 리소스 간 비대칭이었다.
+// Profiles could only be created, not edited or deleted — if you entered a wrong token there was
+// no way to fix it from the UI, a dead end. The gateway side had PATCH·DELETE but the profile
+// side did not, an asymmetry between resources.
 test("hermes profiles support edit and delete, not just create", () => {
   const src = readFileSync(
     path.join(repoRoot, "src/app/api/gateways/[id]/profiles/[profileId]/route.ts"),
@@ -274,8 +274,8 @@ test("hermes profiles support edit and delete, not just create", () => {
   }
 });
 
-// 빈 문자열로 자격증명을 지우는 사고를 막는 규약. 화면이 빈 칸을 보내지 않는 것과
-// 서버가 빈 값을 무시하는 것, 둘 다 있어야 한 쪽이 바뀌어도 토큰이 날아가지 않는다.
+// A convention that prevents wiping credentials with an empty string. The UI not sending blank fields and
+// the server ignoring blank values — both must exist so that the token survives if one side changes.
 test("a blank token never overwrites a stored profile credential", () => {
   const src = readFileSync(path.join(repoRoot, "src/lib/hermes-profiles.ts"), "utf8");
   const fn = src.slice(src.indexOf("export async function updateHermesProfile"));
@@ -286,9 +286,9 @@ test("a blank token never overwrites a stored profile credential", () => {
   );
 });
 
-// T5 하드 게이트 10: 자동화가 더하는 소켓 이벤트는 `kanban:event`·`cron:event`·`npc:working`·
-// `artifact:event` 넷뿐이고, 방 쪽은 `room:message` 에 `notice` 필드를 얹는 것이 전부다. 이름을
-// 상수(`AUTOMATION_SOCKET_EVENTS`)로 묶어 두었으니 다섯째 이름이 생기면 여기서 빨개진다.
+// T5 hard gate 10: the socket events automation adds are only `kanban:event`·`cron:event`·`npc:working`·
+// `artifact:event`, and on the room side it only adds a `notice` field to `room:message`. The names are
+// bundled in a constant (`AUTOMATION_SOCKET_EVENTS`), so a fifth name turns this red.
 test("automation adds exactly four channel-scoped socket events and reuses room:message", () => {
   const sink = readFileSync(path.join(repoRoot, "src/server/automation-events.ts"), "utf8");
   const poller = readFileSync(path.join(repoRoot, "src/server/automation-poller.ts"), "utf8");
@@ -299,14 +299,14 @@ test("automation adds exactly four channel-scoped socket events and reuses room:
     ["artifact:event", "cron:event", "kanban:event", "npc:working"],
     "사건 싱크가 쓰는 채널 이벤트는 정확히 네 개여야 합니다.",
   );
-  // `npc:response-state` 와 섞이지 않는다(R27) — 싱크·폴러 어디에도 그 이름이 없다.
+  // Not mixed with `npc:response-state` (R27) — that name appears nowhere in the sink or poller.
   for (const src of [sink, poller]) assert.doesNotMatch(src, /npc:response-state/);
-  // 방 방송은 room-socket 의 helper 를 통해서만 — 폴러·싱크가 room:* 리터럴을 직접 쓰지 않는다.
+  // Room broadcasts go only through room-socket's helper — the poller/sink do not write room:* literals directly.
   assert.deepEqual(literal(sink + poller, /"(room:[a-z-]+)"/g), []);
   assert.match(poller, /broadcastRoomMessage\(/, "방 메시지는 room-socket 의 helper 로 나갑니다.");
 });
 
-// R27: 채널 접속 때 현재 작업 중 스냅샷을 그 소켓에 보내고, 접속 유무를 폴러에 알린다(R24).
+// R27: on channel join, send the current working snapshot to that socket and tell the poller about presence (R24).
 test("player:join sends the npc:working snapshot and reports channel activity to the poller", () => {
   const src = readFileSync(path.join(repoRoot, "src/server/socket-handlers.ts"), "utf8");
   const start = src.indexOf('"player:join"');
@@ -329,11 +329,11 @@ test("player:join sends the npc:working snapshot and reports channel activity to
   assert.match(src, /startAutomationPollers\(/, "setupSocketHandlers 가 폴러를 켜지 않습니다.");
 });
 
-// DM 을 대화 목록에 올린 배선(카드: "직원과의 DM 이 대화 목록에 없다").
+// Wiring that put DMs into the conversation list (card: "DMs with employees are missing from the conversation list").
 //
-// 서버가 목록을 돌려줘도 클라이언트에 리스너가 없으면 목록은 영원히 비어 있고, 테스트는
-// 초록인 채로 결함이 되살아난다 — 이 파일이 이미 C1 에서 겪은 모양이다.
-test("npc:dm-threads 는 서버 핸들러와 맵 클라이언트 리스너가 함께 있다", () => {
+// Even if the server returns the list, without a client listener the list stays empty forever, and the defect
+// comes back while tests stay green — the same shape this file already went through with C1.
+test("npc:dm-threads has both a server handler and a map client listener", () => {
   const events = socketEventsIn(...HANDLER_FILES);
   assert.ok(
     events.includes("npc:dm-threads"),
@@ -350,9 +350,9 @@ test("npc:dm-threads 는 서버 핸들러와 맵 클라이언트 리스너가 �
   );
 });
 
-// 단테 지시: 목록에서 여는 것만으로는 호출하지 않고 **보내는 시점에** 호출한다.
-// 이 두 줄이 갈라지면 (a) 열자마자 직원이 걸어오거나 (b) 보내도 아무도 오지 않는다.
-test("DM 은 열 때가 아니라 보낼 때 직원을 호출한다", () => {
+// Dante's instruction: just opening from the list does not summon; summon **at send time**.
+// If these two lines diverge, either (a) the employee walks over as soon as it opens or (b) nobody comes on send.
+test("a DM summons the employee on send, not on open", () => {
   const client = readFileSync(path.join(repoRoot, "src/app/game/GamePageClient.tsx"), "utf8");
   const openHandler = client.slice(
     client.indexOf("const handleSelectNpc = useCallback"),

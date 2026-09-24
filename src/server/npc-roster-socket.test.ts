@@ -37,7 +37,7 @@ function fakeIo(emitted: RecordedEmit[]) {
   };
 }
 
-/** 브로커의 참가자 명단만 흉내 낸다 — 가드가 보는 것이 그것뿐이다. */
+/** Mimics only the broker's participant roster — that is all the guard looks at. */
 function fakeBroker(npcIds: string[]) {
   return { config: { participants: npcIds.map((npcId) => ({ npcId })) } };
 }
@@ -62,12 +62,12 @@ async function setup(opts: { owner?: boolean; npcs?: number } = {}) {
   return { channelId, npcId: npcIds[0], npcIds, emitted, socket, activeBrokers };
 }
 
-test("회의에 앉은 NPC 만 막고, 부르지 않은 NPC 는 그대로 퇴근한다", async () => {
+test("blocks only NPCs seated in a meeting; uncalled NPCs clock out as usual", async () => {
   const { selectNpcById } = await import("@/lib/npc-projection");
   const { channelId, npcIds, emitted, socket, activeBrokers } = await setup({ npcs: 2 });
   const [inMeeting, notInMeeting] = npcIds;
 
-  // 토론은 채널의 NPC 전체가 아니라 selectedNpcIds 로 고른 부분집합만 참가자로 잡는다.
+  // A discussion takes as participants only the subset picked by selectedNpcIds, not all NPCs in the channel.
   activeBrokers.set(channelId, fakeBroker([inMeeting]));
 
   await socket.trigger("npc:set-active", { channelId, npcId: notInMeeting, active: false });
@@ -82,9 +82,9 @@ test("회의에 앉은 NPC 만 막고, 부르지 않은 NPC 는 그대로 퇴근
   assert.equal((await selectNpcById(inMeeting))!.active, true, "회의 중에는 상태가 바뀌지 않는다");
 });
 
-test("브로커가 없으면 회의 패널을 열어 둔 사람이 있어도 퇴근한다", async () => {
-  // meetingRooms 의 participants 는 사람의 socket.id 이고 방은 지워지지 않는다 —
-  // 그것을 회의 판정에 쓰면 패널을 켜 둔 뷰어 하나가 소유자를 무기한 막는다.
+test("without a broker, clocks out even if someone has the meeting panel open", async () => {
+  // meetingRooms' participants are people's socket.ids and the room is never deleted —
+  // using that for the meeting check would let one viewer with the panel open block the owner indefinitely.
   const { selectNpcById } = await import("@/lib/npc-projection");
   const { channelId, npcId, emitted, socket, activeBrokers } = await setup();
 
@@ -94,7 +94,7 @@ test("브로커가 없으면 회의 패널을 열어 둔 사람이 있어도 퇴
   assert.equal((await selectNpcById(npcId))!.active, false);
 });
 
-test("회의가 끝나면 퇴근이 반영되고 채널 전체에 npc:updated 가 간다", async () => {
+test("after the meeting ends, the clock-out applies and npc:updated goes to the whole channel", async () => {
   const { selectNpcById } = await import("@/lib/npc-projection");
   const { channelId, npcId, emitted, socket, activeBrokers } = await setup();
 
@@ -107,7 +107,7 @@ test("회의가 끝나면 퇴근이 반영되고 채널 전체에 npc:updated �
   assert.equal((payload as { npc: { active: boolean } }).npc.active, false);
 });
 
-test("출근은 회의 중에도 막지 않는다", async () => {
+test("clocking in is not blocked even during a meeting", async () => {
   const { selectNpcById } = await import("@/lib/npc-projection");
   const { setNpcActive } = await import("@/lib/npc-roster");
   const { channelId, npcId, emitted, socket, activeBrokers } = await setup();
@@ -119,7 +119,7 @@ test("출근은 회의 중에도 막지 않는다", async () => {
   assert.equal(emitted.at(-1)![0], `npc:updated@${channelId}`);
 });
 
-test("채널 소유자가 아니면 forbidden", async () => {
+test("forbidden if not the channel owner", async () => {
   const { selectNpcById } = await import("@/lib/npc-projection");
   const { channelId, npcId, emitted, socket } = await setup({ owner: false });
 
@@ -128,7 +128,7 @@ test("채널 소유자가 아니면 forbidden", async () => {
   assert.equal((await selectNpcById(npcId))!.active, true);
 });
 
-test("다른 채널의 NPC 는 자기 채널 소유권으로 건드릴 수 없다", async () => {
+test("an NPC in another channel cannot be touched with ownership of one's own channel", async () => {
   const { selectNpcById } = await import("@/lib/npc-projection");
   const { channelId, emitted, socket } = await setup();
   const other = await seedChannelWithProfiles({ placedActive: 1 });
@@ -141,7 +141,7 @@ test("다른 채널의 NPC 는 자기 채널 소유권으로 건드릴 수 없�
   assert.equal((await selectNpcById(other.npcIds[0]))!.active, true);
 });
 
-test("빈 페이로드는 조용히 무시한다", async () => {
+test("silently ignores an empty payload", async () => {
   const { channelId, npcId, emitted, socket } = await setup();
 
   await socket.trigger("npc:set-active", undefined);

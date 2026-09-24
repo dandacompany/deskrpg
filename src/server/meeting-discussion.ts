@@ -24,9 +24,9 @@ const { generateTranscript } =
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   require("../lib/meeting-formatter.js") as typeof import("../lib/meeting-formatter.js");
 
-// 회의는 소켓 이벤트로만 흐르고 HTTP 로그를 남기지 않는다. 그래서 "화면에는 시작됐다고
-// 뜨는데 아무도 발언하지 않는" 상태가 되면 서버 쪽에 단서가 하나도 없다 — 실제로 그
-// 상태를 진단하는 데 e2e 를 두 번 5분씩 돌려야 했다. DEBUG_CHAT 과 같은 스위치를 쓴다.
+// Meetings flow only through socket events and leave no HTTP logs. So when it gets into the state of "shows as
+// started on screen but nobody speaks", there is not a single clue on the server side — diagnosing that state
+// actually took two 5-minute e2e runs. Uses the same kind of switch as DEBUG_CHAT.
 const DEBUG_MEETING = process.env.DEBUG_CHAT === "1" || process.env.DEBUG_MEETING === "1";
 function meetingLog(...args: unknown[]) {
   if (DEBUG_MEETING) console.log("[meeting]", ...args);
@@ -55,13 +55,13 @@ type MeetingNpcConfig = {
   name: string;
   agentId: string | null;
   sessionKeyPrefix: string;
-  /** 백엔드 갈래 판정에 쓴다(classifyNpcDispatch). 실 소켓 배선은 항상 채워 보내지만,
-   * 이 파일의 단위 테스트가 최소 픽스처를 쓰므로 optional로 두고 기본값으로 방어한다. */
+  /** Used for backend branch classification (classifyNpcDispatch). Real socket wiring always fills it in,
+   * but this file's unit tests use minimal fixtures, so it is optional and guarded with a default. */
   adapterType?: string;
   hermesProfileId?: string | null;
   role?: string | null;
   passPolicy?: string | null;
-  /** 이 NPC 의 턴에 실을 시스템 지시. getNpcConfig* 가 계산해 넣는다. */
+  /** System instructions to put on this NPC's turn. Computed and filled in by getNpcConfig*. */
   instructions?: string | null;
 };
 
@@ -82,14 +82,15 @@ type MeetingUser = {
   nickname?: string | null;
 };
 
-/** run() 시작 시 참가자별로 한 번 해석해 회의 동안 재사용하는 결과 — 어댑터 인스턴스는
- * 여기 담기지 않는다(콜백/조회용 뷰). 어댑터 자체는 회의 하나에 묶인 EngineParticipant로만 존재한다. */
+/** Result resolved once per participant at run() start and reused for the meeting — adapter instances
+ * are not held here (a view for callbacks/lookup). The adapter itself exists only as an EngineParticipant
+ * bound to one meeting. */
 type MeetingBrokerParticipant = {
   npcId: string;
   displayName: string;
   role: string;
   passPolicy: string | null;
-  /** composeNpcInstructions() 결과. 폴과 발언 양쪽에 실린다. */
+  /** Result of composeNpcInstructions(). Carried on both polls and speech. */
   instructions?: string | null;
 };
 
@@ -113,7 +114,7 @@ type MeetingBrokerConfig = {
   };
 };
 
-/** `outcome`·`status` 는 선택이다 — 없으면 구조화 결과 없이 성공한 요약으로 다룬다. */
+/** `outcome`/`status` are optional — without them it is treated as a successful summary with no structured result. */
 type MeetingSummary = {
   keyTopics: string[];
   conclusions: string | null;
@@ -144,7 +145,7 @@ type MeetingBrokerCallbacks = {
   onPollResult?: (
     raises: Array<{ agent: MeetingBrokerParticipant; reason: string }>,
     passes: string[],
-    /** 폴에 닿지 못한 참가자. 침묵(passes)과 갈라 전달한다. */
+    /** Participants the poll couldn't reach. Delivered separately from silence (passes). */
     failures: Array<{ agent: MeetingBrokerParticipant; reason: string }>,
   ) => void;
   onTurnStart?: (agent: MeetingBrokerParticipant) => void;
@@ -154,12 +155,15 @@ type MeetingBrokerCallbacks = {
   onWaitingInput?: (pollResult: unknown) => void;
   onTurnAborted?: (npcId: string) => void;
   onMeetingEnd?: (transcript: string, durationSeconds?: number) => void | Promise<void>;
-  /** 지목받았으나 건너뛴 NPC. onParticipantsExcluded 와 같은 계열. reason 은 할당량 소진
-   * ("quota_exhausted")과 게이트웨이 연속 실패("backend_failing")를 구분한다 — 합치면
-   * 죽은 게이트웨이가 정상 할당량 소진으로 보인다. */
+  /** NPCs that were mentioned but skipped. Same family as onParticipantsExcluded. reason distinguishes quota exhaustion
+   * ("quota_exhausted") from consecutive gateway failures ("backend_failing") — merging them would make
+   * a dead gateway look like normal quota exhaustion. */
   onMentionSkipped?: (npcId: string, reason: "quota_exhausted" | "backend_failing") => void;
   onError?: (error: unknown) => void;
-  /** 어댑터를 해석하지 못해 참가자 목록에서 제외된 NPC. 조용히 빼지 않고 알린다(요구사항). */
+  /**
+   * NPCs excluded from the participant list because their adapter couldn't be resolved. Announced, not silently
+   * dropped (requirement).
+   */
   onParticipantsExcluded?: (excluded: ExcludedMeetingNpc[]) => void;
 };
 
@@ -191,8 +195,8 @@ type RegisterMeetingDiscussionHandlersArgs = {
     canControlMeeting: (channelId: string, userId: string) => Promise<boolean> | boolean;
     spatial?: MeetingSpatialCoordinator;
     /**
-     * 후속 업무가 나온 회의가 끝나면 사무실 방에 알린다. 선택 의존이다 — 주입하지 않으면 알림이 없다
-     * (소켓·DB 없이 도는 회의 테스트가 그대로 돈다). 구현은 던지지 않는다.
+     * Announces to the office room when a meeting that produced follow-up work ends. Optional dependency —
+     * no notice if not injected (meeting tests that run without socket/DB keep working). The implementation doesn't throw.
      */
     announceOutcome?: (input: {
       channelId: string;
@@ -206,22 +210,22 @@ type RegisterMeetingDiscussionHandlersArgs = {
       config: MeetingBrokerConfig,
       callbacks: MeetingBrokerCallbacks,
     ) => MeetingBrokerLike | Promise<MeetingBrokerLike>;
-    /** 회의 요약. 예전에는 OpenClaw 게이트웨이의 chatSend 에 직접 매여 있어서
-     * `gateway && openclawAgentId` 인 회의에서만 돌았다 — 즉 Hermes 회의는 늘 빈 요약을
-     * 남겼다. 이제 참가자 어댑터를 그대로 받아 백엔드와 무관하게 돈다. */
+    /** Meeting summary. It used to be tied directly to the OpenClaw gateway's chatSend, so it only
+     * ran in meetings with `gateway && openclawAgentId` — i.e. Hermes meetings always left an empty summary.
+     * Now it takes the participant adapter as-is and runs regardless of backend. */
     generateMeetingSummary: (
       adapter: NpcAdapter,
       sessionKey: string,
       topic: string,
       transcript: string,
-      /** 후속 업무의 담당 후보 — 회의에 참석한 직원만. */
+      /** Candidates to own follow-up work — only staff who attended the meeting. */
       participants?: OutcomeParticipant[],
     ) => Promise<MeetingSummary>;
     persistMeetingMinutes: (input: PersistMeetingMinutesInput) => Promise<string | null>;
   };
 };
 
-/** setMode와 같은 기준으로 검증한다(conversation-engine.ts:setMode). 알 수 없는 값은 "auto". */
+/** Validates by the same standard as setMode (conversation-engine.ts:setMode). Unknown values become "auto". */
 function toRunMode(value: unknown): RunMode {
   return value === "auto" || value === "manual" || value === "directed" ? value : "auto";
 }
@@ -230,7 +234,7 @@ function getMeetingRoomId(channelId: string) {
   return `meeting-${channelId}`;
 }
 
-/** createHermesAdapterForNpc와 같은 모양 — 프로필을 못 찾으면 null. */
+/** Same shape as createHermesAdapterForNpc — null if the profile isn't found. */
 type CreateHermesAdapter = (
   npcId: string,
   userId: string,
@@ -244,22 +248,22 @@ export type ResolvedMeetingParticipant = {
 };
 
 /**
- * NPC 한 명을 실제 백엔드 어댑터로 해석한다. P1b 판정(HermesAdapter는 회의 하나당 한 번만 만들고
- * 그 회의 동안 재사용 — 여러 회의가 공유하는 싱글턴으로 등록하지 않는다)을 지키기 위해, 이 함수는
- * 회의 시작 시점에 참가자별로 정확히 한 번만 호출된다.
+ * Resolves one NPC into a real backend adapter. To keep the P1b verdict (a HermesAdapter is created only once
+ * per meeting and reused for that meeting — never registered as a singleton shared across meetings), this function is
+ * called exactly once per participant at meeting start.
  */
 /**
- * 회의 세션 범위. Hermes 세션은 `<prefix>-<scope>` 로 키가 잡히므로 이 문자열이
- * 바뀌면 그 NPC 의 대화 맥락이 끊긴다. 리터럴을 호출부에 흩어 두지 않는 이유는
- * 실제로 한 번 어긋난 적이 있기 때문이다 — 요약 범위에서 `-meeting-` 이 빠졌다.
+ * Meeting session scope. Hermes sessions are keyed as `<prefix>-<scope>`, so if this string
+ * changes, that NPC's conversation context breaks. The literal is not scattered across call sites
+ * because it actually drifted once — `-meeting-` went missing from the summary scope.
  */
 export function meetingSessionScope(meetingId: string): string {
   return `meeting-${meetingId}`;
 }
 
 /**
- * 요약자 세션 범위. 회의 범위와 **반드시 달라야** 한다 — 같으면 요약 프롬프트가
- * 그 NPC 의 회의 맥락에 섞여 다음 회의 발언이 오염된다.
+ * Summarizer session scope. It **must differ** from the meeting scope — if they were equal, the summary prompt
+ * would mix into that NPC's meeting context and pollute its speech in the next meeting.
  */
 export function meetingSummarySessionScope(meetingId: string): string {
   return `${meetingSessionScope(meetingId)}-summary`;
@@ -271,7 +275,7 @@ export async function resolveNpcAdapter(
     sessionScope: string;
     userId: string;
     adapterRegistry: AdapterRegistry;
-    /** 테스트에서 DB·게이트웨이 없이 hermes 갈래를 관찰하기 위한 주입점. 기본값이 실제 배선이다. */
+    /** Injection point to observe the hermes branch in tests without DB/gateway. The default is the real wiring. */
     createHermesAdapter?: CreateHermesAdapter;
   },
 ): Promise<ResolvedMeetingParticipant | { excluded: ExcludedMeetingNpc }> {
@@ -306,8 +310,8 @@ export async function resolveNpcAdapter(
   }
 
   if (dispatchKind === "openclaw") {
-    // OpenClaw 는 제거됐다. 남아 있는 openclaw NPC 는 회의에서 조용히 빠지는 대신
-    // 이유를 달고 제외되어, 사용자가 다시 연결해야 한다는 것을 알 수 있게 한다.
+    // OpenClaw has been removed. Remaining openclaw NPCs, instead of silently dropping out of the meeting,
+    // are excluded with a reason so the user can tell they need to reconnect.
     return { excluded: { npcId: npc.id, displayName: npc.name, reason: "unbound" } };
   }
 
@@ -379,9 +383,9 @@ export async function defaultCreateMeetingBroker(
         maxConsecutivePasses: 2,
         cooldownMs: 1000,
       },
-      // 캐스팅이 아니라 검증한다 — 엔진 생성자는 setMode와 달리 값을 검사하지 않아서,
-      // 잘못된 값은 auto처럼 동작하면서 meeting:mode-changed로 그 잘못된 문자열을
-      // 클라이언트에 되돌려주는 상태로 남는다.
+      // Validate rather than cast — unlike setMode, the engine constructor doesn't check the value, so
+      // an invalid value would behave like auto while meeting:mode-changed sends that invalid string
+      // back to the client.
       initialRunMode: toRunMode(config.settings?.initialMode),
       hybridMode: Boolean(config.settings?.hybridMode),
       hybridAutoResumeMs: (config.settings?.hybridAutoResumeMs as number) ?? null,
@@ -461,10 +465,11 @@ export async function defaultCreateMeetingBroker(
 }
 
 /**
- * 회의를 끝내는 경로가 모두 부르는 정산 — 브로커 정리와 직원 복귀를 한 곳에서 한다.
- * 예전에는 경로마다 따로 적었고, 주재자가 떠나 방이 비는 경로(socket-handlers 의 disconnect)만
- * 복귀를 빠뜨려 직원이 회의석에 남았다. 게다가 그 공간 세션이 "ready" 에 머물러
- * spatial.start 가 null 을 돌려주므로, 그 채널의 다음 회의는 조용히 시작되지 않았다.
+ * Settlement called by every path that ends a meeting — broker cleanup and staff return happen in one place.
+ * Previously each path wrote it separately, and only the path where the host leaves and the room empties
+ * (socket-handlers' disconnect)
+ * missed the return, leaving staff in meeting seats. On top of that, the spatial session stayed at "ready",
+ * so spatial.start returned null and the channel's next meeting silently failed to start.
  */
 export function settleMeeting(
   state: {
@@ -528,11 +533,11 @@ export function registerMeetingDiscussionHandlers({
       return;
     }
 
-    // 예전에는 여기서 getOrConnectGateway(channelId) 를 조건 없이 await 했다. 주석은
-    // "openclaw 참가자를 해석할 때만 필요하다"고 적혀 있었지만 코드는 늘 불렀고, Hermes
-    // 게이트웨이가 OpenClaw WS 핸드셰이크에 403 을 돌려주면 그 자리에서 매달렸다 —
-    // 화면에는 "토론이 시작되었습니다"만 뜬 채 첫 턴이 영영 디스패치되지 않았다.
-    // OpenClaw 가 사라진 지금은 획득할 게이트웨이 자체가 없다.
+    // This used to unconditionally await getOrConnectGateway(channelId) here. The comment
+    // said "only needed when resolving openclaw participants", but the code always called it, and when a Hermes
+    // gateway returned 403 to the OpenClaw WS handshake it hung right there —
+    // the screen showed only "토론이 시작되었습니다" while the first turn was never dispatched.
+    // Now that OpenClaw is gone, there is no gateway to acquire at all.
 
     const npcConfigs = await getNpcConfigsForChannel(channelId);
     let candidateNpcs = npcConfigs;
@@ -598,10 +603,10 @@ export function registerMeetingDiscussionHandlers({
     const meetingId = `meet-${Date.now()}`;
     const sessionKeyPrefix = candidateNpcs[0].sessionKeyPrefix || channelId.slice(0, 8);
 
-    // 요약용 어댑터는 회의 참가자와 **별도로** 한 번 해석한다. 브로커의 config.participants
-    // 는 어댑터를 담지 않는 조회용 뷰이므로(위 타입 주석 참조) 밖에서는 닿을 수 없고,
-    // 요약 세션은 어차피 회의 세션과 분리되어야 한다 — 요약 프롬프트가 그 NPC 의 회의
-    // 맥락에 섞이면 다음 회의 발언이 오염된다.
+    // The summary adapter is resolved once, **separately** from meeting participants. The broker's config.participants
+    // is a lookup view that holds no adapters (see the type comment above), so it can't be reached from outside,
+    // and the summary session has to be separate from the meeting session anyway — if the summary prompt mixed into
+    // that NPC's meeting context, its speech in the next meeting would be polluted.
     const summarizerResolution = await resolveNpcAdapter(candidateNpcs[0], {
       sessionScope: meetingSummarySessionScope(meetingId),
       userId: user.userId,
@@ -636,8 +641,8 @@ export function registerMeetingDiscussionHandlers({
               reason: raise.reason,
             })),
             passes,
-            // 닿지 못한 참가자를 침묵과 구분해 보낸다 — 화면이 "전원 PASS" 로
-            // 뭉개지 않게.
+            // Send unreachable participants distinguished from silence — so the screen doesn't flatten it
+            // into "all PASS".
             failures: (failures ?? []).map((failure) => ({
               name: failure.agent.displayName,
               reason: failure.reason,
@@ -682,15 +687,15 @@ export function registerMeetingDiscussionHandlers({
             npcName: agent?.displayName || npcId,
             chunk: "",
             done: true,
-            // 화면은 말풍선을 이것으로 확정한다. 델타 누적분은 재시도된 앞선 생성까지 담을 수 있어,
-            // 그대로 확정하면 아래에서 회의 기록에 남기는 본문과 어긋난다.
+            // The screen finalizes the speech bubble with this. The accumulated deltas may include earlier
+            // retried generations, so finalizing them as-is would diverge from the body recorded in the meeting log below.
             text: fullResponse,
           });
 
           const liveRoom = meetingRooms.get(channelId);
           if (!liveRoom) return;
-          // 중단된 턴은 부분 텍스트조차 없을 수 있다 — 말풍선은 위에서 닫아주되 빈 메시지를
-          // 회의 기록에 남기지는 않는다.
+          // An aborted turn may not even have partial text — close the bubble above, but don't record an empty message
+          // in the meeting log.
           if (!fullResponse) return;
 
           liveRoom.messages.push({
@@ -750,8 +755,8 @@ export function registerMeetingDiscussionHandlers({
             (participant) => participant.npcId === npcId,
           );
           meetingLog("지목 건너뜀:", `${agent?.displayName || npcId}=${reason}`);
-          // 표시 문구는 여기서 만들지 않는다 — npcId/reason 만 넘기고 클라이언트가
-          // i18n(meeting.mentionSkipped.*)으로 렌더한다.
+          // Display text is not built here — only npcId/reason are passed and the client
+          // renders it via i18n (meeting.mentionSkipped.*).
           io.to(getMeetingRoomId(channelId)).emit("meeting:mention-skipped", {
             npcId,
             npcName: agent?.displayName || npcId,
@@ -760,15 +765,15 @@ export function registerMeetingDiscussionHandlers({
         },
         onMeetingEnd: async (transcript, durationSeconds) => {
           if (activeBrokers.get(channelId) !== brokerInstance) return;
-          // 요약할 직원이 없으면 실패가 아니라 건너뛴 것이다 — 다시 시도해도 같은 결과다.
+          // No staff to summarize is not a failure but a skip — retrying gives the same result.
           let summary: MeetingSummary = {
             keyTopics: [],
             conclusions: null,
             outcome: null,
             status: "skipped",
           };
-          // 참가자 중 아무나 한 명에게 요약을 시킨다. 요약 세션 키는 회의 세션과 분리해
-          // 요약 프롬프트가 그 NPC 의 회의 맥락에 섞이지 않게 한다.
+          // Have any one participant do the summary. The summary session key is separated from the meeting session so
+          // the summary prompt doesn't mix into that NPC's meeting context.
           if (summarizerAdapter) {
             const summaryKey = `${brokerInstance.config.sessionKeyPrefix || sessionKeyPrefix}-summary-${
               brokerInstance.config.meetingId || meetingId
@@ -813,7 +818,8 @@ export function registerMeetingDiscussionHandlers({
             durationSeconds,
           });
 
-          // 회의실 밖 사람도 알 수 있게 사무실 방에 남긴다. 조건(후속 업무 있음·요약 성공)은 구현이 본다.
+          // Leave it in the office room so people outside the meeting room know too. The implementation checks the
+          // conditions (follow-up work exists, summary succeeded).
           void deps.announceOutcome?.({
             channelId,
             minutesId,
@@ -825,7 +831,7 @@ export function registerMeetingDiscussionHandlers({
           settleMeeting(deps, channelId, { context: "회의 종료" });
         },
         onError: (error) => {
-          // 어댑터가 던진 값(HermesError 등)을 그대로 실으면 화면이 [object Object] 를 그린다.
+          // Carrying the adapter's thrown value (HermesError etc.) as-is makes the screen draw [object Object].
           const failure = describeMeetingFailure(error);
           console.warn("[meeting] NPC 응답 실패", { channelId, code: failure.error }, error);
           io.to(getMeetingRoomId(channelId)).emit("meeting:error", failure);
@@ -833,10 +839,10 @@ export function registerMeetingDiscussionHandlers({
       },
     );
 
-    // 어댑터 해석 결과 참가 가능한 NPC가 하나도 남지 않으면(전부 unbound/미해석) 조용히 빈 회의를
-    // 시작-즉시종료하지 않고, 시작 전 검사와 동일하게 실패로 끝낸다. 제외 사유는
-    // onParticipantsExcluded가 이미 개별 통지했다 — 이건 "그래서 회의 자체가 시작되지 않았다"는
-    // 별도의 최종 신호다.
+    // If no NPC able to participate remains after adapter resolution (all unbound/unresolved), don't silently start
+    // and immediately end an empty meeting; end it as a failure, same as the pre-start check. Exclusion reasons were
+    // already announced individually by onParticipantsExcluded — this is a separate final signal that "so the meeting
+    // itself did not start".
     if (brokerInstance.config.participants.length === 0) {
       if (deps.spatial && spatialGeneration !== null)
         deps.spatial.block(

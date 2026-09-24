@@ -102,8 +102,8 @@ async function seedChannel(ownerId: string) {
   return channel;
 }
 
-// NPC 는 프로필 없이 존재할 수 없다(`npcs.hermes_profile_id` NOT NULL) — 게이트웨이와
-// 프로필까지 함께 심는다. 씨앗 헬퍼는 src/test-setup/npc-seed.ts 를 쓴다.
+// An NPC cannot exist without a profile (`npcs.hermes_profile_id` NOT NULL) — seed the gateway and
+// the profile together. The seed helper lives in src/test-setup/npc-seed.ts.
 async function seedNpc(channelId: string, ownerId: string) {
   const {
     seedGateway,

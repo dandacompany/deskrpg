@@ -37,7 +37,7 @@ function harness() {
   return { coordinator, moves, occupied };
 }
 
-test("맵 reset은 준비와 참가자를 폐기하고 이전 도착 세대를 재사용하지 않는다", async () => {
+test("map reset discards preparation and participants and does not reuse the previous arrival generation", async () => {
   const { coordinator: c, occupied } = harness();
   await c.joinPlayer("a", "u1", "socket1");
   const old = await c.start("a", "u1", ["n1"]);
@@ -53,7 +53,7 @@ test("맵 reset은 준비와 참가자를 폐기하고 이전 도착 세대를 �
   assert.equal(c.arrived("a", "n1", old!), false);
 });
 
-test("맵 reset은 지연된 참가 예약과 대기중 start가 세션을 되살리지 못하게 한다", async () => {
+test("map reset keeps a delayed join reservation and a pending start from reviving the session", async () => {
   let release!: () => void;
   const pending = new Promise<void>((r) => {
     release = r;
@@ -80,7 +80,7 @@ test("맵 reset은 지연된 참가 예약과 대기중 start가 세션을 되�
   assert.equal(c.snapshot("a"), null);
 });
 
-test("준비 완료 회의도 reset 뒤 이전 ready와 복귀 위치를 폐기한다", async () => {
+test("a ready meeting also discards the previous ready state and return positions after reset", async () => {
   const { coordinator: c, occupied, moves } = harness();
   const generation = await c.start("a", "u1", ["n1"]);
   c.arrived("a", "n1", generation!);
@@ -93,7 +93,7 @@ test("준비 완료 회의도 reset 뒤 이전 ready와 복귀 위치를 폐기�
   assert.ok((await c.start("a", "u1", ["n1"]))! > generation!);
 });
 
-test("집결은 전원 서버 도착 뒤 한 번만 준비되고 오래된 도착은 무시한다", async () => {
+test("assembly becomes ready only once after everyone arrives on the server, and stale arrivals are ignored", async () => {
   const { coordinator: c, moves } = harness();
   const generation = await c.start("a", "u1", ["n1", "n2"]);
   assert.equal(c.snapshot("a")?.phase, "assembling");
@@ -108,7 +108,7 @@ test("집결은 전원 서버 도착 뒤 한 번만 준비되고 오래된 도�
   assert.equal(c.arrived("a", "n2", generation!), false);
 });
 
-test("좌석 선점 실패는 standing으로 재배정하고 공간 부족은 대상과 함께 blocked", async () => {
+test("a failed seat claim is reassigned to standing, and lack of space is blocked along with the target", async () => {
   const { coordinator: c, occupied, moves } = harness();
   occupied.add("80:80");
   const generation = await c.start("a", "u1", ["n1", "n2"]);
@@ -117,7 +117,7 @@ test("좌석 선점 실패는 standing으로 재배정하고 공간 부족은 �
   assert.equal(await c.ready("a", generation!), false);
 });
 
-test("취소는 원래 실제 위치로 도보 복귀하고 중복 취소는 중복 명령을 만들지 않는다", async () => {
+test("cancel walks back to the original actual position, and a duplicate cancel issues no duplicate commands", async () => {
   const { coordinator: c, moves } = harness();
   const generation = await c.start("a", "u1", ["n1"]);
   await c.cancel("a");
@@ -129,7 +129,7 @@ test("취소는 원래 실제 위치로 도보 복귀하고 중복 취소는 중
   assert.equal(c.snapshot("a")?.phase, "idle");
 });
 
-test("존재하지 않는 선택 NPC를 조용히 제외하지 않는다", async () => {
+test("does not silently drop a selected NPC that doesn't exist", async () => {
   const { coordinator: c } = harness();
   await c.start("a", "u1", ["missing"]);
   assert.deepEqual(c.snapshot("a")?.failure, {
@@ -138,7 +138,7 @@ test("존재하지 않는 선택 NPC를 조용히 제외하지 않는다", async
   });
 });
 
-test("예약 await 도중 취소는 옛 집결을 시작하지 않고 예약을 회수한 뒤 복귀한다", async () => {
+test("cancel during the reservation await does not start the old assembly, reclaims the reservation and returns", async () => {
   let finishReserve!: (value: boolean) => void;
   const reserved = new Promise<boolean>((resolve) => {
     finishReserve = resolve;
@@ -173,7 +173,7 @@ test("예약 await 도중 취소는 옛 집결을 시작하지 않고 예약을 
   assert.equal(c.snapshot("a")?.phase, "returning");
 });
 
-test("복귀 예약 await 도중 새 start는 복귀 세대를 덮지 않는다", async () => {
+test("a new start during the return reservation await does not overwrite the return generation", async () => {
   let releaseReturn!: () => void;
   const waiting = new Promise<void>((r) => {
     releaseReturn = r;
@@ -200,7 +200,7 @@ test("복귀 예약 await 도중 새 start는 복귀 세대를 덮지 않는다"
   assert.equal(c.snapshot("a")!.generation, generation);
 });
 
-test("복귀 중 정체는 timeout blocked가 되어 재시도할 수 있고 옛 실패는 무시한다", async () => {
+test("getting stuck while returning becomes a retryable timeout blocked, and old failures are ignored", async () => {
   const c = createMeetingSpatialCoordinator({
     timeoutMs: 5,
     layout: async () => ({ spaceId: "meeting", targets: [{ x: 80, y: 80, seatId: "80:80" }] }),
@@ -223,12 +223,12 @@ test("복귀 중 정체는 timeout blocked가 되어 재시도할 수 있고 옛
   c.arrived("a", "n1", retry!);
 });
 
-// 카드 "회의가 끝나도 NPC 가 회의석에 남는다" Acceptance (c).
+// Card "NPCs stay in meeting seats after the meeting ends" Acceptance (c).
 //
-// 원래 좌석이 점유돼 있으면 `returnTarget` 이 가장 가까운 설 자리를 내준다. 그 강등이 실제로
-// **회의석을 떠나는 이동**으로 이어지는지, 그리고 세션이 idle 로 닫히는지를 고정한다.
-// 여기서 막히면(`return_space_full`) NPC 는 회의석에 그대로 남는다.
-test("원래 좌석이 점유돼 있으면 설 자리로 강등해 회의석을 떠난다", async () => {
+// If the original seat is occupied, `returnTarget` offers the nearest standing spot. Pins that this demotion actually
+// leads to **a move that leaves the meeting seat**, and that the session closes as idle.
+// If it gets blocked here (`return_space_full`), the NPC stays in the meeting seat.
+test("when the original seat is occupied, demotes to a standing spot and leaves the meeting seat", async () => {
   const moves: Array<{ actorId: string; x: number; y: number; seatId: string | null }> = [];
   const occupied = new Set<string>();
   const published: string[] = [];
@@ -250,11 +250,11 @@ test("원래 좌석이 점유돼 있으면 설 자리로 강등해 회의석을 
       return true;
     },
     release: async (_channel, actorId) => {
-      // 회의석 예약을 놓아준다 — 실제 좌석 정본과 같은 동작.
+      // Releases the meeting seat reservation — same behavior as the real seat source of truth.
       occupied.delete("80:80");
       void actorId;
     },
-    // 원래 좌석(16:16)은 그사이 누가 차지했다 → 가장 가까운 설 자리로 강등된다.
+    // The original seat (16:16) was taken in the meantime -> demoted to the nearest standing spot.
     returnTarget: async () => standing,
     publish: (state) => published.push(state.phase),
   });
@@ -281,15 +281,15 @@ test("원래 좌석이 점유돼 있으면 설 자리로 강등해 회의석을 
 });
 
 // ---------------------------------------------------------------------------
-// 이미 좌석에 앉아 있는 사람은 움직이지 않아도 도착한 것이다.
+// Someone already sitting in the seat has arrived without moving.
 //
-// 사람의 도착 통지는 플레이어 **이동** 핸들러에서만 온다. 그래서 좌석을 새로 예약하는 순간
-// 이미 그 자리에 앉아 있고 움직이지 않으면 통지가 영영 오지 않아, 집결이 `이동 중` 에서
-// 멈췄다가 시간 초과로 깨졌다(스테이징 실측). 재접속(새 소켓)과 재시도가 모두 좌석을
-// 다시 예약하므로 같은 길로 빠진다.
+// A person's arrival notice only comes from the player **move** handler. So if they were already sitting in that
+// spot at the moment the seat was newly reserved and didn't move, the notice never came, and assembly stalled at
+// `이동 중` then broke on timeout (observed on staging). Reconnect (new socket) and retry both reserve the seat
+// again, so they fall into the same path.
 // ---------------------------------------------------------------------------
 
-/** 좌석 위에 정지해 있는 소켓을 흉내낸다. 이 하네스에서는 `playerArrived` 를 부르지 않는다. */
+/** Mimics a socket standing still on a seat. This harness does not call `playerArrived`. */
 function seatedHarness(seatedSockets: Set<string>) {
   const occupied = new Map<string, string>();
   const coordinator = createMeetingSpatialCoordinator({
@@ -323,7 +323,7 @@ function playerState(c: ReturnType<typeof seatedHarness>, userId: string) {
   return c.snapshot("a")?.participants.find((p) => p.actorId === userId)?.state;
 }
 
-test("이미 좌석에 앉아 있는 주재자는 움직이지 않아도 착석으로 잡히고 집결이 준비된다", async () => {
+test("a host already sitting in the seat counts as seated without moving, and assembly becomes ready", async () => {
   const c = seatedHarness(new Set(["socket1"]));
   await c.joinPlayer("a", "u1", "socket1");
   assert.equal(playerState(c, "u1"), "seated", "예약 순간 이미 그 자리인데 이동 중으로 남는다");
@@ -335,8 +335,8 @@ test("이미 좌석에 앉아 있는 주재자는 움직이지 않아도 착석�
   assert.equal(c.snapshot("a")?.phase, "ready");
 });
 
-test("같은 사용자가 새 소켓으로 다시 들어와 좌석에 가만히 있어도 집결이 준비된다", async () => {
-  // 처음 소켓은 걸어 들어와 착석했다.
+test("assembly becomes ready even when the same user rejoins with a new socket and stays still in the seat", async () => {
+  // The first socket walked in and sat down.
   const seated = new Set<string>();
   const c = seatedHarness(seated);
   await c.joinPlayer("a", "u1", "socket1");
@@ -344,7 +344,7 @@ test("같은 사용자가 새 소켓으로 다시 들어와 좌석에 가만히 
   c.playerArrived("a", "u1", "socket1");
   assert.equal(playerState(c, "u1"), "seated");
 
-  // 연결이 끊겼다가 새 소켓으로 돌아왔다 — 화면상 여전히 좌석에 앉아 있고 움직이지 않는다.
+  // Disconnected and came back with a new socket — still sitting in the seat on screen and not moving.
   seated.delete("socket1");
   seated.add("socket2");
   await c.joinPlayer("a", "u1", "socket2");
@@ -356,7 +356,7 @@ test("같은 사용자가 새 소켓으로 다시 들어와 좌석에 가만히 
   assert.equal(await ready, true);
 });
 
-test("좌석에 없는 사람은 여전히 걸어 와야 한다 — 즉시 도착 처리가 거짓 착석을 만들지 않는다", async () => {
+test("someone not in a seat still has to walk over — immediate arrival handling doesn't create false seating", async () => {
   const c = seatedHarness(new Set());
   await c.joinPlayer("a", "u1", "socket1");
   assert.equal(playerState(c, "u1"), "walking");
@@ -366,7 +366,7 @@ test("좌석에 없는 사람은 여전히 걸어 와야 한다 — 즉시 도�
   assert.equal(c.snapshot("a")?.phase, "assembling", "주재자가 오지 않았는데 준비됐다");
 });
 
-test("집결은 여는 사람의 소켓을 capture 에 넘긴다 — 그 사람이 부른 직원만 데려갈 수 있게", async () => {
+test("assembly passes the opener's socket to capture — so only staff that person called can be brought", async () => {
   const seen: Array<string | undefined> = [];
   const c = createMeetingSpatialCoordinator({
     layout: async () => ({ spaceId: "meeting", targets: [{ seatId: "80:80", x: 80, y: 80 }] }),

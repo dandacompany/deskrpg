@@ -1,12 +1,12 @@
 import { getRoomResponseSnapshot } from "./room-runtime";
-// 방 단위 채팅의 소켓 계층. 예전 `chat:*`(채널 하나 = 대화 하나)를 대체한다.
+// Socket layer for per-room chat. Replaces the old `chat:*` (one channel = one conversation).
 //
-// 소켓 룸 이름은 `room-<roomId>` 다. 채널 룸(`<channelId>`)과 겹치지 않게 접두어를 붙인다 —
-// 겹치면 방 메시지가 맵에 있는 모든 사람에게 새어 나간다.
+// Socket room names are `room-<roomId>`. The prefix keeps them from colliding with channel rooms (`<channelId>`) —
+// a collision would leak room messages to everyone on the map.
 //
-// **조용히 버리지 않는다.** 거절된 `room:send` 는 반드시 `room:error` 를 하나 쏜다.
-// 예전 `handleChatSend` 는 쿨다운·빈 메시지를 `ignored` 로 삼켰고, 사용자에게는
-// "입력창만 비워지고 아무 일도 안 일어남" 으로 보였다(docs/BACKLOG.md 2026-09-09).
+// **Never drop silently.** A rejected `room:send` always emits one `room:error`.
+// The old `handleChatSend` swallowed cooldowns and empty messages as `ignored`, which looked to the user like
+// "only the input box cleared and nothing happened" (docs/BACKLOG.md 2026-09-09).
 
 import type { Server } from "socket.io";
 import { resolveRoomAccessDecision, type RoomAccess } from "@/lib/chat-rooms-policy";
@@ -19,14 +19,14 @@ import type { getOrCreateRoomRuntime, invalidateRoomRuntime } from "./room-runti
 export type RoomErrorCode =
   "forbidden" | "not_found" | "not_open" | "empty" | "cooldown" | "not_joined" | "invalid";
 
-/** 사람 메시지 한 건의 최대 길이. 예전 `handleChatSend` 의 규칙을 그대로 옮겼다. */
+/** Max length of a single human message. Carried over as-is from the old `handleChatSend` rule. */
 const MAX_MESSAGE_LENGTH = 500;
-/** `room:open` 이 되돌려 주는 지난 대화 줄 수. */
+/** Number of past conversation lines returned by `room:open`. */
 const HISTORY_LIMIT = 60;
 
 type RoomSocket = {
   id: string;
-  /** player:join 이 심은 값. `userContext` 는 부른 사람의 이름·소개(대본 앞머리에 들어간다). */
+  /** Set by player:join. `userContext` is the caller's name and bio (goes into the transcript preamble). */
   data?: { userContext?: UserContext | null };
   on(event: string, handler: (payload: unknown) => unknown): void;
   emit(event: string, payload: unknown): void;
@@ -38,14 +38,14 @@ type RoomIo = {
   to(room: string): { emit(event: string, payload: unknown): void };
 };
 
-/** 방 `roomId` 의 소켓 룸 이름. 채널 룸(`<channelId>`)과 겹치지 않게 접두어를 붙인다. */
+/** Socket room name for room `roomId`. Prefixed so it doesn't collide with channel rooms (`<channelId>`). */
 export function roomSocketRoom(roomId: string): string {
   return `room-${roomId}`;
 }
 
 /**
- * 방에 메시지 한 건을 방송한다. 사람·NPC 발화와 자동화 알림(폴러의 `ingest`)이 같은
- * 경로를 타야 클라이언트가 한 리스너로 받는다 — `room:message` 는 이 한 벌뿐이다.
+ * Broadcasts one message to a room. Human and NPC utterances and automation notices (the poller's `ingest`) must
+ * take the same path so the client receives them with one listener — `room:message` is the only such path.
  */
 export function broadcastRoomMessage(io: RoomIo, roomId: string, message: RoomMessage): void {
   io.to(roomSocketRoom(roomId)).emit("room:message", { roomId, message });
@@ -96,9 +96,9 @@ function memberKey(member: { kind: string; id: string }): string {
 }
 
 /**
- * 시스템 메시지는 서버가 한국어 문장을 박지 않고 구조를 넣는다 — 렌더는 클라이언트가
- * 자기 로케일로 한다. 서버가 문장을 만들면 방 하나의 기록이 그때 접속한 사람의 언어로
- * 굳어 버린다.
+ * For system messages the server puts in structure rather than hardcoding Korean sentences — the client renders
+ * them in its own locale. If the server built the sentence, a room's record would be frozen in the language of
+ * whoever was connected at the time.
  */
 function systemContent(payload: Record<string, unknown>): string {
   return JSON.stringify(payload);
@@ -118,16 +118,16 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
   } = deps;
   const roomIo = io as unknown as RoomIo;
 
-  /** 이 소켓이 지금 보고 있는 방들. `room:send` 는 여기 없는 방을 거절한다. */
+  /** Rooms this socket is currently viewing. `room:send` rejects rooms not in here. */
   const openRooms = new Set<string>();
   /**
-   * 이 소켓이 **듣고 있는** 사무실 방. `openRooms`(보낼 수 있는 방)와는 다른 개념이다.
+   * The office room this socket is **listening to**. A different concept from `openRooms` (rooms it can send to).
    *
-   * 자동화 알림(카드 검토·막힘·완료, 크론 실패)은 사무실 방으로 방송된다. 방송을 `room:open`
-   * 한 소켓에만 보내면 DM·다른 그룹 방을 보고 있거나 패널을 접어 둔 사용자가 그 방으로
-   * 돌아올 때까지 알림을 받지 못한다 — 알려야 할 바로 그 사용자다. 사무실 방은 채널당
-   * 하나이고 채널에 들어올 수 있는 사람은 모두 볼 수 있으므로(하드 게이트 4), 채널 권한을
-   * 확인한 `room:list` 에서 늘 듣게 한다.
+   * Automation notices (card review, blocked, done, cron failure) are broadcast to the office room. If the broadcast
+   * only went to sockets that did `room:open`, users viewing a DM or another group room, or with the panel collapsed,
+   * wouldn't get the notice until they returned to that room — exactly the users who need to be told.
+   * There's one office room per channel and everyone who can enter the channel can see it (hard gate 4), so we
+   * always listen from `room:list`, which has checked channel permission.
    */
   let listeningOfficeId: string | null = null;
 
@@ -153,8 +153,8 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
   }
 
   /**
-   * 방 요약 한 건. `listRoomsForUser` 를 다시 태워 뽑는다 — 멤버 표시 이름과 마지막
-   * 메시지를 조립하는 규칙이 한 곳에만 있어야 목록과 갱신 알림이 어긋나지 않는다.
+   * One room summary. Produced by rerunning `listRoomsForUser` — the rules for assembling member display names and
+   * the last message must live in one place so the list and update notices don't diverge.
    */
   async function summaryFor(
     channelId: string,
@@ -165,7 +165,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
     return all.find((r) => r.id === roomId) ?? null;
   }
 
-  /** 이 프로세스에 접속해 있는 그 사용자의 소켓들. 초대·생성 알림을 곧바로 밀어 넣는다. */
+  /** That user's sockets connected to this process. Invite/create notices are pushed straight into them. */
   function socketIdsForUsers(userIds: Set<string>): string[] {
     const ids: string[] = [];
     for (const [socketId, player] of players) {
@@ -191,28 +191,29 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       const id = asString(channelId);
       if (!id) return fail(null, "invalid");
       if (!(await channelAllowed(id))) return fail(null, "forbidden");
-      // 사무실 방은 채널의 기본값이라 목록을 물을 때 존재를 보장한다 — 채널을 만든
-      // 시점에 만들지 않으므로(마이그레이션 이전 채널이 있다) 여기가 유일한 보장 지점이다.
-      // 주인은 **채널 소유자**다. 부른 사람을 쓰면 먼저 들어온 손님이 사무실 방의
-      // createdBy 가 된다.
+      // The office room is the channel's default, so its existence is ensured when the list is asked for — it isn't
+      // created at channel creation time (there are pre-migration channels), so this is the only ensuring point.
+      // The owner is the **channel owner**. Using the caller would make whichever guest came first the office
+      // room's createdBy.
       const ownerId = await rooms.getChannelOwnerId(id);
       if (!ownerId) return fail(null, "not_found");
       const office = await rooms.ensureOfficeRoom(id, ownerId);
-      // 채널을 옮겨 다시 물으면 이전 채널의 사무실 방은 그만 듣는다(열어 둔 방이면 그대로 둔다).
+      // When asked again after moving channels, stop listening to the previous channel's office room (keep it if
+      // it's open).
       if (listeningOfficeId && listeningOfficeId !== office.id && !openRooms.has(listeningOfficeId))
         socket.leave(socketRoom(listeningOfficeId));
       listeningOfficeId = office.id;
       socket.join(socketRoom(office.id));
       socket.emit("room:list-response", {
         channelId: id,
-        // 클라이언트는 자기 user id 를 알 길이 없다(뷰어 신원 엔드포인트가 없다).
-        // 방을 만든 사람인지 가리려면 이 값이 필요하다.
+        // The client has no way to know its own user id (there's no viewer identity endpoint).
+        // This value is needed to tell whether it created the room.
         viewerUserId: user.userId,
         rooms: await rooms.listRoomsForUser(id, user.userId),
       });
-      // 접속 전에 쌓인 알림도 배지에 잡히도록 최근 줄을 함께 내려 준다. 클라이언트의 보고 큐는
-      // 받은 메시지에서만 파생하므로, 이게 없으면 방을 열기 전까지 큐가 비어 있다.
-      // `history` 는 `messages[roomId]` 만 채운다 — 방이 열린 것처럼 되지는 않는다.
+      // Recent lines are sent along so notices piled up before connecting count in the badge. The client's report
+      // queue is derived only from received messages, so without this it stays empty until the room is opened.
+      // `history` only fills `messages[roomId]` — it doesn't make the room appear opened.
       socket.emit("room:history", {
         roomId: office.id,
         messages: await rooms.recentRoomMessages(office.id, HISTORY_LIMIT),
@@ -239,7 +240,8 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       const id = asString(roomId);
       if (!id) return;
       openRooms.delete(id);
-      // 사무실 방은 닫아도 계속 듣는다 — 보내는 것만 막힌다(`openRooms` 에서 빠졌으므로 not_open).
+      // The office room keeps listening even when closed — only sending is blocked (removed from `openRooms`, so
+      // not_open).
       if (id !== listeningOfficeId) socket.leave(socketRoom(id));
     },
 
@@ -248,7 +250,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       const id = asString(roomId);
       if (!id) return fail(null, "invalid");
 
-      // 재연결 뒤 새 socket.id — 클라이언트는 이 코드를 받고 player:join 을 다시 보낸다.
+      // New socket.id after reconnect — the client gets this code and sends player:join again.
       const player = players.get(socket.id);
       if (!player) return fail(id, "not_joined");
 
@@ -276,8 +278,8 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       });
       broadcastRoomMessage(roomIo, id, saved);
 
-      // 런타임 조립(DB + 어댑터 해석)은 기다리지만 **NPC 의 턴은 기다리지 않는다.**
-      // 턴은 수십 초가 걸리므로 여기서 await 하면 다음 메시지가 막힌다.
+      // Runtime assembly (DB + adapter resolution) is awaited, but **the NPC's turn is not.**
+      // A turn takes tens of seconds, so awaiting here would block the next message.
       try {
         const runtime = await getRuntime(io, access.room, user.userId);
         if (runtime) {
@@ -310,8 +312,8 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
         userIds?: unknown;
         requestId?: unknown;
       };
-      // 만든 사람의 화면만 새 방으로 들어간다. 클라이언트는 자기 user id 를 모르므로
-      // 요청에 실어 보낸 표를 그대로 되돌려 준다 — 초대된 사람의 알림에는 넣지 않는다.
+      // Only the creator's screen enters the new room. The client doesn't know its own user id, so
+      // the ticket sent in the request is returned as-is — it isn't included in invitees' notices.
       const requestId =
         typeof rawRequestId === "string" && rawRequestId.length > 0 && rawRequestId.length <= 64
           ? rawRequestId
@@ -319,8 +321,8 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       const id = asString(channelId);
       if (!id) return fail(null, "invalid");
       const npcIds = asStringArray(rawNpcIds);
-      // NPC 가 없는 방은 사람만 있는 빈 방이다 — 이 기능의 목적이 아니고, 만들어 두면
-      // 무엇을 지명해도 아무도 대답하지 않는 죽은 방이 목록에 쌓인다.
+      // A room without NPCs is an empty humans-only room — not the purpose of this feature, and creating it would
+      // pile up dead rooms in the list where nobody answers no matter who is mentioned.
       if (npcIds.length === 0) return fail(null, "invalid");
       if (!(await channelAllowed(id))) return fail(null, "forbidden");
 
@@ -351,7 +353,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       if (!id) return fail(null, "invalid");
       const access = await resolveAccess(id);
       if (!access.ok) return fail(id, access.code);
-      // 사무실 방의 멤버는 출근부가 정한다 — 여기서 손대면 두 개의 정본이 생긴다.
+      // Office room membership is decided by the roster — touching it here would create two sources of truth.
       if (access.room.kind !== "group") return fail(id, "invalid");
 
       const npcIds = asStringArray(rawNpcIds);
@@ -362,8 +364,8 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       const beforeKeys = new Set((before?.members ?? []).map(memberKey));
 
       await rooms.addMembers(id, user.userId, npcIds, userIds);
-      // 참가자 명단이 바뀌었다 — 런타임은 만들어질 때의 명단을 들고 살기 때문에
-      // 버리지 않으면 새 멤버는 불러도 오지 않는다.
+      // The participant roster changed — the runtime lives with the roster from when it was created, so
+      // unless dropped, new members won't come when called.
       invalidateRuntime(id);
 
       const after = await summaryFor(access.room.channelId, id);
@@ -373,7 +375,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
         await appendSystemMessage(id, { kind: "invited", names: added.map((m) => m.name) });
       }
       roomIo.to(socketRoom(id)).emit("room:updated", { room: after });
-      // 새로 초대된 사람은 아직 이 소켓 룸에 없다 — 방이 있다는 사실 자체를 밀어 준다.
+      // Newly invited people aren't in this socket room yet — push the very fact that the room exists.
       for (const socketId of socketIdsForUsers(new Set(userIds))) {
         roomIo.to(socketId).emit("room:created", { room: after });
       }
@@ -385,7 +387,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       if (!id) return fail(null, "invalid");
       const access = await resolveAccess(id);
       if (!access.ok) return fail(id, access.code);
-      // 사무실 방은 나갈 수 없다 — 채널에 있는 한 언제나 보이는 기본 방이다.
+      // The office room can't be left — it's the default room always visible while in the channel.
       if (access.room.kind !== "group") return fail(id, "invalid");
 
       const before = await summaryFor(access.room.channelId, id);
@@ -407,7 +409,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       }
       openRooms.delete(id);
       socket.leave(socketRoom(id));
-      // 나간 사람에게는 방이 사라진 것과 같다. 목록에서 지우라고 알린다.
+      // For the person who left, it's as if the room vanished. Tell them to remove it from the list.
       socket.emit("room:deleted", { roomId: id });
     },
 
@@ -418,7 +420,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       const access = await resolveAccess(id);
       if (!access.ok) return fail(id, access.code);
       if (access.room.kind !== "group") return fail(id, "invalid");
-      // 개명·삭제는 만든 사람만 — 멤버 전원이 할 수 있으면 남의 방 이름이 계속 바뀐다.
+      // Only the creator can rename/delete — if every member could, other people's room names would keep changing.
       if (access.room.createdBy !== user.userId) return fail(id, "forbidden");
 
       const next = String(name ?? "")

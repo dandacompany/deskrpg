@@ -118,13 +118,13 @@ export function emitMeetingNpcStream(io: MeetingIo, channelId: string, payload: 
 }
 
 /**
- * 생성이 끝난 NPC 답변을 회의방에 확정 전달한 뒤, 세션 참조 영속화를 best-effort로 수행한다.
+ * Delivers a finished NPC answer to the meeting room for good, then persists the session ref best-effort.
  *
- * 순서와 격리가 이 함수의 전부다. 영속화를 종료 emit보다 먼저 await하면(그리고 그것이
- * 감싸이지 않으면) 일시적인 DB 오류 하나가 이미 생성된 답변을 통째로 날린다 —
- * 호출부의 catch가 room.messages에서 답변을 pop하고, done:true가 나가지 않아 클라이언트의
- * 스트리밍 말풍선이 영영 열린 채로 남는다. 세션 참조를 잃으면 대화 연속성을 잃지만,
- * 답변을 잃으면 사용자의 턴 자체를 잃는다.
+ * Ordering and isolation are all this function is about. If persistence is awaited before the final emit (and it
+ * is not wrapped), a single transient DB error wipes out an answer that was already generated —
+ * the caller's catch pops the answer from room.messages, and done:true never goes out, so the client's
+ * streaming bubble stays open forever. Losing the session ref loses conversation continuity, but
+ * losing the answer loses the user's turn itself.
  */
 export async function deliverMeetingNpcAnswer(steps: {
   emitDone: () => void;
@@ -282,7 +282,7 @@ export function registerMeetingSocketHandlers({
       const existingPlayer = players.get(socket.id);
       const displayName =
         existingPlayer?.characterName || characterName || user.nickname || "Unknown";
-      // 클라이언트가 보낸 외형은 거절하지 않고 정규화해서 중계한다.
+      // Appearance sent by the client is not rejected; it is normalized and relayed.
       const displayAppearance = normalizeOfficeAppearance(
         existingPlayer?.appearance ?? appearance ?? null,
       );

@@ -1,9 +1,9 @@
-// 방 하나의 자유채팅 런타임. 예전 `createOpenChat`(채널당 하나)을 방 단위로 옮긴 것이다.
+// Free-chat runtime for a single room. Moves the former `createOpenChat` (one per channel) to room scope.
 //
-// 채널당 하나였을 때는 참가자가 "이 채널의 출근 NPC 전부" 하나뿐이었다. 방이 생기면서
-// 두 갈래가 된다 — 사무실 방은 그대로 채널 전원이고, 그룹 방은 그 방의 NPC 멤버만이다.
-// 세션 스코프도 방마다 갈라야 한다(`room-<id>`): 같은 NPC 가 두 방에서 같은 세션을 쓰면
-// 한 방의 대화가 다른 방 프롬프트에 섞인다.
+// With one per channel, there was only one participant set: "every on-duty NPC in this channel". With rooms
+// it splits in two — the office room is still the whole channel, and a group room is only that room's NPC members.
+// The session scope must also split per room (`room-<id>`): if the same NPC used the same session in two rooms,
+// one room's conversation would leak into the other room's prompt.
 
 import { ChatResponseTracker } from "./chat-response-tracker";
 import type { Server } from "socket.io";
@@ -19,15 +19,15 @@ import { resolveNpcAdapter } from "./meeting-discussion";
 import { getOrCreateCached } from "./promise-cache";
 import { adapterRegistry, getNpcConfigsForChannel } from "./socket-handlers";
 
-/** 프롬프트에 실을 최근 대화 줄 수. 예전 채널 히스토리의 `slice(-10)` 과 같다. */
+/** Number of recent conversation lines to put in the prompt. Same as the old channel history's `slice(-10)`. */
 const RECENT_LIMIT = 10;
 
 /**
- * `OpenChatDeps.recent()` 는 **동기**다. 메시지는 이제 메모리 배열이 아니라 DB 에 있으므로
- * 생성 시점에 마지막 몇 줄을 읽어 두고, 이후는 오가는 말마다 밀어 넣어 최신으로 유지한다.
+ * `OpenChatDeps.recent()` is **synchronous**. Messages now live in the DB rather than an in-memory array, so
+ * the last few lines are read at creation time and then kept current by pushing in each message as it flows.
  *
- * 중복 판정은 **메시지 id** 로 한다. 내용으로 가르면 "네" 를 3초 간격으로 두 번 보낸 사람의
- * 두 번째 말이 프롬프트에서 조용히 사라진다 — 쿨다운은 2초뿐이라 정당한 반복이다.
+ * Dedup is by **message id**. Deduping by content would silently drop from the prompt the second "yes" from someone
+ * who sent it twice 3 seconds apart — the cooldown is only 2 seconds, so that is a legitimate repeat.
  */
 type RecentEntry = { id: string; sender: string; content: string };
 
@@ -56,10 +56,10 @@ class RecentCache {
 }
 
 /**
- * DB 의 최근 줄을 캐시가 먹을 수 있는 모양으로. 시스템 메시지는 JSON 구조라 뺀다.
+ * Recent DB lines in a shape the cache can consume. System messages are JSON structures, so they are excluded.
  *
- * **거르고 나서 자른다.** 10줄만 읽어 놓고 거기서 시스템 메시지를 빼면, 초대·개명이
- * 잦았던 방은 대본에 실리는 대화가 그만큼 줄어든다. 넉넉히 읽어 거른 뒤 꼬리를 자른다.
+ * **Filter, then trim.** Reading only 10 lines and then removing system messages would shrink the conversation
+ * in the transcript for rooms with frequent invites/renames. Read generously, filter, then cut the tail.
  */
 async function loadRecentEntries(roomId: string): Promise<RecentEntry[]> {
   return (await recentRoomMessages(roomId, RECENT_LIMIT * 3))
@@ -111,12 +111,12 @@ class RoomChatRuntime extends OpenChatRuntime {
 }
 
 /**
- * 방별 런타임. 값이 런타임이 아니라 **약속**인 이유는 채널 버전과 같다 — 생성이 두 번의
- * DB 왕복을 거치는 동안 들어온 두 번째 지명이 두 번째 인스턴스를 만들면 speaking 가드도
- * 예산도 인스턴스별이라 동시에 무력화된다.
+ * Per-room runtime. The value is a **promise** rather than a runtime for the same reason as the channel version — if
+ * a second mention arriving during creation's two DB round trips created a second instance, the speaking guard and
+ * the budget, both per instance, would be defeated at once.
  */
 const roomRuntimes = new Map<string, Promise<OpenChatRuntime | null>>();
-/** roomId → channelId. 채널 단위 무효화(NPC 고용·해고)가 어느 방을 버릴지 알아야 한다. */
+/** roomId → channelId. Channel-level invalidation (hiring/firing NPCs) must know which rooms to drop. */
 const roomChannels = new Map<string, string>();
 const roomGenerations = new Map<string, symbol>();
 const responseTrackers = new Map<string, ChatResponseTracker>();
@@ -126,13 +126,13 @@ export function getRoomResponseSnapshot(roomId: string) {
 }
 
 /**
- * 어댑터 해석과 NPC 명단 조회의 주입점. 기본값이 실제 배선이다 — 테스트가 게이트웨이나
- * CLI 없이 이 파일의 조립 규칙(참가자 거르기·정책 배선·캐시·콜백)을 관찰하기 위한 것이다.
+ * Injection point for adapter resolution and NPC roster lookup. The defaults are the real wiring — this lets tests
+ * observe this file's assembly rules (participant filtering, policy wiring, cache, callbacks) without a gateway or CLI.
  */
 export type RoomRuntimeDeps = {
   getNpcConfigs?: typeof getNpcConfigsForChannel;
   resolveAdapter?: typeof resolveNpcAdapter;
-  /** 런타임을 만든 사용자의 화면 언어. NPC 규약의 응답 언어를 정한다. */
+  /** Display language of the user who created the runtime. Sets the response language of the NPC protocol. */
   locale?: string | null;
 };
 
@@ -152,7 +152,7 @@ export function getOrCreateRoomRuntime(
   );
 }
 
-/** 멤버가 바뀌거나 방이 사라지면 부른다. 다음 지명에서 DB 를 다시 읽어 새로 만든다. */
+/** Call when members change or the room disappears. The next mention re-reads the DB and builds anew. */
 export function invalidateRoomRuntime(roomId: string): void {
   roomGenerations.delete(roomId);
   const pending = roomRuntimes.get(roomId);
@@ -164,9 +164,9 @@ export function invalidateRoomRuntime(roomId: string): void {
 }
 
 /**
- * 채널의 NPC 명단이 바뀌었다(고용·수정·해고) — 그 채널의 방 런타임을 전부 버린다.
- * 사무실 방은 채널 전원을 참가자로 잡고 그룹 방도 해고된 NPC 를 멤버로 들고 있을 수
- * 있으므로, 방 하나만 버리면 나머지가 유령 NPC 를 계속 부른다.
+ * The channel's NPC roster changed (hire/edit/fire) — drop every room runtime of that channel.
+ * The office room takes the whole channel as participants, and a group room may still hold a fired NPC as a member,
+ * so dropping only one room would leave the rest calling ghost NPCs.
  */
 export function invalidateRoomRuntimesForChannel(channelId: string): void {
   for (const [roomId, id] of roomChannels) {
@@ -184,7 +184,7 @@ async function createRoomRuntime(
   const loadNpcConfigs = deps.getNpcConfigs ?? getNpcConfigsForChannel;
   const resolveAdapter = deps.resolveAdapter ?? resolveNpcAdapter;
   const npcConfigs = await loadNpcConfigs(room.channelId, deps.locale);
-  // 사무실 방은 채널의 출근 NPC 전부, 그룹 방은 초대된 NPC 만.
+  // Office room: every on-duty NPC in the channel; group room: only invited NPCs.
   const allowed = room.kind === "group" ? new Set(await roomNpcMemberIds(room.id)) : null;
   const candidates = allowed ? npcConfigs.filter((npc) => allowed.has(npc.id)) : npcConfigs;
 
@@ -233,7 +233,7 @@ async function createRoomRuntime(
       recent: () => recent.read(),
       recentForSource: (sourceMessageId) => recent.readThrough(sourceMessageId),
       turnTimeout: { idleMs: 180_000, maxMs: 600_000 },
-      // 사무실(mention)은 지명만, 그룹(members)은 지명이 없으면 멤버 전원이 답한다.
+      // Office (mention) answers only when mentioned; group (members) has every member answer when there is no mention.
       selectResponders: (mentioned) => decideResponders(room.replyPolicy, mentioned, memberNpcIds),
     },
     {
@@ -259,11 +259,11 @@ async function createRoomRuntime(
       },
       onTurnStart: (npcId, _displayName, callerSocketId, context) => {
         tracker.update(context.requestId, { status: "thinking" });
-        // 걷기와 말하기는 동시에 시작한다 — 도착을 기다리지 않는다. targetPlayerId 가
-        // 진짜 소켓 id 여야 클라이언트가 A* 를 돌린다(null 이면 아무도 걷지 않는다).
+        // Walking and speaking start together — no waiting for arrival. targetPlayerId must
+        // be a real socket id for the client to run A* (if null, nobody walks).
         if (!callerSocketId) return;
-        // NPC 이동은 맵 전체가 봐야 하므로 채널 룸으로 나간다. roomId 를 함께 실어
-        // 클라이언트가 "지금 보고 있는 방의 호출인가" 를 가른다.
+        // NPC movement must be seen by the whole map, so it goes out to the channel room. roomId is included
+        // so the client can tell "is this a call for the room I am viewing".
         io.to(room.channelId).emit("npc:come-to-player", {
           npcId,
           targetPlayerId: callerSocketId,
@@ -321,7 +321,7 @@ async function createRoomRuntime(
         });
       },
       onMentionNoMatch: (callerSocketId) => {
-        // 아무 멤버에도 안 맞는 지목 — 부른 사람에게만 알린다(방 전체에 뿌리지 않는다).
+        // A mention that matches no member — notify only the caller (not broadcast to the whole room).
         const target = callerSocketId ? io.to(callerSocketId) : io.to(socketRoom);
         target.emit("room:mention-skipped", { roomId: room.id, reason: "no_match" });
       },

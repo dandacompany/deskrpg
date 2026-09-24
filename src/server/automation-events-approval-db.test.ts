@@ -1,5 +1,5 @@
-// 승인 묶음 조회(isApprovalBatchCard)를 실제 DB 로 고정한다. 단위 테스트는 가짜 의존성을 쓰므로
-// "승인 상태와 무관하게 묶음에 들었던 카드면 참" 이라는 성질은 여기서만 보인다.
+// Pins the approval batch lookup (isApprovalBatchCard) against a real DB. Unit tests use fake dependencies, so
+// the property "true if the card was ever in a batch, regardless of approval state" is only visible here.
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -26,13 +26,13 @@ async function seedApproval(channelId: string, status: string, taskIds: string[]
     .values(taskIds.map((taskId) => ({ approvalId: row.id, taskId })));
 }
 
-test("승인 묶음에 들었던 카드면 승인 상태와 무관하게 참, 아니면 거짓, 다른 채널의 묶음은 보지 않는다", async () => {
+test("true for a card that was in an approval batch regardless of approval state, false otherwise, ignoring other channels' batches", async () => {
   const owner = await seedUser("appr-db");
   const channel = await seedChannel(owner.id, "승인 채널");
   const other = await seedChannel(owner.id, "다른 채널");
   await seedApproval(channel.id, "pending", ["t-pending"]);
   await seedApproval(channel.id, "approved", ["t-approved"]);
-  // 반려·수정 요청 묶음의 카드가 나중에 손으로 풀려 끝나도 사람이 목록으로 본 독립 업무다.
+  // Even if a card from a rejected or change-requested batch is later released by hand and finished, it is an independent task a person saw in the list.
   await seedApproval(channel.id, "rejected", ["t-rejected"]);
   await seedApproval(channel.id, "revision_requested", ["t-revision"]);
   await seedApproval(other.id, "approved", ["t-elsewhere"]);
