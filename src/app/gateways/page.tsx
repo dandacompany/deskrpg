@@ -238,7 +238,10 @@ function GatewayManagementPageInner() {
 
   const loadGateways = useCallback(
     async (options: { autoSelect?: boolean } = {}) => {
-      setLoading(true);
+      // `loading` 은 첫 로딩에만 쓴다(초기값 true). 재조회 때 다시 세우면 `if (loading)` 이 페이지를
+      // 로딩 화면으로 바꿔 자식을 언마운트하고, 작업 뒤에 뜨는 결과 알림(갱신의 "계속 켭니다 [끄기]",
+      // [설정에서 켜기] 성공)이 지역 상태째 사라진다(2026-09-24 E2E 실측). 저장·삭제·공유는 각자의
+      // 진행 표시(saving·deleting·…)가 있다.
       setError("");
       try {
         const res = await fetch("/api/gateways");
