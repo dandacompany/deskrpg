@@ -64,7 +64,7 @@ async function mount(props: Partial<MeetingOutcomePanelProps>): Promise<HTMLElem
   return el;
 }
 
-test("결정과 후속 업무를 그리고, 권고가 있으면 프로젝트로 묶기를 권한다", async () => {
+test("renders decisions and follow-ups, and suggests bundling into a project when recommended", async () => {
   const el = await mount({});
   assert.match(el.textContent ?? "", /A안 채택/);
   assert.equal(el.querySelectorAll("[data-outcome-item]").length, 2);
@@ -75,22 +75,22 @@ test("결정과 후속 업무를 그리고, 권고가 있으면 프로젝트로 
   );
 });
 
-test("후속 업무가 없으면 등록 제안을 그리지 않는다", async () => {
+test("does not render the register suggestion when there are no follow-ups", async () => {
   const el = await mount({ outcome: { ...outcome, followUps: [] } });
   assert.equal(el.querySelector("[data-outcome-register]"), null);
   assert.equal(el.querySelector("[data-outcome-item]"), null);
-  // 결정은 여전히 보인다.
+  // Decisions are still shown.
   assert.match(el.textContent ?? "", /A안 채택/);
 });
 
-test("참석자로 풀리지 않은 담당은 미지정으로 두되 모델이 쓴 이름을 보여 준다", async () => {
+test("leaves an assignee unassigned when it doesn't resolve to a participant, but shows the name the model wrote", async () => {
   const el = await mount({});
   const second = el.querySelectorAll("[data-outcome-item]")[1];
   assert.equal((second.querySelector("select") as HTMLSelectElement).value, "");
   assert.match(second.textContent ?? "", /리나/);
 });
 
-test("등록을 누르면 선택한 항목만 넘긴다", async () => {
+test("passes only the selected items when register is clicked", async () => {
   let sent: OutcomeRegistration | null = null;
   const el = await mount({
     onRegister: async (body) => {
@@ -104,19 +104,19 @@ test("등록을 누르면 선택한 항목만 넘긴다", async () => {
   await act(async () => (el.querySelector("[data-outcome-register]") as HTMLElement).click());
   assert.deepEqual(sent, {
     tenant: { slug: "가격-개편", name: "가격 개편" },
-    // 0번이 빠졌으니 1번의 after 도 비워진다.
+    // Since item 0 was dropped, item 1's `after` is cleared too.
     items: [{ index: 1, title: "초안 작성", npcId: null, after: [] }],
   });
 });
 
-test("아무것도 선택하지 않으면 등록 버튼이 잠긴다", async () => {
+test("locks the register button when nothing is selected", async () => {
   const el = await mount({});
   for (const box of el.querySelectorAll("[data-outcome-item] input[type=checkbox]"))
     await act(async () => (box as HTMLInputElement).click());
   assert.equal((el.querySelector("[data-outcome-register]") as HTMLButtonElement).disabled, true);
 });
 
-test("등록 실패는 화면에 남고 버튼은 그대로 있다", async () => {
+test("a registration failure stays on screen while the button remains", async () => {
   const el = await mount({
     onRegister: async () => {
       throw new Error("board_ensure_failed");
@@ -127,7 +127,7 @@ test("등록 실패는 화면에 남고 버튼은 그대로 있다", async () =>
   assert.ok(el.querySelector("[data-outcome-register]"));
 });
 
-test("이미 등록된 회의는 버튼 대신 결과를 그린다", async () => {
+test("an already-registered meeting renders the result instead of the button", async () => {
   const el = await mount({
     registered: { boardSlug: "b", tenant: "가격-개편", taskIds: ["t1", "t2"] },
   });
@@ -135,7 +135,7 @@ test("이미 등록된 회의는 버튼 대신 결과를 그린다", async () =>
   assert.match(el.querySelector("[data-outcome-registered]")?.textContent ?? "", /2/);
 });
 
-test("요약이 실패했으면 그 사실을 말하고 다시 시도하게 한다", async () => {
+test("when the summary fails, it says so and offers a retry", async () => {
   let retried = 0;
   const el = await mount({
     outcome: null,
@@ -150,13 +150,13 @@ test("요약이 실패했으면 그 사실을 말하고 다시 시도하게 한�
   assert.equal(retried, 1);
 });
 
-test("등록 권한이 없으면 초안은 보이되 등록 버튼은 없다", async () => {
+test("without register permission, the draft is shown but there is no register button", async () => {
   const el = await mount({ canRegister: false });
   assert.equal(el.querySelectorAll("[data-outcome-item]").length, 2);
   assert.equal(el.querySelector("[data-outcome-register]"), null);
 });
 
-test("플러그인이 승인 대기 카드를 못 만들면 버튼 대신 갱신 안내를 그리고 초안은 잠근다", async () => {
+test("when the plugin can't create pending-approval cards, it renders an upgrade notice instead of the button and locks the draft", async () => {
   const el = await mount({ registerSupported: false });
   assert.equal(el.querySelector("[data-outcome-register]"), null);
   assert.match(el.querySelector("[data-outcome-upgrade]")?.textContent ?? "", /0\.11\.0/);

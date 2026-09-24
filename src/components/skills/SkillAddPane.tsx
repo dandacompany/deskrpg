@@ -13,20 +13,23 @@ import { useSkillJob } from "./use-skill-job";
 export type SkillAddPaneProps = {
   api: SkillsApi;
   mode: "hub" | "url";
-  /** 설치 작업이 끝났다(성공·실패·결과 불명) — 목록을 다시 읽는다. */
+  /** The install job finished (succeeded/failed/unknown result) — reload the list. */
   onInstalled(): void;
-  /** 작업 폴링 간격(ms). 테스트에서 줄인다. */
+  /** Job polling interval (ms). Shortened in tests. */
   pollIntervalMs?: number;
 };
 
-/** 고른 항목의 미리보기 요청 상태. 성공하면 `preview` 로 옮기고 이것은 비운다. */
+/** Preview request state for the selected item. On success it moves to `preview` and this is cleared. */
 type Pending = { identifier: string; error: string | null };
 
 /**
- * Hub 검색·직접 URL 로 스킬을 설치한다. 결과(왼쪽, 신뢰 등급 순) → 미리보기(오른쪽 — 스캔 판정·신뢰 등급·실행 코드 포함 여부)
- * → 설치 → 진행. 좁은 화면에서는 미리보기가 목록 위로 오고, 열릴 때 화면 안으로 스크롤한다.
- * 미리보기는 수 초 걸린다(플러그인이 저장소를 받아 스캔한다) — 불러오는 중을 보이고, 그사이 다른 항목을 누르면 앞 응답은 버린다.
- * Hermes 가 막는 조합(`policy: block`)은 설치 버튼을 그리지 않고, 주의(`ask`)는 확인을 받은 뒤 `force` 로 보낸다.
+ * Installs a skill via Hub search or a direct URL. Results (left, ordered by trust level) →
+ * preview (right — scan verdict, trust level, whether it includes executable code) → install →
+ * progress. On narrow screens the preview sits above the list, and scrolls into view when opened.
+ * The preview takes a few seconds (the plugin fetches the repo and scans it) — a loading state is
+ * shown, and clicking another item in the meantime discards the earlier response.
+ * A combination Hermes blocks (`policy: block`) draws no install button; a caution (`ask`) sends
+ * with `force` once confirmed.
  */
 export default function SkillAddPane({
   api,
@@ -48,7 +51,7 @@ export default function SkillAddPane({
   const previewSeq = useRef(0);
   const previewRef = useRef<HTMLElement | null>(null);
 
-  // 모드가 바뀌면 앞 모드의 결과·미리보기를 버린다(늦게 올 미리보기도).
+  // When the mode changes, discard the previous mode's results/preview (including a late-arriving preview).
   useEffect(() => {
     previewSeq.current += 1;
     setQ("");
@@ -58,7 +61,7 @@ export default function SkillAddPane({
     setSearchError(null);
   }, [mode]);
 
-  // 작업이 끝나면(성공·실패·결과 불명) 한 번만 목록을 다시 읽게 한다.
+  // Once the job finishes (succeeded/failed/unknown result), reload the list exactly once.
   useEffect(() => {
     if (job.state === "running") reported.current = false;
     else if (
@@ -70,7 +73,7 @@ export default function SkillAddPane({
     }
   }, [job.state, onInstalled]);
 
-  // 미리보기(또는 그 로딩)가 시작되면 그 칸을 보이게 한다 — 긴 결과 목록 아래에 묻히지 않게.
+  // Once the preview (or its loading state) starts, bring that pane into view — so it doesn't stay hidden below a long result list.
   const focusKey = pending?.identifier ?? preview?.identifier ?? null;
   useEffect(() => {
     if (focusKey) previewRef.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });

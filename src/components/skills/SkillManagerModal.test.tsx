@@ -45,7 +45,7 @@ const opened = () => ({
   [`GET ${ROOT}/weekly`]: detail(),
   [`GET ${ROOT}/weekly/file?path=SKILL.md`]: file("본문", "h1"),
 });
-// 모달이 함께 부르는 부속 조회(curator 줄) — 테스트마다 넣지 않도록 기본으로 둔다.
+// Auxiliary fetch the modal also makes (curator row) — kept as a default so tests don't have to add it each time.
 const extras = {
   [`GET ${ROOT}/curator`]: {
     enabled: true,
@@ -72,7 +72,7 @@ const modal = () => (
 
 test.afterEach(cleanup);
 
-test("머리에 직원 이름, 스킬을 고르면 파일 트리와 편집기, scripts 는 잠금", async () => {
+test("header shows employee name; picking a skill shows file tree and editor, scripts locked", async () => {
   mockFetch({ ...extras, [LIST]: listBody(), ...opened() });
   await render(modal());
   assert.ok(text().includes("소피 · 스킬 관리"));
@@ -82,7 +82,7 @@ test("머리에 직원 이름, 스킬을 고르면 파일 트리와 편집기, s
   assert.equal(($("textarea") as HTMLTextAreaElement).value, "본문");
 });
 
-test("저장은 baseHash 를 싣고, 충돌이면 내용을 지우지 않고 다시 불러오기를 보인다", async () => {
+test("save carries baseHash; on conflict shows reload without clearing content", async () => {
   const log = mockFetch({
     ...extras,
     [LIST]: listBody(),
@@ -102,7 +102,7 @@ test("저장은 baseHash 를 싣고, 충돌이면 내용을 지우지 않고 다
   assert.ok(container.querySelector('[data-action="reload"]'));
 });
 
-test("멤버는 편집기가 읽기 전용이고 변경 버튼·추가 탭이 없다", async () => {
+test("a member sees a read-only editor with no change buttons or add tab", async () => {
   mockFetch({ ...extras, [LIST]: listBody(false), ...opened() });
   await render(modal());
   await click('[data-skill="weekly"]');
@@ -113,7 +113,7 @@ test("멤버는 편집기가 읽기 전용이고 변경 버튼·추가 탭이 �
   assert.equal(container.querySelector('[data-tab="add"]'), null);
 });
 
-test("잠긴 파일은 소유자에게도 읽기 전용이고 저장 버튼이 없다", async () => {
+test("a locked file is read-only even for the owner, with no save button", async () => {
   mockFetch({
     ...extras,
     [LIST]: listBody(),
@@ -132,7 +132,7 @@ test("잠긴 파일은 소유자에게도 읽기 전용이고 저장 버튼이 �
   assert.equal(container.querySelector('[data-action="save"]'), null);
 });
 
-test("보관은 확인을 거쳐 POST …/archive 후 선택을 비운다", async () => {
+test("archive goes through confirmation, POSTs …/archive, then clears the selection", async () => {
   const log = mockFetch({
     ...extras,
     [LIST]: listBody(),
@@ -148,7 +148,7 @@ test("보관은 확인을 거쳐 POST …/archive 후 선택을 비운다", asyn
   assert.equal(container.querySelector("textarea"), null);
 });
 
-test("고정은 PUT …/pinned 후 상세를 다시 읽는다", async () => {
+test("pin PUTs …/pinned then re-reads the detail", async () => {
   const log = mockFetch({
     ...extras,
     [LIST]: listBody(),
@@ -162,7 +162,7 @@ test("고정은 PUT …/pinned 후 상세를 다시 읽는다", async () => {
   assert.equal(log.calls.filter((c) => c === `GET ${ROOT}/weekly`).length, 2);
 });
 
-test("미사용 끄기는 목록을 보여 준 뒤 확인하면 일괄 PUT", async () => {
+test("disable-unused shows the list, then bulk PUTs on confirm", async () => {
   const log = mockFetch({
     ...extras,
     [LIST]: listBody(),
@@ -176,7 +176,7 @@ test("미사용 끄기는 목록을 보여 준 뒤 확인하면 일괄 PUT", asy
   assert.deepEqual(log.bodies[`PUT ${ROOT}/enabled`], { enable: [], disable: ["weekly", "pdf"] });
 });
 
-test("새로 만들기는 틀을 채우고 POST, 잘못된 이름이면 버튼이 꺼진다", async () => {
+test("create fills the template and POSTs; an invalid name disables the button", async () => {
   const log = mockFetch({
     ...extras,
     [LIST]: listBody(),
@@ -197,7 +197,7 @@ test("새로 만들기는 틀을 채우고 POST, 잘못된 이름이면 버튼�
   assert.ok(body.content.startsWith("---\nname: invoice\ndescription: 청구서\n---"));
 });
 
-test("Esc 는 닫되, 먼저 처리한 레이어가 있으면(defaultPrevented) 닫지 않는다", async () => {
+test("Esc closes, but not when a higher layer already handled it (defaultPrevented)", async () => {
   mockFetch({ ...extras, [LIST]: listBody() });
   closed = 0;
   await render(modal());
@@ -214,7 +214,7 @@ test("Esc 는 닫되, 먼저 처리한 레이어가 있으면(defaultPrevented) 
   assert.equal(closed, 1);
 });
 
-test("initialSkill 로 열면 그 스킬의 상세가 바로 보이고, 보관함 탭에 개수", async () => {
+test("opening with initialSkill shows that skill's detail immediately, and a count on the archive tab", async () => {
   mockFetch({
     ...extras,
     [LIST]: listBody(),
@@ -234,7 +234,7 @@ test("initialSkill 로 열면 그 스킬의 상세가 바로 보이고, 보관�
   assert.equal($('[data-badge="archive"]').textContent, "1");
 });
 
-test("Hub 스킬 [삭제] 는 확인 뒤 작업을 끝까지 폴링하고 선택을 비운다", async () => {
+test("Hub skill [delete] confirms, polls the job to completion, then clears the selection", async () => {
   const log = mockFetch({
     [`GET ${ROOT}/pdf`]: { ...detail({ name: "pdf", source: "hub" }), files: [] },
     [`GET ${ROOT}/pdf/file?path=SKILL.md`]: file("hub", "h3"),
@@ -269,7 +269,7 @@ test("Hub 스킬 [삭제] 는 확인 뒤 작업을 끝까지 폴링하고 선택
   assert.equal(removed, 1);
 });
 
-test("고정된 로컬 스킬은 [보관] 이 꺼지고 고정 해제 안내가 보인다", async () => {
+test("a pinned local skill has [archive] disabled and shows an unpin hint", async () => {
   mockFetch({
     [`GET ${ROOT}/weekly`]: detail({ pinned: true }),
     [`GET ${ROOT}/weekly/file?path=SKILL.md`]: file("본문", "h1"),
@@ -287,7 +287,7 @@ test("고정된 로컬 스킬은 [보관] 이 꺼지고 고정 해제 안내가 
   assert.ok(text().includes("고정 해제"));
 });
 
-test("보관이 409 skill_pinned 로 거절되면 같은 안내를 보인다", async () => {
+test("when archive is rejected with 409 skill_pinned, it shows the same hint", async () => {
   mockFetch({
     ...opened(),
     [`POST ${ROOT}/weekly/archive`]: { status: 409, json: { code: "skill_pinned", message: "" } },
@@ -305,7 +305,7 @@ test("보관이 409 skill_pinned 로 거절되면 같은 안내를 보인다", a
   assert.ok(text().includes("먼저 고정을 해제하세요"));
 });
 
-test("스킬을 고르기 전 오른쪽 칸에 고르라는 안내", async () => {
+test("before picking a skill, the right pane shows a prompt to pick one", async () => {
   mockFetch({ ...extras, [LIST]: listBody() });
   await render(modal());
   assert.ok(text().includes("왼쪽에서 스킬을 고르세요"));

@@ -7,7 +7,7 @@ export type ArrivalState = {
   reasonCode?: string;
 };
 
-/** 요청을 먼저 기록하므로 방 안에서 발생하는 동기 도착도 한 번만 처리한다. */
+/** Records the request first, so even a synchronous arrival that happens inside the room is handled only once. */
 export class MeetingEntryController {
   state: EntryState = { status: "idle" };
   constructor(

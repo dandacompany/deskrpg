@@ -56,14 +56,14 @@ const approvalRow: AttentionRow = {
   count: 2,
 };
 
-test("답할 것이 없으면 빈 상태를 보인다", async () => {
+test("shows the empty state when there is nothing to answer", async () => {
   const api = fakeApi([{ rows: [], counts: EMPTY_COUNTS }]);
   const { host, cleanup } = await render(<AttentionInboxPanel channelId="c1" api={api.client} />);
   assert.ok(host.querySelector("[data-attention-empty]"));
   await cleanup();
 });
 
-test("승인 줄에는 결정 버튼 셋이 있고 요청자를 프로필로 그린다", async () => {
+test("an approval row has three decision buttons and renders the requester as a profile", async () => {
   const api = fakeApi([
     { rows: [approvalRow], counts: { ...EMPTY_COUNTS, awaiting_approval: 2, total: 2 } },
   ]);
@@ -75,8 +75,8 @@ test("승인 줄에는 결정 버튼 셋이 있고 요청자를 프로필로 그
   await cleanup();
 });
 
-test("사람이 등록한 묶음은 직원 이름으로 그리지 않는다", async () => {
-  // `user:<id>` 를 프로필처럼 그리면 하지 않은 말을 한 것이 된다.
+test("a bundle a human registered is not rendered under a staff name", async () => {
+  // Rendering `user:<id>` as a profile would claim something that wasn't said.
   const api = fakeApi([
     {
       rows: [{ ...approvalRow, requestedBy: "user:7e0a0f1c-1111-4222-8333-444455556666" }],
@@ -90,7 +90,7 @@ test("사람이 등록한 묶음은 직원 이름으로 그리지 않는다", as
   await cleanup();
 });
 
-test("승인을 누르면 그 결정이 라우트로 가고 목록을 다시 불러온다", async () => {
+test("clicking approve sends that decision to the route and reloads the list", async () => {
   const api = fakeApi([
     { rows: [approvalRow], counts: EMPTY_COUNTS },
     { rows: [], counts: EMPTY_COUNTS },
@@ -99,13 +99,13 @@ test("승인을 누르면 그 결정이 라우트로 가고 목록을 다시 불
   const button = host.querySelector('[data-decision="approve"]') as HTMLButtonElement;
   await act(async () => button.click());
   assert.deepEqual(api.decided, [{ approvalId: "a1", body: { decision: "approve" } }]);
-  // 낙관적 갱신을 쓰지 않는다 — 서버가 정본이라 다시 읽는다.
+  // No optimistic update — the server is the source of truth, so we reload.
   assert.equal(api.loads(), 2);
   assert.ok(host.querySelector("[data-attention-empty]"), "결정한 줄이 사라져야 한다");
   await cleanup();
 });
 
-test("메모를 적으면 함께 보낸다", async () => {
+test("a note, when entered, is sent along with the decision", async () => {
   const api = fakeApi([{ rows: [approvalRow], counts: EMPTY_COUNTS }]);
   const { host, cleanup } = await render(<AttentionInboxPanel channelId="c1" api={api.client} />);
   const input = host.querySelector("input") as HTMLInputElement;
@@ -123,7 +123,7 @@ test("메모를 적으면 함께 보낸다", async () => {
   await cleanup();
 });
 
-test("승인이 아닌 줄에는 결정 버튼이 없고 열기만 있다", async () => {
+test("a non-approval row has no decision buttons, only an open action", async () => {
   const api = fakeApi([
     {
       rows: [
@@ -162,7 +162,7 @@ test("승인이 아닌 줄에는 결정 버튼이 없고 열기만 있다", asyn
   await cleanup();
 });
 
-test("실패하면 이유를 보이고 다시 시도할 수 있다", async () => {
+test("on failure, shows the reason and lets the user retry", async () => {
   let calls = 0;
   const client = {
     async load() {

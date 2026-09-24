@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { MeetingEntryController } from "./entry-controller";
 
-test("도착 전에는 UI를 열지 않으며 반복 요청과 늦은 도착을 무시한다", () => {
+test("does not open the UI before arrival, and ignores repeated requests and late arrivals", () => {
   const effects: string[] = [];
   const entry = new MeetingEntryController((event) => effects.push(event));
   entry.request();
@@ -21,7 +21,7 @@ test("도착 전에는 UI를 열지 않으며 반복 요청과 늦은 도착을 
   assert.equal(entry.state.status, "idle");
 });
 
-test("동기 도착과 거절 뒤 재시도를 지원한다", () => {
+test("supports synchronous arrival and retry after rejection", () => {
   const entry = new MeetingEntryController((event) => {
     if (event === "request") entry.arrival({ status: "arrived" });
   });

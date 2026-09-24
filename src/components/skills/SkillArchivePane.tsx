@@ -10,13 +10,14 @@ import type { SkillsApi } from "./skills-api";
 export type SkillArchivePaneProps = {
   api: SkillsApi;
   canManage: boolean;
-  /** 복원·영구 삭제로 목록(설치됨·보관함 수)이 바뀌었다. */
+  /** A restore or purge changed the list (installed count / archive count). */
   onChanged(): void;
 };
 
 /**
- * 보관함 — 보관한 로컬 스킬을 복원하거나 영구 삭제한다. 영구 삭제는 스킬 이름을 그대로 입력해야 켜진다
- * (원본은 Hermes ledger 에 남아 CLI 로만 되살릴 수 있다).
+ * Archive pane — restores or permanently purges archived local skills. Purging is only enabled
+ * once the skill name is typed exactly (the original stays in the Hermes ledger and can only be
+ * revived via CLI).
  */
 export default function SkillArchivePane({ api, canManage, onChanged }: SkillArchivePaneProps) {
   const t = useT();

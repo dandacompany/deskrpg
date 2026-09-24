@@ -9,7 +9,7 @@ import { I18nProvider, type Locale } from "@/lib/i18n";
 import type { RoomNotice } from "@/lib/chat-rooms-policy";
 import CardProposalNotice from "./CardProposalNotice";
 
-// 버튼 유무는 `notice.resolved` 하나로 정해진다 — 오류는 버튼을 지우지 않는다.
+// Whether buttons show is decided solely by `notice.resolved` — an error never removes the buttons.
 
 type Proposal = Extract<RoomNotice, { kind: "card_proposal" }>;
 
@@ -43,7 +43,7 @@ async function render(
   };
 }
 
-test("해소 전에는 버튼 두 개 — 등록과 여기서 처리", async () => {
+test("before resolution there are two buttons — register and handle here", async () => {
   const { host, cleanup } = await render(
     <CardProposalNotice notice={base} onResolve={() => {}} pending={false} error={null} />,
   );
@@ -54,7 +54,7 @@ test("해소 전에는 버튼 두 개 — 등록과 여기서 처리", async () 
   await cleanup();
 });
 
-test("버튼이 선택을 그대로 올린다", async () => {
+test("each button reports its choice as-is", async () => {
   const picked: string[] = [];
   const { host, cleanup } = await render(
     <CardProposalNotice
@@ -73,7 +73,7 @@ test("버튼이 선택을 그대로 올린다", async () => {
   await cleanup();
 });
 
-test("pending 중에는 버튼이 비활성이지만 사라지지 않는다", async () => {
+test("while pending, buttons are disabled but not removed", async () => {
   const { host, cleanup } = await render(
     <CardProposalNotice notice={base} onResolve={() => {}} pending error={null} />,
   );
@@ -83,7 +83,7 @@ test("pending 중에는 버튼이 비활성이지만 사라지지 않는다", as
   await cleanup();
 });
 
-test("해소 후에는 버튼이 없고 결과가 보인다", async () => {
+test("after resolution there are no buttons and the result is shown", async () => {
   const notice: Proposal = {
     ...base,
     resolved: { choice: "card", by: "u1", at: "2026-09-21T00:00:00Z", taskId: "t1" },
@@ -96,7 +96,7 @@ test("해소 후에는 버튼이 없고 결과가 보인다", async () => {
   await cleanup();
 });
 
-test("여기서 처리로 해소되면 taskId 없이도 결과가 보인다", async () => {
+test("when resolved via handle-here, the result shows even without a taskId", async () => {
   const notice: Proposal = {
     ...base,
     resolved: { choice: "inline", by: "u1", at: "2026-09-21T00:00:00Z" },
@@ -110,7 +110,7 @@ test("여기서 처리로 해소되면 taskId 없이도 결과가 보인다", as
   await cleanup();
 });
 
-test("오류가 있으면 이유를 보이고 버튼을 남긴다", async () => {
+test("when there is an error, it shows the reason and keeps the buttons", async () => {
   const { host, cleanup } = await render(
     <CardProposalNotice
       notice={base}
@@ -124,7 +124,7 @@ test("오류가 있으면 이유를 보이고 버튼을 남긴다", async () => 
   await cleanup();
 });
 
-test("네 로케일 모두 제 언어로 버튼 문구가 나온다", async () => {
+test("all four locales show button labels in their own language", async () => {
   const seen = new Set<string>();
   for (const locale of LOCALES) {
     const { host, cleanup } = await render(
@@ -141,7 +141,7 @@ test("네 로케일 모두 제 언어로 버튼 문구가 나온다", async () =
   assert.equal(seen.size, LOCALES.length);
 });
 
-test("이미 처리된 제안(409)은 코드가 아니라 무엇을 할지 안내하고, 버튼은 남는다", async () => {
+test("an already-resolved proposal (409) explains what to do instead of the raw code, and buttons remain", async () => {
   for (const locale of LOCALES) {
     const { host, cleanup } = await render(
       <CardProposalNotice
@@ -152,18 +152,18 @@ test("이미 처리된 제안(409)은 코드가 아니라 무엇을 할지 안�
       />,
       locale,
     );
-    // 버튼이 사라지면 사용자가 손쓸 방법이 없어진다.
+    // If the buttons disappeared, the user would have no way to act.
     assert.equal(host.querySelectorAll("button").length, 2);
     const line = host.querySelector("[data-testid='card-proposal-error']");
     assert.ok(line);
-    // 코드를 그대로 노출하지 않고, 번역 키가 새어 나오지도 않는다.
+    // Neither the raw code nor a leaked translation key should show.
     assert.doesNotMatch(line.textContent!, /already_resolved/);
     assert.doesNotMatch(line.textContent!, /notice\.cardProposal/);
     await cleanup();
   }
 });
 
-test("완료 조건은 라벨을 달아 본문과 구분해 보인다", async () => {
+test("the acceptance condition shows with a label, kept separate from the body", async () => {
   const notice: Proposal = { ...base, body: "청구서를 모은다", acceptance: "표로 정리" };
   for (const locale of LOCALES) {
     const { host, cleanup } = await render(
@@ -173,16 +173,16 @@ test("완료 조건은 라벨을 달아 본문과 구분해 보인다", async ()
     const line = host.querySelector("[data-testid='card-proposal-acceptance']");
     assert.ok(line, `${locale}: 완료 조건 줄이 없다`);
     assert.match(line.textContent!, /표로 정리/);
-    // 본문과 같은 줄에 섞이지 않는다.
+    // It doesn't get mixed into the same line as the body.
     assert.doesNotMatch(line.textContent!, /청구서를 모은다/);
-    // 라벨이 제 언어로 붙는다 — 번역 키가 새지 않는다.
+    // The label attaches in the viewer's own language — no translation key leaks.
     assert.doesNotMatch(line.textContent!, /notice\.cardProposal/);
     assert.ok(line.textContent!.replace("표로 정리", "").trim().length > 0);
     await cleanup();
   }
 });
 
-test("처리할 수 없는 화면에서는 이유를 말한다 — 버튼만 비활성으로 두지 않는다", async () => {
+test("when the screen can't handle it, it states the reason — not just disabled buttons", async () => {
   for (const locale of LOCALES) {
     const { host, cleanup } = await render(
       <CardProposalNotice
@@ -198,7 +198,7 @@ test("처리할 수 없는 화면에서는 이유를 말한다 — 버튼만 비
     assert.ok(line, `${locale}: 이유 줄이 없다 — 비활성 버튼만 남으면 로딩처럼 보인다`);
     assert.doesNotMatch(line.textContent!, /notice\.cardProposal/);
     assert.ok(line.textContent!.trim().length > 0);
-    // 버튼은 사라지지 않고 비활성으로 남는다.
+    // The buttons don't disappear — they remain, just disabled.
     const buttons = [...host.querySelectorAll("button")];
     assert.equal(buttons.length, 2);
     assert.ok(
@@ -209,7 +209,7 @@ test("처리할 수 없는 화면에서는 이유를 말한다 — 버튼만 비
   }
 });
 
-test("pending 과 unavailable 은 다른 상태다 — 요청 중에는 이유 줄이 없다", async () => {
+test("pending and unavailable are different states — no reason line while a request is in flight", async () => {
   const { host, cleanup } = await render(
     <CardProposalNotice notice={base} onResolve={() => {}} pending error={null} />,
   );

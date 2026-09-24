@@ -28,7 +28,7 @@ const pane = (canManage: boolean) => (
 
 test.afterEach(cleanup);
 
-test("목록과 날짜, [복원] 은 POST …/archive/weekly/restore 후 다시 읽는다", async () => {
+test("shows the list and date; [Restore] sends POST …/archive/weekly/restore then reloads", async () => {
   const log = mockFetch({
     [ARCHIVE]: archived,
     [`POST ${ROOT}/archive/weekly/restore`]: { name: "weekly" },
@@ -40,7 +40,7 @@ test("목록과 날짜, [복원] 은 POST …/archive/weekly/restore 후 다시 
   assert.deepEqual(log.calls, [ARCHIVE, `POST ${ROOT}/archive/weekly/restore`, ARCHIVE]);
 });
 
-test("[영구 삭제] 는 이름을 정확히 입력해야 확인 버튼이 켜지고 DELETE …/archive/weekly", async () => {
+test("[Permanently delete] enables the confirm button only on an exact name match, then sends DELETE …/archive/weekly", async () => {
   const log = mockFetch({
     [ARCHIVE]: archived,
     [`DELETE ${ROOT}/archive/weekly`]: { name: "weekly", ledgerId: "l1" },
@@ -56,7 +56,7 @@ test("[영구 삭제] 는 이름을 정확히 입력해야 확인 버튼이 켜�
   assert.ok(log.calls.includes(`DELETE ${ROOT}/archive/weekly`));
 });
 
-test("멤버에게는 복원·영구 삭제 버튼이 없다", async () => {
+test("members have no restore/permanently-delete buttons", async () => {
   mockFetch({ [ARCHIVE]: archived });
   await render(pane(false));
   assert.ok(text().includes("weekly"));
@@ -64,7 +64,7 @@ test("멤버에게는 복원·영구 삭제 버튼이 없다", async () => {
   assert.equal(container.querySelector('[data-action="purge"]'), null);
 });
 
-test("비어 있으면 안내 문구", async () => {
+test("shows a notice when empty", async () => {
   mockFetch({ [ARCHIVE]: { archived: [] } });
   await render(pane(true));
   assert.ok(text().includes("보관한 스킬이 없습니다"));

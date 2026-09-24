@@ -57,8 +57,9 @@ function extractText(node: ReactNode): string {
 // ─── Markdown components ────────────────────────────────────────────
 
 /**
- * 파일 링크 옆에 붙는 내려받기 아이콘. 대화 중에 받은 문서·그림을 저장할 방법이
- * 새 탭 열기뿐이던 것을 없앤다(결과물 뷰어·카드 첨부에만 있던 버튼을 여기에도 준다).
+ * Download icon attached next to a file link. Removes the case where opening a new tab was the
+ * only way to save a document/image received in chat (gives this the button that used to exist
+ * only in the artifact viewer / card attachments).
  */
 function DownloadLink({
   href,
@@ -95,7 +96,7 @@ function buildComponents(t: (key: string) => string): Components {
     ),
     p: ({ children, node }) => {
       const paragraph = <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>;
-      // 한 줄에 링크만 있는 문단만 카드로 승격한다 — 판정은 promote.ts, 실패 시 이 문단 그대로.
+      // Only promotes a paragraph that consists solely of a link into a card — the check is in promote.ts, and on failure this paragraph is left as-is.
       const url = soleLinkUrl(node);
       return url ? <LinkPreviewCard url={url} fallback={paragraph} /> : paragraph;
     },
@@ -147,8 +148,8 @@ function buildComponents(t: (key: string) => string): Components {
     ),
     td: ({ children }) => <td className="border border-border px-2 py-1">{children}</td>,
     img: ({ src, alt }) => {
-      // 주소를 잃은 이미지(`urlTransform` 이 지운 스킴)는 빈 칸으로 두지 않는다 —
-      // 깨진 아이콘만 남으면 사용자에게 무슨 일이 났는지 단서가 없다(2026-09-20 실측).
+      // An image that lost its URL (a scheme stripped by `urlTransform`) is not left blank —
+      // a broken icon alone gives the user no clue what happened (observed 2026-09-20).
       if (typeof src !== "string" || !src) {
         return (
           <span className="my-1 inline-block rounded bg-surface px-2 py-1 text-[11px] text-text-dim">

@@ -7,14 +7,16 @@ import { SkillsApiError, type SkillsApi } from "./skills-api";
 
 export type SkillJobState = "idle" | "running" | "succeeded" | "failed" | "unknown" | "busy";
 
-/** 설치·업데이트·curator 실행 작업을 조회하는 간격과 포기하는 상한(설계 §4.4 — 2초, 5분). */
+/** Poll interval and give-up timeout for install/update/curator-run jobs (design §4.4 — 2s, 5min). */
 export const SKILL_JOB_INTERVAL_MS = 2000;
 export const SKILL_JOB_TIMEOUT_MS = 300_000;
 
 /**
- * 플러그인의 비동기 작업(202 `{jobId}`)을 끝날 때까지 폴링한다. 언마운트하거나 새 작업을 시작하면
- * 앞 폴링은 세대 번호로 버린다 — 닫은 모달이나 다른 직원의 결과가 화면을 덮지 않는다.
- * 시작이 409 `job_busy` 면 `busy`, 조회가 404 `job_unknown`(게이트웨이 재시작)이거나 상한을 넘기면 `unknown`.
+ * Polls a plugin's async job (202 `{jobId}`) until it finishes. On unmount or starting a new job,
+ * the previous poll is discarded by generation number — a closed modal or another employee's
+ * result never overwrites the screen.
+ * `busy` if starting returns 409 `job_busy`; `unknown` if polling returns 404 `job_unknown`
+ * (gateway restarted) or the timeout is exceeded.
  */
 export function useSkillJob(
   api: SkillsApi,

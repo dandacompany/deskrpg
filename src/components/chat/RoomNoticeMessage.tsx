@@ -1,16 +1,19 @@
 "use client";
 /**
- * 구조화 알림 한 줄(R29·R30). 서버는 로케일을 모른 채 `notice` 만 싣고, 문장은 여기서 보는
- * 사람의 언어로 만든다.
+ * A single line of structured notice (R29/R30). The server doesn't know the locale and
+ * only ships `notice`; the sentence is built here in the viewer's language.
  *
- * - `card_done` / `card_blocked` / `card_review`: 카드 제목 중심 문장 + "카드 열기"(칸반 모달을 그 카드로).
- * - `cron_result`: "크론 결과 · {jobName}" 헤더(실패 배지) + 본문 그대로 + "이력 열기".
- * - `card_proposal`: 제안 본문 + 선택 버튼 둘(해소 전) / 결정 결과(해소 후). `content` 는
- *   제목과 같으므로 다시 그리지 않는다.
- * - 모르는 kind: `content` 폴백 — 알림 자체를 삼키지 않는다.
+ * - `card_done` / `card_blocked` / `card_review`: a card-title-centered sentence + "Open
+ *   card" (opens the Kanban modal to that card).
+ * - `cron_result`: a "Cron result · {jobName}" header (with a failure badge) + the body
+ *   as-is + "Open history".
+ * - `card_proposal`: the proposal body + two choice buttons (before resolution) / the
+ *   decision result (after). `content` matches the title, so it isn't rendered again.
+ * - An unknown kind: falls back to `content` — the notice itself is never swallowed.
  *
- * 발신자 이름은 `notice.npcName`(없으면 senderName) 을 쓴다. system 메시지의 `content` 앞에는
- * 서버가 NPC 이름을 붙여 두지만(R22) 문장은 notice 로 만드니 그 접두는 쓰지 않는다.
+ * The sender name uses `notice.npcName` (falling back to senderName). The server prefixes
+ * the NPC name onto a system message's `content` (R22), but since the sentence is built
+ * from notice here, that prefix isn't used.
  */
 import type { RoomMessage, RoomNotice } from "@/lib/chat-rooms-policy";
 import { useT } from "@/lib/i18n";
@@ -20,7 +23,7 @@ import CardProposalNotice from "./CardProposalNotice";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
-/** 카드 알림의 본문 문장. 순수 함수 — 테스트가 로케일별로 고정한다. */
+/** The body sentence for a card notice. A pure function — tests pin it down per locale. */
 export function cardNoticeText(
   notice: Extract<RoomNotice, { kind: "card_done" | "card_blocked" | "card_review" }>,
   t: Translate,
@@ -35,9 +38,10 @@ export function cardNoticeText(
 }
 
 /**
- * 여기서 문장을 만들 수 있는 kind 인지 — 아니면 `content` 폴백으로 간다.
- * 지원 목록을 `Extract` 로 양성적으로 적는다: 새 kind 가 유니온에 들어와도 여기서 빠지면
- * 자동으로 폴백이 되고, `Exclude` 예외가 kind 마다 쌓이지 않는다.
+ * Whether this is a kind we can build a sentence for here — otherwise it falls back to
+ * `content`. The supported list is written positively via `Extract`: a new kind added to
+ * the union that isn't listed here automatically falls back, so `Exclude` exceptions don't
+ * pile up per kind.
  */
 export function isKnownNotice(notice: RoomNotice | null | undefined): notice is Extract<
   RoomNotice,
@@ -69,13 +73,13 @@ export interface RoomNoticeMessageProps {
   onOpenCard?: (cardId: string, boardSlug: string) => void;
   onOpenCronJob?: (jobId: string) => void;
   onOpenApproval?: (approvalId: string) => void;
-  /** 회의 결과 알림 — 그 회의의 회의록(후속 업무 등록 화면)을 연다. 없으면 버튼이 없다. */
+  /** A meeting-outcome notice — opens that meeting's minutes (the follow-up task registration screen). No button if omitted. */
   onOpenMinutes?: (minutesId: string) => void;
-  /** 제안 알림의 선택. 없으면 제안은 버튼 없이 본문만 보인다(읽기 전용). */
+  /** The choice for a proposal notice. If omitted, the proposal shows only its body, with no buttons (read-only). */
   onResolveProposal?: (proposalId: string, choice: "card" | "inline") => void;
-  /** 그 제안이 지금 서버 호출 중인지. */
+  /** Whether that proposal currently has a server call in flight. */
   proposalPending?: boolean;
-  /** 그 제안의 마지막 실패 이유(코드). 버튼은 그대로 남는다. */
+  /** The reason (code) that proposal last failed. The buttons remain as-is. */
   proposalError?: string | null;
 }
 
@@ -94,7 +98,7 @@ export default function RoomNoticeMessage({
   const name = (notice && "npcName" in notice && notice.npcName) || message.senderName;
 
   if (!isKnownNotice(notice)) {
-    // 알 수 없는 kind — 일반 NPC/시스템 줄처럼 content 만.
+    // An unknown kind — just content, like a regular NPC/system line.
     return (
       <div className="flex justify-start" data-room-notice="unknown">
         <div className="max-w-[85%] px-3 py-2 rounded-lg text-body bg-surface-raised text-text-secondary">
@@ -163,7 +167,7 @@ export default function RoomNoticeMessage({
   }
 
   if (notice.kind === "meeting_outcome") {
-    // 등록되면 같은 줄이 결과를 말한다. 렌더러가 `resolved` 를 읽어서이지 클라이언트가 숨기는 것이 아니다.
+    // Once registered, the same line states the result. That's the renderer reading `resolved` — the client isn't hiding anything.
     const registered = notice.resolved;
     return (
       <div className="flex justify-start" data-room-notice={notice.kind}>
@@ -195,8 +199,9 @@ export default function RoomNoticeMessage({
   }
 
   if (notice.kind === "approval_requested") {
-    // 결정되면 버튼 대신 결과를 그린다. **렌더러가 해소 상태를 읽어서**이지 클라이언트가
-    // 숨기는 것이 아니다 — 새로고침해도, 다른 탭에서도 같다.
+    // Once decided, the result renders instead of the button. **The renderer reads the
+    // resolved state** — the client isn't hiding it — so it looks the same after a
+    // refresh and in other tabs.
     return (
       <div className="flex justify-start" data-room-notice={notice.kind}>
         <div className="max-w-[85%] px-3 py-2 rounded-lg text-body bg-surface-raised text-text-secondary border border-border">

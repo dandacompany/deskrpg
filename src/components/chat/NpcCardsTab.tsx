@@ -1,19 +1,21 @@
 "use client";
 /**
- * 직원 대화창의 "카드" 탭 — 이 NPC 가 담당인 칸반 카드 목록. 크론 탭(`CronPanel`)의 짜임새를
- * 따른다.
+ * The "Cards" tab in the staff dialog — the list of Kanban cards this NPC is assigned to.
+ * Follows the same layout as the cron tab (`CronPanel`).
  *
- * **스스로 조회하지 않는다.** `board`(또는 `error`)를 부모(`ChatPanel`, Task 6)가 넘겨주고,
- * 여기는 `assignedCards` 로 고른 결과를 그리기만 한다 — DB·네트워크 없이 테스트되고 클라이언트
- * 번들 경계를 넘지 않는다.
+ * **Does not fetch on its own.** The parent (`ChatPanel`, Task 6) passes in `board` (or
+ * `error`), and this component only renders what `assignedCards` picks out — testable
+ * without a DB or network, and never crosses the client bundle boundary.
  *
- * **확정되지 않은 상태를 빈 목록으로 단정하지 않는다.** 조회가 끝나기 전(`board`·`error` 가
- * 둘 다 `null`)에는 스켈레톤만 둔다. "담당 카드 없음" 은 **확정된 사실일 때만** 하는 말이다.
- * 보드가 도착했으면 로딩은 끝난 것이다 — `npcProfile` 을 몰라도 스켈레톤을 계속 돌리지 않는다.
+ * **Never treats an unconfirmed state as an empty list.** Before the fetch finishes
+ * (`board` and `error` both `null`), it only shows a skeleton. "No assigned cards" is a
+ * statement made **only once it's a confirmed fact.** Once the board has arrived, loading
+ * is over — the skeleton doesn't keep spinning just because `npcProfile` is unknown.
  *
- * **빈 상태와 오류를 구분한다.** 게이트에 막힌 것(플러그인 없음·업그레이드 필요·게이트웨이
- * 미연결 등)을 "담당 카드 없음" 으로 보이면 사용자가 원인을 알 수 없다. 오류 문구는 크론·칸반이
- * 이미 쓰는 `@/lib/gate-failure` 분류와 `wizard-error-codes` 메시지를 그대로 재사용한다.
+ * **Distinguishes an empty state from an error.** If a gate block (missing plugin, needs
+ * upgrade, gateway not connected, etc.) is shown as "no assigned cards", the user can't
+ * tell why. The error text reuses the `@/lib/gate-failure` classification and
+ * `wizard-error-codes` messages that cron and Kanban already use.
  */
 import { useMemo } from "react";
 
@@ -25,11 +27,11 @@ import { assignedCards } from "@/lib/npc-assigned-cards";
 import { failureLine } from "@/components/kanban/kanban-view-model";
 
 export interface NpcCardsTabProps {
-  /** 담당자 판정 기준 — Hermes 프로필 이름(`KanbanTask.assignee`). 모르면 빈 문자열. */
+  /** Basis for determining the assignee — the Hermes profile name (`KanbanTask.assignee`). Empty string if unknown. */
   npcProfile: string;
-  /** 이미 조회된 보드. 조회가 아직 안 끝났으면 `null`. */
+  /** The already-fetched board. `null` if the fetch hasn't finished yet. */
   board: KanbanBoard | null;
-  /** 보드를 못 가져온 이유(플러그인 게이트 코드 등). 있으면 `board` 보다 우선해 오류를 그린다. */
+  /** Reason the board couldn't be fetched (plugin gate code, etc.). If present, it takes priority over `board` and renders the error. */
   error?: string | null;
   onOpenCard: (taskId: string) => void;
 }
@@ -41,9 +43,11 @@ export default function NpcCardsTab({
   onOpenCard,
 }: NpcCardsTabProps) {
   const t = useT();
-  // 프로필을 모르면 아예 고르지 않는다 — `assignee === ""` 인 카드가 "이 직원 담당" 으로
-  // 잡히면 남의 카드를 보이게 된다. 담당은 프로필 이름으로만 붙으므로(`KanbanTask.assignee`),
-  // 프로필이 없는 직원에게 붙은 카드도 없다 — 그래서 빈 목록은 추측이 아니라 사실이다.
+  // Don't pick anything at all when the profile is unknown — if a card with
+  // `assignee === ""` were treated as "assigned to this staff member", someone else's
+  // card would show. Assignment only attaches via the profile name
+  // (`KanbanTask.assignee`), so a staff member without a profile has no cards attached
+  // either — the empty list is a fact, not a guess.
   const cards = useMemo(
     () => (board && npcProfile ? assignedCards(board, npcProfile) : []),
     [board, npcProfile],
@@ -90,21 +94,23 @@ export default function NpcCardsTab({
 }
 
 /**
- * 게이트 안내 — `classifyGateFailure` 가 내는 **모든** kind 에 전용 문구를 준다.
+ * Gate notice — gives **every** kind `classifyGateFailure` can emit its own message.
  *
- * 코드를 하나씩 때우면 같은 결함이 다음 코드에서 되살아난다(`board_unavailable` 하나만 고쳤다가
- * 더 흔한 `plugin_absent` 가 "알 수 없는 오류" 로 떨어졌다). 문구는 전부 재사용이다 — 칸반 보드의
- * 보드 미확보 줄(`failureLine`), 크론 탭의 게이트웨이·업그레이드 안내, 게이트 체크리스트의
- * 단계 문구. 새 i18n 키는 만들지 않는다.
+ * Patching codes one at a time lets the same defect resurface in the next code (fixing
+ * only `board_unavailable` once let the more common `plugin_absent` fall back to "unknown
+ * error"). All the text is reused — the Kanban board's board-unavailable line
+ * (`failureLine`), the cron tab's gateway/upgrade notices, and the gate checklist's step
+ * text. No new i18n keys are created.
  *
- * `classifyGateFailure` 와 `wizard-error-codes` 표는 건드리지 않는다 — 판정은 서버 하나이고
- * 그 표는 마법사 몫이다. 폴백은 남겨 둔다: 미래의 새 코드가 화면을 깨뜨리면 안 된다.
+ * The `classifyGateFailure` and `wizard-error-codes` tables are left untouched — the
+ * server is the single source of judgment and that table belongs to the wizard. The
+ * fallback stays in place: a future new code should never break the screen.
  */
 function CardsErrorNotice({ code }: { code: string }) {
   const t = useT();
 
-  // 503 보드 미준비(`kanban-access.ts`)는 `classifyGateFailure` 의 표에 없다 — 칸반 보드가
-  // 이미 쓰는 문구를 그대로 재사용한다.
+  // The 503 board-not-ready case (`kanban-access.ts`) isn't in `classifyGateFailure`'s
+  // table — reuse the message the Kanban board already uses.
   if (code === "board_unavailable") {
     return (
       <Notice tone="neutral" title={t("kanban.blocker.boardTitle")}>
@@ -141,7 +147,7 @@ function CardsErrorNotice({ code }: { code: string }) {
           <Command command={blocker.command} />
         </Notice>
       );
-    // `plugin_unknown` 도 여기로 온다 — 사용자가 할 수 있는 일이 같다.
+    // `plugin_unknown` also lands here — there's nothing different for the user to do.
     case "unreachable":
       return <Notice tone="neutral">{t("gateChecklist.unreachable")}</Notice>;
     case "timeout":
@@ -156,7 +162,7 @@ function CardsErrorNotice({ code }: { code: string }) {
   }
 }
 
-/** 안내 상자 — 클래스는 리터럴로 둔다(동적 조립은 Tailwind 가 생성하지 않는다). */
+/** Notice box — classes are kept as literals (dynamic assembly isn't generated by Tailwind). */
 function Notice({
   tone,
   title,

@@ -13,14 +13,15 @@ import { groupSkills } from "./skills-view-model";
 export type NpcSkillsTabProps = {
   channelId: string;
   npcId: string;
-  /** 관리 모달을 연다. `skillName` 이 있으면 그 스킬을 골라 연다(항목의 [편집]). */
+  /** Opens the manager modal. If `skillName` is given, opens it with that skill selected (a row's [Edit]). */
   onOpenManager(skillName?: string): void;
   api?: SkillsApi;
 };
 
 /**
- * 직원 대화창의 [스킬] 탭 — 이 직원(Hermes 프로필)이 가진 스킬을 원산지별로 보여 준다. 멤버는 읽기만,
- * 게이트웨이 소유자(`canManage`)는 켜기/끄기 스위치를 쓴다. 편집·추가·정리는 관리 모달의 몫이다.
+ * The [Skills] tab of the NPC chat window — shows the skills this NPC (Hermes profile) has,
+ * grouped by origin. Members get read-only access; the gateway owner (`canManage`) gets the
+ * enable/disable switches. Editing, adding, and cleanup all belong to the manager modal.
  */
 export default function NpcSkillsTab({
   channelId,
@@ -39,7 +40,7 @@ export default function NpcSkillsTab({
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string | null>(null);
-  // 직원을 바꾼 직후 옛 직원의 늦은 응답이 목록을 덮지 않게 한다.
+  // Prevents a late response for the previous NPC from overwriting the list right after switching NPCs.
   const sequence = useRef(0);
 
   const load = useCallback(async () => {

@@ -6,7 +6,7 @@ const scheduleTimeout: Schedule = (callback, delay) => {
   return () => clearTimeout(timer);
 };
 
-/** 실제 출력이 시작될 때만 카메라 발언을 만들고 같은 발언의 조각은 무시한다. */
+/** Creates a camera utterance only when actual output starts, and ignores chunks of the same utterance. */
 export class MeetingSpeakerTracker {
   private serial = 0;
   private currentNpc: string | null = null;
@@ -46,7 +46,8 @@ export class MeetingSpeakerTracker {
     if (id) {
       const generation = this.focusGeneration;
       this.cancelFocusTimer = this.schedule(() => {
-        // 취소 직전에 실행 큐에 들어간 이전 발언 타이머도 다음 발언을 지우지 않는다.
+        // Even a prior utterance's timer that entered the execution queue right before cancellation
+        // must not clear the next utterance.
         if (generation !== this.focusGeneration) return;
         this.finish();
       }, 4000);

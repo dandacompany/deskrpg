@@ -27,14 +27,15 @@ export type SkillManagerModalProps = {
   npcId: string;
   npcName: string;
   onClose(): void;
-  /** 열 때 고를 스킬 — 대화창 [스킬] 탭의 [편집] 에서 온다. */
+  /** Skill to preselect when opening — comes from [Edit] on the chat window's [Skills] tab. */
   initialSkill?: string | null;
   api?: SkillsApi;
 };
 
 /**
- * 직원 한 명의 스킬 관리 모달. [설치됨] 은 좌 목록·우 상세, [보관함]·[학습 관계도]·[추가] 는 탭으로 바꾼다.
- * 조회는 채널 멤버 누구나, 바꾸는 버튼은 `canManage`(게이트웨이 소유자)에게만 그린다 — 서버도 403 으로 막는다.
+ * Skill manager modal for a single employee. [Installed] shows a left list / right detail pane;
+ * [Archive] · [Learning graph] · [Add] are separate tabs. Any channel member can view, but change
+ * buttons are only rendered for `canManage` (gateway owner) — the server also blocks with 403.
  */
 export default function SkillManagerModal({
   channelId,
@@ -62,7 +63,7 @@ export default function SkillManagerModal({
   const [newDesc, setNewDesc] = useState("");
 
   const load = useCallback(async () => {
-    // 보관함 수는 탭 이름 옆 숫자일 뿐이라 실패해도 목록을 막지 않는다.
+    // The archive count is just a number next to the tab name, so a failure here doesn't block the list.
     void api.listArchived().then(
       (rows) => setArchivedCount(rows.length),
       () => setArchivedCount(null),
@@ -80,7 +81,7 @@ export default function SkillManagerModal({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // 모달 안의 더 위 레이어(확대 보기 등)가 먼저 받아 preventDefault 하면 닫지 않는다.
+      // Don't close if a higher layer inside the modal (e.g. a zoomed view) already handled and preventDefault'd it.
       if (e.key !== "Escape" || e.defaultPrevented) return;
       e.preventDefault();
       onClose();

@@ -9,7 +9,7 @@ type Props = {
   responses: ChatResponse[];
   receipt?: boolean;
   receiptOnly?: boolean;
-  /** 답하는 직원의 외형 조회 — 있으면 스트리밍 말풍선에도 아바타가 붙는다. */
+  /** Looks up the responding staff member's appearance — if present, an avatar attaches to the streaming bubble too. */
   avatarFor?: (who: { kind: "npc" | "user"; id?: string | null; name: string }) => unknown;
 };
 

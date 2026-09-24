@@ -4,10 +4,11 @@ import type { ReportItem } from "@/game/report-queue";
 import { useLocale, useT } from "@/lib/i18n";
 
 /**
- * 보고 배지를 누르면 열리는 **남은 보고 목록**. 예전에는 배지가 맨 앞 보고의 칸반으로
- * 바로 가서, 어떤 보고가 남았는지(특히 접혀서 아무도 오지 않는 보고) 알 수 없었다.
+ * The **remaining report list** that opens when the report badge is clicked. Previously
+ * the badge jumped straight to the first report's kanban, so there was no way to know
+ * which reports were left (especially a dismissed one that would never come back).
  *
- * "열기" 는 그 보고 한 건만 확인한다. 접힌 보고에는 "다시 부르기" 를 둔다.
+ * "Open" confirms only that one report. A dismissed report gets a "Recall" action.
  */
 export default function ReportList({
   items,
@@ -27,8 +28,9 @@ export default function ReportList({
       role="dialog"
       aria-label={t("report.list.title")}
       data-testid="report-list"
-      /* 가장 위 레이어만 Esc 를 먹는다 — 이 표시가 없으면 목록을 닫는 Esc 가 뒤의 직원
-         대화창까지 닫아 보고가 접힌다(2026-09-21 스테이징 실측). */
+      /* Only the topmost layer consumes Esc — without this marker, the Esc that closes
+         this list also closes the NPC chat dialog behind it, dismissing the report
+         (observed on staging 2026-09-21). */
       data-modal-overlay=""
       className="absolute right-0 top-full z-50 mt-1 w-80 rounded-md border border-border bg-surface p-2 shadow-lg"
     >

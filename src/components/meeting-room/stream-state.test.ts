@@ -34,8 +34,9 @@ test("consumeNpcStreamBuffer returns no message when the buffer is empty", () =>
   assert.equal(result.finalizedMessage, null);
 });
 
-test("서버가 최종 본문을 주면 스트림 누적분 대신 그것으로 말풍선을 확정한다", () => {
-  // 델타에는 재시도된 앞선 생성까지 쌓일 수 있다 — 회의 기록(서버의 최종 본문)과 화면이 같아야 한다.
+test("When the server provides final text, the bubble is finalized with it instead of the accumulated stream", () => {
+  // The delta can accumulate even a retried earlier generation — the meeting record (server's final text)
+  // and the screen must match.
   const result = consumeNpcStreamBuffer({
     streams: { oliver: "첫 생성. 둘째 생성." },
     npcId: "oliver",
@@ -47,7 +48,7 @@ test("서버가 최종 본문을 주면 스트림 누적분 대신 그것으로 
   assert.deepEqual(result.nextStreams, {});
 });
 
-test("청크 없이 최종 본문만 와도 말풍선이 생긴다", () => {
+test("A bubble is created even when only the final text arrives without chunks", () => {
   const result = consumeNpcStreamBuffer({
     streams: {},
     npcId: "oliver",
@@ -58,7 +59,7 @@ test("청크 없이 최종 본문만 와도 말풍선이 생긴다", () => {
   assert.equal(result.finalizedMessage?.content, "한 덩어리 응답");
 });
 
-test("최종 본문이 비었거나 문자열이 아니면 예전처럼 누적분을 쓴다", () => {
+test("If the final text is empty or not a string, fall back to the accumulated buffer as before", () => {
   for (const finalText of ["", undefined, { x: 1 } as unknown as string]) {
     const result = consumeNpcStreamBuffer({
       streams: { oliver: "누적분" },

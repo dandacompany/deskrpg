@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import RosterAvatar from "../RosterAvatar";
 import MarkdownContent from "./MarkdownContent";
 
-/** 말풍선 옆 아바타의 지름(px). 연속 말풍선의 빈 자리도 같은 폭을 쓴다. */
+/** Diameter (px) of the avatar next to a bubble. A continued bubble's empty slot uses the same width. */
 export const CHAT_AVATAR_SIZE = 28;
 
 export interface ChatBubbleProps {
@@ -12,12 +12,13 @@ export interface ChatBubbleProps {
   name?: string;
   streaming?: boolean;
   /**
-   * 발화자의 외형. **넘기면** 상대 말풍선 왼쪽에 원형 아바타가 붙는다 — 외형을 모르면(`null`)
-   * 기본 표시로 그린다. 넘기지 않으면(`undefined`) 아바타 자리 자체가 없다.
-   * 내 말풍선(`player`)에는 어느 쪽이든 아바타가 없다.
+   * The speaker's appearance. **If passed**, a circular avatar is attached to the left of the
+   * other party's bubble — if the appearance is unknown (`null`), it renders a default. If not
+   * passed at all (`undefined`), there is no avatar slot in the first place.
+   * My own bubble (`player`) never has an avatar either way.
    */
   avatar?: unknown;
-  /** 바로 앞 말풍선과 같은 발화자다 — 아바타·이름을 되풀이하지 않고 자리만 맞춘다. */
+  /** Same speaker as the immediately preceding bubble — don't repeat the avatar/name, just keep the spacing aligned. */
   continued?: boolean;
   children: ReactNode;
 }
@@ -57,8 +58,8 @@ export default function ChatBubble({
           </div>
         ))}
       <div
-        // e2e 훅. 말풍선은 클래스명만으로는 발신자를 구분할 수 없고(색상 유틸리티는
-        // 리팩터 한 번에 바뀐다), 스트리밍 중인지도 밖에서 알 수 없다.
+        // e2e hook. The bubble's class name alone can't identify the sender (the color utility
+        // may change with a single refactor), and streaming state isn't visible from outside either.
         data-chat-bubble={sender}
         data-streaming={streaming ? "true" : "false"}
         className={`

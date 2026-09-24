@@ -14,7 +14,7 @@ function fakeFetch(reply: { status: number; json?: unknown }) {
   return { calls, fetchImpl };
 }
 
-test("list 는 catch-all 의 빈 경로(…/skills/)를 GET 한다", async () => {
+test("list GETs the catch-all's empty path (…/skills/)", async () => {
   const { calls, fetchImpl } = fakeFetch({
     status: 200,
     json: { skills: [], canManage: false, capabilityReady: true, sharedChannelCount: 0 },
@@ -24,13 +24,13 @@ test("list 는 catch-all 의 빈 경로(…/skills/)를 GET 한다", async () =>
   assert.equal(calls[0].init?.method, "GET");
 });
 
-test("스킬 이름은 한 세그먼트로 인코딩한다 — a/b → a%2Fb", async () => {
+test("the skill name is encoded as a single segment — a/b → a%2Fb", async () => {
   const { calls, fetchImpl } = fakeFetch({ status: 200, json: { skill: {}, files: [] } });
   await createSkillsApi("ch-1", "n-1", fetchImpl).detail("a/b");
   assert.equal(calls[0].url, "/api/channels/ch-1/npcs/n-1/skills/a%2Fb");
 });
 
-test("409 skill_changed 는 SkillsApiError 로 코드를 그대로 던진다", async () => {
+test("409 skill_changed is thrown as SkillsApiError with the code preserved", async () => {
   const { fetchImpl } = fakeFetch({
     status: 409,
     json: { code: "skill_changed", message: "바뀜" },

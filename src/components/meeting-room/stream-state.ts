@@ -6,8 +6,9 @@ export function consumeNpcStreamBuffer(args: {
   fallbackSenderName: string;
   timestamp: number;
   /**
-   * 서버가 턴 끝에 보낸 최종 본문. 있으면 스트림 누적분 대신 쓴다 — 델타에는 재시도된 앞선 생성까지
-   * 쌓일 수 있어, 누적분으로 확정하면 화면과 회의 기록이 어긋난다.
+   * Final text the server sent at the end of the turn. If present, used instead of the accumulated
+   * stream — the delta can accumulate even a retried earlier generation, so finalizing from the
+   * buffer would make the screen diverge from the meeting record.
    */
   finalText?: string;
 }): {

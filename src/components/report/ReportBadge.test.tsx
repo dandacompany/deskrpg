@@ -39,7 +39,7 @@ async function click(node: Element | null) {
   });
 }
 
-test("배지를 누르면 칸반이 아니라 남은 보고 목록이 열리고, 열기는 그 보고 한 건을 넘긴다", async () => {
+test("Clicking the badge opens the remaining report list instead of the kanban, and Open hands off just that one report", async () => {
   const opened: string[] = [];
   const recalled: string[] = [];
   const queue = [report("m1", "올리버", "본문 초안"), report("m2", "소피", "최종 검수")];
@@ -61,14 +61,14 @@ test("배지를 누르면 칸반이 아니라 남은 보고 목록이 열리고,
   assert.equal(rows.length, 2);
   assert.match(rows[0].textContent ?? "", /올리버/);
   assert.match(rows[0].textContent ?? "", /본문 초안/);
-  // 접힌 보고에만 "다시 부르기" 가 있다.
+  // Only a dismissed report has "다시 부르기" (recall).
   assert.equal(rows[0].querySelector('[data-testid="report-list-recall"]'), null);
   await click(rows[1].querySelector('[data-testid="report-list-recall"]'));
   await click(rows[0].querySelector('[data-testid="report-list-open"]'));
   assert.deepEqual(opened, ["m1"]);
   assert.deepEqual(recalled, ["m2"]);
 
-  // 연 채로 마지막 보고까지 확인되면 빈 목록 상태를 보여 준다.
+  // If the last report is confirmed while the list stays open, show the empty-list state.
   await rerender(view([]));
   assert.ok(el.querySelector('[data-testid="report-list-empty"]'));
 });

@@ -33,7 +33,7 @@ const bar = (canManage: boolean) => (
 
 test.afterEach(cleanup);
 
-test("상태·마지막 실행·기준 일수를 한 줄로", async () => {
+test("status, last run, and threshold days on one line", async () => {
   mockFetch({ [CURATOR]: status() });
   await render(bar(false));
   assert.ok(text().includes("자동 정리 켜짐"));
@@ -44,7 +44,7 @@ test("상태·마지막 실행·기준 일수를 한 줄로", async () => {
   assert.equal(container.querySelector('[data-action="curator-run"]'), null);
 });
 
-test("일시정지는 PUT …/curator/paused 후 다시 읽는다", async () => {
+test("pause sends PUT …/curator/paused then reloads", async () => {
   const log = mockFetch({ [CURATOR]: status(), [`PUT ${ROOT}/curator/paused`]: { paused: true } });
   await render(bar(true));
   await click('[data-action="curator-pause"]');
@@ -52,7 +52,7 @@ test("일시정지는 PUT …/curator/paused 후 다시 읽는다", async () => 
   assert.equal(log.calls.filter((c) => c === CURATOR).length, 2);
 });
 
-test("지금 실행은 확인을 거쳐 작업을 시작하고 끝까지 폴링한다", async () => {
+test("run now starts the job after confirmation and polls to completion", async () => {
   const log = mockFetch({
     [CURATOR]: status(),
     [`POST ${ROOT}/curator/runs`]: { jobId: "c1" },
@@ -74,7 +74,7 @@ test("지금 실행은 확인을 거쳐 작업을 시작하고 끝까지 폴링�
   assert.equal($("[data-job-state]").dataset.jobState, "succeeded");
 });
 
-test("다른 작업이 돌고 있으면(job_busy) 그 안내", async () => {
+test("shows a notice when another job is running (job_busy)", async () => {
   mockFetch({
     [CURATOR]: status(),
     [`POST ${ROOT}/curator/runs`]: { status: 409, json: { code: "job_busy", message: "" } },

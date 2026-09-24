@@ -6,11 +6,12 @@ import { ExternalLink } from "lucide-react";
 import type { LinkPreview } from "@/lib/link-preview/parse";
 
 /**
- * 한 줄에 링크만 있는 문단을 제목·설명·썸네일 카드로 승격한다. 조회가 실패하거나
- * 미리보기가 없으면(204) **아무것도 바꾸지 않는다** — 원래의 밑줄 링크가 그대로 남는다.
+ * Promotes a paragraph containing only a link into a title/description/thumbnail card. If the
+ * fetch fails or there is no preview (204), **it changes nothing** — the original underlined link
+ * stays as-is.
  *
- * 서버가 이미 받아 온 것을 다시 그린다. 브라우저는 남의 사이트를 직접 물지 않는다
- * (`/api/link-preview`, og:image 도 `/api/link-preview/image` 프록시를 거친다).
+ * This just re-renders what the server already fetched. The browser never hits the other site
+ * directly (`/api/link-preview`; og:image also goes through the `/api/link-preview/image` proxy).
  */
 export default function LinkPreviewCard({
   url,
@@ -30,7 +31,7 @@ export default function LinkPreviewCard({
         const data = (await res.json()) as LinkPreview;
         if (alive) setPreview(data);
       } catch {
-        // 조용히 밑줄 링크로 남는다.
+        // Silently stays as an underlined link.
       }
     })();
     return () => {
@@ -56,7 +57,7 @@ export default function LinkPreviewCard({
       className="my-1.5 flex gap-2 overflow-hidden rounded-md border border-border bg-surface no-underline hover:brightness-110"
     >
       {preview.image && (
-        // 남의 이미지다 — 우리 프록시를 거친 주소이고, 실패하면 자리만 비운다.
+        // A third-party image — the URL goes through our proxy, and on failure just leaves the slot empty.
         <img src={preview.image} alt="" className="h-20 w-28 shrink-0 object-cover" />
       )}
       <span className="flex min-w-0 flex-col gap-0.5 px-2 py-1.5">

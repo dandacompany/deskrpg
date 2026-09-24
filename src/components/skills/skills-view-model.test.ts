@@ -21,7 +21,7 @@ const r = (name: string, over: Partial<SkillRow> = {}): SkillRow => ({
   ...over,
 });
 
-test("원산지로 묶고, 외부는 번들 묶음에 넣고, 빈 묶음은 뺀다", () => {
+test("groups by source, puts external in the bundled group, drops empty groups", () => {
   const groups = groupSkills(
     [r("a"), r("b", { source: "hub" }), r("c", { source: "external" })],
     "",
@@ -36,7 +36,7 @@ test("원산지로 묶고, 외부는 번들 묶음에 넣고, 빈 묶음은 뺀�
   );
 });
 
-test("검색은 이름과 설명, 대소문자 무시", () => {
+test("search matches name and description, case-insensitive", () => {
   const groups = groupSkills(
     [r("Weekly"), r("pdf", { description: "문서 WEEKLY 요약" }), r("x")],
     "weekly",
@@ -47,7 +47,7 @@ test("검색은 이름과 설명, 대소문자 무시", () => {
   );
 });
 
-test("원산지가 없는 옛 플러그인 행은 로컬로 본다", () => {
+test("an old plugin row with no source is treated as local", () => {
   const groups = groupSkills(
     [{ name: "a", category: "", description: "", disabled: false, essential: false }],
     "",
@@ -55,7 +55,7 @@ test("원산지가 없는 옛 플러그인 행은 로컬로 본다", () => {
   assert.equal(groups[0].key, "local");
 });
 
-test("미사용은 사용·조회 0, 켜져 있고, 필수·고정이 아닌 것", () => {
+test("unused means 0 uses/views, enabled, and not essential or pinned", () => {
   const names = unusedSkillNames([
     r("a"),
     r("b", { useCount: 1 }),
@@ -67,7 +67,7 @@ test("미사용은 사용·조회 0, 켜져 있고, 필수·고정이 아닌 것
   assert.deepEqual(names, ["a"]);
 });
 
-test("이름 규칙과 SKILL.md 틀", () => {
+test("name rules and the SKILL.md template", () => {
   assert.equal(isValidSkillName("invoice-check"), true);
   assert.equal(isValidSkillName("Invoice"), false);
   assert.equal(isValidSkillName("a/b"), false);

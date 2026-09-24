@@ -1,10 +1,12 @@
 "use client";
 
 /**
- * 회의록 하나의 결과 패널을 서버 상태와 잇는다. 회의 종료 화면과 회의록 보기 양쪽에서 같은
- * 회의록 id 로 쓴다 — 종료 화면을 닫아도 제안이 사라지지 않는 이유다.
+ * Wires one meeting minutes' outcome panel to server state. Both the meeting-end screen and the
+ * minutes view use it with the same minutes id — that's why the suggestion doesn't disappear
+ * when the end screen is closed.
  *
- * 등록·요약 권한(`canManage`)과 등록 여부는 클라이언트가 추측하지 않고 회의록 조회가 돌려준 값을 쓴다.
+ * The register/summarize permission (`canManage`) and whether it's registered are taken from
+ * what the minutes fetch returns, not guessed by the client.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -16,7 +18,7 @@ import type { OutcomeRegistration } from "@/lib/meeting-outcome-draft";
 import MeetingOutcomePanel from "./MeetingOutcomePanel";
 
 type Loaded = {
-  /** 어느 회의록의 값인가. 다른 회의록으로 바뀌면 새 값이 올 때까지 그리지 않는다. */
+  /** Which minutes this value belongs to. When the minutes change, don't render until the new value arrives. */
   minutesId: string;
   outcome: MeetingOutcome | null;
   summaryStatus: MeetingSummaryStatus;
@@ -25,25 +27,26 @@ type Loaded = {
 
 export type MeetingOutcomeSectionProps = {
   minutesId: string;
-  /** 이 회의가 열린 채널 — 연결된 플러그인이 승인 대기 카드를 만들 수 있는지 묻는 데 쓴다. */
+  /** The channel this meeting happened in — used to ask whether the connected plugin can create pending-approval cards. */
   channelId: string;
   npcs: Array<{ id: string; name: string }>;
-  /** 요약이 다시 만들어졌을 때 — 바깥 화면의 주제·결론 표시를 새로 고칠 기회. */
+  /** Called when the summary is regenerated — a chance to refresh the topic/conclusion display on the outer screen. */
   onSummaryChanged?: (summary: { keyTopics: string[]; conclusions: string | null }) => void;
-  /** 등록이 끝났을 때 — 만든 카드로 이동하는 등의 후속 동작. */
+  /** Called when registration finishes — for follow-up actions like navigating to the created card. */
   onRegistered?: (registered: NonNullable<MeetingOutcome["registered"]>) => void;
-  /** 등록하지 않기로 했을 때. 넘기면 "등록하지 않음" 버튼이 생긴다(회의 종료 화면 전용). */
+  /** Called when the user chooses not to register. Passing this adds a "don't register" button (meeting-end screen only). */
   onDeclined?: () => void;
   /**
-   * 결과를 읽었을 때 — 이 사용자가 등록할 후속 업무가 남았는가. 없으면 종료 화면은 자동으로
-   * 나가지 않고 안내만 한다. 회의록을 못 읽어도 한 번 `false` 로 알린다.
+   * Called when the outcome is read — whether this user still has follow-ups left to register. If not,
+   * the end screen doesn't auto-exit; it just shows a notice. Reported as `false` once even if the
+   * minutes can't be read.
    */
   onOutcomeLoaded?: (pending: boolean) => void;
 };
 
 async function readError(res: Response): Promise<string> {
   try {
-    // 회의 라우트는 `{errorCode}`, 칸반 관문(게이트웨이 없음·플러그인 구버전·남의 보드)은 `{code}` 로 답한다.
+    // The meeting route answers with `{errorCode}`; the kanban gate (no gateway / old plugin / someone else's board) answers with `{code}`.
     const data = (await res.json()) as { errorCode?: string; code?: string; error?: string };
     return data.errorCode || data.code || data.error || `HTTP ${res.status}`;
   } catch {
@@ -62,9 +65,9 @@ export default function MeetingOutcomeSection({
 }: MeetingOutcomeSectionProps) {
   const t = useT();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
-  // 모르는 동안은 못 한다고 본다 — 눌러서 실패하는 버튼을 잠깐이라도 그리지 않는다.
+  // Treat it as unsupported while unknown — never render even briefly a button that would fail on click.
   const [registerSupported, setRegisterSupported] = useState(false);
-  // 알림 콜백이 바뀌어도 회의록을 다시 읽지 않는다.
+  // Don't re-fetch the minutes when the notification callback changes.
   const report = useRef(onOutcomeLoaded);
   useEffect(() => {
     report.current = onOutcomeLoaded;
@@ -72,7 +75,7 @@ export default function MeetingOutcomeSection({
 
   useEffect(() => {
     let cancelled = false;
-    // 스웜 버튼과 같은 길이다: 플러그인이 광고한 capability 로 판정한다(버전이 아니라).
+    // Same approach as the swarm button: judge by the capability the plugin advertises (not by version).
     void fetch(`/api/channels/${encodeURIComponent(channelId)}/automation/status`)
       .then(async (res) => (res.ok ? ((await res.json()) as { capabilities?: string[] }) : null))
       .then((status) => {
@@ -80,7 +83,7 @@ export default function MeetingOutcomeSection({
           setRegisterSupported(status?.capabilities?.includes("initial_status") ?? false);
       })
       .catch(() => {
-        // 상태를 못 읽으면 못 하는 것으로 남는다.
+        // If the status can't be read, it stays treated as unsupported.
       });
     return () => {
       cancelled = true;
@@ -111,7 +114,7 @@ export default function MeetingOutcomeSection({
         });
       })
       .catch(() => {
-        // 회의록을 못 읽으면 패널을 그리지 않는다. 회의록 본문은 바깥 화면이 따로 보여 준다.
+        // Don't render the panel if the minutes can't be read. The outer screen shows the minutes body separately.
         if (!cancelled) report.current?.(false);
       });
     return () => {
@@ -157,7 +160,7 @@ export default function MeetingOutcomeSection({
   const registered = loaded.outcome?.registered ?? null;
   return (
     <MeetingOutcomePanel
-      // 요약을 다시 만들면 초안을 새 결과로 갈아 끼운다.
+      // Regenerating the summary swaps the draft for the new outcome.
       key={`${minutesId}:${loaded.summaryStatus}:${loaded.outcome?.followUps.length ?? 0}`}
       outcome={loaded.outcome}
       summaryStatus={loaded.summaryStatus}

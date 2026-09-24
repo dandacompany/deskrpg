@@ -11,7 +11,7 @@ const r = (identifier: string, trustLevel: string) => ({
   trustLevel,
 });
 
-test("신뢰 등급 순(builtin > trusted > community > 기타), 같은 등급은 서버 순서", () => {
+test("orders by trust level (builtin > trusted > community > other), same level keeps server order", () => {
   const input = [
     r("c1", "community"),
     r("t1", "trusted"),

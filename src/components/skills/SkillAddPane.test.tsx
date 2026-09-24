@@ -60,7 +60,7 @@ const pane = (mode: "hub" | "url") => (
 
 test.afterEach(cleanup);
 
-test("검색 → 결과 클릭 → 미리보기에 판정과 실행 코드 안내", async () => {
+test("search → click a result → preview shows the verdict and executable-code notice", async () => {
   mockFetch({ [SEARCH]: results, [PREVIEW]: preview() });
   await render(pane("hub"));
   await type('[name="hub-query"]', "pdf");
@@ -70,7 +70,7 @@ test("검색 → 결과 클릭 → 미리보기에 판정과 실행 코드 안�
   assert.ok(text().includes("실행 코드(scripts/)"));
 });
 
-test("Hermes 가 막는(policy block) 스킬은 설치 버튼을 그리지 않는다", async () => {
+test("a skill Hermes blocks (policy block) draws no install button", async () => {
   mockFetch({
     [SEARCH]: results,
     [PREVIEW]: preview({ policy: "block", verdict: "dangerous", policyReason: "위험" }),
@@ -83,7 +83,7 @@ test("Hermes 가 막는(policy block) 스킬은 설치 버튼을 그리지 않�
   assert.ok(text().includes("위험"));
 });
 
-test("주의(ask) 는 확인 체크 전에는 설치 버튼이 꺼지고, 체크 뒤 force:true 로 설치해 완료까지 폴링", async () => {
+test("caution (ask) disables the install button before confirming, then installs with force:true and polls to completion", async () => {
   installed = 0;
   const log = mockFetch({
     [SEARCH]: results,
@@ -113,7 +113,7 @@ test("주의(ask) 는 확인 체크 전에는 설치 버튼이 꺼지고, 체크
   assert.equal(installed, 1);
 });
 
-test("설치가 실패하면 출력 끝부분을 보인다", async () => {
+test("shows the output tail when install fails", async () => {
   mockFetch({
     [SEARCH]: results,
     [PREVIEW]: preview({ policy: "allow", verdict: "safe" }),
@@ -136,7 +136,7 @@ test("설치가 실패하면 출력 끝부분을 보인다", async () => {
   assert.ok(text().includes("scan blocked"));
 });
 
-test("URL 모드는 입력한 URL 로 바로 미리보기를 부른다", async () => {
+test("URL mode calls preview directly with the entered URL", async () => {
   const url = "https://example.com/skills/pdf-tools";
   const log = mockFetch({
     [`GET ${ROOT}/hub/preview?identifier=${encodeURIComponent(url)}`]: preview({
@@ -163,7 +163,7 @@ async function search() {
   await click('[data-action="hub-go"]');
 }
 
-test("같은 이름이 여럿이면 행마다 identifier 로 구별하고, 신뢰 등급 순으로 늘어선다", async () => {
+test("when several rows share a name, each row is distinguished by identifier and ordered by trust level", async () => {
   mockFetch({
     [SEARCH]: {
       results: [
@@ -184,7 +184,7 @@ test("같은 이름이 여럿이면 행마다 identifier 로 구별하고, 신�
   assert.ok(rows[2].textContent!.includes("browse-sh/pdf"));
 });
 
-test("미리보기를 기다리는 동안 불러오는 중 표시, 늦게 온 앞 응답은 버린다", async () => {
+test("shows a loading state while waiting for the preview, and discards a late-arriving earlier response", async () => {
   mockFetch({
     [SEARCH]: {
       results: [hit("slow/pdf", "trusted"), hit("fast/pdf", "trusted")],
@@ -213,7 +213,7 @@ test("미리보기를 기다리는 동안 불러오는 중 표시, 늦게 온 �
   assert.ok(!text().includes("미리보기 불러오는 중"));
 });
 
-test("미리보기가 시간 초과(504 timeout)면 그 안내와 [다시 시도], 다시 시도하면 보인다", async () => {
+test("when the preview times out (504 timeout), shows that notice and [Retry], which then shows it", async () => {
   const routes: Record<string, Record<string, unknown>> = {
     [SEARCH]: results,
     [PREVIEW]: { status: 504, json: { code: "timeout", message: "" } },
@@ -229,7 +229,7 @@ test("미리보기가 시간 초과(504 timeout)면 그 안내와 [다시 시도
   assert.equal(container.querySelector('[data-action="preview-retry"]'), null);
 });
 
-test("미리보기가 열리면 그 칸을 화면 안으로 스크롤한다", async () => {
+test("scrolls the preview pane into view once it opens", async () => {
   mockFetch({ [SEARCH]: results, [PREVIEW]: preview() });
   const scrolled: string[] = [];
   const original = HTMLElement.prototype.scrollIntoView;
