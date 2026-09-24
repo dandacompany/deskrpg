@@ -4,7 +4,7 @@ const port = Number(process.env.DESKRPG_FIXTURE_PORT ?? "13104");
 if (!Number.isInteger(port) || port < 1024 || port > 65534) throw new Error("Invalid fixture port");
 const baseURL = `http://127.0.0.1:${port}`;
 
-// 실제 Hermes를 부르는 스펙은 이 허용 목록에 포함하지 않는다.
+// Specs that call a real Hermes are not included in this allowlist.
 export default defineConfig({
   testDir: "./e2e",
   testMatch: ["artifacts.spec.ts", "kanban-card-move.spec.ts", "fixture-contract.spec.ts"],

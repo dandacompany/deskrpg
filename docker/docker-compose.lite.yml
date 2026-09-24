@@ -16,7 +16,7 @@ services:
       SQLITE_PATH: /app/data/deskrpg.db
       JWT_SECRET: ${JWT_SECRET}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
-    # 호스트에서 도는 Hermes 게이트웨이(기본 8642)를 이름으로 고정한다.
+    # Pin the Hermes gateway running on the host (default 8642) by name.
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

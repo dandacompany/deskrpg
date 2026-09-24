@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 공개 Git 트리에는 개발 전용 문서·하네스 메타 파일을 넣지 않는다.
+# Keep development-only docs and harness metadata files out of the public Git tree.
 set -euo pipefail
 
 violations=0

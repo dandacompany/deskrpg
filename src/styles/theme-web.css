@@ -1,6 +1,6 @@
 /*
- * 웹 화면의 면 색 — 단테랩스 브랜드 v2 토큰(cream 계열)을 그대로 쓴다(2026-09-20 단테 결정: 부분 정렬).
- * 제품 고유색(오피스 녹색)은 tokens.css 에 예외로 남는다. 3D 오피스(theme-game)는 이 파일과 별개다.
+ * Surface colors of web screens — uses the Dante Labs brand v2 tokens (cream family) as is (Dante's decision, 2026-09-20: partial alignment).
+ * The product's own color (office green) remains an exception in tokens.css. The 3D office (theme-game) is separate from this file.
  */
 .theme-web,
 :root {

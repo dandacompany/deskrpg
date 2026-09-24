@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# 푸시 전 가벼운 게이트 — format:check · typecheck · lint (약 30초).
+# Light pre-push gate — format:check · typecheck · lint (about 30s).
 #
-# 켜기:  git config core.hooksPath .githooks   (클론·워크트리마다 한 번)
-# 끄기:  git push --no-verify                  (일회성 우회)
+# Enable:  git config core.hooksPath .githooks   (once per clone/worktree)
+# Disable: git push --no-verify                  (one-off bypass)
 #
-# 테스트와 build 는 **일부러 뺐다.** 합치면 4~5분이라 푸시마다 물리면 우회가
-# 일상이 되고, 그러면 훅이 없는 것과 같다. 이 셋이 CI 가 잡는 실패의 대부분이면서
-# 30초 안에 끝난다. 나머지는 CI 가 본다.
+# Tests and build are **deliberately left out.** Together they take 4–5 minutes; charging that on every push
+# makes bypassing routine, which is the same as having no hook. These three catch most of what CI catches
+# and finish within 30 seconds. CI handles the rest.
 set -euo pipefail
 
 repo="$(git rev-parse --show-toplevel)"
 
-# 삭제 푸시는 검사할 것이 없다.
+# Deleting pushes have nothing to check.
 zero="0000000000000000000000000000000000000000"
 only_deletes=1
 ranges=()
@@ -19,14 +19,14 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
   [ -z "${local_sha:-}" ] && continue
   [ "$local_sha" = "$zero" ] && continue
   only_deletes=0
-  # 새 브랜치면 원격 어디에도 없는 커밋만, 아니면 원격 머리 이후 커밋만 본다.
+  # For a new branch, look only at commits not on any remote; otherwise only commits after the remote head.
   if [ "$remote_sha" = "$zero" ]; then ranges+=("$local_sha --not --remotes")
   else ranges+=("$remote_sha..$local_sha"); fi
 done
 [ "$only_deletes" -eq 1 ] && exit 0
 
-# 커밋 메시지의 개발 메타 — 30초 게이트보다 먼저, 몇 밀리초면 끝난다.
-# rebase·cherry-pick·병합은 commit-msg 훅을 다시 돌리지 않으므로 공개 전 마지막 관문은 여기다.
+# Development metadata in commit messages — runs before the 30s gate and takes milliseconds.
+# rebase, cherry-pick and merge do not rerun the commit-msg hook, so this is the last gate before publishing.
 meta_failed=0
 meta_err="$(mktemp)"
 for range in "${ranges[@]}"; do
@@ -53,12 +53,12 @@ fi
 cd "$repo"
 printf '\n\033[1m[pre-push] format:check · typecheck · lint (약 30초). 건너뛰려면 --no-verify.\033[0m\n'
 
-# 로그는 mktemp 로 잡는다. /tmp 에 고정 이름을 쓰면 남이 미리 심볼릭 링크를 걸어
-# 엉뚱한 파일을 덮어쓰게 만들 수 있다(공유 머신에서 실제 위험).
+# Capture the log with mktemp. A fixed name under /tmp lets someone plant a symlink beforehand
+# and make us overwrite the wrong file (a real risk on shared machines).
 log="$(mktemp -t deskrpg-prepush)"
 trap 'rm -f "$log"' EXIT
 
-# 셸에 DATABASE_URL 이 있으면 테스트·도구가 그 DB 를 잡는다 — 레포 규약대로 벗긴다.
+# If DATABASE_URL is in the shell, tests and tools grab that DB — strip it as the repo convention says.
 for step in format:check typecheck lint; do
   printf '  → %s\n' "$step"
   if ! env -u DATABASE_URL npm run -s "$step" >"$log" 2>&1; then

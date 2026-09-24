@@ -5,7 +5,7 @@ on:
     branches: [master]
   pull_request:
 
-# 같은 브랜치에 새 푸시가 오면 이전 실행을 취소한다 — 오래된 결과를 기다릴 이유가 없다.
+# Cancel the previous run when a new push lands on the same branch — no reason to wait for stale results.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    # 마이그레이션 테스트(src/db/npc-profile-migration.test.ts)는 임시 PostgreSQL 이
-    # 있을 때만 돈다. 그 서비스가 없어서 이 테스트는 어디서도 실행되지 않았고,
-    # 스위트는 skipped 1 로 초록이었다 — 프로덕션이 PostgreSQL 이고 NPC 삭제·백필이
-    # 걸린 곳이 바로 이 마이그레이션인데도.
+    # The migration test (src/db/npc-profile-migration.test.ts) runs only when a temporary PostgreSQL
+    # is available. Without that service the test ran nowhere and the suite was green
+    # with skipped 1 — even though production is PostgreSQL and this migration is exactly
+    # where NPC deletion and backfill happen.
     services:
       postgres:
         image: postgres:16-alpine
@@ -47,8 +47,8 @@ jobs:
 
       - run: npm ci
 
-      # 실패해도 나머지를 계속 돌린다 — 한 번에 무엇이 깨졌는지 전부 보이는 편이
-      # "고치고 다시 밀고 다음 실패를 본다"를 반복하는 것보다 싸다.
+      # Keep running the rest on failure — seeing everything that broke at once is cheaper
+      # than repeating "fix, push again, see the next failure".
       - name: 단위 테스트
         if: always()
         env:
@@ -59,19 +59,19 @@ jobs:
         if: always()
         run: npm run typecheck
 
-      # 2026-09-07 에 0으로 만들었다. 이 단계가 없는 동안 react-hooks/exhaustive-deps
-      # 위반 17건이 타일 에디터에 살아 있었고, 그중 여럿이 실제 결함이었다
-      # (레이어 오버레이 토글이 캔버스를 다시 그리지 않는 등).
+      # Brought to 0 on 2026-09-07. While this step was missing, 17 react-hooks/exhaustive-deps
+      # violations lived in the tile editor, and several were real defects
+      # (e.g. the layer overlay toggle did not redraw the canvas).
       #
-      # 경고(미사용 변수 등)로는 실패하지 않는다 — 오류만 게이트다. 경고까지 막으려면
-      # 먼저 그것들을 0으로 만들어야 하고, 그건 별개의 작업이다.
+      # Warnings (unused variables, etc.) do not fail — only errors are gated. Blocking warnings too
+      # would first require bringing them to 0, which is a separate task.
       - name: 린트
         if: always()
         run: npm run lint
 
-      # 이 저장소에서 가장 값진 게이트다. 없는 모듈을 import 하는 코드가 넉 달을
-      # 살아남은 적이 있다(ec60ca2d) — 단위 테스트는 그 라우트를 import 하지 않고,
-      # dev 서버는 요청된 라우트만 컴파일하므로 전체 빌드만이 그걸 본다.
+      # The most valuable gate in this repo. Code importing a module that did not exist once
+      # survived four months (ec60ca2d) — unit tests do not import that route, and the
+      # dev server compiles only requested routes, so only a full build sees it.
       - name: 빌드
         if: always()
         run: npm run build
@@ -101,16 +101,16 @@ jobs:
           include-hidden-files: true
           retention-days: 7
 
-  # 런타임 이미지가 실제로 빌드되는지 본다.
+  # Check that the runtime image actually builds.
   #
-  # verify 잡으로는 이 층을 못 본다. 단위 테스트는 .ts 소스를 직접 읽으므로 파일이
-  # 다 있고, `next build` 는 앱을 번들할 뿐 Dockerfile 의 COPY 목록과 무관하다.
-  # 그래서 삭제된 파일을 계속 COPY 하던 Dockerfile 이 넉 달을 살아남았고, 2단계에서
-  # 늘어난 런타임 모듈이 통째로 빠진 것도 배포 때서야 드러났다.
+  # The verify job cannot see this layer. Unit tests read the .ts sources directly, so every file
+  # is there, and `next build` only bundles the app and ignores the Dockerfile COPY list.
+  # That is how a Dockerfile that kept COPYing a deleted file survived four months, and how the
+  # runtime modules added in phase 2 went missing wholesale until deploy time.
   #
-  # 러너는 amd64 이고 배포 대상(MiniPC)도 x86_64 라 아키텍처가 맞는다.
-  # master 푸시에서는 같은 빌드 결과를 GHCR 에 SHA 태그로 올린다. 이는 운영 후보일
-  # 뿐 배포가 아니다. 운영 전환은 verify 와 docker 가 모두 초록일 때 별도 수행한다.
+  # The runner is amd64 and so is the deploy target (MiniPC, x86_64), so the architecture matches.
+  # On master pushes the same build is pushed to GHCR with a SHA tag. That is only a production
+  # candidate, not a deploy. Promotion to production is done separately once both verify and docker are green.
   docker:
     runs-on: ubuntu-latest
     timeout-minutes: 30

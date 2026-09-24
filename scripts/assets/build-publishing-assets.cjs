@@ -1,4 +1,4 @@
-// 공통 내보내기로 출판 집기와 측정 보고서를 함께 생성한다.
+// Generate the publishing props and the measurement report together through the shared export.
 const { buildAuthoredAssets } = require("./build-tech-startup.cjs");
 buildAuthoredAssets({
   output: "public/assets/shared/publishing",

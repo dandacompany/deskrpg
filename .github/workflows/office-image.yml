@@ -1,13 +1,13 @@
 name: Office image
 
-# deskrpg-office — 사무실(DeskRPG)과 두뇌(Hermes Agent)를 한 컨테이너에 담은 이미지.
+# deskrpg-office — an image with the office (DeskRPG) and the brain (Hermes Agent) in one container.
 #
-# release.yml 과 분리한 이유: 이 이미지는 DeskRPG 릴리스가 아니라 `deskrpg@latest` 와
-# 공식 Hermes 이미지를 바탕에 깔고 굽는다. 그래서 릴리스 태그로도, 손으로도 구울 수 있어야
-# 한다(공식 Hermes 가 올라갔을 때 릴리스 없이 다시 굽는 경우).
+# Why this is separate from release.yml: this image is not a DeskRPG release; it is baked on top of
+# `deskrpg@latest` and the official Hermes image. So it must be bakeable from a release tag or by hand
+# (rebaking without a release when the official Hermes image moves).
 #
-# amd64 전용이다. 공식 Hermes 이미지의 arm64 변종은 2026-06 버전에 멈춰 있어(실측 v0.16.0)
-# 플러그인이 로드되지 않는다. 대상은 amd64 VPS 다.
+# amd64 only. The arm64 variant of the official Hermes image is stuck at a 2026-06 version (measured v0.16.0)
+# and the plugin does not load. The target is amd64 VPSes.
 on:
   push:
     tags: ["20[0-9][0-9].[0-9]*.[0-9]*"]
@@ -38,7 +38,7 @@ jobs:
         with:
           persist-credentials: false
       - id: meta
-        # 입력값은 쉘 코드가 아니라 환경변수로 넣는다(스크립트 주입 방지).
+        # Pass inputs as environment variables, not shell code (prevents script injection).
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
@@ -66,7 +66,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           provenance: false
-      # 익명으로 당길 수 있어야 Compose 기본값으로 쓸 수 있다.
+      # It must be pullable anonymously to serve as the Compose default.
       - name: Verify anonymous pull
         env:
           VERSION: ${{ steps.meta.outputs.version }}

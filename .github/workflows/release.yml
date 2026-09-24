@@ -1,11 +1,11 @@
 name: Release
 
-# 날짜 태그(YYYY.M.D)를 밀면 npm → GHCR → GitHub Release 를 한 번에 낸다.
-# 사람이 하는 일은 버전 커밋과 `git push origin <tag>` 뿐이다.
+# Pushing a date tag (YYYY.M.D) publishes npm → GHCR → GitHub Release in one go.
+# The only human steps are the version commit and `git push origin <tag>`.
 #
-# 필요한 시크릿:
-#   NPM_TOKEN            — npmjs granular token(publish, 패키지 deskrpg). --provenance 로 서명한다.
-#   GHCR 는 저장소 GITHUB_TOKEN (packages: write) 를 사용한다.
+# Required secrets:
+#   NPM_TOKEN            — npmjs granular token (publish, package deskrpg). Signed with --provenance.
+#   GHCR uses the repository GITHUB_TOKEN (packages: write).
 on:
   push:
     tags: ["20[0-9][0-9].[0-9]*.[0-9]*"]
@@ -21,7 +21,7 @@ env:
   IMAGE: ghcr.io/dandacompany/deskrpg
 
 jobs:
-  # 태그와 package.json 이 다르면 아무것도 내보내지 않는다.
+  # If the tag and package.json differ, publish nothing.
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -36,7 +36,7 @@ jobs:
         run: bash scripts/check-public-tree.sh
       - id: ver
         run: |
-          # 날짜 태그는 반드시 이미 master 에 올라온 커밋을 가리켜야 한다.
+          # A date tag must point at a commit already on master.
           git fetch --no-tags origin master
           if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/master; then
             echo "태그 커밋은 origin/master 에 포함되어야 합니다." >&2
@@ -57,13 +57,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # CI 와 동일한 포맷 관문을 공개 게시 전에 다시 확인한다.
+      # Recheck the same format gate as CI before publishing publicly.
       - name: 포매팅 검사
         run: npm run format:check
       - run: npm run test
       - run: npm run typecheck
       - run: npm run lint
-      # Docker 플랫폼 이미지를 내기 전에 tarball을 검증한다.
+      # Verify the tarball before publishing Docker platform images.
       - name: Smoke npm tarball before publishing
         run: |
           smoke_dir="$(mktemp -d)"
@@ -90,7 +90,7 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
       - run: npm ci
-      # 실제 npm publish에 넘길 tarball을 검사하고 실행한다.
+      # Inspect and run the exact tarball handed to npm publish.
       - name: Publish deskrpg@${{ needs.verify.outputs.version }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -110,13 +110,13 @@ jobs:
       - name: Wait for registry propagation
         run: |
           V="${{ needs.verify.outputs.version }}"
-          # 대용량 런타임 에셋의 npm 레지스트리 처리에는 2분 이상 걸릴 수 있다.
+          # The npm registry can take over 2 minutes to process the large runtime assets.
           for i in $(seq 1 240); do
             npm view "deskrpg@$V" version >/dev/null 2>&1 && { echo "propagated after attempt $i"; exit 0; }
             sleep 5
           done
           echo "registry never propagated" >&2; exit 1
-      # 소스 트리에서의 테스트는 npm 전역 설치 위치(node_modules) 문제를 못 잡았다.
+      # Tests from the source tree missed problems with the npm global install location (node_modules).
       - name: Smoke registry-installed npm CLI
         env:
           V: ${{ needs.verify.outputs.version }}
@@ -147,7 +147,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # 각 네이티브 러너에서 한 플랫폼만 빌드한다. QEMU 크로스 빌드는 없다.
+      # Each native runner builds one platform only. No QEMU cross builds.
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -158,7 +158,7 @@ jobs:
           cache-to: type=gha,scope=${{ matrix.arch }},mode=max
 
   docker-manifest:
-    # npm 설치 스모크가 실패하면 :latest 를 공개하지 않는다.
+    # If the npm install smoke test fails, do not publish :latest.
     needs: [verify, npm, docker-platform]
     runs-on: ubuntu-24.04
     timeout-minutes: 20

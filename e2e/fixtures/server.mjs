@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// 개인 환경·DB·게이트웨이를 상속하지 않는 단명 서버. CI와 로컬이 같은 경로를 쓴다.
+// A short-lived server that inherits no personal environment, DB or gateway. CI and local use the same path.
 for (const name of [".env", ".env.local", ".env.production", ".env.production.local"]) {
   if (existsSync(name))
     throw new Error(`Isolated fixture server refuses repository ${name}; use a clean worktree`);

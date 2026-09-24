@@ -31,7 +31,7 @@ ARG ENABLE_CLAUDE=false
 ARG ENABLE_CODEX=false
 ARG ENABLE_GEMINI=false
 ARG ENABLE_OPENCODE=false
-# 연결 마법사의 SSH 연결(ssh·ssh-keygen·ssh-keyscan). 대상 서버에서 도는 python3 는 넣지 않는다.
+# SSH connections for the connection wizard (ssh, ssh-keygen, ssh-keyscan). python3, which runs on the target server, is not included.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends openssh-client \
   && rm -rf /var/lib/apt/lists/*
@@ -45,19 +45,19 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/server.js ./server.js
 
 # CommonJS modules required by server.js (not traced by Next.js standalone)
-# `src/lib` 는 **디렉터리째** 복사한다. 파일마다 COPY 하면 줄마다 레이어가 하나씩 생겨, 런타임 의존이
-# 늘 때마다 이미지가 overlay2 의 레이어 한도에 다가간다 — 2026.921.2 는 126 레이어가 되어 Linux 에서
-# `docker pull` 이 `max depth exceeded` 로 실패했다. 새 의존을 더할 때 이 파일을 고칠 필요도 없어진다.
+# Copy `src/lib` **as a directory**. A COPY per file adds a layer per line, pushing the image toward
+# the overlay2 layer limit every time runtime dependencies grow — 2026.921.2 reached 126 layers and
+# `docker pull` failed on Linux with `max depth exceeded`. It also means new dependencies need no edit here.
 COPY --from=builder /app/src/lib ./src/lib
 
-# 대화 런타임과 소켓 서버는 **디렉토리째** 복사한다.
+# Copy the conversation runtime and socket server **as directories**.
 #
-# 예전에는 파일을 한 줄씩 나열했는데, 그 목록은 파일이 추가·개명될 때마다 썩었다.
-# 실제로 삭제된 meeting-broker.js·openclaw-gateway.js 를 계속 COPY 해 빌드가 깨졌고,
-# 2단계에서 늘어난 conversation 모듈 여덟 개는 아예 빠져 있었다 — server.js 가 런타임에
-# socket-handlers.ts 를 import 하므로 그대로 두면 컨테이너가 기동에서 죽는다.
+# This used to list files one per line, and that list rotted every time a file was added or renamed.
+# It really did keep COPYing the deleted meeting-broker.js and openclaw-gateway.js and broke the build,
+# and the eight conversation modules added in phase 2 were missing entirely — server.js imports
+# socket-handlers.ts at runtime, so left as is the container dies on startup.
 #
-# 목록을 손으로 맞추는 대신 경계를 통째로 옮긴다. 새 형제 파일이 생겨도 따라온다.
+# Instead of matching a list by hand, move the whole boundary. New sibling files come along too.
 COPY --from=builder /app/src/server ./src/server
 # Pure shared map geometry and navigation used by channel motion coordination.
 COPY --from=builder /app/src/game/navigation.ts ./src/game/navigation.ts
@@ -67,20 +67,20 @@ COPY --from=builder /app/src/game/ambient-zones.ts ./src/game/ambient-zones.ts
 COPY --from=builder /app/src/game/meeting-map-normalization.ts ./src/game/meeting-map-normalization.ts
 COPY --from=builder /app/src/game/meeting-space.ts ./src/game/meeting-space.ts
 
-# DB 경계는 통째로 옮긴다. 파일 목록으로 두면 `require("./sqlite-...js")` 처럼
-# 정적 추적에 안 걸리는 진입점이 생길 때마다 조용히 빠진다 — 실제로 이관 모듈
-# 둘(sqlite-npc-profile-ownership.js, sqlite-openclaw-retirement.js)이 COPY 줄
-# 없이 Next 의 standalone 추적에 얹혀 살아 있었다.
+# Move the DB boundary as a whole. As a file list, every entry point that static tracing misses,
+# like `require("./sqlite-...js")`, silently drops out — in fact two migration modules
+# (sqlite-npc-profile-ownership.js, sqlite-openclaw-retirement.js) were alive only by riding
+# Next's standalone tracing, with no COPY line.
 COPY --from=builder /app/src/db ./src/db
-# NPC 의 이름·외형은 Hermes 프로필이 정본이다 — 소켓 서버의 NPC 로더가 이 투영을 거친다.
-# npc:set-active 소켓 핸들러가 출근/퇴근 토글에 쓴다.
+# The Hermes profile is the source of truth for an NPC's name and appearance — the socket server's NPC loader goes through this projection.
+# The npc:set-active socket handler uses it for the clock-in/clock-out toggle.
 # NOTE: src/lib/runtime-paths.ts (ESM) is distinct from src/lib/runtime-paths.js
 # (CJS, copied above for openclaw-gateway.js's require()). db/index.ts imports the
 # extensionless "../lib/runtime-paths", which TypeScript resolves to the .ts file.
-# gateway-resources 가 바인딩 뒤 보드 확보(T4)를 위해 끌어온다 — 빠지면 소켓 서버가 기동에서 죽는다.
-# 폴러(T5)가 REST 라우트에 자기를 꽂는 globalThis 레지스트리 — 빠지면 소켓 서버가 기동에서 죽는다.
-# 자동화 사건 싱크(T5)가 크론 결과의 출처를 대조하려고 끌어온다.
-# 회의 규약 폴백(getDefaultMeetingProtocol)이 끌어오는 프리셋·로케일 트리.
+# gateway-resources pulls this in to secure the board after binding (T4) — without it the socket server dies on startup.
+# The globalThis registry through which the poller (T5) plugs itself into REST routes — without it the socket server dies on startup.
+# The automation event sink (T5) pulls this in to match the origin of cron results.
+# The preset and locale tree pulled in by the meeting protocol fallback (getDefaultMeetingProtocol).
 # Whole-directory copies (not per-file): this project has missed individual files in
 # these two directories five times (most recently local-discovery-gate.ts and
 # profile-name.ts, neither of which had its own COPY line before this fix).

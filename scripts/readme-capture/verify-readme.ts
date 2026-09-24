@@ -25,9 +25,9 @@ const KOREAN_CAPTIONS = [
   "에이전트 회의",
 ];
 /**
- * 맵 에디터는 제거됐다 — 현재 기능으로도, 예정 기능으로도 README 에 나오면 안 된다.
- * 레거시 2D(Phaser·LPC 스프라이트) 자취도 같이 막는다. 공개 README 는 실제로 배포하는
- * 것만 주장한다.
+ * The map editor was removed — it must not appear in the README, neither as a current nor a planned feature.
+ * Traces of legacy 2D (Phaser, LPC sprites) are blocked too. The public README claims only what actually
+ * ships.
  */
 const FORBIDDEN_CLAIMS: { pattern: RegExp; reason: string }[] = [
   { pattern: /map editor/i, reason: "Map Editor was removed and must not appear in the README" },

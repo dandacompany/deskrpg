@@ -19,9 +19,9 @@ function loadRuntimePathsModule() {
   return require(path.join(getPackageRoot(), "src", "lib", "runtime-paths.js"));
 }
 
-// runtime-paths 와 같은 규칙으로 지연 로드한다. 최상위에서 `../src/...` 로 부르면
-// (1) 이 파일이 필요 없는 명령(init·doctor 등)까지 그 파일에 묶이고,
-// (2) 패키지 루트를 __dirname 상대경로로 가정하게 된다 — getPackageRoot() 가 있는 이유다.
+// Lazy-load with the same rule as runtime-paths. Requiring `../src/...` at the top level would
+// (1) tie commands that do not need that file (init, doctor, …) to it, and
+// (2) assume the package root is relative to __dirname — which is why getPackageRoot() exists.
 function loadCliPasswordModule() {
   return require(path.join(getPackageRoot(), "src", "lib", "cli-password.js"));
 }
@@ -314,7 +314,7 @@ function loadStartupCheckModule() {
   return require(path.join(getPackageRoot(), "src", "lib", "startup-check.js"));
 }
 
-/** doctor 의 한 줄 출력. 항목별로 OK / 경고 / 실패 가 눈에 보이게 한다. */
+/** One line of doctor output. Makes OK / warning / failure visible per item. */
 function reportCheck(status, label, detail) {
   const marker = status === "ok" ? "OK  " : status === "warn" ? "경고" : "실패";
   const line = detail ? `[${marker}] ${label} — ${detail}` : `[${marker}] ${label}`;
@@ -322,7 +322,7 @@ function reportCheck(status, label, detail) {
   else console.log(line);
 }
 
-/** doctor 가 볼 포트. start 와 같은 인자 규칙(-p/--port/--port=)을 쓴다. */
+/** The port doctor checks. Uses the same argument rules as start (-p/--port/--port=). */
 function parseDoctorPort() {
   const args = process.argv.slice(3);
   for (let i = 0; i < args.length; i++) {
@@ -340,16 +340,16 @@ const HERMES_INSTALL_KEY = "DESKRPG_HERMES_INSTALL_ENABLED";
 function readSwitch(envText, key) {
   const match = envText.match(new RegExp(`^${key}=(.*)$`, "m"));
   const value = (match?.[1] ?? "").trim().toLowerCase();
-  // 2026-09-19 부터 두 스위치는 기본 켜짐이다(관리자에게). 명시적으로 끈 값만 꺼짐이다.
+  // Since 2026-09-19 both switches default to on (for admins). Only an explicit off value is off.
   return !["0", "false", "no", "off"].includes(value);
 }
 
 /**
- * 호스트 설정 스위치를 켜고 끈다.
+ * Turn the host setup switches on and off.
  *
- * 2026-09-19 부터 기본은 켜짐이다 — 관리자(system_admin)는 연결 마법사에서 로컬·SSH 연결과 Hermes 설치를
- * 바로 쓴다(단테 결정). 이 명령은 운영자가 **끄는** 수단이다. 스위치는 여전히 앱 밖에 있어, 웹 화면에서
- * 켜고 끌 수 없다 — 터미널을 쓸 수 있는 사람만 바꿀 수 있다.
+ * Since 2026-09-19 the default is on — admins (system_admin) can use local/SSH connections and Hermes install
+ * in the connection wizard right away (Dante's decision). This command is how operators turn it **off**. The switches
+ * still live outside the app and cannot be toggled from the web UI — only someone with a terminal can change them.
  */
 async function runHostSetup(argv) {
   const runtimePaths = loadRuntimePathsModule();
@@ -380,7 +380,7 @@ async function runHostSetup(argv) {
 
   const enabled = action === "on";
   envText = runtimePaths.upsertEnvLine(envText, HOST_SETUP_KEY, enabled ? "1" : "0");
-  // 설치는 더 위험한 쪽이라 켤 때만 명시적으로 요구하고, 끌 때는 함께 끈다.
+  // Install is the riskier one, so it is required explicitly only when turning on, and is turned off along with the other.
   if (!enabled || withInstall)
     envText = runtimePaths.upsertEnvLine(envText, HERMES_INSTALL_KEY, enabled ? "1" : "0");
   fs.writeFileSync(envPath, envText, { mode: 0o600 });
@@ -446,7 +446,7 @@ async function runDoctor() {
     reportCheck("ok", "빌드 산출물", "필요한 런타임 파일이 모두 있음");
   }
 
-  // 여기부터는 파일 존재가 아니라 "실제로 동작할 수 있는가" 를 본다.
+  // From here on we check "can it actually work", not whether files exist.
   loadEnvFile(envPath);
 
   const { checkDatabaseReachable, checkPortAvailable, inspectEnvironment } =
@@ -459,7 +459,7 @@ async function runDoctor() {
     reportCheck("ok", "환경변수", `문제 없음 (DB 대상: ${inspection.dbTarget})`);
   }
 
-  // 연결 마법사가 호스트를 만질 수 있는지. 꺼져 있는 것이 기본이고 정상이므로 실패가 아니다.
+  // Whether the connection wizard may touch the host. Off is the default and normal, so it is not a failure.
   const offValue = (v) => ["0", "false", "no", "off"].includes((v ?? "").trim().toLowerCase());
   const hostSetupOn = !offValue(process.env.DESKRPG_HOST_SETUP_ENABLED);
   const hermesInstallOn = !offValue(process.env.DESKRPG_HERMES_INSTALL_ENABLED);
@@ -471,8 +471,8 @@ async function runDoctor() {
       : "운영자가 꺼 둠 — 다시 켜려면 deskrpg host-setup on --with-install",
   );
 
-  // 찌를 대상은 앱이 실제로 쓰는 쪽(inspection.dbTarget)이다. URL 유무로 정하면 SQLite
-  // 런타임에 남아 있는 .env.example 의 DATABASE_URL 때문에 거짓 PostgreSQL 실패가 뜬다.
+  // Probe what the app actually uses (inspection.dbTarget). Deciding by whether a URL exists gives a false
+  // PostgreSQL failure because of the DATABASE_URL from .env.example left in the SQLite runtime.
   const dbProbe = await checkDatabaseReachable({
     databaseUrl: process.env.DATABASE_URL,
     sqlitePath: process.env.SQLITE_PATH || runtimePaths.getDeskRpgSqlitePath(),
@@ -749,7 +749,7 @@ function parseCreateUserArgs() {
   return result;
 }
 
-/** stdin 을 끝까지 읽는다. `echo pw | deskrpg create-user --password-stdin` 용. */
+/** Read stdin to the end. For `echo pw | deskrpg create-user --password-stdin`. */
 function readStdin() {
   return new Promise((resolve, reject) => {
     let data = "";
@@ -761,8 +761,8 @@ function readStdin() {
 }
 
 /**
- * 에코 없이 한 줄을 받는다. readline 의 output 을 가로채 입력 문자를 화면에 쓰지
- * 않는다 — 어깨너머로 보이는 것도, 터미널 스크롤백에 남는 것도 막는다.
+ * Read one line without echo. Intercepts readline's output so typed characters are not written
+ * to the screen — keeps them from shoulder-surfers and out of terminal scrollback.
  */
 function promptPassword(label = "Password: ") {
   return new Promise((resolve, reject) => {
@@ -772,7 +772,7 @@ function promptPassword(label = "Password: ") {
       terminal: true,
     });
     const onWrite = (chunk, encoding, callback) => {
-      // 라벨 자체는 보여야 하지만 그 뒤의 입력 에코는 삼킨다.
+      // The label itself must show, but the echo of the input after it is swallowed.
       if (chunk.toString() !== label) return callback();
       return rlWrite.call(process.stdout, chunk, encoding, callback);
     };
@@ -923,8 +923,8 @@ async function runCreateUser() {
 }
 
 /**
- * 관리자 본인이 잠겼을 때의 최종 복구 경로다 — 호스트에서 DB 를 직접 열어
- * 임시 비밀번호를 발급한다. 평문은 화면에 한 번 나올 뿐 저장하지 않는다.
+ * The last-resort recovery path when the admin is locked out — opens the DB directly on the host
+ * and issues a temporary password. The plaintext appears on screen once and is never stored.
  */
 async function runResetPassword() {
   const loginId = process.argv[3];

@@ -1,12 +1,12 @@
 /**
- * 브라우저에서 도는 마크 렌더러. 캡처 스크립트가 esbuild 로 묶어 빈 페이지에 넣는다.
- * 사이드바 본사와 같은 모델·조명이라(office-building.ts) 건물을 고치면 로고도 같이 바뀐다.
+ * The mark renderer that runs in the browser. The capture script bundles it with esbuild into a blank page.
+ * It uses the same model and lighting as the sidebar headquarters (office-building.ts), so changing the building changes the logo too.
  */
 import * as T from "three";
 
 import { addOfficeBuildingLights, buildOfficeBuilding } from "../../src/game/three/office-building";
 
-/** 배경을 지정하면 그 색으로 칠하고(앱 아이콘), 없으면 투명하게 둔다(사이드바 마크). */
+/** With a background, paint that color (app icon); without, leave it transparent (sidebar mark). */
 export function renderBrandMark(size: number, background?: string): string {
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -20,7 +20,7 @@ export function renderBrandMark(size: number, background?: string): string {
   const scene = new T.Scene();
   if (background) scene.background = new T.Color(background);
   addOfficeBuildingLights(scene);
-  // 나무를 빼 실루엣을 좁히고, 탑을 꽉 채워 16px 에서도 층과 입구가 남는다.
+  // Drop the trees to narrow the silhouette and fill the frame with the tower so floors and entrance survive at 16px.
   const model = buildOfficeBuilding({ trees: false });
   scene.add(model);
   const box = new T.Box3().setFromObject(model);

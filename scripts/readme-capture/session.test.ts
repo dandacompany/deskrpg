@@ -19,7 +19,7 @@ import {
   type CapturePorts,
 } from "./session";
 
-/** 테스트마다 비어 있는 포트 셋. 같은 파일이 다른 세션에서 동시에 돌아도 부딪히지 않는다. */
+/** A free set of ports per test. The same file running concurrently in another session does not collide. */
 async function freePorts(): Promise<CapturePorts> {
   const take = async () => {
     const probe = createServer();
@@ -59,9 +59,9 @@ test("fixture manifest is atomically replaced before capture and has private per
   assert.deepEqual(fs.readdirSync(path.dirname(target)), ["fixture.json"]);
 });
 
-// 세션은 자식의 프로세스 그룹(-pid)에 신호를 보낸다. 가짜 자식의 pid 는 지어낸 번호라, 실제
-// process.kill 로 가면 우연히 그 번호를 쓰는 남의 프로세스 그룹이 신호를 받고 가짜는 죽지 않는다.
-// 그래서 세션에는 늘 `groupKill` 을 넘겨 신호가 이 가짜에만 닿게 한다.
+// The session signals the child's process group (-pid). A fake child's pid is a made-up number, so going through the real
+// process.kill would signal whatever process group happens to use that number, and the fake would not die.
+// So the session is always given `groupKill`, making the signal reach only this fake.
 function runningChild(): {
   child: ChildProcess;
   groupKill: typeof process.kill;
@@ -334,10 +334,10 @@ test("terminates the whole owned process group instead of only the npm wrapper",
   assert.equal(fake.wasKilled(), false);
 });
 
-// 벽시계 상한. 러너는 파일 단위로 끝나기를 기다리므로, 이 테스트가 멈추면 전체 실행이 통째로 멈춘다
-// (병합 게이트에서 25분 정지 실측). 부팅 예산 120초에 정리 여유를 더한 값이다.
+// Wall-clock cap. The runner waits for each file to finish, so if this test hangs the whole run hangs
+// (measured: a 25-minute stall at the merge gate). The 120s boot budget plus cleanup margin.
 const REAL_SERVER_TEST_TIMEOUT_MS = 180_000;
-/** 요청 하나의 상한. 서버가 연결은 받고 답을 못 하면 시간 제한 없는 fetch 는 영원히 기다린다. */
+/** Cap for a single request. If the server accepts the connection but never answers, a fetch without a timeout waits forever. */
 const HEALTH_REQUEST_TIMEOUT_MS = 2_000;
 
 test(
@@ -408,9 +408,9 @@ test(
     child.stderr?.on("data", (chunk) => {
       output += String(chunk);
     });
-    // 시간 초과로 끊겨도 node:test 는 이 파일의 프로세스가 끝나기를 기다린다. 런처가 SIGTERM 을
-    // 넘기면 살아 있는 자식의 파이프가 그 프로세스를 붙잡아 러너 전체가 멈춘다(6시간 멈춤 실측).
-    // 그래서 SIGTERM 뒤에 SIGKILL 까지 보내고, 어느 쪽이든 파이프를 닫아 이 파일이 끝나게 한다.
+    // Even after a timeout, node:test waits for this file's process to end. If the launcher forwards SIGTERM,
+    // a live child's pipe holds that process and the whole runner stalls (measured: a 6-hour stall).
+    // So send SIGKILL after SIGTERM, and close the pipes either way so this file ends.
     stopServer = async () => {
       const exited = () => child.exitCode !== null || child.signalCode !== null;
       const waitExit = (ms: number) =>
@@ -440,8 +440,8 @@ test(
     const deadline = Date.now() + 120_000;
     while (Date.now() < deadline) {
       try {
-        // 이벤트 루프가 멈춘 서버도 커널이 연결은 받아 준다. 요청마다 상한을 두지 않으면 이 줄에서
-        // 영원히 기다리고 아래 deadline 은 다시 평가되지 않는다(SIGSTOP 으로 재현).
+        // The kernel still accepts connections for a server whose event loop is stopped. Without a per-request cap this line
+        // waits forever and the deadline below is never re-evaluated (reproduced with SIGSTOP).
         health = await fetch(`http://127.0.0.1:${port}/__readme-capture/health`, {
           signal: AbortSignal.timeout(HEALTH_REQUEST_TIMEOUT_MS),
         });

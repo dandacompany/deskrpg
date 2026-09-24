@@ -1,7 +1,7 @@
 // Custom server — wraps Next.js standalone with Socket.io on a single port
 // Hooks into startServer's httpServer after it starts
 const path = require("node:path");
-// 별칭 해석을 가장 먼저 심는다 — 아래 require 들이 이미 `@/` 를 타고 들어간다.
+// Install alias resolution first — the requires below already go through `@/`.
 require("./src/lib/path-alias.js").installPathAlias(__dirname);
 const { Server } = require("socket.io");
 const {
@@ -42,11 +42,11 @@ require("next");
 const { startServer } = require("next/dist/server/lib/start-server");
 
 async function main() {
-  // 런타임 홈의 값을 환경에 올린다 — 설정된 값은 덮지 않는다.
+  // Promote the runtime home's values into the environment — values already set are not overwritten.
   bootstrapRuntimeEnv({ packageRoot: dir });
 
-  // 기동 직전 환경 검증 — errors 는 즉시 중단, warnings 는 찍고 계속.
-  // DATABASE_URL 없이 SQLite 로 돌던 사용자는 경고만 보고 그대로 뜬다.
+  // Validate the environment right before startup — errors abort immediately, warnings are printed and startup continues.
+  // Users who ran on SQLite without DATABASE_URL just see a warning and start as before.
   const inspection = inspectEnvironment(process.env);
   const hint = hostSetupHint();
   if (hint) console.log(`[startup] ${hint}`);
@@ -95,11 +95,11 @@ async function main() {
     maxHttpBufferSize: 20e6, // 20 MB — supports 3 × 5 MB file attachments
   });
 
-  // 예전에는 여기에 OpenClaw 게이트웨이 커넥션 캐시와 /_internal/rpc 브리지가 있었다.
-  // API 라우트가 그 브리지로 agents.create / agents.files.set 을 불러 게이트웨이
-  // 워크스페이스에 페르소나 파일을 써 넣었다. OpenClaw 가 사라지면서 그 개념 전체가
-  // 없어졌다 — 페르소나는 DB 에만 남고, Hermes 프로필은 자기 홈을 직접 들고 있다.
-  // 플레이어/세션 상태는 socket-handlers.ts 에 있다.
+  // This used to hold the OpenClaw gateway connection cache and the /_internal/rpc bridge.
+  // API routes called agents.create / agents.files.set through that bridge to write persona files
+  // into the gateway workspace. The whole concept went away with OpenClaw —
+  // personas live only in the DB, and each Hermes profile holds its own home directly.
+  // Player/session state lives in socket-handlers.ts.
 
   const { refreshChannelMap } = setupSocketHandlers(io);
 
@@ -197,11 +197,11 @@ async function main() {
     res.end(JSON.stringify({ error: "Not found" }));
   });
 
-  // DB 도달성은 기동을 막지 않는다 — 실패해도 경고만 남긴다(기존 동작 유지).
+  // DB reachability does not block startup — a failure only leaves a warning (existing behavior kept).
   const dbProbe = await checkDatabaseReachable({
     databaseUrl: process.env.DATABASE_URL,
     sqlitePath: process.env.SQLITE_PATH || getRuntimeSqlitePath(),
-    // 앱이 실제로 쓰는 쪽을 찌른다 — SQLite 런타임에도 .env 에 옛 DATABASE_URL 이 남아 있다.
+    // Probe what the app actually uses — even SQLite runtimes still have an old DATABASE_URL in .env.
     target: inspection.dbTarget,
   });
   if (dbProbe.ok) {

@@ -5,24 +5,24 @@ import os from "node:os";
 import path from "node:path";
 
 /**
- * NPC 관련 라우트/서버 테스트가 공유하는 씨앗 헬퍼.
+ * Seed helpers shared by NPC-related route/server tests.
  *
- * `npcs.hermes_profile_id` 가 NOT NULL 이 된 뒤로 "프로필 없는 NPC" 를 넣는 씨앗은
- * 스키마가 거부한다. 각 테스트가 users → gateway → profile → channel → npc 사슬을
- * 따로 베끼는 대신 여기 한 곳에 둔다. 관심사별로 함수를 하나씩 나눠 두었으니
- * 필요한 조각만 골라 조립하면 된다.
+ * Since `npcs.hermes_profile_id` became NOT NULL, the schema rejects seeds that insert "NPCs without a profile".
+ * Instead of each test copying the users → gateway → profile → channel → npc chain
+ * separately, it lives in one place here. Functions are split one per concern,
+ * so pick and assemble only the pieces needed.
  *
- * `db` 는 지연 초기화되는 모듈 싱글턴이라, 임시 SQLite 를 쓰려면 `@/db` 가 처음
- * 로드되기 **전에** 환경변수가 잡혀 있어야 한다. 그래서 이 파일의 모든 헬퍼는
- * `@/db` 를 동적 import 한다 — 테스트 파일이 모듈 최상단에서 `setupThrowawaySqlite()`
- * 를 부르기만 하면 된다.
+ * `db` is a lazily initialized module singleton, so to use a temporary SQLite the environment variables must be set
+ * **before** `@/db` is first loaded. That is why every helper in this file
+ * imports `@/db` dynamically — a test file only needs to call `setupThrowawaySqlite()`
+ * at the top of the module.
  */
 
-/** 이 테스트 프로세스 전용 SQLite 파일을 잡고, 종료 시 지운다. */
+/** Grab a SQLite file just for this test process and delete it on exit. */
 export function setupThrowawaySqlite(label: string): string {
   const sqlitePath = path.join(os.tmpdir(), `${label}-${crypto.randomUUID()}.db`);
-  // DATABASE_URL 이 환경에 있으면 @/db 는 그것을 보고 Postgres 로 붙는다(src/db/index.ts:22).
-  // 임시 SQLite 를 쓰겠다는 의사를 명시한다 — 개발자의 셸에서 그냥 돌려도 같은 결과가 나온다.
+  // If DATABASE_URL is in the environment, @/db sees it and connects to Postgres (src/db/index.ts:22).
+  // State the intent to use a temporary SQLite explicitly — so running it as is in a developer's shell gives the same result.
   process.env.DB_TYPE = "sqlite";
   process.env.DESKRPG_HOME = os.tmpdir();
   process.env.SQLITE_PATH = sqlitePath;
@@ -37,8 +37,8 @@ async function loadDb() {
 }
 
 /**
- * `probeHermesGateway` 가 "hermes" 로 판정할 최소 스텁.
- * `/health` 는 2xx, `/v1/models` 는 JSON content-type 이어야 한다(gateway-probe.ts).
+ * The minimal stub that `probeHermesGateway` judges as "hermes".
+ * `/health` must be 2xx and `/v1/models` must have a JSON content-type (gateway-probe.ts).
  */
 export async function startStubHermesGateway(): Promise<{ baseUrl: string; close: () => void }> {
   const server = http.createServer((req, res) => {
@@ -53,7 +53,7 @@ export async function startStubHermesGateway(): Promise<{ baseUrl: string; close
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("failed to bind stub gateway");
-  // 테스트 러너가 이 핸들 때문에 매달리지 않게 한다.
+  // Keep the test runner from hanging on this handle.
   server.unref();
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,
@@ -156,23 +156,23 @@ export async function seedNpc(input: {
 }
 
 /**
- * 채널 하나 + 게이트웨이 바인딩 + 요청한 조합의 NPC 들.
+ * One channel + a gateway binding + NPCs of the requested combination.
  *
- * - `placedActive`: 자리 있고 출근 중 — `/api/npcs` 의 기본 응답에 나와야 하는 유일한 종류
- * - `unplaced`: 프로필만 고용됐고 아직 자리가 없음 (`position_x/y` NULL)
- * - `dormant`: 자리는 기억하지만 퇴근 (`active = 0`)
+ * - `placedActive`: has a seat and is clocked in — the only kind that must appear in the default `/api/npcs` response
+ * - `unplaced`: only the profile is hired and there is no seat yet (`position_x/y` NULL)
+ * - `dormant`: remembers the seat but has clocked out (`active = 0`)
  */
 export async function seedChannelWithProfiles(opts: {
   placedActive?: number;
   unplaced?: number;
   dormant?: number;
-  /** 게이트웨이에 등록만 하고 NPC 행은 만들지 않는 프로필 수 — "고용 전" 상태. */
+  /** Number of profiles only registered on the gateway without creating NPC rows — the "before hiring" state. */
   profiles?: number;
-  /** `npcs.name` 에 남겨 둘 옛 값 — 응답에 새면 안 된다. */
+  /** An old value to leave in `npcs.name` — it must not leak into responses. */
   staleNpcName?: string;
-  /** 첫 프로필의 표시 이름 — 응답의 `name` 은 이것이어야 한다. */
+  /** The first profile's display name — the response's `name` must be this. */
   displayName?: string;
-  /** 채널의 맵 데이터 — 있으면 자리 배정 테스트가 실제 좌석을 계산할 수 있다. */
+  /** The channel's map data — if present, seat assignment tests can compute real seats. */
   mapData?: unknown;
 }) {
   const { placedActive = 0, unplaced = 0, dormant = 0, profiles = 0 } = opts;
@@ -190,8 +190,8 @@ export async function seedChannelWithProfiles(opts: {
 
   const profileIds: string[] = [];
   const npcIds: string[] = [];
-  // 자리는 채널 안에서 유일해야 한다(npcs_channel_position_unique). 배치되는 NPC 마다
-  // 한 칸씩 옆으로 민다.
+  // Seats must be unique within a channel (npcs_channel_position_unique). Shift each placed NPC
+  // one cell over.
   let nextColumn = 0;
   let isFirst = true;
 
@@ -233,7 +233,7 @@ export async function seedChannelWithProfiles(opts: {
   };
 }
 
-/** 게이트웨이 하나를 새 채널 여러 개에 바인딩한다 — `hireProfileIntoBoundChannels` 씨앗용. */
+/** Bind one gateway to several new channels — for seeding `hireProfileIntoBoundChannels`. */
 export async function seedGatewayBoundToChannels(opts: { channels: number }) {
   const user = await seedUser("gateway-owner");
   const gateway = await seedGateway(user.id, await sharedStubBaseUrl());
@@ -253,20 +253,20 @@ export async function seedGatewayBoundToChannels(opts: { channels: number }) {
   return { gatewayId: gateway.id, channelIds, userId: user.id };
 }
 
-/** 게이트웨이에 프로필 하나를 등록만 한다(NPC 행 없음). */
+/** Only register one profile on the gateway (no NPC row). */
 export async function seedProfile(gatewayId: string) {
   const profile = await seedHermesProfile(gatewayId);
   return profile.id;
 }
 
-/** 라우트 핸들러에 넘길 인증 헤더 — `getUserId` 는 `x-user-id` 하나만 본다. */
+/** Auth headers to pass to route handlers — `getUserId` looks only at `x-user-id`. */
 export function authHeaders(userId: string): Record<string, string> {
   return { "x-user-id": userId, "Content-Type": "application/json" };
 }
 
 /**
- * 채널 하나 + 게이트웨이 둘. 둘 다 아직 채널에 묶여 있지 않다 — 묶는 것은
- * 테스트가 `PUT /api/channels/:id/gateway` 로 직접 한다(그게 검증 대상이다).
+ * One channel + two gateways. Neither is bound to the channel yet — binding is done
+ * by the test itself with `PUT /api/channels/:id/gateway` (that is what is being verified).
  */
 export async function seedTwoGateways(opts: { profilesEach: number }) {
   const user = await seedUser("two-gateways-owner");
@@ -285,7 +285,7 @@ export async function seedTwoGateways(opts: { profilesEach: number }) {
   };
 }
 
-/** 채널에 회의록 한 건. 게이트웨이를 바꿔도 살아남아야 한다. */
+/** One set of minutes in the channel. It must survive switching gateways. */
 export async function seedMeetingMinutes(channelId: string, topic = "주간 회의") {
   const { db, meetingMinutes } = await loadDb();
   const [row] = await db

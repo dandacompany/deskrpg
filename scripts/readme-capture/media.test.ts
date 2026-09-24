@@ -104,7 +104,7 @@ test("retries oversize palettes in order, stops on success and reports final fai
   assert.throws(() => selectPalette(() => 12_345_678), /12345678/);
 });
 
-/** ffmpeg 가 없는 곳(릴리스 CI 러너)에서는 이 검사를 건너뛴다 — 나머지 인자 계산은 그대로 돈다. */
+/** Skip this check where ffmpeg is missing (release CI runners) — the remaining argument computations still run. */
 const hasFfmpeg = (() => {
   try {
     execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });

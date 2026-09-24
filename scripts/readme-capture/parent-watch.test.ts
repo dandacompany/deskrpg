@@ -29,11 +29,11 @@ test("watchParent reports a vanished parent exactly once", async () => {
   stop();
 });
 
-// 테스트 러너가 SIGKILL·Ctrl-C 로 끊기면 `t.after` 도 `finally` 도 돌지 않는다. 그때 캡처 서버가
-// 스스로 끝나는지를 실제 런처로 본다 — 부모를 SIGKILL 해 정리 경로를 일부러 건너뛴다.
+// When the test runner is cut off by SIGKILL or Ctrl-C, neither `t.after` nor `finally` runs. Check with the real launcher
+// whether the capture server then ends on its own — SIGKILL the parent to deliberately skip the cleanup path.
 //
-// 앱은 Next 대신 가만히 살아 있는 대역(`dev-server.ts`)이다. 감시는 런처가 앱을 불러오기 전에 켜지므로
-// 이것으로 충분하고, 부하가 걸린 전체 실행에서 Next 부팅(수십 초)을 기다리지 않는다.
+// The app is a stand-in that just stays alive (`dev-server.ts`) instead of Next. Watching starts before the launcher loads the app,
+// so that is enough, and a loaded full run does not wait for Next to boot (tens of seconds).
 test(
   "the capture server stops itself when its parent is killed without cleanup",
   { timeout: 60_000 },
@@ -47,7 +47,7 @@ test(
       `import fs from "node:fs";\nfs.writeFileSync(${JSON.stringify(marker)}, String(process.pid));\nsetInterval(() => {}, 1_000);\n`,
     );
 
-    // 중간 부모: 런처를 띄우고 그 pid 를 알린 뒤 가만히 있는다. 이 프로세스를 SIGKILL 한다.
+    // Middle parent: starts the launcher, reports its pid, then stays idle. This is the process we SIGKILL.
     const launcher = path.join(sourceRoot, "scripts/readme-capture/server-launcher.ts");
     const parentScript = `
       const { spawn } = require("node:child_process");
@@ -64,8 +64,8 @@ test(
       stdio: ["ignore", "pipe", "inherit"],
       env: { PATH: process.env.PATH, NODE_ENV: "test" },
     });
-    // 이 테스트가 어떻게 끝나든 둘 다 남기지 않는다. 살아 있는 자식은 이 파일의 종료를 막아
-    // 러너 전체를 멈춘다 — 고치려는 결함을 테스트가 다시 만들지 않게 한다.
+    // However this test ends, leave neither behind. A live child blocks this file from ending
+    // and halts the whole runner — keep the test from recreating the very defect it fixes.
     let launcherPid = 0;
     t.after(() => {
       parent.kill("SIGKILL");

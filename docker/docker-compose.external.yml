@@ -29,8 +29,8 @@ services:
       - ../public/assets:/app/public/assets
       - deskrpg-users:/var/deskrpg/users
       - deskrpg-workspaces:/var/deskrpg/workspaces
-    # 호스트에서 도는 Hermes 게이트웨이(기본 8642)를 이름으로 고정한다.
-    # 브리지 게이트웨이 IP 는 네트워크가 재생성되면 바뀌므로 IP 를 쓰지 않는다.
+    # Pin the Hermes gateway running on the host (default 8642) by name.
+    # The bridge gateway IP changes when the network is recreated, so do not use the IP.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:

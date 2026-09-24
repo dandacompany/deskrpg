@@ -8,23 +8,23 @@ import {
   isDoubled,
 } from "./helpers";
 
-// 회의는 NPC 한 명으로는 검증할 수 없다 — 검증 대상이 "발언권이 참가자 사이를 도는가"이기
-// 때문이다. ensureTwoHermesNpcs 가 두 번째를 준비한다.
+// A meeting cannot be verified with one NPC — what we verify is "does the floor pass between
+// participants". ensureTwoHermesNpcs prepares the second one.
 //
-// 실행 전제는 npc-dm.spec.ts 와 같다(e2e/README.md 참조). 회의는 NPC 여러 명이 순서대로
-// 발언하므로 1:1 보다 오래 걸린다.
+// Preconditions are the same as npc-dm.spec.ts (see e2e/README.md). In a meeting several NPCs
+// speak in turn, so it takes longer than 1:1.
 
 /**
- * 회의실 탭으로 들어가 참가자를 고르고 토론을 시작한다.
+ * Enter the meeting room tab, pick participants and start the discussion.
  *
- * 셀렉터 주의: 상단 버튼 레이블에는 배지 숫자가 붙는다("회의실 0"). 이름을
- * 정확 일치로 잡으면 숫자가 바뀌는 순간 조용히 멈춘다 — 정규식으로 받는다.
+ * Selector note: the top button label carries a badge number ("회의실 0"). Matching the name
+ * exactly stalls silently the moment the number changes — take a regex instead.
  */
 async function startMeeting(page: Page, npcNames: string[], topic: string): Promise<void> {
   await page.getByRole("button", { name: /회의실/ }).click();
 
-  // 참가자는 기본으로 전원 선택돼 있다("· 2/2 NPC"). 그래도 명시적으로 확인한다 —
-  // 기본값이 바뀌면 "회의는 돌았지만 우리가 고른 NPC 는 아니었다"가 되기 때문이다.
+  // All participants are selected by default ("· 2/2 NPC"). Check it explicitly anyway —
+  // if the default changes, it becomes "the meeting ran, but not with the NPCs we picked".
   await page.getByRole("button", { name: /진행 설정/ }).click();
   await page.getByText("참여 NPC").waitFor();
   for (const name of npcNames) {
@@ -32,9 +32,9 @@ async function startMeeting(page: Page, npcNames: string[], topic: string): Prom
     if (!(await box.isChecked())) await box.check();
   }
 
-  // 턴 상한을 최소(5)로 낮춘다. 기본 20 이면 회의가 몇 분씩 돌고, 상한에 닿는 순간
-  // MeetingRoom 이 발언 목록을 결과 화면으로 교체해 버려 수집할 것이 사라진다.
-  // 검증 대상은 "발언권이 도는가"이지 회의의 길이가 아니다.
+  // Lower the turn cap to the minimum (5). At the default of 20 the meeting runs for minutes, and the moment the cap is hit
+  // MeetingRoom replaces the message list with the result screen, so there is nothing left to collect.
+  // What we verify is "does the floor pass", not the length of the meeting.
   await page.locator('input[type="range"]').first().fill("5");
 
   await page.getByPlaceholder("회의 주제를 입력하세요").fill(topic);
@@ -42,13 +42,13 @@ async function startMeeting(page: Page, npcNames: string[], topic: string): Prom
 }
 
 /**
- * NPC 발언이 targetCount 건 쌓일 때까지 기다린 뒤 [화자, 내용] 목록을 돌려준다.
+ * Wait until targetCount NPC messages accumulate, then return a list of [speaker, content].
  *
- * 회의가 턴 상한(기본 20)에 도달하면 MeetingRoom 은 발언 목록을 결과 화면으로 **교체**한다
- * — 그러면 [data-meeting-message] 가 통째로 사라진다. 단순히 toHaveCount 로 기다리면
- * 회의가 먼저 끝나 버린 경우 영영 0개를 보며 타임아웃한다(실측: 격리 시나리오가 이렇게
- * 5분을 기다리다 죽었는데, 정작 회의는 20턴을 다 돌고 요약까지 남긴 뒤였다).
- * 그래서 카운트가 아니라 폴링으로 잡고, 회의가 끝나면 그 시점까지 모인 것을 돌려준다.
+ * When the meeting reaches the turn cap (default 20), MeetingRoom **replaces** the message list with the result screen
+ * — and [data-meeting-message] vanishes entirely. Simply waiting with toHaveCount, if the meeting
+ * ends first, watches 0 forever and times out (measured: an isolated scenario died after waiting
+ * 5 minutes like this, while the meeting had actually run all 20 turns and left a summary).
+ * So we poll instead of counting, and when the meeting ends we return what was collected up to that point.
  */
 async function collectNpcTurns(page: Page, targetCount: number): Promise<Array<[string, string]>> {
   const turns = page.locator('[data-meeting-message="npc"]');
@@ -67,11 +67,11 @@ async function collectNpcTurns(page: Page, targetCount: number): Promise<Array<[
     }
     if (best.length >= targetCount) return best;
 
-    // 회의가 끝나면 발언 목록이 사라진다 — 더 기다려도 늘지 않는다.
+    // When the meeting ends the message list disappears — waiting longer will not grow it.
     //
-    // 단, 발언을 하나도 못 본 상태에서 보이는 "종료" 는 **이전 회의의 결과 화면**이다.
-    // 같은 채널에서 시나리오를 연달아 돌리면 앞 회의의 결과가 그대로 남아 있고, 그걸
-    // 종료로 읽으면 새 회의가 첫 턴을 내기도 전에 8초 만에 포기한다(실측).
+    // But a "종료" seen before any message was observed is **the previous meeting's result screen**.
+    // Running scenarios back to back in the same channel leaves the earlier result in place, and
+    // reading it as the end makes us give up after 8 seconds before the new meeting even takes its first turn (measured).
     if (best.length > 0) {
       const ended = await page
         .getByText("회의가 종료되었습니다")
@@ -91,12 +91,12 @@ async function collectNpcTurns(page: Page, targetCount: number): Promise<Array<[
 }
 
 /**
- * 회의가 끝날 때까지 기다린 뒤, 결과 화면의 텍스트에서 1:1 오염 검사에 쓸 지문을 뽑는다.
+ * Wait until the meeting ends, then extract a fingerprint from the result screen text for the 1:1 contamination check.
  *
- * 발언 말풍선을 세지 않는 이유: 회의가 턴 상한에 닿으면 MeetingRoom 이 발언 목록을 결과
- * 화면으로 교체하므로, 짧은 회의에서는 관측 창 자체가 사라진다(실측: 5턴 회의가 20초에
- * 끝나 폴링이 한 번도 0 이상을 보지 못했다). 결과 화면의 주요 주제·결론은 회의가 실제로
- * 오간 내용에서 나온 것이라 오염 검사의 지문으로 충분하다.
+ * Why not count speech bubbles: when the meeting hits the turn cap MeetingRoom replaces the message list with the result
+ * screen, so in a short meeting the observation window itself disappears (measured: a 5-turn meeting ended in 20 seconds
+ * and polling never saw more than 0). The result screen's main topics and conclusions come from what was actually
+ * said in the meeting, so they are enough as a fingerprint for the contamination check.
  */
 async function waitForMeetingEnd(page: Page): Promise<Array<[string, string]>> {
   await page.getByText("회의가 종료되었습니다").waitFor({ timeout: 300_000 });
@@ -112,11 +112,11 @@ async function waitForMeetingEnd(page: Page): Promise<Array<[string, string]>> {
     .map((line) => ["회의", line] as [string, string]);
 }
 
-test.describe("회의", () => {
-  // 두 NPC 가 각자 한 턴씩 도는 데 에이전트 기동까지 포함하면 1:1 보다 훨씬 오래 걸린다.
+test.describe("meeting", () => {
+  // With agent startup included, two NPCs taking one turn each takes much longer than 1:1.
   test.setTimeout(600_000);
 
-  test("두 NPC 가 번갈아 발언한다 — 한 명이 독점하지 않는다", async ({ page }) => {
+  test("two NPCs take turns speaking — neither monopolizes", async ({ page }) => {
     await enterFirstChannel(page);
     const npcNames = await ensureTwoHermesNpcs(page);
     expect(npcNames.length, "회의에는 Hermes NPC 가 둘 필요합니다").toBeGreaterThanOrEqual(2);
@@ -141,34 +141,34 @@ test.describe("회의", () => {
     }
   });
 
-  test("회의 진행 텍스트가 1:1 대화창으로 새지 않는다", async ({ page }) => {
+  test("meeting text does not leak into the 1:1 dialog", async ({ page }) => {
     await enterFirstChannel(page);
     const npcNames = await ensureTwoHermesNpcs(page);
     const [first] = npcNames;
 
-    // 회의를 돌려 NPC 세션에 다자 대화 맥락을 쌓는다.
+    // Run a meeting to build up multi-party context in the NPC sessions.
     await startMeeting(
       page,
       npcNames.slice(0, 2),
       "회의 격리 확인용 주제입니다. 한 문장으로 답하세요.",
     );
-    // 이 시나리오가 보는 것은 "회의를 돌린 뒤 1:1 이 오염되지 않는가"이지 발언 수집이
-    // 아니다. 5턴짜리 회의는 20초면 끝나고, 끝나는 순간 발언 목록이 결과 화면으로
-    // 통째로 교체된다 — 발언을 세려 들면 그 짧은 창을 놓치고 아무것도 못 본다.
-    // 그래서 회의가 **끝날 때까지** 기다린 뒤, 회의록에서 실제 발언 내용을 가져온다.
+    // What this scenario checks is "is 1:1 uncontaminated after a meeting", not collecting
+    // messages. A 5-turn meeting ends in 20 seconds, and the moment it ends the message list is
+    // replaced wholesale by the result screen — trying to count messages misses that short window and sees nothing.
+    // So we wait **until the meeting ends**, then take the actual content from the minutes.
     const turns = await waitForMeetingEnd(page);
 
-    // 회의는 턴 상한에 닿아 이미 끝났다 — 따로 종료시킬 필요가 없다.
+    // The meeting already ended by hitting the turn cap — no need to stop it.
     //
-    // (여기에는 `getByRole("button", { name: /회의 종료|중단|정지/ }).click().catch(...)`
-    //  가 있었다. 그런 이름의 버튼은 존재하지 않고 정지는 아이콘 ⏹ 이다. .catch() 는
-    //  실패한 **뒤에야** 동작하므로, 없는 버튼마다 expect 타임아웃 120초를 꼬박 기다린
-    //  다음 조용히 넘어갔다 — 조용한 실패가 아니라 조용한 지연이었고, 그 둘이 10분
-    //  테스트 타임아웃을 채웠다.)
+    // (There used to be `getByRole("button", { name: /회의 종료|중단|정지/ }).click().catch(...)`
+    //  here. No button with that name exists; stop is the ⏹ icon. .catch() only acts
+    //  **after** the failure, so for each missing button it waited out the full 120s expect timeout
+    //  and then moved on quietly — not a silent failure but a silent delay, and the two filled
+    //  the 10-minute test timeout.)
 
-    // 같은 NPC 와 1:1 로 말한다. 회의 트랜스크립트는 엔진이 소유하고 1:1 은 별도의
-    // 영속 세션을 쓰므로, 회의 발언이 여기 나타나면 세션이 섞인 것이다.
-    // 새로고침하면 사무실 모드로 돌아온다.
+    // Talk 1:1 with the same NPC. The engine owns the meeting transcript and 1:1 uses a separate
+    // persistent session, so meeting messages showing up here means the sessions got mixed.
+    // Reloading returns to office mode.
     await page.goto(page.url());
     await openNpcDialog(page, first);
     const dm = await sendAndAwaitReply(page, "지금 이 대화는 1:1 입니다. '확인'이라고만 답하세요.");

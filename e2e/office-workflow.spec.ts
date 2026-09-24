@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { login } from "./helpers";
 
-// 명시적 opt-in: 실제 대화와 카드 생성·실행·재작업을 수행한다.
+// Explicit opt-in: performs real conversations and card creation, runs and rework.
 // Supply an existing office game path and NPC name. Never use the public landing site.
 const enabled = process.env.DESKRPG_E2E_LIVE_WORKFLOW === "1";
 const gamePath = process.env.DESKRPG_E2E_GAME_PATH;
@@ -51,7 +51,7 @@ test("office work: request, verify registration, review, revise, and acknowledge
     const detail = page.getByRole("complementary", { name: "카드 상세", exact: true });
     await expect(detail).toContainText(title);
     timings.registeredMs = Date.now() - start;
-    // 실제 worker 실행 결과가 검토 상태로 도착해야 한다. 대화의 완료 주장은 근거가 아니다.
+    // A real worker run result must arrive in review status. A completion claim in conversation is not evidence.
     await expect(detail.getByLabel("상태", { exact: true })).toHaveValue("review", {
       timeout: 240_000,
     });

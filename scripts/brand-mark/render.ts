@@ -1,9 +1,9 @@
 /**
- * 브랜드 마크 그림을 다시 만든다 — `npx tsx scripts/brand-mark/render.ts`.
+ * Regenerate the brand mark images — `npx tsx scripts/brand-mark/render.ts`.
  *
- * 사이드바 본사와 같은 three.js 모델을 헤드리스 Chromium 에서 한 번 렌더해 PNG 로 굽는다.
- * 화면에서 매번 WebGL 을 켜지 않아도 되고, 16px 파비콘까지 같은 그림에서 나온다.
- * 결과물은 저장소에 커밋한다 — 빌드는 이 스크립트를 돌리지 않는다.
+ * Renders the same three.js model as the sidebar headquarters once in headless Chromium and bakes it to PNG.
+ * The screen does not have to start WebGL every time, and even the 16px favicon comes from the same picture.
+ * The output is committed to the repo — the build does not run this script.
  */
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -17,7 +17,7 @@ import { packIco } from "./ico";
 import { simpleMarkSvg } from "./simple-mark";
 
 const ROOT = path.resolve(__dirname, "../..");
-/** 굽는 것들. 투명 배경은 사이드바·워드마크용, 크림 배경은 앱 아이콘용이다. */
+/** What gets baked. Transparent backgrounds are for the sidebar and wordmark; the cream background is for app icons. */
 const OUTPUTS = [
   { file: "public/assets/brand/deskrpg-mark-3d-512.png", size: 512, background: undefined },
   { file: "public/icon-192.png", size: 192, background: "#f3eee2" },
@@ -25,7 +25,7 @@ const OUTPUTS = [
   { file: "public/apple-icon.png", size: 180, background: "#f3eee2" },
 ];
 const RENDER_SIZE = 1024;
-/** 탭 아이콘은 3D 가 뭉개져 단순형을 쓴다(2026-09-20 단테 결정). */
+/** The tab icon uses the simple form because 3D smears at that size (Dante's decision, 2026-09-20). */
 const FAVICON_SIZES = [16, 32, 48, 64];
 
 async function main() {
@@ -54,7 +54,7 @@ async function main() {
           [RENDER_SIZE, background] as const,
         );
         const png = Buffer.from(dataUrl.split(",")[1], "base64");
-        // 한 번 크게 렌더한 뒤 줄인다 — 작은 캔버스에서 바로 뽑으면 계단이 남는다.
+        // Render large once, then scale down — drawing straight from a small canvas leaves jaggies.
         await sharp(png).resize(size, size, { fit: "contain" }).png().toFile(path.join(ROOT, file));
         process.stdout.write(`${file} (${size}px)\n`);
       }

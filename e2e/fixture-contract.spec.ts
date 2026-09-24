@@ -1,6 +1,6 @@
 import { test, expect, installGameFixture, assertFixtureRequests } from "./fixtures/game";
 
-test("알 수 없는 API는 중단되고 메서드·경로를 포함한 실패로 보고된다", async ({
+test("an unknown API is aborted and reported as a failure including method and path", async ({
   context,
   page,
   fixtureDiagnostics,
@@ -23,6 +23,6 @@ test("알 수 없는 API는 중단되고 메서드·경로를 포함한 실패�
   expect(result).toBe("aborted");
   expect(fixtureDiagnostics).toEqual(["POST /api/fixture-unhandled?probe=1"]);
   expect(() => assertFixtureRequests(fixtureDiagnostics)).toThrow(/POST \/api\/fixture-unhandled/);
-  // 이 스펙에서 의도한 요청만 소비한다. 다른 API·페이지 오류는 자동 종료 검사가 잡는다.
+  // Consume only the requests this spec intends. Other API and page errors are caught by the automatic teardown check.
   fixtureDiagnostics.splice(0, 1);
 });

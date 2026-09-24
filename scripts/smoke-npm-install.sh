@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# npm 패키지를 실제 전역 설치 구조(node_modules)에 놓고 CLI 기동까지 확인한다.
+# Put the npm package into a real global install layout (node_modules) and check the CLI starts.
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then

@@ -4,7 +4,7 @@ import test from "node:test";
 import { packIco } from "./ico";
 import { simpleMarkSvg } from "./simple-mark";
 
-test("ico 는 헤더·디렉터리·PNG 순서로 묶이고 오프셋이 맞는다", () => {
+test("ico is packed as header, directory, PNG in that order with correct offsets", () => {
   const first = Buffer.from("first-png");
   const second = Buffer.from("second-png-longer");
   const ico = packIco([
@@ -22,12 +22,12 @@ test("ico 는 헤더·디렉터리·PNG 순서로 묶이고 오프셋이 맞는�
   assert.equal(ico.length, secondOffset + second.length);
 });
 
-test("빈 목록과 범위 밖 크기는 거절한다", () => {
+test("rejects an empty list and out-of-range sizes", () => {
   assert.throws(() => packIco([]), /ico_needs_entries/);
   assert.throws(() => packIco([{ size: 512, png: Buffer.from("x") }]), /ico_size_out_of_range/);
 });
 
-test("단순 마크는 도형 몇 개뿐이고 글자가 없다", () => {
+test("the simple mark is just a few shapes with no text", () => {
   const svg = simpleMarkSvg(32);
   assert.match(svg, /^<svg[^>]*width="32"/);
   assert.equal(/<text/.test(svg), false, "아이콘에 글자를 넣지 않는다");

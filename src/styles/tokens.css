@@ -1,10 +1,10 @@
 /*
- * DeskRPG UI 토큰 — 단테랩스 브랜드 v2 에 부분 정렬한다(2026-09-20 단테 결정).
+ * DeskRPG UI tokens — partially aligned to the Dante Labs brand v2 (Dante's decision, 2026-09-20).
  *
- * 글자·상태·그림자·radius 는 브랜드 토큰을 그대로 쓴다. **제품 고유색은 오피스 녹색 하나뿐이고**
- * 그것만 예외다 — 3D 오피스의 따뜻한 녹색 톤과 이어지는 제품 정체성이라 버튼·선택 표시에 계속 쓴다.
- * 브랜드 규칙(khaki 는 면 전용, 포인트는 밝은 면 blue)은 마케팅 자료에 적용되고, 제품 화면의
- * 예외는 docs/standards.md 에 적어 둔다.
+ * Text, status, shadow and radius use the brand tokens as is. **The product's only own color is office green**
+ * and it alone is the exception — a product identity continuing the warm green tone of the 3D office, so it keeps being used for buttons and selection markers.
+ * The brand rules (khaki for surfaces only, accents in blue on light surfaces) apply to marketing material, and the product screen's
+ * exceptions are written down in docs/standards.md.
  */
 :root {
   color-scheme: light;
@@ -14,17 +14,17 @@
   --color-primary-muted: #e6eee2;
   --color-npc: #93632e;
   --color-npc-dark: #704619;
-  --color-danger: #a63d33; /* 브랜드 danger */
+  --color-danger: #a63d33; /* brand danger */
   --color-danger-hover: #8b3029;
   --color-danger-bg: #f6e3de;
-  --color-info: #245c9e; /* 브랜드 blue-strong */
+  --color-info: #245c9e; /* brand blue-strong */
   --color-success: #327649;
   --color-meeting: #735b8f;
-  --text: #09223f; /* 브랜드 navy */
-  --text-secondary: #3f4346; /* 브랜드 gray */
-  --text-muted: #5f666d; /* 브랜드 gray-muted */
-  --text-dim: #676d74; /* bg·surface 위 4.5:1 이상 — 더 옅게 하지 않는다. surface-raised 위에는 쓰지 않는다 */
-  /* 브랜드 radius·shadow — 8px 가 상한이고 그림자는 navy-tint 전용이다. */
+  --text: #09223f; /* brand navy */
+  --text-secondary: #3f4346; /* brand gray */
+  --text-muted: #5f666d; /* brand gray-muted */
+  --text-dim: #676d74; /* 4.5:1 or more on bg/surface — do not make it lighter. Not used on surface-raised */
+  /* Brand radius and shadow — 8px is the cap and shadows are navy-tint only. */
   --radius-sm: 2px;
   --radius-md: 4px;
   --radius-lg: 8px;

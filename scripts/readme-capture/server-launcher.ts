@@ -17,8 +17,8 @@ async function main(): Promise<void> {
   const entry = path.join(root, "dev-server.ts");
   if (!root || !fs.existsSync(entry)) throw new Error("DeskRPG project root is invalid");
 
-  // 부모(캡처 세션·테스트)가 정리 없이 죽으면 그룹째 끝낸다. 이 런처는 `detached` 로 떠
-  // 그룹의 리더이므로 `-pid` 가 Next 가 띄운 작업자까지 함께 가리킨다.
+  // If the parent (capture session or test) dies without cleanup, end the whole group. This launcher starts `detached`
+  // and leads its group, so `-pid` also points at the workers Next started.
   const parentPid = Number(process.env.DESKRPG_CAPTURE_PARENT_PID);
   if (Number.isInteger(parentPid) && parentPid > 1) {
     watchParent(parentPid, () => {

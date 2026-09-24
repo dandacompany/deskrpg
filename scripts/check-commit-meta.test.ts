@@ -10,7 +10,7 @@ function check(message: string) {
   return { status: r.status, stderr: r.stderr };
 }
 
-test("세션 트레일러·보드 식별자·비공개 문서 경로가 든 메시지는 막는다", () => {
+test("blocks messages with session trailers, board identifiers or private doc paths", () => {
   for (const bad of [
     "fix: x\n\nClaude-Session: https://claude.ai/code/session_01AbC",
     "fix: x\n\n카드: PVTI_lAHOB6eLEc4BjrHnzg70RxQ",
@@ -27,7 +27,7 @@ test("세션 트레일러·보드 식별자·비공개 문서 경로가 든 메�
   }
 });
 
-test("평범한 메시지와 비슷하지만 다른 표현은 통과한다", () => {
+test("ordinary messages and similar-but-different wording pass", () => {
   for (const ok of [
     "docs: README 의 Docker 안내를 고친다",
     "fix(ui): 크림 배경 위 옅은 팔레트 글자색 31곳\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>",
@@ -39,7 +39,7 @@ test("평범한 메시지와 비슷하지만 다른 표현은 통과한다", () 
   }
 });
 
-test("git 이 붙이는 주석 줄(#)은 검사하지 않는다", () => {
-  // 편집기로 커밋할 때 git 은 변경 파일 목록을 # 주석으로 붙인다 — 거기에 docs/ 가 나올 수 있다.
+test("does not check the comment lines (#) that git adds", () => {
+  // When committing through an editor git appends the changed file list as # comments — docs/ may show up there.
   assert.equal(check("fix: x\n\n# Changes to be committed:\n#\tmodified: docs/a.md\n").status, 0);
 });

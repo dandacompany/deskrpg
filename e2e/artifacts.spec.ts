@@ -5,7 +5,7 @@ const CHANNEL_ID = "artifacts-e2e-channel";
 const CHARACTER_ID = "artifacts-e2e-character";
 const TASK_ID = "artifacts-e2e-task";
 
-// 투명 1x1 PNG — 이미지 결과물 콘텐츠로 그대로 서빙한다.
+// A transparent 1x1 PNG — served as-is as image artifact content.
 const PNG_1PX = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
@@ -234,7 +234,7 @@ async function openArtifactsModal(page: Page) {
   return dialog;
 }
 
-test("헤더 결과물 → 목록·마크다운 편집·HTML·링크 뷰어·삭제", async ({ context, page }) => {
+test("header artifacts → list, md edit, HTML, link viewer, delete", async ({ context, page }) => {
   const state: FixtureState = { artifacts: seedArtifacts() };
   await installFixture(context, state);
   await openGame(page);
@@ -243,7 +243,7 @@ test("헤더 결과물 → 목록·마크다운 편집·HTML·링크 뷰어·삭
   const list = dialog.locator("ul > li");
   await expect(list).toHaveCount(4);
 
-  // 마크다운 열기 → h1 보임 → 편집 → 새 버전으로 저장 → 버전 2 선택됨.
+  // Open markdown → h1 visible → edit → save as a new version → version 2 selected.
   await dialog.getByRole("button", { name: /프로젝트 메모/ }).click();
   await expect(dialog.locator("h1")).toHaveText("프로젝트 메모");
 
@@ -259,24 +259,24 @@ test("헤더 결과물 → 목록·마크다운 편집·HTML·링크 뷰어·삭
   await expect(versionSelect).toHaveValue("2");
   await expect(dialog.locator("h1")).toHaveText("프로젝트 메모 v2");
 
-  // 1440px 너비에서는 목록(왼쪽)이 뷰어 옆에 그대로 남는다 — 닫지 않고 바로 다음 항목을 고른다.
+  // At 1440px width the list (left) stays next to the viewer — pick the next item without closing.
   await expect(dialog.locator("ul > li")).toHaveCount(4);
   await dialog.getByRole("button", { name: /소개 페이지/ }).click();
   await expect(dialog.locator("iframe")).toHaveAttribute("sandbox", "allow-scripts");
 
-  // 링크 결과물 → "새 탭에서 열기" 의 rel 확인.
+  // Link artifact → check the rel of "open in new tab".
   await dialog.getByRole("button", { name: /참고 링크/ }).click();
   const openLink = dialog.getByRole("link", { name: "새 탭에서 열기" });
   await expect(openLink).toHaveAttribute("rel", "noopener noreferrer");
   await expect(openLink).toHaveAttribute("target", "_blank");
 
-  // 삭제 확인 → 목록 3개.
+  // Confirm delete → 3 items in the list.
   await dialog.getByRole("button", { name: "삭제" }).click();
   await dialog.getByRole("alertdialog").getByRole("button", { name: "삭제" }).click();
   await expect(dialog.locator("ul > li")).toHaveCount(3);
 });
 
-test("칸반 카드 상세에 결과물 섹션이 보인다", async ({ context, page }) => {
+test("the kanban card detail shows an artifacts section", async ({ context, page }) => {
   const state: FixtureState = { artifacts: seedArtifacts() };
   await installFixture(context, state, { withKanbanCard: true });
   await openGame(page);
@@ -290,7 +290,7 @@ test("칸반 카드 상세에 결과물 섹션이 보인다", async ({ context, 
   const artifactButton = drawer.getByRole("button", { name: /프로젝트 메모/ });
   await expect(artifactButton).toBeVisible();
 
-  // 카드의 결과물을 누르면 결과물 모달이 칸반 위에 뜨고 그 결과물이 선택돼 있다.
+  // Clicking a card's artifact opens the artifacts modal over the kanban with that artifact selected.
   await artifactButton.click();
   const modal = page.getByRole("dialog", { name: "결과물" });
   await expect(modal).toBeVisible();

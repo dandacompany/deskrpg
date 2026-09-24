@@ -1,14 +1,14 @@
 /**
- * 캡처 서버가 자기를 띄운 프로세스보다 오래 살지 않게 한다.
+ * Keep the capture server from outliving the process that started it.
  *
- * 캡처 서버는 프로세스 그룹째 정리하려고 `detached` 로 뜬다. 그래서 부모가 SIGKILL·Ctrl-C 로
- * 죽어 `finally`·`t.after` 가 돌지 못하면 서버는 그대로 남는다 — 테스트 러너를 중단할 때마다
- * `server-launcher.ts` 고아가 쌓였다(2026-09-21 실측: 한 체크아웃에 7개, 최장 1일 5시간).
- * 부모 쪽 정리는 부모가 살아 있어야 돈다. 확실한 쪽은 자식이 부모를 지켜보는 것이다.
+ * The capture server starts `detached` so it can be cleaned up as a process group. So when the parent dies
+ * by SIGKILL or Ctrl-C and `finally`/`t.after` cannot run, the server stays — every time the test runner was interrupted
+ * `server-launcher.ts` orphans piled up (2026-09-21 measurement: 7 in one checkout, the oldest 1 day 5 hours).
+ * Parent-side cleanup only runs while the parent is alive. The reliable side is the child watching the parent.
  */
 export const PARENT_WATCH_INTERVAL_MS = 1_000;
 
-/** `kill(pid, 0)` 은 신호를 보내지 않고 존재만 본다. ESRCH 만 "없음" 이고 EPERM 은 살아 있다. */
+/** `kill(pid, 0)` sends no signal and only checks existence. Only ESRCH means "gone"; EPERM means alive. */
 export function processAlive(pid: number, kill: typeof process.kill = process.kill): boolean {
   try {
     kill(pid, 0);
@@ -18,7 +18,7 @@ export function processAlive(pid: number, kill: typeof process.kill = process.ki
   }
 }
 
-/** 부모가 사라지면 `onGone` 을 한 번 부른다. 돌려준 함수로 감시를 멈춘다. */
+/** Call `onGone` once when the parent disappears. The returned function stops watching. */
 export function watchParent(
   parentPid: number,
   onGone: () => void,
@@ -30,7 +30,7 @@ export function watchParent(
     clearInterval(timer);
     onGone();
   }, options.intervalMs ?? PARENT_WATCH_INTERVAL_MS);
-  // 감시 때문에 서버가 스스로 끝나지 못하는 일은 없어야 한다.
+  // Watching must never keep the server from ending on its own.
   timer.unref();
   return () => clearInterval(timer);
 }

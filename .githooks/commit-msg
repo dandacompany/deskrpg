@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 커밋 메시지에 개발 메타(세션 트레일러·비공개 보드 식별자·비공개 문서 경로)가 들어가지 않게 막는다.
-# 규칙은 scripts/check-commit-meta.sh 한 곳에 있다. 일회성 우회: git commit --no-verify
+# Keep development metadata (session trailers, private board identifiers, private doc paths) out of commit messages.
+# The rules live in one place: scripts/check-commit-meta.sh. One-off bypass: git commit --no-verify
 set -euo pipefail
 repo="$(git rev-parse --show-toplevel)"
 bash "$repo/scripts/check-commit-meta.sh" < "$1"

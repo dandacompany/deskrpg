@@ -1,5 +1,5 @@
-// 본문용 글자 토큰은 웹 화면의 세 면(bg·surface·surface-raised) 위에서 WCAG AA(4.5:1)를 지킨다.
-// 토큰 값을 바꾸면 그 토큰을 쓰는 화면 수십 곳의 대비가 한 번에 바뀐다 — 값에서 막는다.
+// Body text tokens keep WCAG AA (4.5:1) on the three surfaces of web screens (bg, surface, surface-raised).
+// Changing a token value changes the contrast of dozens of screens using that token at once — block it at the value.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -26,7 +26,7 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-test("글자 토큰은 웹 화면의 면 위에서 4.5:1 이상이다", () => {
+test("text tokens are 4.5:1 or more on web screen surfaces", () => {
   for (const text of ["text", "text-secondary", "text-muted"])
     for (const surface of ["bg", "surface", "surface-raised"]) {
       const ratio = contrast(token(text), token(surface));
@@ -34,9 +34,9 @@ test("글자 토큰은 웹 화면의 면 위에서 4.5:1 이상이다", () => {
     }
 });
 
-test("가장 옅은 글자(text-dim)도 읽는 면(bg·surface) 위에서는 4.5:1 이상이다", () => {
-  // 가라앉은 면(surface-raised) 위에서 4.5:1 을 넘기려면 text-muted 와 같은 값이 돼 위계가 사라진다.
-  // 그 면 위의 글자에는 text-dim 을 쓰지 않는다 — text-muted 이상을 쓴다.
+test("even the lightest text (text-dim) is 4.5:1 or more on reading surfaces (bg, surface)", () => {
+  // To exceed 4.5:1 on the sunken surface (surface-raised) it would have to equal text-muted, and the hierarchy would vanish.
+  // Text on that surface does not use text-dim — use text-muted or stronger.
   for (const surface of ["bg", "surface"]) {
     const ratio = contrast(token("text-dim"), token(surface));
     assert.ok(ratio >= 4.5, `--text-dim on --${surface}: ${ratio.toFixed(2)}:1`);
@@ -51,13 +51,13 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-test("가라앉은 면(bg-surface-raised) 위에 text-dim 을 얹지 않는다 — 비활성 컨트롤만 예외다", () => {
+test("text-dim is not placed on the sunken surface (bg-surface-raised) — only disabled controls are exempt", () => {
   const offenders: string[] = [];
   for (const file of sourceFiles("src"))
     readFileSync(file, "utf8")
       .split("\n")
       .forEach((line, index) => {
-        // hover:bg-surface-raised 는 기본 면이 아니다. 비활성 컨트롤은 대비 요건의 예외다.
+        // hover:bg-surface-raised is not a base surface. Disabled controls are exempt from contrast requirements.
         const onRaised = /(^|[\s"'`])bg-surface-raised/.test(line);
         const disabled = /cursor-not-allowed|disabled:/.test(line);
         if (onRaised && /text-text-dim/.test(line) && !disabled)

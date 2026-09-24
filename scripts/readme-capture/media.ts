@@ -170,8 +170,8 @@ function run(args: string[], root: string, label: string) {
 
 export function selectPalette(encode: (colors: number) => number): number {
   let bytes = 0;
-  // 회의 장면은 걸음이 빠른 캡처 런타임에서 움직임이 많아 96색으로도 10MB 를 살짝 넘는다
-  // (실측 10.2MB). 64색까지 내려가면 9.7MB 로 들어간다.
+  // With the fast walking of the capture runtime the meeting scene has a lot of motion and slightly exceeds 10MB even at 96 colors
+  // (measured 10.2MB). Going down to 64 colors fits at 9.7MB.
   for (const colors of [192, 160, 128, 96, 64]) {
     bytes = encode(colors);
     if (bytes <= MEDIA_SPEC.gif.maxBytes) return colors;

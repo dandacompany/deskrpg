@@ -25,14 +25,14 @@ services:
     environment:
       DB_TYPE: sqlite
       SQLITE_PATH: /app/data/deskrpg.db
-      # 볼륨 안이라야 Update 뒤에도 생성된 JWT_SECRET 이 남는다.
+      # Must be inside the volume so the generated JWT_SECRET survives an Update.
       DESKRPG_HOME: /app/data/home
-      # 기본값 금지 — 모든 설치가 같은 공개 키로 서명하게 된다.
+      # No default — every install would sign with the same public key.
       JWT_SECRET: ${JWT_SECRET:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       INTERNAL_HOSTNAME: 0.0.0.0
       # Host-level setup from the web UI stays off on a VPS.
-      # 관리자에게 기본으로 열린다. 끄려면 0.
+      # Open to admins by default. Set 0 to turn off.
       DESKRPG_HOST_SETUP_ENABLED: ${DESKRPG_HOST_SETUP_ENABLED:-1}
     volumes:
       - deskrpg-data:/app/data

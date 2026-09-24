@@ -42,7 +42,7 @@ async function speak(page: Page, message: string) {
     page.locator("[data-meeting-workspace]").getByText(message, { exact: true }),
   ).toBeVisible();
 }
-/** 맵 템플릿 표가 사라진 뒤, 부속 배치는 채널을 만든 뒤 맵을 직접 덮어써서 만든다. */
+/** With the map template table gone, fixture layouts are made by creating a channel and overwriting its map directly. */
 function annexMap(kind: string) {
   const cols = 14,
     rows = 12;
@@ -85,8 +85,8 @@ function annexMap(kind: string) {
 }
 
 /**
- * 채널을 만든다. 공식 사무실 환경은 `environmentId` 로 바로 만들고, 부속 배치(legacy·tiled)는
- * 아무 환경으로 만든 뒤 맵을 덮어쓴다 — 맵 템플릿 API 는 제거됐다.
+ * Create a channel. Official office environments are created directly with `environmentId`; fixture layouts (legacy, tiled)
+ * are created with any environment and then the map is overwritten — the map template API has been removed.
  */
 async function createSpatialChannel(
   api: APIRequestContext,
@@ -110,7 +110,7 @@ async function createSpatialChannel(
 }
 
 async function waitForOfficeReady(page: Page, frames: Frame[]) {
-  // 시뮬레이션은 세 서버 스냅샷이 다 와야 플레이어를 움직인다(NPC 가 0명이어도).
+  // The simulation moves the player only after all three server snapshots arrive (even with 0 NPCs).
   await expect
     .poll(
       () =>

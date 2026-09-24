@@ -66,7 +66,7 @@ async function installFixture(context: BrowserContext, state: FixtureState) {
       const url = new URL(request.url());
       const path = url.pathname;
 
-      // 카드 상세는 그 카드의 결과물도 읽는다. 목록이 없는 응답이면 드로어가 통째로 죽는다.
+      // The card detail also reads that card's artifacts. A response without a list kills the whole drawer.
       if (path === `/api/channels/${CHANNEL_ID}/artifacts` && request.method() === "GET")
         return json(route, { artifacts: [], cursor: "", has_more: false });
       if (path === `/api/channels/${CHANNEL_ID}/kanban/board` && request.method() === "GET") {

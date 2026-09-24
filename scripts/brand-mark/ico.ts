@@ -1,6 +1,6 @@
 /**
- * PNG 몇 장을 .ico 하나로 묶는다. Windows 아이콘은 PNG 를 그대로 품을 수 있어(Vista+)
- * 압축 없이 디렉터리만 쓰면 된다 — 이 한 가지 때문에 의존성을 더하지 않는다.
+ * Pack several PNGs into one .ico. Windows icons can embed PNGs as-is (Vista+),
+ * so only the directory has to be written with no compression — that alone is why we add no dependency.
  */
 export type IcoEntry = { size: number; png: Buffer };
 
@@ -15,10 +15,10 @@ export function packIco(entries: IcoEntry[]): Buffer {
   let offset = header.length + directory.length;
   entries.forEach((entry, index) => {
     const at = index * 16;
-    // 256 은 0 으로 적는다(형식 규칙).
+    // 256 is written as 0 (format rule).
     directory.writeUInt8(entry.size === 256 ? 0 : entry.size, at);
     directory.writeUInt8(entry.size === 256 ? 0 : entry.size, at + 1);
-    directory.writeUInt8(0, at + 2); // 팔레트 없음
+    directory.writeUInt8(0, at + 2); // no palette
     directory.writeUInt8(0, at + 3); // reserved
     directory.writeUInt16LE(1, at + 4); // color planes
     directory.writeUInt16LE(32, at + 6); // bits per pixel

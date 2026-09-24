@@ -19,11 +19,11 @@ export type SessionDeps = {
 };
 
 /**
- * 캡처가 쓰는 포트. 실제 캡처는 README 가 가리키는 3310 을 고정으로 쓴다.
+ * Ports the capture uses. The real capture uses 3310, which the README points to, as a fixed port.
  *
- * 테스트는 주입한다 — 가짜 자식을 쓰는 단위 테스트도 포트 점유 검사와 모의 Hermes 바인드는 실제로
- * 하므로, 기본값을 쓰면 다른 세션이 같은 파일을 동시에 돌릴 때 `EADDRINUSE 127.0.0.1:38642` 로
- * 깨졌다(2026-09-21, 전체 실행 두 벌 동시 실측).
+ * Tests inject them — unit tests with a fake child still do the real port-in-use check and mock Hermes bind,
+ * so with the defaults they broke with `EADDRINUSE 127.0.0.1:38642` when another session ran the same file concurrently
+ * (2026-09-21, measured with two full runs at once).
  */
 export type CapturePorts = { app: number; internal: number; hermes: number };
 export const DEFAULT_CAPTURE_PORTS: CapturePorts = { app: 3310, internal: 3311, hermes: 38642 };

@@ -50,9 +50,9 @@ app.prepare().then(async () => {
   }
   const { setupSocketHandlers } = await import("./src/server/socket-handlers");
 
-  // 예전에는 여기서 in-process RPC 핸들러를 등록해 API 라우트가 OpenClaw 게이트웨이의
-  // agents.* 를 직접 부를 수 있게 했다(포트 의존 없이). OpenClaw 가 사라지면서 그 메서드
-  // 들도 함께 없어졌다 — server.js 의 /_internal/rpc 브리지와 짝을 맞춰 제거한다.
+  // This used to register an in-process RPC handler so API routes could call the OpenClaw gateway's
+  // agents.* directly (without depending on a port). Those methods went away with OpenClaw
+  // — removed together with the /_internal/rpc bridge in server.js.
 
   const httpServer = createServer((req, res) => {
     if (captureMode && req.method === "GET" && req.url === "/__readme-capture/health") {

@@ -1,4 +1,4 @@
-/** 브라우저에서 구름을 렌더해 PNG 데이터 URL 로 돌려준다(캡처 스크립트가 esbuild 로 묶는다). */
+/** Render clouds in the browser and return a PNG data URL (the capture script bundles this with esbuild). */
 import * as T from "three";
 
 import { addCloudLights, buildCloud } from "../../src/game/three/sky-clouds";
@@ -17,7 +17,7 @@ export function renderCloud(variant: 0 | 1 | 2, width: number, height: number): 
   scene.add(cloud);
   const box = new T.Box3().setFromObject(cloud);
   const center = box.getCenter(new T.Vector3());
-  // 가로·세로를 모두 담는다 — 가로만 맞추면 위아래가 잘린다(2026-09-20 실측).
+  // Fit both width and height — fitting only the width crops the top and bottom (2026-09-20 measurement).
   const aspect = width / height;
   let halfWidth = (box.max.x - box.min.x) / 2 + 0.25;
   let halfHeight = (box.max.y - box.min.y) / 2 + 0.25;

@@ -142,7 +142,7 @@ assert.ok(["trading", "agency", "tech", "executive", "publishing"].includes(envi
           direction: "up",
           walking: false,
         };
-        // 접근 검사 시작점은 실제 연결된 바닥에서 선택한다.
+        // Pick the start point of the reachability check from the floor that is actually connected.
         const first = window.seats[0];
         actor.x = (first.anchorX ?? first.x) * 32;
         actor.y = (first.anchorZ ?? first.z) * 32;

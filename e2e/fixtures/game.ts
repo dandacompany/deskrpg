@@ -4,7 +4,7 @@ import { SignJWT } from "jose";
 export const FIXTURE_JWT_SECRET = "deskrpg-e2e-synthetic-secret-not-for-production";
 const diagnostics = new WeakMap<BrowserContext, string[]>();
 
-// 라우트 콜백에서 던지면 요소 대기만 시간 초과된다. 종료 시 원래 요청을 보고한다.
+// Throwing in a route callback only times out the element wait. Report the original request at teardown.
 export function assertFixtureRequests(errors: string[]) {
   expect(errors, "Unexpected fixture API requests or page errors").toEqual([]);
 }

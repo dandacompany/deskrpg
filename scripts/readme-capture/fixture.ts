@@ -60,7 +60,7 @@ const PROFILE_REGISTRATIONS = [
 ] as const;
 
 const CHANNEL_NAME = "Dante Labs Office";
-/** 캡처 채널의 환경. 배치는 서버가 코드에서 만들므로 ID 만 넘긴다. */
+/** The capture channel's environment. The server builds the layout from code, so only the ID is passed. */
 const CHANNEL_ENVIRONMENT_ID = "trading";
 const REPORT_TITLE = "시네마틱 캡처 준비";
 
@@ -102,7 +102,7 @@ function requireId(value: Identified | undefined, label: string): string {
   return value.id;
 }
 
-/** 회의실 입구 타일. 좌석을 회의실 가까이 골라 모이는 시간을 줄인다. */
+/** The meeting room entrance tile. Seats are picked close to the meeting room to shorten gathering time. */
 function meetingEntryTile(mapData: unknown): { col: number; row: number } | null {
   const layout = deriveChannelMotionLayout(
     { mapData } as Parameters<typeof deriveChannelMotionLayout>[0],
@@ -112,16 +112,16 @@ function meetingEntryTile(mapData: unknown): { col: number; row: number } | null
   return entry ? { col: Math.floor(entry.x), row: Math.floor(entry.y) } : null;
 }
 
-/** Sophie 를 스폰에서 얼마나 떼어 놓을지(타일). 호출 장면은 걸어야 하고, 회의는 9초 안에 모여야 한다. */
+/** How far (in tiles) to put Sophie from the spawn. The call scene needs walking, and the meeting must gather within 9 seconds. */
 const SOPHIE_DISTANCE = 6;
 
 /**
- * 장면에 쓸 좌석 두 개와 플레이어 스폰을 고른다.
+ * Pick two seats for the scenes and the player spawn.
  *
- * - Noah 는 스폰 바로 옆에 앉힌다 — 근처에 누가 있어야 방 입력이 열린 채로 장면이 시작된다
- *   (대화 사거리 64px = 2칸).
- * - Sophie 는 몇 칸 떨어진 좌석에 앉힌다 — "호출하기" 장면은 그가 걸어와야 성립한다.
- *   그중 회의실에 가까운 자리를 고른다 — 회의 장면은 9초 안에 모여 발언까지 끝나야 한다.
+ * - Seat Noah right next to the spawn — someone must be nearby for the scene to start with the room input open
+ *   (conversation range 64px = 2 cells).
+ * - Seat Sophie a few cells away — the "호출하기" scene only works if Sophie has to walk over.
+ *   Among those, pick a seat close to the meeting room — the meeting scene must gather and finish speaking within 9 seconds.
  */
 function captureSeating(
   seating: SeatingMap | null,
@@ -133,8 +133,8 @@ function captureSeating(
       (tile) => Math.abs(tile.col - noah.col) <= 1 && Math.abs(tile.row - noah.row) <= 1,
     );
     if (!spawn) continue;
-    // 가장 먼 자리는 쓰지 않는다 — 회의 장면에서 걸어오느라 9초 클립을 넘긴다(실측 17.7초).
-    // 호출 장면이 성립할 만큼만 떨어뜨린다.
+    // Do not use the farthest seat — walking over in the meeting scene overruns the 9-second clip (measured 17.7s).
+    // Only as far as the call scene needs.
     const sophie = seating.seats
       .filter((seat) => seat.number !== noah.number)
       .map((seat) => ({
@@ -263,7 +263,7 @@ export async function prepareFixture(
   );
   const sophie = findRosterNpc(roster.npcs, "sophie");
   const noah = findRosterNpc(roster.npcs, "noah");
-  // 좌석은 맵이 정한다 — 좌표를 박아 두면 좌석 배정이 바뀔 때마다 `not_a_desk_seat` 로 막힌다.
+  // The map decides seats — hard-coded coordinates get blocked with `not_a_desk_seat` whenever seat assignment changes.
   const detail = await api.request<ChannelDetail>(
     "GET",
     `/api/channels/${encodeURIComponent(channelId)}`,
@@ -274,7 +274,7 @@ export async function prepareFixture(
   });
   const scene = captureSeating(seating, meetingEntryTile(detail.channel.mapData));
   if (scene) {
-    // 플레이어가 대화 사거리(2칸) 안에서 시작하도록 스폰을 옮긴다 — 방 입력이 잠기지 않는다.
+    // Move the spawn so the player starts within conversation range (2 cells) — the room input is not locked.
     await api.request("PUT", `/api/channels/${encodeURIComponent(channelId)}`, {
       mapConfig: {
         ...(typeof detail.channel.mapConfig === "object" && detail.channel.mapConfig !== null

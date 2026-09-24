@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: __dirname,
-  // 동적 파일 접근이 프로젝트 전체를 추적해도 개발 파일은 싣지 않는다.
+  // Even when dynamic file access traces the whole project, do not ship development files.
   outputFileTracingExcludes: {
     "**/*": [
       "**/*.test.*",

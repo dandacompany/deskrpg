@@ -61,8 +61,8 @@ function resetCaptureHistory(fixture: CaptureFixture) {
       "DELETE FROM chat_room_messages WHERE room_id IN (SELECT id FROM chat_rooms WHERE channel_id = ?)",
     ).run(fixture.channelId);
     db.prepare("DELETE FROM meeting_minutes WHERE channel_id = ?").run(fixture.channelId);
-    // 저장된 마지막 위치가 있으면 설정된 스폰을 덮는다(`office-simulation.createPlayer`).
-    // 비워야 픽스처가 잡아 둔 직원 옆자리에서 장면이 시작되고 방 입력이 열려 있다.
+    // A saved last position overrides the configured spawn (`office-simulation.createPlayer`).
+    // Clear it so the scene starts next to the employee the fixture placed, with the room input open.
     db.prepare("UPDATE channel_members SET last_x = NULL, last_y = NULL WHERE channel_id = ?").run(
       fixture.channelId,
     );
@@ -83,7 +83,7 @@ export async function enterCaptureOffice(page: Page, fixture: CaptureFixture) {
   const { npcs } = await roster.json();
   for (const name of fixture.npcNames)
     expect(npcs.some((npc: { name: string }) => npc.name === name)).toBe(true);
-  // 내 캐릭터는 한 명이고 목록에서 고르지 않는다 — 예전 화면의 "캐릭터 버튼 클릭" 단계는 없어졌다.
+  // There is one character of your own and it is not picked from a list — the old screen's "click the character button" step is gone.
   await page.goto("/channels");
   await page.getByRole("heading", { name: "Dante Labs Office", exact: true }).click();
   await page.waitForURL(new RegExp(fixture.channelId));
@@ -141,8 +141,8 @@ export async function prepareScene(page: Page, scene: CaptureScene, fixture: Cap
     resetCaptureHistory(fixture);
     await enterCaptureOffice(page, fixture);
     await page.getByRole("button", { name: "전체 보기", exact: true }).click();
-    // 어느 입력을 기다리는지 못박는다 — 근처 직원이 인사를 걸면 NPC 대화창이 열려
-    // "마지막 textbox" 가 방 입력이 아니게 된다.
+    // Pin down which input we wait for — if a nearby employee greets us, the NPC dialog opens
+    // and the "last textbox" is no longer the room input.
     const roomInput = page.locator('[data-chat-scope="room"] [contenteditable]');
     const unlocked = Date.now() + 15_000;
     while (Date.now() < unlocked) {
