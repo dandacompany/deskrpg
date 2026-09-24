@@ -12,7 +12,7 @@ function tmpHome(label) {
   return fs.mkdtempSync(path.join(os.tmpdir(), `deskrpg-envboot-${label}-`));
 }
 
-test("KEY=value 를 파싱하고 주석·빈 줄은 무시한다", () => {
+test("parses KEY=value and ignores comments/blank lines", () => {
   assert.deepEqual(parseEnvLine("FOO=bar"), { key: "FOO", value: "bar" });
   assert.deepEqual(parseEnvLine('QUOTED="hello"'), { key: "QUOTED", value: "hello" });
   assert.equal(parseEnvLine("# FOO=bar"), null);
@@ -20,7 +20,7 @@ test("KEY=value 를 파싱하고 주석·빈 줄은 무시한다", () => {
   assert.equal(parseEnvLine("not an assignment"), null);
 });
 
-test("이미 설정된 값은 덮지 않는다 — 사용자가 직접 넣은 값이 이긴다", () => {
+test("an already-set value is not overwritten — a value the user entered themselves wins", () => {
   const env = { KEEP: "user-value" };
   const applied = applyEnvText("KEEP=file-value\nNEW=from-file\n", env);
   assert.equal(env.KEEP, "user-value");
@@ -28,14 +28,14 @@ test("이미 설정된 값은 덮지 않는다 — 사용자가 직접 넣은 �
   assert.deepEqual(applied, ["NEW"]);
 });
 
-test("빈 문자열은 '설정되지 않음' 으로 본다", () => {
-  // 컨테이너 환경변수는 비어 있어도 정의돼 있다. 값이 있는지만 보면 빈 값이 홈 파일을 가린다.
+test("an empty string is treated as 'not set'", () => {
+  // A container environment variable can be defined even while empty. Checking only whether it's defined would let an empty value shadow the home file.
   const env = { BLANK: "" };
   applyEnvText("BLANK=from-file\n", env);
   assert.equal(env.BLANK, "from-file");
 });
 
-test("런타임 홈에 JWT_SECRET 을 만들어 적고 환경에 올린다", () => {
+test("generates a JWT_SECRET into the runtime home and loads it into the environment", () => {
   const homeDir = tmpHome("gen");
   try {
     const env = { DESKRPG_HOME: homeDir };
@@ -43,14 +43,14 @@ test("런타임 홈에 JWT_SECRET 을 만들어 적고 환경에 올린다", () 
     assert.ok(result.envPath, "envPath 가 있어야 한다");
     assert.ok(env.JWT_SECRET, "JWT_SECRET 이 채워져야 한다");
     assert.ok(env.JWT_SECRET.length >= 24, `너무 짧다: ${env.JWT_SECRET.length}`);
-    // 홈 파일에도 남아야 다음 기동에서 같은 키를 쓴다.
+    // Must also persist in the home file so the next boot uses the same key.
     assert.match(fs.readFileSync(result.envPath, "utf8"), /^JWT_SECRET=.+$/m);
   } finally {
     fs.rmSync(homeDir, { recursive: true, force: true });
   }
 });
 
-test("같은 홈으로 다시 부르면 키가 그대로다 — Update 로 재생성돼도 로그아웃되지 않는다", () => {
+test("calling again with the same home keeps the same key — an Update-triggered regeneration doesn't log anyone out", () => {
   const homeDir = tmpHome("stable");
   try {
     const first = { DESKRPG_HOME: homeDir };
@@ -63,7 +63,7 @@ test("같은 홈으로 다시 부르면 키가 그대로다 — Update 로 재�
   }
 });
 
-test("사용자가 넣은 JWT_SECRET 은 생성값으로 덮이지 않는다", () => {
+test("a user-supplied JWT_SECRET is not overwritten by a generated value", () => {
   const homeDir = tmpHome("user");
   try {
     const env = { DESKRPG_HOME: homeDir, JWT_SECRET: "my-production-key-9f3a2b7c1d4e6f8a" };
@@ -74,7 +74,7 @@ test("사용자가 넣은 JWT_SECRET 은 생성값으로 덮이지 않는다", (
   }
 });
 
-test("런타임 경로 모듈이 없으면 조용히 넘어간다 — 기동을 막지 않는다", () => {
+test("if the runtime-paths module is missing, it quietly moves on — never blocks startup", () => {
   const env = {};
   const result = bootstrapRuntimeEnv({
     packageRoot: path.join(os.tmpdir(), "deskrpg-does-not-exist"),

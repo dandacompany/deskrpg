@@ -19,7 +19,7 @@ function seedDb() {
   return db;
 }
 
-test("로그인 ID 로 해시를 바꾸고 강제 변경 표시를 세운다", async () => {
+test("changes the hash by login ID and sets the forced-change flag", async () => {
   const db = seedDb();
   const passwordHash = await bcrypt.hash("temporary-password", 10);
 
@@ -34,7 +34,7 @@ test("로그인 ID 로 해시를 바꾸고 강제 변경 표시를 세운다", a
   db.close();
 });
 
-test("없는 로그인 ID 는 null 을 돌려주고 아무 행도 건드리지 않는다", () => {
+test("a nonexistent login ID returns null and touches no row", () => {
   const db = seedDb();
 
   const result = resetSqliteUserPassword(db, "nobody", "new-hash");
@@ -45,7 +45,7 @@ test("없는 로그인 ID 는 null 을 돌려주고 아무 행도 건드리지 �
   db.close();
 });
 
-test("must_change_password 컬럼이 없는 옛 DB 에서는 안내와 함께 실패한다", () => {
+test("on an old DB missing the must_change_password column, it fails with guidance", () => {
   const db = new Database(":memory:");
   db.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, login_id TEXT NOT NULL UNIQUE,
       nickname TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL);`);

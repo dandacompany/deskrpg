@@ -8,13 +8,13 @@ import {
   seedChannelWithProfiles,
 } from "@/test-setup/npc-seed";
 
-// `db` 는 지연 초기화 싱글턴이고 node:test 는 파일마다 프로세스를 나누므로, 모듈
-// 최상단에서 한 번 임시 DB 를 잡으면 이 파일의 모든 테스트가 그 DB 를 쓴다.
-// `./chat-rooms` 는 `@/db` 를 정적으로 import 하므로, ESM 호이스팅을 피하려면
-// 이 파일도 매 테스트에서 동적 import 를 써야 한다(npc-roster.test.ts 와 동일 패턴).
+// `db` is a lazily-initialized singleton, and node:test splits into a process per file,
+// so grabbing a temp DB once at the top of the module means every test in this file uses that DB.
+// `./chat-rooms` statically imports `@/db`, so to avoid ESM hoisting, this file also has
+// to use a dynamic import in every test (same pattern as npc-roster.test.ts).
 setupThrowawaySqlite("chat-rooms-test");
 
-test("office 방은 채널당 하나 — 두 번 불러도 같은 id", async () => {
+test("there's one office room per channel — calling it twice returns the same id", async () => {
   const { ensureOfficeRoom } = await import("./chat-rooms");
   const owner = await seedUser();
   const ch = await seedChannel(owner.id);
@@ -24,7 +24,7 @@ test("office 방은 채널당 하나 — 두 번 불러도 같은 id", async () 
   assert.equal(a.replyPolicy, "mention");
 });
 
-test("목록은 office + 내가 멤버인 group 만", async () => {
+test("the list is office + only groups I'm a member of", async () => {
   const { ensureOfficeRoom, createRoom, listRoomsForUser, isRoomMember } =
     await import("./chat-rooms");
   const owner = await seedUser("owner");
@@ -54,7 +54,7 @@ test("목록은 office + 내가 멤버인 group 만", async () => {
   assert.equal(await isRoomMember(mine.id, owner.id), true, "만든 사람은 자동 멤버");
 });
 
-test("메시지를 쌓으면 last_message_at 이 오르고 최근 N 줄을 오래된 순으로 준다", async () => {
+test("stacking messages bumps last_message_at and returns the most recent N lines oldest-first", async () => {
   const { createRoom, appendRoomMessage, recentRoomMessages, listRoomsForUser } =
     await import("./chat-rooms");
   const owner = await seedUser();
@@ -92,8 +92,8 @@ test("메시지를 쌓으면 last_message_at 이 오르고 최근 N 줄을 오�
     recent.map((m) => m.content),
     ["2", "3"],
   );
-  // 메시지가 하나도 없는 방을 같은 목록 조회에 섞어, 배치 조회(N+1 제거)가 메시지
-  // 있는 방과 없는 방을 뒤섞지 않고 각각 올바로 매칭하는지 본다.
+  // Mixes in a room with zero messages in the same list query, to check that the batch
+  // query (N+1 removal) matches rooms with and without messages correctly, without mixing them up.
   const emptyRoom = await createRoom({
     channelId: ch.id,
     name: "빈 방",
@@ -108,7 +108,7 @@ test("메시지를 쌓으면 last_message_at 이 오르고 최근 N 줄을 오�
   assert.equal(emptySummary?.lastMessage, undefined);
 });
 
-test("NPC 멤버 초대는 중복 무시, 방 삭제는 cascade", async () => {
+test("inviting an NPC member ignores duplicates, and deleting a room cascades", async () => {
   const {
     createRoom,
     addMembers,

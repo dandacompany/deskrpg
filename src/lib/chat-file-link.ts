@@ -1,20 +1,22 @@
 /**
- * 대화창의 링크가 **파일**인지 판정한다 — 파일이면 화면이 다운로드 아이콘을 붙인다.
+ * Decides whether a link in chat is a **file** — if so, the UI attaches a download icon.
  *
- * 왜 필요한가: 직원이 문서를 만들어 링크로 알려 줘도 대화창에는 밑줄 친 글자만 있었다.
- * 다운로드 버튼은 결과물 뷰어(`ArtifactViewer.tsx:371`)와 카드 첨부(`TaskDrawer.tsx:760`)에만
- * 있어서, 대화 중에 받은 파일은 새 탭에서 열어 브라우저에 맡기는 수밖에 없었다(2026-09-20 실측).
+ * Why this exists: even when a staff member created a document and shared it as a link,
+ * chat showed nothing but underlined text. The download button existed only on the
+ * artifact viewer (`ArtifactViewer.tsx:371`) and card attachments (`TaskDrawer.tsx:760`),
+ * so a file received mid-conversation could only be opened in a new tab and left to the
+ * browser (observed 2026-09-20).
  *
- * 모든 링크에 아이콘을 붙이지는 않는다 — 참고 사이트 링크까지 아이콘을 달면 소음이 되고,
- * 미리보기 카드 승격과도 겹친다. 판정은 두 갈래다.
+ * Not every link gets an icon — putting one on every reference-site link would become
+ * noise, and it would overlap with preview-card promotion. The verdict branches two ways:
  *
- *   1. 우리 자신의 파일 경로(결과물 콘텐츠·카드 첨부) — 상대 경로로 온다.
- *   2. 그 밖의 http(s) 링크는 마지막 경로 조각의 확장자가 파일 확장자일 때만.
+ *   1. Our own file paths (artifact content · card attachments) — these arrive as relative paths.
+ *   2. Any other http(s) link, only when the last path segment's extension is a file extension.
  *
- * 순수 함수다. 클라이언트 번들에 실리므로 `node:*`·`@/db` 를 import 하지 않는다.
+ * A pure function. It's in the client bundle, so it imports neither `node:*` nor `@/db`.
  */
 
-/** 브라우저가 페이지로 여는 확장자는 제외한다 — 그것은 링크지 파일이 아니다. */
+/** Extensions the browser opens as a page are excluded — that's a link, not a file. */
 const FILE_EXTENSIONS = new Set([
   "pdf",
   "doc",
@@ -61,21 +63,22 @@ const FILE_EXTENSIONS = new Set([
   "m4a",
 ]);
 
-/** 결과물 콘텐츠: `/api/channels/<id>/artifacts/<id>/versions/<n>/content` */
+/** Artifact content: `/api/channels/<id>/artifacts/<id>/versions/<n>/content` */
 const ARTIFACT_CONTENT = /^\/api\/channels\/[^/]+\/artifacts\/[^/]+\/versions\/\d+\/content$/;
-/** 카드 첨부: `/api/channels/<id>/kanban/attachments/<id>` */
+/** Card attachment: `/api/channels/<id>/kanban/attachments/<id>` */
 const KANBAN_ATTACHMENT = /^\/api\/channels\/[^/]+\/kanban\/attachments\/[^/]+$/;
 
 /**
- * 인라인 이미지 중 **래스터만**. `svg+xml` 은 스크립트를 품는 문서라 제외한다.
- * `markdown-url.ts` 의 주소 정책과 이 파일의 내려받기 판정이 같은 목록을 본다.
+ * **Raster only** among inline images. `svg+xml` is excluded — it's a document that can
+ * carry a script. This list is shared between `markdown-url.ts`'s address policy and this
+ * file's download verdict.
  */
 export const DATA_IMAGE_RASTER = /^data:image\/(png|jpe?g|gif|webp|avif|bmp);/i;
 
 export type ChatFileLink = {
-  /** 다운로드에 쓸 주소. 결과물이면 `?download=1` 이 붙는다(Content-Disposition 을 서버가 준다). */
+  /** The address to use for downloading. For an artifact, `?download=1` is appended (the server supplies Content-Disposition). */
   href: string;
-  /** `download` 속성에 쓸 이름. 서버가 이름을 주는 경로에서는 비운다. */
+  /** The name to use for the `download` attribute. Left empty on paths where the server supplies the name. */
   filename: string | undefined;
 };
 
@@ -89,14 +92,14 @@ function extensionOf(pathname: string): string | null {
 export function chatFileLink(href: string | undefined | null): ChatFileLink | null {
   if (!href) return null;
 
-  // 직원이 만든 그림은 인라인 base64 로 오는 일이 잦다 — 그것도 사용자에게는 파일이다.
+  // Images a staff member created often arrive as inline base64 — to the user, that's a file too.
   const inline = DATA_IMAGE_RASTER.exec(href);
   if (inline) {
     const ext = inline[1].toLowerCase() === "jpg" ? "jpeg" : inline[1].toLowerCase();
     return { href, filename: `image.${ext}` };
   }
 
-  // 상대 경로는 우리 자신의 라우트다. `new URL` 에 기준을 줘서 쿼리·해시를 정확히 가른다.
+  // A relative path is one of our own routes. Give `new URL` a base so query and hash split correctly.
   const base = "https://deskrpg.invalid";
   let url: URL;
   try {

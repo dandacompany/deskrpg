@@ -1,13 +1,15 @@
 import { PLUGIN_INSTALL_COMMAND } from "@/lib/hermes/plugin-install-command";
 
 /**
- * 게이트 실패를 화면 분기로 옮긴다.
+ * Turns a gate failure into a screen branch.
  *
- * **판정하지 않는다.** 판정은 서버의 `automation-gate.ts` 하나이고, 그 결과를
- * `cron-access.ts` 의 `pluginGateResponse` 가 상태코드+코드로 옮긴다. 이 파일은 그 표를
- * 화면 쪽 이름으로 번역할 뿐이다 — 새 분기를 여기서 만들면 판정이 두 곳이 된다.
+ * **Never makes the judgment itself.** The judgment is made solely by the server's
+ * `automation-gate.ts`, and its result is carried by `cron-access.ts`'s
+ * `pluginGateResponse` as a status code + code. This file only translates that table into
+ * screen-side names — adding a new branch here would create a second place where the
+ * judgment is made.
  *
- * 클라이언트 번들에 실린다: `node:*`·`@/db` 를 import 하지 않는다.
+ * Ships in the client bundle: does not import `node:*` or `@/db`.
  */
 export const GATE_FALLBACK_MIN_VERSION = "0.6.0";
 
@@ -44,7 +46,7 @@ export function classifyGateFailure(failure: GateFailure): GateBlocker {
     case "timeout":
       return { kind: "timeout" };
     case "unreachable":
-    // 프로브가 왜 실패했는지 모르는 경우다. 사용자가 할 수 있는 일은 unreachable 과 같다.
+    // A case where we don't know why the probe failed. What the user can do is the same as for unreachable.
     case "plugin_unknown":
       return { kind: "unreachable" };
     default:
@@ -57,7 +59,7 @@ export function classifyGateFailure(failure: GateFailure): GateBlocker {
   }
 }
 
-/** 체크리스트로 그릴 값인가 — 연결·서버 상태 문제는 단계로 표현하면 거짓말이 된다. */
+/** Is this a value that should be drawn as a checklist? — expressing a connectivity/server-status problem as a step would be a lie. */
 export function isSetupBlocker(blocker: GateBlocker): boolean {
   return (
     blocker.kind === "gateway_not_bound" ||

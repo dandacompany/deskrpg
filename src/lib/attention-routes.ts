@@ -1,8 +1,9 @@
 /**
- * 판단 모음 REST 의 몸통. 라우트 파일은 위임 3줄(`src/app/api/AGENTS.md`).
+ * The body of the attention-inbox REST endpoint. The route file is a 3-line delegate (`src/app/api/AGENTS.md`).
  *
- * 줄을 만드는 판정은 `attention-inbox.ts`, 세는 판정은 `needs-attention.ts` 다 — 화면과
- * 운영 지표가 같은 함수를 쓰게 하려고 밖에 뒀다. 여기서는 **모으기만** 한다.
+ * The judgment that builds rows lives in `attention-inbox.ts`; the judgment that counts lives in
+ * `needs-attention.ts` — kept outside this file so the screen and operational metrics share the
+ * same function. This file only **collects**.
  */
 import { and, desc, eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
@@ -20,7 +21,7 @@ import { resolveKanbanChannelContext } from "@/lib/kanban-access";
 
 export type ChannelParams = { params: Promise<{ id: string }> };
 
-/** 사무실 방에 남은 **실패한** 크론 알림. 성공한 실행은 사람이 할 일이 없다. */
+/** **Failed** cron notices left in the office room. A successful run has nothing for a human to do. */
 const CRON_SCAN_LIMIT = 200;
 
 async function recentCronFailures(channelId: string) {
@@ -54,7 +55,7 @@ async function recentCronFailures(channelId: string) {
   return out;
 }
 
-/** GET — 사람이 답해야 하는 것만. */
+/** GET — only what needs a human answer. */
 export async function getAttentionInbox(req: NextRequest, channelId: string) {
   const resolved = await resolveKanbanChannelContext({ userId: getUserId(req), channelId });
   if (!resolved.ok) return resolved.response;
@@ -72,9 +73,10 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
     .where(and(eq(approvals.channelId, channelId), eq(approvals.status, "pending")));
   const targets = await approvalTargetsByApproval(pending.map((a) => a.id));
 
-  // 기본 보드만 읽으면 **다른 보드의 승인 대기 카드가 줄에서 빠진다.** 대기 중인 승인이
-  // 가리키는 보드를 함께 읽는다. 한 보드가 실패하면 그 보드만 건너뛴다 — 한 보드 때문에
-  // 화면 전체가 비면 사용자가 아무것도 못 본다.
+  // Reading only the default board would **drop pending-approval cards from other boards out of
+  // the row**. The boards pointed at by pending approvals are also read. If one board fails,
+  // only that board is skipped — one board's failure blanking the whole screen would leave the
+  // user seeing nothing.
   const slugs = new Set<string>([ctx.boardSlug]);
   for (const a of pending) {
     const slug = approvalBoardSlug(a.payloadJson);
@@ -85,7 +87,7 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
   for (const slug of slugs) {
     const board = await ctx.client.kanban.getBoard(slug, {});
     if (!board.ok) {
-      // 기본 보드가 실패하면 화면에 이유를 보여야 한다 — 그것까지 감추지 않는다.
+      // If the default board fails, the screen must show why — that one isn't hidden either.
       if (slug === ctx.boardSlug) return pluginFailureResponse(board);
       continue;
     }
@@ -104,8 +106,9 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
   if (!anyBoardOk)
     return NextResponse.json({ rows: [], counts: countNeedsAttention([], new Set()) });
 
-  // 카드 시각은 **epoch 초**로 온다 — `Date.parse` 를 부르면 NaN 이라 경과 시간이 조용히
-  // 사라진다. 그 판정은 `taskTimeMs` 한 곳에만 둔다(위 루프에서 읽었다).
+  // Card timestamps arrive as **epoch seconds** — calling `Date.parse` on them yields NaN,
+  // silently losing the elapsed time. That judgment is kept in exactly one place, `taskTimeMs`
+  // (already applied in the loop above).
   const cards = cardsBySlug;
   const input: AttentionInboxInput = {
     cards,

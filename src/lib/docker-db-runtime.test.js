@@ -38,7 +38,7 @@ test("an explicit DB_TYPE survives the runtime home's DB_TYPE=sqlite line", () =
   applyEnvText(home, explicit);
   assert.equal(explicit.DB_TYPE, "postgresql");
 
-  // 외부 DATABASE_URL 은 홈의 SQLite 기본값보다 우선한다.
+  // An external DATABASE_URL takes priority over the home's SQLite defaults.
   const inferred = { DATABASE_URL: "postgresql://x" };
   applyEnvText(home, inferred);
   assert.equal(inferred.DB_TYPE, undefined);

@@ -21,9 +21,9 @@ test("sanitizeStreamingSpokenResponse suppresses partial SPEAK prefix fragments"
 });
 
 test("sanitizeSpokenResponse leaves the TO: line intact (parseMention needs it)", () => {
-  // conversation-engine.ts 는 이 함수의 결과를 그대로 parseMention() 에 넘긴다.
-  // 여기서 TO: 를 지우면 지목이 조용히 사라진다 — 화면 표시용 제거는
-  // sanitizeStreamingSpokenResponse 와 stream-text.ts 쪽에서만 한다.
+  // conversation-engine.ts passes this function's result straight into parseMention().
+  // Stripping TO: here would make mentions silently disappear — removing it for display is
+  // handled only on the sanitizeStreamingSpokenResponse / stream-text.ts side.
   assert.equal(sanitizeSpokenResponse("TO: 단비\n어때요?"), "TO: 단비\n어때요?");
 });
 
@@ -34,7 +34,7 @@ test("sanitizeStreamingSpokenResponse suppresses a growing TO: prefix until the 
   assert.equal(sanitizeStreamingSpokenResponse("TO: 단비\n어때요"), "어때요");
 });
 
-test("멘션 안내문이 알려주는 형식대로 쓰면 parseMention이 실제로 인정한다 (round trip)", () => {
+test("writing in the format the mention instructions describe is actually accepted by parseMention (round trip)", () => {
   const participants = [
     { npcId: "npc-danbi", displayName: "단비", role: "팀장" },
     { npcId: "npc-sophie", displayName: "소피", role: "개발자" },
@@ -50,8 +50,9 @@ test("멘션 안내문이 알려주는 형식대로 쓰면 parseMention이 실�
     5,
   );
 
-  // 프롬프트가 안내하는 "TO: 이름" 형식대로, 참석자 목록 렌더링(이름(역할))에서
-  // 역할을 뺀 이름만 써서 멘션을 만들었을 때 parseMention이 정확히 인식해야 한다.
+  // Following the "TO: name" format the prompt describes — building a mention from just the
+  // name, with the role stripped from the participant-list rendering (name(role)) — must be
+  // recognized correctly by parseMention.
   assert.match(prompt, /TO: 이름/, "프롬프트에 TO: 이름 형식 안내가 없습니다");
 
   const spokenBySophie = "TO: 단비\n오늘 점심 뭐 먹을까요?";

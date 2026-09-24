@@ -449,9 +449,9 @@ export function getObjectDimensions(
 }
 
 // ---------------------------------------------------------------------------
-// Tile ID → Object Type mapping (옛 타일 상수 T 호환)
+// Tile ID → Object Type mapping (compatible with the old tile constant T)
 // ---------------------------------------------------------------------------
-// 옛 타일 상수 T: 3=DESK, 4=CHAIR, 5=COMPUTER, 6=PLANT, 8=MEETING_TABLE,
+// Old tile constant T: 3=DESK, 4=CHAIR, 5=COMPUTER, 6=PLANT, 8=MEETING_TABLE,
 // 9=COFFEE, 10=WATER_COOLER, 11=BOOKSHELF, 13=WHITEBOARD, 14=RECEPTION_DESK, 15=CUBICLE_WALL
 export const TILE_ID_TO_OBJECT: Record<number, string> = {
   3: "desk",

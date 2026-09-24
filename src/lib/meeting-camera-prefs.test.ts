@@ -18,7 +18,7 @@ function memory(initial: Record<string, string> = {}) {
   };
 }
 
-test("기본값은 단테 결정 그대로다 — 상반신·직행·체류 2.0초·머묾 1.5초", () => {
+test("the default is exactly Dante's decision — upper body, direct handoff, 2.0s dwell, 1.5s hold", () => {
   assert.deepEqual(DEFAULT_MEETING_CAMERA_PREFS, {
     speakerFraming: "upperBody",
     directHandoff: true,
@@ -27,7 +27,7 @@ test("기본값은 단테 결정 그대로다 — 상반신·직행·체류 2.0�
   });
 });
 
-test("저장된 값을 믿지 않는다 — 틀린 항목만 기본값으로 떨어지고 나머지는 산다", () => {
+test("doesn't trust a stored value — only the invalid fields fall back to defaults, the rest survives", () => {
   const prefs = normalizeMeetingCameraPrefs({
     speakerFraming: "portrait",
     directHandoff: "yes",
@@ -42,7 +42,7 @@ test("저장된 값을 믿지 않는다 — 틀린 항목만 기본값으로 떨
   assert.deepEqual(normalizeMeetingCameraPrefs(null), DEFAULT_MEETING_CAMERA_PREFS);
 });
 
-test("'얼굴 가까이' 단계를 더해도 이전 버전이 저장한 값은 그대로 읽힌다", () => {
+test("adding a '얼굴 가까이' (close-up) step still reads a value saved by an older version as-is", () => {
   const stored = {
     speakerFraming: "fullBody",
     directHandoff: false,
@@ -54,13 +54,13 @@ test("'얼굴 가까이' 단계를 더해도 이전 버전이 저장한 값은 �
   assert.equal(normalizeMeetingCameraPrefs({ speakerFraming: "face" }).speakerFraming, "face");
 });
 
-test("저장하고 다시 읽으면 같은 값이다", () => {
+test("reading it back after saving gives the same value", () => {
   const store = memory();
   saveMeetingCameraPrefs({ ...DEFAULT_MEETING_CAMERA_PREFS, speakerFraming: "table" }, store);
   assert.equal(loadMeetingCameraPrefs(store).speakerFraming, "table");
 });
 
-test("깨진 JSON 이나 막힌 저장소에서도 던지지 않고 기본값이다", () => {
+test("falls back to defaults without throwing even on broken JSON or a blocked store", () => {
   assert.deepEqual(
     loadMeetingCameraPrefs(memory({ [MEETING_CAMERA_PREFS_KEY]: "{not json" })),
     DEFAULT_MEETING_CAMERA_PREFS,

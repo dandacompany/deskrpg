@@ -47,9 +47,10 @@ async function updateHermesProfileToken(
       tokenEncrypted: encryptGatewayToken(input.token.trim()),
       displayName: input.displayName?.trim() || fallbackDisplayName,
       updatedAt: nowForDb(),
-      // 최종 리뷰 I-2: 이 인자가 없거나 false 면 기존 값을 건드리지 않는다 — 수동
-      // 재등록(토큰 교체 등) 경로가 이미 서 있는 provisionedByDeskrpg 를 조용히
-      // false 로 되돌리면 안 된다. 마법사만 true 를 명시적으로 넘긴다.
+      // Final review I-2: if this argument is missing or false, leave the existing value
+      // alone — a manual re-registration path (e.g. swapping a token) must not silently
+      // revert an already-set provisionedByDeskrpg back to false. Only the wizard explicitly
+      // passes true.
       ...(input.provisionedByDeskrpg ? { provisionedByDeskrpg: true } : {}),
     })
     .where(eq(hermesProfiles.id, profileId))
@@ -78,11 +79,11 @@ export async function registerHermesProfile(input: {
   token: string;
   displayName?: string;
   /**
-   * 최종 리뷰 I-2: 스펙 §3① — "마법사가 이 값을 세운다." 마법사(플러그인 프로필 생성
-   * 라우트)만 `true` 를 넘긴다. 수동 등록 화면(`/api/gateways/[id]/profiles`)은 이
-   * 인자를 아예 넘기지 않아 기본값(false)이 유지된다 — DeskRPG 가 만든 프로필과
-   * 사용자가 손으로 등록한 프로필을 구분하는 유일한 신호이므로, 여기서 잘못 세우면
-   * 영원히 되돌릴 방법이 없다.
+   * Final review I-2: spec §3① — "the wizard sets this value." Only the wizard (the plugin
+   * profile-creation route) passes `true`. The manual registration screen
+   * (`/api/gateways/[id]/profiles`) never passes this argument at all, so the default (false)
+   * is kept — it's the only signal that distinguishes a profile DeskRPG created from one a
+   * user registered by hand, so setting it wrong here has no way back.
    */
   provisionedByDeskrpg?: boolean;
 }): Promise<{ profile: typeof hermesProfiles.$inferSelect } | { error: "forbidden" }> {
@@ -108,8 +109,9 @@ export async function registerHermesProfile(input: {
     return { profile: updated };
   }
 
-  // 새 직원은 외형을 가진 채 태어난다 — 비어 있으면 모두 기본 룩으로 보인다.
-  // 기존 행(위 update 경로)의 외형은 사람이 골랐을 수 있으므로 건드리지 않는다.
+  // A new employee is born with an appearance — if it's left empty, everyone looks the same
+  // default look. An existing row's appearance (the update path above) may have been chosen
+  // by a person, so it's left untouched.
   const siblings = await db
     .select({ appearance: hermesProfiles.appearance })
     .from(hermesProfiles)
@@ -163,9 +165,10 @@ export async function listHermesProfiles(userId: string, gatewayId: string) {
     .from(hermesProfiles)
     .where(eq(hermesProfiles.gatewayId, gatewayId));
 
-  // 한 프로필은 NPC 하나에만 붙인다 — 둘이 같은 프로필을 쓰면 같은 Hermes 세션과
-  // 기억을 공유해 서로의 대화가 섞인다. 어느 프로필이 이미 묶였는지는 서버만 알 수
-  // 있으므로 여기서 알려준다(화면이 NPC 목록을 따로 들고 다니지 않아도 되게).
+  // A profile attaches to only one NPC — if two shared the same profile, they'd share the
+  // same Hermes session and memory, mixing their conversations together. Only the server
+  // knows which profiles are already bound, so it reports that here (so the screen doesn't
+  // need to carry the NPC list around separately).
   const boundRows = await db.select({ profileId: npcs.hermesProfileId }).from(npcs);
   const bound = new Set(boundRows.map((r) => r.profileId).filter(Boolean));
 
@@ -174,19 +177,22 @@ export async function listHermesProfiles(userId: string, gatewayId: string) {
     profileName: row.profileName,
     displayName: row.displayName,
     lastValidationStatus: row.lastValidationStatus,
-    // 외형은 프로필이 정본이다. 목록에 실어 주지 않으면 게이트웨이 화면의 외형
-    // 편집기가 기본값에서 시작해, 저장 한 번에 그 인격의 생김새를 조용히 갈아 치운다.
+    // The profile is the source of truth for appearance. If it's not included in the list,
+    // the gateway screen's appearance editor starts from the default, and one save quietly
+    // overwrites that persona's look.
     appearance: parseDbJson<unknown>(row.appearance) ?? null,
     inUse: bound.has(row.id),
   }));
 }
 
 /**
- * 프로필 수정. 토큰은 **보낼 때만** 바뀐다 — 게이트웨이 PATCH 와 같은 규약이다
- * (화면이 빈 칸을 아예 보내지 않는다). 빈 문자열로 자격증명을 지우는 사고를 막는다.
+ * Modifies a profile. The token only changes **when it's actually sent** — the same
+ * convention as the gateway PATCH (the screen never sends an empty field at all). This
+ * prevents accidentally wiping a credential with an empty string.
  *
- * `profileName` 은 바꾸지 않는다. 그것은 Hermes 쪽 정체성이고 `/p/<name>/` 라우팅과
- * 세션 키가 그 이름에 걸려 있어, 바꾸는 것은 사실상 다른 프로필이다 — 새로 만들어야 한다.
+ * `profileName` is never changed. It's the Hermes-side identity, and since `/p/<name>/`
+ * routing and the session key are pinned to that name, changing it is effectively a
+ * different profile — a new one must be created instead.
  */
 export async function updateHermesProfile(
   userId: string,
@@ -205,17 +211,18 @@ export async function updateHermesProfile(
 
   const patch: Record<string, unknown> = { updatedAt: nowForDb() };
   if (typeof input.displayName === "string") patch.displayName = input.displayName;
-  // 외형은 프로필이 정본이고 그 프로필이 나가는 **모든** 채널의 NPC 모습을 한꺼번에
-  // 바꾼다. 공유받은 사용자가 남의 게이트웨이 인격의 얼굴을 갈아치울 수는 없다 —
-  // 소유자만 쓴다.
+  // The profile is the source of truth for appearance, and changes it for the NPC in **every**
+  // channel that profile appears in, all at once. A user with shared access can't overwrite
+  // the face of someone else's gateway persona — only the owner can write it.
   if (input.appearance !== undefined) {
     if (!access.isOwner) return { ok: false, errorCode: "forbidden" };
     patch.appearance = jsonForDb(input.appearance);
   }
   if (typeof input.token === "string" && input.token.trim()) {
     patch.tokenEncrypted = encryptGatewayToken(input.token.trim());
-    // 자격증명이 바뀌었으므로 예전 검증 결과는 더 이상 이 토큰에 대한 것이 아니다.
-    // 남겨 두면 "인증 실패" 배지가 새 토큰에 대해서도 계속 붙어 사용자를 오도한다.
+    // The credential changed, so the old validation result no longer applies to this token.
+    // Leaving it would keep an "authentication failed" badge attached even to the new token,
+    // misleading the user.
     patch.lastValidationStatus = null;
     patch.lastValidationError = null;
     patch.lastValidatedAt = null;
@@ -225,7 +232,7 @@ export async function updateHermesProfile(
   return { ok: true };
 }
 
-/** 이 프로필이 몇 개의 NPC 로, 몇 개의 채널에 나가 있는지 — 삭제 확인 문구가 쓴다. */
+/** How many NPCs and channels this profile appears in — used by the delete-confirmation copy. */
 export async function profileUsage(profileId: string): Promise<{
   npcs: number;
   channels: number;
@@ -238,9 +245,10 @@ export async function profileUsage(profileId: string): Promise<{
 }
 
 /**
- * 프로필 삭제. 프로필이 NPC 의 정본이 된 뒤로 이것은 **해고**다 — `npcs.hermes_profile_id`
- * 의 CASCADE 가 그 프로필의 NPC 행을 함께 지운다. 몇 개가 몇 채널에서 사라지는지는
- * 지우기 전에 세어 돌려준다(지운 뒤에는 셀 수 없다).
+ * Deletes a profile. Since the profile became the source of truth for NPCs, this is
+ * effectively a **termination** — the CASCADE on `npcs.hermes_profile_id` also deletes that
+ * profile's NPC rows. How many NPCs disappear from how many channels is counted and returned
+ * before the delete (it can't be counted afterward).
  */
 export async function deleteHermesProfile(
   userId: string,
@@ -261,17 +269,19 @@ export async function deleteHermesProfile(
 
   const usage = await profileUsage(profileId);
 
-  // 프로필 삭제는 npcs 를 cascade 로 지운다 — 그 NPC 가 대화방 멤버로 남아 있던
-  // chat_room_members 행은 cascade 대상이 아니므로(멤버 테이블은 npcs 를 FK 로 물지
-  // 않는다) 지우기 전에 NPC id 를 먼저 걷어 직접 정리한다.
-  // 이 저장소에는 공유 트랜잭션 헬퍼가 없다 — better-sqlite3 의 drizzle 트랜잭션은
-  // 동기, PG 쪽은 비동기라 두 드라이버를 같은 헬퍼로 감쌀 수 없다(다른 자원 모듈들도
-  // 같은 이유로 트랜잭션을 안 쓴다). 그래서 두 delete 를 트랜잭션 없이 순서대로
-  // 실행한다. 순서가 유일한 안전장치다: 멤버 정리 → 프로필/NPC cascade. 이 순서면
-  // 중간에 실패해도 최악의 경우 "지워진 NPC 를 여전히 멤버로 가리키는 방"이 아니라
-  // "멤버는 지워졌는데 NPC 는 남은" 상태만 생긴다 — 후자는 다음 조회에서 그냥 무해한
-  // 유령 멤버가 없는 정상 상태이고, 전자(멤버 정리를 나중에 했다면 생겼을 상태)처럼
-  // 존재하지 않는 NPC 를 참조하는 깨진 멤버 행을 만들지 않는다.
+  // Deleting a profile cascades to delete npcs — but the chat_room_members rows left over
+  // from that NPC being a chat room member are not part of that cascade (the members table
+  // doesn't hold an FK to npcs), so we collect the NPC ids and clean them up directly before
+  // deleting.
+  // This store has no shared transaction helper — better-sqlite3's drizzle transactions are
+  // synchronous while PG's are async, so the two drivers can't be wrapped by the same helper
+  // (other resource modules skip transactions for the same reason). So the two deletes run in
+  // sequence, without a transaction. Order is the only safeguard: clean up members → cascade
+  // profile/NPC. With this order, even a mid-failure worst case leaves only "members cleaned
+  // up but the NPC remains," never "a room still pointing at a deleted NPC as a member." The
+  // former is just a harmless normal state on the next query (no ghost member), unlike the
+  // latter (what cleaning up members second would have produced), which would create a broken
+  // member row referencing an NPC that no longer exists.
   const affectedNpcs = await db
     .select({ id: npcs.id })
     .from(npcs)

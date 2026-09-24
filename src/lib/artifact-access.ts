@@ -1,7 +1,9 @@
 /**
- * 결과물(아티팩트) REST 의 문지기. 순서: 로그인 → 채널 멤버 → 게이트웨이(409) → 플러그인 게이트 →
- * `artifacts` 능력(428). 칸반과 달리 보드 행이 없어도 막지 않는다 — 칸반을 안 쓰는 채널에도 채팅 결과물은 있다.
- * 채널 범위는 서버가 정한다: 채널 NPC 프로필(잠든 NPC 포함, 현재 게이트웨이) OR 채널 보드.
+ * Gatekeeper for the artifacts REST API. Order: login → channel member → gateway (409) →
+ * plugin gate → `artifacts` capability (428). Unlike kanban, a missing board row does not
+ * block here — a channel without kanban can still have chat artifacts.
+ * The channel scope is decided by the server: channel NPC profiles (including dormant
+ * NPCs, on the current gateway) OR the channel board.
  */
 import { and, eq, ne } from "drizzle-orm";
 import type { NextResponse } from "next/server";
@@ -22,7 +24,7 @@ import { resolveChannelBoard } from "@/lib/kanban-boards";
 export type ArtifactChannelContext = {
   userId: string;
   channelId: string;
-  /** 채널에 지금 묶인 게이트웨이(`gateway_resources.id`). */
+  /** The gateway currently bound to the channel (`gateway_resources.id`). */
   gatewayId: string;
   client: OwnerPluginClient;
   boardSlug: string;
@@ -88,7 +90,7 @@ export function inChannelScope(
   return ctx.profiles.includes(a.profile) || (!!a.board && a.board === ctx.boardSlug);
 }
 
-/** 플러그인 결과물 id 모양(`new_artifact_id` 는 [0-9a-z] 26자). `.`·`..`·`/` 는 URL 정규화로 다른 경로가 된다. */
+/** The plugin artifact id shape (`new_artifact_id` is 26 chars of [0-9a-z]). `.`, `..`, `/` become a different path via URL normalization. */
 const ARTIFACT_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 export function isValidArtifactId(id: string): boolean {
@@ -99,7 +101,7 @@ export function artifactNotFound(): NextResponse {
   return cronError(404, "artifact_not_found", "artifact not found");
 }
 
-/** 단건 조회 + 범위 확인. 범위 밖은 없는 것과 같다(404) — id 추측으로 다른 채널에 닿지 않게. */
+/** Fetch one + verify scope. Out of scope counts as not found (404) — so guessing an id can't reach another channel. */
 export async function loadScopedArtifact(
   ctx: ArtifactChannelContext,
   id: string,
@@ -115,10 +117,11 @@ export async function loadScopedArtifact(
 }
 
 /**
- * 편집·삭제 권한(2026-09-18 사용자 결정). 읽기는 채널 범위 전체지만, 바꾸는 것은 출처 채널에서만:
- * 보드 결과물은 이 채널 보드의 것일 때, 보드 없는 결과물은 그 프로필이 이 게이트웨이에서 **이 채널에만**
- * 고용돼 있을 때. 같은 프로필을 여러 채널이 고용하면 어느 채널이 만든 채팅 결과물인지 알 수 없어
- * 모든 채널에서 읽기 전용이다.
+ * Edit/delete permission (user decision 2026-09-18). Reading covers the full channel
+ * scope, but modifying is allowed only from the origin channel: a board artifact when it
+ * belongs to this channel's board, and a boardless artifact when its profile is employed
+ * on this gateway **only by this channel**. If multiple channels employ the same profile,
+ * which channel produced a given chat artifact can't be known, so it's read-only in every channel.
  */
 export async function canModifyArtifact(
   ctx: Pick<ArtifactChannelContext, "channelId" | "gatewayId" | "boardSlug" | "profiles">,

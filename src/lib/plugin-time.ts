@@ -1,23 +1,26 @@
 /**
- * 플러그인이 보내는 시각을 읽는 단 하나의 자리.
+ * The single place that reads timestamps sent by the plugin.
  *
- * 화면·정렬·지표가 제각기 `Date.parse` 를 부르면 계약이 바뀔 때마다 같은 결함이 여러 곳에서
- * 되살아난다. 여기만 고치면 되게 둔다.
+ * If the screen, sorting, and metrics each called `Date.parse` on their own, the same
+ * bug would come back in multiple places every time the contract changed. Let fixing it
+ * here be enough.
  */
 
 import type { PluginTime } from "@/lib/hermes/deskrpg-plugin-types";
 
 /**
- * 카드·실행의 시각을 ms 로. 못 읽으면 `null`.
+ * A card/run timestamp, in ms. `null` if it can't be read.
  *
- * **플러그인은 epoch 초(정수)를 보낸다**(플러그인 `docs/contracts.md`: "칸반의 `created_at`·
- * `started_at`·`ts` 등은 epoch 초(정수)"). 그런데 우리 타입은 `string` 으로 적어 뒀고 화면은
- * `Date.parse` 를 불렀다 — `Date.parse(1758412800)` 은 **NaN** 이라 경과 시간이 조용히 사라진다.
- * 가짜 플러그인 서버(`fake-plugin-server.ts`)가 ISO 문자열을 보내는 바람에 테스트는 내내
- * 초록이었고, 실제 게이트웨이에서만 값이 비었다.
+ * **The plugin sends epoch seconds (an integer)** (plugin `docs/contracts.md`: "kanban's
+ * `created_at`, `started_at`, `ts`, etc. are epoch seconds (integer)"). But our type had
+ * it written as `string`, and the screen called `Date.parse` — `Date.parse(1758412800)`
+ * is **NaN**, so elapsed time silently disappears. The fake plugin server
+ * (`fake-plugin-server.ts`) sends ISO strings, so tests stayed green the whole time, and
+ * only the real gateway produced empty values.
  *
- * 양쪽을 다 받는다. 숫자(또는 숫자로만 된 문자열)는 epoch 초로, 그 밖은 ISO 로 읽는다.
- * 한쪽으로 통일하는 것은 계약 변경이라 이 함수가 결정할 일이 아니다.
+ * Accepts both. A number (or a numeric-only string) is read as epoch seconds; anything
+ * else as ISO. Standardizing on one side would be a contract change, so that's not this
+ * function's call to make.
  */
 export function taskTimeMs(value: PluginTime | null | undefined): number | null {
   if (value === null || value === undefined || value === "") return null;
@@ -30,8 +33,9 @@ export function taskTimeMs(value: PluginTime | null | undefined): number | null 
 }
 
 /**
- * epoch 초를 ms 로. 이미 ms 로 보이는 값(13자리 이상)은 그대로 둔다 — 어느 단위로 오는지
- * 계약이 흔들린 적이 있어, 1000배 틀린 시각을 그리느니 둘 다 받아들인다.
+ * Epoch seconds to ms. A value that already looks like ms (13+ digits) is left as-is —
+ * the contract has wavered on which unit is used before, so this accepts both rather
+ * than drawing a time that's off by a factor of 1000.
  */
 function epochSecondsToMs(value: number): number {
   return Math.abs(value) >= 1e11 ? value : value * 1000;

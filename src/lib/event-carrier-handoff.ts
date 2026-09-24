@@ -66,7 +66,7 @@ export async function recordEventCarrierError(channelId: string, code: string): 
     .where(eq(channelKanbanBoards.channelId, channelId));
 }
 
-/** 저장한 불투명 커서만으로 재개한다. 복구 중에는 네트워크나 사건 소비가 없다. */
+/** Resumes using only the stored opaque cursor. No network calls or event consumption happen during recovery. */
 export async function recoverEventCarrierHandoff(channelId: string): Promise<void> {
   return withChannelAutomationLock(channelId, async () => {
     try {
@@ -124,7 +124,7 @@ async function recover(channelId: string): Promise<void> {
   )
     throw conflict();
 
-  // journal을 지우기 전에는 폴링이 시작되지 않으므로 이 쓰기들은 재실행해도 커서를 되감지 않는다.
+  // Polling doesn't start until the journal is cleared, so re-running these writes never rewinds the cursor.
   await db
     .update(channelKanbanBoards)
     .set({ isEventCarrier: false, updatedAt: nowForDb() })
@@ -256,7 +256,7 @@ export async function handoffEventCarrier(input: {
         .where(eq(channelKanbanBoards.id, source.id));
       await recoverEventCarrierHandoff(input.channelId);
     } catch (err) {
-      // Drizzle 오류는 SQL 인수(불투명 커서 포함)를 담을 수 있으므로 원문을 바깥에 내보내지 않는다.
+      // A Drizzle error can carry SQL arguments (including the opaque cursor), so the raw error isn't propagated outward.
       if (err instanceof EventCarrierError) throw err;
       throw new EventCarrierError(503, "event_carrier_handoff_pending");
     }

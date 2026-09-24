@@ -1,9 +1,10 @@
 /**
- * 회의 요약 응답을 구조화된 결과로 읽는다.
+ * Reads a meeting-summary response into a structured outcome.
  *
- * 결과는 **초안**이다 — 카드가 아니다. Hermes 에는 사용자가 등록을 누르기 전까지 아무것도 생기지 않는다.
- * 모델이 쓴 담당은 회의 참석자 안에서만 풀고, 못 풀면 미지정으로 둔다. 채널에 없는 프로필 이름이
- * 카드 담당으로 들어가는 길을 막기 위해서다.
+ * The result is a **draft** — not a card. Nothing is created in Hermes until the user
+ * clicks register. The assignee the model wrote is resolved only among meeting
+ * participants; if it can't be resolved, it's left unassigned. This blocks a profile
+ * name that isn't in the channel from becoming a card's assignee.
  */
 
 export const MEETING_OUTCOME_LIMITS = {
@@ -21,9 +22,9 @@ export type MeetingFollowUp = {
   summary: string | null;
   acceptance: string | null;
   assigneeNpcId: string | null;
-  /** 모델이 쓴 이름 그대로. 참석자로 풀리지 않았어도 초안 검토 화면에 보여 준다. */
+  /** The name exactly as the model wrote it. Shown on the draft review screen even if it didn't resolve to a participant. */
   assigneeName: string | null;
-  /** 먼저 끝나야 하는 항목의 인덱스. 등록할 때 Hermes 부모 링크가 된다. */
+  /** The index of an item that must finish first. Becomes a Hermes parent link on registration. */
   after: number[];
 };
 
@@ -32,8 +33,9 @@ export type MeetingOutcome = {
   followUps: MeetingFollowUp[];
   project: { recommended: boolean; name: string | null; reason: string | null } | null;
   /**
-   * 등록 결과. 카드 내용의 사본이 아니라 **연결**이다 — 어느 보드·서브프로젝트에 어떤 카드가
-   * 생겼는지만 적는다. 이 값이 있으면 제안은 해소된 것이고 요약을 다시 만들지 않는다.
+   * The registration result. Not a copy of the card content but a **link** — it only
+   * records which cards were created on which board/subproject. If this is set, the
+   * proposal has been resolved and the summary isn't regenerated.
    */
   registered?: MeetingOutcomeRegistered | null;
 };
@@ -83,7 +85,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** `from` 에서 `after` 를 따라가 `target` 에 닿는가. */
+/** Does following `after` from `from` reach `target`? */
 function reaches(
   after: number[][],
   from: number,
@@ -100,7 +102,7 @@ function readFollowUps(value: unknown, participants: OutcomeParticipant[]): Meet
   if (!Array.isArray(value)) return [];
   const byName = new Map(participants.map((p) => [p.name.trim().toLowerCase(), p.npcId]));
 
-  // 제목 없는 항목을 버리면 인덱스가 밀린다 — 원래 번호에서 새 번호로 가는 표를 먼저 만든다.
+  // Dropping items with no title shifts the indexes — first build a table mapping original numbers to new ones.
   const kept: Array<{ source: Record<string, unknown>; title: string }> = [];
   const renumber = new Map<number, number>();
   value.forEach((entry, index) => {
@@ -117,7 +119,7 @@ function readFollowUps(value: unknown, participants: OutcomeParticipant[]): Meet
     for (const raw of source.after) {
       const target = typeof raw === "number" ? renumber.get(raw) : undefined;
       if (target === undefined || target === index || after[index].includes(target)) continue;
-      // 이 링크를 넣으면 고리가 생기는가: target 에서 이미 index 로 올 수 있으면 그렇다.
+      // Would adding this link create a cycle? Yes if target can already reach index.
       if (reaches(after, target, index)) continue;
       after[index].push(target);
     }
@@ -180,8 +182,8 @@ export function parseMeetingOutcome(
 }
 
 /**
- * 요약 프롬프트. 담당 후보를 참석 직원 이름으로 못 박아 준다 — 모델이 고를 수 있는 이름을
- * 알려 주지 않으면 회의에 없던 이름을 지어 낸다.
+ * The summary prompt. Pins down assignee candidates to attending employee names — if
+ * the model isn't told which names it can choose from, it invents names that weren't in the meeting.
  */
 export function buildMeetingSummaryPrompt(
   topic: string,

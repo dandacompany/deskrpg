@@ -1,23 +1,30 @@
 /**
- * 채널 ↔ Hermes 칸반 보드 연결 (T4).
+ * Channel ↔ Hermes kanban board binding (T4).
  *
- * 보드는 **Hermes 가 정본**이다. 카드는 한 장도 여기 저장하지 않는다 — 우리가 남기는 것은
- * `channel_kanban_boards` 의 (채널, 게이트웨이, slug) 연결 기록과 마지막 실패 사유뿐이다.
+ * For boards, **Hermes is the source of truth**. Not a single card is stored here — all we
+ * keep is the (channel, gateway, slug) binding record in `channel_kanban_boards` and the
+ * last failure reason.
  *
- * 2026-09-21 부터 **채널은 보드를 여러 개 가진다**(보드 = 프로젝트). 연결 행의 PK 는 대리 키이고
- * `(채널, slug)` 가 유니크다. 그중 정확히 하나가 **사건 수신 보드**(`isEventCarrier`)이고, 게이트웨이
- * 전역 사건(크론·아티팩트)은 그 행에서만 받는다 — 플러그인의 `/deskrpg/events` 가 크론을 보드로
- * 걸러 주지 않기 때문이다. 인자 없는 `getChannelBoard`·`ensureChannelBoard` 는 **사건 수신 보드**를
- * 가리킨다(이관 전의 유일한 보드가 그것이다) — 그래서 기존 호출자는 뜻이 바뀌지 않는다.
+ * As of 2026-09-21, **a channel can have multiple boards** (board = project). The binding
+ * row's PK is a surrogate key, and `(channel, slug)` is unique. Exactly one of them is the
+ * **event carrier board** (`isEventCarrier`), and gateway-wide events (cron, artifacts) are
+ * only received on that row — because the plugin's `/deskrpg/events` doesn't filter cron
+ * events by board. `getChannelBoard`/`ensureChannelBoard` with no board argument point to
+ * the **event carrier board** (it was the only board before the migration) — so existing
+ * callers keep their meaning.
  *
- * - slug 는 채널 UUID 에서 결정적으로 나온다(`channelBoardSlug`). 그래서 "보드가 이미
- *   있는가" 를 DB 에 묻지 않아도 된다 — 플러그인의 `POST /deskrpg/kanban/boards` 가 같은
- *   slug 면 기존 보드를 200 으로 돌려주므로 확보는 늘 같은 호출 한 번이다(E1).
- * - 확보 실패는 바인딩을 막지 않는다(R5). 행은 만들되 `last_error` 에 이유를 남기고,
- *   `ensureChannelBoard` 는 멱등이라 다음 화면 진입·폴링이 그대로 다시 부르면 된다.
- * - 플러그인 계약(0.6.0 + kanban·cron·events)에 못 미치면 칸반 경로를 **건드리지 않는다**
- *   (R31). 판정은 `automation-gate.ts` 의 단일 게이트가 한다 — 크론 REST 도 같은 함수를 쓴다.
- * - ensureChannelBoard/syncBoardName은 실패를 결과로 돌린다. 인계 복구 불가는 명시적 오류다.
+ * - The slug is derived deterministically from the channel UUID (`channelBoardSlug`). So we
+ *   never need to ask the DB "does the board already exist" — the plugin's
+ *   `POST /deskrpg/kanban/boards` returns the existing board with 200 for the same slug, so
+ *   ensuring it is always the same single call (E1).
+ * - A failed ensure doesn't block the binding (R5). The row is created anyway with the
+ *   reason left in `last_error`, and since `ensureChannelBoard` is idempotent, the next
+ *   screen visit or poll simply calls it again.
+ * - If the plugin contract (0.6.0 + kanban·cron·events) isn't met, the kanban path is
+ *   **left untouched** (R31). The judgment is made by the single gate in
+ *   `automation-gate.ts` — the cron REST API uses the same function.
+ * - ensureChannelBoard/syncBoardName return failure as a result. An unrecoverable handoff
+ *   is an explicit error.
  */
 
 import { withChannelAutomationLock } from "./channel-automation-lock";
@@ -34,8 +41,8 @@ import { gateAutomationPlugin, type PluginGate } from "@/lib/automation-gate";
 import { channelKanbanBoards, channelProjects, channels, db, nowForDb } from "@/db";
 
 /**
- * 끝난 프로젝트의 상태. `project-registry` 의 것과 같은 값이며, 여기서 그 모듈을 import 하면
- * 순환이 생겨(그쪽이 이 파일을 쓴다) 작은 사본을 둔다.
+ * Statuses for a finished project. Same values as `project-registry`'s — kept as a small
+ * copy here because importing that module would create a cycle (it imports this file).
  */
 const ARCHIVED_PROJECT_STATUSES: ReadonlySet<string> = new Set(["completed", "cancelled"]);
 import { decryptGatewayToken, getChannelGatewayBinding } from "@/lib/gateway-resources";
@@ -47,7 +54,7 @@ export type { PluginGate } from "@/lib/automation-gate";
 
 export type ChannelBoardRow = typeof channelKanbanBoards.$inferSelect;
 
-/** 확보·동기화가 실패한 이유. `channel_kanban_boards.last_error` 에 그대로 남는다. */
+/** The reason ensure/sync failed. Stored as-is in `channel_kanban_boards.last_error`. */
 export type ChannelBoardFailureCode =
   | "unbound"
   | "channel_not_found"
@@ -57,7 +64,7 @@ export type ChannelBoardFailureCode =
   | "plugin_unknown"
   | "plugin_upgrade_required"
   | "internal_error"
-  // 플러그인 클라이언트가 돌려준 실패 코드(unreachable·timeout·malformed_response·플러그인의 error 값)
+  // A failure code returned by the plugin client (unreachable · timeout · malformed_response · the plugin's own error value)
   | (string & {});
 
 export type ChannelBoardResult =
@@ -75,33 +82,36 @@ export type ResolvedChannelBoard =
   | { ok: false; code: "unbound"; reason: string };
 
 /**
- * 채널 UUID → 보드 slug. `deskrpg-` + 하이픈을 뺀 32자(소문자).
- * 플러그인의 slug 규칙(`[a-z0-9-]{1,64}`)에 맞고, 채널마다 유일하며, 다시 계산해도 같다.
+ * Channel UUID → board slug. `deskrpg-` + 32 lowercase chars with hyphens stripped.
+ * Fits the plugin's slug rule (`[a-z0-9-]{1,64}`), is unique per channel, and is stable
+ * across recomputation.
  */
 export function channelBoardSlug(channelId: string): string {
   return `deskrpg-${channelId.replace(/-/g, "").toLowerCase()}`;
 }
 
 /**
- * 둘째 보드부터 쓰는 slug. 첫 보드(= 사건 수신 보드)는 `channelBoardSlug` 그대로다 — Hermes 의
- * 카드 DB 가 `board_dir(slug)` 아래에 있고 slug 를 바꾸는 라우트가 없어서, 이미 있는 보드의
- * slug 는 건드릴 수 없다. 접미사 8자를 붙여도 `deskrpg-`(8) + 32 + `-`(1) + 8 = 49자라
- * 플러그인의 64자 상한 안이다.
+ * The slug used from the second board onward. The first board (= the event carrier board)
+ * keeps `channelBoardSlug` as-is — Hermes's card DB lives under `board_dir(slug)` and there
+ * is no route to rename a slug, so an existing board's slug can never be touched. Even with
+ * the 8-char suffix, `deskrpg-`(8) + 32 + `-`(1) + 8 = 49 chars, still within the plugin's
+ * 64-char limit.
  */
 export function newChannelBoardSlug(channelId: string): string {
   return `${channelBoardSlug(channelId)}-${randomBytes(4).toString("hex")}`;
 }
 
 /**
- * 채널의 **사건 수신 보드** 행. 인자 하나짜리 옛 호출자가 기대하던 "그 채널의 보드" 가 이것이다.
- * 아직 carrier 가 정해지지 않은 옛 행이 있을 수 있어, 없으면 가장 먼저 만들어진 행으로 떨어진다.
+ * The channel's **event carrier board** row. This is what an old single-argument caller
+ * expected as "the channel's board". Since an old row may not yet have a carrier assigned,
+ * it falls back to the earliest-created row if none is set.
  */
 export async function getChannelBoard(channelId: string): Promise<ChannelBoardRow | null> {
   const rows = await listChannelBoards(channelId);
   return rows.find((row) => row.isEventCarrier) ?? rows[0] ?? null;
 }
 
-/** 채널에 붙은 보드 전부. 만들어진 순서 — 첫 행이 보통 사건 수신 보드다. */
+/** All boards attached to the channel, in creation order — the first row is usually the event carrier board. */
 export async function listChannelBoards(channelId: string): Promise<ChannelBoardRow[]> {
   return db
     .select()
@@ -111,8 +121,9 @@ export async function listChannelBoards(channelId: string): Promise<ChannelBoard
 }
 
 /**
- * 인계 기록이 있으면 먼저 끝낸다. 기록 없이 carrier가 없으면 미초기화 채널만 복구한다.
- * 저장 커서가 있는 기존 채널에서 옛 수신 위치를 추정하면 미소비 사건을 건너뛸 수 있다.
+ * Finishes an existing handoff record first, if there is one. Without a record, if there's
+ * no carrier, it only recovers an uninitialized channel. Guessing the old receive position
+ * for an existing channel that already has a saved cursor could skip unconsumed events.
  */
 export async function ensureChannelCarrier(channelId: string): Promise<ChannelBoardRow | null> {
   return withChannelAutomationLock(channelId, async () => {
@@ -155,8 +166,9 @@ async function ensureChannelCarrierUnlocked(channelId: string): Promise<ChannelB
 }
 
 /**
- * 이 채널에 **그 slug 로 붙어 있는** 보드 행. 없으면 null — 호출자는 404 로 답해야 한다.
- * 다른 채널의 보드를 slug 로 집어 오는 것을 막는 유일한 관문이라 채널 조건을 뺄 수 없다.
+ * The board row attached to this channel **under that slug**. null if none — the caller
+ * should respond 404. This is the only guard that stops fetching another channel's board
+ * by slug, so the channel condition can never be dropped.
  */
 export async function getChannelBoardBySlug(
   channelId: string,
@@ -176,9 +188,10 @@ export async function getChannelBoardBySlug(
 }
 
 /**
- * 뒤의 태스크(칸반 라우트·폴러)가 재사용하는 진입점 — 바인딩·오너 클라이언트·slug·플러그인
- * 게이트를 한 번에 푼다. 바인딩이 없으면 `unbound`. 게이트 실패는 `pluginGate.ok=false` 로
- * 돌려주고 여기서는 아무것도 기록하지 않는다(기록은 `ensureChannelBoard` 의 몫).
+ * The entry point reused by downstream consumers (kanban routes, poller) — resolves the
+ * binding, owner client, slug, and plugin gate all at once. `unbound` if there's no
+ * binding. A gate failure is returned as `pluginGate.ok=false` and nothing is recorded
+ * here (recording is `ensureChannelBoard`'s job).
  */
 export async function resolveChannelBoard(channelId: string): Promise<ResolvedChannelBoard> {
   const binding = await getChannelGatewayBinding(channelId);
@@ -196,14 +209,17 @@ export async function resolveChannelBoard(channelId: string): Promise<ResolvedCh
 }
 
 /**
- * 게이트웨이가 바뀌었으면 그 채널의 보드 행을 **새 게이트웨이로 옮긴다**(R4).
+ * If the gateway changed, **moves the channel's board rows to the new gateway** (R4).
  *
- * 예전에는 행을 지우고 새로 만들었다. 이제는 그럴 수 없다 — `channel_projects.board_link_id` 가
- * cascade 로 연결 행을 물고 있어서, 행을 지우면 프로젝트 메타(상태·목표일·출처 회의)가 함께
- * 사라진다. 결정 D-1 은 "메타는 남기고 연결만 다시 붙인다" 이므로 행 id 를 유지한 채
- * 게이트웨이만 갈아 끼우고, **이전 게이트웨이의 것인 커서와 동기화 시각은 버린다**.
+ * The old approach was to delete the row and create a new one. That's no longer possible —
+ * `channel_projects.board_link_id` holds the binding row via cascade, so deleting the row
+ * would also wipe project metadata (status, target date, origin meeting). Decision D-1 is
+ * "keep the metadata, just re-attach the binding", so the row id is kept and only the
+ * gateway is swapped in — **the cursor and sync timestamp belonging to the old gateway are
+ * discarded.**
  *
- * 카드는 새 게이트웨이에 없을 수 있다. 그것은 화면이 말해야 할 사실이지 여기서 숨길 일이 아니다.
+ * The card may not exist on the new gateway. That's a fact for the screen to surface, not
+ * something to hide here.
  */
 async function migrateChannelBoardsToGateway(channelId: string, gatewayId: string): Promise<void> {
   await db
@@ -224,8 +240,9 @@ async function migrateChannelBoardsToGateway(channelId: string, gatewayId: strin
 }
 
 /**
- * 연결 행을 쓴다 — 키는 `(채널, slug)` 다. 그 채널에 아직 보드가 하나도 없으면 만들어지는 행이
- * **사건 수신 보드**가 된다(크론·아티팩트를 받는 자리는 채널마다 정확히 하나다).
+ * Writes the binding row — keyed by `(channel, slug)`. If the channel has no board yet, the
+ * row created here becomes the **event carrier board** (a channel has exactly one place
+ * that receives cron and artifacts).
  */
 async function upsertBoardRow(input: {
   channelId: string;
@@ -254,7 +271,7 @@ async function upsertBoardRow(input: {
     return updated;
   }
 
-  // 첫 보드가 사건 수신 보드다. 부분 유니크 인덱스가 둘째 carrier 를 막는다.
+  // The first board is the event carrier board. A partial unique index blocks a second carrier.
   const carrierExists = (await listChannelBoards(input.channelId)).some((r) => r.isEventCarrier);
   const [created] = await db
     .insert(channelKanbanBoards)
@@ -282,11 +299,13 @@ async function readChannelName(channelId: string): Promise<string | null> {
 }
 
 /**
- * 채널의 보드를 확보한다 — slug 가 있으면 재사용, 없으면 생성(R1). 멱등이며 던지지 않는다.
- * 실패해도 연결 행은 남고 `last_error` 에 이유가 적힌다(R5).
+ * Ensures the channel has a board — reuses it if the slug exists, creates it otherwise
+ * (R1). Idempotent and never throws. Even on failure, the binding row stays and the reason
+ * is recorded in `last_error` (R5).
  *
- * 호출자가 이미 `resolveChannelBoard` 를 풀었으면 `resolved` 로 넘긴다 — 게이트·클라이언트를
- * 한 요청에서 두 번 만들지 않기 위해서다(칸반 접근 제어·폴러).
+ * If the caller has already resolved via `resolveChannelBoard`, pass it as `resolved` — to
+ * avoid building the gate and client twice within one request (kanban access control, the
+ * poller).
  */
 export async function ensureChannelBoard(
   ...args: Parameters<typeof ensureChannelBoardUnlocked>
@@ -306,9 +325,10 @@ async function ensureChannelBoardUnlocked(
   channelId: string,
   resolved?: ResolvedChannelBoard,
   /**
-   * 확보할 보드. 생략하면 그 채널의 기본 보드(= 사건 수신 보드) slug 다. 이미 붙어 있는 보드를
-   * 다시 확보할 때는 그 보드의 이름을 Hermes 가 갖고 있으므로 채널 이름으로 덮어쓰지 않는다 —
-   * 플러그인의 `POST /kanban/boards` 는 같은 slug 면 기존 보드를 이름째 돌려준다.
+   * The board to ensure. If omitted, this is the channel's default board slug (= the event
+   * carrier board). When re-ensuring an already-attached board, its name is not overwritten
+   * with the channel name, since Hermes already holds that board's name — the plugin's
+   * `POST /kanban/boards` returns the existing board, name included, for the same slug.
    */
   requestedSlug?: string,
 ): Promise<ChannelBoardResult> {
@@ -375,9 +395,10 @@ async function ensureChannelBoardUnlocked(
 }
 
 /**
- * 채널 이름 변경을 보드 표시 이름에 반영한다(R2). 실패해도 던지지 않고
- * `board_name_synced_at` 은 건드리지 않는다 — 폴러가 그 시각을 채널의 `updated_at` 과 견줘
- * 뒤처져 있으면 한 바퀴에 한 번 다시 부른다(게이트를 통과한 바퀴에서만).
+ * Reflects a channel name change into the board's display name (R2). Never throws on
+ * failure and leaves `board_name_synced_at` untouched — the poller compares that timestamp
+ * against the channel's `updated_at`, and calls this again once per cycle if it's behind
+ * (only on cycles that pass the gate).
  */
 export async function syncBoardName(
   ...args: Parameters<typeof syncBoardNameUnlocked>

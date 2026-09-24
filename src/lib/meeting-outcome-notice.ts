@@ -1,11 +1,14 @@
 /**
- * 회의 결과 방 알림 — 후속 업무가 나온 회의가 끝나면 사무실 방에 한 줄을 남긴다.
+ * Meeting outcome room notice — when a meeting that produced follow-up work ends, one
+ * line is left in the office room.
  *
- * 회의는 자동화 사건이 아니다(Hermes 사건 스트림·커서를 거치지 않는다). 그래서 사건 싱크(`ingest`)가
- * 아니라 승인 알림과 같은 길로 낸다: 행은 `appendRoomMessage` 가 쓰고 방송은 `automation-registry` 훅.
+ * A meeting is not an automation event (it doesn't go through the Hermes event stream /
+ * cursor). So this goes out the same path as approval notices rather than the event sink
+ * (`ingest`): the row is written by `appendRoomMessage`, and broadcast via the
+ * `automation-registry` hook.
  *
- * **여기 함수들은 던지지 않는다.** 알림이 늦게 보이는 것과 회의록이 안 남는 것·등록이 실패하는 것은
- * 무게가 다르다.
+ * **The functions here never throw.** A notice showing up late carries a different
+ * weight than the meeting minutes not being saved, or registration failing.
  */
 import { requestEmitRoomMessage } from "@/lib/automation-registry";
 import { appendRoomMessage, ensureOfficeRoom, getChannelOwnerId } from "@/lib/chat-rooms";
@@ -20,8 +23,9 @@ import { rewriteRoomNotices } from "@/lib/room-notice-rewrite";
 export type MeetingOutcomeNotice = Extract<RoomNotice, { kind: "meeting_outcome" }>;
 
 /**
- * 조건은 "회의가 끝났는가" 가 아니라 **"등록할 후속 업무가 있는가"** 다. 요약 실패는 0건과 다르지만
- * 방에 남기지 않는다 — 다시 시도는 회의 화면·회의록이 권한다.
+ * The condition isn't "did the meeting end" but **"is there follow-up work to
+ * register"**. A summarization failure is different from zero follow-ups, but neither
+ * is announced in the room — retrying is left to the meeting screen and the minutes.
  */
 export function shouldAnnounceOutcome(
   outcome: MeetingOutcome | null | undefined,
@@ -30,7 +34,7 @@ export function shouldAnnounceOutcome(
   return summaryStatus === "ok" && !!outcome && outcome.followUps.length > 0;
 }
 
-/** id 와 개수만 싣는다. 프로젝트·서브프로젝트 이름은 바뀔 수 있어 사본을 두지 않는다. */
+/** Carries only ids and counts. Project/subproject names can change, so no copy is kept here. */
 export function buildMeetingOutcomeNotice(input: {
   minutesId: string;
   topic: string;
@@ -63,7 +67,7 @@ export async function announceMeetingOutcome(input: {
       senderKind: "system",
       senderId: null,
       senderName: "",
-      // 로케일 무관 폴백. 문장은 보는 사람의 언어로 렌더러가 만든다.
+      // A locale-agnostic fallback. The renderer builds the actual sentence in the viewer's language.
       content: input.topic,
       notice: buildMeetingOutcomeNotice({
         minutesId: input.minutesId,
@@ -78,8 +82,9 @@ export async function announceMeetingOutcome(input: {
 }
 
 /**
- * 등록이 끝나면 **같은 줄**에 결과를 되쓴다 — 렌더러가 회의록을 다시 읽지 않고, 과거 메시지를
- * 스크롤해도 그때의 결과가 보인다. 해소 여부를 클라이언트가 숨기는 것이 아니다.
+ * Once registration finishes, the result is rewritten onto **the same line** — the
+ * renderer doesn't re-read the minutes, and scrolling back to an old message still shows
+ * that moment's result. Resolution is not something the client hides.
  */
 export async function markMeetingOutcomeNoticeRegistered(input: {
   channelId: string;
@@ -89,7 +94,7 @@ export async function markMeetingOutcomeNoticeRegistered(input: {
   await rewriteRoomNotices({
     channelId: input.channelId,
     needle: input.minutesId,
-    // LIKE 는 후보만 좁힌다 — 다른 회의 id 의 부분 문자열일 수 있으니 정확히 맞춘다.
+    // LIKE only narrows the candidates — it could be a substring of a different meeting id, so match exactly.
     update: (notice) =>
       notice.kind === "meeting_outcome" && notice.minutesId === input.minutesId
         ? {

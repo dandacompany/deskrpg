@@ -3,13 +3,13 @@ import test from "node:test";
 
 import { describeMeetingFailure, meetingErrorCode, meetingErrorMessage } from "./meeting-error";
 
-/** hermes-client 의 HermesError 와 같은 모양 — 이 모듈은 브라우저에서도 읽히므로 클래스를 import 하지 않는다. */
+/** Shaped like hermes-client's HermesError — this module is also read in the browser, so it does not import the class. */
 function hermesError(code: string, message: string, status: number) {
   return Object.assign(new Error(message), { name: "HermesError", code, status });
 }
 
-test("모델 백엔드 사용 한도(실행 실패 안의 429)는 한도 코드로 구분된다", () => {
-  // 스테이징 실측: Codex 계정 한도가 찼을 때 게이트웨이가 run.failed 로 돌려준 사유
+test("model backend usage limit (a 429 inside a failed run) is mapped to its own limit code", () => {
+  // Observed on staging: the reason the gateway returns as run.failed when the Codex account limit is hit
   const out = describeMeetingFailure(
     hermesError("run_failed", "HTTP 429: The usage limit has been reached", 200),
   );
@@ -17,14 +17,14 @@ test("모델 백엔드 사용 한도(실행 실패 안의 429)는 한도 코드�
   assert.equal(out.detail, "HTTP 429: The usage limit has been reached");
 });
 
-test("게이트웨이 동시 실행 상한(HTTP 429)은 사용 한도와 다른 코드다", () => {
+test("the gateway concurrent-run cap (HTTP 429) is a different code from usage limit", () => {
   assert.equal(
     describeMeetingFailure(hermesError("http_error", "Too Many Requests", 429)).error,
     "gateway_busy",
   );
 });
 
-test("게이트웨이에 닿지 못하거나 인증이 거절되면 각자의 코드다", () => {
+test("unreachable gateway or rejected auth each get their own code", () => {
   assert.equal(
     describeMeetingFailure(hermesError("unreachable", "connect ECONNREFUSED", 0)).error,
     "backend_unavailable",
@@ -35,7 +35,7 @@ test("게이트웨이에 닿지 못하거나 인증이 거절되면 각자의 �
   );
 });
 
-test("Error·평범한 객체·문자열·없음 어느 것이 와도 error 와 detail 은 문자열이다", () => {
+test("error and detail are always strings, whatever the input — Error, plain object, string, or nothing", () => {
   for (const input of [
     new Error("boom"),
     { code: "adapter_failed", message: "adapter blew up" },
@@ -54,7 +54,7 @@ test("Error·평범한 객체·문자열·없음 어느 것이 와도 error 와 
   assert.equal(describeMeetingFailure("plain failure").detail, "plain failure");
 });
 
-test("detail 은 한 줄로 줄이고 길이를 제한하며 토큰 모양을 가린다", () => {
+test("detail is collapsed to one line, length-capped, and masks token-shaped substrings", () => {
   const long = describeMeetingFailure(new Error(`first line\nsecond ${"x".repeat(500)}`));
   assert.ok(long.detail);
   assert.doesNotMatch(long.detail!, /\n/);
@@ -66,14 +66,14 @@ test("detail 은 한 줄로 줄이고 길이를 제한하며 토큰 모양을 �
   assert.doesNotMatch(secret.detail!, /abcdefghijklmnop|sk-proj-1234567890abcdef/);
 });
 
-test("클라이언트는 문자열이 아닌 오류 값을 코드로 쓰지 않는다", () => {
+test("the client never uses a non-string error value as the code", () => {
   assert.equal(meetingErrorCode("backend_usage_limit"), "backend_usage_limit");
   assert.equal(meetingErrorCode({ code: "x" }), "unknown");
   assert.equal(meetingErrorCode(undefined), "unknown");
   assert.equal(meetingErrorCode(""), "unknown");
 });
 
-test("회의 채팅에 그릴 문구는 객체를 받아도 [object Object] 를 만들지 않는다", () => {
+test("the text rendered in meeting chat never becomes [object Object], even for object input", () => {
   const dict: Record<string, string> = {
     "meeting.reason.backend_usage_limit": "AI 백엔드 사용 한도가 찼습니다.",
     "meeting.reason.unknown": "알 수 없는 오류입니다.",
@@ -84,9 +84,9 @@ test("회의 채팅에 그릴 문구는 객체를 받아도 [object Object] 를 
     meetingErrorMessage({ error: "backend_usage_limit", detail: "HTTP 429" }, t),
     "AI 백엔드 사용 한도가 찼습니다. (HTTP 429)",
   );
-  // 서버가 옛 버전이라 객체를 그대로 보내도 글자가 새지 않는다
+  // Even if an old-version server sends the raw object, no garbage text leaks through
   assert.equal(meetingErrorMessage({ error: { message: "x" } }, t), "알 수 없는 오류입니다.");
-  // 번역이 없는 옛 문자열 오류는 그대로 보인다(기존 리터럴 발행처들)
+  // An old string error with no translation is shown as-is (existing literal-error emitters)
   assert.equal(meetingErrorMessage({ error: "Permission denied" }, t), "Permission denied");
   assert.equal(
     meetingErrorMessage({ error: "backend_usage_limit", detail: { a: 1 } }, t),

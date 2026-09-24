@@ -1,18 +1,20 @@
 /**
- * 런타임 홈을 준비하고, 거기 적힌 값 중 **환경에 없는 것만** `process.env` 로 올린다.
+ * Prepares the runtime home and lifts **only the values missing from the environment**
+ * from it into `process.env`.
  *
- * 왜 서버 기동 경로에 있나: `ensureDeskRpgHome` 을 부르는 곳이 `deskrpg init` 하나뿐이던
- * 동안, 컨테이너에는 JWT_SECRET 을 만들 경로가 **아예 없었다.** 진입점이 자리표시자를
- * unset 해도 아무도 대신 만들지 않아 기동이 멈췄다(2026-09-16 Hostinger 실측).
- * 이제 npm(`deskrpg start`)·Docker·로컬 개발이 모두 같은 함수를 지난다.
+ * Why this sits in the server startup path: while `ensureDeskRpgHome` was called only from
+ * `deskrpg init`, containers had **no path at all** to create JWT_SECRET. When the entry
+ * point unset the placeholder, nothing else created it, and startup just stalled (measured
+ * on Hostinger, 2026-09-16). Now npm (`deskrpg start`), Docker, and local dev all pass
+ * through this same function.
  *
- * 우선순위는 세 단계다:
- *   1. 이미 설정된 환경변수      → 그대로 쓴다. **절대 덮지 않는다**
- *   2. 런타임 홈에 저장된 값      → 재시작·Update 를 견딘다(홈이 볼륨일 때)
- *   3. 둘 다 없으면              → `ensureDeskRpgHome` 이 만들어 홈에 적는다
+ * Priority has three tiers:
+ *   1. An already-set environment variable  → used as-is. **Never overwritten**
+ *   2. A value stored in the runtime home    → survives restarts/updates (when the home is a volume)
+ *   3. Neither exists                        → `ensureDeskRpgHome` creates it and writes it to the home
  *
- * 빈 문자열은 "설정되지 않음" 으로 본다. 컨테이너 환경변수는 비어 있어도 정의되어 있어서,
- * 값이 있는지만 보면 빈 값이 홈 파일을 가려 버린다.
+ * An empty string is treated as "not set". A container environment variable can be defined
+ * but empty, so checking presence alone would let an empty value shadow the home file.
  */
 
 "use strict";
@@ -21,7 +23,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { parseEnv } = require("node:util");
 
-/** `KEY=value` 한 줄을 파싱한다. 주석·빈 줄·이상한 줄은 null. */
+/** Parses a single `KEY=value` line. A comment, blank line, or malformed line yields null. */
 function parseEnvLine(line) {
   const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
   if (!match) return null;
@@ -30,9 +32,9 @@ function parseEnvLine(line) {
 }
 
 /**
- * @param {string} text        런타임 홈의 env 파일 내용
- * @param {Record<string, string | undefined>} env  대상 환경(기본 `process.env`)
- * @returns {string[]} 실제로 채운 키 이름들
+ * @param {string} text        the runtime home's env file contents
+ * @param {Record<string, string | undefined>} env  the target environment (defaults to `process.env`)
+ * @returns {string[]} the key names actually filled in
  */
 function applyEnvText(text, env) {
   const applied = [];
@@ -50,7 +52,7 @@ function applyEnvText(text, env) {
   for (const parsed of entries) {
     if (externalPostgres && ["DB_TYPE", "SQLITE_PATH"].includes(parsed.key)) continue;
     const current = env[parsed.key];
-    // 빈 문자열도 "없음" 으로 본다 — 그러지 않으면 빈 환경변수가 홈 파일을 가린다.
+    // An empty string is also treated as "absent" — otherwise an empty env var would shadow the home file.
     if (current !== undefined && current !== "") continue;
     env[parsed.key] = parsed.value;
     applied.push(parsed.key);
@@ -60,7 +62,7 @@ function applyEnvText(text, env) {
 
 /**
  * @param {object} [options]
- * @param {string} [options.packageRoot]  `src/lib/runtime-paths.js` 를 찾을 기준 경로
+ * @param {string} [options.packageRoot]  the base path to locate `src/lib/runtime-paths.js`
  * @param {Record<string, string | undefined>} [options.env]
  * @param {(message: string) => void} [options.warn]
  * @returns {{ envPath: string | null, applied: string[] }}
@@ -74,7 +76,7 @@ function bootstrapRuntimeEnv(options = {}) {
   try {
     runtimePaths = require(path.join(packageRoot, "src", "lib", "runtime-paths.js"));
   } catch {
-    // 런타임 경로 모듈이 없는 빌드는 그대로 둔다 — 기동을 막을 이유가 없다.
+    // A build without the runtime-paths module is left as-is — there's no reason to block startup.
     return { envPath: null, applied: [] };
   }
 

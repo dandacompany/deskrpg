@@ -4,15 +4,18 @@ import path from "node:path";
 import test from "node:test";
 
 /**
- * Next 앱 코드(`src/app/**`, `src/lib/**`)는 소켓 서버 모듈(`src/server/**`)을 import 하지 않는다.
+ * Next app code (`src/app/**`, `src/lib/**`) doesn't import the socket server modules
+ * (`src/server/**`).
  *
- * 왜 이 테스트가 필요한가: 실제 사고가 있었다. `kanban-routes.ts` 가 `@/server/automation-events`
- * 를, 게이트웨이 라우트가 `@/server/automation-poller` 를 import 하자 `socket-handlers.ts` 가
- * Next/Turbopack 번들로 끌려왔고, 그 파일의 `.js` 확장자 상대 import(tsx 런타임용)가
- * "Module not found" 5건으로 `npm run build` 를 깨뜨렸다. `npm run test` 도 `tsc` 도 잡지 못한다.
+ * Why this test is needed: a real incident happened. When `kanban-routes.ts` imported
+ * `@/server/automation-events` and the gateway route imported `@/server/automation-poller`,
+ * `socket-handlers.ts` got pulled into the Next/Turbopack bundle, and that file's `.js`
+ * -extension relative imports (meant for the tsx runtime) broke `npm run build` with 5
+ * "Module not found" errors. Neither `npm run test` nor `tsc` catches this.
  *
- * 소켓 서버 쪽 기능이 라우트에 필요하면 `automation-registry.ts` 같은 `globalThis` 레지스트리를
- * 거친다(`rpc-registry.ts` 와 같은 무늬). 타입만 필요해도 서버 모듈이 아니라 lib 쪽에 둔다.
+ * When a route needs socket-server-side functionality, it goes through a `globalThis`
+ * registry like `automation-registry.ts` (same pattern as `rpc-registry.ts`). Even when only
+ * a type is needed, it's placed in lib, not in a server module.
  */
 
 const SRC = path.join(process.cwd(), "src");
@@ -28,7 +31,7 @@ function listFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-// 정적 import 와 동적 import() 둘 다 본다 — 동적이라도 번들러는 따라간다.
+// Looks at both static imports and dynamic import() — the bundler follows dynamic ones too.
 const IMPORT_RE =
   /(?:^|\n)\s*(?:import|export)\s+(?:[^"';]*?\sfrom\s+)?["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g;
 
@@ -47,7 +50,7 @@ function pointsAtServer(spec: string, fromFile: string): boolean {
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
-test("src/app 와 src/lib 는 src/server 를 import 하지 않는다", () => {
+test("src/app and src/lib don't import src/server", () => {
   const files = SCAN_DIRS.flatMap((d) => listFiles(d));
   assert.ok(files.length > 50, `탐색이 깨졌다 — 파일 ${files.length}개만 찾았다`);
 

@@ -1,10 +1,11 @@
 /**
- * 크론 REST 라우트 핸들러들이 공유하는 몸통.
+ * The shared body for the cron REST route handlers.
  *
- * 라우트 파일(`src/app/api/channels/[id]/cron/**`)은 얇게 두고 — 본문 파싱, 문지기
- * (`cron-access.ts`), 출처 장부(`cron-origins.ts`), Hermes 호출, 응답 조립 — 의 순서를
- * 여기 한 곳에 고정한다. pause/resume/run/PUT/DELETE 는 "출처 채널 멤버만" 이라는 같은
- * 규칙을 타므로 `mutateCronJob` 하나로 모은다.
+ * Keep the route files (`src/app/api/channels/[id]/cron/**`) thin — the order of body
+ * parsing, the gatekeeper (`cron-access.ts`), the origin ledger (`cron-origins.ts`), the
+ * Hermes call, and response assembly is fixed here in one place. pause/resume/run/PUT/
+ * DELETE all follow the same "origin channel members only" rule, so they're consolidated
+ * into a single `mutateCronJob`.
  */
 
 import type { NextRequest } from "next/server";
@@ -43,12 +44,12 @@ import { getUserId } from "@/lib/internal-rpc";
 export type RouteParams = { params: Promise<{ id: string; jobId?: string }> };
 
 // ---------------------------------------------------------------------------
-// 본문·쿼리
+// Body / query
 // ---------------------------------------------------------------------------
 
 type JsonBody = Record<string, unknown>;
 
-/** JSON 본문. 비어 있거나 깨졌으면 null — 호출부가 400 을 낸다. */
+/** JSON body. null if empty or malformed — the caller returns a 400. */
 export async function readJsonBody(req: NextRequest): Promise<JsonBody | null> {
   try {
     const parsed: unknown = await req.json();
@@ -73,9 +74,10 @@ function invalidBody(message: string) {
 }
 
 /**
- * R17 생성 본문. `npcId` 는 여기서 떼어 낸다 — Hermes 로 나가는 본문에 섞이면 안 된다.
- * 프리셋→표현식 변환은 클라이언트가 하므로 `schedule` 은 문자열 그대로 넘긴다.
- * `prompt` 는 스크립트 전용 잡(`script` 가 있음)이 아니면 필수다 — 둘 다 비면 400.
+ * R17 create body. `npcId` is stripped off here — it must not leak into the body sent
+ * to Hermes. Since the preset-to-expression conversion happens client-side, `schedule`
+ * is passed through as a plain string. `prompt` is required unless this is a
+ * script-only job (has `script`) — a 400 if both are empty.
  */
 export function parseCreateBody(
   body: JsonBody,
@@ -110,7 +112,7 @@ export function parseCreateBody(
   return { ok: true, npcId, job };
 }
 
-/** R17 수정 본문 — `{npcId, updates:{...}}`. 모르는 키는 버린다. */
+/** R17 update body — `{npcId, updates:{...}}`. Unknown keys are dropped. */
 export function parseUpdateBody(
   body: JsonBody,
 ): { ok: true; npcId: string; update: UpdateCronJobBody } | { ok: false; response: NextResponse } {
@@ -136,7 +138,7 @@ export function parseUpdateBody(
   return { ok: true, npcId, update: { updates } };
 }
 
-/** R21 인스턴스화 본문 — `{npcId, blueprint, values}`. */
+/** R21 instantiate body — `{npcId, blueprint, values}`. */
 export function parseInstantiateBody(
   body: JsonBody,
 ):
@@ -155,19 +157,19 @@ export function parseInstantiateBody(
   return { ok: true, npcId, request: { blueprint, values } };
 }
 
-/** `?npcId=` — 본문이 없는 GET/DELETE 가 담당 NPC 를 지정하는 방법. */
+/** `?npcId=` — how a bodyless GET/DELETE specifies the assigned NPC. */
 export function readNpcIdParam(req: NextRequest): string | null {
   const value = req.nextUrl.searchParams.get("npcId");
   return value && value.length > 0 ? value : null;
 }
 
 // ---------------------------------------------------------------------------
-// 공통 흐름
+// Shared flow
 // ---------------------------------------------------------------------------
 
 type Resolved = { ctx: CronChannelContext; npc: NpcProfileClient };
 
-/** 로그인 → 멤버 → 게이트웨이 → 플러그인 게이트 → NPC. 어디서든 막히면 응답을 돌려준다. */
+/** Login -> member -> gateway -> plugin gate -> NPC. Returns a response if blocked anywhere. */
 export async function resolveCronRequest(
   req: NextRequest,
   channelId: string,
@@ -196,7 +198,7 @@ async function enrichOne({ ctx, npc }: Resolved, job: CronJob): Promise<Enriched
   });
 }
 
-/** 생성·인스턴스화 뒤 — 플러그인이 성공했을 때만 출처를 적고 201 로 돌려준다. */
+/** After create/instantiate — only when the plugin succeeds, record the origin and return 201. */
 async function createdJobResponse(resolved: Resolved, res: PluginResponse<{ job: CronJob }>) {
   if (!res.ok) return pluginFailureResponse(res);
   const { ctx, npc } = resolved;
@@ -207,13 +209,13 @@ async function createdJobResponse(resolved: Resolved, res: PluginResponse<{ job:
     channelId: ctx.channelId,
     createdByUserId: ctx.userId,
   });
-  // R24. 조작 직후 즉시 폴링 — 기다리지 않는다.
+  // R24. Poll immediately right after the mutation — don't wait.
   schedulePollNow(ctx.channelId);
   return NextResponse.json({ job: await enrichOne(resolved, res.data.job) }, { status: 201 });
 }
 
 // ---------------------------------------------------------------------------
-// 핸들러 몸통
+// Handler bodies
 // ---------------------------------------------------------------------------
 
 export async function listCronJobs(req: NextRequest, channelId: string) {
@@ -221,7 +223,7 @@ export async function listCronJobs(req: NextRequest, channelId: string) {
   if (!context.ok) return context.response;
   const ctx = context.ctx;
 
-  // E3. 프로필이 사라진 출처 행은 목록을 볼 때 치운다.
+  // E3. Clean up origin rows whose profile has vanished while listing.
   await cleanupOrphanCronOrigins(ctx.gateway.id);
 
   const npcIdFilter = readNpcIdParam(req);
@@ -238,7 +240,7 @@ export async function listCronJobs(req: NextRequest, channelId: string) {
   const jobs: EnrichedCronJob[] = [];
   const errors: Array<{ npcId: string; code: string; message: string }> = [];
 
-  // 프로필마다 따로 부른다 — 하나가 죽어도 나머지 목록은 살아야 한다.
+  // Call per profile separately — if one is down, the rest of the list must still survive.
   const results = await Promise.all(
     targets.map(async (npc) => ({
       npc,
@@ -340,7 +342,7 @@ export async function listCronBlueprints(req: NextRequest, channelId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// 변경 — 출처 채널 멤버만 (R16)
+// Mutations — origin channel members only (R16)
 // ---------------------------------------------------------------------------
 
 export type CronMutation =
@@ -351,9 +353,9 @@ export type CronMutation =
   | { kind: "delete" };
 
 /**
- * 편집·멈춤·재개·실행·삭제의 공통 몸통. 출처가 이 채널(그리고 현재 게이트웨이)의 것이
- * 아니면 403 `cron_read_only` — **Hermes 를 부르기 전에** 끝난다. 삭제가 성공하면 출처 행도
- * 지운다.
+ * The shared body for edit, pause, resume, run, and delete. If the origin isn't this
+ * channel's (and the current gateway's), it's a 403 `cron_read_only` — this ends
+ * **before Hermes is ever called.** If delete succeeds, the origin row is deleted too.
  */
 export async function mutateCronJob(
   req: NextRequest,
@@ -393,7 +395,7 @@ export async function mutateCronJob(
       return NextResponse.json({ job: await enrichOne(resolved.value, res.data.job) });
     }
     case "run": {
-      // R19. 요청만 넣고 바로 돌아온다 — 결과는 이력(runs)·이벤트로 본다.
+      // R19. Just submit the request and return right away — the result is seen via history (runs)/events.
       const res = await cron.runJob(jobId);
       if (!res.ok) return pluginFailureResponse(res);
       schedulePollNow(ctx.channelId);
@@ -409,7 +411,7 @@ export async function mutateCronJob(
   }
 }
 
-/** 본문에서 `npcId` 만 읽는 변경(pause/resume/run). */
+/** A mutation (pause/resume/run) that reads only `npcId` from the body. */
 export async function mutateFromBody(
   req: NextRequest,
   channelId: string,

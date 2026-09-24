@@ -1,10 +1,12 @@
-// 회의 중 NPC 응답 실패를 소켓으로 내보낼 모양으로 정규화한다.
-// 브로커의 onError 는 어댑터가 던진 값을 그대로 넘기는데(HermesError·Error·임의 객체),
-// 그것을 그대로 실으면 화면이 `회의: [object Object]` 를 그린다. 서버 경계에서 문자열 코드와
-// 사람이 읽을 짧은 사유로 바꾸고, 클라이언트는 문자열이 아닌 값을 코드로 쓰지 않는다.
+// Normalizes an NPC response failure during a meeting into the shape sent out over the
+// socket.
+// The broker's onError passes through whatever value the adapter threw as-is (HermesError,
+// Error, an arbitrary object), and shipping that as-is would render the screen as
+// `meeting: [object Object]`. At the server boundary it's converted into a string code and
+// a short human-readable reason, and the client never uses a non-string value as the code.
 //
-// 이 파일은 브라우저 번들에도 들어가므로 hermes-client 를 import 하지 않는다 — HermesError 는
-// name·code·status 모양으로 알아본다.
+// This file is also bundled into the browser, so hermes-client isn't imported — HermesError
+// is instead recognized by its name/code/status shape.
 
 export type MeetingFailureCode =
   | "backend_usage_limit"
@@ -17,7 +19,8 @@ export type MeetingFailure = { error: MeetingFailureCode; detail: string | null 
 
 const DETAIL_MAX = 160;
 
-// 모델 제공자의 계정·요금 한도. 게이트웨이 동시 실행 상한(HTTP 429)과는 사용자가 할 일이 다르다.
+// The model provider's account/billing limit. What the user needs to do differs from the
+// gateway's concurrent-run limit (HTTP 429).
 const USAGE_LIMIT = /\b429\b|usage limit|rate[ _-]?limit|quota|insufficient[ _]credits?/i;
 
 function field(value: unknown, key: string): unknown {
@@ -59,14 +62,15 @@ export function describeMeetingFailure(err: unknown): MeetingFailure {
   return { error, detail };
 }
 
-/** 소켓으로 받은 error 필드를 코드로 쓸 수 있을 때만 쓴다. */
+/** Uses the error field received over the socket as a code only when it's usable as one. */
 export function meetingErrorCode(value: unknown): string {
   return typeof value === "string" && value ? value : "unknown";
 }
 
 /**
- * 회의 채팅에 그릴 문구. 번역이 있는 코드는 번역하고, 없는 옛 문자열 오류("Permission denied")는
- * 그대로 보인다. detail 은 문자열일 때만 괄호로 붙인다.
+ * The phrase rendered in the meeting chat. A code with a translation gets translated; an old
+ * string error with none ("Permission denied") is shown as-is. detail is only appended in
+ * parentheses when it's a string.
  */
 export function meetingErrorMessage(
   data: { error?: unknown; detail?: unknown },

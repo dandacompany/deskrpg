@@ -1,19 +1,22 @@
 /**
- * 프로젝트 목록표 (설계 2026-09-21 project-registry).
+ * Project listing table (designed 2026-09-21 project-registry).
  *
- * **보드 = 프로젝트, 테넌트 = 서브프로젝트**다. 보드도 카드도 테넌트 값도 전부 Hermes 정본이고,
- * 여기 남는 것은 Hermes 가 담을 자리가 없는 사람 쪽 정보뿐이다 — 상태·리드 직원·목표일·색·
- * 아이콘·일시정지 사유, 그리고 "왜 이 일을 하는가" 에 답하는 출처 회의.
+ * **A board = a project, a tenant = a subproject.** Boards, cards, and tenant values are all
+ * Hermes' source of truth; what's left here is only the human-side info Hermes has no place
+ * for — status, the lead employee, target date, color, icon, pause reason, and the origin
+ * meeting that answers "why are we doing this."
  *
- * 그래서 **이름·설명·진행률은 저장하지 않는다**(하드 게이트 1).
- * - 이름·설명: Hermes 보드 메타가 정본이다. 바꾸려면 `PATCH /kanban/boards/{slug}` 를 부른다.
- * - 진행률: `GET /kanban/boards` 가 보드마다 `total` 과 상태별 `counts` 를 이미 준다.
- * 목록을 만들 때 그 둘을 읽어 메타 표와 조인한다 — 사본을 두면 언젠가 어긋난다.
+ * So **name, description, and progress are not stored** (hard gate 1).
+ * - Name/description: the Hermes board meta is the source of truth. Changing it calls
+ *   `PATCH /kanban/boards/{slug}`.
+ * - Progress: `GET /kanban/boards` already gives `total` and per-status `counts` for each board.
+ * When building a listing, both are read and joined with the meta table — keeping a copy would
+ * eventually drift.
  *
- * **메타 행은 지연 생성한다.** 이관 전부터 있던 채널에는 보드만 있고 메타 행이 없다. 그 채널이
- * "프로젝트가 없다" 며 막히면 안 되므로, 목록을 읽거나 서브프로젝트를 만들 때 그 자리에서
- * 기본값으로 만들어 준다(`ensureProjectRow`). 지연 생성은 Hermes 를 부르지 않는다 — 보드는
- * 이미 있고 우리가 만드는 것은 우리 쪽 메타 행뿐이다.
+ * **Meta rows are created lazily.** Channels that predate the migration have a board but no meta
+ * row. That channel shouldn't get blocked with "no project" errors, so when the listing is read
+ * or a subproject is created, a default row is created on the spot (`ensureProjectRow`). Lazy
+ * creation doesn't call Hermes — the board already exists; all we're creating is our own meta row.
  */
 
 import { withChannelAutomationLock } from "./channel-automation-lock";
@@ -41,7 +44,7 @@ import { isTenantSlug, tenantSlugFromName } from "@/lib/tenant-slug";
 export type ProjectRow = typeof channelProjects.$inferSelect;
 export type SubprojectRow = typeof channelSubprojects.$inferSelect;
 
-/** Paperclip 의 projects 와 같은 낱말. `paused` 는 상태가 아니라 pauseReason 이 채워진 in_progress 다. */
+/** Same wording as Paperclip's projects. `paused` isn't a status — it's `in_progress` with `pauseReason` set. */
 export const PROJECT_STATUSES = [
   "backlog",
   "planned",
@@ -51,7 +54,7 @@ export const PROJECT_STATUSES = [
 ] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
-/** 목록에서 기본으로 접히는 상태 — 끝난 일이다. 폴링은 계속한다(§5-3). */
+/** Statuses collapsed by default in the listing — done work. Polling keeps going regardless (§5-3). */
 export const ARCHIVED_STATUSES: ReadonlySet<string> = new Set(["completed", "cancelled"]);
 
 export function isProjectStatus(value: unknown): value is ProjectStatus {
@@ -69,7 +72,7 @@ export class ProjectRegistryError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// 메타 행 — 지연 생성
+// Meta row — lazy creation
 // ---------------------------------------------------------------------------
 
 async function readProjectByBoardLink(boardLinkId: string): Promise<ProjectRow | null> {
@@ -82,10 +85,11 @@ async function readProjectByBoardLink(boardLinkId: string): Promise<ProjectRow |
 }
 
 /**
- * 그 보드의 프로젝트 메타 행. 없으면 기본값으로 만든다.
+ * The project meta row for that board. Creates one with defaults if it doesn't exist.
  *
- * 이관 전 채널을 막지 않기 위한 장치다. 경합으로 둘이 동시에 만들려 하면 `board_link_id` 유니크가
- * 하나를 거절하는데, 그때는 이긴 쪽의 행을 읽어 돌려준다 — 실패로 만들 이유가 없다.
+ * This exists so pre-migration channels aren't blocked. If two calls race to create one, the
+ * `board_link_id` unique constraint rejects one of them — in that case, the winner's row is read
+ * back and returned. There's no reason to turn that into a failure.
  */
 export async function ensureProjectRow(
   board: ChannelBoardRow,
@@ -116,15 +120,15 @@ export async function ensureProjectRow(
 }
 
 // ---------------------------------------------------------------------------
-// 목록
+// Listing
 // ---------------------------------------------------------------------------
 
-/** 화면·덩어리 1 이 받는 한 줄. Hermes 값과 우리 메타를 합친 것이다. */
+/** One row as seen by screen/chunk 1. Merges the Hermes values with our meta. */
 export type ProjectView = {
   id: string;
   boardSlug: string;
   isEventCarrier: boolean;
-  /** Hermes 보드 메타. 보드가 게이트웨이에서 사라졌으면 null 이고 화면이 그것을 말해야 한다. */
+  /** Hermes board meta. `null` if the board has disappeared from the gateway — the screen must say so. */
   name: string | null;
   description: string | null;
   status: string;
@@ -134,7 +138,7 @@ export type ProjectView = {
   icon: string | null;
   pauseReason: string | null;
   originMeetingId: string | null;
-  /** 저장하지 않는다 — Hermes 가 준 값을 그대로 싣는다. */
+  /** Not stored — carried through exactly as Hermes returned it. */
   progress: { total: number; counts: Record<string, number> } | null;
   lastError: string | null;
 };
@@ -169,17 +173,18 @@ function viewOf(
 }
 
 /**
- * 채널의 프로젝트 목록. 연결 행이 정본이고 Hermes 보드 메타를 덧입힌다.
+ * The channel's project listing. The link row is the source of truth, layered with Hermes board meta.
  *
- * 게이트웨이에 없는 보드도 **숨기지 않는다** — 게이트웨이를 갈아 끼우면(결정 D-1) 메타는 남고
- * 카드는 비는데, 그것을 조용히 감추면 사용자는 프로젝트가 사라진 줄 안다. `name: null` 로 싣고
- * 화면이 "이 게이트웨이에 보드가 없다" 고 말하게 한다.
+ * Boards missing from the gateway are **not hidden** — swapping the gateway (decision D-1) leaves
+ * the meta behind but empties the cards, and silently hiding that would make users think the
+ * project disappeared. It's carried with `name: null` so the screen can say "this gateway has no
+ * board for this."
  */
 export async function listChannelProjects(
   channelId: string,
   client: OwnerPluginClient,
 ): Promise<ProjectView[]> {
-  // 읽는 쪽이 고친다 — carrier 가 0개로 떨어진 채널을 여기서 되살린다(§보관의 두 UPDATE 사이).
+  // The reader fixes it up — this revives a channel whose carrier count dropped to 0 (§the gap between archive's two UPDATEs).
   await ensureChannelCarrier(channelId);
   const boards = await listChannelBoards(channelId);
   if (boards.length === 0) return [];
@@ -214,19 +219,20 @@ export async function readProjectBoard(project: ProjectRow): Promise<ChannelBoar
     .from(channelKanbanBoards)
     .where(eq(channelKanbanBoards.id, project.boardLinkId))
     .limit(1);
-  // 연결 행은 cascade 로 메타를 물고 있으므로 메타가 있는데 연결이 없을 수는 없다.
+  // The link row carries meta via cascade, so meta existing without a link should be impossible.
   if (!row) throw new ProjectRegistryError(404, "project_not_found");
   return row;
 }
 
 // ---------------------------------------------------------------------------
-// 생성
+// Creation
 // ---------------------------------------------------------------------------
 
 /**
- * 채널당 보드 상한. 이유는 크론 사건이다 — 플러그인의 `/deskrpg/events` 는 보드마다 크론 tail 을
- * 다시 훑고, 우리는 사건 수신 보드가 아닌 행에서 그 사건을 버린다(§2-3). 보드가 늘수록 그 헛일이
- * 선형으로 는다. 폴링 지연을 재고 조정할 숫자이지 구조적 한계가 아니다.
+ * Board cap per channel. The reason is the cron event: the plugin's `/deskrpg/events` re-scans
+ * the cron tail for every board, and we drop events that arrive on a board that isn't the event
+ * receiver (§2-3). More boards means that wasted work grows linearly. This is a number to tune by
+ * measuring polling delay, not a structural limit.
  */
 export const MAX_BOARDS_PER_CHANNEL = 20;
 
@@ -244,10 +250,11 @@ export type CreateProjectInput = {
 };
 
 /**
- * 프로젝트(= 보드)를 만든다.
+ * Creates a project (= a board).
  *
- * **순서가 규칙이다.** Hermes 에 보드를 만들고, 성공했을 때만 연결 행과 메타 행을 쓴다. 뒤집으면
- * 정본 없는 메타가 남아 목록이 존재하지 않는 프로젝트를 보여 준다.
+ * **Order is the rule.** The board is created in Hermes first, and only on success are the link
+ * row and meta row written. Reversing this order leaves meta with no source of truth, showing a
+ * project in the listing that doesn't exist.
  */
 export async function createChannelProject(
   channelId: string,
@@ -278,7 +285,7 @@ async function createChannelProjectUnlocked(
   if (boards.length >= MAX_BOARDS_PER_CHANNEL)
     throw new ProjectRegistryError(409, "board_limit_reached");
 
-  // 서브프로젝트 슬러그는 **보드를 만들기 전에** 검증한다 — 나중에 걸리면 Hermes 에 빈 보드가 남는다.
+  // Subproject slugs are validated **before the board is created** — catching it later leaves an empty board behind in Hermes.
   const subprojects = (input.subprojects ?? []).map((sub) => resolveSubprojectSlug(sub));
   assertUniqueSlugs(subprojects.map((s) => s.tenantSlug));
 
@@ -286,8 +293,8 @@ async function createChannelProjectUnlocked(
   const ensured = await ensureChannelBoard(channelId, undefined, slug);
   if (!ensured.ok) throw new ProjectRegistryError(503, ensured.code, ensured.reason);
 
-  // 보드 이름은 Hermes 가 정본이다. `createBoard` 는 같은 slug 면 이름을 덮어쓰지 않으므로
-  // 새로 만든 보드에 사용자가 고른 이름을 붙이려면 PATCH 를 한 번 더 부른다.
+  // Hermes is the source of truth for the board name. `createBoard` doesn't overwrite the name
+  // for an existing slug, so giving a newly created board the user's chosen name needs one more PATCH.
   const patched = await client.kanban.updateBoard(slug, {
     name,
     ...(input.description === undefined ? {} : { description: input.description }),
@@ -325,7 +332,7 @@ async function createChannelProjectUnlocked(
 }
 
 // ---------------------------------------------------------------------------
-// 수정·보관
+// Update / archive
 // ---------------------------------------------------------------------------
 
 export type UpdateProjectInput = {
@@ -344,7 +351,7 @@ export async function updateChannelProject(
 ): Promise<ProjectView> {
   const result = await withChannelAutomationLock(args[0], async () => {
     await recoverEventCarrierHandoff(args[0]);
-    // 잠금을 기다리는 사이 바인딩이 바뀌었을 수 있다. 요청 전에 만든 클라이언트를 재사용하지 않는다.
+    // The binding may have changed while waiting for the lock. Don't reuse a client created before the request.
     const resolved = await resolveChannelBoard(args[0]);
     if (!resolved.ok) throw new EventCarrierError(409, resolved.code);
     if (!resolved.pluginGate.ok) throw new EventCarrierError(428, resolved.pluginGate.code);
@@ -366,7 +373,7 @@ async function updateChannelProjectUnlocked(
   if (input.status !== undefined && !isProjectStatus(input.status))
     throw new ProjectRegistryError(400, "invalid_project_status");
 
-  // 이름·설명은 Hermes 정본이라 우리 표에 쓰지 않고 그쪽으로 넘긴다.
+  // Name/description are Hermes' source of truth, so they aren't written to our table — they're passed through to Hermes instead.
   let meta: BoardMeta | undefined;
   if (input.name !== undefined || input.description !== undefined) {
     const name = input.name?.trim();
@@ -406,7 +413,7 @@ async function updateChannelProjectUnlocked(
   return viewOf(board, updated, meta);
 }
 
-/** 보관 시 보드별 k/d는 유지하고 기존 수신 위치 c/a만 플러그인이 인계한다. */
+/** On archive, keep the per-board k/d and have the plugin hand off only the existing receiver position c/a. */
 export async function archiveChannelProject(
   ...args: Parameters<typeof archiveChannelProjectUnlocked>
 ) {
@@ -461,7 +468,7 @@ async function archiveChannelProjectUnlocked(
 }
 
 // ---------------------------------------------------------------------------
-// 서브프로젝트
+// Subprojects
 // ---------------------------------------------------------------------------
 
 function resolveSubprojectSlug(input: { tenantSlug?: string; name: string; description?: string }) {
@@ -469,7 +476,7 @@ function resolveSubprojectSlug(input: { tenantSlug?: string; name: string; descr
   if (!name || name.length > 120) throw new ProjectRegistryError(400, "invalid_subproject_name");
   const slug = input.tenantSlug?.trim() ? input.tenantSlug.trim() : tenantSlugFromName(name);
   if (!slug) {
-    // 이름에 글자·숫자가 하나도 없었다. 형식 위반과 갈라야 화면이 정확히 안내한다.
+    // The name had no letters or digits at all. Kept distinct from a format violation so the screen can guide the user precisely.
     throw new ProjectRegistryError(400, "tenant_slug_underivable");
   }
   if (!isTenantSlug(slug)) throw new ProjectRegistryError(400, "invalid_tenant_slug");
@@ -502,22 +509,22 @@ async function insertSubproject(
       .returning();
     return row;
   } catch {
-    // `(project_id, tenant_slug)` 유니크. 같은 슬러그를 두 번 등록하려 한 것이다.
+    // The `(project_id, tenant_slug)` unique constraint fired — the same slug was registered twice.
     throw new ProjectRegistryError(409, "subproject_exists");
   }
 }
 
 export type SubprojectView = SubprojectRow & {
-  /** 이 슬러그를 쓰는 카드가 보드에 실제로 있는가. 메타만 있고 카드가 없을 수 있다. */
+  /** Whether a card using this slug actually exists on the board. Meta can exist with no card. */
   observed: boolean;
 };
 
 /**
- * 서브프로젝트 목록. 등록된 메타와 **보드에서 관측된 테넌트**를 왼쪽 조인한다.
+ * The subproject listing. Left-joins registered meta with **tenants observed on the board**.
  *
- * DeskRPG 밖(Hermes CLI·다른 도구)에서 만든 카드가 모르는 `tenant` 값을 들고 올 수 있다.
- * 그런 값을 조용히 숨기면 사용자는 카드가 어디로 갔는지 알 수 없다 — 슬러그를 이름 삼아
- * `registered: false` 로 싣는다.
+ * A card created outside DeskRPG (Hermes CLI, another tool) can carry a `tenant` value we don't
+ * know about. Silently hiding such a value would leave the user unable to tell where the card
+ * went — it's carried with the slug as its name and `registered: false`.
  */
 export async function listSubprojects(
   project: ProjectRow,
@@ -564,7 +571,7 @@ export type UpdateSubprojectInput = {
   pauseReason?: string | null;
 };
 
-/** 슬러그는 받지 않는다 — Hermes 카드가 그 문자열을 들고 있어서 바꾸면 카드가 고아가 된다. */
+/** The slug isn't accepted here — Hermes cards carry that string, and changing it would orphan them. */
 export async function updateSubproject(
   projectId: string,
   subprojectId: string,
@@ -604,7 +611,7 @@ export async function updateSubproject(
   return updated;
 }
 
-/** 채널의 NPC 인지 확인한다 — 리드 직원은 그 채널에 출근한 NPC 만 될 수 있다. */
+/** Confirms this is an NPC of the channel — only an NPC clocked into that channel can be a lead. */
 export async function assertChannelNpc(channelId: string, npcId: string | null | undefined) {
   if (!npcId) return;
   const [row] = await db

@@ -31,8 +31,9 @@ const isCount = (v: unknown): v is number => typeof v === "number" && Number.isF
 const isTag = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
 
 /**
- * GitHub 의 Star 수와 최신 릴리스 태그를 캐시해 둔다. 인증 없는 GitHub API 는 IP 당 시간 60회라
- * 설치마다 이 값을 매번 묻지 않도록 성공은 6시간, 실패는 10분 동안 재사용한다.
+ * Caches GitHub's star count and latest release tag. The unauthenticated GitHub API is
+ * limited to 60 requests per hour per IP, so successes are reused for 6 hours and
+ * failures for 10 minutes, instead of asking every installation to hit it every time.
  */
 export function createAppMetaCache({
   fetchJson = githubFetchJson,

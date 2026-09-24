@@ -16,17 +16,19 @@ async function loadSeatingMap(channelId: string): Promise<SeatingMap | null> {
   return channel ? seatingMapFor(channel) : null;
 }
 
-/** 출근부가 좌석 번호를 붙일 때 쓴다. 맵을 읽을 수 없으면 null. */
+/** Used by the roster to attach seat numbers. Null if the map can't be read. */
 export async function channelSeats(channelId: string): Promise<DeskSeat[] | null> {
   return (await loadSeatingMap(channelId))?.seats ?? null;
 }
 
 /**
- * 출근했는데 자리가 없는 직원을 전부 배치한다 — 빈 데스크 좌석 먼저, 만석이면 서는 칸.
+ * Places every employee who's clocked in but has no seat — empty desk seats first, standing
+ * spots once those are full.
  *
- * 시스템 배정 경로다. 사용자의 자리 변경은 `PATCH /api/npcs/[id]` 하나뿐이지만, 고용은
- * 채널 소유자의 요청 없이도 일어나므로(공유 게이트웨이에 프로필 추가) 여기서 직접 쓴다.
- * 어떤 실패도 고용을 깨뜨리지 않는다 — `failed` 로 세고 끝낸다.
+ * This is the system-assignment path. The user's only way to change seats is
+ * `PATCH /api/npcs/[id]`, but hiring can also happen with no request from the channel owner
+ * (adding a profile to a shared gateway), so this writes directly. No failure here ever
+ * breaks the hiring itself — it's just counted as `failed` and left at that.
  */
 export async function placeUnplacedNpcs(channelId: string): Promise<PlacementResult> {
   let result: PlacementResult;
@@ -58,10 +60,12 @@ async function countActiveUnplaced(channelId: string): Promise<number> {
 }
 
 /**
- * 대표석에 앉아 있는 직원을 자리 없음으로 되돌린다 — 곧바로 아래 배치가 빈 좌석에 앉힌다.
+ * Reverts an employee sitting in the CEO seat back to unplaced — the placement step right
+ * below then seats them in an empty seat.
  *
- * 대표석이 1번 자리이던 시절(2026.920.7 이전)에 배치된 직원이 대표 의자에 앉아 있다.
- * 대표석은 이제 좌석 목록에 없어 사용자가 "자리 변경" 으로 옮길 수도 없으므로 시스템이 옮긴다.
+ * An employee placed back when the CEO seat was seat #1 (before 2026.920.7) is still sitting
+ * in the CEO chair. The CEO seat is no longer in the seat list, so the user can't move them
+ * out of it via "change seat" either, so the system moves them instead.
  */
 async function vacateReservedSeats(channelId: string, map: SeatingMap): Promise<void> {
   for (const tile of map.reserved) {
@@ -113,7 +117,8 @@ async function placeUnplacedNpcsInternal(channelId: string): Promise<PlacementRe
         if (step.seated) result.seated += 1;
         else result.standing += 1;
       } catch (err) {
-        // 다른 요청이 같은 칸을 먼저 잡았다(npcs_channel_position_unique) — 다시 읽고 재계획.
+        // Another request claimed the same slot first (npcs_channel_position_unique) — re-read
+        // and replan.
         if (!isUniqueViolation(err)) throw err;
         conflict = true;
         break;
@@ -127,10 +132,12 @@ async function placeUnplacedNpcsInternal(channelId: string): Promise<PlacementRe
 }
 
 /**
- * 서버 부팅 때 1회 — 자리 없이 만들어진 직원과 대표석에 앉은 직원을 이행한다. 멱등.
+ * Runs once at server boot — moves employees created with no seat and employees sitting in
+ * the CEO seat. Idempotent.
  *
- * 출근한 직원이 있는 채널을 모두 돈다. 대표석에 앉은 직원은 좌표가 있어 "미배치" 로는
- * 걸러지지 않고, 어느 칸이 대표석인지는 채널 맵을 읽어야 알기 때문이다.
+ * Iterates every channel with a clocked-in employee. An employee in the CEO seat has
+ * coordinates, so they're not filtered out as "unplaced", and knowing which tile is the CEO
+ * seat requires reading the channel map.
  */
 export async function placeAllUnplacedNpcs(): Promise<PlacementResult & { channels: number }> {
   const rows = await db

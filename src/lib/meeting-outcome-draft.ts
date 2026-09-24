@@ -1,14 +1,16 @@
 /**
- * 회의 결과를 등록하기 전에 사람이 손보는 초안.
+ * A draft a human touches up before registering a meeting outcome.
  *
- * 1차 편집 범위는 선택·제목·담당뿐이다. 본문과 순서는 등록한 뒤 칸반에서 고친다 —
- * 종료 화면이 편집기가 되지 않게 하기 위해서다.
+ * The first-pass editing scope is only selection, title, and assignee. The body and order
+ * are fixed afterward in Kanban, once registered — this keeps the end-of-meeting screen
+ * from turning into an editor.
  */
 import type { MeetingOutcome } from "./meeting-outcome";
 import { tenantSlugFromName } from "./tenant-slug";
 
 export type OutcomeDraftItem = {
-  /** `outcome.followUps` 안의 원래 번호. 등록 멱등 키(`meeting:{id}:{index}`)가 이 값을 쓴다. */
+  /** The original index within `outcome.followUps`. The registration idempotency key
+   * (`meeting:{id}:{index}`) uses this value. */
   index: number;
   selected: boolean;
   title: string;
@@ -18,7 +20,7 @@ export type OutcomeDraftItem = {
 
 export type OutcomeDraft = {
   items: OutcomeDraftItem[];
-  /** 비우면 서브프로젝트(테넌트) 없이 등록한다. */
+  /** If left empty, registers with no subproject (tenant). */
   subprojectName: string;
 };
 
@@ -62,7 +64,7 @@ export function draftToRegistration(draft: OutcomeDraft): OutcomeRegistration {
       index: item.index,
       title: item.title.trim(),
       npcId: item.npcId,
-      // 선택에서 빠진 항목을 기다리면 그 카드는 영영 시작하지 못한다.
+      // Waiting on an item excluded from selection would leave that card unable to ever start.
       after: item.after.filter((target) => keptIndexes.has(target)),
     })),
   };

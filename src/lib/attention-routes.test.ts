@@ -1,4 +1,4 @@
-// 판단 모음 REST 의 몸통. 가짜 플러그인 서버 + 일회용 SQLite.
+// The body of the attention-inbox REST endpoint. A fake plugin server + a throwaway SQLite.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
@@ -50,7 +50,7 @@ const get = (userId: string, channelId: string) =>
     headers: authHeaders(userId),
   });
 
-test("아무것도 없으면 빈 목록이고 수는 0 이다", async () => {
+test("with nothing there, the list is empty and the count is 0", async () => {
   const { ownerId, channelId } = await seedCtx();
   const { getAttentionInbox } = await import("@/lib/attention-routes");
   const res = await getAttentionInbox(get(ownerId, channelId), channelId);
@@ -60,7 +60,7 @@ test("아무것도 없으면 빈 목록이고 수는 0 이다", async () => {
   assert.equal(body.counts.total, 0);
 });
 
-test("승인 대기가 한 줄로 모이고 수에도 잡힌다", async () => {
+test("items awaiting approval collect into one row and are also counted", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const batch = await createApprovalBatch(ctx, {
@@ -81,7 +81,7 @@ test("승인 대기가 한 줄로 모이고 수에도 잡힌다", async () => {
   assert.equal(body.counts.blocked, 0, "승인 대기가 '막힘' 으로 이중 계상되면 안 된다");
 });
 
-test("결정된 승인은 목록에서 빠진다", async () => {
+test("a decided approval drops out of the list", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const batch = await createApprovalBatch(ctx, {
@@ -110,7 +110,7 @@ test("결정된 승인은 목록에서 빠진다", async () => {
   assert.deepEqual(body.rows, [], "결정했으면 더 이상 사람이 할 일이 아니다");
 });
 
-test("비멤버는 목록을 볼 수 없다", async () => {
+test("a non-member can't see the list", async () => {
   const { channelId } = await seedCtx();
   const stranger = await seedUser(`out-${Math.random().toString(36).slice(2, 8)}`);
   const { getAttentionInbox } = await import("@/lib/attention-routes");
@@ -118,7 +118,7 @@ test("비멤버는 목록을 볼 수 없다", async () => {
   assert.ok(res.status === 403 || res.status === 404, `got ${res.status}`);
 });
 
-test("로그인하지 않으면 401", async () => {
+test("401 when not logged in", async () => {
   const { channelId } = await seedCtx();
   const { getAttentionInbox } = await import("@/lib/attention-routes");
   const res = await getAttentionInbox(new NextRequest(`http://localhost/x`), channelId);

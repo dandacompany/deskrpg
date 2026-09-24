@@ -1,8 +1,9 @@
-// 실행 전 승인 관문의 진입점. 가짜 플러그인 서버 + 일회용 SQLite 로 끝까지 돈다.
+// The entry point for the pre-execution approval gate. Runs end to end with a fake plugin
+// server + a throwaway SQLite.
 //
-// 여기서 고정하는 것: 카드가 `blocked` 로 서는 것, 묶음 안 선행이 id 로 이어지는 것,
-// 일부 실패가 나머지를 막지 않는 것, 선행이 실패하면 그 자식은 **만들지 않는** 것,
-// 한 장도 못 만들면 승인을 만들지 않는 것.
+// What's pinned down here: cards land in `blocked`, an in-batch precedent gets wired up by
+// id, a partial failure doesn't block the rest, a failed precedent means its child is **not
+// created**, and if not a single card can be created, no approval is created either.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 
@@ -64,7 +65,7 @@ async function seedCtx() {
 
 const source = { kind: "meeting" as const, id: "m1" };
 
-test("카드는 blocked 로 서고 승인 1건에 전부 묶인다", async () => {
+test("cards land in blocked and are all bundled into one approval", async () => {
   const { ctx, npcId, channelId } = await seedCtx();
   const { createApprovalBatch, pendingApprovalTaskIds } = await import("@/lib/approvals");
   const result = await createApprovalBatch(ctx, {
@@ -98,10 +99,10 @@ test("카드는 blocked 로 서고 승인 1건에 전부 묶인다", async () =>
   assert.equal(pending.size, 3);
 });
 
-test("묶음 안 선행은 인덱스로 받아 id 로 이어진다", async () => {
+test("an in-batch precedent given by index gets wired up by id", async () => {
   const { ctx } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
-  // 0 이 1 을 선행으로 갖는다 — 1 이 먼저 만들어져야 한다.
+  // 0 has 1 as its precedent — 1 must be created first.
   const result = await createApprovalBatch(ctx, {
     type: "task_execution",
     title: "선행 있는 묶음",
@@ -120,7 +121,7 @@ test("묶음 안 선행은 인덱스로 받아 id 로 이어진다", async () =>
   );
 });
 
-test("순환하는 선행은 카드를 한 장도 만들지 않는다", async () => {
+test("a cyclic precedent creates not a single card", async () => {
   const { ctx } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const result = await createApprovalBatch(ctx, {
@@ -137,7 +138,7 @@ test("순환하는 선행은 카드를 한 장도 만들지 않는다", async ()
   assert.equal(result.ok === false && result.errorCode, "parent_cycle");
 });
 
-test("담당이 이 채널 NPC 가 아니면 그 줄만 실패하고 나머지는 만들어진다", async () => {
+test("if the assignee isn't an NPC in this channel, only that line fails and the rest are created", async () => {
   const { ctx } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const result = await createApprovalBatch(ctx, {
@@ -154,7 +155,7 @@ test("담당이 이 채널 NPC 가 아니면 그 줄만 실패하고 나머지�
   assert.deepEqual(result.failed, [{ index: 0, errorCode: "assignee_not_in_channel" }]);
 });
 
-test("선행이 실패하면 그 자식은 만들지 않는다 — 영영 안 풀리는 부모를 기다리게 두지 않는다", async () => {
+test("if a precedent fails, its child is not created — never leave a card waiting on a parent that will never unblock", async () => {
   const { ctx } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const result = await createApprovalBatch(ctx, {
@@ -179,7 +180,7 @@ test("선행이 실패하면 그 자식은 만들지 않는다 — 영영 안 �
   ]);
 });
 
-test("한 장도 못 만들면 승인을 만들지 않는다 — 누를 것이 없는 승인은 소음이다", async () => {
+test("if not a single card can be created, no approval is created either — an approval with nothing to click is noise", async () => {
   const { ctx, channelId } = await seedCtx();
   const { createApprovalBatch, pendingApprovalTaskIds } = await import("@/lib/approvals");
   const result = await createApprovalBatch(ctx, {
@@ -194,7 +195,7 @@ test("한 장도 못 만들면 승인을 만들지 않는다 — 누를 것이 �
   assert.equal((await pendingApprovalTaskIds(channelId)).size, 0);
 });
 
-test("멱등 키가 같으면 재시도해도 카드가 늘지 않는다", async () => {
+test("same idempotency key means a retry doesn't add more cards", async () => {
   const { ctx } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const input = {
@@ -211,8 +212,8 @@ test("멱등 키가 같으면 재시도해도 카드가 늘지 않는다", async
   assert.equal(first.taskIds[0], second.taskIds[0], "같은 카드를 돌려줘야 한다");
 });
 
-test("재시도해도 승인 레코드가 늘지 않는다 — 같은 출처의 pending 을 재사용한다", async () => {
-  // 카드 id 만 같은지 보면 이 결함이 보이지 않는다. 승인 수를 세야 한다.
+test("a retry doesn't add more approval records — pending from the same source is reused", async () => {
+  // Only checking whether the card ids match would hide this defect. The approval count must be checked too.
   const { ctx, channelId } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const { db, approvals, approvalTargets } = await import("@/db");
@@ -239,7 +240,7 @@ test("재시도해도 승인 레코드가 늘지 않는다 — 같은 출처의 
   assert.equal(targets.length, 1);
 });
 
-test("첫 호출에서 일부만 성공하면, 재시도가 같은 승인에 나머지를 더한다", async () => {
+test("if only some succeed on the first call, a retry adds the rest to the same approval", async () => {
   const { ctx, channelId } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const { db, approvals, approvalTargets } = await import("@/db");
@@ -261,7 +262,7 @@ test("첫 호출에서 일부만 성공하면, 재시도가 같은 승인에 나
   if (!first.ok) return;
   assert.equal(first.failed?.length, 1);
 
-  // 사용자가 버튼을 다시 누른다 — 이번에는 담당을 빼고.
+  // The user clicks the button again — this time without the assignee.
   const second = await createApprovalBatch(ctx, {
     type: "task_execution",
     title: "부분 성공",
@@ -286,7 +287,7 @@ test("첫 호출에서 일부만 성공하면, 재시도가 같은 승인에 나
   assert.equal(targets.length, 2, "재시도로 붙은 카드가 같은 승인의 대상이 된다");
 });
 
-test("다른 출처의 승인은 재사용하지 않는다", async () => {
+test("an approval from a different source is not reused", async () => {
   const { ctx, channelId } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const { db, approvals } = await import("@/db");
@@ -311,14 +312,14 @@ test("다른 출처의 승인은 재사용하지 않는다", async () => {
   );
 });
 
-test("출처의 키 순서가 달라도 같은 승인으로 본다", () => {
-  // `sourceJson` 이 문자열 일치라, 직렬화를 필드 명시로 고정하지 않으면 여기서 갈린다.
+test("even if the source's key order differs, it's treated as the same approval", () => {
+  // `sourceJson` is a plain string match, so unless serialization is pinned to an explicit field order, this diverges.
   const a = JSON.stringify({ kind: "meeting", id: "m1" });
   const b = JSON.stringify({ kind: "meeting", id: "m1" } as const);
   assert.equal(a, b);
 });
 
-test("호출자가 키 순서를 바꿔 줘도 승인이 하나다", async () => {
+test("even if the caller changes the key order, there's still only one approval", async () => {
   const { ctx, channelId } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const { db, approvals } = await import("@/db");
@@ -331,7 +332,7 @@ test("호출자가 키 순서를 바꿔 줘도 승인이 하나다", async () =>
   });
   await createApprovalBatch(ctx, {
     ...base,
-    // 같은 출처를 키 순서만 바꿔 넘긴다.
+    // Passes the same source with only its key order changed.
     source: JSON.parse('{"id":"m-order","kind":"meeting"}'),
     items: [{ title: "가", idempotencyKey: "meeting:m-order:0" }],
   });
@@ -341,7 +342,7 @@ test("호출자가 키 순서를 바꿔 줘도 승인이 하나다", async () =>
   );
 });
 
-test("승인을 만들면 사무실 방에 시스템 알림이 남는다", async () => {
+test("creating an approval leaves a system notice in the office room", async () => {
   const { ctx, channelId } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const result = await createApprovalBatch(ctx, {
@@ -373,7 +374,7 @@ test("승인을 만들면 사무실 방에 시스템 알림이 남는다", async
   assert.equal(row?.senderKind, "system", "사람이 시작한 묶음도 있으므로 직원 발화로 두지 않는다");
 });
 
-test("사람이 요청한 묶음은 알림에 직원 이름을 싣지 않는다", async () => {
+test("a batch requested by a person doesn't carry an employee name in the notice", async () => {
   const { ctx, channelId } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const { formatRequester } = await import("@/lib/approval-requester");
@@ -397,7 +398,7 @@ test("사람이 요청한 묶음은 알림에 직원 이름을 싣지 않는다"
   assert.equal(notice.npcName, "", "user:<id> 를 직원 이름 자리에 넣으면 안 된다");
 });
 
-test("승인 정책 미지원이면 묶음의 카드와 승인 레코드를 쓰지 않는다", async () => {
+test("if the approval policy isn't supported, neither the batch's cards nor the approval record are written", async () => {
   const { ctx } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   ctx.info = { ...ctx.info!, capabilities: ["kanban", "cron", "events"] };

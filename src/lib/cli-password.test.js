@@ -19,33 +19,34 @@ function deps(overrides) {
   );
 }
 
-test("--password 를 주면 그대로 쓴다 — 기존 호출을 깨지 않는다", async () => {
+test("using --password as given doesn't break existing calls", async () => {
   const got = await resolvePassword(deps({ passwordArg: "hunter2", isTty: true }));
   assert.equal(got, "hunter2");
 });
 
-test("--password-stdin 은 인자보다 우선한다", async () => {
-  // 둘 다 준 것은 호출자의 실수지만, 더 안전한 쪽을 고르는 편이 낫다.
+test("--password-stdin takes priority over the argument", async () => {
+  // Giving both is a caller mistake, but it's better to pick the safer one.
   const got = await resolvePassword(
     deps({ passwordArg: "from-arg", fromStdin: true, readStdin: async () => "from-pipe\n" }),
   );
   assert.equal(got, "from-pipe");
 });
 
-test("파이프의 마지막 개행만 뗀다", async () => {
-  // `echo pw | …` 는 개행을 붙인다. 그러나 비밀번호 안의 공백은 비밀번호의 일부다.
+test("only strips the trailing newline from the pipe", async () => {
+  // `echo pw | …` appends a newline. But whitespace inside the password is part of the
+  // password.
   const got = await resolvePassword(
     deps({ fromStdin: true, readStdin: async () => "  spaced pw  \n" }),
   );
   assert.equal(got, "  spaced pw  ");
 });
 
-test("CRLF 로 끝나도 개행만 뗀다", async () => {
+test("strips only the newline even when it ends in CRLF", async () => {
   const got = await resolvePassword(deps({ fromStdin: true, readStdin: async () => "pw\r\n" }));
   assert.equal(got, "pw");
 });
 
-test("아무것도 없고 TTY 면 물어본다", async () => {
+test("prompts when there's nothing and it's a TTY", async () => {
   let asked = 0;
   const got = await resolvePassword(
     deps({
@@ -60,15 +61,15 @@ test("아무것도 없고 TTY 면 물어본다", async () => {
   assert.equal(asked, 1);
 });
 
-test("아무것도 없고 TTY 가 아니면 멈추지 않고 에러를 낸다", async () => {
-  // 여기서 프롬프트를 띄우면 스크립트가 입력을 기다리며 조용히 멈춘다 — CI 에서
-  // 타임아웃까지 매달리는 최악의 실패 형태다.
+test("errors out instead of hanging when there's nothing and it's not a TTY", async () => {
+  // Showing a prompt here would leave the script silently waiting for input — the worst
+  // kind of failure in CI, hanging until it times out.
   await assert.rejects(() => resolvePassword(deps({ isTty: false })), /password required/);
 });
 
-test("빈 문자열 인자도 인자로 친다 — 프롬프트로 새지 않는다", async () => {
-  // `--password ""` 는 잘못된 입력이지만, 그 판정은 길이 검사가 할 일이다.
-  // 여기서 프롬프트로 흘려보내면 비대화형 스크립트가 멈춘다.
+test("an empty string argument still counts as an argument — doesn't fall through to the prompt", async () => {
+  // `--password ""` is invalid input, but deciding that is a job for length validation.
+  // Letting it fall through to the prompt here would hang a non-interactive script.
   const got = await resolvePassword(deps({ passwordArg: "", isTty: true }));
   assert.equal(got, "");
 });

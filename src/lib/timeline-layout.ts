@@ -1,31 +1,33 @@
 /**
- * 실적 타임라인의 배치 계산 — SVG·React·DOM 을 모른다.
+ * Layout math for the performance timeline — knows nothing about SVG, React, or the DOM.
  *
- * "누가 언제 **실제로** 일했는가" 를 그린다. 계획이 아니라 실적이다. 행은 카드가 아니라
- * 작업자이고, 막대 하나가 실행 기록 한 건이다.
+ * It draws "who **actually** worked when." It's actuals, not plans. Rows are actors, not
+ * cards, and each bar is one run record.
  *
- * 배치를 순수 함수로 빼 두면 SVG 없이 테스트할 수 있다 — 겹침·레인·창 경계 같은 것은
- * 그림을 보지 않고도 틀렸는지 알 수 있어야 한다.
+ * Keeping the layout as pure functions lets it be tested without SVG — overlap, lanes, and
+ * window boundaries should be verifiable to be correct without looking at a picture.
  */
 
 import type { KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
 import { taskTimeMs } from "@/lib/plugin-time";
 
 /**
- * 막대 색을 고르는 결과 종류.
+ * The kind of outcome used to pick a bar's color.
  *
- * `outcome` 은 **Hermes 코어가 소유한 열린 어휘**다. 닫힌 목록으로 믿으면 코어가 값을 하나
- * 늘릴 때마다 조용히 회색으로 빠진다 — 실제로 그렇게 됐다(스테이징 실측: 실행 178건 중
- * 177건이 `rate_limited` 였고 색 매핑에 없어 "기타" 로 그려졌다). 그래서 여기서 하는 일은
- * "아는 값을 나열" 이 아니라 **뜻으로 묶기**이고, 모르는 값은 `unknown` 으로 두되 화면이
- * 그 문자열을 그대로 보여 준다(`outcomeLegend`).
+ * `outcome` is an **open vocabulary owned by the Hermes core**. Treating it as a closed list
+ * silently drops new values into gray every time the core adds one — that's actually happened
+ * (measured on staging: 177 of 178 runs were `rate_limited`, which wasn't in the color map
+ * and rendered as "other"). So the job here isn't "enumerate known values" but **group by
+ * meaning**, and unknown values are left as `unknown` while the screen still shows the raw
+ * string (`outcomeLegend`).
  *
- * `actionable` 은 실패와 다르다 — 한도·차단·변경요청은 **사용자가 할 일이 있는** 상태다.
- * 실패색으로 칠하면 "고장" 으로 읽혀 할 일을 놓친다.
+ * `actionable` is different from failure — rate limits, blocks, and change requests are states
+ * where **the user has something to do**. Coloring them as failures reads as "broken" and the
+ * to-do gets missed.
  */
 export type RunTone = "running" | "done" | "failed" | "actionable" | "neutral" | "unknown";
 
-/** 뜻이 같은 결과끼리. 값은 `~/.hermes` 코어의 `kanban_db.py` 에서 확인한 것이다. */
+/** Groups outcomes that mean the same thing. Values confirmed against `kanban_db.py` in the `~/.hermes` core. */
 const TONE_BY_OUTCOME: Readonly<Record<string, RunTone>> = {
   completed: "done",
   crashed: "failed",
@@ -51,22 +53,22 @@ export type TimelineWindow = { fromMs: number; toMs: number };
 export type PositionedBar = {
   run: KanbanTimelineRun;
   tone: RunTone;
-  /** 창 안으로 자른 시작·끝(ms). 창 밖으로 뻗은 쪽은 창 경계에 붙는다. */
+  /** Start/end clipped to the window (ms). The side that extends past the window sticks to the window edge. */
   startMs: number;
   endMs: number;
-  /** 아직 끝나지 않았는가. 화면은 이쪽 끝을 흐리게 그려 "여기까지 확실하다" 를 말한다. */
+  /** Not yet finished? The screen fades this end to say "certain up to here." */
   open: boolean;
-  /** 창 기준 0~1 비율. 픽셀 환산은 화면이 한다 — 여기서 폭을 모른다. */
+  /** 0~1 ratio relative to the window. Pixel conversion is the screen's job — width isn't known here. */
   x: number;
   width: number;
-  /** 같은 작업자 안에서 동시에 돈 실행을 쌓는 줄 번호(0부터). */
+  /** Lane number (0-based) stacking runs that overlap in time for the same actor. */
   lane: number;
 };
 
 export type ActorRow = {
-  /** 작업자 이름(`runs[].profile`). 없으면 `null` — 누가 했는지 모르는 실행도 버리지 않는다. */
+  /** Actor name (`runs[].profile`). `null` if absent — runs with an unknown actor aren't dropped. */
   profile: string | null;
-  /** 이 행이 몇 줄을 차지하는가(동시 실행 수). 최소 1. */
+  /** How many lanes this row occupies (concurrent run count). Minimum 1. */
   lanes: number;
   bars: PositionedBar[];
 };
@@ -74,11 +76,11 @@ export type ActorRow = {
 export type TimelineLayout = {
   window: TimelineWindow;
   rows: ActorRow[];
-  /** 창에 겹치지 않아 그려지지 않은 실행 수. 0이 아니면 화면이 밝혀야 한다. */
+  /** Count of runs not drawn because they don't overlap the window. If nonzero, the screen should surface it. */
   omitted: number;
 };
 
-/** 창에 겹치는가. 시작만 보고 자르면 긴 작업이 타임라인에서 사라진다. */
+/** Does it overlap the window? Clipping by start time alone would make long-running tasks vanish from the timeline. */
 function overlaps(startMs: number, endMs: number | null, win: TimelineWindow): boolean {
   if (startMs > win.toMs) return false;
   if (endMs !== null && endMs < win.fromMs) return false;
@@ -86,12 +88,13 @@ function overlaps(startMs: number, endMs: number | null, win: TimelineWindow): b
 }
 
 /**
- * 실행 기록을 작업자 행으로 배치한다.
+ * Lays out run records into actor rows.
  *
- * - 행 순서는 **가장 최근에 일한 작업자가 위**다. 이름순으로 두면 방금 일어난 일을 찾으려고
- *   눈이 훑어야 한다.
- * - 같은 작업자가 동시에 여러 실행을 돌렸으면 아래 줄로 쌓는다(겹쳐 그리면 하나만 보인다).
- * - 시각을 못 읽는 실행은 버린다. 다만 몇 건을 버렸는지 `omitted` 로 말한다.
+ * - Row order is **most recently active actor on top**. Sorting by name would make you scan
+ *   the whole list to find what just happened.
+ * - If the same actor ran multiple runs concurrently, they stack into lower lanes (drawing them
+ *   overlapped would hide all but one).
+ * - Runs whose time can't be read are dropped, but `omitted` reports how many were dropped.
  */
 export function layoutTimeline(
   runs: readonly KanbanTimelineRun[],
@@ -110,7 +113,7 @@ export function layoutTimeline(
     }
     const endedMs = taskTimeMs(run.ended_at);
     const open = endedMs === null;
-    // 끝나지 않은 실행은 "지금까지" 로 본다. 창 끝을 넘지는 않는다.
+    // An unfinished run is treated as running "up to now." It never extends past the window end.
     const effectiveEnd = open ? Math.min(nowMs, win.toMs) : endedMs;
     if (!overlaps(startedMs, open ? null : endedMs, win)) {
       omitted += 1;
@@ -139,7 +142,7 @@ export function layoutTimeline(
     const lanes = assignLanes(row.bars);
     rows.push({ profile: row.profile, lanes, bars: row.bars });
   }
-  // 최근에 일한 작업자가 위. 이름 없는 행은 마지막.
+  // Most recently active actor on top. Rows with no name go last.
   rows.sort((a, b) => {
     if ((a.profile === null) !== (b.profile === null)) return a.profile === null ? 1 : -1;
     return lastEnd(b) - lastEnd(a);
@@ -152,8 +155,9 @@ function lastEnd(row: ActorRow): number {
 }
 
 /**
- * 겹치는 막대를 아래 줄로 내린다. 각 줄이 비는 가장 이른 줄에 넣는 탐욕 배치다 —
- * 최소 줄 수를 보장하고(구간 그래프의 색칠 수는 최대 동시 수와 같다) 순서가 안정적이다.
+ * Pushes overlapping bars down into lower lanes. A greedy placement that puts each bar into the
+ * earliest free lane — this guarantees the minimum lane count (the coloring of an interval graph
+ * equals the max concurrency) and keeps the order stable.
  */
 function assignLanes(bars: PositionedBar[]): number {
   const laneEnds: number[] = [];
@@ -170,31 +174,34 @@ function assignLanes(bars: PositionedBar[]): number {
   return Math.max(1, laneEnds.length);
 }
 
-/** 창의 기본 범위 — "오늘" 과 "이번 주". 줌은 없다(요구가 생기면 그때 붙인다). */
+/** Default window ranges — "today" and "this week." No zoom (added later if there's demand). */
 export type WindowPreset = "today" | "week";
 
 /**
- * 창은 **오늘 끝까지**다. `now` 에서 끊지 않는다.
+ * The window runs **through the end of today**. It doesn't cut off at `now`.
  *
- * 처음에는 `now` 에서 끊었는데, 그러면 목표일 세로선이 사실상 절대 그려지지 않는다 — 목표일은
- * 그날 끝(23:59)이라 언제나 `now` 보다 뒤이기 때문이다. 오늘 마감인 일을 보려고 여는 화면에서
- * 그 선이 없으면 기능이 없는 것과 같다(모달 배선 테스트가 이걸 잡았다).
+ * It originally cut off at `now`, but then the target-date vertical line would almost never be
+ * drawn — a target date is the **end of that day** (23:59), which is always after `now`. On a
+ * screen opened to check what's due today, missing that line is as good as not having the
+ * feature (a modal wiring test caught this).
  *
- * 남은 오늘은 막대 없는 빈 구간으로 남는데, 그것이 곧 "얼마 남았나" 를 보여 준다. 진행 중인
- * 막대는 `now` 까지만 그려지므로(`layoutTimeline`) 없는 일을 그리지도 않는다.
+ * The rest of today is left as an empty stretch with no bar, and that emptiness is exactly what
+ * shows "how much time is left." In-progress bars are only drawn up to `now` (`layoutTimeline`),
+ * so nothing that hasn't happened gets drawn either.
  */
 export function presetWindow(preset: WindowPreset, nowMs: number): TimelineWindow {
   const end = new Date(nowMs);
   end.setHours(23, 59, 59, 999);
   const toMs = end.getTime();
   if (preset === "today") return { fromMs: localDayStart(nowMs), toMs };
-  // 달력 주가 아니라 **롤링 7일**이다. 월요일 아침에 빈 화면이 되는 달력 주보다, "최근에
-  // 무슨 일이 있었나" 를 보는 이 화면에는 롤링이 맞다(2026-09-21 결정). 창 시작을 그 날의
-  // 로컬 자정에 맞춰 눈금이 날짜 경계와 어긋나지 않게 한다 — 라벨은 "지난 7일" 이다.
+  // This is a **rolling 7 days**, not a calendar week. For a screen that answers "what happened
+  // recently," rolling fits better than a calendar week that goes blank every Monday morning
+  // (decided 2026-09-21). The window start is aligned to that day's local midnight so ticks
+  // don't drift off date boundaries — the label is "last 7 days."
   return { fromMs: localDayStart(toMs - 6 * DAY_MS), toMs };
 }
 
-/** 그 시각이 속한 날의 **로컬** 자정. 눈금 기준점과 날짜 비교의 단일 출처다. */
+/** The **local** midnight of the day containing this timestamp. Single source of truth for tick alignment and date comparisons. */
 function localDayStart(ms: number): number {
   const d = new Date(ms);
   d.setHours(0, 0, 0, 0);
@@ -204,18 +211,19 @@ function localDayStart(ms: number): number {
 const DAY_MS = 24 * 3600_000;
 
 /**
- * 시간축 눈금. 창 길이에 따라 간격을 고르고, 창 안에 드는 경계만 돌려준다.
+ * Time-axis ticks. Picks an interval based on window length and returns only the boundaries that
+ * fall inside the window.
  *
- * 눈금 수를 고정하지 않는 이유는 "오늘" 이 자정 직후면 한 시간도 안 되기 때문이다 —
- * 억지로 여섯 개를 만들면 초 단위 눈금이 생긴다.
+ * The tick count isn't fixed because "today" can be less than an hour right after midnight —
+ * forcing six ticks in that case would produce second-level ticks.
  *
- * **경계는 epoch 이 아니라 로컬 자정을 기준으로 센다.** epoch 배수에 맞추면 일 단위 눈금이
- * UTC 자정에 놓여 KST 에서는 09:00 에 찍힌다 — 주 단위 창의 눈금 일곱 개가 모두 "오전 09:00"
- * 으로 같아지는 실측 결함이 이것이었다. 30분 오프셋 시간대(예: 인도)에서는 시 단위 눈금도
- * 같은 문제를 겪으므로 간격에 상관없이 같은 기준을 쓴다.
+ * **Boundaries are counted from local midnight, not epoch.** Aligning to epoch multiples puts
+ * daily ticks at UTC midnight, which lands at 09:00 in KST — this is the actual defect where all
+ * seven ticks of a weekly window read "09:00 AM." Timezones with a 30-minute offset (e.g. India)
+ * hit the same problem even for hourly ticks, so the same basis is used regardless of interval.
  *
- * 일 단위는 24시간을 더하지 않고 **날짜를 하나 올린다** — DST 가 있는 지역에서 고정 24시간을
- * 더하면 하루씩 밀려 자정에서 벗어난다.
+ * Daily ticks don't add 24 hours — they **advance the date by one** — adding a fixed 24 hours in
+ * a region with DST would drift a day off midnight over time.
  */
 export function axisTicks(win: TimelineWindow, maxTicks = 8): number[] {
   const span = win.toMs - win.fromMs;
@@ -230,8 +238,8 @@ export function axisTicks(win: TimelineWindow, maxTicks = 8): number[] {
     12 * 3600_000,
     DAY_MS,
   ];
-  // 눈금은 경계이므로 개수는 `span/step + 1` 이다. 간격을 고를 때 그 +1 을 빼먹으면
-  // 딱 하나가 넘친다(4시간 창에서 30분 간격 → 9개).
+  // Ticks are boundaries, so the count is `span/step + 1`. Forgetting that +1 when picking the
+  // interval overshoots by exactly one (a 4-hour window with a 30-minute interval → 9 ticks).
   const step = steps.find((s) => Math.floor(span / s) + 1 <= maxTicks) ?? steps[steps.length - 1];
   const ticks: number[] = [];
 
@@ -252,8 +260,9 @@ export function axisTicks(win: TimelineWindow, maxTicks = 8): number[] {
 }
 
 /**
- * 눈금 라벨을 시각으로 쓸지 날짜로 쓸지. 창이 하루를 넘으면 시:분만으로는 구분이 안 된다 —
- * 주 단위 창에서 라벨 일곱 개가 모두 같은 글자였던 실측 결함이 그것이다.
+ * Whether tick labels should be shown as time or date. When the window spans more than a day,
+ * hour:minute alone can't distinguish ticks — that's the actual defect where all seven labels
+ * of a weekly window read the same text.
  */
 export type AxisLabelKind = "time" | "date";
 
@@ -262,19 +271,20 @@ export function axisLabelKind(win: TimelineWindow): AxisLabelKind {
 }
 
 /**
- * 범례 한 항목. `outcome` 이 `null` 이면 "결과 미기록" 이나 "아직 도는 중" 이라 화면이
- * 자기 말로 붙인다.
+ * One legend entry. If `outcome` is `null`, the screen attaches its own wording such as
+ * "no outcome recorded" or "still running."
  */
 export type OutcomeLegendEntry = { outcome: string | null; tone: RunTone; count: number };
 
 /**
- * 보이는 막대에 **실제로 있는** 결과만 범례로 만든다.
+ * Builds the legend only from outcomes that **actually appear** among the visible bars.
  *
- * tone 고정 목록을 범례로 쓰면 모르는 값이 "기타" 한 칸에 뭉개져 이름을 잃는다. 여기서는
- * 값 자체가 항목이므로 코어가 어휘를 늘려도 그 문자열이 그대로 화면에 나온다 — 색을 못
- * 골라도 이름은 잃지 않는다는 것이 이 함수의 목적이다.
+ * Using a fixed list of tones as the legend would squash unknown values into a single "other"
+ * entry and lose their name. Here the value itself is the entry, so even as the core grows its
+ * vocabulary, that string still shows up on screen — not losing the name is the point of this
+ * function, even when a color can't be picked.
  *
- * 많은 것부터, 같으면 이름 순. 정렬을 고정해 두면 스냅샷이 흔들리지 않는다.
+ * Sorted by count descending, then by name for ties. A fixed sort keeps snapshots stable.
  */
 export function outcomeLegend(rows: readonly ActorRow[]): OutcomeLegendEntry[] {
   const seen = new Map<string, OutcomeLegendEntry>();
@@ -292,30 +302,32 @@ export function outcomeLegend(rows: readonly ActorRow[]): OutcomeLegendEntry[] {
   );
 }
 
-/** 막대 한 건의 소요(ms). 아직 안 끝났으면 창 안에서 보이는 만큼이다. */
+/** Duration of one bar (ms). If not yet finished, it's however much is visible inside the window. */
 export function barDurationMs(bar: PositionedBar): number {
   return bar.endMs - bar.startMs;
 }
 
 // ---------------------------------------------------------------------------
-// 목표일 (D3(c) — 계획 막대 대신 프로젝트 목표일 하나)
+// Target date (D3(c) — one project target date instead of a plan bar)
 // ---------------------------------------------------------------------------
 
 export type TargetMarker =
   | { kind: "none" }
-  /** 창 안에 있어 세로선을 그릴 수 있다. `x` 는 0~1 비율. */
+  /** Inside the window, so a vertical line can be drawn. `x` is a 0~1 ratio. */
   | { kind: "inWindow"; atMs: number; x: number }
   /**
-   * 목표일이 창 밖이다. **선을 창 경계에 붙이지 않는다** — 그러면 목표일이 그 시각인 것처럼
-   * 보인다. 대신 방향과 남은 일수를 글로 말한다.
+   * The target date is outside the window. **The line is not pinned to the window edge** — that
+   * would make the target date look like it's at that instant. Instead, direction and days
+   * remaining are stated in words.
    */
   | { kind: "outside"; atMs: number; side: "before" | "after"; daysFromNow: number };
 
 /**
- * 프로젝트 목표일을 창 기준으로 해석한다.
+ * Resolves a project target date relative to the window.
  *
- * `targetDate` 는 `YYYY-MM-DD` 날짜다(`project-registry.ts` 의 `toIsoDate`). 그날 **끝**까지를
- * 목표로 본다 — 9월 30일이 목표면 30일 23:59 까지가 기한이고, 00:00 으로 잡으면 하루를 잃는다.
+ * `targetDate` is a `YYYY-MM-DD` date (see `toIsoDate` in `project-registry.ts`). It's treated as
+ * due through the **end** of that day — if the target is September 30, the deadline runs through
+ * 23:59 on the 30th; using 00:00 would lose a day.
  */
 export function targetMarker(
   targetDate: string | null | undefined,
@@ -334,33 +346,33 @@ export function targetMarker(
     kind: "outside",
     atMs,
     side: atMs < win.fromMs ? "before" : "after",
-    // 지난 목표일은 음수로 나온다 — 화면이 "지났다" 를 말할 수 있어야 한다.
+    // A past target date comes out negative — the screen needs to be able to say "past due."
     daysFromNow: Math.ceil((atMs - nowMs) / (24 * 3600_000)),
   };
 }
 
 // ---------------------------------------------------------------------------
-// 의존 화살표 (부모 링크가 곧 실행 순서다)
+// Dependency arrows (a parent link is the execution order)
 // ---------------------------------------------------------------------------
 
 export type DependencyEdge = {
   parentTaskId: string;
   childTaskId: string;
-  /** 부모의 마지막 막대 끝과 자식의 첫 막대 시작. 둘 다 창 안에 보일 때만 만든다. */
+  /** The parent's last bar end and the child's first bar start. Only built when both are visible in the window. */
   from: { x: number; row: number; lane: number };
   to: { x: number; row: number; lane: number };
   /**
-   * 자식이 부모보다 먼저 시작했는가. Hermes 는 부모가 끝나야 자식을 집게 하므로 정상적으로는
-   * 생기지 않는다. 생겼다면 볼 만한 사실이라 숨기지 않는다.
+   * Did the child start before the parent? Hermes only picks up the child after the parent
+   * finishes, so this normally shouldn't happen. If it does, it's worth seeing, so it isn't hidden.
    */
   outOfOrder: boolean;
 };
 
 /**
- * 부모→자식 링크를 화살표로 바꾼다.
+ * Turns parent→child links into arrows.
  *
- * **양쪽 카드가 모두 창 안에 그려져 있을 때만** 만든다. 한쪽이 없으면 화살표가 허공에서
- * 나오거나 허공으로 들어가는데, 그건 없는 관계를 암시한다.
+ * Only built **when both cards are drawn inside the window**. If one is missing, the arrow would
+ * come from or go into thin air, implying a relationship that isn't there.
  */
 export function dependencyEdges(
   rows: readonly ActorRow[],
@@ -389,7 +401,7 @@ export function dependencyEdges(
         });
         continue;
       }
-      // 한 카드가 여러 번 돌았으면 처음 시작과 마지막 끝으로 잇는다.
+      // If a card ran more than once, connect its earliest start to its latest end.
       if (bar.startMs < existing.startMs) {
         existing.startMs = bar.startMs;
         existing.startX = bar.x;

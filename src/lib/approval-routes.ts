@@ -1,17 +1,18 @@
 /**
- * 승인 결정 REST 의 몸통. 라우트 파일은 얇게 두고 순서를 여기 한 곳에 고정한다
- * (`src/app/api/AGENTS.md`).
+ * The body of the approval-decision REST endpoint. Route files stay thin, and the order is
+ * pinned in this one place (`src/app/api/AGENTS.md`).
  *
- * **왜 소유자 전용이 아닌가:** 결정은 채널 멤버면 누구나 한다. 멤버는 이미 카드를 직접
- * `unblock` 할 수 있으므로(`kanban-routes.ts` 의 기존 동작) 여기서 좁혀도 권한이 실제로
- * 줄지 않고, 승인을 기다리는 일만 늘어난다.
+ * **Why this isn't owner-only:** any channel member can make a decision. Members can already
+ * `unblock` a card directly (existing behavior in `kanban-routes.ts`), so narrowing it here
+ * wouldn't actually reduce access — it would just mean more waiting for approval.
  *
- * 관문 순서는 칸반과 같다 — `resolveKanbanChannelContext` 가 로그인 → 멤버 →
- * 게이트웨이 409 → 플러그인 428 → 보드 소속 404 → 보드 503 을 보장한다. 여기서
- * 우회 경로를 만들지 않는다.
+ * The gate order matches Kanban — `resolveKanbanChannelContext` guarantees
+ * login → member → gateway 409 → plugin 428 → board membership 404 → board 503.
+ * No bypass path is created here.
  *
- * 승인은 **카드 상태로** 직원에게 전달된다. `unblock` 이 되면 디스패처가 집어 가므로
- * 별도 통지 경로가 없다 — 이 설계가 새 채널을 만들지 않아도 되는 이유다.
+ * Approval reaches the employee **as card state**. Once `unblock` happens, the dispatcher
+ * picks it up, so there's no separate notification path — this is why the design doesn't
+ * need a new channel.
  */
 import { and, eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
@@ -50,15 +51,17 @@ function readTargets(raw: unknown): TargetDecision[] | undefined | null {
   return out;
 }
 
-/** POST — 승인 하나를 결정하고, 승인된 카드를 `unblock` 한다. */
+/** POST — decides on a single approval and `unblock`s the approved card(s). */
 export async function decideApproval(req: NextRequest, channelId: string, approvalId: string) {
   const userId = getUserId(req);
   if (!userId) return cronError(401, "unauthorized", "unauthorized");
 
-  // 승인을 **먼저** 읽는다. 카드가 어느 보드에 있는지 알아야 컨텍스트를 그 보드로 풀 수
-  // 있다. 기본 보드로 풀면 다른 보드의 카드에 `unblock` 이 닿지 않는다.
-  // 이 조회는 권한 검사 전이라 **결과를 응답에 싣지 않는다** — 존재 여부가 새지 않게
-  // 아래 멤버 검사를 통과한 뒤에만 404/409 를 가른다.
+  // Read the approval **first**. We need to know which board the card is on to resolve
+  // context against that board. Resolving against the default board would leave `unblock`
+  // unable to reach a card on a different board.
+  // This lookup happens before the permission check, so **its result isn't put in the
+  // response** — existence isn't allowed to leak, so the 404/409 split only happens after
+  // the member check below passes.
   const [row] = await db
     .select({
       id: approvals.id,
@@ -72,13 +75,15 @@ export async function decideApproval(req: NextRequest, channelId: string, approv
   const resolved = await resolveKanbanChannelContext({
     userId,
     channelId,
-    // 옛 행(payload 없음)은 채널 기본 보드다. 슬러그는 소속 검사(404)를 다시 거친다.
+    // An old row (no payload) belongs to the channel's default board. The slug still goes
+    // through the membership check (404) again.
     ...(row ? { boardSlug: approvalBoardSlug(row.payloadJson) ?? undefined } : {}),
   });
   if (!resolved.ok) return resolved.response;
   const ctx = resolved.ctx;
 
-  // 관문을 켤 수 있는 플러그인인가. 없는 채로 결정만 기록하면 카드는 영영 blocked 로 남는다.
+  // Is this a plugin capable of the gate at all? Recording just the decision without it
+  // would leave the card blocked forever.
   const gate = initialStatusGate(ctx.info);
   if (!gate.ok) {
     const failure = pluginUpgradeRequired(gate);
@@ -95,7 +100,8 @@ export async function decideApproval(req: NextRequest, channelId: string, approv
     return cronError(400, "invalid_targets", "targets must be [{task_id, decision}]");
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 2000) : "";
 
-  // 이 채널의 승인만. 남의 채널 승인 id 를 넣어도 존재 여부가 새지 않게 404 로 접는다.
+  // Only approvals from this channel. Even if someone passes another channel's approval id,
+  // fold it into a 404 so existence doesn't leak.
   if (!row) return cronError(404, "approval_not_found", "approval not found");
   if (row.status !== "pending")
     return cronError(409, "approval_already_decided", "approval already decided");
@@ -104,8 +110,8 @@ export async function decideApproval(req: NextRequest, channelId: string, approv
   const plan = decideTargets(targetIds, targets, decision);
   if (!plan.ok) return cronError(400, plan.error, `${plan.error}: ${plan.taskId}`);
 
-  // 상태를 먼저 닫는다. 두 탭에서 동시에 눌러도 한쪽만 이긴다 — `status = 'pending'` 조건이
-  // 없으면 둘 다 통과해 `unblock` 이 두 번 나간다.
+  // Close the status first. Even if two tabs click at the same time, only one wins — without
+  // the `status = 'pending'` condition, both would pass and `unblock` would fire twice.
   const closed = await db
     .update(approvals)
     .set({
@@ -125,18 +131,20 @@ export async function decideApproval(req: NextRequest, channelId: string, approv
       .set({ decision: t.decision })
       .where(and(eq(approvalTargets.approvalId, approvalId), eq(approvalTargets.taskId, t.taskId)));
 
-  // 부분 실패를 감추지 않는다. 성공분을 되돌리지도 않는다 — 되돌리기가 또 실패할 수 있고,
-  // 이미 실행이 시작됐을 수 있다.
+  // Partial failures aren't hidden. Successful ones aren't rolled back either — the rollback
+  // itself could also fail, and execution may already have started.
   const failed: { task_id: string; code: string }[] = [];
   for (const taskId of plan.unblock) {
     const res = await ctx.client.kanban.runTaskAction(ctx.boardSlug, taskId, "unblock", {});
     if (!res.ok) failed.push({ task_id: taskId, code: res.failure.code || "unblock_failed" });
   }
 
-  // 풀 것이 있었는데 **하나도** 못 풀었으면 게이트웨이가 그 순간 안 닿은 것이다. 승인만
-  // 닫아 두면 사용자는 카드를 하나씩 손으로 풀어야 하고 다시 누를 pending 도 없다.
-  // 트랜잭션을 못 쓰니 보상으로 되돌린다. 일부만 실패한 경우는 되돌리지 않는다 — 이미
-  // 실행이 시작된 카드가 있고, 남은 것은 판단 모음의 막힌 카드 줄에 보인다.
+  // If there was something to unblock but **none** of it could be, the gateway simply wasn't
+  // reachable at that moment. Leaving only the approval closed would force the user to
+  // unblock cards one by one by hand, with no pending state left to click again.
+  // Since a transaction isn't available, roll back as compensation. A partial failure isn't
+  // rolled back — some cards have already started executing, and the rest show up in the
+  // blocked-card row of the decision list.
   if (plan.unblock.length > 0 && failed.length === plan.unblock.length) {
     await db
       .update(approvals)
@@ -145,17 +153,20 @@ export async function decideApproval(req: NextRequest, channelId: string, approv
     return cronError(502, "unblock_failed", "could not unblock any task", { failed });
   }
 
-  // 풀린 카드가 있으면 디스패치를 한 번 요청한다. 카드 액션 라우트는 unblock 뒤 이렇게 하는데,
-  // 여기는 unblock 을 직접 보내므로 따로 불러야 한다 — 부르지 않으면 게이트웨이 내장 디스패처의
-  // 주기에 맡겨져 카드가 ready 에 머문다(스테이징에서 약 5분). 실패해도 승인은 성공이다.
+  // If any card was unblocked, request one dispatch. The card action route does this after
+  // unblock too, but this route sends unblock directly, so it has to be called separately —
+  // without it, the card is left to the gateway's built-in dispatcher cycle and sits at ready
+  // (about 5 minutes on staging). Even if this fails, the approval is still a success.
   if (plan.unblock.length > failed.length) {
     await dispatchOnce(ctx);
     schedulePollNow(channelId);
   }
 
-  // 댓글도 같은 `ctx.boardSlug` 로 간다 — 위에서 승인의 보드로 컨텍스트를 풀었기 때문이다.
-  // 반려·수정 요청의 말은 카드 댓글로 남긴다 — 직원이 그 카드를 다시 집을 때 읽는다.
-  // 빈 메모로는 댓글을 남기지 않는다(소음이다).
+  // Comments also go to the same `ctx.boardSlug` — because context was resolved against the
+  // approval's board above.
+  // A rejection or revision-request message is left as a card comment — the employee reads
+  // it when they pick the card back up.
+  // No comment is left for an empty note (it would just be noise).
   if (note && decision !== "approve")
     for (const taskId of targetIds)
       await ctx.client.kanban.addComment(ctx.boardSlug, taskId, {
@@ -163,7 +174,8 @@ export async function decideApproval(req: NextRequest, channelId: string, approv
         body: note,
       });
 
-  // 방의 승인 요청 줄이 결과를 말하게 한다 — 그러지 않으면 결정한 뒤에도 "승인 열기" 가 남는다.
+  // Have the room's approval-request line report the outcome — otherwise "open approval"
+  // would still show even after a decision is made.
   await rewriteRoomNotices({
     channelId,
     needle: approvalId,

@@ -1,20 +1,24 @@
 /**
- * 칸반 REST(`/api/channels/:id/kanban/**`, `/automation/status`)의 문지기.
+ * The gatekeeper for the Kanban REST surface (`/api/channels/:id/kanban/**`, `/automation/status`).
  *
- * 순서가 곧 규칙이다: 로그인 → 채널 멤버 → 채널의 게이트웨이(409) → 플러그인 계약(428/404/401/
- * 503/504) → 보드 확보(503). 앞 단계가 막히면 뒤 단계(특히 Hermes 호출)는 일어나지 않는다.
- * 게이트는 `resolveChannelBoard` 가 한 번 풀어 준 것을 그대로 쓰고, 그 결과의 오너 클라이언트를
- * 컨텍스트에 싣는다 — 한 요청에서 게이트·클라이언트를 두 번 만들지 않는다. 멤버·오류 응답은
- * `cron-access.ts` 의 것을 **그대로 가져다 쓴다** — 게이트를 두 벌 두면 언젠가 한쪽만 고쳐진다.
+ * Order is the rule: login → channel member → channel's gateway (409) → plugin contract
+ * (428/404/401/503/504) → board acquisition (503). If an earlier stage is blocked, later
+ * stages (especially Hermes calls) never happen. The gate uses exactly what
+ * `resolveChannelBoard` resolves once, and carries that result's owner client in the context —
+ * so a single request never builds the gate/client twice. Member and error responses are
+ * **reused as-is** from `cron-access.ts` — keeping two copies of the gate means one of them
+ * eventually drifts unfixed.
  *
- * 크론과 다른 점은 셋이다.
- * - 스코프가 **오너 키**다. 프로필 키는 여기서 쓰지 않는다.
- * - 권한 단위가 보드다. 보기·카드 조작은 채널 멤버, 보드 작업 폴더는 채널 소유자, 호스트
- *   운영 설정(orchestration)은 읽기 = 채널 소유자·수정 = 게이트웨이 리소스 소유자.
- * - 담당자는 `npcId` 로 받아 이 채널에 출근 중인 NPC 의 `profile_name` 으로 바꿔 보낸다(R7).
+ * Three things differ from cron.
+ * - The scope is the **owner key**. Profile keys are not used here.
+ * - The unit of permission is the board. Viewing/card operations require channel membership,
+ *   the board's working folder requires the channel owner, and host orchestration settings
+ *   require the channel owner to read, the gateway resource owner to modify.
+ * - The assignee is received as `npcId` and translated to the `profile_name` of the NPC
+ *   currently working in this channel before being sent on (R7).
  *
- * 브라우저는 Hermes 를 직접 부르지 않는다. 오너 토큰은 여기서 복호화해 클라이언트에
- * 가두고, 응답에는 절대 싣지 않는다.
+ * The browser never calls Hermes directly. The owner token is decrypted here, kept confined
+ * to the client, and never included in the response.
  */
 
 import { and, eq } from "drizzle-orm";
@@ -37,18 +41,18 @@ import {
   type ResolvedChannelBoard,
 } from "@/lib/kanban-boards";
 
-/** 자동화 최소 플러그인 버전 — 정본은 `plugin-capability.ts` 하나다. */
+/** The minimum plugin version for automation — the single source of truth is `plugin-capability.ts`. */
 export { AUTOMATION_MIN_VERSION as AUTOMATION_MIN_PLUGIN_VERSION } from "@/lib/hermes/plugin-capability";
 
 // ---------------------------------------------------------------------------
-// 채널 컨텍스트 — 멤버 + 게이트웨이 + 플러그인 게이트 + 보드
+// Channel context — member + gateway + plugin gate + board
 // ---------------------------------------------------------------------------
 
 export type KanbanChannelContext = CronChannelContext & {
   channel: { id: string; ownerId: string };
-  /** 요청자가 채널 소유자인가 — 보드 작업 폴더·운영 설정 읽기의 기준. */
+  /** Whether the requester is the channel owner — the basis for reading the board's working folder/orchestration settings. */
   isChannelOwner: boolean;
-  /** 요청자가 게이트웨이 리소스 소유자인가 — 운영 설정 수정의 기준. */
+  /** Whether the requester is the gateway resource owner — the basis for modifying orchestration settings. */
   isGatewayOwner: boolean;
   boardSlug: string;
   boardRow: ChannelBoardRow;
@@ -59,9 +63,9 @@ export type KanbanContextResult =
   { ok: true; ctx: KanbanChannelContext } | { ok: false; response: NextResponse };
 
 /**
- * R5. 보드 행이 없거나(바인딩 때 확보 실패) `last_error` 가 남아 있거나 게이트웨이가
- * 바뀌었으면 한 번 다시 확보한다. 그래도 안 되면 503 — 보드 없이는 어떤 칸반 요청도
- * 의미가 없다.
+ * R5. If the board row is missing (acquisition failed at binding time), a `last_error` is
+ * left on it, or the gateway changed, re-acquire it once. If that still fails, 503 — no
+ * Kanban request means anything without a board.
  */
 async function requireBoardRow(
   channelId: string,
@@ -70,8 +74,9 @@ async function requireBoardRow(
 ): Promise<{ ok: true; row: ChannelBoardRow } | { ok: false; response: NextResponse }> {
   const gatewayId = resolved.binding.resource.id;
 
-  // 보드를 명시했으면 **이 채널에 붙어 있는지**부터 본다. 다른 채널의 보드를 slug 로 집어
-  // 오는 것을 막는 유일한 관문이고, 확보(503)보다 앞선다 — 남의 보드를 확보해 주면 안 된다.
+  // If a board was specified, first check **whether it's attached to this channel**. This is
+  // the only gate that stops pulling in another channel's board by slug, and it comes before
+  // acquisition (503) — we must never acquire someone else's board for the caller.
   if (requestedSlug !== undefined) {
     const row = await getChannelBoardBySlug(channelId, requestedSlug);
     if (!row) {
@@ -81,7 +86,7 @@ async function requireBoardRow(
       };
     }
     if (row.gatewayId === gatewayId && !row.lastError) return { ok: true, row };
-    // 게이트웨이가 바뀌었거나 지난번 확보가 실패했다 — 그 보드만 다시 확보한다.
+    // The gateway changed, or the last acquisition failed — re-acquire just that board.
     const ensured = await ensureChannelBoard(channelId, resolved, requestedSlug);
     if (ensured.ok) return { ok: true, row: ensured.row };
     return { ok: false, response: cronError(503, ensured.code, ensured.reason || ensured.code) };
@@ -100,10 +105,12 @@ async function requireBoardRow(
 }
 
 /**
- * 읽기 전용 갈래 — **이미 있는** 연결 행만 쓴다. 없거나 `last_error` 가 남았거나 게이트웨이가
- * 바뀌었으면 503 이고, 보드를 만들지도 다시 확보하지도 않는다.
+ * The read-only branch — uses only a connection row that **already exists**. If it's missing,
+ * has a leftover `last_error`, or the gateway changed, this is a 503, and it neither creates
+ * nor re-acquires a board.
  *
- * 배지 폴링처럼 사용자가 요청하지 않은 주기적 읽기가 Hermes 보드 생성을 반복 시도하면 안 된다.
+ * A periodic read the user didn't request, like badge polling, must not repeatedly attempt
+ * to create a Hermes board.
  */
 async function existingBoardRow(
   channelId: string,
@@ -124,8 +131,9 @@ export async function resolveKanbanChannelContext(input: {
   userId: string | null;
   channelId: string;
   /**
-   * `?board=` 로 명시된 보드. 생략하면 그 채널의 **사건 수신 보드**(이관 전의 유일한 보드)를
-   * 쓴다 — 그래서 보드를 모르는 옛 클라이언트도 뜻이 바뀌지 않는다.
+   * The board named by `?board=`. If omitted, uses the channel's **event-receiving board**
+   * (the only board before multi-board migration) — so old clients unaware of boards keep
+   * the same meaning.
    */
   boardSlug?: string;
 }): Promise<KanbanContextResult> {
@@ -133,9 +141,9 @@ export async function resolveKanbanChannelContext(input: {
 }
 
 /**
- * 게이트(로그인·멤버·게이트웨이·플러그인)는 본 경로와 **똑같이** 태우고 보드만 확보하지 않는
- * 갈래. 배지처럼 곁다리로 읽기만 하는 경로가 쓴다 — 권한 판정을 약하게 만들지 않으면서
- * 원격 쓰기 부작용만 뗀다.
+ * A branch that runs through the gate (login, member, gateway, plugin) **identically** to the
+ * main path, but never acquires a board. Used by side-read paths like badges — it removes
+ * only the remote write side effect without weakening the permission check.
  */
 export async function resolveKanbanChannelContextForRead(input: {
   userId: string | null;
@@ -185,8 +193,9 @@ async function resolveContext(
       timezone: info.timezone ?? null,
       isChannelOwner: access.channel.ownerId === input.userId,
       isGatewayOwner: gateway.ownerUserId === input.userId,
-      // 컨텍스트의 boardSlug 는 **확보된 행**의 것이다 — resolved 의 것은 기본 보드 slug 라
-      // `?board=` 가 온 요청에서 다르다. 여기서 갈리면 라우트가 엉뚱한 보드를 만진다.
+      // The context's boardSlug belongs to the **acquired row** — resolved's is the default
+      // board's slug, which differs for a request that came with `?board=`. If these diverge
+      // here, the route ends up touching the wrong board.
       boardSlug: board.row.boardSlug,
       boardRow: board.row,
       client: resolved.ownerClient,
@@ -195,20 +204,21 @@ async function resolveContext(
 }
 
 // ---------------------------------------------------------------------------
-// 로스터 — assignee(profile_name) ↔ NPC 매핑
+// Roster — assignee(profile_name) ↔ NPC mapping
 // ---------------------------------------------------------------------------
 
 export type RosterEntry = {
   npcId: string;
-  /** `hermes_profiles.display_name ?? profile_name` — `npcs.name` 은 절대 읽지 않는다. */
+  /** `hermes_profiles.display_name ?? profile_name` — `npcs.name` is never read. */
   npcName: string;
   profileName: string;
   active: boolean;
 };
 
 /**
- * 이 채널의 NPC 전부(현재 게이트웨이의 프로필만). 잠든 NPC 도 `active:false` 로 싣는다 —
- * 밖에서 만든 카드나 잠든 NPC 의 카드도 이름을 붙여 보여 줘야 하기 때문이다(R7 후단).
+ * Every NPC in this channel (profiles of the current gateway only). Sleeping NPCs are also
+ * included, with `active:false` — cards created externally or belonging to a sleeping NPC
+ * still need a name attached to them (the back half of R7).
  */
 export async function loadChannelRoster(
   ctx: Pick<KanbanChannelContext, "channelId" | "gateway">,
@@ -234,15 +244,16 @@ export async function loadChannelRoster(
 }
 
 // ---------------------------------------------------------------------------
-// 담당자 검증 (R7)
+// Assignee validation (R7)
 // ---------------------------------------------------------------------------
 
 export type AssigneeResult =
   { ok: true; profileName: string; npcId: string } | { ok: false; response: NextResponse };
 
 /**
- * `npcId` → 이 채널에 **출근 중인**(active) NPC → 현재 게이트웨이의 프로필 이름.
- * 잠든 NPC·다른 채널의 NPC·옛 게이트웨이의 NPC·없는 id 는 전부 400 `assignee_not_in_channel`.
+ * `npcId` → an NPC currently **working (active)** in this channel → the current gateway's
+ * profile name. A sleeping NPC, an NPC from another channel, an NPC from an old gateway, or
+ * a nonexistent id all become 400 `assignee_not_in_channel`.
  */
 export async function resolveAssignee(
   ctx: Pick<KanbanChannelContext, "channelId" | "gateway">,
@@ -275,10 +286,10 @@ export async function resolveAssignee(
 }
 
 // ---------------------------------------------------------------------------
-// 댓글 작성자 (R11)
+// Comment author (R11)
 // ---------------------------------------------------------------------------
 
-/** Hermes 에 남기는 작성자 — `deskrpg:<닉네임>`. 닉네임을 못 찾으면 사용자 id 로 대신한다. */
+/** The author recorded on Hermes — `deskrpg:<nickname>`. Falls back to the user id if no nickname is found. */
 export async function commentAuthorFor(userId: string): Promise<string> {
   const [row] = await db
     .select({ nickname: users.nickname })
@@ -289,7 +300,7 @@ export async function commentAuthorFor(userId: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// 첨부 지원 여부 (R12)
+// Attachment support (R12)
 // ---------------------------------------------------------------------------
 
 export function attachmentsUnsupportedResponse(): NextResponse {
@@ -300,7 +311,7 @@ export function supportsAttachments(ctx: Pick<KanbanChannelContext, "info">): bo
   return ctx.info.kanban.attachments !== false;
 }
 
-/** 신규 업무의 완료 정책을 보장할 수 없으면 쓰기 전에 차단한다. */
+/** Blocks the write up front if the completion policy for new work can't be guaranteed. */
 export function reviewPolicyFailure(ctx: Pick<KanbanChannelContext, "info">): NextResponse | null {
   return ctx.info?.capabilities.includes("kanban_review_policy_v1")
     ? null

@@ -1,12 +1,13 @@
 /**
- * 프로젝트 목록표 REST (`/api/channels/:id/projects/**`).
+ * Project list REST API (`/api/channels/:id/projects/**`).
  *
- * 얇은 핸들러다 — 판단은 `project-registry.ts`, 게이트는 `kanban-access.ts` 가 한다. 게이트를
- * 칸반과 공유하는 이유는 프로젝트가 곧 보드라서다: 게이트웨이가 없거나 플러그인이 낡았으면
- * 프로젝트 목록도 의미가 없다.
+ * A thin handler — the judgment is made by `project-registry.ts`, the gate by
+ * `kanban-access.ts`. The gate is shared with kanban because a project is a board: with no
+ * gateway or an outdated plugin, the project list is meaningless too.
  *
- * 권한은 칸반의 층을 그대로 따른다 — **보기는 채널 멤버, 구조 변경은 채널 소유자**.
- * 게이트웨이 리소스 소유자 권한은 쓰지 않는다(호스트 운영 설정이 아니다).
+ * Permission follows kanban's layering exactly — **viewing is for channel members,
+ * structural changes are for the channel owner**. Gateway-resource owner permission is not
+ * used here (this isn't host operational settings).
  */
 
 import { EventCarrierError } from "./event-carrier-handoff";
@@ -53,7 +54,7 @@ async function readJsonBody(req: NextRequest): Promise<Record<string, unknown> |
   }
 }
 
-/** 게이트를 한 번 통과한 컨텍스트. 보드는 명시하지 않는다 — 프로젝트는 보드 목록 전체를 다룬다. */
+/** A context that has already passed the gate once. No board is specified — a project covers the entire board list. */
 async function resolve(req: NextRequest, channelId: string) {
   return resolveKanbanChannelContext({ userId: getUserId(req), channelId });
 }

@@ -1,17 +1,23 @@
 /**
- * 직원 대화창의 `카드`·`크론` 탭 배지 — "아직 보지 않은 것" 개수와 그 열람 기록.
+ * The `Cards`/`Cron` tab badges in the employee chat window — the "not yet seen" count and
+ * the history of viewing it.
  *
- * 세는 일은 순수 함수(`npc-panel-reads-count.ts`)가 하고, 여기서 정하는 것은 조합이다.
- * 핵심 규칙 하나: **두 배지는 서로를 죽이지 않는다.** 보드 조회는 게이트웨이·플러그인·보드
- * 확보가 모두 성공해야 하는 긴 사슬이라 플러그인이 없는 설치에서는 늘 실패하는데, 크론 알림은
- * DeskRPG 의 방 메시지라 그때도 멀쩡하다. 그래서 두 조회를 각각 감싸고, 실패한 쪽만 0 으로 둔다.
+ * Counting is done by a pure function (`npc-panel-reads-count.ts`); what's decided here is
+ * how it's combined. One core rule: **the two badges never take each other down.** Board
+ * lookup is a long chain requiring gateway, plugin, and board acquisition to all succeed, so
+ * it always fails on an install with no plugin, while cron notices are DeskRPG's own room
+ * messages and stay fine even then. So each lookup is wrapped separately, and only the
+ * failing side falls back to 0.
  *
- * 보드 쪽은 **읽기 전용 갈래**(`resolveKanbanChannelContextForRead`)로 본다. 배지는 주기적으로
- * 폴링되므로, 본 경로처럼 `ensureChannelBoard` 까지 타면 사용자가 요청하지 않은 Hermes 보드
- * 생성이 반복 시도된다. 권한 관문(로그인·멤버·게이트웨이·플러그인)은 본 경로와 똑같다.
+ * The board side is viewed through the **read-only branch**
+ * (`resolveKanbanChannelContextForRead`). Since badges are polled periodically, if this path
+ * went as far as `ensureChannelBoard` like the main path does, it would repeatedly try to
+ * create a Hermes board the user never asked for. The permission gates (login, member,
+ * gateway, plugin) are the same as the main path.
  *
- * 카드 탭은 시각 워터마크를 쓸 수 없다 — `KanbanTask` 에 `updated_at` 이 없다. 그래서 본 카드
- * id 를 쌓고, 쓸 때마다 현재 담당 카드와 교집합으로 가지친다(`pruneSeenIds`).
+ * The Cards tab can't use a time watermark — `KanbanTask` has no `updated_at`. So it
+ * accumulates seen card ids, and every write prunes them down to the intersection with the
+ * currently assigned cards (`pruneSeenIds`).
  */
 
 import { and, eq } from "drizzle-orm";
@@ -43,8 +49,9 @@ export type PanelTarget = { channelId: string; userId: string; npcId: string };
 export type PanelReadRow = { seenAt: string | null; seenIds: string[] };
 
 /**
- * 배지 출처 하나가 막혔다는 뜻. 상태 코드를 들고 다니지만 라우트는 이걸 응답으로 바꾸지
- * 않는다 — 배지는 "모르면 0" 이 정답이고, 400/428/503 을 내면 나머지 배지까지 사라진다.
+ * Means one badge source is blocked. It carries a status code, but the route never turns
+ * this into a response — for a badge, "unknown means 0" is the right answer, and returning
+ * 400/428/503 would make even the other badge disappear too.
  */
 export class PanelSourceError extends Error {
   constructor(
@@ -57,9 +64,10 @@ export class PanelSourceError extends Error {
 }
 
 export type BadgeDeps = {
-  /** 담당 카드 id — 게이트웨이·플러그인·보드 중 하나라도 막히면 `PanelSourceError`. */
+  /** Assigned card ids — throws `PanelSourceError` if any of gateway/plugin/board is blocked. */
   loadAssignedCardIds(target: PanelTarget): Promise<string[]>;
-  /** 이 NPC 가 이 채널에 남긴 크론 결과 알림의 시각(ISO, 오름차순일 필요는 없다). */
+  /** Timestamps (ISO, not necessarily ascending) of cron-result notices this NPC left in this
+   * channel. */
   loadCronNoticeTimes(target: PanelTarget): Promise<string[]>;
   loadPanelRead(target: PanelTarget, tab: PanelTab): Promise<PanelReadRow | null>;
   savePanelRead(
@@ -72,7 +80,7 @@ export type BadgeDeps = {
 
 export type PanelBadges = { cards: number; cron: number };
 
-/** 실패한 출처는 0 으로 접는다 — 한 쪽의 침묵이 다른 쪽을 가리지 않게. */
+/** A failed source folds down to 0 — so one side's silence doesn't mask the other. */
 async function countOrZero(count: () => Promise<number>): Promise<number> {
   try {
     return await count();
@@ -99,10 +107,11 @@ export async function readBadges(target: PanelTarget, deps: BadgeDeps): Promise<
 }
 
 /**
- * 탭을 열었다는 기록. `cards` 면 현재 담당 카드를 모두 본 것으로 만들고 담당에서 빠진 id 는
- * 버린다. `cron` 이면 `seenAt` 만 올린다 — `seenIds` 는 건드리지 않는다(카드 탭의 것이다).
- * 담당 카드를 못 가져오면 `seenIds` 는 그대로 두고 `seenAt` 만 올린다 — 못 본 것을 본 것으로
- * 만들지도, 이미 본 것을 잊지도 않는다.
+ * Records that a tab was opened. For `cards`, marks every currently assigned card as seen
+ * and drops any id no longer assigned. For `cron`, only bumps `seenAt` — `seenIds` is left
+ * untouched (that belongs to the cards tab). If assigned cards can't be fetched, `seenIds`
+ * is left as-is and only `seenAt` is bumped — this neither marks something unseen as seen
+ * nor forgets something already seen.
  */
 export async function markTabSeen(
   input: PanelTarget & { tab: PanelTab },
@@ -128,10 +137,10 @@ export async function markTabSeen(
 }
 
 // ---------------------------------------------------------------------------
-// 실제 배선 — Hermes 보드 · 방 알림 · `npc_panel_reads`
+// Real wiring — Hermes board · room notices · `npc_panel_reads`
 // ---------------------------------------------------------------------------
 
-/** 이 채널에 있는 NPC 의 프로필 이름. `npcs.name` 은 읽지 않는다. */
+/** The profile name of the NPC in this channel. `npcs.name` is not read. */
 async function npcProfileName(target: PanelTarget): Promise<string> {
   const [row] = await db
     .select({ profileName: hermesProfiles.profileName })
@@ -191,7 +200,8 @@ async function loadPanelRead(target: PanelTarget, tab: PanelTab): Promise<PanelR
   };
 }
 
-/** 깨진 JSON 은 "본 것이 없다" 로 접는다 — 배지가 조금 많이 보일 뿐, 화면은 산다. */
+/** Broken JSON folds down to "nothing seen" — the badge just shows a bit high, but the
+ * screen still works. */
 function parseSeenIds(raw: string | null): string[] {
   if (!raw) return [];
   try {
@@ -224,7 +234,8 @@ async function savePanelRead(
     });
 }
 
-/** PG 드라이버는 `Date`, SQLite 의 TEXT 컬럼은 ISO 문자열을 원한다(`nowForDb` 와 같은 규칙). */
+/** The PG driver wants a `Date`; SQLite's TEXT column wants an ISO string (same rule as
+ * `nowForDb`). */
 function toDbTimestamp(value: Date): Date {
   return (isPostgres ? value : value.toISOString()) as unknown as Date;
 }

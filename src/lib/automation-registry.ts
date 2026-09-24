@@ -1,19 +1,20 @@
 /**
- * 자동화 훅 레지스트리 — Next 앱 코드와 소켓 서버(`src/server/*`) 사이의 경계.
+ * Automation hook registry — the boundary between the Next app code and the socket server (`src/server/*`).
  *
- * API 라우트(`src/app/**`)와 그 몸통(`src/lib/**`)은 **이 파일만** 본다. 소켓 서버가 뜰 때
- * (`startAutomationPollers`) 실제 구현을 `globalThis` 에 꽂고, 라우트는 꽂힌 것을 읽는다.
- * `rpc-registry.ts` 와 같은 무늬다.
+ * API routes (`src/app/**`) and their body (`src/lib/**`) only ever look at **this file**. When
+ * the socket server comes up (`startAutomationPollers`), it plugs the real implementation into
+ * `globalThis`, and routes read whatever is plugged in. Same pattern as `rpc-registry.ts`.
  *
- * 왜 직접 import 하지 않는가: `@/server/automation-poller` 는 `socket-handlers.ts` 를 끌고
- * 들어오고, 그 파일의 `.js` 확장자 상대 import 는 tsx 런타임용이라 Next/Turbopack 번들에서
- * "Module not found" 로 빌드가 깨진다. 이 경계는 `app-server-boundary.test.ts` 가 지킨다.
+ * Why it isn't imported directly: `@/server/automation-poller` drags in `socket-handlers.ts`,
+ * and that file's `.js`-extension relative imports are meant for the tsx runtime, which breaks
+ * the Next/Turbopack bundle build with "Module not found." This boundary is guarded by
+ * `app-server-boundary.test.ts`.
  *
- * 꽂힌 것이 없으면(테스트·CLI 초기·폴러가 못 뜬 경우) 전부 조용히 no-op 다 — 폴링 실패가
- * REST 응답에 섞이지 않는다는 R24 의 약속과 같다.
+ * If nothing is plugged in (tests, early CLI, or the poller failed to start), everything is
+ * silently a no-op — same promise as R24 that a polling failure never leaks into a REST response.
  */
 
-/** `src/server/automation-events.ts` 의 `NpcWorkingPayload` 와 같은 모양. 서버 모듈을 import 하지 않으려 여기 다시 적는다. */
+/** Same shape as `NpcWorkingPayload` in `src/server/automation-events.ts`. Redeclared here to avoid importing the server module. */
 export type AutomationWorkingPayload = {
   npcId: string;
   working: boolean;
@@ -21,18 +22,19 @@ export type AutomationWorkingPayload = {
 };
 
 export type AutomationHooks = {
-  /** 조작 직후 즉시 폴링(R24). 폴러가 없으면 null. 결과 모양은 `automation-poller.ts` 의 `PollOutcome`. */
+  /** Immediate poll right after an action (R24). null if there's no poller. Result shape is `PollOutcome` from `automation-poller.ts`. */
   pollNow(channelId: string): Promise<unknown>;
-  /** 바인딩이 생기거나 풀렸을 때 폴러 표를 다시 읽는다. */
+  /** Re-reads the poller table when a binding is created or released. */
   refreshPollers(): Promise<void>;
-  /** 지금 "작업 중" 인 NPC 들의 스냅샷(R27). */
+  /** A snapshot of NPCs currently "working" (R27). */
   getWorkingSnapshot(channelId: string): AutomationWorkingPayload[];
   /**
-   * 이미 저장된 방 메시지를 그 방에 방송한다.
+   * Broadcasts an already-stored room message to that room.
    *
-   * DeskRPG 안에서 생기는 알림(승인 요청 등)은 Hermes 사건이 아니라 사건 싱크를 탈 수
-   * 없다. 행은 `appendRoomMessage` 가 쓰고, 이 훅은 **방송만** 한다 — 훅이 없으면 조용히
-   * 지나가되 행은 이미 DB 에 있으므로 사용자가 방을 열면 보인다.
+   * Notices generated inside DeskRPG (approval requests, etc.) aren't Hermes events, so they
+   * can't ride the event sink. The row is written by `appendRoomMessage`; this hook **only
+   * broadcasts** — if the hook is missing, it silently passes through, but the row is already in
+   * the DB so it appears when the user opens the room.
    */
   emitRoomMessage(roomId: string, message: unknown): void;
 };
@@ -53,7 +55,7 @@ export function getAutomationHooks(): AutomationHooks | undefined {
   return hooks && typeof hooks === "object" ? hooks : undefined;
 }
 
-/** 즉시 폴링 요청. 훅이 없으면 null 로 끝난다 — 예전 `pollNow` 가 폴러 없을 때 하던 대로. */
+/** Requests an immediate poll. Resolves to null if there's no hook — same as what the old `pollNow` did with no poller. */
 export function requestPollNow(channelId: string): Promise<unknown> {
   const hooks = getAutomationHooks();
   return hooks ? hooks.pollNow(channelId) : Promise.resolve(null);
@@ -70,9 +72,9 @@ export function readWorkingSnapshot(channelId: string): AutomationWorkingPayload
 }
 
 /**
- * 저장된 방 메시지를 방송한다. 훅이 없으면 조용히 no-op — **방송 실패가 알림을 만든
- * 작업(승인 생성 등)을 실패시키면 안 된다.** 알림이 늦게 보이는 것과 승인이 안 생기는
- * 것은 무게가 다르다.
+ * Broadcasts a stored room message. A silent no-op if there's no hook — **a broadcast failure
+ * must never fail the action that produced the notice (e.g. creating an approval).** A notice
+ * showing up late and an approval failing to be created are not the same weight.
  */
 export function requestEmitRoomMessage(roomId: string, message: unknown): void {
   const hooks = getAutomationHooks();
@@ -80,11 +82,11 @@ export function requestEmitRoomMessage(roomId: string, message: unknown): void {
   try {
     hooks.emitRoomMessage(roomId, message);
   } catch {
-    // 소켓 방송이 깨져도 호출자는 계속 간다.
+    // The caller keeps going even if the socket broadcast breaks.
   }
 }
 
-/** 테스트 전용 — 꽂힌 훅을 비운다. */
+/** Test-only — clears the plugged-in hooks. */
 export function resetAutomationHooksForTests(): void {
   unregisterAutomationHooks();
 }

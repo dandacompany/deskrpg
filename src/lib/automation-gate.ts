@@ -1,17 +1,21 @@
 /**
- * 자동화 플러그인 게이트 — **단 하나의** 판정 함수.
+ * The automation plugin gate — **a single** judgment function.
  *
- * 칸반(보드 확보·폴러)과 크론 REST 가 같은 판정을 써야 한다. 예전에는 두 벌이 있었고
- * 크론 쪽은 신선한 `unknown`/`plugin_absent`/`plugin_unauthorized` 캐시를 그대로 믿은 뒤
- * "info 가 없다" 는 이유로 428 `plugin_upgrade_required` 를 내 오진했다. 판정은 여기서만
- * 하고, HTTP 응답으로 옮기는 일은 `cron-access.ts` 의 `pluginGateResponse` 가 한다.
+ * Kanban (board acquisition, poller) and cron REST must use the same judgment. There
+ * used to be two copies, and the cron side trusted a fresh `unknown`/`plugin_absent`/
+ * `plugin_unauthorized` cache as-is and then misdiagnosed it as 428
+ * `plugin_upgrade_required` because "there's no info". The judgment happens only here;
+ * translating it into an HTTP response is `cron-access.ts`'s `pluginGateResponse`.
  *
- * 게이트웨이의 플러그인 판정을 캐시에서 읽거나(1시간 규칙 — `shouldReprobePlugin`) 다시 찔러
- * 캐시를 채운다. 두 경우는 캐시가 신선해도 다시 찌른다 — 정보가 없는 것이지 판정이 난 것이
- * 아니기 때문이다:
- * - `unknown`(도달 실패·타임아웃) — 한 시간 붙들면 게이트웨이가 살아나도 보드 확보가 막힌다.
- * - `plugin_ready` 인데 `plugin_info_json` 이 비었음 — info 없이 계약을 판정하면 `no_info` 로
- *   `plugin_upgrade_required` 가 나와 한 시간 동안 오판한다(설정 마법사가 남긴 캐시가 이 모양).
+ * Reads the gateway's plugin verdict from the cache (the 1-hour rule —
+ * `shouldReprobePlugin`), or reprobes to refill the cache. There are two cases where it
+ * reprobes even with a fresh cache — because there's no information yet, not because a
+ * verdict was reached:
+ * - `unknown` (unreachable/timeout) — holding this for an hour would block board
+ *   acquisition even after the gateway comes back up.
+ * - `plugin_ready` but `plugin_info_json` is empty — judging the contract without info
+ *   produces `no_info` -> `plugin_upgrade_required`, a misjudgment held for an hour
+ *   (this is the shape of a cache the setup wizard leaves behind).
  */
 
 import { eq } from "drizzle-orm";
@@ -34,11 +38,11 @@ import { transportFetch } from "@/lib/hermes/setup/transport";
 
 export type GatewayResourceRow = typeof gatewayResources.$inferSelect;
 
-/** 게이트가 내는 실패 코드. `channel_kanban_boards.last_error` 에 그대로 남는다. */
+/** The failure code the gate emits. Stored as-is in `channel_kanban_boards.last_error`. */
 export type PluginGateFailureCode =
   "plugin_absent" | "plugin_unauthorized" | "plugin_unknown" | "plugin_upgrade_required";
 
-/** 플러그인 계약 판정. `ok:false` 의 `code` 는 그대로 `last_error` 가 된다. */
+/** The plugin contract verdict. On `ok:false`, `code` becomes `last_error` as-is. */
 export type PluginGate =
   | { ok: true; status: "plugin_ready"; info: PluginInfo }
   | {
@@ -46,9 +50,9 @@ export type PluginGate =
       status: PluginStatus;
       code: PluginGateFailureCode;
       reason: string;
-      /** `plugin_unknown` 이 전송 계층 실패였으면 어느 쪽인지 — HTTP 응답의 코드가 된다. */
+      /** If `plugin_unknown` was a transport-layer failure, which kind — becomes the HTTP response's code. */
       transport?: "unreachable" | "timeout";
-      /** `plugin_upgrade_required` 일 때 계약 판정 상세(최소 버전·이유·빠진 capability). */
+      /** Contract verdict detail for `plugin_upgrade_required` (min version, reason, missing capability). */
       verdict?: Extract<AutomationContractVerdict, { ok: false }>;
     };
 
@@ -112,6 +116,6 @@ export async function gateAutomationPlugin(
       verdict,
     };
   }
-  // verdict.ok 이면 info 는 null 이 아니다(`no_info` 가 먼저 걸린다).
+  // If verdict.ok, info isn't null (`no_info` would have caught it first).
   return { ok: true, status, info: info as PluginInfo };
 }

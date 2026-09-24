@@ -1,6 +1,6 @@
 import { version } from "../../package.json";
 
-/** 앱 버전과 레포 주소의 한 곳. 브라우저와 서버가 함께 읽는다. */
+/** The single place for the app version and repo URL. Read by both the browser and the server. */
 export const APP_VERSION: string = version;
 export const REPO_URL = "https://github.com/dandacompany/deskrpg";
 export const BUG_REPORT_BASE_URL = `${REPO_URL}/issues/new`;
@@ -12,7 +12,7 @@ function parseCalVer(value: string): number[] | null {
   return parts.map(Number);
 }
 
-/** 달력식 버전(2026.921.3)을 자리마다 숫자로 비교한다. 읽을 수 없는 값이 있으면 0. */
+/** Compares a calendar-style version (2026.921.3) numerically, segment by segment. Returns 0 if either value can't be read. */
 export function compareCalVer(a: string, b: string): -1 | 0 | 1 {
   const pa = parseCalVer(a);
   const pb = parseCalVer(b);

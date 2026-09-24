@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-test("채널 큐는 기다리는 폴링과 인계를 순서대로 실행하고 중첩 호출은 허용한다", async () => {
+test("the channel queue runs waiting polls and handoffs in order and allows nested calls", async () => {
   const { withChannelAutomationLock: locked } = await import("./channel-automation-lock");
   const order: string[] = [];
   let release!: () => void;
@@ -29,7 +29,7 @@ test("채널 큐는 기다리는 폴링과 인계를 순서대로 실행하고 �
   assert.deepEqual(order, ["poll", "nested", "other", "saved", "handoff"]);
 });
 
-test("해제된 비동기 컨텍스트는 다음 소유자의 잠금을 우회하지 않는다", async () => {
+test("a released async context does not bypass the next owner's lock", async () => {
   const { withChannelAutomationLock: locked } = await import("./channel-automation-lock");
   let delayed!: Promise<void>;
   let trigger!: () => void;

@@ -1,4 +1,4 @@
-// 승인 결정 REST 의 몸통. 가짜 플러그인 서버 + 일회용 SQLite 로 끝까지 돈다.
+// The body of the approval-decision REST endpoint. Runs end to end with a fake plugin server + a throwaway SQLite.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
@@ -67,7 +67,7 @@ function post(userId: string, channelId: string, approvalId: string, body: unkno
   );
 }
 
-test("승인하면 대상 카드가 전부 풀린다", async () => {
+test("approving unblocks every target card", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가", "나"]);
   const { decideApproval } = await import("@/lib/approval-routes");
@@ -87,7 +87,7 @@ test("승인하면 대상 카드가 전부 풀린다", async () => {
   }
 });
 
-test("결정하면 방의 승인 요청 줄이 결과를 말한다 — 버튼이 남지 않는다", async () => {
+test("deciding makes the room's approval-request line report the result — the button doesn't stay", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가"]);
   const { decideApproval } = await import("@/lib/approval-routes");
@@ -109,7 +109,7 @@ test("결정하면 방의 승인 요청 줄이 결과를 말한다 — 버튼이
   assert.equal(notice.resolved?.by, ownerId);
 });
 
-test("반려하면 아무것도 풀리지 않고 카드는 blocked 로 남는다", async () => {
+test("rejecting unblocks nothing and the card stays blocked", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가"]);
   const { decideApproval } = await import("@/lib/approval-routes");
@@ -125,7 +125,7 @@ test("반려하면 아무것도 풀리지 않고 카드는 blocked 로 남는다
   assert.equal(task.data.task.status, "blocked", "단테 결정: 반려해도 카드는 남는다");
 });
 
-test("두 번째 결정은 409 — 두 탭에서 눌러도 한쪽만 이긴다", async () => {
+test("a second decision is 409 — clicking from two tabs, only one wins", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가"]);
   const { decideApproval } = await import("@/lib/approval-routes");
@@ -144,7 +144,7 @@ test("두 번째 결정은 409 — 두 탭에서 눌러도 한쪽만 이긴다",
   assert.equal((await second.json()).code, "approval_already_decided");
 });
 
-test("다른 채널의 승인 id 는 404 — 존재 여부가 새지 않는다", async () => {
+test("an approval id from another channel is 404 — existence doesn't leak", async () => {
   const a = await seedCtx();
   const b = await seedCtx();
   const batch = await makeApproval(a.ctx, ["가"]);
@@ -158,7 +158,7 @@ test("다른 채널의 승인 id 는 404 — 존재 여부가 새지 않는다",
   assert.equal((await res.json()).code, "approval_not_found");
 });
 
-test("로그인하지 않으면 401", async () => {
+test("401 when not logged in", async () => {
   const { ctx, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가"]);
   const { decideApproval } = await import("@/lib/approval-routes");
@@ -170,7 +170,7 @@ test("로그인하지 않으면 401", async () => {
   assert.equal(res.status, 401);
 });
 
-test("결정 값이 틀리면 400 이고 승인은 그대로 pending 이다", async () => {
+test("an invalid decision value is 400 and the approval stays pending", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가"]);
   const { decideApproval } = await import("@/lib/approval-routes");
@@ -190,7 +190,7 @@ test("결정 값이 틀리면 400 이고 승인은 그대로 pending 이다", as
   );
 });
 
-test("이 승인 밖의 카드를 지정하면 400 이고 아무것도 풀리지 않는다", async () => {
+test("targeting a card outside this approval is 400 and unblocks nothing", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가"]);
   const { decideApproval } = await import("@/lib/approval-routes");
@@ -209,7 +209,7 @@ test("이 승인 밖의 카드를 지정하면 400 이고 아무것도 풀리지
   assert.equal(task.data.task.status, "blocked");
 });
 
-test("부분 반려는 그 카드만 막고 나머지는 푼다", async () => {
+test("a partial rejection blocks only that card and unblocks the rest", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가", "나"]);
   const { decideApproval } = await import("@/lib/approval-routes");
@@ -228,7 +228,7 @@ test("부분 반려는 그 카드만 막고 나머지는 푼다", async () => {
   assert.equal(blocked.data.task.status, "blocked");
 });
 
-test("수정 요청은 아무것도 풀지 않고 메모를 카드 댓글로 남긴다", async () => {
+test("requesting revision unblocks nothing and leaves the note as a card comment", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가"]);
   const { decideApproval } = await import("@/lib/approval-routes");
@@ -248,7 +248,7 @@ test("수정 요청은 아무것도 풀지 않고 메모를 카드 댓글로 남
   assert.equal(task.data.comments?.length, 1, "고쳐 달라는 말이 카드에 남아야 직원이 읽는다");
 });
 
-test("메모가 없으면 댓글을 남기지 않는다 — 빈 댓글은 소음이다", async () => {
+test("no note means no comment — an empty comment is noise", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가"]);
   const { decideApproval } = await import("@/lib/approval-routes");
@@ -262,9 +262,9 @@ test("메모가 없으면 댓글을 남기지 않는다 — 빈 댓글은 소음
   assert.equal(task.data.comments?.length ?? 0, 0);
 });
 
-test("항목별 결정 값이 모르는 것이면 400 — DB 에 쓰이기 전에 막는다", async () => {
-  // `decideTargets` 는 모르는 값에 카드를 풀지 않아 fail-closed 지만, 그 값이
-  // `approval_targets.decision` 에 실릴 수 있다. 경계에서 거른다.
+test("an unknown per-item decision value is 400 — blocked before it reaches the DB", async () => {
+  // `decideTargets` is fail-closed and won't unblock a card for an unknown value, but that
+  // value could still land in `approval_targets.decision`. Filtered out at the boundary.
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가"]);
   const { decideApproval } = await import("@/lib/approval-routes");
@@ -288,7 +288,7 @@ test("항목별 결정 값이 모르는 것이면 400 — DB 에 쓰이기 전�
   assert.equal(rows[0].decision, null, "거절된 요청이 항목 결정을 쓰면 안 된다");
 });
 
-/** 둘째 보드를 만들고 그 슬러그를 돌려준다 — 다중 보드는 이미 출시본에 있다. */
+/** Creates a second board and returns its slug — multi-board support is already shipped. */
 async function makeSecondBoard(ownerId: string, channelId: string): Promise<string> {
   const routes = await import(`@/app/api/channels/[id]/projects/route`);
   const res = await routes.POST(
@@ -304,10 +304,10 @@ async function makeSecondBoard(ownerId: string, channelId: string): Promise<stri
   return body.project!.boardSlug;
 }
 
-test("기본 보드가 아닌 곳의 카드도 승인하면 풀린다", async () => {
-  // 예전에는 결정이 늘 채널 기본 보드로 `unblock` 을 보내, 카드가 다른 보드에 있으면
-  // 전부 task_not_found 로 실패하는데 승인은 이미 닫혀 있었다 — 승인했는데 아무 일도
-  // 일어나지 않는 상태다.
+test("approving unblocks a card even on a board other than the default one", async () => {
+  // Previously, a decision always sent `unblock` to the channel's default board, so if the
+  // card lived on another board it always failed with task_not_found — but the approval had
+  // already closed. That left a state where approving did nothing at all.
   const { ctx, ownerId, channelId } = await seedCtx();
   const second = await makeSecondBoard(ownerId, channelId);
   assert.notEqual(second, ctx.boardSlug, "둘째 보드가 기본 보드와 같으면 이 시험이 무의미하다");
@@ -340,7 +340,7 @@ test("기본 보드가 아닌 곳의 카드도 승인하면 풀린다", async ()
   assert.notEqual(task.data.task.status, "blocked");
 });
 
-test("풀기가 전부 실패하면 승인을 되돌리고 502 — 다시 누를 수 있게", async () => {
+test("when every unblock fails, the approval is reverted and returns 502 — so it can be retried", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const { createApprovalBatch } = await import("@/lib/approvals");
   const batch = await createApprovalBatch(ctx, {
@@ -353,7 +353,7 @@ test("풀기가 전부 실패하면 승인을 되돌리고 502 — 다시 누를
   assert.ok(batch.ok);
   if (!batch.ok) return;
 
-  // unblock 두 번을 모두 실패시킨다.
+  // Makes both unblock calls fail.
   server.failNext("/deskrpg/kanban/tasks", 2);
 
   const { decideApproval } = await import("@/lib/approval-routes");
@@ -373,9 +373,10 @@ test("풀기가 전부 실패하면 승인을 되돌리고 502 — 다시 누를
   );
 });
 
-// 승인으로 카드를 풀면 디스패치를 한 번 요청한다. 카드 액션 라우트는 unblock 뒤 디스패치를
-// 부르는데, 승인 결정은 unblock 을 직접 보내 그 규칙을 비껴갔다 — 그 뒤는 게이트웨이 내장
-// 디스패처의 주기에 맡겨져, 스테이징에서 카드가 ready 에 약 5분 머물렀다.
+// Unblocking a card via approval requests one dispatch. The card-action route calls dispatch
+// right after unblock, but an approval decision sends unblock directly and bypassed that rule —
+// leaving the card at the mercy of the gateway's built-in dispatcher cycle, which left cards
+// sitting in `ready` for about 5 minutes in staging.
 function dispatchCount() {
   return server
     .requests()
@@ -387,7 +388,7 @@ async function decide(approvalId: string, ownerId: string, channelId: string, bo
   return decideApproval(post(ownerId, channelId, approvalId, body), channelId, approvalId);
 }
 
-test("승인으로 카드를 풀면 디스패치를 한 번 요청한다", async () => {
+test("unblocking a card via approval requests one dispatch", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가", "나"]);
   const before = dispatchCount();
@@ -396,7 +397,7 @@ test("승인으로 카드를 풀면 디스패치를 한 번 요청한다", async
   assert.equal(dispatchCount() - before, 1, "카드 두 장이어도 디스패치는 한 번이다");
 });
 
-test("반려·수정 요청은 아무것도 풀지 않으므로 디스패치하지 않는다", async () => {
+test("rejecting/requesting revision unblocks nothing, so it never dispatches", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   for (const decision of ["reject", "request_revision"]) {
     const batch = await makeApproval(ctx, [`${decision}-가`]);
@@ -406,7 +407,7 @@ test("반려·수정 요청은 아무것도 풀지 않으므로 디스패치하�
   }
 });
 
-test("풀기가 전부 실패하면 디스패치하지 않는다", async () => {
+test("when every unblock fails, it never dispatches", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가"]);
   server.failNext("/deskrpg/kanban/tasks", 1);
@@ -416,7 +417,7 @@ test("풀기가 전부 실패하면 디스패치하지 않는다", async () => {
   assert.equal(dispatchCount() - before, 0);
 });
 
-test("디스패치가 실패해도 승인은 성공이다 — 내장 디스패처가 이어받는다", async () => {
+test("even if dispatch fails, the approval still succeeds — the built-in dispatcher takes over", async () => {
   const { ctx, ownerId, channelId } = await seedCtx();
   const batch = await makeApproval(ctx, ["가"]);
   server.failNext("/deskrpg/kanban/dispatch", 1);

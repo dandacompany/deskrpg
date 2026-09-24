@@ -1,10 +1,12 @@
 /**
- * NPC 스킬 관리 REST 의 문지기. 순서: 로그인(401) → 채널 멤버(403/404) → 게이트웨이(409) →
- * 자동화 플러그인 게이트 → NPC 가 이 채널의 active NPC 이고 현재 게이트웨이 프로필(404 npc_not_found) →
- * capability(428, 목록 GET 은 예외) → 변경은 게이트웨이 소유자(403).
+ * The gatekeeper for the NPC skill management REST. Order: login (401) -> channel member
+ * (403/404) -> gateway (409) -> automation plugin gate -> the NPC is an active NPC in
+ * this channel with a current-gateway profile (404 npc_not_found) -> capability (428,
+ * except for the list GET) -> mutations require the gateway owner (403).
  *
- * 스킬은 **프로필 단위**다. 같은 프로필을 다른 채널이 고용했으면 변경이 그 채널에도 적용된다 —
- * `sharedChannelCount` 를 응답에 실어 화면이 알린다.
+ * Skills are **per-profile**. If another channel has also hired the same profile, a
+ * change applies to that channel too — the response carries `sharedChannelCount` so the
+ * screen can say so.
  */
 import { and, countDistinct, eq, ne } from "drizzle-orm";
 import type { NextResponse } from "next/server";
@@ -68,7 +70,7 @@ export function requireOwner(ctx: Pick<SkillContext, "isGatewayOwner">): NextRes
   return ctx.isGatewayOwner ? null : cronError(403, "forbidden", "Gateway owner only");
 }
 
-/** 같은 게이트웨이의 같은 프로필을 NPC 로 가진 **다른** 채널 수(잠든 NPC 포함 — 깨우면 바로 영향을 받는다). */
+/** The number of **other** channels that have the same profile on the same gateway as an NPC (including dormant NPCs — waking one is affected immediately). */
 export async function sharedChannelCount(
   ctx: Pick<SkillContext, "gatewayId" | "profileName" | "channelId">,
 ): Promise<number> {

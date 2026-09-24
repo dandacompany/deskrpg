@@ -13,16 +13,17 @@ test("DEV_JWT_SECRET is a non-empty string", () => {
 });
 
 /**
- * 이 테스트는 원래 "consistent across imports" 라는 이름으로 두 모듈을 `await import`
- * 했지만, **가져온 값을 쓰지 않고** 앞 테스트와 같은 단언만 했다. 즉 이름이 주장하는
- * 것을 한 번도 검증하지 않았고, 어떤 회귀로도 빨개질 수 없었다(2026-09-08 발견).
+ * This test originally `await import`ed two modules under the name "consistent across imports,"
+ * but **never used the imported values** — it just repeated the same assertion as the test
+ * above. In other words, it never once verified what its name claimed, and no regression could
+ * ever have turned it red (discovered 2026-09-08).
  *
- * 공유는 구조적으로 보장된다 — `jwt.ts` 와 `gateway-resources.ts` 가 둘 다
- * `./dev-constants` 에서 가져온다. 깨지는 경로는 하나뿐이다: 누군가 그 리터럴을
- * 자기 파일에 다시 적는 것. 그러면 한쪽 비밀만 바뀌어 토큰이 조용히 서로 안 맞는다.
- * 그래서 검사하는 것도 그것이다.
+ * Sharing is structurally guaranteed — both `jwt.ts` and `gateway-resources.ts` import from
+ * `./dev-constants`. There's exactly one way to break it: someone rewrites that literal in their
+ * own file. Then only one side's secret changes and tokens silently stop matching. So that's
+ * what's checked here.
  */
-test("개발용 비밀 리터럴은 dev-constants.ts 에만 있다", () => {
+test("the dev secret literal exists only in dev-constants.ts", () => {
   const libDir = path.dirname(fileURLToPath(import.meta.url));
   const srcDir = path.resolve(libDir, "..");
   const offenders: string[] = [];

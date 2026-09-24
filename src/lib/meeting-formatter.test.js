@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const { formatSpeakMessage } = require("./meeting-formatter.js");
 
-test("발언 프롬프트가 멘션 형식을 알려준다", () => {
+test("the speak prompt explains the mention format", () => {
   const prompt = formatSpeakMessage(
     "점심 메뉴",
     [
@@ -17,7 +17,7 @@ test("발언 프롬프트가 멘션 형식을 알려준다", () => {
     5,
   );
 
-  // 두 형식이 모두 프롬프트에 있어야 NPC 가 골라 쓸 수 있다.
+  // Both formats need to be in the prompt for the NPC to pick between them.
   assert.match(prompt, /TO:/, "TO: 형식이 안내되지 않았습니다");
   assert.match(prompt, /@\[/, "@[이름] 형식이 안내되지 않았습니다");
 });

@@ -23,7 +23,7 @@ test("normalizeMeetingMinutesRecord falls back to empty arrays for invalid value
   assert.deepEqual(normalized.keyTopics, []);
 });
 
-test("outcomeJson 은 SQLite 문자열이든 PG 객체든 outcome 으로 읽힌다", () => {
+test("outcomeJson reads as outcome whether it's a SQLite string or a PG object", () => {
   const outcome = { decisions: ["A안"], followUps: [], project: null };
   for (const stored of [JSON.stringify(outcome), outcome]) {
     const normalized = normalizeMeetingMinutesRecord({ outcomeJson: stored });
@@ -32,7 +32,7 @@ test("outcomeJson 은 SQLite 문자열이든 PG 객체든 outcome 으로 읽힌�
   }
 });
 
-test("outcomeJson 이 없거나 깨졌으면 outcome 은 null", () => {
+test("outcome is null when outcomeJson is missing or malformed", () => {
   for (const stored of [null, undefined, "oops", "[]", 3]) {
     assert.equal(normalizeMeetingMinutesRecord({ outcomeJson: stored }).outcome, null);
   }

@@ -12,7 +12,7 @@ const queue = (shared[KEY] ??= {
   context: new AsyncLocalStorage<Lease>(),
 });
 
-/** Next 번들과 소켓 서버가 공유한다. 단일 서버 프로세스의 채널별 실행 순서를 지킨다. */
+/** Shared by the Next bundle and the socket server. Preserves per-channel execution order within a single server process. */
 export async function withChannelAutomationLock<T>(
   channelId: string,
   run: () => Promise<T>,
@@ -30,7 +30,7 @@ export async function withChannelAutomationLock<T>(
   try {
     return await queue.context.run(lease, run);
   } finally {
-    // fire-and-forget 자식이 이 컨텍스트를 상속했더라도 해제 후 재진입할 수 없다.
+    // Even if a fire-and-forget child inherited this context, it can't re-enter after release.
     lease.active = false;
     release();
     if (queue.tails.get(channelId) === tail) queue.tails.delete(channelId);

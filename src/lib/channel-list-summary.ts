@@ -1,10 +1,13 @@
 /**
- * 채널 선택 카드에 싣는 요약 — 맵 환경(썸네일용)과 참여자.
+ * The summary carried on the channel-selection card — map environment (for the thumbnail)
+ * and participants.
  *
- * 채널은 환경 ID 를 따로 저장하지 않는다. 생성 때 `buildOfficeEnvironment(id)` 의 사본을 `map_data` 에
- * 넣을 뿐이다(`POST /api/channels`). 그래서 저장된 맵을 다섯 공식 환경의 현재 맵과 견준다. 오브젝트는
- * 자리 배치 등으로 달라질 수 있으니 **크기와 바닥 레이어**만 본다 — 환경마다 바닥 모양이 다르다.
- * 업그레이드 전 옛 공식 맵은 기존 판정(`upgradeOfficialEnvironmentMap`)을 먼저 거친다.
+ * A channel doesn't separately store an environment ID. At creation, it just puts a copy
+ * of `buildOfficeEnvironment(id)` into `map_data` (`POST /api/channels`). So the stored map
+ * is compared against the current map of each of the five official environments. Objects
+ * can differ due to seat placement etc., so only the **size and floor layer** are checked —
+ * the floor shape differs per environment. A pre-upgrade old official map first goes
+ * through the existing judgment (`upgradeOfficialEnvironmentMap`).
  */
 import {
   buildOfficeEnvironment,
@@ -65,7 +68,7 @@ export type ParticipantPreview = { nickname: string | null; appearance: unknown 
 
 export const PARTICIPANT_PREVIEW_LIMIT = 5;
 
-/** 소유자 먼저, 나머지는 들어온 순서. 사용자당 한 명. */
+/** Owner first, the rest in arrival order. One entry per user. */
 export function summarizeParticipants(
   rows: ParticipantRow[],
   ownerId: string,

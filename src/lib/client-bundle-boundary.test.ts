@@ -4,13 +4,14 @@ import path from "node:path";
 import test from "node:test";
 
 /**
- * `"use client"` 파일에서 시작해 import 를 따라가며, 서버 전용 모듈이 클라이언트
- * 번들로 끌려오는 경로가 있는지 본다.
+ * Starting from `"use client"` files, follows imports to check whether any path pulls a
+ * server-only module into the client bundle.
  *
- * 왜 이 테스트가 필요한가: 같은 부류로 실제 사고가 있었다. `plugin-capability.ts` 가
- * `@/db` 를 import 하자 pg·better-sqlite3 가 브라우저 번들에 실려 화면이 백지가 됐다.
- * `npm run test` 도 `tsc` 도 그걸 잡지 못한다 — 타입은 맞고 런타임은 서버에서만 돈다.
- * 번들러의 트리셰이킹이 가려 줄 때도 있어서 "지금 안 깨진다" 는 근거가 되지 않는다.
+ * Why this test exists: a real incident of exactly this kind happened. When
+ * `plugin-capability.ts` imported `@/db`, pg and better-sqlite3 got bundled into the
+ * browser and the screen went blank. Neither `npm run test` nor `tsc` catches it — the
+ * types are correct, and the runtime only ever runs on the server. The bundler's
+ * tree-shaking sometimes hides it too, so "it's not broken right now" is not proof.
  */
 
 const SRC = path.join(process.cwd(), "src");
@@ -45,7 +46,7 @@ function resolve(spec: string, fromFile: string): string | null {
   let base: string;
   if (spec.startsWith("@/")) base = path.join(SRC, spec.slice(2));
   else if (spec.startsWith(".")) base = path.resolve(path.dirname(fromFile), spec);
-  else return null; // 외부 패키지는 파일로 따라가지 않는다
+  else return null; // an external package is not followed to a file
   for (const cand of [
     base + ".ts",
     base + ".tsx",
@@ -61,7 +62,7 @@ function isServerOnly(spec: string): boolean {
   return SERVER_ONLY_SPECIFIERS.some((re) => re.test(spec));
 }
 
-test("클라이언트 컴포넌트에서 서버 전용 모듈로 가는 import 경로가 없다", () => {
+test("no import path from a client component reaches a server-only module", () => {
   const files = listFiles(SRC);
   const clientEntries = files.filter((f) => {
     const head = fs.readFileSync(f, "utf8").slice(0, 200);
@@ -72,7 +73,7 @@ test("클라이언트 컴포넌트에서 서버 전용 모듈로 가는 import �
   const violations: string[] = [];
   for (const entry of clientEntries) {
     const seen = new Set<string>();
-    // [파일, 여기까지 온 경로]
+    // [file, path taken to get here]
     const stack: Array<[string, string[]]> = [[entry, [path.relative(SRC, entry)]]];
     while (stack.length > 0) {
       const [file, trail] = stack.pop()!;

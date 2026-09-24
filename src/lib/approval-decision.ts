@@ -1,8 +1,10 @@
 /**
- * 승인 결정의 순수 판정 — "무엇을 풀 것인가" 하나만 답한다.
+ * The pure judgment for an approval decision — it answers exactly one thing: "what should be
+ * unblocked".
  *
- * 라우트에 두면 검증할 수 없다. 부분 승인은 "고른 것만" 이 아니라 "고르지 않은 것은 승인
- * 전체의 결정을 따른다" 라서, 말로는 맞아 보여도 구현이 어긋나기 쉬운 자리다.
+ * Leaving this in the route would make it untestable. Partial approval isn't just "only the
+ * chosen ones" — "anything not chosen follows the decision of the approval as a whole" — a
+ * rule that sounds right in words but is easy to get wrong in implementation.
  */
 export type ApprovalDecision = "approve" | "reject" | "request_revision";
 
@@ -27,9 +29,11 @@ export type DecideTargetsResult =
   | { ok: false; error: "target_not_in_approval" | "target_duplicated"; taskId: string };
 
 /**
- * 풀어야 할 카드 목록. `targets` 를 주지 않으면 전체가 승인 전체의 결정을 따른다.
+ * The list of cards to unblock. If `targets` isn't given, everything follows the decision of
+ * the approval as a whole.
  *
- * `request_revision` 은 아무것도 풀지 않는다 — 고쳐 달라고 한 일을 시작시키면 안 된다.
+ * `request_revision` never unblocks anything — work that was asked to be revised must not
+ * start.
  */
 export function decideTargets(
   targetIds: readonly string[],
@@ -46,7 +50,8 @@ export function decideTargets(
   }
   const unblock = targetIds.filter((id) => {
     const per = chosen.get(id);
-    // 수정 요청 중에는 개별 승인도 풀지 않는다. 그것이 이 결정의 뜻이다.
+    // During a revision request, not even an individual approval unblocks anything. That's
+    // what this decision means.
     if (decision === "request_revision") return false;
     return (per ?? decision) === "approve";
   });

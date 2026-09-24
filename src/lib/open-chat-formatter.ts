@@ -1,10 +1,11 @@
-// 자유채팅(맵 채팅)에서 NPC 에게 줄 대본을 만든다. 순수 — I/O 없음.
+// Builds the script given to an NPC in free chat (map chat). Pure — no I/O.
 //
-// 회의 대본(meeting-formatter.js)과 다른 것: 주제가 없고, 턴 카운터가 없고, 참석자 명단
-// 대신 "누가 나를 불렀나"와 최근 대화만 있다. 맵 채팅에는 안건도 순서도 없기 때문이다.
+// How it differs from the meeting script (meeting-formatter.js): no topic, no turn
+// counter, and instead of a participant roster there's only "who called me" and the
+// recent conversation. Map chat has no agenda and no ordering.
 //
-// 지명 형식만은 회의와 **똑같이** 안내한다. 형식이 갈리면 파서가 둘이 되고, 그 순간
-// 한쪽에서만 통하는 지목이 생긴다.
+// The mention format is the **exact same** as in meetings, deliberately. If the format
+// diverged, there'd be two parsers, and a mention that only works with one of them.
 
 import { formatReportFormat } from "@/lib/report-format";
 import { formatUserContext, type UserContext } from "@/lib/user-context";
@@ -23,7 +24,7 @@ export function formatOpenChatMessage(
   lines.push(
     `당신은 ${self.displayName} 입니다. 사무실에서 오가는 대화 중 ${calledBy} 님이 당신을 불렀습니다.`,
   );
-  // 부른 사람이 누구인지(이름·소개). 넘기지 않으면 예전 대본과 바이트까지 같다.
+  // Who called (name·intro). If not passed, this is byte-identical to the old script.
   if (caller?.name) lines.push(formatUserContext(caller));
   lines.push("");
 
@@ -33,8 +34,9 @@ export function formatOpenChatMessage(
     lines.push("");
   }
 
-  // 보고 형식은 대화 경로 셋(DM·오피스 전체·회의)이 같은 문자열을 쓴다 — report-format.ts.
-  // 최근 대화 **앞**에 둔다: 대본을 [최근 대화]~[답하는 법] 로 잘라 읽는 곳이 있다.
+  // The report format string is shared across all three conversation paths (DM · whole
+  // office · meeting) — report-format.ts. Placed **before** the recent conversation: some
+  // callers read the script by slicing from [최근 대화] to [답하는 법].
   lines.push(formatReportFormat());
   lines.push("");
 

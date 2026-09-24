@@ -1,13 +1,14 @@
 /**
- * 칸반 REST 라우트 핸들러들이 공유하는 몸통.
+ * The shared body for the kanban REST route handlers.
  *
- * 라우트 파일(`src/app/api/channels/[id]/kanban/**`)은 얇게 두고 — 본문 파싱, 문지기
- * (`kanban-access.ts`), Hermes 호출, dispatch 한 번(R9), 즉시 폴링(R24), 응답 조립 — 의
- * 순서를 여기 한 곳에 고정한다.
+ * Keep the route files (`src/app/api/channels/[id]/kanban/**`) thin — the order of body
+ * parsing, the gatekeeper (`kanban-access.ts`), the Hermes call, one dispatch (R9),
+ * immediate polling (R24), and response assembly is fixed here in one place.
  *
- * Hermes 가 정본이다. 카드 상태는 재해석하지 않고(R6) 응답을 그대로 전달하며, Hermes 오류는
- * 상태 코드와 `{code, message}` 그대로 내려간다(R32). 여기서 우리가 정하는 것은 권한과
- * 담당자 검증뿐이다.
+ * Hermes is the source of truth. Card status isn't reinterpreted (R6) — the response is
+ * passed through as-is, and Hermes errors go out with their original status code and
+ * `{code, message}` (R32). The only things we decide here are permissions and
+ * assignee validation.
  */
 
 import { eq } from "drizzle-orm";
@@ -64,12 +65,12 @@ export type TaskParams = { params: Promise<{ id: string; taskId: string }> };
 export type AttachmentParams = { params: Promise<{ id: string; attachmentId: string }> };
 
 // ---------------------------------------------------------------------------
-// 본문·쿼리
+// Body / query
 // ---------------------------------------------------------------------------
 
 type JsonBody = Record<string, unknown>;
 
-/** JSON 본문. 비어 있거나 깨졌으면 null — 호출부가 400 을 낸다. */
+/** JSON body. null if empty or malformed — the caller returns a 400. */
 async function readJsonBody(req: NextRequest): Promise<JsonBody | null> {
   try {
     const parsed: unknown = await req.json();
@@ -81,7 +82,7 @@ async function readJsonBody(req: NextRequest): Promise<JsonBody | null> {
   }
 }
 
-/** 본문이 없어도 되는 액션(approve·reclaim 등)용 — 비어 있으면 빈 객체. */
+/** For actions that don't require a body (approve, reclaim, etc.) — an empty object if empty. */
 async function readOptionalJsonBody(req: NextRequest): Promise<JsonBody> {
   return (await readJsonBody(req)) ?? {};
 }
@@ -100,7 +101,7 @@ function stringList(value: unknown): string[] | undefined {
   return Array.isArray(value) ? value.filter((s): s is string => typeof s === "string") : undefined;
 }
 
-/** 문자열 필드만 골라 담는다. 모르는 키는 버린다 — Hermes 로 나가는 본문에 섞이면 안 된다. */
+/** Pick only string fields. Unknown keys are dropped — they must not leak into the body sent to Hermes. */
 const TASK_STRING_FIELDS = [
   "body",
   "tenant",
@@ -134,8 +135,8 @@ function pickTaskFields(body: JsonBody): Omit<CreateTaskBody, "title" | "assigne
 }
 
 /**
- * 담당자 필드. `assignee` 는 npcId 로 받는다(R8) — 서버가 profile_name 으로 바꾼다.
- * `null` 은 "담당 해제" 로 그대로 넘긴다(PATCH 전용).
+ * The assignee field. `assignee` is received as npcId (R8) — the server converts it
+ * to profile_name. `null` passes through as "clear the assignee" (PATCH only).
  */
 async function resolveAssigneeField(
   ctx: KanbanChannelContext,
@@ -187,15 +188,17 @@ async function resolveReviewPolicy(
 }
 
 // ---------------------------------------------------------------------------
-// 공통 흐름
+// Shared flow
 // ---------------------------------------------------------------------------
 
 /**
- * 요청이 가리키는 보드. `?board=` 가 없으면 undefined 이고, 그러면 컨텍스트가 그 채널의
- * 사건 수신 보드를 쓴다 — 보드를 모르는 옛 클라이언트의 뜻이 바뀌지 않게 하는 지점이다.
+ * The board the request points to. undefined if `?board=` is absent, in which case the
+ * context uses the channel's event-receiving board — this is the point that keeps the
+ * meaning unchanged for old clients that don't know about boards.
  *
- * 형식 검사만 여기서 한다. **이 채널의 보드인지**는 `kanban-access` 가 404 로 판정한다 —
- * 형식이 맞는 남의 보드 slug 를 형식 검사로는 걸러낼 수 없기 때문이다.
+ * Only format validation happens here. **Whether it's this channel's board** is decided
+ * by `kanban-access` with a 404 — a well-formed but someone-else's board slug can't be
+ * filtered out by format validation alone.
  */
 function requestedBoardSlug(req: NextRequest): string | undefined | null {
   const raw = req.nextUrl.searchParams.get("board");
@@ -203,7 +206,7 @@ function requestedBoardSlug(req: NextRequest): string | undefined | null {
   return BOARD_SLUG.test(raw) ? raw : null;
 }
 
-/** 플러그인의 보드 slug 규칙과 같다(`BOARD_SLUG_RE`). */
+/** Same as the plugin's board slug rule (`BOARD_SLUG_RE`). */
 const BOARD_SLUG = /^[a-z0-9-]{1,64}$/;
 
 async function resolve(req: NextRequest, channelId: string) {
@@ -218,7 +221,7 @@ async function resolve(req: NextRequest, channelId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// 보드·카드
+// Board / task
 // ---------------------------------------------------------------------------
 
 export async function getBoard(req: NextRequest, channelId: string) {
@@ -235,10 +238,11 @@ export async function getBoard(req: NextRequest, channelId: string) {
 }
 
 /**
- * `GET /api/channels/:id/kanban/links` — 보드 전체의 부모·자식 쌍.
+ * `GET /api/channels/:id/kanban/links` — parent/child pairs across the whole board.
  *
- * 플러그인에 묶음 조회가 없으면 404 가 그대로 올라간다. 화면은 그때 카드마다 상세를 부르는
- * 길로 내려앉는다 — 여기서 빈 목록으로 덮으면 "링크가 없다" 와 "물어볼 수 없다" 가 같아진다.
+ * If the plugin has no batch lookup, the 404 propagates as-is. The screen then falls
+ * back to fetching details card by card — papering over it with an empty list here
+ * would make "there are no links" and "we can't ask" indistinguishable.
  */
 export async function listLinks(req: NextRequest, channelId: string) {
   const resolved = await resolve(req, channelId);
@@ -249,10 +253,11 @@ export async function listLinks(req: NextRequest, channelId: string) {
 }
 
 /**
- * `GET /api/channels/:id/kanban/runs?from=&to=&limit=` — 창 안의 실행 기록.
+ * `GET /api/channels/:id/kanban/runs?from=&to=&limit=` — run history within a window.
  *
- * 쿼리는 그대로 넘긴다. 검증은 플러그인이 하고(400 `invalid_query`), 여기서 한 번 더 하면
- * 두 곳의 규칙이 갈린다. 숫자가 아닌 값은 넘기지 않아 플러그인의 판정을 받게 한다.
+ * The query is passed through as-is. The plugin validates it (400 `invalid_query`);
+ * validating again here would let the two rules diverge. Non-numeric values aren't
+ * passed through, so they're left to the plugin's judgment.
  */
 export async function listRuns(req: NextRequest, channelId: string) {
   const resolved = await resolve(req, channelId);
@@ -303,7 +308,7 @@ export async function createTask(req: NextRequest, channelId: string) {
     ...pickTaskFields(body),
     ...(typeof assignee.assignee === "string" ? { assignee: assignee.assignee } : {}),
   };
-  // 누가 시켰는지를 카드 본문 끝에 남긴다. 캐릭터가 없으면 붙이지 않고 그대로 만든다.
+  // Note who requested it at the end of the card body. If there's no character, leave it as-is.
   const mine = await getMyCharacter(ctx.userId);
   if (mine) task.body = appendRequesterLine(task.body, { name: mine.name, bio: mine.bio });
   const res = await ctx.client.kanban.createTask(ctx.boardSlug, task);
@@ -330,7 +335,7 @@ export async function updateTask(req: NextRequest, channelId: string, taskId: st
 
   const update: UpdateTaskBody = { ...pickTaskFields(body) };
   if (typeof body.title === "string" && body.title.trim()) update.title = body.title.trim();
-  // 상태 값은 검증하지 않는다(R6) — Hermes 가 400 으로 답하면 그대로 전달한다.
+  // Status values aren't validated (R6) — if Hermes returns 400, it's passed through as-is.
   if (typeof body.status === "string") update.status = body.status as UpdateTaskBody["status"];
   if (assignee.assignee !== undefined) {
     update.assignee = (assignee.assignee ?? undefined) as UpdateTaskBody["assignee"];
@@ -389,10 +394,10 @@ export async function addComment(req: NextRequest, channelId: string, taskId: st
 }
 
 // ---------------------------------------------------------------------------
-// 카드 액션 (R10·R13)
+// Task actions (R10, R13)
 // ---------------------------------------------------------------------------
 
-/** 상태를 바꾸는 액션 — 성공 직후 dispatch 를 한 번 요청한다(R9). */
+/** Actions that change status — request one dispatch right after success (R9). */
 const DISPATCH_AFTER: ReadonlySet<KanbanTaskAction> = new Set<KanbanTaskAction>([
   "approve",
   "request-changes",
@@ -465,7 +470,7 @@ export async function runTaskAction(
 }
 
 // ---------------------------------------------------------------------------
-// 첨부 (R12)
+// Attachments (R12)
 // ---------------------------------------------------------------------------
 
 async function resolveForAttachments(req: NextRequest, channelId: string) {
@@ -478,14 +483,16 @@ async function resolveForAttachments(req: NextRequest, channelId: string) {
 }
 
 /**
- * 보드 전체의 카드 첨부 — 결과물 갤러리가 아티팩트 뒤에 잇는다.
+ * Attachments for cards across the whole board — the artifact gallery follows behind this.
  *
- * 워커가 만든 파일은 `scratch` 워크스페이스와 함께 카드가 끝나면 지워지고 **첨부만 남는다.**
- * 그래서 갤러리가 첨부를 모르면 끝난 카드의 결과물이 어디에도 안 보인다.
+ * Files the worker made are wiped along with the `scratch` workspace when the card
+ * finishes, and **only the attachment remains.** So if the gallery doesn't know about
+ * the attachment, a finished card's deliverable is invisible anywhere.
  *
- * 플러그인이 목록을 모르면(capability `kanban_attachment_list` 없음) 오류가 아니라
- * `supported: false` 로 답한다 — 화면은 아티팩트만 그리고 **왜 첨부가 없는지** 한 줄 알린다.
- * 카드마다 상세를 부르는 N+1 로 흉내 내지 않는다.
+ * If the plugin doesn't know how to list them (no `kanban_attachment_list` capability),
+ * this doesn't error — it answers `supported: false` so the screen still renders the
+ * artifact and notes **why there's no attachment** in one line. It does not fake this
+ * with N+1 calls fetching each card's detail.
  */
 export async function listBoardAttachments(req: NextRequest, channelId: string) {
   const resolved = await resolve(req, channelId);
@@ -495,7 +502,7 @@ export async function listBoardAttachments(req: NextRequest, channelId: string) 
     return NextResponse.json({ supported: false, attachments: [], next_cursor: null });
   const q = req.nextUrl.searchParams;
   const rawLimit = q.get("limit");
-  // 검증은 플러그인이 한다(`invalid_query`) — REST 계층에서 한 번 더 하면 두 규칙이 갈린다.
+  // The plugin validates this (`invalid_query`) — validating again at the REST layer would let the two rules diverge.
   const limit = rawLimit === null || rawLimit === "" ? undefined : Number(rawLimit);
   const res = await ctx.client.kanban.listBoardAttachments(ctx.boardSlug, {
     limit,
@@ -517,7 +524,7 @@ export async function listAttachments(req: NextRequest, channelId: string, taskI
   return NextResponse.json({ attachments: res.data.attachments });
 }
 
-/** multipart 의 `file` 파트를 그대로 Hermes 로 넘긴다. */
+/** Passes the multipart `file` part straight through to Hermes. */
 export async function uploadAttachment(req: NextRequest, channelId: string, taskId: string) {
   const resolved = await resolveForAttachments(req, channelId);
   if (!resolved.ok) return resolved.response;
@@ -542,7 +549,7 @@ export async function uploadAttachment(req: NextRequest, channelId: string, task
   return NextResponse.json({ attachment: res.data.attachment }, { status: 201 });
 }
 
-/** 첨부 id 모양. `.`·`..`·`/` 는 URL 정규화로 소유자 토큰이 다른 경로에 닿게 한다 — 부르기 전에 막는다. */
+/** Attachment id shape. `.`, `..`, `/` let URL normalization reach a different path with the owner token — block them before calling out. */
 const ATTACHMENT_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 function attachmentNotFound() {
@@ -574,7 +581,7 @@ export async function deleteAttachment(req: NextRequest, channelId: string, atta
 }
 
 // ---------------------------------------------------------------------------
-// 링크 (R14) · dispatch · 로그
+// Links (R14) · dispatch · logs
 // ---------------------------------------------------------------------------
 
 export async function mutateLink(req: NextRequest, channelId: string, op: "add" | "remove") {
@@ -613,13 +620,13 @@ export async function dispatchBoard(req: NextRequest, channelId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// 스웜 — Hermes `create_swarm` 으로 가는 경로. 토폴로지는 Hermes 가 만든다.
+// Swarm — the path into Hermes's `create_swarm`. Hermes builds the topology.
 // ---------------------------------------------------------------------------
 
 export async function createSwarm(req: NextRequest, channelId: string) {
   const resolved = await resolve(req, channelId);
   if (!resolved.ok) return resolved.response;
-  // Native 스웜의 즉시 완료 루트는 카드별 승인을 보장하지 못한다. 기존 스웜 읽기는 유지한다.
+  // Native swarm's instant-complete route can't guarantee per-card approval. Existing swarm reads are kept.
   return cronError(
     428,
     "swarm_review_policy_unsupported",
@@ -632,7 +639,7 @@ export async function getBlackboard(req: NextRequest, channelId: string, taskId:
   if (!resolved.ok) return resolved.response;
   const ctx = resolved.ctx;
 
-  // createSwarm 과 같은 게이트 — 블랙보드도 스웜 기능이므로 같은 428 을 낸다.
+  // Same gate as createSwarm — the blackboard is also a swarm feature, so it returns the same 428.
   const gate = swarmGate(ctx.info);
   if (!gate.ok) {
     const failure = pluginUpgradeRequired(gate);
@@ -657,7 +664,7 @@ export async function getTaskLog(req: NextRequest, channelId: string, taskId: st
 }
 
 // ---------------------------------------------------------------------------
-// 설정 — 보드 작업 폴더(채널 소유자) · 호스트 운영 설정(읽기 = 채널 소유자, 수정 = 게이트웨이 소유자)
+// Settings — board work folder (channel owner) · host orchestration settings (read = channel owner, write = gateway owner)
 // ---------------------------------------------------------------------------
 
 function settingsForbidden() {
@@ -672,8 +679,9 @@ async function readBoardMeta(ctx: KanbanChannelContext) {
 }
 
 async function buildSettingsResponse(ctx: KanbanChannelContext) {
-  // 운영 설정 읽기는 채널 소유자의 권한이지만, 고칠 수 있는 게이트웨이 소유자가 자기가 고친
-  // 값을 못 보는 모양은 성립하지 않는다 — 수정 권한은 읽기 권한을 함의한다. 일반 멤버는 null.
+  // Reading orchestration settings is the channel owner's privilege, but a shape where the
+  // gateway owner who can edit them can't see what they changed doesn't make sense — write
+  // permission implies read permission. Regular members get null.
   const canReadOrchestration = ctx.isChannelOwner || ctx.isGatewayOwner;
   const [board, orchestration] = await Promise.all([
     readBoardMeta(ctx),
@@ -713,7 +721,7 @@ function parseOrchestrationPatch(raw: JsonBody): UpdateOrchestrationBody {
   return patch;
 }
 
-/** PATCH `{board?:{default_workdir}, orchestration?:{...}}`. 권한 없는 부분이 하나라도 있으면 403. */
+/** PATCH `{board?:{default_workdir}, orchestration?:{...}}`. If any part lacks permission, 403. */
 export async function patchSettings(req: NextRequest, channelId: string) {
   const body = await readJsonBody(req);
   if (!body) return invalidBody("JSON body required");
@@ -731,7 +739,7 @@ export async function patchSettings(req: NextRequest, channelId: string) {
   if (!resolved.ok) return resolved.response;
   const ctx = resolved.ctx;
 
-  // 권한은 Hermes 를 부르기 전에 한꺼번에 본다 — 반만 적용된 채 403 이 나가면 안 된다.
+  // Check all permissions before calling Hermes — a 403 must not go out after only half applied.
   if (boardPatch && !ctx.isChannelOwner) return settingsForbidden();
   if (orchestrationPatch && !ctx.isGatewayOwner) return settingsForbidden();
 
@@ -754,7 +762,7 @@ export async function patchSettings(req: NextRequest, channelId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// 자동화 상태 — 게이트를 통과하지 못해도 "왜" 를 보여 줘야 하므로 428·503 을 내지 않는다.
+// Automation status — must show "why" even when the gate isn't cleared, so no 428/503 here.
 // ---------------------------------------------------------------------------
 
 function isoOrNull(value: Date | string | null | undefined): string | null {
@@ -771,7 +779,7 @@ export async function getAutomationStatus(req: NextRequest, channelId: string) {
   const binding = await getChannelGatewayBinding(channelId);
   if (!binding) return cronError(409, "gateway_not_bound", "Channel has no gateway bound");
 
-  // 캐시가 낡았으면 여기서 갱신된다. 판정 결과는 쓰지 않는다 — 상태는 캐시에서 읽는다.
+  // If the cache is stale, it's refreshed here. The judgment result itself isn't used — status is read from the cache.
   await ensureAutomationPlugin(binding.resource);
   const [gateway] = await db
     .select()
@@ -797,17 +805,18 @@ export async function getAutomationStatus(req: NextRequest, channelId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// 카드 제안 해소 (T7)
+// Resolving card proposals (T7)
 // ---------------------------------------------------------------------------
 
 export type ProposalParams = { params: Promise<{ id: string; proposalId: string }> };
 
 /**
- * `POST .../kanban/proposals/{proposalId}/resolve` — 본문 `{choice:"card"|"inline"}`.
+ * `POST .../kanban/proposals/{proposalId}/resolve` — body `{choice:"card"|"inline"}`.
  *
- * 판정은 `resolveProposal`(도메인)이, 배선은 `liveResolveDeps`(DB·플러그인)가 한다. 여기서
- * 하는 일은 본문 파싱, 그 둘을 붙이기, 결과를 상태 코드로 옮기기, 그리고 카드가 생겼을 때의
- * dispatch 한 번 + 즉시 폴링(R9·R24)뿐이다.
+ * The judgment is made by `resolveProposal` (domain); the wiring is done by
+ * `liveResolveDeps` (DB/plugin). All that happens here is parsing the body, wiring the
+ * two together, mapping the result to a status code, and — when a card was created —
+ * one dispatch + immediate polling (R9, R24).
  */
 export async function resolveCardProposal(req: NextRequest, channelId: string, proposalId: string) {
   const body = await readJsonBody(req);
@@ -826,7 +835,7 @@ export async function resolveCardProposal(req: NextRequest, channelId: string, p
 
   if (outcome.choice === "inline") return NextResponse.json({ choice: "inline" });
 
-  // 카드가 생겼으니 카드 생성 라우트와 같은 뒤처리를 한다 — 관문은 이미 통과한 것을 쓴다.
+  // A card was created, so do the same post-processing as the card creation route — reuse the gate already passed.
   const ctx = gatedContext();
   if (ctx) {
     await dispatchOnce(ctx);

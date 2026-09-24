@@ -2,14 +2,15 @@ import type { CharacterAppearance } from "@/game/three/office-appearance";
 import { OFFICE_LOOKS, officeLookAppearance, resolveOfficeLook } from "@/game/three/office-looks";
 
 /**
- * 새 직원의 외형을 고른다 — **외형 없는 직원을 만들지 않는다.**
+ * Picks a new employee's appearance — **never leaves an employee with no appearance.**
  *
- * 외형이 비어 있으면 렌더러가 기본 룩(`office-jun`)으로 접어, 직원이 전부 같은 얼굴로
- * 출근했다. 그래서 등록하는 순간 이 게이트웨이에서 아직 아무도 안 쓴 룩을 하나 준다.
- * 50종을 다 썼으면 겹치더라도 전체에서 고른다. 바꾸는 곳은 직원 상세 화면이다.
+ * If the appearance is empty, the renderer collapses to the default look (`office-jun`),
+ * so every employee showed up with the same face. So at registration time, a look no one
+ * else on this gateway has used yet is assigned. If all 50 are used, it picks from the
+ * whole set even with overlap. Changing it happens on the employee detail screen.
  *
- * @param usedAppearances 같은 게이트웨이 직원들의 `appearance` 값(형태 불문 — 모르면 무시)
- * @param random 테스트가 고정할 수 있게 주입한다
+ * @param usedAppearances the `appearance` values of employees on the same gateway (any shape — unrecognized ones are ignored)
+ * @param random injected so tests can pin it
  */
 export function pickOfficeLookForNewProfile(
   usedAppearances: readonly unknown[],

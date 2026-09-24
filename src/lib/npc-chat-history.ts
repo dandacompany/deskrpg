@@ -1,8 +1,9 @@
-// NPC 1:1 대화 이력의 저장소.
+// Storage for NPC 1:1 conversation history.
 //
-// 이력의 소유 단위는 **캐릭터**다 — `chat_messages` 스키마의 (character_id, npc_id) 그대로.
-// 같은 채널에 있어도 내가 NPC 와 나눈 대화는 나만 본다. 소켓 핸들러의 인메모리 맵은
-// 이 저장소 앞의 캐시일 뿐이고, 프로세스가 죽으면 여기 남은 것이 정본이다.
+// The ownership unit for history is the **character** — exactly (character_id, npc_id) from the
+// `chat_messages` schema. Even in the same channel, only I see the conversation I had with an
+// NPC. The socket handler's in-memory map is just a cache in front of this store; what's left
+// here is the source of truth if the process dies.
 
 import { and, asc, eq } from "drizzle-orm";
 
@@ -32,22 +33,23 @@ export type NpcChatMessageRow = {
   content: string;
 };
 
-/** 인메모리 캐시 키. 캐릭터별로 갈린다는 사실이 이 한 줄에 모여 있다. */
+/** In-memory cache key. This one line captures the fact that it's keyed per character. */
 export function npcHistoryKey(characterId: string, npcId: string): string {
   return `${characterId}:${npcId}`;
 }
 
 /**
- * 이 발화를 누구의 이력으로 남길지 정한다.
+ * Decides whose history this line should be recorded under.
  *
- * 소켓이 붙어 있고 화면도 멀쩡한데 서버의 `players` 에는 없는 구간이 있다 — 재연결
- * 직후 `player:join` 이 다시 성립하기 전이 그렇다(배포·네트워크 끊김 뒤). 그 동안 오간
- * 대화는 서버가 캐릭터를 몰라 통째로 사라졌다 — 응답까지 정상이라 화면은 성공을 보여주고
- * 기록만 없는, 조용한 유실이다.
+ * There's a window where the socket is connected and the screen looks fine, but the server's
+ * `players` doesn't have an entry — right after a reconnect, before `player:join` is
+ * re-established (after a deploy or network drop). Conversation exchanged during that window
+ * used to vanish entirely because the server didn't know the character — the response still
+ * succeeded, so the screen showed success while only the record was missing, a silent loss.
  *
- * 그래서 클라이언트가 자기 캐릭터를 함께 실어 보낸다. 다만 클라이언트가 말한 값은
- * 그대로 믿지 않는다. 서버가 이미 아는 값(join 된 소켓)이 있으면 그쪽이 이기고,
- * 없을 때만 클라이언트의 주장을 쓰되 소유를 확인하라고 표시한다.
+ * So the client also sends its own character. But the client's claimed value isn't trusted
+ * outright: if the server already knows a value (a joined socket), that wins; only when there
+ * isn't one is the client's claim used, and it's flagged for ownership verification.
  */
 export function pickHistoryCharacterId(input: {
   joinedCharacterId: string | null;
@@ -62,7 +64,7 @@ export function pickHistoryCharacterId(input: {
   return { characterId: null, needsVerification: false };
 }
 
-/** 저장할 값이 없으면 null — 빈 발화로 이력을 더럽히지 않는다. */
+/** null if there's nothing to store — an empty line doesn't pollute the history. */
 export function buildChatMessageRow(input: {
   characterId: string;
   npcId: string;
@@ -83,7 +85,7 @@ function isHistoryRole(role: string): role is NpcHistoryRole {
   return role === "player" || role === "npc";
 }
 
-/** 저장된 행을 클라이언트가 이미 알고 있는 이력 모양으로 되돌린다. */
+/** Converts stored rows back into the history shape the client already knows. */
 export function toHistoryMessages(rows: StoredChatMessage[]): NpcHistoryMessage[] {
   const messages: NpcHistoryMessage[] = [];
   for (const row of rows) {
@@ -91,23 +93,23 @@ export function toHistoryMessages(rows: StoredChatMessage[]): NpcHistoryMessage[
     messages.push({
       role: row.role,
       content: row.content,
-      // createdAt 이 없다고 메시지를 버리지는 않는다 — 순서는 조회에서 이미 정해졌고,
-      // 여기서 잃을 것은 표시용 시각뿐이다.
+      // A missing createdAt doesn't drop the message — the order is already decided by the
+      // query, and all that's lost here is the display timestamp.
       timestamp: row.createdAt ? row.createdAt.getTime() : 0,
     });
   }
   return messages;
 }
 
-// --- DB 경계 -------------------------------------------------------------
-// 이 아래는 drizzle 에 닿는다. 다른 서버 헬퍼들과 같은 주입 방식을 쓴다
-// db·schema 를 unknown 으로 받아 안에서 좁힌다.
+// --- DB boundary -----------------------------------------------------------
+// Everything below this touches drizzle. Same injection pattern as the other server helpers —
+// db·schema are taken as unknown and narrowed inside.
 
 type ChatDb = {
   insert: (table: unknown) => { values: (row: unknown) => Promise<unknown> };
   select: (fields?: unknown) => {
     from: (table: unknown) => {
-      // 뽑는 열이 호출마다 달라서(이력 / 목록) 행 모양은 호출 쪽에서 좁힌다.
+      // The selected columns differ per call (history / listing), so the row shape is narrowed by the caller.
       where: (cond: unknown) => { orderBy: (...order: unknown[]) => Promise<unknown[]> };
     };
   };
@@ -167,12 +169,14 @@ export async function loadNpcChatHistory(
 }
 
 /**
- * 이 캐릭터가 대화한 직원들의 **마지막 발화 한 줄씩** 을 뽑는다 — 대화 목록의 DM 줄이다.
+ * Pulls **one line per employee** — the last message exchanged — for every employee this
+ * character has talked to; this is the DM row of the conversation list.
  *
- * 한 캐릭터의 DM 행을 모두 읽어 JS 에서 접는다. 정렬을 `(npcId, createdAt)` 로 두어
- * `idx_chat_messages_lookup` 를 그대로 타고, 접는 규칙은 `summarizeDmThreads` 가 갖는다.
- * 행 수는 한 사람이 직원들과 나눈 대화 전체이므로 `loadNpcChatHistory`(한 직원 전체)와
- * 같은 자리수다 — 목록을 열 때 한 번 돈다. 더 커지면 그때 집계 질의로 바꾼다.
+ * Reads all of one character's DM rows and folds them in JS. Sorting by `(npcId, createdAt)`
+ * rides `idx_chat_messages_lookup` directly, and the folding rule lives in `summarizeDmThreads`.
+ * The row count is that one person's whole conversation with all employees, so it's the same
+ * order of magnitude as `loadNpcChatHistory` (one whole employee) — it runs once per time the
+ * list is opened. Switch to an aggregate query if it grows past that.
  */
 export async function loadDmThreads(
   db: unknown,
@@ -205,8 +209,8 @@ export async function clearNpcChatHistory(
 }
 
 /**
- * 클라이언트가 실어 보낸 캐릭터가 정말 그 사용자의 것인지 확인한다.
- * 이 검증이 빠지면 남의 characterId 를 실어 그 사람 이력에 쓸 수 있다.
+ * Confirms the character the client sent actually belongs to that user.
+ * Without this check, someone else's characterId could be used to write into their history.
  */
 export async function characterBelongsToUser(
   db: unknown,

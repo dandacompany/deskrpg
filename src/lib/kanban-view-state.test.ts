@@ -25,10 +25,10 @@ function task(id: string, over: Partial<KanbanTask> = {}): KanbanTask {
 }
 
 // ---------------------------------------------------------------------------
-// 거르기
+// Filtering
 // ---------------------------------------------------------------------------
 
-test("빈 필터는 아무것도 거르지 않는다 — 고르지 않은 것이 전부를 지우면 안 된다", () => {
+test("an empty filter filters nothing out — an unselected value must not wipe out everything", () => {
   const tasks = [task("a"), task("b", { tenant: "web" })];
   assert.deepEqual(
     applyFilter(tasks, DEFAULT_VIEW_STATE.filter).map((t) => t.id),
@@ -36,7 +36,7 @@ test("빈 필터는 아무것도 거르지 않는다 — 고르지 않은 것이
   );
 });
 
-test("테넌트·담당·상태 필터는 교집합으로 걸린다", () => {
+test("tenant/assignee/status filters combine as an intersection", () => {
   const tasks = [
     task("a", { tenant: "web", assignee: "sophie", status: "todo" }),
     task("b", { tenant: "web", assignee: "oliver", status: "todo" }),
@@ -53,7 +53,7 @@ test("테넌트·담당·상태 필터는 교집합으로 걸린다", () => {
   );
 });
 
-test("테넌트가 빈 카드는 빈 문자열로 취급돼 다른 테넌트 필터에 걸리지 않는다", () => {
+test("a card with no tenant is treated as an empty string and isn't caught by another tenant filter", () => {
   const tasks = [task("a"), task("b", { tenant: "web" })];
   const got = applyFilter(tasks, { ...DEFAULT_VIEW_STATE.filter, tenants: ["web"] });
   assert.deepEqual(
@@ -62,7 +62,7 @@ test("테넌트가 빈 카드는 빈 문자열로 취급돼 다른 테넌트 필
   );
 });
 
-test("경고만 보기는 count>0 인 카드만 남긴다", () => {
+test("warnings-only view keeps only cards with count>0", () => {
   const tasks = [
     task("a", { warnings: { count: 0 } }),
     task("b", { warnings: { count: 2, highest_severity: "high" } }),
@@ -76,10 +76,10 @@ test("경고만 보기는 count>0 인 카드만 남긴다", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 묶기
+// Grouping
 // ---------------------------------------------------------------------------
 
-test("상태로 묶으면 KANBAN_TASK_STATUSES 순서를 따른다", () => {
+test("grouping by status follows the KANBAN_TASK_STATUSES order", () => {
   const tasks = [
     task("done1", { status: "done" }),
     task("todo1", { status: "todo" }),
@@ -91,7 +91,7 @@ test("상태로 묶으면 KANBAN_TASK_STATUSES 순서를 따른다", () => {
   );
 });
 
-test("알 수 없는 상태값 카드는 버려지지 않고 기타 그룹으로 간다", () => {
+test("a card with an unknown status isn't dropped — it goes into the other group", () => {
   const tasks = [task("a", { status: "todo" }), task("x", { status: "weird" as KanbanTaskStatus })];
   const groups = groupTasks(tasks, "status");
   const other = groups.find((g) => g.key === OTHER_STATUS_GROUP_KEY);
@@ -105,7 +105,7 @@ test("알 수 없는 상태값 카드는 버려지지 않고 기타 그룹으로
   assert.equal(total, tasks.length, "묶는 과정에서 카드 수가 줄었다");
 });
 
-test("테넌트가 빈 카드는 '없음' 그룹이고 항상 마지막이다", () => {
+test("a card with no tenant goes into the 'none' group and it's always last", () => {
   const tasks = [task("a"), task("b", { tenant: "web" })];
   const groups = groupTasks(tasks, "tenant", { tenants: ["web"] });
   assert.deepEqual(
@@ -114,7 +114,7 @@ test("테넌트가 빈 카드는 '없음' 그룹이고 항상 마지막이다", 
   );
 });
 
-test("보드 응답 목록에 없는 테넌트도 그룹으로 나온다 — 메타 없는 서브프로젝트가 사라지면 안 된다", () => {
+test("a tenant absent from the board response list still becomes a group — a subproject with no meta must not disappear", () => {
   const tasks = [task("a", { tenant: "ghost" }), task("b", { tenant: "web" })];
   const groups = groupTasks(tasks, "tenant", { tenants: ["web"] });
   assert.deepEqual(
@@ -124,13 +124,13 @@ test("보드 응답 목록에 없는 테넌트도 그룹으로 나온다 — 메
   assert.equal(groups[1]?.value, "ghost", "슬러그가 값으로 그대로 남아야 화면이 표시할 수 있다");
 });
 
-test("묶기가 none 이면 그룹 하나, 카드가 없으면 그룹도 없다", () => {
+test("grouping by none yields one group, and no cards means no groups", () => {
   assert.equal(groupTasks([task("a")], "none").length, 1);
   assert.deepEqual(groupTasks([], "none"), []);
   assert.deepEqual(groupTasks([], "status"), []);
 });
 
-test("빈 그룹은 만들지 않는다 — 빈 열은 보드 뷰의 일이다", () => {
+test("empty groups are never created — empty columns are the board view's job", () => {
   const groups = groupTasks([task("a", { status: "todo" })], "status");
   assert.deepEqual(
     groups.map((g) => g.key),
@@ -139,10 +139,10 @@ test("빈 그룹은 만들지 않는다 — 빈 열은 보드 뷰의 일이다",
 });
 
 // ---------------------------------------------------------------------------
-// 정렬
+// Sorting
 // ---------------------------------------------------------------------------
 
-test("같은 키를 가진 카드의 상대 순서는 방향을 뒤집어도 유지된다(안정 정렬)", () => {
+test("relative order of cards sharing a key holds regardless of direction (stable sort)", () => {
   const tasks = [
     task("a", { created_at: "2026-09-01T00:00:00Z" }),
     task("b", { created_at: "2026-09-01T00:00:00Z" }),
@@ -158,7 +158,7 @@ test("같은 키를 가진 카드의 상대 순서는 방향을 뒤집어도 유
   );
 });
 
-test("날짜가 없는 카드는 방향과 무관하게 뒤로 간다", () => {
+test("cards with no date go last regardless of direction", () => {
   const tasks = [
     task("none"),
     task("old", { created_at: "2026-01-01T00:00:00Z" }),
@@ -168,7 +168,7 @@ test("날짜가 없는 카드는 방향과 무관하게 뒤로 간다", () => {
   assert.equal(sortTasks(tasks, "created", "desc").at(-1)?.id, "none");
 });
 
-test("숫자 우선순위는 숫자로 비교한다 — 문자열 비교면 10 이 2보다 앞선다", () => {
+test("numeric priority is compared as a number — string comparison would put 10 before 2", () => {
   const tasks = [task("p10", { priority: "10" }), task("p2", { priority: "2" })];
   assert.deepEqual(
     sortTasks(tasks, "priority", "asc").map((t) => t.id),
@@ -176,7 +176,7 @@ test("숫자 우선순위는 숫자로 비교한다 — 문자열 비교면 10 �
   );
 });
 
-test("상태 정렬은 열 순서를 쓰고 모르는 상태는 맨 뒤다", () => {
+test("status sort uses the column order and unknown statuses go last", () => {
   const tasks = [
     task("x", { status: "weird" as KanbanTaskStatus }),
     task("d", { status: "done" }),
@@ -189,22 +189,22 @@ test("상태 정렬은 열 순서를 쓰고 모르는 상태는 맨 뒤다", () 
 });
 
 // ---------------------------------------------------------------------------
-// 진행률
+// Progress
 // ---------------------------------------------------------------------------
 
-test("progress 가 없거나 total 이 0이면 바를 그리지 않는다(null)", () => {
+test("no bar is drawn when progress is absent or total is 0 (null)", () => {
   assert.equal(cardProgress(task("a")), null);
   assert.equal(cardProgress(task("b", { progress: { done: 0, total: 0 } })), null);
 });
 
-test("done 이 total 을 넘어도 넘치지 않게 접는다", () => {
+test("clamps so done doesn't overflow past total", () => {
   assert.deepEqual(cardProgress(task("a", { progress: { done: 9, total: 3 } })), {
     done: 3,
     total: 3,
   });
 });
 
-test("묶음 진행률의 분모에서 archived 가 빠진다", () => {
+test("archived is excluded from the batch progress denominator", () => {
   const tasks = [
     task("a", { status: "done" }),
     task("b", { status: "todo" }),
@@ -218,7 +218,7 @@ test("묶음 진행률의 분모에서 archived 가 빠진다", () => {
   );
 });
 
-test("세그먼트는 상태 순서대로 나오고 0인 상태는 빠진다", () => {
+test("segments come out in status order and a status with 0 is excluded", () => {
   const tasks = [task("a", { status: "done" }), task("b", { status: "todo" })];
   assert.deepEqual(
     statusSegments(tasks).segments.map((s) => s.status),
@@ -226,13 +226,13 @@ test("세그먼트는 상태 순서대로 나오고 0인 상태는 빠진다", (
   );
 });
 
-test("셀 카드가 없으면 폭 계산이 빈 배열 — 0% 바를 그리지 않는다", () => {
+test("no countable cards means an empty array for width — no 0% bar is drawn", () => {
   const { segments, counted } = statusSegments([task("z", { status: "archived" })]);
   assert.equal(counted, 0);
   assert.deepEqual(segmentWidths(segments, counted), []);
 });
 
-test("세그먼트 폭의 합은 100 이다", () => {
+test("segment widths sum to 100", () => {
   const tasks = [
     task("a", { status: "done" }),
     task("b", { status: "todo" }),
@@ -244,15 +244,15 @@ test("세그먼트 폭의 합은 100 이다", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 트리
+// Tree
 // ---------------------------------------------------------------------------
 
-test("직계 자식 수는 보드 응답의 link_counts 를 그대로 쓴다", () => {
+test("direct child count uses the board response's link_counts as-is", () => {
   assert.equal(directChildCount(task("a", { link_counts: { parents: 1, children: 3 } })), 3);
   assert.equal(directChildCount(task("b")), 0);
 });
 
-test("부모가 보이는 목록에 없으면 자식이 루트로 올라온다 — 카드가 사라지지 않는다", () => {
+test("if the parent is absent from the visible list, the child is promoted to root — the card doesn't disappear", () => {
   const tasks = [task("child")];
   const parentOf = new Map([["child", "archived-parent"]]);
   const { roots, childrenOf } = promoteOrphans(tasks, parentOf);
@@ -263,7 +263,7 @@ test("부모가 보이는 목록에 없으면 자식이 루트로 올라온다 �
   assert.equal(childrenOf.size, 0);
 });
 
-test("부모가 목록에 있으면 자식은 그 아래로 붙는다", () => {
+test("if the parent is in the list, the child is nested under it", () => {
   const tasks = [task("parent"), task("child")];
   const parentOf = new Map([["child", "parent"]]);
   const { roots, childrenOf } = promoteOrphans(tasks, parentOf);
@@ -277,7 +277,7 @@ test("부모가 목록에 있으면 자식은 그 아래로 붙는다", () => {
   );
 });
 
-test("부모 대기는 todo 이고 미완 부모가 있을 때만 참이다", () => {
+test("waiting on parents is true only when the card is todo and has an unfinished parent", () => {
   const child = task("c", { status: "todo" });
   assert.equal(isWaitingOnParents(child, [task("p", { status: "running" })]), true);
   assert.equal(isWaitingOnParents(child, [task("p", { status: "done" })]), false);
@@ -291,21 +291,21 @@ test("부모 대기는 todo 이고 미완 부모가 있을 때만 참이다", ()
 });
 
 // ---------------------------------------------------------------------------
-// 저장된 뷰 상태
+// Saved view state
 // ---------------------------------------------------------------------------
 
-test("낡거나 망가진 저장값을 기본값으로 접는다", () => {
+test("a stale or broken saved value falls back to the default", () => {
   assert.deepEqual(normalizeViewState(null), DEFAULT_VIEW_STATE);
   assert.deepEqual(normalizeViewState("nonsense"), DEFAULT_VIEW_STATE);
   assert.deepEqual(normalizeViewState({ viewMode: "gantt", groupBy: "moon" }), DEFAULT_VIEW_STATE);
 });
 
-test("알 수 없는 상태 필터값은 버린다 — 열지 못할 필터가 카드를 다 지우면 안 된다", () => {
+test("an unknown status filter value is dropped — a filter that can't open must not wipe out all cards", () => {
   const got = normalizeViewState({ filter: { statuses: ["todo", "weird"] } });
   assert.deepEqual(got.filter.statuses, ["todo"]);
 });
 
-test("저장된 값이 살아 있으면 그대로 읽는다", () => {
+test("a valid saved value is read as-is", () => {
   const got = normalizeViewState({
     viewMode: "list",
     groupBy: "tenant",
@@ -323,8 +323,8 @@ test("저장된 값이 살아 있으면 그대로 읽는다", () => {
   assert.deepEqual(got.collapsedGroups, ["web"]);
 });
 
-test("만든 날짜 정렬은 플러그인이 보내는 epoch 초에서도 동작한다", () => {
-  // 정수 시각을 못 읽으면 전부 "값 없음" 으로 몰려 정렬이 조용히 입력 순서가 된다.
+test("sorting by creation date also works with epoch seconds sent by the plugin", () => {
+  // Failing to read an integer timestamp would dump everything into "no value," silently making the sort fall back to input order.
   const tasks = [task("new", { created_at: 1758412800 }), task("old", { created_at: 1750000000 })];
   assert.deepEqual(
     sortTasks(tasks, "created", "asc").map((t) => t.id),
@@ -336,7 +336,7 @@ test("만든 날짜 정렬은 플러그인이 보내는 epoch 초에서도 동�
   );
 });
 
-test("epoch 초와 ISO 가 섞여 있어도 한 줄로 정렬된다", () => {
+test("a mix of epoch seconds and ISO still sorts as one consistent line", () => {
   const tasks = [
     task("iso-new", { created_at: "2025-09-21T00:00:00.000Z" }),
     task("epoch-old", { created_at: 1750000000 }),
@@ -347,23 +347,23 @@ test("epoch 초와 ISO 가 섞여 있어도 한 줄로 정렬된다", () => {
   );
 });
 
-test("필터가 없으면 실행 기록을 거르지 않는다 — 카드가 지워진 실행이 사라지면 안 된다", () => {
+test("with no filter, run records aren't filtered out — a run for a deleted card must not disappear", () => {
   const runs = [{ task_id: "gone" }, { task_id: "a" }];
   assert.equal(hasActiveFilter(DEFAULT_VIEW_STATE.filter), false);
   assert.deepEqual(filterRunsByVisibleTasks(runs, null), runs);
 });
 
-test("필터가 걸리면 보이는 카드의 실행만 남는다", () => {
+test("when a filter is active, only runs for visible cards remain", () => {
   const runs = [{ task_id: "web" }, { task_id: "api" }];
   assert.deepEqual(filterRunsByVisibleTasks(runs, new Set(["web"])), [{ task_id: "web" }]);
 });
 
-test("보관함 보기만 켠 것은 거르는 필터가 아니다", () => {
-  // 그건 서버 조회 범위이고, 응답에 없는 것을 한 번 더 거를 이유가 없다.
+test("having only the archive view toggled on is not itself a filter", () => {
+  // That's the server query scope — there's no reason to filter again for what the response already excludes.
   assert.equal(hasActiveFilter({ ...DEFAULT_VIEW_STATE.filter, includeArchived: true }), false);
 });
 
-test("테넌트·담당·상태·경고 필터는 모두 활성으로 센다", () => {
+test("tenant/assignee/status/warnings filters all count as active", () => {
   const base = DEFAULT_VIEW_STATE.filter;
   assert.equal(hasActiveFilter({ ...base, tenants: ["web"] }), true);
   assert.equal(hasActiveFilter({ ...base, assignees: ["sophie"] }), true);

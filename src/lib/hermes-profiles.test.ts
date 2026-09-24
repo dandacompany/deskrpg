@@ -202,11 +202,11 @@ describe("registerHermesProfile", () => {
     assert.equal(rows.length, 1, "the race did not create a duplicate row");
   });
 
-  // 최종 리뷰 I-2: 스펙 §3① — "마법사가 이 값을 세운다." 수동 등록 경로는 이 인자를
-  // 아예 넘기지 않는다는 사실 자체가 구분 신호이므로, 기본값(false)과 명시적 true
-  // 둘 다 여기서 고정한다.
-  describe("provisionedByDeskrpg (최종 리뷰 I-2)", () => {
-    test("인자를 넘기지 않으면(수동 등록) false 로 남는다", async () => {
+  // Final review I-2: spec §3① — "the wizard sets this value." Since the manual
+  // registration path not passing this argument at all is itself the distinguishing signal,
+  // both the default (false) and an explicit true are pinned down here.
+  describe("provisionedByDeskrpg (final review I-2)", () => {
+    test("stays false when the argument isn't passed (manual registration)", async () => {
       const owner = await seedUser("owner");
       const gateway = await seedGateway(owner.id);
 
@@ -220,7 +220,7 @@ describe("registerHermesProfile", () => {
       assert.equal(result.profile.provisionedByDeskrpg, false);
     });
 
-    test("provisionedByDeskrpg: true 를 넘기면(마법사) 신규 행에 true 로 저장된다", async () => {
+    test("saves true on the new row when provisionedByDeskrpg: true is passed (the wizard)", async () => {
       const owner = await seedUser("owner");
       const gateway = await seedGateway(owner.id);
 
@@ -235,7 +235,7 @@ describe("registerHermesProfile", () => {
       assert.equal(result.profile.provisionedByDeskrpg, true);
     });
 
-    test("이미 true 인 행을 인자 없이 재등록해도(수동 토큰 교체) false 로 되돌아가지 않는다", async () => {
+    test("re-registering an already-true row with no argument (a manual token swap) doesn't revert to false", async () => {
       const owner = await seedUser("owner");
       const gateway = await seedGateway(owner.id);
 
@@ -249,7 +249,8 @@ describe("registerHermesProfile", () => {
       assert.ok("profile" in created);
       assert.equal(created.profile.provisionedByDeskrpg, true);
 
-      // 사용자가 화면에서 토큰만 바꾸는 흔한 경로 — provisionedByDeskrpg 를 모른다.
+      // The common path where the user changes only the token on screen — it doesn't know
+      // about provisionedByDeskrpg.
       const rotated = await registerHermesProfile({
         userId: owner.id,
         gatewayId: gateway.id,

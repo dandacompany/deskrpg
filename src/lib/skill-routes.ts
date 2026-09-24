@@ -1,7 +1,8 @@
 /**
- * NPC 스킬 관리 REST(`/api/channels/:id/npcs/:npcId/skills/**`). catch-all 한 라우트가 이 표로 분기한다 —
- * 플러그인 `routes.py` 와 같은 순서로, 고정 세그먼트(`enabled`·`archive`·`hub`·`curator`·`learning`)가
- * 스킬 이름보다 먼저다. 권한 판정은 전부 여기(서버)서 하고, 플러그인은 프로필 키만 본다.
+ * NPC skill management REST (`/api/channels/:id/npcs/:npcId/skills/**`). A single catch-all
+ * route dispatches through this table — in the same order as the plugin's `routes.py`, with
+ * the fixed segments (`enabled`·`archive`·`hub`·`curator`·`learning`) matched before a skill
+ * name. Permission is decided entirely here (the server); the plugin only checks the profile key.
  */
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -21,11 +22,11 @@ type HandlerArgs = { args: string[]; body: Record<string, unknown>; sp: URLSearc
 type Handler = (ctx: SkillContext, a: HandlerArgs) => Promise<PluginResponse<unknown> | Response>;
 type Row = {
   method: string;
-  /** `*` 는 한 세그먼트 인자. */
+  /** `*` matches one path-segment argument. */
   pattern: string[];
   access: Access;
   handler: Handler;
-  /** 성공 상태 코드 — 작업을 시작하는 호출은 202, 생성은 201. 기본 200. */
+  /** Success status code — 202 for a call that starts a job, 201 for creation. Defaults to 200. */
   okStatus?: number;
 };
 
@@ -34,7 +35,7 @@ const strList = (v: unknown) =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 const FIXED = new Set(["enabled", "archive", "hub", "curator", "learning"]);
 
-// 표 순서가 매칭 순서다.
+// Table order is match order.
 const ROWS: Row[] = [
   {
     method: "PUT",
@@ -134,7 +135,7 @@ const ROWS: Row[] = [
     handler: (c, a) => c.client.skills.job("curator", a.args[0]),
   },
   {
-    // 메모리 노드는 소유자에게만 — 멤버에게는 플러그인이 메모리를 빼고 보내도록 includeMemory=0.
+    // Memory nodes go to the owner only — for a member, includeMemory=0 tells the plugin to strip memory before sending.
     method: "GET",
     pattern: ["learning", "graph"],
     access: "member",
@@ -238,7 +239,7 @@ function match(method: string, path: string[]): { row: Row; args: string[] } | n
     const args: string[] = [];
     const ok = row.pattern.every((p, i) => {
       if (p !== "*") return p === path[i];
-      // 고정 세그먼트 이름은 첫 자리 와일드카드로 받지 않는다 — 표의 고정 행이 먼저다.
+      // A fixed segment name is never accepted by the first-position wildcard — the fixed rows in the table come first.
       if (i === 0 && FIXED.has(path[i])) return false;
       args.push(path[i]);
       return true;
@@ -279,7 +280,7 @@ export async function handleSkillRoute(
   const { ctx } = resolved;
   const path = params.path ?? [];
 
-  // 목록은 capability 가 없어도 옛 필드로 응답한다 — 화면이 "업그레이드 필요" 를 그 자리에서 알린다.
+  // The list responds with legacy fields even without the capability — so the screen can show "upgrade required" right there.
   if (req.method === "GET" && path.length === 0) {
     const res = await ctx.client.skills.list();
     if (!res.ok) return pluginFailureResponse(res);

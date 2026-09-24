@@ -1,11 +1,13 @@
 /**
- * 운영 지표 — 카드·실행 기록에서 **계산되는** 것. 저장하지 않는다.
+ * Operational metrics — **computed** from card/run history. Never stored.
  *
- * 저장하지 않는 이유는 틀렸을 때 계산만 고치면 되고, 낡은 값이 DB 에 남지 않기 때문이다.
+ * The reason not to store them: when the calculation is wrong, fixing it is enough, and no
+ * stale value lingers in the DB.
  *
- * 제품 방향(`docs/product-direction.md`)이 못을 박아 뒀다 — 에이전트 수·메시지 수·회의 시간·
- * 화면 체류시간만으로 생산성을 주장하지 않는다. 그래서 "카드 30개 생성" 같은 수는 지표가
- * 아니다. 여기 있는 것은 **끝났는가 · 왜 실패했는가 · 지금 손이 필요한가** 세 가지다.
+ * The product direction (`docs/product-direction.md`) nails this down — we do not claim
+ * productivity from agent count, message count, meeting time, or screen dwell time alone.
+ * So a number like "created 30 cards" is not a metric. What's here is three things:
+ * **did it finish · why did it fail · does it need attention right now.**
  */
 
 import type { KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
@@ -13,50 +15,52 @@ import { countNeedsAttention, type AttentionCounts } from "@/lib/needs-attention
 import { taskTimeMs } from "@/lib/plugin-time";
 
 /**
- * 끝난 실행의 결과 어휘(Hermes `task_runs.outcome`).
+ * The outcome vocabulary for finished runs (Hermes `task_runs.outcome`).
  *
- * `completed` 하나만 성공이다. 나머지를 "실패" 한 덩어리로 합치지 않는다 — `gave_up` 과
- * `crashed` 는 사람이 할 일이 다르고, 합치면 무엇을 고쳐야 하는지가 사라진다.
+ * Only `completed` counts as success. The rest are not lumped together as one "failure" —
+ * `gave_up` and `crashed` call for different human action, and merging them loses what
+ * needs to be fixed.
  */
 export const RUN_SUCCESS_OUTCOME = "completed";
 
 export type OutcomeCount = { outcome: string; count: number };
 
 export type DurationStats = {
-  /** 중앙값(ms). 평균은 크래시 한 건에 끌려간다. 표본이 없으면 null. */
+  /** Median (ms). A mean gets dragged around by a single crash. null if there are no samples. */
   medianMs: number | null;
-  /** **표본 수를 반드시 함께 낸다.** 3건의 중앙값을 추세처럼 보여 주면 없는 경향을 읽게 된다. */
+  /** **Always report the sample count alongside it.** Showing the median of 3 runs as a trend reads a pattern that isn't there. */
   samples: number;
 };
 
 export type OperationalMetrics = {
   window: { fromMs: number; toMs: number };
-  /** 이 창에서 완료 실행이 하나라도 있었던 **카드 수**. 같은 카드가 여러 번 돌아도 한 번 센다. */
+  /** **Number of cards** with at least one completed run in this window. The same card counts once even if it ran several times. */
   throughput: number;
-  /** 끝난 실행 가운데 성공 비율(0~1). 끝난 실행이 없으면 null — 0% 로 쓰면 거짓이다. */
+  /** Success rate among finished runs (0-1). null if there are no finished runs — writing 0% would be a lie. */
   successRate: number | null;
-  /** 끝난 실행 수. `successRate` 의 분모이고, 표본 크기이기도 하다. */
+  /** Count of finished runs. Both the denominator for `successRate` and the sample size. */
   terminalRuns: number;
-  /** 아직 안 끝난 실행 수. 성공률 계산에서 빠진다. */
+  /** Count of runs not yet finished. Excluded from the success-rate calculation. */
   openRuns: number;
-  /** 결과별 건수, 많은 것부터. 같으면 이름순 — 재조회마다 순서가 흔들리지 않게. */
+  /** Count per outcome, highest first. Ties break by name — so the order doesn't shift between requeries. */
   outcomes: OutcomeCount[];
-  /** 완료 실행의 소요. 실패한 실행은 소요의 의미가 달라 섞지 않는다. */
+  /** Duration of completed runs. Failed runs are excluded since their duration means something different. */
   duration: DurationStats;
-  /** 손이 필요한 카드. 판단 모음과 **같은 함수**로 센다. */
+  /** Cards needing attention. Counted with the **same function** as the judgment aggregate. */
   attention: AttentionCounts;
 };
 
-/** 실행이 끝났는가. `ended_at` 이 없으면 아직 돌고 있다. */
+/** Has the run finished? If `ended_at` is missing, it's still running. */
 function isTerminal(run: KanbanTimelineRun): boolean {
   return taskTimeMs(run.ended_at) !== null;
 }
 
 /**
- * 창 안에서 **끝난** 실행만 센다.
+ * Counts only runs that **finished** inside the window.
  *
- * 타임라인은 창에 겹치기만 하면 그리지만(보이는 것이 목적이므로), 지표는 다르다 — 창 밖에서
- * 끝난 일을 이 창의 성과로 세면 같은 실행이 두 창에 중복으로 잡힌다.
+ * The timeline draws anything that merely overlaps the window (since the point there is
+ * visibility), but metrics are different — counting work that finished outside the window
+ * as this window's result would double-count the same run in two windows.
  */
 function endedInWindow(run: KanbanTimelineRun, fromMs: number, toMs: number): boolean {
   const ended = taskTimeMs(run.ended_at);
@@ -84,7 +88,7 @@ export function computeOperationalMetrics(
     if (!endedInWindow(run, window.fromMs, window.toMs)) continue;
     terminalRuns += 1;
 
-    // 결과가 없는 채 끝난 실행도 센다. 지어내지 않고 "미기록" 으로 둔다.
+    // Also count runs that finished with no outcome. Don't invent one — leave it as "unrecorded".
     const outcome = run.outcome ?? "unrecorded";
     outcomes.set(outcome, (outcomes.get(outcome) ?? 0) + 1);
 
@@ -121,10 +125,10 @@ function median(values: number[]): DurationStats {
 }
 
 /**
- * 표본이 이만큼은 돼야 비율을 수치로 보여 준다.
+ * A rate is only shown as a number once the sample size reaches this.
  *
- * 2건 중 1건 성공을 "50%" 로 쓰면 없는 경향을 읽게 된다. 그 아래에서는 화면이 비율 대신
- * 건수를 그대로 보인다.
+ * Writing 1 success out of 2 as "50%" reads a pattern that isn't there. Below this, the
+ * screen shows the raw count instead of a rate.
  */
 export const MIN_RATE_SAMPLES = 5;
 

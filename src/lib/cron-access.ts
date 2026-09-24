@@ -1,15 +1,17 @@
 /**
- * 크론 REST(`/api/channels/:id/cron/**`)의 문지기.
+ * Gatekeeper for the cron REST API (`/api/channels/:id/cron/**`).
  *
- * 순서가 곧 규칙이다: 로그인 → 채널 멤버 → 채널의 게이트웨이 → 플러그인 계약(428/404/401/503/504) →
- * 담당 NPC 의 프로필 클라이언트. 앞 단계가 막히면 뒤 단계(특히 Hermes 호출)는 일어나지
- * 않는다 — 권한 거절이 원격 왕복 뒤에 오면 거절당한 요청도 Hermes 에 흔적을 남긴다.
+ * The order is itself the rule: login → channel member → channel's gateway → plugin
+ * contract (428/404/401/503/504) → the assigned NPC's profile client. If an earlier step
+ * blocks, later steps (especially the Hermes call) never happen — if a permission denial
+ * came after a remote round trip, even the rejected request would leave a trace in Hermes.
  *
- * 브라우저는 Hermes 를 직접 부르지 않는다. 프로필 토큰은 여기서 복호화해 클라이언트에
- * 가두고, 응답에는 절대 싣지 않는다.
+ * The browser never calls Hermes directly. Profile tokens are decrypted here and kept
+ * inside the client — never put in the response.
  *
- * 칸반 쪽 접근 제어(`kanban-access.ts`)와는 **별개 파일**이다 — 두 기능은 스코프(오너 키
- * vs 프로필 키)와 권한 단위(보드 vs 출처 채널)가 달라 합치면 서로의 규칙을 오염시킨다.
+ * This is a **separate file** from the kanban side's access control (`kanban-access.ts`) —
+ * the two differ in scope (owner key vs. profile key) and permission unit (board vs.
+ * origin channel), and merging them would contaminate each other's rules.
  */
 
 import { and, eq } from "drizzle-orm";
@@ -35,13 +37,13 @@ export function cronError(status: number, code: string, message: string, extra?:
 }
 
 // ---------------------------------------------------------------------------
-// 채널 멤버
+// Channel membership
 // ---------------------------------------------------------------------------
 
 export type ChannelAccess =
   { ok: true; channel: { id: string; ownerId: string } } | { ok: false; response: NextResponse };
 
-/** 보기·만들기의 최소 조건 — 채널 소유자이거나 `channel_members` 에 있어야 한다. */
+/** The minimum requirement to view/create — must be the channel owner or in `channel_members`. */
 export async function requireChannelMember(
   channelId: string,
   userId: string,
@@ -68,18 +70,19 @@ export async function requireChannelMember(
 }
 
 // ---------------------------------------------------------------------------
-// 플러그인 계약 게이트 (E10)
+// Plugin contract gate (E10)
 // ---------------------------------------------------------------------------
 
 export type PluginGate = { ok: true; info: PluginInfo } | { ok: false; response: NextResponse };
 
 /**
- * 게이트 실패를 HTTP 응답으로 옮긴다. 진단마다 사용자가 할 일이 다르므로 코드를 뭉치지 않는다:
- * - 428 `plugin_upgrade_required` `{minVersion, reason, missing?}` — 플러그인 업그레이드
- * - 404 `plugin_absent` — 게이트웨이 머신에 플러그인 설치
- * - 401 `plugin_unauthorized` — 게이트웨이 레코드의 키 교체
- * - 503 `unreachable` / 504 `timeout` — 게이트웨이 주소·상태 확인(데이터 호출 실패 `pluginFailureResponse` 도 같은 상태·코드)
- * - 503 `plugin_unknown` — 닿았지만 우리 플러그인의 응답이 아님
+ * Turns a gate failure into an HTTP response. Each diagnosis calls for different user
+ * action, so the codes are kept distinct rather than lumped together:
+ * - 428 `plugin_upgrade_required` `{minVersion, reason, missing?}` — upgrade the plugin
+ * - 404 `plugin_absent` — install the plugin on the gateway machine
+ * - 401 `plugin_unauthorized` — rotate the key on the gateway record
+ * - 503 `unreachable` / 504 `timeout` — check the gateway address/status (a data-call failure via `pluginFailureResponse` uses the same status/code)
+ * - 503 `plugin_unknown` — reachable, but the response isn't from our plugin
  */
 export function pluginGateResponse(gate: Extract<AutomationGate, { ok: false }>): NextResponse {
   switch (gate.code) {
@@ -115,11 +118,12 @@ export function pluginGateResponse(gate: Extract<AutomationGate, { ok: false }>)
 }
 
 /**
- * 자동화 계약(버전 ≥ 0.6.0 + capability 세 가지)을 만족하는지 본다. 판정은 `automation-gate.ts`
- * 의 단일 게이트(캐시 1시간, `unknown`·info 없는 `plugin_ready` 는 재프로브)이고 여기서는 그 결과를
- * `pluginGateResponse` 로 HTTP 에 옮기기만 한다.
+ * Checks whether the automation contract is met (version >= 0.6.0 + three capabilities).
+ * The judgment itself is made by the single gate in `automation-gate.ts` (cached for 1
+ * hour; `unknown` or a `plugin_ready` with no info triggers a re-probe) — this just
+ * translates that result into HTTP via `pluginGateResponse`.
  *
- * `timezone` 은 여기서 나온 `info` 에서 읽는다(E9 — 플러그인이 안 주면 null).
+ * `timezone` is read from the `info` returned here (E9 — null if the plugin doesn't provide it).
  */
 export async function ensureAutomationPlugin(
   gateway: GatewayResourceRow,
@@ -135,7 +139,7 @@ export async function ensureAutomationPlugin(
 }
 
 // ---------------------------------------------------------------------------
-// 채널 컨텍스트 — 멤버 + 게이트웨이 + 플러그인 게이트를 한 번에
+// Channel context — member + gateway + plugin gate, all in one
 // ---------------------------------------------------------------------------
 
 export type CronChannelContext = {
@@ -143,7 +147,7 @@ export type CronChannelContext = {
   channelId: string;
   gateway: GatewayResourceRow;
   info: PluginInfo;
-  /** E9. 플러그인이 시간대를 주지 않으면 null — 라벨("미확인")은 클라이언트 몫이다. */
+  /** E9. null if the plugin doesn't provide a timezone — the label ("unknown") is the client's job. */
   timezone: string | null;
 };
 
@@ -184,13 +188,13 @@ export async function resolveCronChannelContext(input: {
 }
 
 // ---------------------------------------------------------------------------
-// NPC → 프로필 → 프로필 키 클라이언트
+// NPC → profile → profile-key client
 // ---------------------------------------------------------------------------
 
 export type NpcProfileClient = {
   npc: NpcRow;
   profile: HermesProfileRow;
-  /** `hermes_profiles.display_name ?? profile_name` — `npcs.name` 은 절대 읽지 않는다. */
+  /** `hermes_profiles.display_name ?? profile_name` — `npcs.name` is never read. */
   npcName: string;
   client: ProfilePluginClient;
 };
@@ -211,9 +215,10 @@ function buildClient(gateway: GatewayResourceRow, profile: HermesProfileRow): Pr
 }
 
 /**
- * `npcId` 를 이 채널의 **active** NPC 행으로 풀고, 그 프로필이 채널의 현재 게이트웨이
- * 것인지까지 확인한 뒤 프로필 키 클라이언트를 만든다. 다른 채널의 NPC·휴면 NPC·옛
- * 게이트웨이의 NPC 는 전부 404 `npc_not_found` — 존재 여부를 채널 밖으로 흘리지 않는다.
+ * Resolves `npcId` to this channel's **active** NPC row, confirms its profile belongs to
+ * the channel's current gateway, and only then builds the profile-key client. An NPC from
+ * another channel, a dormant NPC, or an NPC on an old gateway all get 404
+ * `npc_not_found` — existence is never leaked outside the channel.
  */
 export async function resolveNpcProfileClient(
   ctx: Pick<CronChannelContext, "channelId" | "gateway">,
@@ -242,7 +247,7 @@ export async function resolveNpcProfileClient(
   };
 }
 
-/** 채널의 active NPC 전부(현재 게이트웨이의 프로필만) — 합집합 목록(R15)용. */
+/** All active NPCs of the channel (profiles on the current gateway only) — for the union list (R15). */
 export async function listNpcProfileClients(
   ctx: Pick<CronChannelContext, "channelId" | "gateway">,
 ): Promise<NpcProfileClient[]> {
@@ -266,20 +271,21 @@ export async function listNpcProfileClients(
 }
 
 // ---------------------------------------------------------------------------
-// Hermes 오류 그대로 전달 (R32)
+// Forward Hermes errors as-is (R32)
 // ---------------------------------------------------------------------------
 
 /**
- * 플러그인 실패를 HTTP 응답으로 옮긴다. 상태 코드는 Hermes 가 준 것을 그대로, 본문은
- * `{code, message}`. 로컬 대체는 없다. 클라이언트 계층에서 난 실패(status 0)만 우리가
- * 코드를 정한다 — 닿지 못했으면 503, 기다리다 끝났으면 504(게이트 판정 실패와 같은 값).
+ * Turns a plugin failure into an HTTP response. The status code is passed through exactly
+ * as Hermes gave it; the body is `{code, message}`. There's no local substitute. Only a
+ * failure at the client layer (status 0) gets its code decided by us — 503 if unreachable,
+ * 504 if it timed out waiting (same value as a gate-judgment failure).
  */
 export function pluginFailureResponse(res: Extract<PluginResponse<unknown>, { ok: false }>) {
   const status = res.status > 0 ? res.status : res.failure.code === "timeout" ? 504 : 503;
   return cronError(status, res.failure.code, res.failure.message, res.failure.details);
 }
 
-/** 실패 목록 항목(합집합 목록에서 프로필 하나가 실패했을 때). */
+/** A failure-list entry (when one profile fails within the union list). */
 export function pluginFailureSummary(res: Extract<PluginResponse<unknown>, { ok: false }>) {
   return { code: res.failure.code, message: res.failure.message };
 }

@@ -1,19 +1,22 @@
 /**
- * "손이 필요한 카드" 판정 — 판단 모음 화면과 운영 지표가 **같은 함수**를 쓴다.
+ * "Card needs attention" verdict — the decision-collection screen and the operations
+ * metrics use **the same function**.
  *
- * 두 곳이 각자 세면 다른 수가 나오고, 그때 어느 쪽이 맞는지 아무도 모른다. 순수 함수라
- * 클라이언트 번들에 들어가도 안전하다(`node:*`·`@/db` 를 쓰지 않는다).
+ * If the two counted it separately, they'd land on different numbers and nobody could tell
+ * which one is right. It's a pure function, so it's safe in the client bundle too (it uses
+ * neither `node:*` nor `@/db`).
  */
 export type AttentionKind = "awaiting_approval" | "blocked" | "review";
 
 type CardLike = { id: string; status: string };
 
 /**
- * 이 카드가 왜 사람을 기다리는가. 아니면 null.
+ * Why this card is waiting on a human. Or null.
  *
- * `blocked` 는 두 뜻을 겸한다 — 승인 대기와 오류 차단이다. 가르는 것은 **대기 중인 승인
- * 대상에 이 카드가 있는가** 뿐이다. 칸반 열은 아홉 개로 고정이라 열을 나누지 않고
- * 배지로 가른다(`src/components/kanban/AGENTS.md`).
+ * `blocked` does double duty — it means both "awaiting approval" and "blocked by an
+ * error". The only thing that tells them apart is **whether this card is in the set of
+ * pending approvals**. Kanban columns are fixed at nine, so this is shown as a badge
+ * rather than as a separate column (`src/components/kanban/AGENTS.md`).
  */
 export function attentionOf(
   card: CardLike,

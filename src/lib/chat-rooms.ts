@@ -61,7 +61,8 @@ function toRoomMessage(row: typeof chatRoomMessages.$inferSelect): RoomMessage {
   };
 }
 
-/** office 방은 채널당 하나. 없으면 만들고, 유니크 위반이면(경합) 재조회한다. */
+/** There's exactly one office room per channel. Create it if missing, and re-query on a
+ * unique violation (a race). */
 export async function ensureOfficeRoom(channelId: string, ownerId: string): Promise<RoomRow> {
   const [existing] = await db
     .select()
@@ -95,9 +96,9 @@ export async function ensureOfficeRoom(channelId: string, ownerId: string): Prom
 }
 
 /**
- * office 방의 `created_by` 는 **채널 소유자**여야 한다(스펙 ①). 방을 만드는 계기는
- * 아무나 부를 수 있는 `room:list` 라서, 부른 사람을 그대로 쓰면 마이그레이션 이전
- * 채널에 처음 들어온 손님이 사무실 방의 주인이 된다.
+ * The office room's `created_by` must be the **channel owner** (spec ①). The trigger that
+ * creates the room is `room:list`, which anyone can call, so using the caller as-is would
+ * make the first guest to enter a pre-migration channel the owner of the office room.
  */
 export async function getChannelOwnerId(channelId: string): Promise<string | null> {
   const [row] = await db
@@ -179,16 +180,17 @@ async function memberDisplayNames(
 }
 
 /**
- * 방마다 최신 메시지 1건 — 방 개수만큼 쿼리를 날리던 N+1 을 단일 쿼리로 줄인다.
- * "이 행보다 (created_at, id) 사전식으로 더 뒤인 같은 방 행이 없다" 는 상관
- * 서브쿼리(NOT EXISTS)로 방마다 최신 행 하나만 골라낸다 — PG/SQLite 모두 표준
- * SQL 이라 방언 분기가 필요 없다. 같은 방·같은 타임스탬프로 쓰인 메시지가 있으면
- * (SQLite 의 created_at 은 밀리초라 흔하다) id 가 더 큰 쪽을 최신으로 친다 —
- * `appendRoomMessage` 가 **UUIDv7**(앞 48비트가 유닉스 밀리초 + 같은 밀리초 안에서는
- * 단조 증가 카운터)을 박아 넣으므로 id 순서가 곧 생성 순서다. v4 이던 시절에는 이 규칙이
- * 승자를 무작위로 골랐다.
- * 서브쿼리 안의 `chat_room_messages`/컬럼명은 raw SQL 이지만 사용자 입력이 섞이지
- * 않는 고정 문자열이라 바인딩 안전성 문제가 없다.
+ * One latest message per room — reduces what used to be N+1 queries (one per room) to a
+ * single query. A correlated subquery (NOT EXISTS) that says "no row in the same room comes
+ * after this one lexicographically by (created_at, id)" picks exactly one latest row per
+ * room — this is standard SQL on both PG/SQLite, so no dialect branching is needed. If
+ * messages share the same room and the same timestamp (common since SQLite's created_at is
+ * millisecond-precision), the one with the larger id is treated as the latest — since
+ * `appendRoomMessage` embeds **UUIDv7** (the top 48 bits are Unix milliseconds, plus a
+ * monotonically increasing counter within the same millisecond), id order equals creation
+ * order. Back when it was v4, this rule picked the winner at random.
+ * The `chat_room_messages`/column names inside the subquery are raw SQL, but they're fixed
+ * strings with no user input mixed in, so there's no binding-safety issue.
  */
 async function lastMessages(roomIds: string[]): Promise<Map<string, RoomMessage>> {
   const result = new Map<string, RoomMessage>();
@@ -241,7 +243,7 @@ function toSummary(
   };
 }
 
-/** office 1개 + 내가 user 멤버인 group 전체. */
+/** The one office room, plus every group room where I'm a user member. */
 export async function listRoomsForUser(channelId: string, userId: string): Promise<RoomSummary[]> {
   const office = await db
     .select()
@@ -279,7 +281,8 @@ export async function listRoomsForUser(channelId: string, userId: string): Promi
   return sortRooms(summaries);
 }
 
-/** `name` 이 빈 문자열이면 NPC 이름을 이어 붙인다(최대 60자). createdBy 는 자동으로 user 멤버가 된다. */
+/** If `name` is an empty string, join the NPC names instead (max 60 chars). createdBy
+ * automatically becomes a user member. */
 export async function createRoom(args: {
   channelId: string;
   name: string;
@@ -318,7 +321,7 @@ export async function createRoom(args: {
   return toRoomRow(created);
 }
 
-/** 중복은 무시한다. */
+/** Duplicates are ignored. */
 export async function addMembers(
   roomId: string,
   invitedBy: string,
@@ -375,9 +378,10 @@ export async function roomNpcMemberIds(roomId: string): Promise<string[]> {
 }
 
 /**
- * insert 후 방의 last_message_at 을 갱신한다.
- * `notice` 는 자동화 알림의 구조(R29·R30) — JSON 으로 `notice_json` 에 남고 `RoomMessage.notice`
- * 로 되읽힌다. 일반 메시지는 넘기지 않는다(NULL).
+ * Updates the room's last_message_at after inserting.
+ * `notice` is the structure for automation notifications (R29·R30) — it's stored as JSON in
+ * `notice_json` and read back as `RoomMessage.notice`. Ordinary messages don't pass it
+ * (NULL).
  */
 export async function appendRoomMessage(args: {
   roomId: string;
@@ -390,8 +394,8 @@ export async function appendRoomMessage(args: {
   const [created] = await db
     .insert(chatRoomMessages)
     .values({
-      // DB 기본값(randomUUID / defaultRandom)은 v4 라 정렬 키가 되지 못한다.
-      // 방언 양쪽에서 같은 규칙을 쓰도록 앱에서 박는다.
+      // The DB default (randomUUID / defaultRandom) is v4, which can't serve as a sort key.
+      // Embedded at the app level so both dialects use the same rule.
       id: uuidv7(),
       roomId: args.roomId,
       senderKind: args.senderKind,
@@ -409,14 +413,16 @@ export async function appendRoomMessage(args: {
 }
 
 /**
- * 최근 `limit` 개를 오래된 순으로 돌려준다.
+ * Returns the most recent `limit` messages in oldest-first order.
  *
- * 정렬은 `(created_at, id)` 사전식 — `lastMessages()` 의 상관 서브쿼리와 **같은 규칙**이다.
- * 두 함수가 다른 규칙을 쓰면 목록의 "마지막 메시지" 와 방을 열었을 때의 마지막 줄이
- * 어긋난다. id 가 UUIDv7 이라 이 타이브레이커는 생성 순서와 일치한다.
+ * Sorted lexicographically by `(created_at, id)` — the **same rule** as `lastMessages()`'s
+ * correlated subquery. If the two functions used different rules, the "last message" shown
+ * in the room list and the last line shown when opening the room would disagree. Since id is
+ * UUIDv7, this tiebreaker matches creation order.
  *
- * v7 도입 이전에 쌓인 행은 v4 라 그들끼리의 동률은 여전히 무작위다 — 새 메시지에는
- * 영향이 없고, 옛 대화의 한 밀리초 안 순서가 흔들릴 뿐이다.
+ * Rows accumulated before v7 was introduced are v4, so ties among them are still random —
+ * this doesn't affect new messages, it only leaves the within-one-millisecond order of old
+ * conversations unstable.
  */
 export async function recentRoomMessages(roomId: string, limit: number): Promise<RoomMessage[]> {
   const rows = await db

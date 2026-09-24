@@ -20,12 +20,12 @@ import {
   type PanelTab,
 } from "@/lib/npc-panel-reads";
 
-// T-badges. 직원 대화창의 `카드`·`크론` 탭 배지.
+// T-badges. Badges for the `cards`·`cron` tabs of an employee chat window.
 //
-// 계산은 순수 함수(`npc-panel-reads-count.ts`)가 하고 여기서 고정하는 것은 조합이다:
-// 어떤 조회가 실패했을 때 어느 배지가 살아남는가, 탭에 따라 무엇을 쓰는가. 라우트 케이스는
-// 관문(비멤버 403)과 본문 검증(모르는 tab 400)만 본다 — 게이트웨이 없는 채널에서도 200 이
-// 나와야 하므로 플러그인 세팅은 필요 없다.
+// The calculation is a pure function (`npc-panel-reads-count.ts`); what's pinned down here is
+// the composition: which badge survives when a given fetch fails, and what each tab writes. The
+// route cases only cover the gate (non-member 403) and body validation (unknown tab 400) — a
+// channel with no gateway must still return 200, so no plugin setup is needed.
 setupThrowawaySqlite("npc-panel-reads-test");
 
 const target = { channelId: "c1", userId: "u1", npcId: "n1" };
@@ -67,7 +67,7 @@ function stubDeps(opts: {
   };
 }
 
-test("배지는 담당 카드 중 안 본 것과 seenAt 이후 크론을 센다", async () => {
+test("the badge counts unseen assigned cards and cron entries after seenAt", async () => {
   const deps = stubDeps({
     assignedIds: ["a", "b", "c"],
     seenIds: ["a"],
@@ -77,7 +77,7 @@ test("배지는 담당 카드 중 안 본 것과 seenAt 이후 크론을 센다"
   assert.deepEqual(await readBadges(target, deps), { cards: 2, cron: 1 });
 });
 
-test("열람 기록이 없으면 전부 미확인이다", async () => {
+test("with no read record, everything is unread", async () => {
   const deps = stubDeps({
     assignedIds: ["a"],
     seenIds: [],
@@ -87,20 +87,20 @@ test("열람 기록이 없으면 전부 미확인이다", async () => {
   assert.deepEqual(await readBadges(target, deps), { cards: 1, cron: 1 });
 });
 
-test("cards 탭 열람은 현재 담당 카드를 모두 본 것으로 만들고 옛 id 를 가지친다", async () => {
+test("reading the cards tab marks all currently assigned cards seen and prunes old ids", async () => {
   const deps = stubDeps({ assignedIds: ["a", "b"], seenIds: ["옛것"] });
   await markTabSeen({ ...target, tab: "cards" }, deps);
   assert.deepEqual(deps.written.seenIds!.sort(), ["a", "b"]);
 });
 
-test("cron 탭 열람은 seen_at 만 올리고 seen_ids 를 쓰지 않는다", async () => {
+test("reading the cron tab only bumps seen_at and doesn't write seen_ids", async () => {
   const deps = stubDeps({});
   await markTabSeen({ ...target, tab: "cron" }, deps);
   assert.equal(deps.written.seenIds, undefined);
   assert.ok(deps.written.seenAt);
 });
 
-test("보드를 못 가져오면 카드 배지는 0 이고 크론 배지는 그대로 센다", async () => {
+test("if the board can't be fetched, the card badge is 0 but the cron badge still counts normally", async () => {
   const deps = stubDeps({
     boardError: gateError(428, "plugin_required"),
     cronTimes: ["2026-09-20T00:00:00Z"],
@@ -109,13 +109,13 @@ test("보드를 못 가져오면 카드 배지는 0 이고 크론 배지는 그�
   assert.deepEqual(await readBadges(target, deps), { cards: 0, cron: 1 });
 });
 
-test("보드를 못 가져오면 cards 탭 열람은 이전 기록을 유지한다", async () => {
+test("if the board can't be fetched, reading the cards tab keeps the previous record", async () => {
   const deps = stubDeps({ boardError: gateError(503, "board_unavailable"), seenIds: ["a"] });
   await markTabSeen({ ...target, tab: "cards" }, deps);
   assert.deepEqual(deps.written.seenIds, ["a"]);
 });
 
-// --- 라우트 -----------------------------------------------------------------
+// --- Route -------------------------------------------------------------------
 
 type Routes = typeof import("@/app/api/channels/[id]/npcs/[npcId]/panel-reads/route");
 
@@ -133,7 +133,7 @@ function req(channelId: string, userId: string, method: string, body?: unknown):
 
 const ctx = (id: string, npcId = "n1") => ({ params: Promise.resolve({ id, npcId }) });
 
-test("비멤버는 403", async () => {
+test("a non-member gets 403", async () => {
   const { GET } = await loadRoute();
   const owner = await seedUser("panel-owner");
   const outsider = await seedUser("panel-outsider");
@@ -142,7 +142,7 @@ test("비멤버는 403", async () => {
   assert.equal(res.status, 403);
 });
 
-test("로그인하지 않으면 401", async () => {
+test("not being logged in gets 401", async () => {
   const { GET } = await loadRoute();
   const owner = await seedUser("panel-owner");
   const channel = await seedChannel(owner.id);
@@ -153,7 +153,7 @@ test("로그인하지 않으면 401", async () => {
   assert.equal(res.status, 401);
 });
 
-test("모르는 tab 값은 400", async () => {
+test("an unknown tab value gets 400", async () => {
   const { POST } = await loadRoute();
   const owner = await seedUser("panel-owner");
   const channel = await seedChannel(owner.id);
@@ -161,13 +161,14 @@ test("모르는 tab 값은 400", async () => {
   assert.equal(res.status, 400);
 });
 
-// --- 배지 조회는 보드를 확보하지 않는다 ---------------------------------------
+// --- Badge reads don't provision a board ------------------------------------
 //
-// 배지는 주기적으로 폴링된다. 여기서 `resolveKanbanChannelContext`(본 경로)를 태우면
-// `requireBoardRow` → `ensureChannelBoard` 로 Hermes 에 보드 생성 요청이 반복해서 나간다 —
-// 사용자가 요청하지 않은 원격 쓰기다. 그래서 읽기 전용 갈래를 쓴다. 이 테스트는 가짜
-// 플러그인 서버가 받은 요청과 `channel_kanban_boards` 행으로 그것을 고정한다.
-test("배지 조회는 보드를 확보하지 않고, 연결이 없으면 카드 0 · 크론은 그대로 센다", async () => {
+// Badges are polled periodically. Routing this through `resolveKanbanChannelContext` (the main
+// path) would repeatedly send board-creation requests to Hermes via `requireBoardRow` →
+// `ensureChannelBoard` — a remote write the user never asked for. So a read-only branch is used
+// instead. This test pins that down with what the fake plugin server received and the
+// `channel_kanban_boards` row.
+test("badge reads don't provision a board, and with no link, cards is 0 while cron still counts normally", async () => {
   const { GET } = await loadRoute();
   const { startFakePluginServer } = await import("@/lib/hermes/fake-plugin-server");
   const { db, channelKanbanBoards, chatRoomMessages, chatRooms } = await import("@/db");
@@ -190,10 +191,10 @@ test("배지 조회는 보드를 확보하지 않고, 연결이 없으면 카드
     const profile = await seedHermesProfile(gateway.id, { profileName: "sophie" });
     const npc = await seedNpc({ channelId: channel.id, hermesProfileId: profile.id });
 
-    // 바인딩이 만들어 둔 연결 행을 지운다 — "보드 연결이 없는 채널" 을 만든다.
+    // Delete the link row the binding created — this makes "a channel with no board link."
     await db.delete(channelKanbanBoards).where(eq(channelKanbanBoards.channelId, channel.id));
 
-    // 이 NPC 가 남긴 크론 결과 알림 하나.
+    // One cron-result notice left by this NPC.
     const [room] = await db
       .insert(chatRooms)
       .values({
@@ -227,7 +228,7 @@ test("배지 조회는 보드를 확보하지 않고, 연결이 없으면 카드
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { cards: 0, cron: 1 });
 
-    // 보드 생성 요청이 나가지 않았다.
+    // No board-creation request went out.
     const sent = server.requests().slice(before);
     assert.deepEqual(
       sent.filter((r) => r.method !== "GET").map((r) => `${r.method} ${r.path}`),
@@ -237,7 +238,7 @@ test("배지 조회는 보드를 확보하지 않고, 연결이 없으면 카드
       sent.filter((r) => r.path.includes("kanban/boards")).map((r) => `${r.method} ${r.path}`),
       [],
     );
-    // 연결 행도 되살아나지 않았다.
+    // The link row wasn't revived either.
     const rows = await db
       .select({ channelId: channelKanbanBoards.channelId })
       .from(channelKanbanBoards)
