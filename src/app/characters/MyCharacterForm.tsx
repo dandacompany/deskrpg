@@ -7,6 +7,7 @@ import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import CharacterPreview from "@/components/CharacterPreview";
 import OfficeLookGallery from "@/components/OfficeLookGallery";
 import { officeLookAppearance, resolveOfficeLook } from "@/game/three/office-looks";
+import { lookLabel } from "@/game/three/office-look-labels";
 import {
   DEFAULT_OFFICE_LOOK_ID,
   normalizeOfficeAppearance,
@@ -164,10 +165,8 @@ export default function MyCharacterForm({ onSaved }: { onSaved?: () => void } = 
         </div>
         {selected && (
           <>
-            <h2>{ko ? selected.name : selected.nameEn}</h2>
-            <p className="lookbook-preview-description">
-              {ko ? selected.subtitle : selected.subtitleEn}
-            </p>
+            <h2>{lookLabel(selected, locale).name}</h2>
+            <p className="lookbook-preview-description">{lookLabel(selected, locale).subtitle}</p>
           </>
         )}
         <div className="lookbook-name">
