@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, RefreshCw, UsersRound } from "lucide-react";
 import HermesProfileList from "@/components/hermes/HermesProfileList";
-import { useLocale, useT } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { backLinkTarget } from "@/app/gateways/return-target";
 import { employeeDetailHref, hirePageHref } from "./hire-navigation";
@@ -41,9 +41,7 @@ function ProfilesPageContent() {
   // so the user does not have to find and enter the channel again.
   const wantsCreate = searchParams.get("new") === "1";
   const returnTo = backLinkTarget(searchParams.get("returnTo"));
-  const { locale } = useLocale();
   const t = useT();
-  const ko = locale === "ko";
   const [gateways, setGateways] = useState<Gateway[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -111,11 +109,9 @@ function ProfilesPageContent() {
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold tracking-widest text-primary mb-2">HERMES</p>
-            <h1 className="text-3xl font-bold">{ko ? "직원" : "Employees"}</h1>
+            <h1 className="text-3xl font-bold">{t("profiles.page.title")}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-secondary">
-              {ko
-                ? "직원 한 명이 Hermes 프로필 하나입니다. 여기서 직원을 등록하고 인격·외형·모델을 관리합니다. 모델 로그인은 직원마다 따로 합니다."
-                : "Choose a profile from a connected gateway to manage your NPC’s name and appearance. Each NPC’s identity and appearance belong to that Hermes profile."}
+              {t("profiles.page.subtitle")}
             </p>
           </div>
         </header>
@@ -133,14 +129,12 @@ function ProfilesPageContent() {
             role="status"
             className="rounded-2xl border border-border bg-surface p-10 text-center text-text-muted"
           >
-            {ko ? "연결된 게이트웨이를 불러오는 중…" : "Loading connected gateways…"}
+            {t("profiles.gateways.loading")}
           </div>
         ) : error ? (
           <div className="rounded-2xl border border-border bg-surface p-8 space-y-4">
             <div role="alert">
-              <h2 className="font-semibold">
-                {ko ? "게이트웨이를 불러오지 못했습니다" : "Could not load gateways"}
-              </h2>
+              <h2 className="font-semibold">{t("profiles.gateways.loadFailed")}</h2>
               <p className="mt-2 text-sm text-danger">{error}</p>
             </div>
             <button
@@ -149,25 +143,21 @@ function ProfilesPageContent() {
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-white hover:bg-primary-hover"
             >
               <RefreshCw size={15} aria-hidden="true" />
-              {ko ? "다시 시도" : "Try again"}
+              {t("profiles.gateways.retry")}
             </button>
           </div>
         ) : gateways.length === 0 ? (
           <div className="rounded-2xl border border-border bg-surface px-6 py-14 text-center">
             <UsersRound size={36} className="mx-auto text-primary mb-4" aria-hidden="true" />
-            <h2 className="text-lg font-semibold">
-              {ko ? "먼저 게이트웨이를 연결하세요" : "Connect a gateway first"}
-            </h2>
+            <h2 className="text-lg font-semibold">{t("profiles.gateways.emptyTitle")}</h2>
             <p className="mx-auto mt-2 max-w-lg text-sm text-text-muted">
-              {ko
-                ? "NPC는 연결된 Hermes 게이트웨이의 프로필에서 시작합니다. 게이트웨이를 연결하거나 공유받으면 여기에서 프로필과 외형을 관리할 수 있습니다."
-                : "NPCs start with profiles on a connected Hermes gateway. Connect a gateway or obtain shared access to manage its profiles and appearances here."}
+              {t("profiles.gateways.emptyBody")}
             </p>
             <Link
               href="/gateways"
               className="inline-flex items-center gap-2 mt-6 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white hover:bg-primary-hover"
             >
-              {ko ? "게이트웨이 연결하기" : "Connect gateway"}
+              {t("profiles.gateways.connect")}
               <ArrowRight size={16} aria-hidden="true" />
             </Link>
           </div>
@@ -178,13 +168,9 @@ function ProfilesPageContent() {
             {showGatewayPicker(gateways.length) && (
               <aside className="rounded-2xl border border-border bg-surface p-4 self-start">
                 <h2 className="px-2 pb-3 text-xs font-semibold text-text-muted">
-                  {ko ? "연결된 게이트웨이" : "Connected gateways"}
+                  {t("profiles.gateways.connected")}
                 </h2>
-                <div
-                  className="space-y-2"
-                  role="group"
-                  aria-label={ko ? "게이트웨이 선택" : "Choose gateway"}
-                >
+                <div className="space-y-2" role="group" aria-label={t("profiles.gateways.choose")}>
                   {gateways.map((gateway) => (
                     <button
                       type="button"
@@ -215,12 +201,8 @@ function ProfilesPageContent() {
                   </h2>
                   <p className="mt-1 text-sm text-text-muted">
                     {selected.isOwner === true
-                      ? ko
-                        ? "이 게이트웨이의 프로필과 NPC 외형을 관리합니다."
-                        : "Manage this gateway’s profiles and NPC appearances."
-                      : ko
-                        ? "공유받은 게이트웨이입니다. 프로필 등록과 외형 관리는 소유자가 담당합니다."
-                        : "This gateway is shared with you. Its owner manages profile registration and appearance."}
+                      ? t("profiles.gateway.ownerHint")
+                      : t("profiles.gateway.sharedHint")}
                   </p>
                 </div>
                 <HermesProfileList

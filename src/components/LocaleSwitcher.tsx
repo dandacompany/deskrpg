@@ -1,13 +1,14 @@
 "use client";
-import { useLocale, LOCALES } from "@/lib/i18n";
+import { useLocale, useT, LOCALES } from "@/lib/i18n";
 
 export default function LocaleSwitcher({ className }: { className?: string }) {
   const { locale, setLocale } = useLocale();
+  const t = useT();
   return (
     <select
       value={locale}
       onChange={(e) => setLocale(e.target.value as typeof locale)}
-      aria-label={locale === "ko" ? "언어" : "Language"}
+      aria-label={t("common.language")}
       style={{
         background: "var(--color-primary-muted)",
         color: "var(--text)",

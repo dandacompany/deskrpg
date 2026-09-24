@@ -10,7 +10,7 @@ import { PROFILE_STATUS_BADGE_CLASS } from "@/components/hermes/profile-status-s
 import { resolvePluginStatusFromCache, type PluginStatus } from "@/lib/hermes/plugin-capability";
 import type { CharacterAppearance } from "@/game/three/office-appearance";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
-import { useLocale, useT } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import { deleteConfirmParams, deletedNoticeFrom, visibleSections } from "../employee-detail-view";
 
 type ProfileRow = {
@@ -45,8 +45,6 @@ export default function EmployeeDetailPage() {
 
 function EmployeeDetailContent() {
   const t = useT();
-  const { locale } = useLocale();
-  const ko = locale === "ko";
   const router = useRouter();
   const params = useParams<{ name: string }>();
   const searchParams = useSearchParams();
@@ -219,9 +217,7 @@ function EmployeeDetailContent() {
   if (!gatewayId) {
     return (
       <div className="theme-web min-h-screen bg-bg p-6 text-text md:p-8">
-        <p className="text-sm text-danger">
-          {ko ? "어느 게이트웨이의 직원인지 알 수 없습니다." : "No gateway was given."}
-        </p>
+        <p className="text-sm text-danger">{t("profiles.noGateway")}</p>
         <Link href="/profiles" className="mt-3 inline-block font-semibold text-primary">
           {t("nav.profiles")} →
         </Link>
@@ -262,9 +258,7 @@ function EmployeeDetailContent() {
         {notice && <p className="text-sm text-success">{notice}</p>}
         {loading && !profile && <p className="text-sm text-text-muted">{t("common.loading")}</p>}
         {!loading && !profile && (
-          <p className="text-sm text-danger">
-            {ko ? "이 게이트웨이에 그 직원이 없습니다." : "No such employee on this gateway."}
-          </p>
+          <p className="text-sm text-danger">{t("profiles.detail.notFound")}</p>
         )}
 
         {profile && (
@@ -273,7 +267,7 @@ function EmployeeDetailContent() {
             {sections.includes("persona") && (
               <section className="rounded-xl border border-border bg-surface p-5">
                 <NpcHireWizard
-                  title={ko ? "인격·외형·AI 모델" : "Persona, appearance & AI model"}
+                  title={t("profiles.detail.sectionTitle")}
                   gatewayId={gatewayId}
                   pluginStatus={pluginStatus}
                   existingProfiles={allNames}

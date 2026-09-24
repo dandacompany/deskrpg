@@ -1181,7 +1181,7 @@ export default function MeetingRoom({
                     {formatPollPasses(
                       pollStatus.passes,
                       displayedNpcs,
-                      locale === "ko" ? "알 수 없는 NPC" : "Unknown NPC",
+                      t("meeting.unknownNpc"),
                     ).join(", ")}
                   </span>
                 )}
@@ -1342,7 +1342,7 @@ export default function MeetingRoom({
                         {lastMeetingResult.participantCount}
                       </div>
                       <div className="text-micro text-text-muted">
-                        {locale === "ko" ? "기록된 참가자" : "Recorded participants"}
+                        {t("meeting.recordedParticipants")}
                       </div>
                     </div>
                     <div className="bg-surface-raised/50 rounded px-3 py-2 text-center">
@@ -1354,9 +1354,7 @@ export default function MeetingRoom({
                   </div>
 
                   <p className="text-micro text-text-muted">
-                    {locale === "ko"
-                      ? "기록된 참가자 수는 회의 시작 시점의 참여자를 기준으로 합니다."
-                      : "The recorded participant count reflects the participants present when the meeting started."}
+                    {t("meeting.recordedParticipantsNote")}
                   </p>
 
                   {/* Key topics & conclusions */}

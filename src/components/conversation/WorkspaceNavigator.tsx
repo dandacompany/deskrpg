@@ -94,7 +94,7 @@ export default function WorkspaceNavigator(props: Props) {
 
   return (
     <nav
-      aria-label="워크스페이스"
+      aria-label={t("workspace.nav.label")}
       className="flex h-full min-h-0 flex-col border-r border-border bg-bg/95"
     >
       <div className="border-b border-border px-4 py-4">
@@ -221,7 +221,7 @@ export default function WorkspaceNavigator(props: Props) {
                 appearance={npc.appearance ?? null}
                 selected={npc.id === props.selectedNpcId}
                 onSelect={() => props.onSelectNpc(npc.id, npc.name)}
-                menuLabel={`${npc.name} 관리`}
+                menuLabel={t("workspace.npc.menuLabel", { name: npc.name })}
                 onOpenMenu={() => setMenuNpcId((current) => (current === npc.id ? null : npc.id))}
               />
             ))}

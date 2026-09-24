@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import NpcHireWizard from "@/components/hermes/NpcHireWizard";
 import { resolvePluginStatusFromCache, type PluginStatus } from "@/lib/hermes/plugin-capability";
-import { useLocale, useT } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import { backLinkTarget } from "@/app/gateways/return-target";
 
 import { hireDoneHref, hireFinishedHref } from "../hire-navigation";
@@ -35,8 +35,6 @@ export default function HireEmployeePage() {
 
 function HireEmployeeContent() {
   const t = useT();
-  const { locale } = useLocale();
-  const ko = locale === "ko";
   const router = useRouter();
   const searchParams = useSearchParams();
   const gatewayId = searchParams.get("gateway") ?? "";
@@ -138,9 +136,7 @@ function HireEmployeeContent() {
   if (!gatewayId) {
     return (
       <div className="theme-web min-h-screen bg-bg p-6 text-text md:p-8">
-        <p className="text-sm text-danger">
-          {ko ? "어느 게이트웨이의 직원인지 알 수 없습니다." : "No gateway was given."}
-        </p>
+        <p className="text-sm text-danger">{t("profiles.noGateway")}</p>
         <Link href="/gateways" className="mt-3 inline-block font-semibold text-primary">
           {t("nav.gateways")} →
         </Link>
@@ -153,20 +149,14 @@ function HireEmployeeContent() {
       <div className="mx-auto max-w-4xl space-y-6">
         <header>
           <p className="mb-2 text-xs font-semibold tracking-widest text-primary">HERMES</p>
-          <h1 className="text-3xl font-bold">{ko ? "새 직원" : "New employee"}</h1>
+          <h1 className="text-3xl font-bold">{t("profiles.new.title")}</h1>
           <p className="mt-2 text-sm leading-relaxed text-text-secondary">
-            {ko
-              ? "직원 한 명이 Hermes 프로필 하나입니다. 이름을 정하고, 인격을 적고, 그 직원으로 모델에 로그인합니다."
-              : "One employee is one Hermes profile. Name it, write its persona, then sign that employee in to a model."}
+            {t("profiles.new.subtitle")}
           </p>
         </header>
 
         {canRegister === false ? (
-          <p className="text-sm text-danger">
-            {ko
-              ? "공유받은 게이트웨이입니다. 직원 등록은 소유자가 합니다."
-              : "This gateway is shared with you; its owner registers employees."}
-          </p>
+          <p className="text-sm text-danger">{t("profiles.new.sharedGateway")}</p>
         ) : (
           <NpcHireWizard
             gatewayId={gatewayId}

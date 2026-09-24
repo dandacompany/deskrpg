@@ -131,7 +131,7 @@ export default function MyCharacterForm({ onSaved }: { onSaved?: () => void } = 
           setError("");
         }}
       />
-      <aside className="lookbook-preview" aria-label={ko ? "선택한 캐릭터" : "Selected character"}>
+      <aside className="lookbook-preview" aria-label={t("character.preview.label")}>
         <div className="lookbook-eyebrow">
           {isEditMode ? t("characters.my.editTitle") : t("characters.my.createTitle")}
         </div>
@@ -146,17 +146,17 @@ export default function MyCharacterForm({ onSaved }: { onSaved?: () => void } = 
         <div className="lookbook-preview-controls">
           <button
             type="button"
-            aria-label={ko ? "왼쪽으로 회전" : "Rotate left"}
+            aria-label={t("character.preview.rotateLeft")}
             onClick={() => setDirection((direction + 1) % 4)}
           >
             ↶
           </button>
           <button type="button" aria-pressed={walking} onClick={() => setWalking(!walking)}>
-            {ko ? (walking ? "걷는 모습" : "서 있는 모습") : walking ? "Walking" : "Standing"}
+            {t(walking ? "character.preview.walking" : "character.preview.standing")}
           </button>
           <button
             type="button"
-            aria-label={ko ? "오른쪽으로 회전" : "Rotate right"}
+            aria-label={t("character.preview.rotateRight")}
             onClick={() => setDirection((direction + 3) % 4)}
           >
             ↷
@@ -171,9 +171,7 @@ export default function MyCharacterForm({ onSaved }: { onSaved?: () => void } = 
           </>
         )}
         <div className="lookbook-name">
-          <label htmlFor="character-name">
-            {ko ? "오피스에서 사용할 이름" : "Your name in the office"}
-          </label>
+          <label htmlFor="character-name">{t("character.form.officeName")}</label>
           <input
             id="character-name"
             type="text"
@@ -195,7 +193,7 @@ export default function MyCharacterForm({ onSaved }: { onSaved?: () => void } = 
           />
           <p className="lookbook-field-meta">
             <span>{t("characters.my.bioHint")}</span>
-            <span aria-label={ko ? "글자 수" : "Character count"}>
+            <span aria-label={t("character.form.charCount")}>
               {bio.length} / {BIO_MAX_LENGTH}
             </span>
           </p>
