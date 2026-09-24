@@ -532,8 +532,8 @@ describe("ConversationEngine — poll chunking", () => {
 
 describe("ConversationEngine — control surface: setMode / nextTurn / directSpeak / abortCurrentTurn", () => {
   test(
-    "setMode에 잘못된 값을 주면 조용히 무시된다(보존된 결함 — meeting-broker.js:214를 이식. " +
-      "고치지 않고 그대로 옮긴 것이며 별도 후속 수정 후보다)",
+    "setMode silently ignores an invalid value (preserved defect — ported from meeting-broker.js:214. " +
+      "Moved as-is without fixing; a candidate for a separate follow-up fix)",
     { timeout: 5000 },
     async () => {
       const a = participant("a", ["PASS"]);
@@ -572,8 +572,8 @@ describe("ConversationEngine — control surface: setMode / nextTurn / directSpe
   );
 
   test(
-    "directSpeak에 알 수 없는 npcId를 주면 아무도 발언하지 않고 조용히 대기로 돌아간다" +
-      "(보존된 결함 — meeting-broker.js의 run()이 agent를 못 찾을 때와 동일한 무음 실패. 고치지 않는다)",
+    "directSpeak with an unknown npcId makes no one speak and silently returns to waiting" +
+      " (preserved defect — the same silent failure as meeting-broker.js run() when it cannot find the agent. Not fixed)",
     { timeout: 5000 },
     async () => {
       const a = participant("a", ["PASS"]);
@@ -734,10 +734,10 @@ describe("ConversationEngine — control surface: setMode / nextTurn / directSpe
   );
 
   test(
-    "hybridMode: manual 대기 재개 이후 유휴 시간이 지나면 자동으로 auto로 복귀한다" +
-      "(meeting-broker.js:162-167 그대로 이식 — 최초 대기가 아니라 재개된 대기부터 타이머가 걸리고, " +
-      '자동 복귀도 setMode()를 거치므로 drainCommands가 source를 "user"로 통지한다. 둘 다 원본의 ' +
-      "특이 동작이며 고치지 않는다)",
+    "hybridMode: after a manual wait resumes, it returns to auto once the idle time passes" +
+      " (ported as-is from meeting-broker.js:162-167 — the timer starts on a resumed wait, not the first one, " +
+      'and the auto return also goes through setMode(), so drainCommands reports source as "user". Both are ' +
+      "quirks of the original and are not fixed)",
     { timeout: 5000 },
     async () => {
       const a = participant("a", ["PASS"]);
