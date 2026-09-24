@@ -3257,6 +3257,7 @@ const ja: Record<string, string> = {
   "errors.sessionKickedElsewhere": "別の場所から接続したため、このセッションは終了しました。",
   // --- /content-i18n:A ---
   // --- content-i18n:B ---
+  "room.defaultName": "新しいチャット",
   // --- /content-i18n:B ---
   // --- content-i18n:C ---
   "room.cronResult.failed": "実行失敗",

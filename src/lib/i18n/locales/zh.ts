@@ -3109,6 +3109,7 @@ const zh: Record<string, string> = {
   "errors.sessionKickedElsewhere": "你已在其他位置连接，当前会话已结束。",
   // --- /content-i18n:A ---
   // --- content-i18n:B ---
+  "room.defaultName": "新聊天",
   // --- /content-i18n:B ---
   // --- content-i18n:C ---
   "room.cronResult.failed": "执行失败",

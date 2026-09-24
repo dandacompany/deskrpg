@@ -3244,6 +3244,7 @@ const en: Record<string, string> = {
     "You connected from another location, so this session was ended.",
   // --- /content-i18n:A ---
   // --- content-i18n:B ---
+  "room.defaultName": "New chat",
   // --- /content-i18n:B ---
   // --- content-i18n:C ---
   "room.cronResult.failed": "Run failed",
