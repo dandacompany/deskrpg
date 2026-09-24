@@ -1,7 +1,7 @@
 // Extracts the "who speaks next" mention from a meeting utterance. A pure function — no I/O.
 //
-// Not parsing free text is the key point. Korean names carry a trailing particle (@단비는,
-// @단비님), and a partial match hijacks a similar name (@단비 matching @단비수). So just as
+// Not parsing free text is the key point. Korean names carry a trailing particle (`@단비는`,
+// `@단비님`), and a partial match hijacks a similar name (`@단비` matching `@단비수`). So just as
 // polling enforces the SPEAK:/PASS format (meeting-formatter.js:113-126), mentions enforce a
 // format too.
 

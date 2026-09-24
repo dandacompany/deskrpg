@@ -1945,7 +1945,7 @@ const ja: Record<string, string> = {
     "リアルタイム接続が切れているためチャットを送れません。再読み込みしてもう一度お試しください。",
   "game.channelChatNotJoined":
     "接続が復旧しオフィスに再入場しました。メッセージをもう一度送ってください。",
-  // 방 에러 코드(src/server/room-socket.ts 의 RoomErrorCode) 7종.
+  // Room error codes (RoomErrorCode in src/server/room-socket.ts), 7 of them.
   "game.room.error.forbidden": "このルームにアクセスする権限がありません。",
   "game.room.error.not_found": "ルームが見つかりません。一覧を読み込み直しました。",
   "game.room.error.not_open": "ルームが開いていません。もう一度入り直してください。",
@@ -1955,7 +1955,7 @@ const ja: Record<string, string> = {
     "接続が復旧し、再入室しました。メッセージをもう一度送ってください。",
   "game.room.error.invalid": "リクエストが正しくありません。",
   // チャットルーム（グループチャット）
-  // 직원 호출 거절 사유(src/lib/npc-call-errors.ts 의 표와 짝이다)
+  // Reasons an employee call is refused (pairs with the table in src/lib/npc-call-errors.ts)
   "game.npcCall.unknownNpc":
     "その社員が見つかりません。画面を再読み込みしてもう一度お試しください。",
   "game.npcCall.meetingReserved": "会議中の社員です。会議が終わってから呼んでください。",
@@ -2653,7 +2653,7 @@ const ja: Record<string, string> = {
   "errors.noProfile": "このプロファイルは登録されていません",
   "errors.templateDeleteConfirm": "「{name}」を削除しますか? この操作は元に戻せません。",
 
-  // 크론 화면 (T9)
+  // Cron screen (T9)
   "hermes.wizard.error.pluginUpgradeRequired": "プラグインの更新が必要です。",
   "hermes.wizard.error.unknownCursor": "イベントカーソルが不明です。再読み込みしてください。",
   "hermes.wizard.error.cronReadOnly": "このクーロンは作成したチャンネルでのみ変更できます。",

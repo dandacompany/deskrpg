@@ -1931,7 +1931,7 @@ const en: Record<string, string> = {
     "Cannot send chat because the real-time connection is lost. Refresh and try again.",
   "game.channelChatNotJoined":
     "Reconnected and rejoined the office. Please send your message again.",
-  // 방 에러 코드(src/server/room-socket.ts 의 RoomErrorCode) 7종.
+  // Room error codes (RoomErrorCode in src/server/room-socket.ts), 7 of them.
   "game.room.error.forbidden": "You don't have access to this room.",
   "game.room.error.not_found": "That room is gone. The list has been refreshed.",
   "game.room.error.not_open": "The room isn't open. Please enter it again.",
@@ -1940,7 +1940,7 @@ const en: Record<string, string> = {
   "game.room.error.not_joined": "Reconnected and rejoined. Please send the message once more.",
   "game.room.error.invalid": "That request wasn't valid.",
   // Chat rooms (group chat)
-  // 직원 호출 거절 사유(src/lib/npc-call-errors.ts 의 표와 짝이다)
+  // Reasons an employee call is refused (pairs with the table in src/lib/npc-call-errors.ts)
   "game.npcCall.unknownNpc": "That employee is no longer here. Refresh the page and try again.",
   "game.npcCall.meetingReserved": "That employee is in a meeting. Call them once it ends.",
   "game.npcCall.alreadyClaimed": "Another user is calling that employee. Try again in a moment.",
@@ -2636,7 +2636,7 @@ const en: Record<string, string> = {
   "errors.noProfile": "This profile is not registered",
   "errors.templateDeleteConfirm": 'Delete "{name}"? This cannot be undone.',
 
-  // 크론 화면 (T9)
+  // Cron screen (T9)
   "hermes.wizard.error.pluginUpgradeRequired": "The plugin needs to be updated.",
   "hermes.wizard.error.unknownCursor": "Unknown event cursor. Reload and try again.",
   "hermes.wizard.error.cronReadOnly":

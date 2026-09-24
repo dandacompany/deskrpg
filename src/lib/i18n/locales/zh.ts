@@ -1861,7 +1861,7 @@ const zh: Record<string, string> = {
   "game.npcChatDisconnected": "实时连接已断开，无法向 NPC 发送消息。请刷新后重试。",
   "game.channelChatDisconnected": "实时连接已断开，无法发送聊天消息。请刷新后重试。",
   "game.channelChatNotJoined": "连接已恢复并重新进入办公室，请再发送一次消息。",
-  // 방 에러 코드(src/server/room-socket.ts 의 RoomErrorCode) 7종.
+  // Room error codes (RoomErrorCode in src/server/room-socket.ts), 7 of them.
   "game.room.error.forbidden": "你没有访问该房间的权限。",
   "game.room.error.not_found": "找不到该房间，已重新加载列表。",
   "game.room.error.not_open": "房间尚未打开，请重新进入。",
@@ -1870,7 +1870,7 @@ const zh: Record<string, string> = {
   "game.room.error.not_joined": "连接已恢复并重新加入，请再发送一次消息。",
   "game.room.error.invalid": "请求无效。",
   // 聊天室（群聊）
-  // 직원 호출 거절 사유(src/lib/npc-call-errors.ts 의 표와 짝이다)
+  // Reasons an employee call is refused (pairs with the table in src/lib/npc-call-errors.ts)
   "game.npcCall.unknownNpc": "找不到该员工。请刷新页面后重试。",
   "game.npcCall.meetingReserved": "该员工正在开会。会议结束后再呼叫。",
   "game.npcCall.alreadyClaimed": "其他用户正在呼叫该员工。请稍后重试。",
@@ -2531,7 +2531,7 @@ const zh: Record<string, string> = {
   "errors.noProfile": "该配置文件尚未注册",
   "errors.templateDeleteConfirm": "要删除“{name}”吗？此操作无法撤销。",
 
-  // 크론 화면 (T9)
+  // Cron screen (T9)
   "hermes.wizard.error.pluginUpgradeRequired": "需要更新插件。",
   "hermes.wizard.error.unknownCursor": "未知的事件游标。请重新加载。",
   "hermes.wizard.error.cronReadOnly": "此定时任务只能在创建它的频道中修改。",

@@ -1,5 +1,5 @@
 /**
- * The **wording rules for when an employee reports to the user** (card PVTI_...70a2Y).
+ * The **wording rules for when an employee reports to the user**.
  *
  * The screen is already ready to receive it — employee messages render as markdown
  * (`src/components/ui/ChatBubble.tsx:38`) and `![](URL)` draws as `<img>`
