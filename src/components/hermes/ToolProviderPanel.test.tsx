@@ -102,22 +102,22 @@ function button(host: HTMLElement, text: string) {
   return [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === text)!;
 }
 
-test("처음에는 쓰던 것, 없으면 앱에서 고를 수 있는 첫 행을 고른다", () => {
+test("picks what's currently in use first, otherwise the first row the app can select", () => {
   assert.equal(defaultProviderChoice(payload()), "Microsoft Edge TTS");
   assert.equal(defaultProviderChoice(payload({ activeProvider: "OpenAI TTS" })), "OpenAI TTS");
-  // 첫 고를 수 있는 행이 키 필요여도, 이미 준비된 행이 뒤에 있으면 그것을 고른다(웹 검색 실측).
+  // Even if the first selectable row needs a key, an already-ready row later in the list is picked instead (observed with web search).
   const web = payload();
   web.providers = [web.providers[1], web.providers[0], web.providers[2]];
   assert.equal(defaultProviderChoice(web), "Microsoft Edge TTS");
 });
 
-test("주소 값은 가리지 않는다", () => {
+test("does not mask a URL value", () => {
   assert.equal(isPlainEnvValue("FIRECRAWL_API_URL"), true);
   assert.equal(isPlainEnvValue("SEARXNG_URL"), true);
   assert.equal(isPlainEnvValue("OPENAI_API_KEY"), false);
 });
 
-test("키가 필요한 제공자는 키를 넣어야 저장되고, 저장 요청에만 값이 실리고 화면에서는 지운다", async () => {
+test("a provider that needs a key can only save once entered, the value goes only in the save request, and it's cleared from the screen", async () => {
   const f = stub({
     get: () => payload(),
     put: () => ({ provider: "OpenAI TTS", isSet: { VOICE_TOOLS_OPENAI_KEY: true } }),
@@ -133,7 +133,7 @@ test("키가 필요한 제공자는 키를 넣어야 저장되고, 저장 요청
     const input = host.querySelector<HTMLInputElement>(
       'input[data-env-key="VOICE_TOOLS_OPENAI_KEY"]',
     )!;
-    // 비밀번호 관리자가 로그인으로 보지 않게 하는 표시(스테이징 실측 2026-09-19).
+    // Markers that keep a password manager from mistaking this for a login (observed in staging 2026-09-19).
     assert.equal(input.type, "password");
     assert.equal(input.getAttribute("autocomplete"), "new-password");
     assert.equal(input.getAttribute("data-bwignore"), "true");
@@ -156,7 +156,7 @@ test("키가 필요한 제공자는 키를 넣어야 저장되고, 저장 요청
   }
 });
 
-test("서버 설치가 필요한 제공자는 저장 대신 명령을 안내한다", async () => {
+test("a provider that needs server-side install shows a command instead of save", async () => {
   const f = stub({ get: () => payload() });
   const { host, unmount } = await mount();
   try {
@@ -169,7 +169,7 @@ test("서버 설치가 필요한 제공자는 저장 대신 명령을 안내한�
   }
 });
 
-test("저장이 거절되면 그 이유를 번역해 보여 준다", async () => {
+test("shows a translated reason when save is rejected", async () => {
   const f = stub({
     get: () => payload(),
     put: () => ({ errorCode: "provider_needs_cli" }),

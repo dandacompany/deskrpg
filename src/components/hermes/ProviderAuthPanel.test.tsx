@@ -13,9 +13,9 @@ type Reply = { status?: number; body: unknown };
 type Call = { method: string; url: string; body: string | null };
 
 /**
- * `METHOD URL`(정확히 일치) → 응답. 값이 배열이면 호출마다 하나씩 꺼내고 마지막을 유지한다.
- * 진짜 `Response` 대신 최소 객체를 돌려준다 — 가짜 타이머를 켠 동안 본문 읽기가 내부
- * 타이머에 기대지 않게.
+ * `METHOD URL` (exact match) -> response. If the value is an array, one is popped per call
+ * and the last one sticks. Returns a minimal object instead of a real `Response` — so body
+ * reads don't rely on internal timers while fake timers are enabled.
  */
 function stubFetch(routes: Record<string, Reply | Reply[]>) {
   const original = globalThis.fetch;
@@ -57,7 +57,7 @@ function stubFetch(routes: Record<string, Reply | Reply[]>) {
   };
 }
 
-/** console 로 흘러간 모든 문자열을 모은다 — 비밀 값이 없어야 한다. */
+/** Collects every string that flowed to console — there must be no secret value among them. */
 function captureConsole() {
   const lines: string[] = [];
   const saved = { log: console.log, warn: console.warn, error: console.error, info: console.info };
@@ -128,7 +128,7 @@ async function click(el: HTMLElement) {
   await flush();
 }
 
-/** React 제어 입력에 값을 넣는다 — value setter 를 거쳐 input 이벤트를 낸다. */
+/** Sets a value on a React-controlled input — goes through the value setter and fires an input event. */
 async function typeInto(input: HTMLInputElement, value: string) {
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value")!.set!;
@@ -166,7 +166,7 @@ const PENDING = {
 };
 const APPROVED = { ...PENDING, status: "approved" };
 
-test("api_key: 비밀번호 입력으로 키를 저장하고 값을 어디에도 되돌려 보여 주지 않는다", async () => {
+test("api_key: saves the key via a password input and never shows the value back anywhere", async () => {
   const f = stubFetch({
     [`PUT ${BASE}/provider-keys/openai`]: {
       body: { configured: true, envVar: "OPENAI_API_KEY" },
@@ -177,8 +177,8 @@ test("api_key: 비밀번호 입력으로 키를 저장하고 값을 어디에도
   try {
     const input = view.host.querySelector<HTMLInputElement>("input")!;
     assert.equal(input.getAttribute("type"), "password");
-    // 비밀번호 관리자가 이 칸을 로그인으로 보지 않게 한다(2026-09-19 스테이징 실측: Bitwarden 이
-    // "기존 로그인 업데이트" 를 띄웠다). "off" 는 password 입력에서 무시된다.
+    // Keeps a password manager from mistaking this field for a login (observed in staging
+    // 2026-09-19: Bitwarden offered "update existing login"). "off" is ignored on password inputs.
     assert.equal(input.getAttribute("autocomplete"), "new-password");
     assert.equal(input.getAttribute("data-bwignore"), "true");
     await typeInto(input, SECRET);
@@ -199,7 +199,7 @@ test("api_key: 비밀번호 입력으로 키를 저장하고 값을 어디에도
   }
 });
 
-test("api_key: 빈 값이면 저장 버튼이 꺼져 있다", async () => {
+test("api_key: the save button is disabled when the value is empty", async () => {
   const f = stubFetch({});
   const view = await mount(OPENAI_KEY);
   try {
@@ -210,7 +210,7 @@ test("api_key: 빈 값이면 저장 버튼이 꺼져 있다", async () => {
   }
 });
 
-test("oauth_device: 로그인 → 코드·링크 → 승인되면 onAuthenticated 1회", async (t) => {
+test("oauth_device: login -> code/link -> onAuthenticated fires once when approved", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const f = stubFetch({
     [`POST ${BASE}/oauth/openai-codex/start`]: { body: START },
@@ -228,7 +228,7 @@ test("oauth_device: 로그인 → 코드·링크 → 승인되면 onAuthenticate
     const rel = link.getAttribute("rel") ?? "";
     assert.ok(rel.includes("noopener") && rel.includes("noreferrer"));
 
-    // 폴링은 pollDelayMs 뒤에 한 번씩 — 겹치지 않는다.
+    // Polling happens once every pollDelayMs — never overlapping.
     assert.equal(f.count("GET", `${BASE}/oauth/openai-codex/sessions/sess-1`), 0);
     await act(async () => t.mock.timers.tick(1999));
     await flush();
@@ -242,7 +242,7 @@ test("oauth_device: 로그인 → 코드·링크 → 승인되면 onAuthenticate
     assert.equal(f.count("GET", `${BASE}/oauth/openai-codex/sessions/sess-1`), 2);
     assert.equal(view.authenticated(), 1);
 
-    // 승인 뒤로는 더 폴링하지 않고, 끝난 세션을 지우지도 않는다.
+    // After approval, no more polling happens, and the ended session is not deleted either.
     await act(async () => t.mock.timers.tick(10_000));
     await flush();
     assert.equal(f.count("GET", `${BASE}/oauth/openai-codex/sessions/sess-1`), 2);
@@ -253,7 +253,7 @@ test("oauth_device: 로그인 → 코드·링크 → 승인되면 onAuthenticate
   assert.equal(f.count("DELETE", `${BASE}/oauth/sessions/sess-1`), 0);
 });
 
-test("oauth_device: 응답이 늦어도 다음 폴링을 겹쳐 보내지 않는다", async (t) => {
+test("oauth_device: never overlaps the next poll even if the response is slow", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let release: (() => void) | null = null;
   const f = stubFetch({ [`POST ${BASE}/oauth/openai-codex/start`]: { body: START } });
@@ -289,7 +289,7 @@ test("oauth_device: 응답이 늦어도 다음 폴링을 겹쳐 보내지 않는
   }
 });
 
-test("oauth_device: 대기 중 언마운트하면 세션 DELETE 1회, 이후 폴링 없음", async (t) => {
+test("oauth_device: unmounting while waiting DELETEs the session once, with no further polling", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const f = stubFetch({
     [`POST ${BASE}/oauth/openai-codex/start`]: { body: START },
@@ -313,7 +313,7 @@ test("oauth_device: 대기 중 언마운트하면 세션 DELETE 1회, 이후 폴
   f.restore();
 });
 
-test("oauth_device: 취소 버튼은 세션 DELETE 1회 후 로그인 버튼으로 돌아간다", async (t) => {
+test("oauth_device: the cancel button DELETEs the session once, then returns to the login button", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const f = stubFetch({
     [`POST ${BASE}/oauth/openai-codex/start`]: { body: START },
@@ -332,12 +332,12 @@ test("oauth_device: 취소 버튼은 세션 DELETE 1회 후 로그인 버튼으�
   } finally {
     await view.unmount();
   }
-  // 이미 취소한 세션을 언마운트가 다시 지우지 않는다.
+  // Unmounting doesn't delete a session that's already been canceled.
   assert.equal(f.count("DELETE", `${BASE}/oauth/sessions/sess-1`), 1);
   f.restore();
 });
 
-test("oauth_device: 거절되면 사유와 다시 시도 버튼", async (t) => {
+test("oauth_device: on denial, shows the reason and a retry button", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const f = stubFetch({
     [`POST ${BASE}/oauth/openai-codex/start`]: { body: START },
@@ -357,7 +357,7 @@ test("oauth_device: 거절되면 사유와 다시 시도 버튼", async (t) => {
   }
 });
 
-test("oauth_device: http(s) 가 아닌 인증 주소는 링크로 싣지 않는다", async (t) => {
+test("oauth_device: a non-http(s) verification URL is never rendered as a link", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const f = stubFetch({
     [`POST ${BASE}/oauth/openai-codex/start`]: {
@@ -378,7 +378,7 @@ test("oauth_device: http(s) 가 아닌 인증 주소는 링크로 싣지 않는�
   }
 });
 
-test("external: 명령과 복사 버튼만, 입력·로그인 버튼은 없다", async () => {
+test("external: only the command and copy button, no input or login button", async () => {
   const f = stubFetch({});
   const nav = navigator as unknown as Record<string, unknown>;
   const savedClipboard = Object.getOwnPropertyDescriptor(nav, "clipboard");
@@ -408,7 +408,7 @@ test("external: 명령과 복사 버튼만, 입력·로그인 버튼은 없다",
   }
 });
 
-test("authType 이 없으면 아무것도 그리지 않는다", async () => {
+test("renders nothing when authType is absent", async () => {
   const f = stubFetch({});
   const view = await mount({ id: "x", name: "X", authenticated: false });
   try {
@@ -419,7 +419,7 @@ test("authType 이 없으면 아무것도 그리지 않는다", async () => {
   }
 });
 
-test("인증된 oauth_device: 연결됨 + 연결 끊기 → DELETE 후 onAuthenticated", async () => {
+test("authenticated oauth_device: connected + disconnect -> DELETE then onAuthenticated", async () => {
   const f = stubFetch({ [`DELETE ${BASE}/oauth/openai-codex`]: { body: { ok: true } } });
   const view = await mount({ ...CODEX, authenticated: true });
   try {
@@ -434,8 +434,8 @@ test("인증된 oauth_device: 연결됨 + 연결 끊기 → DELETE 후 onAuthent
   }
 });
 
-test("연결 끊기가 ok:false(지운 것 없음)면 다시 불러오되 끊겼다고 덮어쓰지 않는다", async () => {
-  // 플러그인은 그 프로필 auth.json 에 지울 것이 없으면 ok:false 다 — 인증은 환경변수·풀에서 올 수 있다.
+test("when disconnect returns ok:false (nothing removed), refetches without overwriting as disconnected", async () => {
+  // The plugin returns ok:false when there's nothing to remove from that profile's auth.json — auth can come from an env var or a pool.
   const f = stubFetch({ [`DELETE ${BASE}/oauth/openai-codex`]: { body: { ok: false } } });
   const view = await mount({ ...CODEX, authenticated: true });
   try {
@@ -450,7 +450,7 @@ test("연결 끊기가 ok:false(지운 것 없음)면 다시 불러오되 끊겼
   }
 });
 
-test("인증된 api_key: 연결됨 + 키 교체(입력란) + 키 삭제", async () => {
+test("authenticated api_key: connected + replace key (input field) + remove key", async () => {
   const f = stubFetch({
     [`DELETE ${BASE}/provider-keys/openai`]: {
       body: { configured: false, removed: ["OPENAI_API_KEY"] },
@@ -474,7 +474,7 @@ test("인증된 api_key: 연결됨 + 키 교체(입력란) + 키 삭제", async 
   }
 });
 
-test("업스트림 실패는 현지화 메시지로, 값·토큰은 보이지 않는다", async () => {
+test("an upstream failure shows a localized message, never the value/token", async () => {
   const f = stubFetch({
     [`PUT ${BASE}/provider-keys/openai`]: {
       status: 403,
@@ -514,7 +514,7 @@ test("업스트림 실패는 현지화 메시지로, 값·토큰은 보이지 �
   }
 });
 
-test("disabled 면 모든 버튼이 꺼진다", async () => {
+test("when disabled, every button is disabled", async () => {
   const f = stubFetch({});
   const view = await mount({ ...CODEX, authenticated: true }, { disabled: true });
   try {
@@ -525,9 +525,9 @@ test("disabled 면 모든 버튼이 꺼진다", async () => {
   }
 });
 
-// ── 수정 라운드 1 ────────────────────────────────────────────────────────────
+// ── Fix round 1 ──────────────────────────────────────────────────────────────
 
-test("프로바이더가 바뀌면 입력하던 키를 버린다 — 새 엔드포인트로 새지 않는다", async () => {
+test("changing the provider discards the key being typed — it never leaks to the new endpoint", async () => {
   const f = stubFetch({});
   const view = await mount(OPENAI_KEY);
   try {
@@ -543,7 +543,7 @@ test("프로바이더가 바뀌면 입력하던 키를 버린다 — 새 엔드�
   }
 });
 
-test("대기 중 프로바이더가 바뀌면 옛 세션을 한 번 지우고 idle 로 돌아가며 옛 경로를 폴링하지 않는다", async (t) => {
+test("changing the provider while waiting deletes the old session once, returns to idle, and stops polling the old path", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const f = stubFetch({
     [`POST ${BASE}/oauth/openai-codex/start`]: { body: START },
@@ -568,7 +568,7 @@ test("대기 중 프로바이더가 바뀌면 옛 세션을 한 번 지우고 id
   f.restore();
 });
 
-test("연결됨 표시는 새 프로바이더의 authenticated 만 따른다", async () => {
+test("the connected badge follows only the new provider's authenticated value", async () => {
   const f = stubFetch({
     [`PUT ${BASE}/provider-keys/openai`]: { body: { configured: true, envVar: "OPENAI_API_KEY" } },
   });
@@ -587,7 +587,7 @@ test("연결됨 표시는 새 프로바이더의 authenticated 만 따른다", a
   }
 });
 
-test("폴링 중 프록시의 일시 오류(timeout·unreachable·upstream_error)는 로그인을 끝내지 않는다", async (t) => {
+test("a transient proxy error while polling (timeout/unreachable/upstream_error) never ends the login", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const f = stubFetch({
     [`POST ${BASE}/oauth/openai-codex/start`]: { body: START },
@@ -614,7 +614,7 @@ test("폴링 중 프록시의 일시 오류(timeout·unreachable·upstream_error
   }
 });
 
-test("폴링 중 다른 errorCode 는 로그인을 끝내고 세션을 지운다", async (t) => {
+test("a different errorCode while polling ends the login and deletes the session", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const f = stubFetch({
     [`POST ${BASE}/oauth/openai-codex/start`]: { body: START },
@@ -636,7 +636,7 @@ test("폴링 중 다른 errorCode 는 로그인을 끝내고 세션을 지운다
   }
 });
 
-test("start 응답이 언마운트 뒤에 와도 그 세션을 한 번 지운다", async () => {
+test("deletes the session once even when the start response arrives after unmount", async () => {
   const f = stubFetch({ [`DELETE ${BASE}/oauth/sessions/sess-1`]: { body: { ok: true } } });
   const inner = globalThis.fetch;
   let release: (() => void) | null = null;
@@ -659,7 +659,7 @@ test("start 응답이 언마운트 뒤에 와도 그 세션을 한 번 지운다
   f.restore();
 });
 
-test("네트워크 실패가 이어지면 만료 + 여유 시간 뒤에 폴링을 멈춘다", async (t) => {
+test("stops polling after expiry + grace period when network failures keep happening", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 0 });
   const f = stubFetch({
     [`POST ${BASE}/oauth/openai-codex/start`]: { body: { ...START, expiresIn: 4 } },
@@ -677,7 +677,7 @@ test("네트워크 실패가 이어지면 만료 + 여유 시간 뒤에 폴링�
   const view = await mount(CODEX);
   try {
     await click(button(view.host, "로그인"));
-    // 만료 4초 + 여유 30초 = 34초. 넉넉히 60초를 2초씩 당긴다.
+    // Expiry 4s + grace 30s = 34s. Advance a generous 60s in 2s increments.
     for (let i = 0; i < 30; i += 1) {
       await act(async () => t.mock.timers.tick(2000));
       await flush();

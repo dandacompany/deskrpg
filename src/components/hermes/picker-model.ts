@@ -1,4 +1,4 @@
-/** `ToolsetSkillPicker` 의 순수 로직 — 화면 없이 고정한다. */
+/** Pure logic for `ToolsetSkillPicker` — pinned down without a screen. */
 import type { SkillRow, ToolsetRow } from "@/lib/hermes/plugin-client-types";
 
 export function initialSelection(toolsets: ToolsetRow[], skills: SkillRow[]) {
@@ -22,9 +22,10 @@ export function toggle(list: string[], name: string, on: boolean): string[] {
 }
 
 /**
- * 툴셋 체크를 바꾼 다음 목록 — **불러온 행 이름 안의 것만** 싣는다.
- * 부모가 config GET 의 `enabledToolsets`(MCP 서버 이름이 섞일 수 있다)로 시드해도 플러그인 PUT 이
- * `unknown toolsets` 로 400 을 내지 않게. MCP 항목은 플러그인이 쓸 때 보존하므로 빼도 사라지지 않는다.
+ * The list after a toolset checkbox changes — carries **only names within the loaded rows**.
+ * This keeps the plugin PUT from returning a 400 for `unknown toolsets` even when the parent
+ * seeds from config GET's `enabledToolsets` (which can mix in MCP server names). MCP entries
+ * are preserved when the plugin writes, so excluding them here doesn't make them disappear.
  */
 export function toggleToolset(
   list: string[],
@@ -37,8 +38,9 @@ export function toggleToolset(
 }
 
 /**
- * 스킬 체크(`enabled` = 켜짐)를 바꾼 다음 **끈** 목록 — 불러온 스킬 이름 안의 것, 필수 제외.
- * 플러그인 PUT 은 모르는 스킬·필수 스킬을 400 으로 거절한다.
+ * The **disabled** list after a skill checkbox (`enabled` = on) changes — names within the
+ * loaded skills, excluding essential ones. The plugin PUT rejects unknown or essential
+ * skills with a 400.
  */
 export function toggleSkill(
   disabled: string[],

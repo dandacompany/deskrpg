@@ -1,21 +1,23 @@
 "use client";
 
 /**
- * NPC 프로필이 쓰는 모델 프로바이더를 앱 안에서 인증한다 — 게이트웨이 소유자용.
+ * Authenticates a model provider used by an NPC profile, in-app — for the gateway owner.
  *
- * `authType` 별로 세 가지다.
- * - `oauth_device`: 로그인 → 코드와 인증 페이지 링크를 보여 주고, 승인될 때까지 세션을 폴링한다.
- * - `api_key`: 쓰기 전용 키 입력. 값은 서버로 보내고 다시 읽어 오지 않는다.
- * - `external`: 앱에서 할 수 없는 로그인 — 게이트웨이 호스트에서 칠 명령만 안내한다.
- * `authType` 이 없으면(구버전 플러그인·모르는 프로바이더) 아무것도 그리지 않는다.
+ * There are three cases by `authType`.
+ * - `oauth_device`: login -> shows a code and verification-page link, and polls the session until approved.
+ * - `api_key`: write-only key input. The value is sent to the server and never read back.
+ * - `external`: a login that can't be done from the app — only guides the command to run on the gateway host.
+ * When `authType` is absent (an old plugin, or an unknown provider), nothing is rendered.
  *
- * 비밀 값 규칙: 키 입력란은 비제어(uncontrolled)다. 제어 입력은 React 가 `value` **속성**까지
- * 동기화해 DOM 직렬화(innerHTML)에 키가 실린다 — 값은 입력란 프로퍼티에만 있고, 저장 성공
- * 시 비운다. 로그로 내보내지 않고, 실패 문구는 코드로만 현지화한다(업스트림 `error` 원문 금지).
+ * Secret-value rule: the key input field is uncontrolled. A controlled input has React sync
+ * even the `value` **attribute**, which puts the key into the DOM serialization (innerHTML)
+ * — the value lives only in the input's property, and is cleared on a successful save. It's
+ * never sent to logs, and failure text is localized only from codes (never the raw upstream
+ * `error`).
  *
- * 폴링 규칙: `setTimeout` 체인 — 응답을 받은 뒤에야 다음을 예약하므로 겹치지 않는다.
- * 취소·언마운트는 타이머를 풀고 살아 있는 세션을 한 번만 DELETE 한다. 승인·거절·만료처럼
- * 업스트림이 끝낸 세션은 지우지 않는다.
+ * Polling rule: a `setTimeout` chain — the next poll is scheduled only after a response
+ * arrives, so they never overlap. Cancel/unmount clears the timer and DELETEs a live session
+ * exactly once. A session the upstream already ended (approved/denied/expired) is not deleted.
  */
 import {
   useCallback,
@@ -41,8 +43,9 @@ import { SECRET_INPUT_PROPS } from "./secret-input";
 import { getWizardErrorMessage, isWizardErrorCode } from "./wizard-error-codes";
 
 /**
- * `provider.name` 은 그리지 않는다 — 제목·이름은 호출부가 붙인다(이 패널은 인증 조작만).
- * `profileBase`·`provider.id` 가 바뀌면 패널 상태 전체를 새로 시작한다(아래 기본 export 참조).
+ * `provider.name` is never rendered here — the title/name is attached by the caller (this
+ * panel only handles auth actions). Changing `profileBase`/`provider.id` restarts the whole
+ * panel's state from scratch (see the default export below).
  */
 export type ProviderAuthPanelProps = {
   profileBase: string; // `/api/gateways/${gatewayId}/plugin/profiles/${encodeURIComponent(name)}`
@@ -54,7 +57,7 @@ export type ProviderAuthPanelProps = {
     envVars?: string[];
     cliCommand?: string | null;
   };
-  onAuthenticated(): void; // 로그인·키 저장·연결 끊기 성공 뒤 — 호출부가 카탈로그를 다시 불러온다
+  onAuthenticated(): void; // after a successful login/key save/disconnect — the caller refetches the catalog
   disabled?: boolean;
 };
 
@@ -67,13 +70,13 @@ const TERMINAL_STATUSES: ReadonlyArray<OAuthPollPayload["status"]> = [
   "expired",
   "error",
 ];
-/** 프록시가 HTTP 200 + errorCode 로 싣는 일시 오류 — 네트워크 실패처럼 만료 전까지 다시 묻는다. */
+/** Transient failures the proxy carries as HTTP 200 + errorCode — retried until expiry, like a network failure. */
 const TRANSIENT_POLL_CODES: ReadonlySet<string> = new Set([
   "timeout",
   "unreachable",
   "upstream_error",
 ]);
-/** 네트워크가 끊겨 폴 응답을 못 받는 동안 무한히 돌지 않도록 — 만료 시각 + 여유. */
+/** Prevents polling forever while the network is down and no poll response arrives — expiry time + grace period. */
 const EXPIRY_GRACE_MS = 30_000;
 
 const BTN =
@@ -82,7 +85,7 @@ const BTN_PRIMARY =
   "rounded bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50";
 const BADGE = "rounded bg-surface-raised px-1.5 py-0.5 text-[10px] text-text-muted";
 
-/** 본문이 JSON 객체가 아니면 `malformed_response` 로 흐르게 한다(ToolsetSkillPicker 와 같다). */
+/** Flows as `malformed_response` when the body isn't a JSON object (same as ToolsetSkillPicker). */
 async function readBody(response: Response): Promise<Body> {
   try {
     const body: unknown = await response.json();
@@ -95,7 +98,7 @@ async function readBody(response: Response): Promise<Body> {
   }
 }
 
-/** 업스트림 실패는 HTTP 200 + `errorCode` 로 온다 — 상태 코드만 보지 않는다. */
+/** An upstream failure arrives as HTTP 200 + `errorCode` — the status code alone isn't checked. */
 function succeeded(response: Response, body: Body): boolean {
   return response.ok && typeof body.errorCode !== "string";
 }
@@ -105,23 +108,26 @@ function errorCodeOf(body: Body | null, fallback: string): string {
 }
 
 /**
- * 코드 → 현지화 문구. 공용 표(`error-codes.ts`)에 없고 마법사 표에만 있는 프록시 코드
- * (`timeout`·`unreachable`·`upstream_error` …)는 그 표로 옮긴다. 어느 쪽도 아니면 fallback.
+ * Code -> localized text. A proxy code (`timeout`/`unreachable`/`upstream_error`, ...) that's
+ * absent from the common table (`error-codes.ts`) but present in the wizard table is routed
+ * there. Falls back if it's in neither.
  */
 function errorText(t: Translator, code: string, fallbackKey: string): string {
   if (!isErrorCode(code) && isWizardErrorCode(code)) return getWizardErrorMessage(t, code);
   return getLocalizedErrorMessage(t, { errorCode: code }, fallbackKey);
 }
 
-/** 성공 뒤 호출부가 카탈로그를 다시 불러오기 전까지 보여 줄 인증 상태. `base` 는 그때의 prop —
- *  prop 이 바뀌면(다시 불러옴) 덮어쓴 값은 저절로 물러난다. */
+/** The auth state to show after success, until the caller refetches the catalog. `base` is
+ *  the prop value at that time — when the prop changes (a refetch happened), the override
+ *  value retires on its own. */
 type Override = { base: boolean; value: boolean } | null;
 
 /**
- * 대상(`profileBase`·`provider.id`)마다 안쪽 패널을 새로 마운트한다. 상태가 이어지면 입력해 둔
- * 키가 **다른** 프로바이더 엔드포인트로 PUT 되거나, 진행 중 로그인이 옛 세션을 새 경로로
- * 폴링하거나, "연결됨" 덮어쓰기가 엉뚱한 프로바이더에 남는다. 키를 바꾸면 옛 패널이
- * 언마운트되며 살아 있는 세션을 한 번 DELETE 하고 입력란도 함께 사라진다.
+ * Remounts the inner panel fresh for every target (`profileBase`/`provider.id`). If state
+ * carried over, a key already typed could be PUT to a **different** provider's endpoint, an
+ * in-progress login could poll an old session on a new path, or a "connected" override could
+ * be left on the wrong provider. Changing the key unmounts the old panel, DELETEs any live
+ * session exactly once, and clears the input field along with it.
  */
 export default function ProviderAuthPanel(props: ProviderAuthPanelProps): JSX.Element | null {
   return <ProviderAuthPanelInner key={`${props.profileBase}|${props.provider.id}`} {...props} />;
@@ -144,7 +150,7 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
   const connected =
     override && override.base === provider.authenticated ? override.value : provider.authenticated;
 
-  // 부모가 인라인 함수를 넘겨도 폴링을 다시 걸지 않도록 최신 prop 은 ref 로 든다.
+  // The latest prop is kept in a ref so polling isn't re-scheduled even if the parent passes a new inline function.
   const latest = useRef({
     onAuthenticated: props.onAuthenticated,
     profileBase,
@@ -158,7 +164,7 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
     };
   });
 
-  /** DELETE 해야 할 살아 있는 세션. 한 번 비우면 다시 지우지 않는다 — DELETE 는 정확히 1회. */
+  /** The live session that needs a DELETE. Once cleared, it's never deleted again — DELETE happens exactly once. */
   const liveSession = useRef<string | null>(null);
   const pollDelay = useRef(pollDelayMs(undefined));
   const unmounted = useRef(false);
@@ -170,7 +176,7 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
     void fetch(`${latest.current.profileBase}/oauth/sessions/${encodeURIComponent(sessionId)}`, {
       method: "DELETE",
     }).catch(() => {
-      // 지우지 못해도 세션은 업스트림에서 만료된다 — 화면에 알릴 것이 없다.
+      // Even if the delete fails, the session still expires upstream — there's nothing for the screen to report.
     });
   }, []);
 
@@ -187,7 +193,7 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
     latest.current.onAuthenticated();
   }, []);
 
-  // ── OAuth 폴링 ────────────────────────────────────────────────────────────
+  // ── OAuth polling ────────────────────────────────────────────────────────
   const waitingSession = oauth.kind === "waiting" ? oauth.sessionId : null;
   const waitingExpiresAt = oauth.kind === "waiting" ? oauth.expiresAt : 0;
 
@@ -208,7 +214,7 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
         response = await fetch(url);
         body = await readBody(response);
       } catch {
-        response = null; // 일시적인 네트워크 실패 — 만료 전까지는 다시 묻는다.
+        response = null; // A transient network failure — retried until expiry.
       }
       if (stopped) return;
 
@@ -239,7 +245,7 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
         return;
       }
       if (status && TERMINAL_STATUSES.includes(status)) {
-        // 업스트림이 끝낸 세션 — 지울 것이 없다.
+        // A session the upstream already ended — nothing to delete.
         liveSession.current = null;
         dispatch({ type: "poll", status, error: null });
         if (status === "approved") markAuthenticated(true);
@@ -266,11 +272,11 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
       body = await readBody(response);
       ok = succeeded(response, body);
     } catch {
-      // 네트워크 실패 — 아래에서 oauth_error 로 떨어진다.
+      // A network failure — falls through to oauth_error below.
     }
     const start = body as Partial<OAuthStartPayload>;
-    // 업스트림에 세션이 생겼으면 먼저 붙잡는다 — 화면이 이미 닫혔거나 응답 모양이 틀려도
-    // 치울 수 있게.
+    // If a session was created upstream, grab it first — so it can be cleaned up even if
+    // the screen already closed or the response shape is wrong.
     if (ok && typeof start.sessionId === "string" && start.sessionId !== "") {
       liveSession.current = start.sessionId;
     }
@@ -308,7 +314,7 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
     dispatch({ type: "cancel" });
   };
 
-  /** 연결 끊기·키 저장·키 삭제의 공통 뼈대. 성공이면 응답 본문, 실패면 null. */
+  /** Shared skeleton for disconnect/save key/remove key. Returns the response body on success, null on failure. */
   const mutate = async (url: string, init: RequestInit): Promise<Body | null> => {
     setBusy(true);
     setActionError(null);
@@ -333,8 +339,9 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
     const body = await mutate(providerPath, { method: "DELETE" });
     if (!body) return;
     dispatch({ type: "cancel" });
-    // ok:false 는 그 프로필 auth.json 에 지울 것이 없었다는 뜻이다(인증은 환경변수·풀에서 올 수 있다) —
-    // 끊겼다고 덮어쓰지 않고 다시 불러온 카탈로그 상태를 그대로 보인다.
+    // ok:false means that profile's auth.json had nothing to remove (auth can come from an
+    // env var or pool) — this doesn't overwrite it as disconnected, it just shows the
+    // refetched catalog state as-is.
     if (body.ok === false) latest.current.onAuthenticated();
     else markAuthenticated(false);
   };

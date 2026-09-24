@@ -66,7 +66,7 @@ async function mount(props: Partial<React.ComponentProps<typeof ToolsetSkillPick
   return { host, unmount: () => act(async () => root.unmount()) };
 }
 
-test("목록을 불러와 서버 상태를 기본값으로 체크하고 onLoaded 로 알린다", async () => {
+test("loads the list, checks it based on the server's state as default, and reports via onLoaded", async () => {
   const f = stubFetch({ "/toolsets": TOOLSETS, "/skills": SKILLS });
   const loaded: unknown[] = [];
   const { host, unmount } = await mount({ onLoaded: (v) => loaded.push(v) });
@@ -81,7 +81,7 @@ test("목록을 불러와 서버 상태를 기본값으로 체크하고 onLoaded
     assert.equal(box("web").checked, true);
     assert.equal(box("tts").checked, false);
     assert.ok(host.textContent?.includes("키 필요"));
-    // 스킬 체크박스는 "켜짐" 을 뜻한다 — disabled 의 반대.
+    // A checked skill checkbox means "on" — the inverse of disabled.
     assert.equal(host.querySelector<HTMLInputElement>('input[data-skill="pdf"]')!.checked, false);
     assert.equal(
       host.querySelector<HTMLInputElement>('input[data-skill="hermes-agent"]')!.disabled,
@@ -93,7 +93,7 @@ test("목록을 불러와 서버 상태를 기본값으로 체크하고 onLoaded
   }
 });
 
-test("체크를 바꾸면 새 목록을 올린다", async () => {
+test("changing a check reports the new list", async () => {
   const f = stubFetch({ "/toolsets": TOOLSETS, "/skills": SKILLS });
   const toolsets: string[][] = [];
   const skills: string[][] = [];
@@ -116,7 +116,7 @@ test("체크를 바꾸면 새 목록을 올린다", async () => {
   }
 });
 
-test("구버전 플러그인이면 아무것도 그리지 않고 onUnsupported 를 부른다", async () => {
+test("renders nothing and calls onUnsupported on an old plugin", async () => {
   const f = stubFetch({
     "/toolsets": { errorCode: "plugin_upgrade_required" },
     "/skills": { errorCode: "plugin_upgrade_required" },
@@ -136,7 +136,7 @@ test("구버전 플러그인이면 아무것도 그리지 않고 onUnsupported �
   }
 });
 
-test("다른 오류는 메시지와 다시 시도 버튼을 보여 준다", async () => {
+test("a different error shows a message and a retry button", async () => {
   const f = stubFetch({ "/toolsets": { errorCode: "config_unreadable" }, "/skills": SKILLS });
   const { host, unmount } = await mount({});
   try {
@@ -149,12 +149,12 @@ test("다른 오류는 메시지와 다시 시도 버튼을 보여 준다", asyn
   }
 });
 
-test("부모가 준 목록에 플러그인이 거절할 이름이 있어도 올리는 목록에는 싣지 않는다", async () => {
+test("never carries a name the plugin would reject, even if it's in the parent's given list", async () => {
   const f = stubFetch({ "/toolsets": TOOLSETS, "/skills": SKILLS });
   const toolsets: string[][] = [];
   const skills: string[][] = [];
   const { host, unmount } = await mount({
-    // config GET 의 enabledToolsets 에는 MCP 서버 이름이 섞여 올 수 있다.
+    // config GET's enabledToolsets can have MCP server names mixed in.
     enabledToolsets: ["web", "my-mcp", "ghost-toolset"],
     disabledSkills: ["pdf", "hermes-agent", "ghost-skill"],
     onEnabledToolsetsChange: (v) => toolsets.push(v),
@@ -173,7 +173,7 @@ test("부모가 준 목록에 플러그인이 거절할 이름이 있어도 올�
   }
 });
 
-test("소유자는 제공자를 고르는 도구에 '설정' 이 있고, 키가 없는 도구를 켜면 설정 팝업이 뜬다", async () => {
+test("an owner sees 'Configure' on a tool with a provider choice, and checking a keyless tool opens the config popup", async () => {
   const withProviders = {
     ...TOOLSETS,
     toolsets: TOOLSETS.toolsets.map((t) => ({ ...t, hasProviders: t.name === "tts" })),
@@ -211,7 +211,7 @@ test("소유자는 제공자를 고르는 도구에 '설정' 이 있고, 키가 
     });
     const panel = host.querySelector('[data-tool-panel="tts"]');
     assert.ok(panel, "키 없는 도구를 켰는데 설정이 열리지 않았다");
-    // 목록 사이에 펼치지 않고 팝업으로 띄운다.
+    // Shown as a popup rather than expanded inline in the list.
     assert.ok(panel.closest("[data-modal-overlay]"), "설정이 팝업이 아니라 목록 안에 펼쳐졌다");
     const close = [...host.querySelectorAll("button")].find(
       (b) => b.textContent?.trim() === "닫기",
@@ -224,7 +224,7 @@ test("소유자는 제공자를 고르는 도구에 '설정' 이 있고, 키가 
   }
 });
 
-test("공유 사용자에게는 '설정' 이 없다", async () => {
+test("a shared user has no 'Configure'", async () => {
   const withProviders = {
     ...TOOLSETS,
     toolsets: TOOLSETS.toolsets.map((t) => ({ ...t, hasProviders: true })),

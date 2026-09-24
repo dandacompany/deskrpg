@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { isSafeHttpUrl, oauthReducer, pollDelayMs } from "./provider-auth-model";
 
 describe("provider-auth-model", () => {
-  it("시작 → 대기 → 승인이면 done", () => {
+  it("start -> waiting -> approved becomes done", () => {
     let s = oauthReducer({ kind: "idle" }, { type: "start" });
     assert.equal(s.kind, "starting");
     s = oauthReducer(s, {
@@ -25,7 +25,7 @@ describe("provider-auth-model", () => {
     assert.equal(oauthReducer(s, { type: "poll", status: "pending", error: null }).kind, "waiting");
     assert.equal(oauthReducer(s, { type: "poll", status: "approved", error: null }).kind, "done");
   });
-  it("거절·만료·오류는 failed 로 사유 코드를 남긴다", () => {
+  it("denied/expired/error become failed with a reason code", () => {
     const w = {
       kind: "waiting" as const,
       sessionId: "s",
@@ -46,7 +46,7 @@ describe("provider-auth-model", () => {
       errorCode: "oauth_error",
     });
   });
-  it("취소하면 idle", () => {
+  it("cancel becomes idle", () => {
     const w = {
       kind: "waiting" as const,
       sessionId: "s",
@@ -56,19 +56,19 @@ describe("provider-auth-model", () => {
     };
     assert.deepEqual(oauthReducer(w, { type: "cancel" }), { kind: "idle" });
   });
-  it("폴링 간격은 최소 2초", () => {
+  it("the polling interval is at least 2 seconds", () => {
     assert.equal(pollDelayMs(undefined), 2500);
     assert.equal(pollDelayMs(1), 2000);
     assert.equal(pollDelayMs(5), 5000);
   });
-  it("http(s) 만 연다", () => {
+  it("only opens http(s)", () => {
     assert.equal(isSafeHttpUrl("https://auth.openai.com/codex/device"), true);
     assert.equal(isSafeHttpUrl("javascript:alert(1)"), false);
     assert.equal(isSafeHttpUrl("not a url"), false);
   });
 
-  // 브리프 밖 보강 — 뒤늦게 도착한 이벤트가 상태를 되살리지 않는다.
-  it("대기가 아닐 때 온 poll·started 는 무시한다", () => {
+  // Coverage beyond the brief — a late-arriving event never resurrects the state.
+  it("ignores poll/started events received when not waiting", () => {
     const idle = { kind: "idle" as const };
     assert.deepEqual(oauthReducer(idle, { type: "poll", status: "approved", error: null }), idle);
     const started = {
@@ -81,7 +81,7 @@ describe("provider-auth-model", () => {
     };
     assert.deepEqual(oauthReducer(idle, started), idle);
   });
-  it("시작·대기 중 실패는 failed, 실패·완료 뒤 start 는 다시 starting", () => {
+  it("failure while starting/waiting becomes failed, and start after failed/done becomes starting again", () => {
     assert.deepEqual(oauthReducer({ kind: "starting" }, { type: "fail", errorCode: "forbidden" }), {
       kind: "failed",
       errorCode: "forbidden",
@@ -93,7 +93,7 @@ describe("provider-auth-model", () => {
     assert.equal(oauthReducer({ kind: "done" }, { type: "start" }).kind, "starting");
     assert.equal(oauthReducer({ kind: "starting" }, { type: "start" }).kind, "starting");
   });
-  it("폴링 간격 입력이 숫자가 아니면 기본값", () => {
+  it("falls back to the default when the polling interval input isn't a number", () => {
     assert.equal(pollDelayMs(Number.NaN), 2500);
     assert.equal(pollDelayMs(0), 2000);
   });

@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * 도구 하나의 프로바이더를 고르고 필요한 API 키를 넣는다 — `hermes tools` 의 도구별 설정 단계.
+ * Picks a single tool's provider and enters the required API key — the per-tool config step of `hermes tools`.
  *
- * 행은 플러그인(0.10.0)이 Hermes 의 `TOOL_CATEGORIES` 에서 그대로 준다. 키는 쓰기 전용이다 — 서버는
- * 설정 여부만 알려 주고, 입력한 값은 저장 뒤 화면에서도 지운다. 서버에 설치하거나 구독 로그인이 필요한
- * 행(`setup: "cli"`)은 고를 수 없고 명령을 안내한다.
+ * Rows come straight from Hermes's `TOOL_CATEGORIES` via the plugin (0.10.0). Keys are
+ * write-only — the server only reports whether it's configured, and an entered value is
+ * cleared from the screen after saving too. A row that needs server-side install or a
+ * subscription login (`setup: "cli"`) can't be selected — it only guides the command.
  *
- * 소유자만 이 패널을 본다(쓰기 라우트가 소유자 전용이다). 호출부가 그 판정을 한다.
+ * Only the owner sees this panel (the write route is owner-only). The caller makes that call.
  */
 import { useCallback, useEffect, useState, type JSX } from "react";
 
@@ -21,7 +22,7 @@ import { SECRET_INPUT_PROPS } from "./secret-input";
 type Props = {
   profileBase: string;
   toolset: string;
-  /** 저장이 끝났다 — 호출부가 "키 필요" 같은 표시를 고친다. */
+  /** Saving is done — the caller updates displays like "key needed." */
   onSaved?(result: { provider: string; ready: boolean }): void;
   disabled?: boolean;
 };
@@ -41,8 +42,10 @@ async function readBody(res: Response): Promise<Body> {
 }
 
 /**
- * 처음 고를 행: 지금 쓰는 것 → 이미 준비된 행(키 없이 되는 무료 행 등) → 앱에서 고를 수 있는 첫 행.
- * Hermes 의 행 순서는 추천 순이지만 첫 행이 구독·설치 행이거나 키가 필요한 경우가 흔하다(웹 검색).
+ * The row picked initially: what's currently in use -> an already-ready row (e.g. a free
+ * one that needs no key) -> the first row the app can select. Hermes's row order is by
+ * recommendation, but the first row is often a subscription/install row or needs a key
+ * (observed with web search).
  */
 export function defaultProviderChoice(payload: ToolProvidersPayload): string | null {
   if (payload.activeProvider) return payload.activeProvider;
@@ -50,7 +53,7 @@ export function defaultProviderChoice(payload: ToolProvidersPayload): string | n
   return (selectable.find((p) => p.status === "ready") ?? selectable[0])?.name ?? null;
 }
 
-/** 주소 같은 비밀이 아닌 값 — 가리지 않고, 비밀번호 관리자 표시만 유지한다. */
+/** A non-secret value like a URL — not masked, but the password-manager markers are kept. */
 export function isPlainEnvValue(key: string): boolean {
   return /_(URL|BASE_URL|HOST|ENDPOINT)$/.test(key);
 }
@@ -128,7 +131,7 @@ export default function ToolProviderPanel({
         setSaveError(body);
         return;
       }
-      // 키 값은 저장 뒤 화면에서도 지운다 — 다시 보여 줄 이유가 없다.
+      // The key value is cleared from the screen after saving too — there's no reason to show it again.
       setValues({});
       setSaved(true);
       onSaved?.({ provider: row.name, ready: true });

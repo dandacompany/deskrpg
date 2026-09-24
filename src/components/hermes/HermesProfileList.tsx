@@ -25,7 +25,7 @@ type HermesProfileRow = {
   profileName: string;
   displayName: string | null;
   lastValidationStatus: string | null;
-  /** 외형은 프로필이 정본이다 — 편집기를 이 값에서 열어야 한다. */
+  /** The profile is the source of truth for appearance — the editor must open from this value. */
   appearance?: CharacterAppearance | null;
 };
 
@@ -33,10 +33,10 @@ interface HermesProfileListProps {
   gatewayId: string;
   /** Registering a profile requires gateway ownership; a shared-access user can only view + test. */
   canRegister: boolean;
-  /** `?new=1` 로 들어왔을 때 고용 마법사를 바로 연다. */
-  /** 게임 화면에서 들어왔을 때 돌아갈 자리. 채용 페이지 링크에 그대로 실어 보낸다. */
+  /** Opens the hire wizard immediately when arriving with `?new=1`. */
+  /** Where to return to when arriving from the game screen. Carried through as-is on the hire-page link. */
   returnTo?: string | null;
-  /** 프로필이 실제로 하나 생겼을 때만 부른다(닫기·삭제는 해당 없음). */
+  /** Called only when a profile is actually created (not on close/delete). */
   onCreated?: () => void;
 }
 
@@ -66,7 +66,7 @@ export default function HermesProfileList({
   const [selected, setSelected] = useState<string[]>([]);
   const [probeStatus, setProbeStatus] = useState<ProbeStatus>("idle");
   const [registering, setRegistering] = useState(false);
-  /** "인격" 버튼이 지정한 프로필 — 마법사를 그 프로필의 ②단계로 바로 연다. */
+  /** The profile the "Personality" button pointed at — opens the wizard straight to that profile's step 2. */
   const [registerFailures, setRegisterFailures] = useState<{ name: string; errorCode: string }[]>(
     [],
   );
@@ -147,8 +147,8 @@ export default function HermesProfileList({
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">{t("gateway.profile.title")}</h2>
         {canRegister && (
-          // 마법사는 `/profiles/new` 한 페이지가 전담한다 — 목록 화면은 링크만 갖는다
-          // (docs/standards.md "1기능 1페이지"). 예전에는 이 버튼이 목록 위에 4단계를 펼쳤다.
+          // The wizard is owned solely by the `/profiles/new` page — the list screen only holds a link
+          // (docs/standards.md "one feature, one page"). This button used to expand 4 steps above the list.
           <Link
             href={hirePageHref(gatewayId, { returnTo })}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
@@ -186,8 +186,8 @@ export default function HermesProfileList({
                     >
                       {t(key)}
                     </span>
-                    {/* 이 직원을 고치는 곳은 상세 페이지 하나다 — 목록에 편집기를 펼치지 않는다
-                        (docs/standards.md "1기능 1페이지"). */}
+                    {/* Editing this employee happens on a single detail page — the list never expands
+                        an editor inline (docs/standards.md "one feature, one page"). */}
                     <Link
                       href={employeeDetailHref(gatewayId, profile.profileName)}
                       className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80"
@@ -247,8 +247,8 @@ export default function HermesProfileList({
 
           {discovery?.optedIn && discovery.rows.length > 0 && (
             <div className="space-y-2 rounded-lg bg-bg p-3">
-              {/* 제목이 없으면 등록 목록과 "프로필 추가" 폼 사이에 정체불명의
-                  체크박스 뭉치로 보인다 — 이게 이 머신에서 찾아온 것임을 말해 준다. */}
+              {/* Without a title, this looks like an unexplained clump of checkboxes wedged between the
+                  registered list and the "Add profile" form — this tells the user it came from this machine. */}
               <p className="text-sm font-semibold text-text">{t("hermes.discovery.listTitle")}</p>
               {discovery.rows.map((row) => (
                 <label key={row.name} className="flex items-center gap-2 text-sm">
@@ -314,9 +314,10 @@ export default function HermesProfileList({
             </div>
           )}
 
-          {/* 새 직원은 "+ 새 직원 고용" 마법사로 만든다. 이 폼은 Hermes 에 **이미 있는** 원격
-              프로필을 토큰으로 등록하는 유일한 길이라 지우지 않고 접어 둔다 — 처음 쓰는 사람이
-              "프로필 추가" 를 채용으로 오해해 토큰을 찾다 막히지 않게 한다. */}
+          {/* New employees are created through the "+ Hire new employee" wizard. This form is kept,
+              collapsed, because it's the only way to register a remote profile that **already exists**
+              in Hermes via token — so a first-time user doesn't mistake "Add profile" for hiring and
+              get stuck hunting for a token. */}
           <details className="rounded border border-border px-3 py-2">
             <summary className="cursor-pointer text-sm font-semibold">
               {t("gateway.profile.addTitle")}

@@ -10,13 +10,13 @@ import { I18nProvider } from "@/lib/i18n";
 import NpcHireWizard from "./NpcHireWizard";
 
 /**
- * 이 파일이 존재하는 이유: `handleSaveConfig` 가 오래된 클로저를 붙잡아
- * `reasoning_effort` 를 PUT 본문에서 떨어뜨렸는데도, 화면은 "저장했습니다" 를 띄웠고
- * `npm run test` 959개는 전부 초록이었다. 컴포넌트를 렌더하는 테스트가 하나도
- * 없었기 때문이다(스테이징에서야 잡혔다).
+ * Why this file exists: `handleSaveConfig` was holding a stale closure that dropped
+ * `reasoning_effort` from the PUT body, yet the screen still showed "Saved" and all 959
+ * tests in `npm run test` were green. There wasn't a single test rendering the component
+ * (it was only caught in staging).
  *
- * `exhaustive-deps` 규칙이 그 **부류**를 막으므로, 여기서는 규칙이 볼 수 없는 것만
- * 확인한다 — 저장 버튼이 실제로 무엇을 보내는가.
+ * The `exhaustive-deps` rule blocks that **class** of bug, so this file checks only what
+ * the rule can't see — what the save button actually sends.
  */
 
 type FetchCall = { url: string; method: string; body: unknown };
@@ -57,7 +57,7 @@ function buttonByText(el: HTMLElement, text: string): HTMLButtonElement {
   return found as HTMLButtonElement;
 }
 
-test("설정 저장이 선택한 reasoning_effort 를 PUT 본문에 싣는다", async () => {
+test("saving config carries the selected reasoning_effort in the PUT body", async () => {
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = stubFetch(calls, {
@@ -84,7 +84,7 @@ test("설정 저장이 선택한 reasoning_effort 를 PUT 본문에 싣는다", 
       </I18nProvider>,
     );
 
-    // ③ 설정 단계로 이동
+    // Move to step 3 config
     const configTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("④"));
     assert.ok(configTab, "③ AI 모델 탭을 찾지 못했다");
     await act(async () => {
@@ -126,9 +126,10 @@ test("설정 저장이 선택한 reasoning_effort 를 PUT 본문에 싣는다", 
   }
 });
 
-test("카탈로그를 못 받으면 드롭다운 대신 직접 입력으로 떨어진다", async () => {
-  // 강등이 없으면 게이트웨이가 목록을 못 줄 때 화면에서 모델을 **아예 지정할 수 없다**.
-  // 순수 함수 테스트로는 볼 수 없는 배선이라 여기서 고정한다.
+test("falls back to free-text input instead of a dropdown when the catalog can't be fetched", async () => {
+  // Without this fallback, the screen would make it **impossible to specify a model at all**
+  // when the gateway can't return the list. This wiring can't be seen by pure-function tests,
+  // so it's pinned down here.
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -196,10 +197,11 @@ test("카탈로그를 못 받으면 드롭다운 대신 직접 입력으로 떨�
   }
 });
 
-test("설정 단계가 이 직원의 대시보드 로그인으로 안내하고, 로그인 확인이 목록을 다시 받는다", async () => {
-  // Hermes 는 NPC(프로필)마다 로그인한다. default 로 로그인해 둔 구독은 새 직원이 쓸 수 없어,
-  // 안내가 없으면 사용자는 "인증 안 됨" 앞에서 멈추거나 대화 실패를 보고서야 안다
-  // (2026-09-17 Hostinger VPS 실측: No Codex credentials stored).
+test("the config step guides to this employee's dashboard login, and confirming login refetches the list", async () => {
+  // Hermes logs in per NPC (profile). A subscription logged in as default can't be used by a
+  // new employee, and without guidance the user is stuck at "not authenticated" or only finds
+  // out after a conversation fails
+  // (observed 2026-09-17 on the Hostinger VPS: No Codex credentials stored).
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = stubFetch(calls, {
@@ -254,7 +256,7 @@ test("설정 단계가 이 직원의 대시보드 로그인으로 안내하고, 
   }
 });
 
-test("대시보드 주소가 없으면 링크 대신 프로필을 바꿔 로그인하라고 말한다", async () => {
+test("without a dashboard URL, says to switch profiles and log in instead of showing a link", async () => {
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = stubFetch(calls, {
@@ -293,7 +295,7 @@ test("대시보드 주소가 없으면 링크 대신 프로필을 바꿔 로그�
 });
 
 const PROFILE_ROUTES = (attendedChannels: number) => ({
-  // 구체적인 경로를 먼저 둔다 — stubFetch 는 `includes` 로 첫 키를 고른다.
+  // Put the more specific path first — stubFetch picks the first matching key via `includes`.
   "/identity": { isDefaultTemplate: true, body: "", revision: "r0" },
   "/config": { model: null, provider: null, toolsets: null, reasoning_effort: null },
   "/catalog": { providers: [], models: {}, reasoningEfforts: [] },
@@ -363,7 +365,7 @@ function wizardWith(
   );
 }
 
-test("단계는 ① 프로필 ② 인격 ③ 외형 ④ AI 모델이고, 옛 배치 단계의 링크 버튼은 없다", async () => {
+test("steps are 1 profile 2 identity 3 appearance 4 AI model, with no link button for the old placement step", async () => {
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
@@ -384,7 +386,7 @@ test("단계는 ① 프로필 ② 인격 ③ 외형 ④ AI 모델이고, 옛 배
   }
 });
 
-test("새 직원의 출근 오피스가 없을 때만 연결된 오피스 생성 링크를 보인다", async () => {
+test("shows a linked office-creation link only when the new employee has no office to attend", async () => {
   const originalFetch = globalThis.fetch;
   try {
     for (const count of [0, 1]) {
@@ -407,9 +409,10 @@ test("새 직원의 출근 오피스가 없을 때만 연결된 오피스 생성
   }
 });
 
-test("프로필을 만들기 전에는 ②③④ 가 잠기고, 이유는 '다음' 버튼 툴팁으로만 붙는다", async () => {
-  // 2026-09-18 스테이징 실측: 새 프로필인데 ② 를 누르면 "인격 파일을 읽을 수 없어
-  // 편집기를 열지 않습니다" 가 떴고, ③ 은 모델 목록 대신 자유 입력이었다.
+test("before a profile is created, steps 2/3/4 are locked and the reason only shows as the 'Next' button's tooltip", async () => {
+  // Observed in staging 2026-09-18: on a new profile, clicking step 2 showed "can't read the
+  // identity file so the editor won't open," and step 3 fell back to free-text input instead
+  // of a model list.
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
@@ -418,7 +421,7 @@ test("프로필을 만들기 전에는 ②③④ 가 잠기고, 이유는 '다�
     assert.equal(tabByNumber(el, "③")?.disabled, true, "③ 이 잠기지 않았다");
     assert.equal(tabByNumber(el, "④")?.disabled, true, "④ 가 잠기지 않았다");
     const text = el.textContent ?? "";
-    // 튜토리얼처럼 늘어놓지 않는다 — 이유는 잠긴 "다음" 버튼의 툴팁에만 있다(2026-09-20).
+    // Not spelled out like a tutorial — the reason lives only in the locked "Next" button's tooltip (2026-09-20).
     assert.equal(text.includes("먼저 ① 에서 프로필을 만드세요"), false);
     assert.equal(text.includes("인격 파일을 읽을 수 없어"), false);
     const next = el.querySelector<HTMLButtonElement>('[data-step-nav="next"]');
@@ -440,9 +443,10 @@ test("프로필을 만들기 전에는 ②③④ 가 잠기고, 이유는 '다�
   }
 });
 
-test("붙은 채널이 없으면 '출근했다'고 말하지 않는다", async () => {
-  // 채널이 없는데 출근했다고 띄우면, 사용자는 있지도 않은 출근부에서 직원을 찾다 막힌다
-  // (Hostinger VPS 실측 2026-09-17).
+test("does not say 'attended' when there's no attached channel", async () => {
+  // Claiming attendance with no channel leaves the user stuck looking for the employee in an
+  // attendance roster that doesn't exist
+  // (observed on the Hostinger VPS 2026-09-17).
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
@@ -458,7 +462,7 @@ test("붙은 채널이 없으면 '출근했다'고 말하지 않는다", async (
   }
 });
 
-test("붙은 채널이 있으면 출근 결과를 한 줄로 알린다", async () => {
+test("announces attendance results in one line when there's an attached channel", async () => {
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
@@ -472,7 +476,7 @@ test("붙은 채널이 있으면 출근 결과를 한 줄로 알린다", async (
   }
 });
 
-test("③ 의 완료가 마법사를 끝내며 그 직원 이름을 넘긴다", async () => {
+test("finishing step 3 ends the wizard and passes along that employee's name", async () => {
   const calls: FetchCall[] = [];
   const done: Array<{ profileName: string } | undefined> = [];
   const originalFetch = globalThis.fetch;
@@ -492,9 +496,9 @@ test("③ 의 완료가 마법사를 끝내며 그 직원 이름을 넘긴다", 
   }
 });
 
-test("프로필을 만들면 곧바로 바깥 목록에 알린다", async () => {
-  // 알리지 않으면 마법사를 닫기 전까지 아래 프로필 목록이 "등록된 프로필이 없습니다"
-  // 로 남아, 방금 만든 직원이 없어진 것처럼 보인다.
+test("notifies the outer list as soon as a profile is created", async () => {
+  // Without notifying, the profile list below stays on "no profiles registered" until the
+  // wizard closes, making the just-created employee look like it vanished.
   const calls: FetchCall[] = [];
   const created: string[] = [];
   const originalFetch = globalThis.fetch;
@@ -511,10 +515,11 @@ test("프로필을 만들면 곧바로 바깥 목록에 알린다", async () => 
   }
 });
 
-test("방금 만든 프로필의 ② 는 곧바로 빈 편집기를 연다 — 덮어쓸지 묻지 않는다", async () => {
-  // 2026-09-18 로컬 실측: 새 프로필(SOUL.md = Hermes 기본 템플릿, isDefaultTemplate:true)인데
-  // ② 가 "이미 작성된 인격이 있습니다. 어떻게 할까요?" 를 물었다. ① 의 서빙 확인이 받은 인격
-  // 응답을 저장만 하고 편집 모드를 정하지 않아, ② 가 다시 읽지도 판정하지도 않았다.
+test("step 2 for a just-created profile opens an empty editor right away — it doesn't ask to overwrite", async () => {
+  // Observed locally 2026-09-18: for a new profile (SOUL.md = Hermes default template,
+  // isDefaultTemplate: true), step 2 asked "an identity already exists. What would you like
+  // to do?" Step 1's serving check only stored the identity response it received without
+  // deciding an edit mode, so step 2 neither re-read it nor re-decided.
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
@@ -537,7 +542,7 @@ test("방금 만든 프로필의 ② 는 곧바로 빈 편집기를 연다 — �
   }
 });
 
-test("플러그인이 복제를 지원할 때만 새 프로필을 기본 프로필에서 복제해 달라고 한다", async () => {
+test("only asks to clone the new profile from the default profile when the plugin supports cloning", async () => {
   const originalFetch = globalThis.fetch;
   try {
     for (const clone of [true, false]) {
@@ -561,7 +566,7 @@ test("플러그인이 복제를 지원할 때만 새 프로필을 기본 프로�
   }
 });
 
-test("툴셋 체크리스트에서 고른 것만 저장하고, 대화에 안 쓰이는 최상위 toolsets 는 보내지 않는다", async () => {
+test("saves only what's checked in the toolset checklist, and never sends the top-level toolsets unused in conversation", async () => {
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
@@ -571,7 +576,7 @@ test("툴셋 체크리스트에서 고른 것만 저장하고, 대화에 안 쓰
       await Promise.resolve();
     });
 
-    // 안 건드리고 저장하면 서버의 현재 상태를 다시 쓰지 않는다.
+    // Saving without touching anything must not overwrite the server's current state.
     await act(async () => {
       buttonByText(el, "저장").click();
     });
@@ -601,7 +606,7 @@ test("툴셋 체크리스트에서 고른 것만 저장하고, 대화에 안 쓰
   }
 });
 
-test("구버전 플러그인이면 체크리스트 대신 예전 쉼표 입력으로 떨어진다", async () => {
+test("falls back to the old comma-separated input instead of a checklist on an older plugin", async () => {
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
@@ -610,7 +615,7 @@ test("구버전 플러그인이면 체크리스트 대신 예전 쉼표 입력�
       "/toolsets": { errorCode: "plugin_upgrade_required" },
       "/skills": { errorCode: "plugin_upgrade_required" },
     };
-    // 스프레드는 키 순서를 유지하므로 "/plugin/profiles" 가 여전히 마지막이다.
+    // A spread preserves key order, so "/plugin/profiles" still comes last.
     const { root, el } = await mount(wizardWith(routes, calls));
     await createAndOpenModel(el);
     await act(async () => {
@@ -625,7 +630,7 @@ test("구버전 플러그인이면 체크리스트 대신 예전 쉼표 입력�
   }
 });
 
-test("'모든 API 키도 함께 복사' 를 켜면 cloneKeys:api_keys 를, 끄면 싣지 않는다", async () => {
+test("turning on 'also copy all API keys' sends cloneKeys:api_keys, turning it off omits it", async () => {
   const originalFetch = globalThis.fetch;
   try {
     for (const all of [true, false]) {
@@ -658,7 +663,7 @@ test("'모든 API 키도 함께 복사' 를 켜면 cloneKeys:api_keys 를, 끄�
   }
 });
 
-test("복제를 지원하지 않는 게이트웨이에는 키 복사 체크박스를 보이지 않는다", async () => {
+test("does not show the key-copy checkbox on a gateway that doesn't support cloning", async () => {
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
@@ -712,7 +717,7 @@ async function openModelFor(canManageProviderAuth: boolean) {
   return { ...mounted, select };
 }
 
-test("소유자는 인증 안 된 프로바이더를 골라 그 자리에서 키를 넣을 수 있다", async () => {
+test("an owner can pick an unauthenticated provider and enter its key right there", async () => {
   const originalFetch = globalThis.fetch;
   try {
     const { root, el, select } = await openModelFor(true);
@@ -723,7 +728,7 @@ test("소유자는 인증 안 된 프로바이더를 골라 그 자리에서 키
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     assert.ok(el.querySelector('input[type="password"]'), "키 입력 패널이 나오지 않았다");
-    // 앱 안에서 인증할 수 있으면 대시보드로 가라는 옛 안내는 겹치므로 숨긴다.
+    // The old "go to the dashboard" guidance is hidden as redundant when in-app auth is available.
     assert.equal((el.textContent ?? "").includes("직원마다"), false);
     root.unmount();
     el.remove();
@@ -732,7 +737,7 @@ test("소유자는 인증 안 된 프로바이더를 골라 그 자리에서 키
   }
 });
 
-test("공유 사용자에게는 키 입력 대신 소유자가 설정해야 한다고 말한다", async () => {
+test("tells a shared user the owner needs to set it up, instead of showing key input", async () => {
   const originalFetch = globalThis.fetch;
   try {
     const { root, el, select } = await openModelFor(false);
@@ -746,9 +751,9 @@ test("공유 사용자에게는 키 입력 대신 소유자가 설정해야 한�
   }
 });
 
-test("인증 전 프로바이더는 모델을 비활성으로 두고, 로그인 뒤 목록이 오면 드롭다운으로 고른다", async () => {
-  // 2026-09-19 스테이징: Codex 가 인증 전이라 카탈로그에 모델 목록이 없었고, 모델 칸이 자유
-  // 입력으로 떨어져 "gpt-6-astra S" 같은 오타를 그대로 받았다.
+test("an unauthenticated provider keeps model disabled, and switches to a dropdown once the list arrives after login", async () => {
+  // Staging 2026-09-19: Codex was unauthenticated so the catalog had no model list, the model
+  // field fell back to free-text input, and a typo like "gpt-6-astra S" was accepted as-is.
   const originalFetch = globalThis.fetch;
   let authenticated = false;
   const calls: FetchCall[] = [];
@@ -762,8 +767,8 @@ test("인증 전 프로바이더는 모델을 비활성으로 두고, 로그인 
               id: "openai-codex",
               name: "OpenAI Codex",
               authenticated,
-              // authType 을 빼 구버전 안내의 "로그인 확인" 으로 다시 받게 한다 — 패널의 로그인
-              // 완료도 같은 loadCatalog 를 부른다.
+              // Omit authType so the old "Confirm login" guidance is used again — the panel's
+              // login completion also calls the same loadCatalog.
             },
           ],
           models: authenticated ? { "openai-codex": ["gpt-6", "gpt-6-mini"] } : {},
@@ -824,7 +829,7 @@ test("인증 전 프로바이더는 모델을 비활성으로 두고, 로그인 
   }
 });
 
-test("③ 외형은 이 직원의 현재 외형으로 편집기를 열고, 저장하면 그 프로필 행을 고친다", async () => {
+test("step 3 appearance opens the editor with this employee's current appearance, and saving patches that profile row", async () => {
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
@@ -867,7 +872,7 @@ test("③ 외형은 이 직원의 현재 외형으로 편집기를 열고, 저�
   }
 });
 
-test("남은 요청 주소를 알리고, 확인해야만 지운다", async () => {
+test("surfaces a leftover custom endpoint and only clears it after explicit confirmation", async () => {
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
@@ -886,15 +891,15 @@ test("남은 요청 주소를 알리고, 확인해야만 지운다", async () =>
     const warning = el.querySelector("[data-base-url-warning]");
     assert.ok(warning, "남은 주소를 알리지 않는다");
     assert.match(el.textContent ?? "", /https:\/\/old\.example\/v1/);
-    // 경고는 버튼 줄 밖이어야 한다 — 같은 flex 줄에 들어가면 저장·완료 버튼이 눌려
-    // 글자가 세로로 꺾인다(2026-09-20 실제로 그렇게 나갔다).
+    // The warning must be outside the button row — put in the same flex row it squeezes the
+    // save/done buttons and wraps their text vertically (2026-09-20, actually happened).
     const actions = el.querySelector("[data-config-actions]");
     assert.ok(actions, "버튼 줄을 찾지 못했다");
     assert.equal(actions.contains(warning), false, "경고가 버튼 줄 안에 있다");
     for (const button of actions.querySelectorAll("button"))
       assert.match(button.className, /whitespace-nowrap/, "버튼 글자가 줄바꿈될 수 있다");
 
-    // 확인 없이 저장하면 주소를 건드리지 않는다 — 커스텀 엔드포인트를 말없이 지우지 않는다.
+    // Saving without confirmation must not touch the endpoint — a custom endpoint is never silently cleared.
     await act(async () => {
       buttonByText(el, "저장").click();
     });
@@ -918,7 +923,7 @@ test("남은 요청 주소를 알리고, 확인해야만 지운다", async () =>
   }
 });
 
-test("워커 전파가 꺼진 게이트웨이면 채용 결과에 결과물이 모이지 않는다는 알림과 켜는 방법 링크", async () => {
+test("with worker propagation disabled on the gateway, the hire result shows a notice that output won't collect, with a link to enable it", async () => {
   const calls: FetchCall[] = [];
   const originalFetch = globalThis.fetch;
   try {
@@ -945,7 +950,7 @@ test("워커 전파가 꺼진 게이트웨이면 채용 결과에 결과물이 �
   }
 });
 
-test("워커 적용이 됐거나 옛 플러그인(workerPlugin 없음)이면 알림이 없다", async () => {
+test("no notice when the worker was applied, or on an old plugin (no workerPlugin)", async () => {
   const originalFetch = globalThis.fetch;
   try {
     for (const workerPlugin of [{ profile: "mia", link: "created", enabled: "added" }, undefined]) {
