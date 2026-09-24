@@ -1253,7 +1253,7 @@ export function setupSocketHandlers(io: Server) {
           const prevSocket = io.sockets.sockets.get(prevSocketId);
           if (prevSocket) {
             prevSocket.emit("session:kicked", {
-              reason: "다른 위치에서 접속하여 현재 세션이 종료되었습니다.",
+              reason: "errors.sessionKickedElsewhere",
             });
             prevSocket.disconnect(true);
           }
@@ -1941,7 +1941,7 @@ export function setupSocketHandlers(io: Server) {
         if (room && room.participants.size === 0) {
           settleMeeting({ activeBrokers, discussionInitiators, spatial }, channelId, {
             stopBroker: true,
-            context: "주재자 이탈",
+            context: "host left",
           });
         }
       }

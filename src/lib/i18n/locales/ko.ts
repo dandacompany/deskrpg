@@ -3216,6 +3216,9 @@ const ko: Record<string, string> = {
     "게이트웨이 화면에서 켠 뒤 [적용]을 누르면 이 직원에게도 적용됩니다",
   "hermes.wizard.result.workerPropagationLink": "켜는 방법 보기",
   // --- content-i18n:A ---
+  "meeting.cardAcceptance": "완료 조건: {acceptance}",
+  "meeting.cardSource": "출처: 회의록 {id} — {topic}",
+  "errors.sessionKickedElsewhere": "다른 위치에서 접속하여 현재 세션이 종료되었습니다.",
   // --- /content-i18n:A ---
   // --- content-i18n:B ---
   // --- /content-i18n:B ---

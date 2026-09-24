@@ -3104,6 +3104,9 @@ const zh: Record<string, string> = {
   "hermes.wizard.result.workerPropagationHow": "在网关页面开启后点击[应用]，即可应用到此员工",
   "hermes.wizard.result.workerPropagationLink": "查看开启方法",
   // --- content-i18n:A ---
+  "meeting.cardAcceptance": "完成条件: {acceptance}",
+  "meeting.cardSource": "来源: 会议纪要 {id} — {topic}",
+  "errors.sessionKickedElsewhere": "你已在其他位置连接，当前会话已结束。",
   // --- /content-i18n:A ---
   // --- content-i18n:B ---
   // --- /content-i18n:B ---

@@ -77,7 +77,11 @@ export async function announceMeetingOutcome(input: {
     });
     requestEmitRoomMessage(room.id, message);
   } catch (error) {
-    console.warn("[meeting] 회의 결과 알림을 남기지 못했다", { channelId: input.channelId }, error);
+    console.warn(
+      "[meeting] Failed to post the meeting outcome notice",
+      { channelId: input.channelId },
+      error,
+    );
   }
 }
 

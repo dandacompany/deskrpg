@@ -3238,6 +3238,10 @@ const en: Record<string, string> = {
     "Turn it on from the gateway page, then press [Apply] to include this employee",
   "hermes.wizard.result.workerPropagationLink": "How to turn it on",
   // --- content-i18n:A ---
+  "meeting.cardAcceptance": "Acceptance: {acceptance}",
+  "meeting.cardSource": "Source: meeting minutes {id} — {topic}",
+  "errors.sessionKickedElsewhere":
+    "You connected from another location, so this session was ended.",
   // --- /content-i18n:A ---
   // --- content-i18n:B ---
   // --- /content-i18n:B ---

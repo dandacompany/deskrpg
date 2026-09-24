@@ -11,6 +11,7 @@
  */
 import type { MeetingOutcome, MeetingOutcomeRegistered } from "./meeting-outcome";
 import type { OutcomeRegistration } from "./meeting-outcome-draft";
+import { translateServer } from "./i18n/server";
 import { isTenantSlug } from "./tenant-slug";
 
 export type RegisterBatchInput = {
@@ -88,19 +89,28 @@ function invalid(errorCode: string): RegisterMeetingResult {
 function cardBody(
   followUp: MeetingOutcome["followUps"][number],
   minutes: { id: string; topic: string },
+  locale: string | null,
 ): string {
   return [
     followUp.summary,
-    followUp.acceptance ? `완료 조건: ${followUp.acceptance}` : null,
+    followUp.acceptance
+      ? translateServer(locale, "meeting.cardAcceptance", { acceptance: followUp.acceptance })
+      : null,
     // The link back to the meeting decision the card came from. The card detail view renders this line as "open minutes."
-    `출처: 회의록 ${minutes.id} — ${minutes.topic}`,
+    translateServer(locale, "meeting.cardSource", { id: minutes.id, topic: minutes.topic }),
   ]
     .filter(Boolean)
     .join("\n\n");
 }
 
 export async function registerMeetingOutcome<Ctx extends RegisterContext>(
-  args: { minutesId: string; userId: string; body: Body },
+  args: {
+    minutesId: string;
+    userId: string;
+    body: Body;
+    /** Language of the card body labels — the registering user's. Omitted keeps Korean. */
+    locale?: string | null;
+  },
   deps: RegisterMeetingDeps<Ctx>,
 ): Promise<RegisterMeetingResult> {
   const minutes = await deps.loadMinutes(args.minutesId);
@@ -156,7 +166,11 @@ export async function registerMeetingOutcome<Ctx extends RegisterContext>(
     boardSlug: ctx.boardSlug,
     items: items.map((item) => ({
       title: item.title.trim(),
-      body: cardBody(outcome.followUps[item.index], minutes),
+      body: cardBody(
+        outcome.followUps[item.index],
+        minutes,
+        args.locale === undefined ? "ko" : args.locale,
+      ),
       ...(item.npcId ? { npcId: item.npcId } : {}),
       ...(tenant ? { tenant: tenant.slug } : {}),
       parents: item.after.map((target) => position.get(target) as number),

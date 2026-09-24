@@ -3252,6 +3252,9 @@ const ja: Record<string, string> = {
     "ゲートウェイ画面でオンにしてから[適用]を押すと、この社員にも適用されます",
   "hermes.wizard.result.workerPropagationLink": "オンにする方法",
   // --- content-i18n:A ---
+  "meeting.cardAcceptance": "完了条件: {acceptance}",
+  "meeting.cardSource": "出典: 議事録 {id} — {topic}",
+  "errors.sessionKickedElsewhere": "別の場所から接続したため、このセッションは終了しました。",
   // --- /content-i18n:A ---
   // --- content-i18n:B ---
   // --- /content-i18n:B ---
