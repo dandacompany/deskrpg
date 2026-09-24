@@ -18,7 +18,7 @@ export function hirePageHref(
 /**
  * Where to go back when the wizard is closed.
  *
- * The server decides the seat — we only go back to the game. If entered via the game screen's "새 직원",
+ * The server decides the seat — we only go back to the game. If entered via the game screen's "New employee" (`game.roster.hire`),
  * send them back there. Otherwise go back to the employee list — where the just-created employee is visible.
  */
 export function hireDoneHref(gatewayId: string, returnTo?: string | null): string {
@@ -29,7 +29,7 @@ export function hireDoneHref(gatewayId: string, returnTo?: string | null): strin
 /**
  * Where to go when the wizard finishes.
  *
- * If it ends with ③'s "완료" (there is an employee name), go to that just-created employee's detail — the place to
+ * If it ends with ③'s "Done" (`hermes.wizard.finish`) (there is an employee name), go to that just-created employee's detail — the place to
  * review appearance, persona and model in one place. If entered from the game screen or ended by closing, go back as before.
  */
 export function hireFinishedHref(

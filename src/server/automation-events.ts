@@ -167,7 +167,7 @@ export type IngestDeps = {
   boardSlug: string;
   findNpcByProfile(channelId: string, profileName: string): Promise<ChannelNpcLookup | null>;
   /**
-   * Is this card `blocked` because it is **awaiting approval**? If so, no "막혔습니다" notice is posted — the approval
+   * Is this card `blocked` because it is **awaiting approval**? If so, no "card blocked" (`notice.cardBlocked`) notice is posted — the approval
    * request line already says the same thing, and awaiting approval is not a failure. Optional dependency; if absent,
    * notifies as before.
    */

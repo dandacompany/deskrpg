@@ -37,8 +37,9 @@ function ProfilesPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const requestedGateway = searchParams.get("gateway");
-  // The game screen's "새 직원" and "프로필 설정" come into this screen. After creating, send them back to where they came from
-  // so the user does not have to find and enter the channel again.
+  // The game screen's "New employee" (`game.roster.hire`) and "Profile settings" (`workspace.action.profile`) come
+  // into this screen. After creating, send them back to where they came from so the user does not have to find and
+  // enter the channel again.
   const wantsCreate = searchParams.get("new") === "1";
   const returnTo = backLinkTarget(searchParams.get("returnTo"));
   const t = useT();
@@ -92,7 +93,7 @@ function ProfilesPageContent() {
   const deletedNpcs = Number(searchParams.get("deletedNpcs") ?? 0);
   const lostChannels = Number(searchParams.get("channels") ?? 0);
 
-  // `?new=1` is the old address (the form the game's "새 직원" used). Hiring is handled by its own page, so
+  // `?new=1` is the old address (the form the game's "New employee" used). Hiring is handled by its own page, so
   // pass it through — the list screen does not unfold the wizard again.
   useEffect(() => {
     if (wantsCreate && selectedId) {
