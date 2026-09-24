@@ -73,7 +73,7 @@ export default function AuthPageClient({ isComingSoon }: { isComingSoon: boolean
         return;
       }
 
-      // 임시 비밀번호로 들어왔으면 곧바로 변경 화면으로 보낸다.
+      // If they came in with a temporary password, send them straight to the change screen.
       if (data?.user?.mustChangePassword) {
         router.push("/account/password?forced=1");
         return;
@@ -184,7 +184,7 @@ export default function AuthPageClient({ isComingSoon }: { isComingSoon: boolean
                     <p className="text-center text-sm text-text-secondary">
                       {t("auth.setupDescription")}
                     </p>
-                    {/* 첫 계정이 곧 관리자다. 공개 서버에 올린 사람에게는 가입을 언제 닫아야 하는지가 중요하다. */}
+                    {/* The first account becomes the admin. For someone who put it on a public server, knowing when to close sign-ups matters. */}
                     <p className="text-center text-xs text-text-muted">
                       {t("auth.setupAdminNotice")}
                     </p>

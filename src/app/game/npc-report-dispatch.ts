@@ -1,16 +1,16 @@
 /**
- * 보고 호출 판정 — "지금 누구를 부를 것인가" 하나만 답한다.
+ * The report call decision — answers only "whom to call now".
  *
- * 호출 자체는 기존 `npc:call` 을 그대로 쓴다(새 이벤트를 만들지 않는다). 여기서는 언제
- * 쏘지 **않을지**가 본질이다 — 대화 중에 끼어들지 않고, 걸어오는 중에 다시 부르지 않는다.
+ * The call itself uses the existing `npc:call` as is (no new event). What matters here is when **not**
+ * to fire — do not interrupt a conversation, and do not call again while they are walking over.
  */
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 
 import { pendingReports, type ReportAck, type ReportItem } from "@/game/report-queue";
 
 /**
- * 방 상태와 로스터에서 이번 채널의 보고 큐를 뽑는다. 화면이 갖고 있는 모양 그대로 받아
- * 컴포넌트 안에 판정이 남지 않게 한다 — 사무실 방이 아직 없으면 빈 큐다.
+ * Extract this channel's report queue from the room state and roster. It takes the shape the screen holds as is
+ * so no decisions remain inside the component — if the office room does not exist yet, the queue is empty.
  */
 export function reportsForChannel(input: {
   rooms: readonly RoomSummary[];
@@ -28,10 +28,10 @@ export function reportsForChannel(input: {
 }
 
 /**
- * 이 보고를 열면 어디로 가는가. 카드 보고는 칸반, 크론 실패는 크론 이력이다.
+ * Where opening this report goes. Card reports go to kanban, cron failures to the cron history.
  *
- * 컴포넌트 안에서 `cardId ?? ""` 로 얼버무렸다가 크론 실패 보고가 **어떤 방법으로도
- * 확인되지 않아** 배지가 영구히 남았다. 갈라지는 지점을 여기 두고 테스트로 고정한다.
+ * Fudging this inside the component with `cardId ?? ""` made cron failure reports **impossible to
+ * acknowledge by any means**, and the badge stayed forever. The branching point lives here, pinned by tests.
  */
 export function reportTarget(
   item: ReportItem,
@@ -42,43 +42,43 @@ export function reportTarget(
 }
 
 /**
- * 호출 한 번의 결과. `signature` 는 **그 시점 그 직원의 관찰 가능한 상태**다(아래 참조).
+ * The result of one call. `signature` is **the observable state of that employee at that moment** (see below).
  *
- * - `sent` — 쏘았고 아직 거절을 받지 않았다. 같은 보고를 두 번 쏘는 것을 막는 낙관적 표시다.
- * - `rejected` — 거절됐다. 그 직원의 상태가 **그대로인 동안은** 다시 쏘지 않는다.
- * - `dismissed` — 직원이 와서 대화창까지 열렸는데 사용자가 확인하지 않고 닫았다. 한동안
- *   다시 부르지 않는다(`reviveDismissedReports` 가 되살린다). 배지와 보고 목록에는 남는다.
+ * - `sent` — fired and not yet refused. An optimistic marker that prevents firing the same report twice.
+ * - `rejected` — refused. Not fired again **while** that employee's state stays the same.
+ * - `dismissed` — the employee came and the dialog opened, but the user closed it without acknowledging. Not called
+ *   again for a while (`reviveDismissedReports` revives it). It stays in the badge and the report list.
  */
 export type ReportAttempt = {
   messageId: string;
   outcome: "sent" | "rejected" | "dismissed";
   signature: string;
-  /** 보낸 호출로 직원이 실제로 내 것이 된 적이 있는가. 그 뒤에 잃어야 "빼앗겼다" 로 본다. */
+  /** Whether the employee ever actually became mine through the sent call. Only losing them after that counts as "taken". */
   acquired?: boolean;
-  /** 도착 신호를 놓쳐 이쪽에서 대화창을 대신 열었는가. 한 번만 연다. */
+  /** Whether we opened the dialog on their behalf because the arrival signal was missed. Opened only once. */
   opened?: boolean;
-  /** `dismissed` 가 된 시각(ms). 되살릴 때를 가른다. */
+  /** The time (ms) it became `dismissed`. Decides when to revive. */
   dismissedAt?: number;
 };
 
-/** 접힌 보고가 저절로 다시 후보가 되기까지의 시간(단테 결정 2026-09-21: 약 10분). */
+/** Time until a folded report becomes a candidate again on its own (Dante's decision, 2026-09-21: about 10 minutes). */
 export const DISMISSED_REPORT_REVIVE_MS = 10 * 60 * 1000;
 
 /**
- * 재시도 신호가 되는 직원 상태. 모션 스냅샷의 `phase` 와 "주인이 나인가" 를 합친다.
+ * The employee state that serves as the retry signal. Combines the motion snapshot's `phase` with "am I the owner".
  *
- * 시간 기반 재시도를 쓰지 않는 이유: 회의가 한 시간이면 그동안 호출이 계속 헛나간다.
- * 상태가 바뀌는 순간이 곧 "이제 될지도 모른다" 는 유일한 근거다.
+ * Why not time-based retries: if a meeting lasts an hour, calls keep missing the whole time.
+ * The moment the state changes is the only basis for "now it might work".
  */
 export function npcSignature(
   phase: string | undefined,
   ownerSocketId: string | undefined,
   mySocketId: string | undefined,
   /**
-   * 자기 자리(home)에 있는가. 회의 전후로 직원은 **같은 모양으로 돌아온다** — 회의석에 앉은
-   * 직원도, 자리로 돌아온 직원도 `idle` · 주인 없음이다. 이것이 없으면 회의가 끝나는 순간
-   * 낡은 화면 상태로 거절된 호출이, 복귀가 끝난 뒤에도 "달라진 것이 없다" 로 보여 영영
-   * 재시도되지 않는다(스테이징 실측: 회의를 마치고 나와도 보고하러 오지 않았다).
+   * Whether they are at their own seat (home). Before and after a meeting the employee **comes back in the same shape** — an
+   * employee seated at the meeting and one back at their seat are both `idle` · no owner. Without this, a call refused with
+   * stale screen state the moment the meeting ends looks like "nothing changed" even after the return finishes, and is never
+   * retried (staging measurement: they did not come to report even after the meeting ended).
    */
   atHome: boolean,
 ): string {
@@ -86,21 +86,21 @@ export function npcSignature(
   return `${phase ?? "unknown"}:${owner}:${atHome ? "home" : "away"}`;
 }
 
-/** 서명에서 "주인이 나인가" 부분만 읽는다. `npcSignature` 와 같은 파일에 두어 형식이 갈리지 않게 한다. */
+/** Read only the "am I the owner" part of the signature. Kept in the same file as `npcSignature` so the format does not drift. */
 function signatureOwner(signature: string): string {
   return signature.split(":")[1] ?? "none";
 }
 
 /**
- * 보낸 호출의 결과를 직원 상태로 정리한다.
+ * Settle the result of sent calls into employee state.
  *
- * "보냄" 은 보고가 확인돼 큐에서 빠질 때만 풀렸다. 그래서 내 호출로 오던 직원을 회의가
- * 데려가면 그 보고는 영영 "보냄" 으로 남아, 회의가 끝나도 다시 부르지 않았다. 이제 직원이
- * 한 번 내 것이 된 뒤 **내 것이 아니게 되면** 그 시도를 그 순간의 서명으로 거절 처리한다 —
- * 상태가 다시 바뀌면(예: 집에 돌아오면) 후보가 된다.
+ * "Sent" was released only when the report was acknowledged and left the queue. So if a meeting took the employee coming
+ * on my call, that report stayed "sent" forever and was not called again even after the meeting. Now, once the employee
+ * has become mine and **stops being mine**, the attempt is treated as refused with that moment's signature —
+ * when the state changes again (e.g. they get home) it becomes a candidate.
  *
- * 내 것이 되기 전에는 건드리지 않는다. 호출을 막 보냈을 때는 스냅샷이 아직 옛 상태라
- * "내 것이 아니다" 로 보이는데, 그것을 잃은 것으로 보면 방금 보낸 호출을 스스로 취소한다.
+ * Do not touch it before they become mine. Right after sending a call the snapshot is still the old state and
+ * looks like "not mine"; treating that as lost would cancel the call just sent.
  */
 export function reconcileReportAttempts(
   attempts: readonly ReportAttempt[],
@@ -116,19 +116,19 @@ export function reconcileReportAttempts(
     const mine = signatureOwner(signature) === "mine";
     if (mine) return attempt.acquired ? attempt : { ...attempt, acquired: true };
     if (!attempt.acquired) return attempt;
-    // 이미 자기 자리에 돌아와 있으면 서명이 더 바뀌지 않는다 — 그 서명으로 거절해 두면 영영
-    // 다시 부르지 않는다(스테이징 실측: 올리버가 서버 복귀로 돌아간 뒤 배지 1건이 남고 아무도
-    // 오지 않았다). 그때는 빈 서명으로 남겨 **즉시** 후보가 되게 한다. 아직 돌아가는 중이면
-    // 그 순간의 서명으로 두어, 집에 닿아 서명이 바뀔 때 후보가 된다.
+    // If they are already back at their seat the signature will not change further — refusing with that signature would never
+    // call them again (staging measurement: after Oliver went back via the server return, one badge remained and nobody
+    // came). In that case leave an empty signature so they become a candidate **immediately**. If still heading back,
+    // keep that moment's signature so they become a candidate when they reach home and the signature changes.
     const home = signature.endsWith(":home");
     return { messageId: attempt.messageId, outcome: "rejected", signature: home ? "" : signature };
   });
 }
 
 /**
- * 소켓이 끊기면 응답을 받지 못한 호출(보냈지만 직원이 내 것이 된 적 없는 것)을 거절로 바꾼다.
- * 서버가 그 호출을 받았는지 알 수 없으므로, 빈 서명으로 두어 재연결 뒤 **즉시** 다시 후보가
- * 되게 한다. 이미 내 것이 된 보고는 직원이 와 있거나 오는 중이라 그대로 둔다.
+ * When the socket drops, turn calls with no response (sent, but the employee never became mine) into refusals.
+ * It is unknown whether the server received the call, so leave an empty signature so it becomes a candidate again
+ * **immediately** after reconnecting. Reports already mine are left as is, since the employee is here or on the way.
  */
 export function releaseUnacquiredReportCalls(
   attempts: readonly ReportAttempt[],
@@ -142,8 +142,8 @@ export function releaseUnacquiredReportCalls(
 }
 
 /**
- * 전하던 보고가 더는 "진행 중" 이 아닌가. 거절(또는 접힘)로 바뀐 보고를 active 로 쥐고 있으면
- * `decideReportCall` 이 그 보고만 기다리며 **큐 전체**를 멈춘다 — 화면은 이때 active 를 비운다.
+ * Whether the report being delivered is no longer "in progress". Holding a report that turned into a refusal (or fold) as active
+ * makes `decideReportCall` wait only on that report and stall **the whole queue** — the screen clears active at that point.
  */
 export function activeReportReleased(
   attempts: readonly ReportAttempt[],
@@ -155,9 +155,9 @@ export function activeReportReleased(
 }
 
 /**
- * 복귀시킨 직원 목록을 정리한다 — 자리에 닿았으면(서명이 `:home` 이고 주인이 내가 아니면) 뺀다.
- * 복귀를 누른 직후에는 스냅샷이 아직 "내 호출에 대기" 라 서명만으로는 복귀 중인지 모른다.
- * 그래서 화면이 누른 순간 넣고, 여기서 도착을 확인해 뺀다.
+ * Tidy the list of returned employees — remove those who reached their seat (signature `:home` and I am not the owner).
+ * Right after pressing return the snapshot still says "waiting on my call", so the signature alone cannot tell whether they are returning.
+ * So the screen adds them the moment it is pressed, and here arrival is confirmed and they are removed.
  */
 export function settleReturningNpcs(
   returning: ReadonlySet<string>,
@@ -176,12 +176,12 @@ export function settleReturningNpcs(
 }
 
 /**
- * 지금 보고하러 직원을 부르면 안 되는가.
+ * Whether employees must not be called to report right now.
  *
- * 대화창·칸반·크론 모달이 열려 있으면 끼어들지 않는다. **회의실에 있는 동안에도** 부르지
- * 않는다 — 자동 보고 호출은 직원을 내 호출에 묶고, 묶인 직원은 회의 집결이 원위치를 캡처하지
- * 못해 "참가자를 찾을 수 없습니다" 로 집결이 깨진다. 밀린 보고가 있으면 회의를 시작할 수
- * 없었다(스테이징 실측). 어느 경우든 큐는 그대로 남고, 막힌 이유가 사라지면 이어진다.
+ * Do not interrupt when the dialog, kanban or cron modal is open. Also do not call **while in the meeting
+ * room** — automatic report calls bind the employee to my call, and for a bound employee the meeting gathering cannot capture
+ * the original position, so the gathering breaks with "참가자를 찾을 수 없습니다". With pending reports a meeting could not
+ * be started (staging measurement). Either way the queue stays as is and continues once the blocking reason is gone.
  */
 export function reportCallBlocked(input: {
   dialogOpen: boolean;
@@ -194,50 +194,50 @@ export function reportCallBlocked(input: {
 
 export function decideReportCall(input: {
   queue: readonly ReportItem[];
-  /** 지금 전하러 오는 중이거나 전하는 중인 보고. 직원이 아니라 보고 건으로 추적한다. */
+  /** The report currently being brought or delivered. Tracked per report, not per employee. */
   activeMessageId: string | null;
-  /** 이 보고들에 무엇을 했고 어떻게 됐는지. */
+  /** What was done to these reports and how it turned out. */
   attempts: readonly ReportAttempt[];
-  /** 지금 각 직원의 상태 서명. 거절 당시와 다르면 다시 부를 수 있다. */
+  /** Each employee's current state signature. If it differs from the time of refusal, they can be called again. */
   signatures: Readonly<Record<string, string>>;
-  /** 지금 부르면 안 되는가(`reportCallBlocked`). 큐는 그대로 남는다. */
+  /** Whether calling is blocked right now (`reportCallBlocked`). The queue stays as is. */
   blocked: boolean;
-  /** 자리로 돌아가는 중이라 지금은 부르지 않을 직원(`settleReturningNpcs`). */
+  /** Employees not to call right now because they are heading back to their seats (`settleReturningNpcs`). */
   returningNpcIds?: ReadonlySet<string>;
 }): ReportItem | null {
   if (input.blocked) return null;
   const callable = (item: ReportItem): boolean => {
-    // 복귀 중인 직원은 자리에 닿을 때까지 후보가 아니다. 복귀가 보고를 확인하는 순간 같은
-    // 직원의 접힌 보고가 되살아나 곧바로 다시 불렸고, 그 호출이 복귀를 뒤집어 직원이 곁에
-    // 남았다(스테이징 실측: 올리버를 복귀시켰는데 "내 호출에 대기" 로 남고 소피가 먼저 왔다).
+    // An employee being returned is not a candidate until reaching their seat. The moment a return acknowledged a report, the same
+    // employee's folded report revived and was called again right away, and that call reversed the return so the employee stayed
+    // beside us (staging measurement: Oliver was returned but stayed "waiting on my call" and Sophie came first).
     if (input.returningNpcIds?.has(item.npcId)) return false;
     if ((input.signatures[item.npcId] ?? "").startsWith("returning:")) return false;
     const attempt = input.attempts.find((a) => a.messageId === item.messageId);
     if (!attempt) return true;
-    // 결과를 기다리는 중이면 다시 쏘지 않는다. 사용자가 닫은 보고도 다시 부르지 않는다.
+    // While waiting for a result, do not fire again. Reports the user closed are not called again either.
     if (attempt.outcome === "sent" || attempt.outcome === "dismissed") return false;
-    // 거절 — 그 직원의 상태가 바뀌었을 때만 다시 후보가 된다.
+    // Refused — becomes a candidate again only when that employee's state has changed.
     return (input.signatures[item.npcId] ?? "unknown:none:away") !== attempt.signature;
   };
-  // 전하는 중인 보고가 끝날 때까지 다음 사람을 부르지 않는다 — 한 번에 한 명이다.
+  // Do not call the next person until the report being delivered finishes — one at a time.
   const active = input.queue.find((item) => item.messageId === input.activeMessageId);
-  // 거절·접힘으로 끝난 보고는 active 라도 큐를 쥐지 않는다(`activeReportReleased`).
+  // A report that ended in refusal or fold does not hold the queue even if active (`activeReportReleased`).
   if (active && !activeReportReleased(input.attempts, active.messageId))
     return callable(active) ? active : null;
-  // 그 밖에는 **보고가 생긴 순서대로**다. 예전에는 보고 중이던 직원의 남은 보고를 먼저 골라,
-  // 소피→올리버→소피 큐에서 소피가 다시 불리고 올리버는 오지 못했다(배지는 올리버 보고를
-  // 가리키고 있었다). 같은 직원이 두 번 오가는 것은 감수한다. 맨 앞이 거절돼 막히면 큐 전체가
-  // 멈추지 않게 다음 후보로 넘어간다(head-of-line blocking).
+  // Otherwise it is **in the order reports arose**. It used to pick the reporting employee's remaining reports first, so in a
+  // Sophie→Oliver→Sophie queue Sophie was called again and Oliver never came (the badge was pointing at Oliver's
+  // report). The same employee going back and forth twice is accepted. If the head is refused and blocked, move on to the
+  // next candidate so the whole queue does not stall (head-of-line blocking).
   return input.queue.find(callable) ?? null;
 }
 
 /**
- * 도착했는데 대화창이 열리지 않은 보고. 있으면 화면이 대신 대화창을 연다.
+ * A report that arrived but whose dialog did not open. If there is one, the screen opens the dialog on its behalf.
  *
- * 대화창은 `npc:movement-arrived` 한 번에만 열린다. 직원이 오는 도중 회의가 끼어들었거나
- * 그 신호를 놓치면 직원은 내 곁에서 `waiting` 으로 서 있고, 시도는 "보냄" 으로 남아
- * `decideReportCall` 이 그 직원을 우선한 채 null 만 돌려 **큐 전체가 멈췄다**(스테이징 실측:
- * 소피가 "내 호출에 대기" 로 서 있고 배지는 그대로, 다른 직원도 오지 않았다).
+ * The dialog opens only on a single `npc:movement-arrived`. If a meeting cut in while the employee was coming or that
+ * signal was missed, the employee stands beside me as `waiting`, the attempt stays "sent", and
+ * `decideReportCall`, prioritizing that employee, returned only null so **the whole queue stalled** (staging measurement:
+ * Sophie stood "waiting on my call", the badge stayed, and no other employee came either).
  */
 export function missedReportArrival(input: {
   queue: readonly ReportItem[];
@@ -256,10 +256,10 @@ export function missedReportArrival(input: {
 }
 
 /**
- * 보고하러 온 직원과의 대화창을 확인 없이 닫았다 — 이 보고를 이 세션에서 다시 부르지 않는다.
+ * The dialog with an employee who came to report was closed without acknowledging — do not call this report again this session.
  *
- * 확인은 알림 링크를 열거나 복귀시킬 때 일어난다. 대화창만 닫으면 시도가 "보냄" 으로 남아
- * 큐 전체가 멈췄다. **그 한 건만** 접는다 — 같은 직원의 다음 보고는 시간순 차례에 다시 온다.
+ * Acknowledgment happens when opening the notice link or returning them. Closing only the dialog left the attempt "sent" and
+ * stalled the whole queue. Fold **only that one** — the same employee's next report comes again in chronological turn.
  */
 export function dismissReport(
   attempts: readonly ReportAttempt[],
@@ -273,9 +273,9 @@ export function dismissReport(
 }
 
 /**
- * 접힌 보고를 다시 후보로 되돌린다 — 접은 뒤 **다른 보고를 확인했거나** 약 10분이 지났으면.
- * 영구히 접어 두면 배지에는 남았는데 아무도 오지 않는 상태가 세션 끝까지 간다(…75v1A).
- * 되돌린다는 것은 시도 기록을 지우는 것이다 — 기록이 없는 보고는 `decideReportCall` 의 후보다.
+ * Return folded reports to candidacy — if **another report was acknowledged** after folding or about 10 minutes passed.
+ * Folding permanently leaves a state until the session ends where the badge remains but nobody comes (…75v1A).
+ * Returning means deleting the attempt record — a report with no record is a candidate for `decideReportCall`.
  */
 export function reviveDismissedReports(
   attempts: readonly ReportAttempt[],
@@ -291,7 +291,7 @@ export function reviveDismissedReports(
   return next.length === attempts.length ? (attempts as ReportAttempt[]) : next;
 }
 
-/** "다시 부르기" — 그 보고를 즉시 후보로 되돌린다. */
+/** "다시 부르기" — immediately return that report to candidacy. */
 export function recallReport(
   attempts: readonly ReportAttempt[],
   messageId: string,
@@ -299,14 +299,14 @@ export function recallReport(
   return attempts.filter((attempt) => attempt.messageId !== messageId);
 }
 
-/** 보고 목록에 "접힘" 과 "다시 부르기" 를 보일 보고들. */
+/** Reports that should show "folded" and "다시 부르기" in the report list. */
 export function dismissedReportIds(attempts: readonly ReportAttempt[]): Set<string> {
   return new Set(attempts.filter((a) => a.outcome === "dismissed").map((a) => a.messageId));
 }
 
 /**
- * 확인 기록(`ReportAck`)을 담아 두는 브라우저 저장 키. 서버 읽은 지점 스키마를 건드리지 않으려는 선택이라,
- * 대가로 기기마다 배지가 다를 수 있다. 읽은 지점이 정리되면 그 값으로 갈아끼운다.
+ * The browser storage key holding the acknowledgment record (`ReportAck`). A choice made to avoid touching the server read-point schema,
+ * at the cost that badges may differ per device. Once read points are sorted out, swap in that value.
  */
 export function reportAckKey(channelId: string): string {
   return `deskrpg.reportAck.${channelId}`;

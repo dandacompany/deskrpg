@@ -1,16 +1,16 @@
 import { sortRooms, type RoomMessage, type RoomSummary } from "@/lib/chat-rooms-policy";
 
 /**
- * 채널 대화방 화면의 상태. 순수 리듀서라 소켓·React 를 모른다 — `node:test` 가 붙는다.
+ * State of the channel chat room screen. A pure reducer that knows neither socket nor React — `node:test` can cover it.
  *
- * `view` 는 세 화면이다: 방 목록(`list`), 방 안(`room`), 새 방/초대 작성(`compose`).
- * 목록은 방이 하나여도 새 방 만들기의 진입점이다.
+ * `view` is three screens: the room list (`list`), inside a room (`room`), composing a new room/invite (`compose`).
+ * The list is the entry point to creating a new room even when there is only one room.
  */
 export type RoomState = {
   rooms: RoomSummary[];
   /**
-   * 이 브라우저를 쓰는 사람의 user id. 서버가 `room:list-response` 에 실어 준다 —
-   * 클라이언트는 달리 자기 신원을 알 수 없고, 이게 없으면 "내가 만든 방" 을 가릴 수 없다.
+   * The user id of the person using this browser. The server carries it in `room:list-response` —
+   * the client has no other way to know its identity, and without it "rooms I created" cannot be told apart.
    */
   viewerUserId: string | null;
   currentRoomId: string | null;
@@ -42,7 +42,7 @@ export const initialRoomState: RoomState = {
   view: "list",
 };
 
-/** 폴백 방: office 가 있으면 office, 없으면 정렬 뒤 첫 방. */
+/** The fallback room: office if present, otherwise the first room after sorting. */
 function fallbackRoomId(rooms: RoomSummary[]): string | null {
   return (rooms.find((room) => room.kind === "office") ?? rooms[0])?.id ?? null;
 }
@@ -62,7 +62,7 @@ export function reduceRoomState(state: RoomState, action: RoomAction): RoomState
       return {
         ...state,
         rooms,
-        // 옛 서버는 이 값을 보내지 않는다 — 그때는 이미 알던 것을 지우지 않는다.
+        // Old servers do not send this value — then do not erase what we already knew.
         viewerUserId: action.viewerUserId ?? state.viewerUserId,
         currentRoomId,
         view: currentRoomId ? "room" : "list",
@@ -75,12 +75,12 @@ export function reduceRoomState(state: RoomState, action: RoomAction): RoomState
 
     case "message": {
       const previous = state.messages[action.roomId] ?? [];
-      // 같은 메시지가 두 번 오는 경로가 실제로 있다 — 히스토리를 받은 직후에
-      // 그 마지막 줄의 브로드캐스트가 도착하면 화면에 두 번 찍힌다.
+      // There really is a path where the same message arrives twice — if the broadcast of the last line arrives right after
+      // receiving the history, it is printed twice on screen.
       const existing = previous.find((message) => message.id === action.message.id);
       if (existing) {
-        // 같은 줄이 **해소된 알림**으로 다시 왔으면 제자리에서 갈아 끼운다(등록·승인 뒤 서버가 같은 id 로
-        // 되쓴 줄을 방송한다). 순서·미리보기는 건드리지 않는다 — 새 메시지가 아니다.
+        // If the same line comes back as a **resolved notice**, swap it in place (after registration or approval the server broadcasts
+        // the line rewritten with the same id). Order and preview are not touched — it is not a new message.
         if (
           JSON.stringify(existing.notice ?? null) === JSON.stringify(action.message.notice ?? null)
         )
@@ -151,7 +151,7 @@ export function reduceRoomState(state: RoomState, action: RoomAction): RoomState
       return { ...state, currentRoomId: action.roomId, view: "room", compose: undefined };
 
     case "showList":
-      // 단일 office 채널에서도 새 방 만들기에 접근할 수 있다.
+      // Creating a new room is reachable even in a single-office channel.
       return { ...state, view: "list", compose: undefined };
 
     case "compose":

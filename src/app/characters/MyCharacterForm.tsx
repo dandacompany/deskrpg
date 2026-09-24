@@ -23,8 +23,8 @@ type MyCharacter = {
 };
 
 /**
- * `/characters` 화면 전체 — "내 캐릭터" 는 사용자당 하나다. `GET /api/characters/me` 가
- * null 을 주면 등록 모드, 캐릭터가 있으면 수정 모드로 같은 폼을 보여준다(스펙 2026-09-18).
+ * The whole `/characters` screen — "my character" is one per user. When `GET /api/characters/me`
+ * gives null it is registration mode, and with a character the same form is shown in edit mode (spec 2026-09-18).
  */
 export default function MyCharacterForm({ onSaved }: { onSaved?: () => void } = {}) {
   const t = useT(),

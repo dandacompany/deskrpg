@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { decideChatError } from "./chat-error-dispatch";
 
-test("not_joined → 재조인 요청, 목록으로는 가지 않는다", () => {
+test("not_joined → request a rejoin, do not go to the list", () => {
   assert.deepEqual(decideChatError({ roomId: "r1", code: "not_joined" }), {
     toastKey: "game.room.error.not_joined",
     rejoin: true,
@@ -10,7 +10,7 @@ test("not_joined → 재조인 요청, 목록으로는 가지 않는다", () => 
   });
 });
 
-test("not_found·forbidden 은 목록으로 돌려보낸다 — 그 방은 더 볼 수 없다", () => {
+test("not_found and forbidden send you back to the list — that room can no longer be seen", () => {
   for (const code of ["not_found", "forbidden"]) {
     assert.deepEqual(
       decideChatError({ code }),
@@ -20,7 +20,7 @@ test("not_found·forbidden 은 목록으로 돌려보낸다 — 그 방은 더 �
   }
 });
 
-test("나머지 코드는 토스트만 — 화면을 옮기지 않는다", () => {
+test("other codes only toast — the screen does not move", () => {
   for (const code of ["not_open", "empty", "cooldown", "invalid"]) {
     assert.deepEqual(
       decideChatError({ code }),
@@ -30,7 +30,7 @@ test("나머지 코드는 토스트만 — 화면을 옮기지 않는다", () =>
   }
 });
 
-test("모르는 코드는 일반 실패 토스트, 재조인도 이동도 없음", () => {
+test("unknown codes give a generic failure toast, with neither rejoin nor navigation", () => {
   const generic = { toastKey: "game.channelChatFailed", rejoin: false, backToList: false };
   assert.deepEqual(decideChatError({ code: "weird" }), generic);
   assert.deepEqual(decideChatError(null), generic);

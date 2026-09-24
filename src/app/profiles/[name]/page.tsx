@@ -22,11 +22,11 @@ type ProfileRow = {
 };
 
 /**
- * 직원 한 명 — **이 페이지가 그 직원을 고치는 유일한 화면이다.**
+ * One employee — **this page is the only screen that edits that employee.**
  *
- * 예전에는 목록 행마다 인격·외형·수정·삭제 버튼이 붙고 그 아래로 편집기가 펼쳐져, 직원이
- * 늘수록 목록이 편집기 더미가 됐다(`docs/standards.md` 의 "1기능 1페이지"). 목록은 이제
- * 이름·상태·이 화면으로 가는 링크만 갖는다.
+ * Each list row used to carry persona, appearance, edit and delete buttons with editors unfolding below, so as employees
+ * grew the list became a pile of editors (`docs/standards.md`'s "one feature, one page"). The list now
+ * has only the name, status and a link to this screen.
  */
 export default function EmployeeDetailPage() {
   const t = useT();
@@ -122,7 +122,7 @@ function EmployeeDetailContent() {
         });
         setPluginStatus(cached.status);
       } catch {
-        // 상태를 못 읽어도 화면은 뜬다 — 인격·모델 편집만 잠긴다.
+        // The screen shows even if the status cannot be read — only persona and model editing are locked.
       }
     })();
     return () => {
@@ -154,7 +154,7 @@ function EmployeeDetailContent() {
     setError("");
     try {
       const body: Record<string, unknown> = { displayName: displayName.trim() || null };
-      // 빈 토큰은 보내지 않는다 — 자격증명을 지우는 사고를 막는다.
+      // Do not send an empty token — prevents the accident of wiping credentials.
       if (token.trim()) body.token = token.trim();
       const res = await fetch(`/api/gateways/${gatewayId}/profiles/${profile.id}`, {
         method: "PATCH",
@@ -175,8 +175,8 @@ function EmployeeDetailContent() {
 
   async function handleDelete() {
     if (!profile) return;
-    // 프로필 삭제는 해고다 — 그 직원의 자리가 채널에서 함께 사라진다. 몇 자리가 몇 채널에서
-    // 없어지는지 **묻기 전에** 세어 온다. 개수를 모른 채 누르는 확인은 확인이 아니다.
+    // Deleting a profile is firing — that employee's seats disappear from channels along with it. Count how many seats in how many channels
+    // disappear **before asking**. A confirmation pressed without knowing the count is not a confirmation.
     let usage: { npcs?: unknown; channels?: unknown } | null = null;
     try {
       const res = await fetch(`/api/gateways/${gatewayId}/profiles/${profile.id}`);
@@ -184,7 +184,7 @@ function EmployeeDetailContent() {
       if (res.ok)
         usage = (data as { usage?: { npcs?: unknown; channels?: unknown } }).usage ?? null;
     } catch {
-      // 수치를 못 읽어도 삭제를 막지 않는다 — 0 으로 물어본다.
+      // Failing to read the numbers does not block deletion — ask with 0.
     }
     if (
       !window.confirm(
@@ -204,8 +204,8 @@ function EmployeeDetailContent() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw data;
-      // 몇 자리가 사라졌는지 목록 화면에서 알린다 — 이 화면은 곧 사라지므로 여기서 띄우면
-      // 사용자가 읽을 시간이 없다(서버 필드는 `deletedNpcs`·`channels` 다).
+      // Report how many seats disappeared on the list screen — this screen is about to go away, so showing it here
+      // leaves the user no time to read (the server fields are `deletedNpcs` and `channels`).
       const notice = deletedNoticeFrom(data);
       router.push(
         notice ? `${listHref}&deletedNpcs=${notice.npcs}&channels=${notice.channels}` : listHref,
@@ -269,7 +269,7 @@ function EmployeeDetailContent() {
 
         {profile && (
           <>
-            {/* 인격·모델·로그인 — 채용 마법사의 ②③ 단계가 그 직원의 편집기다. */}
+            {/* Persona, model, login — steps ②③ of the hiring wizard are that employee's editor. */}
             {sections.includes("persona") && (
               <section className="rounded-xl border border-border bg-surface p-5">
                 <NpcHireWizard
@@ -289,7 +289,7 @@ function EmployeeDetailContent() {
             {sections.includes("account") && (
               <section className="space-y-2 rounded-xl border border-border bg-surface p-5">
                 <h2 className="text-lg font-semibold">{t("gateway.profile.edit")}</h2>
-                {/* 표시 이름이 비면 프로필 이름이 그대로 쓰인다 — 그 폴백을 placeholder 로 보여준다. */}
+                {/* If the display name is empty the profile name is used as is — show that fallback as the placeholder. */}
                 <input
                   value={displayName}
                   onChange={(event) => setDisplayName(event.target.value)}

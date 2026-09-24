@@ -37,14 +37,14 @@ type GatewayRow = {
   lastValidatedAt?: string | null;
   lastValidationStatus?: string | null;
   lastValidationError?: string | null;
-  /** Hermes 대시보드 공개 주소 — 플러그인 0.7.1 이 알려 주고, 소유자에게만 내려온다. */
+  /** The public address of the Hermes dashboard — plugin 0.7.1 reports it, and it is sent only to the owner. */
   dashboardUrl?: string | null;
-  /** 마지막 프로브가 본 설치본 버전. `/api/gateways` 가 캐시에서 내려준다. */
+  /** The installed version seen by the last probe. `/api/gateways` serves it from the cache. */
   pluginVersion?: string | null;
   pluginStatus?: string | null;
-  /** 칸반·크론 결과물이 쌓이지 않는 직원. 소유자에게만 내려온다(`worker-plugin.ts`). */
+  /** Employees whose kanban/cron artifacts do not accumulate. Sent only to the owner (`worker-plugin.ts`). */
   workerPluginWarning?: WorkerPluginWarning | null;
-  /** 0.16.0 워커 전파 상태 — 소유자 행에만 값이 있다(공유 행·옛 플러그인은 null). */
+  /** 0.16.0 worker propagation state — only owner rows have a value (shared rows and old plugins are null). */
   workerPropagation?: WorkerPropagation | null;
 };
 
@@ -57,9 +57,9 @@ type GatewayShare = {
   createdAt?: string;
 };
 
-/** 게이트웨이 연결 테스트 결과. 예전 이름은 PairingState 였지만 페어링(OpenClaw 디바이스
- * 승인)은 사라졌고 남은 것은 연결 테스트 상태뿐이다. */
-/** 삭제를 막고 있는 채널. 서버가 409 와 함께 실어 보낸다. */
+/** The gateway connection test result. The old name was PairingState, but pairing (OpenClaw device
+ * approval) is gone and all that remains is the connection test state. */
+/** Channels blocking deletion. The server sends them along with 409. */
 type BlockingChannel = {
   channelId: string;
   channelName: string;
@@ -74,26 +74,26 @@ type GatewayTestState = {
 };
 
 /**
- * 이 게이트웨이에 깔린 플러그인 버전과 앱이 설치하는 버전을 나란히 보여 준다.
+ * Show the plugin version installed on this gateway side by side with the version the app installs.
  *
- * 없던 것을 채우는 줄이다 — 예전에는 설치본 버전이 화면 어디에도 없어서, 플러그인을
- * 올렸는지 확인하려면 API 를 직접 읽어야 했다. 값은 캐시에서 오고 캐시는 최대 1시간
- * 낡을 수 있으므로(`shouldReprobePlugin`), 뒤처져 보이면 "연결 테스트" 를 눌러 다시
- * 확인하라고 안내한다 — 그 버튼이 프로브 후 캐시를 갱신한다.
+ * This line fills something that was missing — the installed version used to appear nowhere on screen, so checking
+ * whether the plugin was upgraded meant reading the API directly. The value comes from the cache, and the cache can be up to an hour
+ * stale (`shouldReprobePlugin`), so if it looks behind, the user is told to press "연결 테스트" to
+ * check again — that button refreshes the cache after probing.
  */
 function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpdated: () => void }) {
   const t = useT();
   const { locale } = useLocale();
   const [busyStep, setBusyStep] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState("");
-  // 갱신이 워커 전파를 켠 채로 이어받았으면 한 번 알린다(잡의 workerPropagationInherited).
+  // If the update inherited worker propagation turned on, say so once (the job's workerPropagationInherited).
   const [inherited, setInherited] = useState(false);
   const view = describePluginVersion({
     installed: gateway.pluginVersion,
     pluginStatus: gateway.pluginStatus,
   });
 
-  // 갱신은 호스트에서 명령을 돌리는 긴 작업이라 잡으로 돈다 — 마법사와 같은 잡 조회를 쓴다.
+  // Updating runs commands on the host and takes long, so it runs as a job — using the same job query as the wizard.
   const runUpdate = async () => {
     setUpdateError("");
     setBusyStep("inspecting");
@@ -169,7 +169,7 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
   );
 }
 
-/** 서버가 200 + errorCode 로도 실패를 말하므로(프록시 관례) 본문의 `results` 유무로 가른다. */
+/** The server also reports failure as 200 + errorCode (proxy convention), so branch on whether the body has `results`. */
 async function applyWorkerPluginRequest(gatewayId: string): Promise<WorkerPluginApplyResponse> {
   const res = await fetch(`/api/gateways/${gatewayId}/plugin/worker-plugin`, { method: "POST" });
   const body = await res.json().catch(() => ({}));
@@ -182,7 +182,7 @@ async function applyWorkerPluginRequest(gatewayId: string): Promise<WorkerPlugin
 
 const EMPTY_TEST_STATE: GatewayTestState = { status: "idle" };
 
-/** 재조회가 이보다 오래 걸릴 때만 "새로 읽는 중" 을 보인다 — 짧은 재조회마다 깜빡이지 않게. */
+/** Show "새로 읽는 중" only when a reload takes longer than this — so short reloads do not flash. */
 const REFRESH_INDICATOR_DELAY_MS = 300;
 
 export default function GatewayManagementPage() {
@@ -202,10 +202,10 @@ export default function GatewayManagementPage() {
 
 function GatewayManagementPageInner() {
   const t = useT();
-  // 사무실(채널 화면)에서 "인격을 하나 더 만들자"로 넘어온 왕복. `gateway` 는 어느
-  // 게이트웨이를 열지, `new=1` 은 만들기 화면을 바로 펼칠지, `returnTo` 는 만든 뒤
-  // 어디로 돌아갈지를 말한다. `returnTo` 는 그대로 믿지 않는다 — safeReturnTo 가
-  // 같은 오리진 경로만 통과시킨다(열린 리다이렉트).
+  // The round trip coming from the office (channel screen) as "let's make one more persona". `gateway` says which
+  // gateway to open, `new=1` whether to expand the create screen right away, and `returnTo` where to go back
+  // after creating. `returnTo` is not trusted as is — safeReturnTo lets only
+  // same-origin paths through (open redirect).
   const searchParams = useSearchParams();
   const requestedGatewayId = searchParams.get("gateway") ?? "";
   const autoOpenCreate = searchParams.get("new") === "1";
@@ -236,11 +236,11 @@ function GatewayManagementPageInner() {
   const [testStates, setTestStates] = useState<Record<string, GatewayTestState>>({});
   const [blockingChannels, setBlockingChannels] = useState<BlockingChannel[]>([]);
   const [unbinding, setUnbinding] = useState("");
-  // 공유·진단은 상단 버튼으로 연다(2026-09-20 단테 결정) — 늘 펼쳐 두면 화면이 길어진다.
+  // Sharing and diagnostics open from the top buttons (Dante's decision, 2026-09-20) — keeping them always expanded makes the screen long.
   const [panel, setPanel] = useState<"share" | "diagnostics" | null>(null);
   const [diagnosticsAvailable, setDiagnosticsAvailable] = useState(false);
 
-  // 재조회 진행 표시. 화면을 갈아 끼우지 않고 제목 옆에 작게 띄운다(겹친 재조회는 수를 센다).
+  // Reload progress indicator. Shown small next to the title without swapping the screen (overlapping reloads are counted).
   const [refreshing, setRefreshing] = useState(false);
   const loadedOnce = useRef(false);
   const refreshesInFlight = useRef(0);
@@ -259,10 +259,10 @@ function GatewayManagementPageInner() {
         refreshesInFlight.current += 1;
         refreshTimer.current ??= setTimeout(() => setRefreshing(true), REFRESH_INDICATOR_DELAY_MS);
       }
-      // `loading` 은 첫 로딩에만 쓴다(초기값 true). 재조회 때 다시 세우면 `if (loading)` 이 페이지를
-      // 로딩 화면으로 바꿔 자식을 언마운트하고, 작업 뒤에 뜨는 결과 알림(갱신의 "계속 켭니다 [끄기]",
-      // [설정에서 켜기] 성공)이 지역 상태째 사라진다(2026-09-24 E2E 실측). 저장·삭제·공유는 각자의
-      // 진행 표시(saving·deleting·…)가 있다.
+      // `loading` is used only for the first load (initial value true). Setting it again on reload makes `if (loading)` turn the page
+      // into the loading screen, unmounting children, and the result notices shown after an operation (the update's "계속 켭니다 [끄기]",
+      // [설정에서 켜기] success) vanish along with their local state (2026-09-24 E2E measurement). Save, delete and share each have
+      // their own progress indicator (saving, deleting, …).
       setError("");
       try {
         const res = await fetch("/api/gateways");
@@ -393,9 +393,9 @@ function GatewayManagementPageInner() {
     setUnbinding(channel.channelId);
     setError("");
     try {
-      // 해제는 더 이상 지우는 것이 아니라 재우는 것이다 — NPC 는 자리를 기억한 채
-      // 퇴근하고 회의록은 그대로 남는다. 그래서 예전의 confirmNpcReset=1 도 없앴다
-      // (서버가 그 확인을 요구하지 않는데도 붙어 있던 유물이다).
+      // Unbinding no longer deletes but puts to sleep — NPCs clock out remembering their seats
+      // and minutes stay as they are. That is also why the old confirmNpcReset=1 was removed
+      // (a relic still attached even though the server no longer required that confirmation).
       const res = await fetch(`/api/channels/${channel.channelId}/gateway`, {
         method: "DELETE",
       });
@@ -410,7 +410,7 @@ function GatewayManagementPageInner() {
     }
   };
 
-  /** 이 게이트웨이의 프로필들이 데리고 있는 NPC 자리·채널 수를 합산한다. */
+  /** Total the NPC seats and channel counts that this gateway's profiles bring along. */
   const sumGatewayUsage = async (gatewayId: string) => {
     const res = await fetch(`/api/gateways/${gatewayId}/profiles`);
     const data = await res.json().catch(() => ({}));
@@ -435,18 +435,18 @@ function GatewayManagementPageInner() {
 
   const handleDelete = async () => {
     if (!selectedGateway) return;
-    // 게이트웨이 삭제는 프로필 → NPC → 태스크까지 연쇄한다. 무엇이 얼마나
-    // 사라지는지 말하지 않는 확인은 확인이 아니다 — 수치를 먼저 세어 문구에 넣는다.
+    // Deleting a gateway cascades from profiles → NPCs → tasks. A confirmation that does not say what disappears
+    // and how much is not a confirmation — count the numbers first and put them in the text.
     let usage = { profiles: 0, npcs: 0, channels: 0 };
     try {
       usage = await sumGatewayUsage(selectedGateway.id);
     } catch {
-      // 수치를 못 읽어도 삭제를 막지는 않는다 — 0 으로 물어본다.
+      // Failing to read the numbers does not block deletion — ask with 0.
     }
     const plan = planGatewayDelete(usage);
     if (plan.blocked) {
-      // 서버가 409 로 거절할 삭제다. 확인을 띄우면 사용자는 일어나지 않을 일에
-      // 동의하게 된다 — 묻지 말고 먼저 해야 할 일을 말한다.
+      // This is a deletion the server will refuse with 409. Showing a confirmation would have the user agree to something that
+      // will not happen — do not ask; say what must be done first.
       setError(t("gateways.deleteBlockedByChannels"));
       setNotice("");
       return;
@@ -483,8 +483,8 @@ function GatewayManagementPageInner() {
       setNotice(t("gateways.deleted"));
     } catch (nextError) {
       setError(getLocalizedErrorMessage(t, nextError, "common.error"));
-      // 막고 있는 채널을 그 자리에서 풀 수 있게 목록을 띄운다 — 채널 화면까지
-      // 찾아가게 만드는 왕복이 이 화면의 가장 큰 마찰이었다.
+      // Show the list of blocking channels so they can be unbound right there — the round trip of hunting them down
+      // on the channel screen was this screen's biggest friction.
       const blocked = (nextError as { channels?: BlockingChannel[] })?.channels;
       if (Array.isArray(blocked)) setBlockingChannels(blocked);
     } finally {
@@ -500,10 +500,10 @@ function GatewayManagementPageInner() {
     }));
     try {
       const res = await fetch(`/api/gateways/${gatewayId}/test`, { method: "POST" });
-      // 본문이 사라져도 헤더의 코드로 진단을 살린다(위 withHeaderErrorCode 주석 참조).
+      // Even if the body is lost, the header code keeps the diagnosis alive (see the withHeaderErrorCode comment above).
       const data = withHeaderErrorCode(await res.json().catch(() => ({})), res.headers);
-      // 프로브 실패는 200 + { ok: false } 로 온다(라우트의 PROBE_RESULT_INIT 주석 참조).
-      // res.ok 로 판정하면 실패를 성공으로 읽는다.
+      // Probe failures come as 200 + { ok: false } (see the route's PROBE_RESULT_INIT comment).
+      // Judging by res.ok would read a failure as success.
       const succeeded = res.ok && (data as { ok?: unknown } | null)?.ok !== false;
       if (succeeded) {
         setTestStates((prev) => ({
@@ -521,9 +521,9 @@ function GatewayManagementPageInner() {
         }));
       }
     } catch (err) {
-      // 여기는 응답이 아예 오지 않은 경우다(브라우저가 요청을 끊었거나 네트워크가 죽었거나).
-      // 폴백 문구만 띄우면 서버가 보낸 진단과 구분되지 않아, 어느 층에서 끊겼는지 알 수
-      // 없다 — 실제로 그 구분이 안 돼 한참을 헤맸다. 원인을 함께 보여준다.
+      // This is the case where no response came at all (the browser cut the request or the network died).
+      // Showing only the fallback text makes it indistinguishable from a diagnosis the server sent, so there is no way to know
+      // which layer broke — and in fact we wandered for a long time because that could not be told apart. Show the cause too.
       const detail = err instanceof Error ? err.message : String(err);
       setTestStates((prev) => ({
         ...prev,
@@ -798,7 +798,7 @@ function GatewayManagementPageInner() {
                 )}
 
                 {selectedGateway && (
-                  // 게이트웨이를 바꾸면 이전 적용 결과를 들고 가지 않도록 key 로 새로 만든다.
+                  // Recreate by key when the gateway changes so the previous apply result is not carried over.
                   <WorkerPluginLine
                     key={selectedGateway.id}
                     warning={selectedGateway.workerPluginWarning ?? null}
@@ -881,7 +881,7 @@ function GatewayManagementPageInner() {
                   />
                 )}
 
-                {/* 삭제는 저장과 붙여 두지 않는다 — 되돌릴 수 없는 버튼이 먼저 눈에 들었다(2026-09-20). */}
+                {/* Delete is not placed next to save — the irreversible button caught the eye first (2026-09-20). */}
                 <div className="mt-5 flex items-center justify-between gap-3">
                   <>
                     <button
@@ -911,8 +911,8 @@ function GatewayManagementPageInner() {
             )}
 
             {selectedGateway && (
-              // 직원(Hermes 프로필) 관리는 `/profiles` 한 곳에서만 한다 — 이 화면은 "연결" 까지다.
-              // 예전에는 같은 목록이 두 화면에 똑같이 떠서 어디서 관리하는지가 흐려졌다.
+              // Employees (Hermes profiles) are managed in one place only, `/profiles` — this screen goes as far as "connection".
+              // The same list used to appear identically on two screens, blurring where it was managed.
               <section className="rounded-xl border border-border bg-surface p-5">
                 <h2 className="text-lg font-semibold">{t("gateways.employeesTitle")}</h2>
                 <p className="mt-1 text-sm text-text-muted">{t("gateways.employeesHint")}</p>
@@ -993,7 +993,7 @@ function GatewayManagementPageInner() {
               </section>
             )}
 
-            {/* 관리자에게만 보이는 진단. 권한이 없으면 버튼도 나오지 않는다. */}
+            {/* Diagnostics visible only to admins. Without permission the button does not appear either. */}
             <DiagnosticsPanel
               open={panel === "diagnostics"}
               onAvailable={setDiagnosticsAvailable}

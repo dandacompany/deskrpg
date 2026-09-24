@@ -4,8 +4,8 @@ import test from "node:test";
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
 
-// 브리프의 리터럴은 `as const` 였지만 그러면 `members` 가 readonly 튜플이 되어
-// RoomSummary 에 대입되지 않는다(tsc 가 빨개진다). 의미는 그대로 두고 타입만 붙인다.
+// The brief's literal was `as const`, but then `members` becomes a readonly tuple and
+// is not assignable to RoomSummary (tsc goes red). Keep the meaning and only add a type.
 const office: RoomSummary = {
   id: "o",
   kind: "office",
@@ -23,7 +23,7 @@ const g1: RoomSummary = {
   replyPolicy: "members",
 };
 
-test("목록이 오면 마지막 방(있으면)으로, 없으면 office 로 들어간다", () => {
+test("when the list arrives, enter the last room (if any), otherwise office", () => {
   const s1 = reduceRoomState(initialRoomState, {
     type: "list",
     rooms: [office, g1],
@@ -39,7 +39,7 @@ test("목록이 오면 마지막 방(있으면)으로, 없으면 office 로 들�
   assert.equal(s2.currentRoomId, "o");
 });
 
-test("방이 하나여도 명시적 showList 는 새 방 만들기 목록으로 이동한다", () => {
+test("even with one room, an explicit showList moves to the new-room list", () => {
   const s = reduceRoomState(initialRoomState, {
     type: "list",
     rooms: [office],
@@ -54,7 +54,7 @@ test("방이 하나여도 명시적 showList 는 새 방 만들기 목록으로 
   assert.equal(reduceRoomState(s2, { type: "showList" }).view, "list");
 });
 
-test("메시지는 방별로 쌓이고 목록의 lastMessage 도 갱신된다", () => {
+test("messages accumulate per room and the list's lastMessage updates", () => {
   let s = reduceRoomState(initialRoomState, {
     type: "list",
     rooms: [office, g1],
@@ -75,7 +75,7 @@ test("메시지는 방별로 쌓이고 목록의 lastMessage 도 갱신된다", 
   assert.equal(s.rooms[1].id, "g1", "최신 메시지 방이 office 바로 아래로");
 });
 
-test("같은 id 메시지는 두 번 쌓이지 않는다", () => {
+test("a message with the same id does not accumulate twice", () => {
   let s = reduceRoomState(initialRoomState, { type: "list", rooms: [office], preferRoomId: null });
   const m: RoomMessage = {
     id: "m1",
@@ -91,7 +91,7 @@ test("같은 id 메시지는 두 번 쌓이지 않는다", () => {
   assert.equal(s.messages.o.length, 1);
 });
 
-test("같은 id 가 해소된 알림으로 다시 오면 제자리에서 갈아 끼운다 — 순서와 개수는 그대로", () => {
+test("when the same id comes back as a resolved notice it is swapped in place — order and count stay the same", () => {
   let s = reduceRoomState(initialRoomState, { type: "list", rooms: [office], preferRoomId: null });
   const notice = {
     kind: "meeting_outcome" as const,
@@ -133,7 +133,7 @@ test("같은 id 가 해소된 알림으로 다시 오면 제자리에서 갈아 
   assert.deepEqual(s.messages.o[0].notice, resolved, "등록 결과가 새로고침 없이 보여야 한다");
 });
 
-test("history 는 그 방의 메시지를 통째로 갈아 끼운다", () => {
+test("history replaces that room's messages wholesale", () => {
   let s = reduceRoomState(initialRoomState, { type: "list", rooms: [office], preferRoomId: null });
   const m: RoomMessage = {
     id: "m1",
@@ -149,7 +149,7 @@ test("history 는 그 방의 메시지를 통째로 갈아 끼운다", () => {
   assert.deepEqual(s.messages.o, []);
 });
 
-test("created(enter) 는 새 방으로 들어가고, deleted 는 현재 방이면 목록으로", () => {
+test("created(enter) enters the new room, and deleted goes to the list if it is the current room", () => {
   let s = reduceRoomState(initialRoomState, { type: "list", rooms: [office], preferRoomId: null });
   s = reduceRoomState(s, { type: "created", room: g1, enter: true });
   assert.equal(s.currentRoomId, "g1");
@@ -158,14 +158,14 @@ test("created(enter) 는 새 방으로 들어가고, deleted 는 현재 방이�
   assert.equal(s.currentRoomId, "o");
 });
 
-test("created(enter=false) 는 목록에만 넣고 현재 방을 바꾸지 않는다", () => {
+test("created(enter=false) only adds to the list and does not change the current room", () => {
   let s = reduceRoomState(initialRoomState, { type: "list", rooms: [office], preferRoomId: null });
   s = reduceRoomState(s, { type: "created", room: g1, enter: false });
   assert.equal(s.currentRoomId, "o");
   assert.equal(s.rooms.length, 2);
 });
 
-test("updated 는 같은 방을 제자리에서 갈아 끼운다", () => {
+test("updated swaps the same room in place", () => {
   let s = reduceRoomState(initialRoomState, {
     type: "list",
     rooms: [office, g1],
@@ -176,7 +176,7 @@ test("updated 는 같은 방을 제자리에서 갈아 끼운다", () => {
   assert.equal(s.rooms.find((r) => r.id === "g1")?.name, "기획2");
 });
 
-test("open/compose 는 뷰를 옮긴다", () => {
+test("open/compose move the view", () => {
   let s = reduceRoomState(initialRoomState, {
     type: "list",
     rooms: [office, g1],
@@ -191,11 +191,11 @@ test("open/compose 는 뷰를 옮긴다", () => {
   assert.equal(s.compose, undefined, "방으로 들어가면 작성 상태는 버린다");
 });
 
-test("lastRoomKey 는 채널별로 갈린다", () => {
+test("lastRoomKey is split per channel", () => {
   assert.equal(lastRoomKey("c1"), "deskrpg.lastRoom.c1");
 });
 
-test("목록이 실어 준 viewerUserId 를 기억하고, 없는 응답은 그것을 지우지 않는다", () => {
+test("remembers the viewerUserId the list carried, and responses without it do not erase it", () => {
   const s1 = reduceRoomState(initialRoomState, {
     type: "list",
     rooms: [office],

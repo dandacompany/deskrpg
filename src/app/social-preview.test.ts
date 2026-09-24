@@ -8,14 +8,14 @@ import {
   isPublicLandingEnabled,
 } from "./social-preview";
 
-test("공개 랜딩은 운영 플래그가 켜졌을 때만 활성화된다", () => {
+test("the public landing is enabled only when the production flag is on", () => {
   assert.equal(isPublicLandingEnabled({ COMING_SOON: "true" }), true);
   assert.equal(isPublicLandingEnabled({ NEXT_PUBLIC_COMING_SOON: "true" }), true);
   assert.equal(isPublicLandingEnabled({ COMING_SOON: "false" }), false);
   assert.equal(isPublicLandingEnabled({}), false);
 });
 
-test("로그인 URL은 공유 이미지가 있지만 검색 색인에는 들어가지 않는다", () => {
+test("the login URL has a share image but is not in the search index", () => {
   const metadata = createAuthShareMetadata(true);
   assert.equal(metadata.alternates?.canonical, "https://deskrpg.com/");
   assert.deepEqual(metadata.robots, { index: false, follow: false });
@@ -23,7 +23,7 @@ test("로그인 URL은 공유 이미지가 있지만 검색 색인에는 들어�
   assert.equal((metadata.twitter as { card?: string })?.card, "summary_large_image");
 });
 
-test("robots와 sitemap은 공개 사이트 한 페이지만 색인한다", () => {
+test("robots and sitemap index only the one public site page", () => {
   const publicRules = createRobotsPolicy(true);
   assert.deepEqual(publicRules.rules, {
     userAgent: "*",
@@ -49,7 +49,7 @@ test("robots와 sitemap은 공개 사이트 한 페이지만 색인한다", () =
   assert.deepEqual(createSitemapEntries(false), []);
 });
 
-test("공유 메타데이터는 대표 URL과 큰 이미지를 절대 주소로 제공한다", () => {
+test("share metadata provides the canonical URL and a large image as absolute addresses", () => {
   const metadata = createPublicShareMetadata();
 
   assert.equal(metadata.alternates?.canonical, "https://deskrpg.com/");

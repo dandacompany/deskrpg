@@ -37,8 +37,8 @@ function ProfilesPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const requestedGateway = searchParams.get("gateway");
-  // 게임 화면의 "새 직원"·"프로필 설정" 이 이 화면으로 들어온다. 만들고 나면 왔던 자리로
-  // 돌려보내야 사용자가 다시 채널을 찾아 들어가지 않는다.
+  // The game screen's "새 직원" and "프로필 설정" come into this screen. After creating, send them back to where they came from
+  // so the user does not have to find and enter the channel again.
   const wantsCreate = searchParams.get("new") === "1";
   const returnTo = backLinkTarget(searchParams.get("returnTo"));
   const { locale } = useLocale();
@@ -90,18 +90,18 @@ function ProfilesPageContent() {
   }, [attempt, requestedGateway, t]);
 
   const selected = gateways.find((gateway) => gateway.id === selectedId);
-  // 상세 화면에서 직원을 지우고 돌아오면 몇 자리가 사라졌는지 여기서 알린다.
+  // When coming back after deleting an employee on the detail screen, report here how many seats disappeared.
   const deletedNpcs = Number(searchParams.get("deletedNpcs") ?? 0);
   const lostChannels = Number(searchParams.get("channels") ?? 0);
 
-  // `?new=1` 은 예전 주소다(게임의 "새 직원" 이 쓰던 형태). 채용은 전용 페이지가 전담하므로
-  // 그대로 넘긴다 — 목록 화면에서 마법사를 다시 펼치지 않는다.
+  // `?new=1` is the old address (the form the game's "새 직원" used). Hiring is handled by its own page, so
+  // pass it through — the list screen does not unfold the wizard again.
   useEffect(() => {
     if (wantsCreate && selectedId) {
       router.replace(hirePageHref(selectedId, { returnTo }));
       return;
     }
-    // `?profile=` 은 예전 주소다(외형 편집기를 목록에서 펼치던 시절). 그 직원 상세로 넘긴다.
+    // `?profile=` is the old address (from when the appearance editor unfolded in the list). Pass it to that employee's detail.
     const wanted = searchParams.get("profile");
     if (wanted && selectedId) router.replace(employeeDetailHref(selectedId, wanted));
   }, [returnTo, router, searchParams, selectedId, wantsCreate]);

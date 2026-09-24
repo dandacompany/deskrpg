@@ -39,7 +39,7 @@ async function mount(node: React.ReactElement) {
   return { root, el };
 }
 
-test("캐릭터가 없으면 등록 폼, 있으면 수정 폼 — 화면은 하나다", async () => {
+test("registration form without a character, edit form with one — it is one screen", async () => {
   const calls: Call[] = [];
   const original = globalThis.fetch;
   try {
@@ -75,7 +75,7 @@ test("캐릭터가 없으면 등록 폼, 있으면 수정 폼 — 화면은 하�
   }
 });
 
-test("저장은 PATCH 로 bio 를 보낸다", async () => {
+test("saving sends bio with PATCH", async () => {
   const calls: Call[] = [];
   const original = globalThis.fetch;
   try {

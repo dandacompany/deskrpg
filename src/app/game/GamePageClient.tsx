@@ -175,8 +175,8 @@ const ThreeGame = dynamic(() => import("@/components/ThreeGame"), {
 });
 
 /**
- * 외형 원본은 DB 의 JSON 이다. 맵(ThreeGame)은 `officeLookId` 만 읽고, 회의·목록 컴포넌트가
- * 나머지를 해석한다 — 그 컴포넌트들의 prop 타입을 그대로 빌려 이 파일은 외형 포맷을 모른다.
+ * The source of appearance is JSON in the DB. The map (ThreeGame) reads only `officeLookId`, and the meeting and list components
+ * interpret the rest — this file borrows those components' prop types as is and does not know the appearance format.
  */
 type CharacterAppearanceData = ComponentProps<typeof MeetingWorkspace>["character"]["appearance"];
 
@@ -201,7 +201,7 @@ interface ChannelInfo {
   inviteCode: string | null;
   mapData: unknown;
   mapConfig: unknown;
-  /** NPC 걸음 속도(채널 공유). 서버가 접어서 주므로 비어 있지 않다. */
+  /** NPC walking speed (shared per channel). The server clamps it, so it is never empty. */
   motionConfig?: NpcMotionConfig;
   isPublic: boolean;
   isMember?: boolean;
@@ -238,8 +238,8 @@ function getSocketServerUrl(): string | undefined {
 
 type GamePageClientProps = {
   /**
-   * 3D 를 더 이상 띄울 수 없을 때(렌더러 초기화 실패·WebGL 컨텍스트 소실) 부른다.
-   * 부르기 전에 소켓을 끊어 반쯤 살아 있는 채널 화면을 남기지 않는다.
+   * Called when 3D can no longer run (renderer init failure, WebGL context loss).
+   * Disconnect the socket before calling so no half-alive channel screen is left behind.
    */
   onFatal?: () => void;
 };
@@ -273,7 +273,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const { locale, setLocale } = useLocale();
   const channelId = searchParams.get("channelId");
 
-  // "나" 는 서버가 정한다 — URL 이 아니라 GET /api/characters/me 로 읽는다(player:join 도 같은 규칙).
+  // The server decides "me" — read via GET /api/characters/me, not the URL (player:join follows the same rule).
   const [character, setCharacter] = useState<Character | null>(null);
   const characterId = character?.id ?? null;
   const [channel, setChannel] = useState<ChannelInfo | null>(null);
@@ -291,7 +291,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const [showBugReport, setShowBugReport] = useState(false);
   const surveyPrompt = useSurveyPrompt(appMeta.feedbackUrl);
   useEffect(() => installErrorCapture(), []);
-  // 칸반 보드(T8). `kanbanRefreshTick` 은 `kanban:event` 마다 오르고, 모달이 디바운스해 재조회한다.
+  // The kanban board (T8). `kanbanRefreshTick` rises on every `kanban:event`, and the modal rereads with a debounce.
   const [showKanban, setShowKanban] = useState(false);
   const [chatTaskDraft, setChatTaskDraft] = useState<
     (ChatTaskDraft & { channelId: string; seq: number }) | null
@@ -304,35 +304,35 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
   }, []);
   const [kanbanRefreshTick, setKanbanRefreshTick] = useState(0);
-  // 직원 대화창 탭의 미확인 배지(T6)와 그 재계산 신호(`cron:event` 마다 오른다).
+  // Unread badges on the employee dialog tabs (T6) and their recompute signal (rises on every `cron:event`).
   const [panelBadges, setPanelBadges] = useState<PanelBadgeCounts | null>(null);
   const [panelBadgeTick, setPanelBadgeTick] = useState(0);
-  // 카드를 누른 **그 순간** 보드가 열려 있었는지 — 콜백을 다시 만들지 않고 보기 위해 ref 로 둔다.
+  // Whether the board was open **at the moment** the card was clicked — kept in a ref to see it without recreating the callback.
   const showKanbanRef = useRef(showKanban);
   useEffect(() => {
     showKanbanRef.current = showKanban;
   }, [showKanban]);
-  // 방 알림의 "카드 열기"(R29)·결과물의 "출처로 이동"·직원 대화창의 카드 탭(T6) — 이 카드의
-  // 상세를 편다. 누를 당시 보드가 닫혀 있었으면 `initialTaskId`(마운트 때 읽힌다), 열려 있었으면
-  // `focusRequest` 의 `seq` 를 올린다(`openCardTarget`).
+  // The room notice's "카드 열기" (R29), the artifact's "출처로 이동", the employee dialog's card tab (T6) — expand this card's
+  // detail. If the board was closed at click time, `initialTaskId` (read at mount); if open,
+  // bump `focusRequest`'s `seq` (`openCardTarget`).
   const [kanbanCard, setKanbanCard] = useState<OpenCardTarget | null>(null);
-  // 방 알림의 "프로젝트로 등록" — 회의실에 들어가지 않고도 그 회의록(후속 업무 등록 화면)을 연다.
+  // The room notice's "프로젝트로 등록" — opens those minutes (the follow-up registration screen) without entering the meeting room.
   const [noticeMinutesId, setNoticeMinutesId] = useState<string | null>(null);
-  // 판단 모음 — 승인·검토·막힘처럼 사람이 답해야 하는 것. 헤더 버튼과 승인 요청 알림이 연다.
-  // 이 화면이 없으면 회의에서 등록한 카드는 승인 대기(`blocked`)에 영영 머문다.
+  // The decision inbox — things a person must answer, like approvals, reviews and blocks. Opened by the header button and approval request notices.
+  // Without this screen, cards registered in a meeting would stay awaiting approval (`blocked`) forever.
   const [showAttention, setShowAttention] = useState(false);
-  // 채널 크론 화면(T10, R15). "이력 열기"(R30) 는 그 잡의 실행 이력으로 연다.
+  // The channel cron screen (T10, R15). "이력 열기" (R30) opens it at that job's run history.
   const [showCron, setShowCron] = useState(false);
   const [cronInitialJobId, setCronInitialJobId] = useState<string | null>(null);
-  // 채널 결과물 모달. 열린 동안 `artifact:event` 마다 tick 이 오르고 마지막 사건을 모달에 넘긴다
-  // (닫으면 비운다 — `reduceArtifactsModal`).
+  // The channel artifacts modal. While open, tick rises on every `artifact:event` and the last event is passed to the modal
+  // (cleared on close — `reduceArtifactsModal`).
   const [artifactsModal, dispatchArtifactsModal] = useReducer(
     reduceArtifactsModal,
     INITIAL_ARTIFACTS_MODAL,
   );
-  // 지금 대화 중인 NPC 가 채팅에서 저장한 결과물 — 대화 NPC 가 바뀌면 비운다.
+  // Artifacts the NPC currently in conversation saved in chat — cleared when the conversation NPC changes.
   const [npcArtifactChips, setNpcArtifactChips] = useState<ArtifactChip[]>([]);
-  // 맵의 "작업 중"(R27). 소켓의 `npc:working` 만 담는다 — 낙관적 갱신 없음(R26).
+  // The map's "working" state (R27). Holds only the socket's `npc:working` — no optimistic updates (R26).
   const [npcWorking, setNpcWorking] = useState<NpcWorkingMap>(EMPTY_NPC_WORKING);
   const meetingEntry = useMeetingEntry(socket, channelId);
   const mode = ["joining", "joined"].includes(meetingEntry.state.status) ? "meeting" : "office";
@@ -344,10 +344,10 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       appearance: unknown;
     }[]
   >([]);
-  // 맵용 목록(`channelNpcs`)은 배치·출근한 것만이다. 출근부는 자리 없는·퇴근한 NPC 도
-  // 보여야 하므로 `?roster=1` 로 따로 읽는다.
+  // The map list (`channelNpcs`) has only placed, clocked-in NPCs. The attendance roster must also show NPCs without a seat
+  // or clocked out, so it is read separately with `?roster=1`.
   const [rosterNpcs, setRosterNpcs] = useState<RosterNpc[]>([]);
-  // 소켓 리스너가 최신 출근부(프로필 이름)를 읽도록.
+  // So socket listeners read the latest attendance roster (profile names).
   const rosterNpcsRef = useRef<RosterNpc[]>([]);
   useEffect(() => {
     rosterNpcsRef.current = rosterNpcs;
@@ -361,33 +361,33 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // NPC dialog state — all managed here, ChatPanel is pure display
   const [npcActivityKey, setNpcActivityKey] = useState<string | null>(null);
   const [dialogNpc, setDialogNpc] = useState<{ npcId: string; npcName: string } | null>(null);
-  /** 스킬 관리 모달을 연 직원 — 대화창 [스킬] 탭의 "관리 열기" 가 연다. */
+  /** The employee whose skill management modal is open — opened by "관리 열기" in the dialog's [스킬] tab. */
   const [skillManagerNpc, setSkillManagerNpc] = useState<{
     npcId: string;
     npcName: string;
     skillName: string | null;
   } | null>(null);
-  // 보고 큐 — 사무실 알림에서 파생한다. 확인 지점만 브라우저에 남긴다(`reportAckKey`).
+  // The report queue — derived from office notices. Only acknowledgment points are kept in the browser (`reportAckKey`).
   const [reportAck, setReportAck] = useState<ReportAck>(EMPTY_REPORT_ACK);
-  // 지금 전하러 오는(또는 와서 전하는) 보고. 직원이 아니라 보고 건으로 추적한다 — 같은 직원의
-  // 다른 보고가 시간순 차례를 새치기하지 않게.
+  // The report currently being delivered (or coming to be delivered). Tracked per report, not per employee — so another
+  // report from the same employee does not cut ahead of the chronological order.
   const [reportingMessageId, setReportingMessageId] = useState<string | null>(null);
-  // 보고하러 와서 열린 대화창이 맨 위에 보여 줄 보고.
+  // The report shown at the top of the dialog opened by someone coming to report.
   const [dialogReport, setDialogReport] = useState<ReportItem | null>(null);
-  // 시도 기록(ref)이 바뀐 것을 화면에 알리는 버전, 마지막 확인 시각, 접힌 보고 되살리기용 시계.
+  // A version that tells the screen the attempt log (ref) changed, the last acknowledgment time, and a clock for reviving folded reports.
   const [reportAttemptsVersion, setReportAttemptsVersion] = useState(0);
   const lastReportAckAtRef = useRef<number | null>(null);
-  // 복귀시켜 자리로 돌아가는 중인 직원. 도착할 때까지 보고 호출 후보가 아니다.
+  // Employees being sent back to their seats. Not candidates for report calls until they arrive.
   const returningNpcsRef = useRef<ReadonlySet<string>>(new Set());
   const [reportClock, setReportClock] = useState(0);
   const reportAttemptsRef = useRef<ReportAttempt[]>([]);
-  // 대화 목록에 올라가는 직원별 DM 한 줄. 방과 달리 서버가 밀어 주지 않으므로 필요할 때 묻는다.
+  // One DM line per employee in the conversation list. Unlike rooms the server does not push these, so ask when needed.
   const [dmThreads, setDmThreads] = useState<DmThread[]>([]);
   // Keep ref in sync so socket listeners can read current value without stale closure
   useEffect(() => {
     dialogNpcRef.current = dialogNpc;
   }, [dialogNpc]);
-  // 결과물 칩은 그 대화의 것이다 — 대화 NPC 가 바뀌거나 닫히면 비운다.
+  // Artifact chips belong to that conversation — cleared when the conversation NPC changes or it closes.
   const dialogNpcId = dialogNpc?.npcId ?? null;
   useEffect(() => {
     setNpcArtifactChips([]);
@@ -407,7 +407,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       EventBus.off("scene-ready", publish);
     };
   }, [chatResponses]);
-  // 작업 중 목록도 같은 길로 맵에 넘긴다. 씬이 늦게 뜨면 `scene-ready` 에서 다시 보낸다.
+  // The working list goes to the map the same way. If the scene comes up late, it is sent again on `scene-ready`.
   useEffect(() => {
     const publish = () =>
       EventBus.emit("npc:working-state", {
@@ -427,18 +427,18 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     { id: string; name: string; type: "npc" | "player" }[] | null
   >(null);
 
-  // Channel chat state — 방(room)별로 갈린다. 서버는 `room:*` 만 말한다.
+  // Channel chat state — split per room. The server only speaks `room:*`.
   const [roomState, dispatchRoom] = useReducer(reduceRoomState, initialRoomState);
   const currentRoomId = roomState.currentRoomId;
   /**
-   * 지금 `room:open` 을 걸어 둔 방. 방을 옮길 때 이전 방을 닫으려면 필요하고,
-   * 재접속하면 서버의 `openRooms` 가 비므로 null 로 되돌려 다시 열게 한다.
+   * The room we currently hold `room:open` on. Needed to close the previous room when moving rooms,
+   * and after reconnecting the server's `openRooms` is empty, so reset to null to reopen.
    */
   const openedRoomRef = useRef<string | null>(null);
   /**
-   * 내가 만든 방인가. 클라이언트는 자기 user id 를 모르므로(뷰어 신원 엔드포인트가 없다)
-   * `room:create` 에 일회용 표를 실어 보내고, 서버가 **요청한 소켓에만** 그 표를 되돌려 준다.
-   * 이름으로 가르면 같은 이름을 동시에 만든 두 사람이 서로의 방으로 끌려 들어간다.
+   * Whether I created the room. The client does not know its own user id (there is no viewer identity endpoint),
+   * so `room:create` carries a one-time ticket and the server returns that ticket **only to the requesting socket**.
+   * Telling apart by name would pull two people who created the same name at once into each other's rooms.
    */
   const pendingCreateRef = useRef<string | null>(null);
   const [channelChatOpen, setChannelChatOpen] = useState(false);
@@ -456,13 +456,13 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const npcGreetings = useRef<Map<string, string>>(new Map());
   const npcMessagesRef = useRef<NpcChatMessage[]>([]);
   /**
-   * 맵 채팅 지명 때문에 걸어오는 중인 NPC 들. 도착했을 때 1:1 대화창을 **열지 않기**
-   * 위해서다 — 대답은 맵 채팅에 나오는데 대화창이 뜨면 그 채팅을 가려 버린다.
-   * 컨텍스트 메뉴로 부른 경우(자동으로 대화창을 여는 기존 동작)와는 다른 사건이다.
+   * NPCs walking over because they were named in map chat. This is so the 1:1 dialog **does not open**
+   * when they arrive — the answer appears in map chat, and a dialog popping up would cover that chat.
+   * A different event from calling them via the context menu (the existing behavior that auto-opens the dialog).
    */
   const mapChatWalkersRef = useRef<MapChatWalkers>(new MapChatWalkers());
   const mapChatParticipantsRef = useRef<MapChatParticipants>(new MapChatParticipants());
-  /** 채널 채팅 패널이 지금 보이는가(ChatPanel 이 알려 준다) — 씬에 전달한다. */
+  /** Whether the channel chat panel is visible now (ChatPanel reports it) — passed to the scene. */
   const [channelChatVisible, setChannelChatVisible] = useState(false);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -479,8 +479,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const [isOwner, setIsOwner] = useState(false);
   const [placementMode, setPlacementMode] = useState(false);
   const [spawnSetMode, setSpawnSetMode] = useState(false);
-  // 배치할 NPC 는 **이미 존재하는 행** 이다. 만드는 것이 아니라 자리를 주는 것이라
-  // id 하나면 된다(이름·페르소나·외형은 프로필이 정본이다).
+  // The NPC to place is **an existing row**. It is not created but given a seat, so
+  // an id is enough (the profile is the source of truth for name, persona and appearance).
   const [pendingNpc, setPendingNpc] = useState<{ id: string; wasPlaced: boolean } | null>(null);
   // npcMenu removed — Edit/Fire now in ChatPanel gear menu
 
@@ -495,8 +495,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
 
   const [npcMoveStates, setNpcMoveStates] = useState<Record<string, string>>({});
   const npcMoveStatesRef = useRef<Record<string, string>>({});
-  // 씬은 "지금 어느 방이 보이는가" 를 본다 — 패널이 닫혔거나 방이 없으면 null 이다.
-  // 두 값 중 하나만 바뀌어도 항상 최신 조합을 보내야 하므로 한 effect 에서 낸다.
+  // The scene looks at "which room is visible now" — null if the panel is closed or there is no room.
+  // Whenever either value changes the latest combination must always be sent, so emit from one effect.
   useEffect(() => {
     EventBus.emit("room:visible", { roomId: channelChatVisible ? currentRoomId : null });
   }, [channelChatVisible, currentRoomId]);
@@ -514,7 +514,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const [instanceId, setInstanceId] = useState("");
   const [debugCopied, setDebugCopied] = useState(false);
 
-  // 3D 가 죽으면 채널 화면을 더 유지할 이유가 없다 — 소켓부터 끊고 관문에 알린다.
+  // If 3D dies there is no reason to keep the channel screen — disconnect the socket first and tell the gate.
   const handleGameFatal = useCallback(() => {
     const socketInstance = socketRef.current;
     if (socketInstance) {
@@ -618,7 +618,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       [{ id, message, timestamp: Date.now(), read: false }, ...prev].slice(0, 20),
     );
   }, []);
-  // 크론 화면·탭의 토스트(R19). id 는 메시지마다 새로 — 알림 목록에 겹치지 않게.
+  // Toasts for the cron screen and tab (R19). A new id per message — so they do not stack in the notice list.
   const cronToast = useCallback(
     (message: string) => showToastNotification(`cron-${Date.now()}`, message),
     [showToastNotification],
@@ -658,14 +658,14 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           socketInstance?.emit("room:list", { channelId });
         }
       });
-      // 열려 있던 대화의 이력은 재입장(player:spawn) 뒤에 다시 받는다. 이력의 주인은
-      // player:join 이 서버에서 정하므로, connect 직후에 물으면 아직 몰라 빈 이력이 온다.
+      // The history of the conversation that was open is fetched again after re-entry (player:spawn). The owner of the history
+      // is decided on the server by player:join, so asking right after connect gets an empty history because it is not known yet.
       socketInstance.on("player:spawn", () => {
         const openNpc = dialogNpcRef.current;
         if (openNpc) {
           socketInstance?.emit("npc:history", { npcId: openNpc.npcId });
         }
-        // 목록도 같은 이유로 여기서 묻는다 — 이력의 주인이 정해진 뒤여야 내 DM 이 온다.
+        // The list is asked here for the same reason — my DMs come only after the history owner is decided.
         socketInstance?.emit("npc:dm-threads");
       });
       socketInstance.on("npc:dm-threads", ({ threads }: { threads: DmThread[] }) => {
@@ -677,14 +677,14 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         setIsNpcStreaming(false);
         setNpcActivityKey(null);
         dispatchChatResponse({ type: "disconnect" });
-        // 응답을 못 받은 보고 호출은 재연결 뒤 다시 부를 수 있게 푼다.
+        // Release report calls that got no response so they can be called again after reconnecting.
         const released = releaseUnacquiredReportCalls(reportAttemptsRef.current);
         if (released !== reportAttemptsRef.current) {
           reportAttemptsRef.current = [...released];
           setReportAttemptsVersion((v) => v + 1);
         }
         setNpcMessages((previous) => previous.filter((message) => !message.responseTransient));
-        // 서버의 openRooms 는 소켓별 상태다 — 끊기면 비므로 다시 열어야 한다.
+        // The server's openRooms is per-socket state — it empties on disconnect, so rooms must be reopened.
         openedRoomRef.current = null;
         showToastNotification("socket-disconnected", t("game.socketDisconnected", { reason }));
       });
@@ -693,7 +693,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         showToastNotification("channel-chat-error", t(toastKey));
         if (rejoin) EventBus.emit("socket-rejoin");
         if (backToList) {
-          // 그 방은 사라졌거나 권한을 잃었다 — 목록으로 돌아가 서버에서 새로 받는다.
+          // That room is gone or we lost permission — go back to the list and fetch fresh from the server.
           dispatchRoom({ type: "showList" });
           if (channelId) socketInstance?.emit("room:list", { channelId });
         }
@@ -766,7 +766,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         setChannelPlayers((prev) => prev.filter((player) => player.id !== id));
       });
 
-      // 방 목록과 히스토리 — 목록은 connect 뒤에, 히스토리는 room:open 의 응답이다.
+      // Room list and history — the list comes after connect, the history is the response to room:open.
       socketInstance.on(
         "room:list-response",
         (data: { rooms: RoomSummary[]; viewerUserId?: string }) => {
@@ -915,9 +915,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         },
       );
 
-      // 자유채팅 전용 알림 — 회의 전용 이벤트를 맵 룸으로 재사용하지 않는다. 맵 룸 방송은
-      // 회의 중인 사람에게도 닿는데(회의 참가자는 맵 룸을 떠나지 않는다), 그러면 남의 맵
-      // 사건이 진행 중인 회의 트랜스크립트에 삽입된다.
+      // A notice for free chat only — do not reuse meeting-only events for the map room. Map room broadcasts
+      // also reach people in a meeting (meeting participants do not leave the map room), and then someone else's
+      // map events get inserted into the transcript of a meeting in progress.
       socketInstance.on(
         "room:mention-skipped",
         (data: {
@@ -928,7 +928,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         }) => {
           if (data.roomId !== openedRoomRef.current) return;
           if (data.reason === "no_match") {
-            // 지목이 아무 멤버에도 안 맞았다 — 특정 NPC 가 없으므로 이름 없는 토스트.
+            // The mention matched no member — there is no specific NPC, so a nameless toast.
             showToastNotification(`chat-mention-no-match-${Date.now()}`, t("room.mentionNoMatch"));
             return;
           }
@@ -939,8 +939,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         },
       );
 
-      // 실패한 턴(타임아웃·어댑터 에러·빈 응답). 맵에는 스트리밍 말풍선이 없어 이 신호가
-      // 없으면 사용자에게는 자기 말풍선 하나만 남는다.
+      // A failed turn (timeout, adapter error, empty response). The map has no streaming bubble, so without this
+      // signal the user is left with only their own bubble.
       socketInstance.on(
         "room:npc-aborted",
         (data: { roomId: string; npcId: string; npcName: string; reason: string }) => {
@@ -972,7 +972,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         "channel:updated",
         (data: { name?: string; isPublic?: boolean; motionConfig?: NpcMotionConfig }) => {
           setChannel((prev) => (prev ? { ...prev, ...data } : prev));
-          // 소유자가 걸음 속도를 바꿨다. 이 브라우저가 NPC 를 구동하고 있으면 다음 걸음부터 반영된다.
+          // The owner changed the walking speed. If this browser is driving NPCs it applies from the next step.
           if (data.motionConfig) EventBus.emit("channel:motion-config", data.motionConfig);
         },
       );
@@ -988,7 +988,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           setIsNpcStreaming(false);
           const message = getLocalizedErrorMessage(t, data, "errors.forbidden");
           if (data.errorCode === "character_missing") {
-            // 입장은 내 캐릭터가 있어야 한다 — 만들고 나서 이 채널로 돌아온다.
+            // Entering requires my character — create one and come back to this channel.
             alert(message);
             router.push(
               channelId
@@ -1057,8 +1057,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                   ...(data.reason ? { reason: data.reason } : {}),
                   ...(data.roomId ? { roomId: data.roomId } : {}),
                 },
-                // 사람이 누른 호출이 아니라 방 런타임의 의사표시를 따라가는 확인 호출이다 —
-                // 토스트를 띄우면 대화 차례마다 경고가 뜬다. 다만 조용히 버리지는 않는다.
+                // Not a call a person pressed but a confirming call that follows the room runtime's intent —
+                // toasting would warn on every conversation turn. Still, it is not silently discarded.
                 (result: unknown) => {
                   if (isNpcCallRejected(result))
                     console.warn("[npc-call] intent claim rejected", data.npcId, result);
@@ -1070,12 +1070,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           setNpcCallers((prev) => ({ ...prev, [data.npcId]: data.targetPlayerId }));
           // Only the caller runs local A* pathfinding; other clients follow npc:position-sync
           if (socketInstance && data.targetPlayerId === socketInstance.id) {
-            // 표시는 도착 시점에 정해지지만 사유는 지금만 알 수 있다. 근거리면 아래 emit 이
-            // 그 자리에서 도착까지 진행하므로, 반드시 emit 앞에서 기록해야 한다.
-            // 컨텍스트 메뉴 호출(reason 없음)은 이전 맵 채팅 대기를 무효화한다. 지우지 않으면
-            // 그 NPC 가 도착했을 때 사용자가 방금 명시적으로 요청한 1:1 대화창이 삼켜진다 —
-            // 시뮬레이션은 이미 걷고 있는 NPC 의 재호출을 조용히 무시하므로, 도착은 원래
-            // 걷기로 일어나고 항목은 그때까지 살아 있다.
+            // The display is decided on arrival, but the reason is only known now. At close range the emit below
+            // proceeds all the way to arrival on the spot, so it must be recorded before the emit.
+            // A context menu call (no reason) invalidates a previous map chat wait. Without clearing it,
+            // when that NPC arrives the 1:1 dialog the user just explicitly requested gets swallowed —
+            // the simulation silently ignores recalls of an NPC already walking, so arrival happens from the original
+            // walk and the entry stays alive until then.
             mapChatWalkersRef.current.noteCall(data.npcId, data.reason);
             mapChatParticipantsRef.current.noteCalled(data.roomId, data.npcId, data.reason);
             EventBus.emit("npc:call-to-player", {
@@ -1090,8 +1090,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       // Generic NPC chat responses stay in the dialog — nothing pulls the NPC over.
       socketInstance.on("npc:response-complete", () => {});
 
-      // 진행 상태. 대화창이 열려 있으면 창 안 상태 줄로, 아니면 맵 위 말풍선으로 —
-      // 같은 사실을 두 군데 동시에 띄우지 않는다.
+      // Progress state. If the dialog is open, as a status line inside it; otherwise as a bubble on the map —
+      // do not show the same fact in two places at once.
       socketInstance.on("npc:activity", (data: { npcId: string; activityKey?: string | null }) => {
         const key = data.activityKey ?? null;
         const inDialog = dialogNpcRef.current?.npcId === data.npcId;
@@ -1173,8 +1173,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         socketInstance.removeAllListeners();
         socketInstance.disconnect();
       }
-      // removeAllListeners() 가 disconnect 핸들러를 먼저 떼므로 그 안의 리셋이 안 돈다.
-      // 소켓이 재생성되면 room:open 이펙트가 새 소켓에 무조건 다시 열도록 여기서 리셋한다.
+      // removeAllListeners() detaches the disconnect handler first, so the reset inside it does not run.
+      // Reset here so that when the socket is recreated the room:open effect unconditionally reopens on the new socket.
       openedRoomRef.current = null;
       setSocket(null);
       setSocketConnected(false);
@@ -1273,8 +1273,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         clearTimeout(toastTimerRef.current);
         toastTimerRef.current = null;
       }
-      // 시뮬레이션은 로케일을 모른다 — 키만 넘기고 번역은 여기서 한다.
-      // (예전에는 씬이 영어 문장을 만들어 넘겨서 한국어 사용자도 영어를 봤다.)
+      // The simulation does not know the locale — pass only the key and translate here.
+      // (The scene used to build English sentences and pass them, so Korean users saw English too.)
       setToastMessage(data.messageKey ? t(data.messageKey, data.params) : (data.message ?? ""));
     };
     const handleToastHide = () => {
@@ -1306,13 +1306,13 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
     const handleMovementArrived = (data: { npcId: string; npcName?: string }) => {
       setNpcMoveStates((prev) => ({ ...prev, [data.npcId]: "waiting" }));
-      // 맵 채팅으로 부른 NPC 는 맵 채팅에서 대답한다 — 여기서 1:1 대화창을 열면 그 대답이
-      // 보이는 패널을 덮어 버린다.
+      // NPCs called via map chat answer in map chat — opening the 1:1 dialog here would cover
+      // the panel where that answer shows.
       const fromMapChat = mapChatWalkersRef.current.takeOnArrival(data.npcId);
       // Auto-open dialog when NPC arrives — preserve existing messages (don't resetDialog)
       if (data.npcName && !fromMapChat) {
         const nextDialogNpc = { npcId: data.npcId, npcName: data.npcName };
-        // 보고하러 온 직원이면 대화창 맨 위에 그 보고를 띄운다.
+        // If the employee came to report, show that report at the top of the dialog.
         const report = reportingItemRef.current;
         setDialogReport(report && report.npcId === data.npcId ? report : null);
         dialogNpcRef.current = nextDialogNpc;
@@ -1369,7 +1369,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const handleDialogClose = useCallback(() => {
     resetDialog();
     EventBus.emit("dialog:close");
-    // 닫고 나면 목록이 보인다 — 방금 주고받은 것이 미리보기에 반영되도록 다시 묻는다.
+    // After closing, the list is visible — ask again so what was just exchanged shows in the preview.
     socketRef.current?.emit("npc:dm-threads");
   }, [resetDialog]);
 
@@ -1380,8 +1380,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const handleCallNpcById = useCallback(
     (npcId: string) => {
       if (!socket) return;
-      // 서버는 호출을 거절할 수 있다(회의 중·다른 사용자 점유·목록 불일치). 예전에는 ack 를
-      // 받지 않아 **클릭이 먹지 않은 것처럼** 보였고, 사용자는 원인을 알 방법이 없었다.
+      // The server can refuse the call (in a meeting, occupied by another user, list mismatch). The ack used to be
+      // ignored, so it looked **as if the click did nothing**, and the user had no way to know why.
       socket.emit("npc:call", { channelId, npcId }, (result: unknown) => {
         if (!isNpcCallRejected(result)) return;
         showToastNotification(
@@ -1405,13 +1405,13 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   );
 
   /**
-   * NPC 의 이름·외형·페르소나는 게이트웨이 프로필이 정본이라 맵에서 고치지 않는다.
-   * 맵에서 할 수 있는 것은 **자리 이동** 뿐이다.
+   * The gateway profile is the source of truth for an NPC's name, appearance and persona, so they are not edited on the map.
+   * The only thing the map can do is **move the seat**.
    */
   const handleMoveNpcById = useCallback(
     (npcId: string) => {
-      // 맵 목록(`channelNpcs`)에 있다 = 이미 자리가 있다 = 다른 화면에도 스프라이트가
-      // 있다. 배치가 끝난 뒤 무엇을 브로드캐스트할지가 여기서 갈린다.
+      // Being in the map list (`channelNpcs`) = already has a seat = has a sprite on other screens
+      // too. What to broadcast after placement finishes branches here.
       setPendingNpc({ id: npcId, wasPlaced: channelNpcs.some((n) => n.id === npcId) });
       setPlacementMode(true);
       setContextMenu(null);
@@ -1453,8 +1453,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   );
 
   /**
-   * 해고가 아니라 **퇴근** 이다. NPC 행을 지우면 다시 출근시킬 때 자리를 잃는다.
-   * REST 가 아니라 소켓인 이유는 회의 중 차단이 소켓 쪽에만 보이기 때문이다.
+   * This is **clocking out**, not firing. Deleting the NPC row would lose the seat when clocking back in.
+   * It goes through the socket rather than REST because the in-meeting block is visible only on the socket side.
    */
   const setNpcActiveById = useCallback(
     (npcId: string, active: boolean) => {
@@ -1541,11 +1541,11 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       }
 
       if (socket.id) EventBus.emit("chat:speech", { actorId: socket.id, text: displayMessage });
-      // 목록에서 연 DM 은 그 직원을 부르지 않은 상태다 — **보내는 시점에** 부른다(단테 지시).
-      // 이미 곁에 있거나 오는 중이면 씬이 재호출을 무시하므로 그때는 쏘지 않는다.
+      // A DM opened from the list has not called that employee — call them **at send time** (Dante's instruction).
+      // If they are already beside us or on the way the scene ignores the recall, so do not fire then.
       if (channelId && needsCallBeforeDmSend(npcMoveStatesRef.current[dialogNpc.npcId])) {
-        // reason 을 싣지 않는다 — 서버가 아는 값은 "map-chat"(방 화면을 여는 후처리)뿐이고,
-        // 모르는 값은 조용히 버려진다. DM 은 이미 열려 있으므로 평범한 호출이 맞다.
+        // Do not include reason — the only value the server knows is "map-chat" (post-processing that opens the room screen),
+        // and unknown values are silently dropped. The DM is already open, so a plain call is right.
         socket.emit("npc:call", { channelId, npcId: dialogNpc.npcId }, (result: unknown) => {
           if (!isNpcCallRejected(result)) return;
           showToastNotification(
@@ -1554,7 +1554,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           );
         });
       }
-      // 목록 미리보기를 서버 왕복 없이 먼저 맞춘다 — 목록은 닫을 때 다시 묻는다.
+      // Update the list preview first without a server round trip — the list is asked again on close.
       setDmThreads((previous) => [
         {
           npcId: dialogNpc.npcId,
@@ -1567,8 +1567,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         npcId: dialogNpc.npcId,
         message,
         sourceMessageId,
-        // 재연결 직후에는 서버의 `players` 에 이 소켓이 아직 없어 캐릭터를 모른다.
-        // 그 구간에서 나눈 대화가 사라지지 않도록 캐릭터를 함께 보낸다(서버가 소유를 검증한다).
+        // Right after reconnecting the server's `players` does not have this socket yet and does not know the character.
+        // Send the character along so conversation in that window is not lost (the server verifies ownership).
         characterId: characterId ?? undefined,
         files: filePayloads,
       });
@@ -1585,15 +1585,15 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       if (!currentRoomId) return;
       socket.emit("room:send", { roomId: currentRoomId, message });
       if (socket.id) EventBus.emit("chat:speech", { actorId: socket.id, text: message });
-      // 대화를 다시 시작하는 메시지 — 자리로 돌아갔던 참여자를 다시 곁으로 부른다.
-      // 지명된 NPC 는 서버가 따로 부르고, 이미 곁에 있거나 걷는 중이면 씬이 재호출을 무시한다.
+      // A message restarting the conversation — call participants who went back to their seats to our side again.
+      // The server calls mentioned NPCs separately, and if they are already beside us or walking the scene ignores the recall.
       const present = new Set(
         Object.entries(npcMoveStatesRef.current)
           .filter(([, st]) => st === "waiting" || st === "moving-to-player")
           .map(([id]) => id),
       );
-      // 그룹 방의 참여자는 명단이 정본이다(지명하지 않아도 전원이 대답한다).
-      // office 는 명단이 채널 전원이라 그럴 수 없어 지명 이력을 쓴다.
+      // For group rooms the member list is the source of truth for participants (everyone answers even without a mention).
+      // For office the member list is the whole channel, so that is impossible and the mention history is used.
       const room = roomState.rooms.find((candidate) => candidate.id === currentRoomId);
       const targets =
         room?.kind === "group"
@@ -1606,8 +1606,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         socket.emit(
           "npc:call",
           { channelId, npcId, reason: "map-chat", roomId: currentRoomId },
-          // 대화를 다시 시작하며 자동으로 부르는 경로다. `already_claimed`(다른 사용자가
-          // 대화 중)는 여기서 정상이라 토스트를 띄우지 않는다 — 대신 흔적은 남긴다.
+          // This is the path that calls automatically when restarting a conversation. `already_claimed` (another user
+          // is in conversation) is normal here, so no toast — but a trace is left.
           (result: unknown) => {
             if (isNpcCallRejected(result))
               console.warn("[npc-call] room recall rejected", npcId, result);
@@ -1618,7 +1618,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     [socket, channelId, currentRoomId, roomState.rooms, showToastNotification, t],
   );
 
-  /** 방을 옮기면 이전 방을 닫고 새 방을 연다. 마지막 방은 채널별로 기억한다. */
+  /** Moving rooms closes the previous room and opens the new one. The last room is remembered per channel. */
   useEffect(() => {
     const socketInstance = socketRef.current;
     if (!socketInstance || !socketConnected || !currentRoomId) return;
@@ -1631,7 +1631,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       try {
         window.localStorage.setItem(lastRoomKey(channelId), currentRoomId);
       } catch {
-        // 시크릿 모드·차단된 저장소 — 마지막 방을 기억하지 못할 뿐이다.
+        // Private mode or blocked storage — we just cannot remember the last room.
       }
     }
   }, [currentRoomId, socketConnected, channelId]);
@@ -1644,7 +1644,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const handleRoomCreate = useCallback(
     (name: string, npcIds: string[], userIds: string[]) => {
       if (!socket || !socket.connected || !channelId) return;
-      // 서버가 `room:created` 를 돌려줄 때 "내가 만든 것" 을 가릴 근거는 이 표뿐이다.
+      // When the server returns `room:created`, this ticket is the only basis for telling "the one I created".
       const requestId = crypto.randomUUID();
       pendingCreateRef.current = requestId;
       socket.emit("room:create", { channelId, name, npcIds, userIds, requestId });
@@ -1680,8 +1680,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     [socket],
   );
 
-  /** `@` 로 지명할 수 있는 NPC — office 는 출근 중 전원, group 은 그중 방 멤버만. */
-  // 대화창 아바타 — 직원은 명부에서, 사람은 접속자 목록에서 외형을 찾는다.
+  /** NPCs that can be mentioned with `@` — for office everyone clocked in, for group only those who are room members. */
+  // Dialog avatars — employees' appearance from the roster, people's from the online list.
   const avatarFor = useMemo(
     () =>
       createAvatarLookup(
@@ -1778,7 +1778,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           // Character
           const found: Character | null = charData.character ?? null;
           if (!found) {
-            // 내 캐릭터가 없으면 입장할 수 없다 — 만들고 나서 이 채널로 돌아온다.
+            // Without my character one cannot enter — create one and come back to this channel.
             router.replace(`/characters?joinChannel=${encodeURIComponent(channelId)}`);
             return;
           }
@@ -1812,7 +1812,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           setChannel(nextChannel);
           if (nextChannel?.isOwner) setIsOwner(true);
 
-          // 시뮬레이션이 시작할 때 읽을 채널 데이터
+          // Channel data the simulation reads when it starts
           // Parse mapData if it's a JSON string (SQLite stores as text)
           let rawMapData = channelData.channel.mapData;
           if (typeof rawMapData === "string") {
@@ -1854,8 +1854,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   }, [channelId, router, t]);
 
   /**
-   * 맵 목록과 출근부를 함께 읽는다. 하나만 갱신하면 화면 두 곳이 서로 다른 사실을
-   * 말한다 — 출근부에서 퇴근시켰는데 헤더의 "출근 N명" 이 그대로인 식이다.
+   * Read the map list and the attendance roster together. Updating only one makes two parts of the screen
+   * state different facts — like clocking someone out in the roster while the header's "출근 N명" stays the same.
    */
   const refreshNpcLists = useCallback(async () => {
     if (!channelId) return;
@@ -1945,17 +1945,17 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     EventBus.on("scene-ready", restorePlacement);
     const onPlacementComplete = async (data: { col: number; row: number }) => {
       if (!pendingNpc) return;
-      // 409(타일 점유)일 때만 배치 모드를 유지한다. `return` 은 finally 를 건너뛰지
-      // 않으므로 플래그로 알린다 — 예전에는 주석만 "유지한다" 고 적혀 있고 실제로는
-      // 배치 모드가 조용히 꺼졌다(칸을 찍었는데 아무 일도 안 일어났다).
+      // Keep placement mode only on 409 (tile occupied). `return` does not skip finally,
+      // so signal with a flag — previously only the comment said "keep it" while in reality
+      // placement mode quietly turned off (clicking a cell did nothing).
       let keepPlacementMode = false;
       try {
-        // NPC 를 새로 만들지 않는다 — 이미 있는 행에 **자리를 준다**. 생성 라우트는
-        // 없어졌고, 자리·방향 말고는 이 라우트가 받지 않는다(프로필이 정본).
+        // Do not create a new NPC — **give a seat** to an existing row. The create route
+        // is gone, and this route accepts nothing but seat and facing (the profile is the source of truth).
         const request = buildPlacementRequest(pendingNpc.id, data.col, data.row);
         const res = await fetch(request.url, request.init);
-        // 그 칸에 이미 다른 NPC 가 있다(`npcs_channel_position_unique`). 배치 모드를
-        // 유지한 채 다른 칸을 기다리되, 왜 안 됐는지는 알려 준다.
+        // Another NPC is already on that cell (`npcs_channel_position_unique`). Keep placement mode
+        // and wait for another cell, but say why it did not work.
         if (keepsPlacementMode(res.status)) {
           keepPlacementMode = true;
           showToastNotification("npc-place-occupied", t("errors.tileAlreadyOccupied"));
@@ -1968,8 +1968,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         const result = await res.json();
         await refreshNpcLists();
         if (result?.npc) {
-          // 이동은 로컬에서도 원격에서도 **빼고 다시 넣는다**. add 만 보내면 받는 쪽
-          // `npc:added` 가 "이미 있는 NPC" 라며 무시해서 옛 칸에 그대로 남는다.
+          // A move **removes and re-adds** both locally and remotely. Sending only add makes the receiving side's
+          // `npc:added` ignore it as "an NPC that already exists", leaving it on the old cell.
           for (const step of placementBroadcastPlan(pendingNpc.wasPlaced)) {
             if (step === "remove") {
               EventBus.emit("npc:remove-local", { npcId: pendingNpc.id });
@@ -2008,9 +2008,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   }, [placementMode, pendingNpc, refreshNpcLists, showToastNotification, socket, t]);
 
   /**
-   * 출근부 토글의 결과는 소켓으로 온다. 성공은 채널 전체 브로드캐스트(`npc:updated`)
-   * 이고, 실패는 요청한 소켓에만 온다(`npc:set-active:error`) — 회의 중이라 막힌 것을
-   * 토스트로 알리지 않으면 버튼이 아무 일도 안 한 것처럼 보인다.
+   * The result of the roster toggle arrives over the socket. Success is a channel-wide broadcast (`npc:updated`),
+   * and failure goes only to the requesting socket (`npc:set-active:error`) — if being blocked by a meeting
+   * is not reported with a toast, the button looks like it did nothing.
    */
   useEffect(() => {
     if (!socket) return;
@@ -2032,8 +2032,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   }, [socket, refreshNpcLists, showToastNotification, t]);
 
   /**
-   * 칸반 사건(`kanban:event`)은 이 채널의 것만 세어 모달에 재조회 신호를 준다(R26).
-   * 모달이 닫혀 있어도 세지만, 여는 순간 어차피 처음부터 읽으므로 누적은 무해하다.
+   * Count only this channel's kanban events (`kanban:event`) to give the modal a reread signal (R26).
+   * They are counted even while the modal is closed, but it reads from scratch the moment it opens anyway, so the accumulation is harmless.
    */
   useEffect(() => {
     if (!socket || !channelId) return;
@@ -2048,8 +2048,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   }, [socket, channelId]);
 
   /**
-   * 직원 대화창 탭의 미확인 배지(T6) — 대화창을 열 때와 기존 `kanban:event`·`cron:event` 가
-   * 올 때만 다시 센다. **폴링하지 않는다**: 이 조회는 서버에서 Hermes 보드를 읽는다.
+   * Unread badges on the employee dialog tabs (T6) — recounted only when the dialog opens and when the existing
+   * `kanban:event`/`cron:event` arrive. **No polling**: this query reads the Hermes board on the server.
    */
   useEffect(() => {
     if (!socket || !channelId) return;
@@ -2073,14 +2073,14 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         if (alive) setPanelBadges(badges);
       })
       .catch(() => {
-        // 배지는 "모르면 없다" 가 정답이다 — 실패를 화면에 올리지 않는다.
+        // For badges "unknown means none" is the right answer — failures are not surfaced on screen.
         if (alive) setPanelBadges(null);
       });
     return () => {
       alive = false;
     };
   }, [channelId, dialogNpcId, kanbanRefreshTick, panelBadgeTick]);
-  /** 탭을 열었다 — 그 배지를 먼저 0 으로 만들고(사용자가 기다리지 않게) 기록을 보낸다. */
+  /** A tab was opened — zero that badge first (so the user does not wait) and send the record. */
   const markPanelTabSeen = useCallback(
     (tab: "cron" | "cards") => {
       if (!channelId || !dialogNpcId) return;
@@ -2093,15 +2093,15 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           body: JSON.stringify({ tab }),
         },
       ).catch(() => {
-        // 기록에 실패하면 다음 조회에서 배지가 되살아난다 — 조용히 넘긴다.
+        // If recording fails, the badge comes back on the next read — let it pass quietly.
       });
     },
     [channelId, dialogNpcId],
   );
 
   /**
-   * 결과물 사건(`artifact:event`) — 이 채널 것만 모달 상태로 접고(마지막 사건은 삭제·새 버전
-   * 반영용), 열린 NPC 대화에서 저장된 것이면 "결과물 저장됨" 칩을 더한다.
+   * Artifact events (`artifact:event`) — fold only this channel's into the modal state (the last event is for reflecting
+   * deletes and new versions), and add a "결과물 저장됨" chip if it was saved in the open NPC conversation.
    */
   useEffect(() => {
     if (!socket || !channelId) return;
@@ -2125,8 +2125,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   }, [socket, channelId]);
 
   /**
-   * `npc:working`(R27) — 값이 바뀔 때만 오고, 접속 때 스냅샷이 한 번 온다. 채널이 바뀌면
-   * 비운다: 스냅샷이 새 채널 것으로 다시 오므로 옛 채널의 표시가 남지 않는다.
+   * `npc:working` (R27) — arrives only when the value changes, plus one snapshot on connect. Cleared when the channel
+   * changes: the snapshot arrives again for the new channel, so the old channel's display does not linger.
    */
   useEffect(() => {
     setNpcWorking(EMPTY_NPC_WORKING);
@@ -2142,8 +2142,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
   }, [socket, channelId]);
 
-  // 확인 기록을 브라우저에서 되읽는다. 없으면 빈 기록 — 첫 방문에는 쌓인 것을 모두 보고한다.
-  // 옛 문자열 워터마크도 읽는다(`parseReportAck`).
+  // Reread the acknowledgment record from the browser. If none, an empty record — on a first visit report everything accumulated.
+  // Old string watermarks are read too (`parseReportAck`).
   useEffect(() => {
     if (!channelId) return;
     try {
@@ -2153,7 +2153,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     }
   }, [channelId]);
 
-  /** 이 보고 **한 건만** 확인한다 — 앞에 있던 다른 직원의 보고는 그대로 남는다. */
+  /** Acknowledge **only this one** report — other employees' reports ahead of it stay. */
   const acknowledgeReports = useCallback(
     (item: ReportItem) => {
       setReportAck((prev) => {
@@ -2163,7 +2163,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           try {
             window.localStorage.setItem(reportAckKey(channelId), serializeReportAck(next));
           } catch {
-            // 사생활 보호 모드 등으로 막혀도 이 세션 동안은 상태로 유지된다.
+            // Even if blocked by privacy mode etc., it stays in state for this session.
           }
         return next;
       });
@@ -2182,32 +2182,32 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     [roomState.rooms, roomState.messages, rosterNpcs, reportAck],
   );
 
-  // 방 알림 링크(R29·R30) → 해당 모달을 그 항목으로 연다.
+  // Room notice links (R29, R30) → open the matching modal at that item.
   //
-  // `showKanbanRef` 는 effect 에서 갱신되므로, **같은 tick 에 보드를 닫고** 이걸 부르면 아직
-  // `true` 로 읽혀 `focusRequest` 로 간다 — 그 사이 모달이 언마운트되면 지목이 사라진다.
-  // 지금 부르는 곳(방 알림·카드 탭·`openArtifactSource`)은 모두 보드를 닫지 않으므로
-  // (kanban 분기는 `closeKanban: false` — `artifact-entry.ts:145`) 그 경로가 없다.
-  // 닫고 여는 호출자를 새로 만들려면 `boardOpen` 을 인자로 받도록 바꿔야 한다.
+  // `showKanbanRef` is updated in an effect, so calling this after **closing the board in the same tick** still
+  // reads `true` and goes to `focusRequest` — if the modal unmounts meanwhile the target is lost.
+  // The current callers (room notices, card tab, `openArtifactSource`) never close the board
+  // (the kanban branch is `closeKanban: false` — `artifact-entry.ts:145`), so that path does not exist.
+  // To add a caller that closes and opens, change this to take `boardOpen` as an argument.
   const openNoticeCard = useCallback(
     (cardId: string) => {
       setKanbanCard((prev) =>
         openCardTarget({ boardOpen: showKanbanRef.current, taskId: cardId, prev }),
       );
       setShowKanban(true);
-      // 그 카드의 보고는 사용자가 본 것이다 — **그 카드의** 보고만 확인한다.
-      // `cardId` 가 없는 보고(크론 실패)와 섞이지 않도록 빈 id 는 맞추지 않는다.
+      // The user has seen that card's reports — acknowledge only **that card's** reports.
+      // Empty ids are not matched so reports without a `cardId` (cron failures) do not mix in.
       if (cardId)
         for (const item of reportQueue) if (item.cardId === cardId) acknowledgeReports(item);
     },
     [reportQueue, acknowledgeReports],
   );
   /**
-   * 보고 호출 — **서버가 아니라 이 브라우저가 쏜다.** `npc:call` 은 `targetPlayerId` 를
-   * 소켓에서 정하므로 자동화 사건에는 걸어갈 대상이 없다. 아무도 접속하지 않았으면
-   * 이동이 생략되고 알림만 방에 남는 것이 옳다.
+   * Report calls — **fired by this browser, not the server.** `npc:call` determines `targetPlayerId`
+   * from the socket, so automation events have no one to walk to. If nobody is connected it is right
+   * that the move is skipped and only the notice stays in the room.
    *
-   * 대화창·칸반·크론 모달이 열려 있으면 끼어들지 않는다 — 큐는 그대로 남아 닫으면 이어진다.
+   * If the dialog, kanban or cron modal is open, do not interrupt — the queue stays and continues when they close.
    */
   const reportSignatures = useMemo(() => {
     const snapshot = npcMotionSnapshotRef.current;
@@ -2223,9 +2223,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
 
   useEffect(() => {
     if (!socket || !channelId) return;
-    // 내 호출로 오던 직원을 누가 데려갔으면(회의 등) 그 "보냄" 을 거절로 정리한다 — 안 그러면
-    // 보고가 확인될 때까지 영영 다시 부르지 않는다.
-    // 접힌 보고는 다른 보고를 확인했거나 약 10분이 지나면 다시 후보가 된다.
+    // If someone took the employee who was coming on my call (a meeting, etc.), settle that "sent" as refused — otherwise
+    // they are never called again until the report is acknowledged.
+    // Folded reports become candidates again when another report is acknowledged or after about 10 minutes.
     const revived = reviveDismissedReports(
       reportAttemptsRef.current,
       Date.now(),
@@ -2241,8 +2241,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       reportSignatures,
       reportQueue,
     );
-    // 전하던 보고가 거절로 바뀌었으면(자동 복귀·회의 등) 쥐고 있지 않는다 — 다음 렌더에서
-    // 시간순 규칙으로 다시 고른다.
+    // If the report being delivered turned into a refusal (auto return, meeting, etc.), do not hold it — on the next render
+    // pick again by the chronological rule.
     if (activeReportReleased(reportAttemptsRef.current, reportingMessageId)) {
       setReportingMessageId(null);
       return;
@@ -2253,7 +2253,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       cronOpen: showCron,
       inMeeting: mode === "meeting",
     });
-    // 도착 신호를 놓친 직원이 내 곁에서 기다리면 대화창을 대신 연다(도착 핸들러와 같은 동작).
+    // If an employee who missed the arrival signal is waiting beside me, open the dialog instead (same as the arrival handler).
     const missed = missedReportArrival({
       queue: reportQueue,
       activeMessageId: reportingMessageId,
@@ -2294,10 +2294,10 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     record("sent");
     setReportingMessageId(next.messageId);
     socket.emit("npc:call", { channelId, npcId: next.npcId }, (result: unknown) => {
-      // 거절(회의 중·다른 사용자 점유)은 **사용자에게는** 조용히 넘긴다 — 알림도 배지도
-      // 남아 있고, 걸어오지 못했다는 토스트로는 사용자가 할 수 있는 일이 없다. 다만
-      // 흔적까지 지우면 안 된다: 예전에는 이 줄이 없어 거절 코드를 아무도 볼 수 없었고,
-      // "직원이 안 온다" 의 원인을 코드 추론으로만 좁혀야 했다.
+      // Refusals (in a meeting, occupied by another user) pass quietly **for the user** — the notice and badge
+      // remain, and a toast saying they could not walk over gives the user nothing to do. But the trace
+      // must not be erased: this line used to be missing so nobody could see the refusal code,
+      // and the cause of "the employee does not come" had to be narrowed down by reasoning over code alone.
       if (!isNpcCallRejected(result)) return;
       console.debug("[report] npc:call rejected", {
         npcId: next.npcId,
@@ -2305,7 +2305,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         signature,
         error: (result as { error?: unknown })?.error,
       });
-      // 거절을 기록해 둔다. 그 직원의 상태가 바뀌면 `decideReportCall` 이 다시 후보로 올린다.
+      // Record the refusal. When that employee's state changes, `decideReportCall` brings them back as a candidate.
       record("rejected");
       setReportingMessageId(null);
     });
@@ -2327,14 +2327,14 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     () => reportQueue.find((item) => item.messageId === reportingMessageId) ?? null,
     [reportQueue, reportingMessageId],
   );
-  // 도착 핸들러는 마운트 때 한 번 등록되는 effect 안에 있어 ref 로 읽는다.
+  // The arrival handler lives in an effect registered once at mount, so it reads through a ref.
   const reportingItemRef = useRef<ReportItem | null>(null);
   useEffect(() => {
     reportingItemRef.current = reportingItem;
   }, [reportingItem]);
 
-  // 보고하러 온 직원과의 대화창을 확인 없이 닫으면 그 보고를 이 세션에서 접고 다음 보고로
-  // 넘긴다. 안 그러면 시도가 "보냄" 으로 남아 큐 전체가 멈춘다.
+  // Closing the dialog with an employee who came to report, without acknowledging, folds that report for this session and moves on
+  // to the next report. Otherwise the attempt stays "sent" and the whole queue stalls.
   const reportDialogNpcRef = useRef<string | null>(null);
   useEffect(() => {
     const prev = reportDialogNpcRef.current;
@@ -2352,10 +2352,10 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     setReportingMessageId(null);
   }, [dialogNpc, reportingItem]);
 
-  // 보고 목록의 "접힘" 표시. 시도 기록은 ref 라 바뀔 때 버전을 올려 다시 읽는다.
+  // The "folded" marker in the report list. The attempt log is a ref, so bump a version when it changes to reread.
   const dismissedReports = useMemo(
     () => dismissedReportIds(reportAttemptsRef.current),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 버전이 ref 변경을 대신 알린다
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the version signals ref changes instead
     [reportAttemptsVersion],
   );
 
@@ -2364,24 +2364,24 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       reportAttemptsRef.current
         .map((a) => `${a.messageId}:${a.outcome}${a.signature ? `@${a.signature}` : ""}`)
         .join(" "),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 버전이 ref 변경을 대신 알린다
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the version signals ref changes instead
     [reportAttemptsVersion],
   );
 
-  /** "다시 부르기" — 접힌 보고를 즉시 후보로 되돌린다. 막힘 규칙은 그대로다. */
+  /** "다시 부르기" — immediately returns a folded report to candidacy. The blocking rules stay as they are. */
   const recallDismissedReport = useCallback((item: ReportItem) => {
     reportAttemptsRef.current = recallReport(reportAttemptsRef.current, item.messageId);
     setReportAttemptsVersion((v) => v + 1);
   }, []);
 
-  // 접힌 보고가 있을 때만 시계를 돌려 시간 경과 되살리기를 판정한다.
+  // Run the clock only while there are folded reports, to judge revival by elapsed time.
   useEffect(() => {
     if (dismissedReports.size === 0) return;
     const timer = window.setInterval(() => setReportClock((c) => c + 1), 30_000);
     return () => window.clearInterval(timer);
   }, [dismissedReports]);
 
-  // 보고가 큐에서 빠지면(확인됨) 다음 보고에 자리를 넘긴다.
+  // When a report leaves the queue (acknowledged), hand the slot to the next report.
   useEffect(() => {
     if (reportingMessageId && !reportingItem) setReportingMessageId(null);
   }, [reportingMessageId, reportingItem]);
@@ -2390,12 +2390,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     (jobId: string) => {
       setCronInitialJobId(jobId);
       setShowCron(true);
-      // 크론 실패 보고도 여기서 닫힌다 — 그러지 않으면 배지가 영영 남는다.
+      // Cron failure reports are closed here too — otherwise the badge would stay forever.
       for (const item of reportQueue) if (item.jobId === jobId) acknowledgeReports(item);
     },
     [reportQueue, acknowledgeReports],
   );
-  /** 보고 목록의 "열기" — 그 카드/이력을 열고 **그 보고 한 건만** 확인한다. */
+  /** The report list's "열기" — open that card/history and acknowledge **only that one report**. */
   const openReport = useCallback(
     (item: ReportItem) => {
       const target = reportTarget(item);
@@ -2421,7 +2421,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     setShowCron(false);
     setCronInitialJobId(null);
   }, []);
-  /** 결과물 모달을 연다 — 특정 결과물을 펴거나 카드의 결과물로 거른다(Task 11 의 진입점). */
+  /** Open the artifacts modal — expand a specific artifact or filter to a card's artifacts (Task 11's entry point). */
   const openArtifacts = useCallback((initial?: { artifactId?: string; taskId?: string }) => {
     dispatchArtifactsModal({ type: "open", initial });
   }, []);
@@ -2432,9 +2432,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     (artifactId: string) => openArtifacts({ artifactId }),
     [openArtifacts],
   );
-  // 칸반 카드의 결과물 섹션. 결과물 모달은 칸반 위에 뜬다(칸반을 닫지 않는다 — 덮인 동안
-  // 칸반은 Escape 를 무시한다, `covered`). api 객체는 채널이 바뀔 때만 새로 만들고, 사건은
-  // `artifactsRefreshTick` 으로 따로 넘겨 드로어가 디바운스해 다시 읽는다.
+  // The kanban card's artifacts section. The artifacts modal floats above kanban (kanban is not closed — while covered
+  // kanban ignores Escape, `covered`). The api object is recreated only when the channel changes, and events
+  // are passed separately as `artifactsRefreshTick` so the drawer rereads with a debounce.
   const kanbanArtifacts = useMemo<TaskDrawerArtifacts | null>(() => {
     if (!channelId) return null;
     const api = createArtifactsApi(channelId);
@@ -2443,14 +2443,14 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       open: openArtifact,
     };
   }, [channelId, openArtifact]);
-  /** "출처로 이동" — 결과물 모달과 도착 화면을 가리는 모달을 닫고 그 카드·대화·크론 작업을 연다. */
+  /** "출처로 이동" — close the artifacts modal and any modal covering the destination, and open that card, conversation or cron job. */
   const openArtifactSource = useCallback(
     (target: SourceTarget) => {
       const plan = planSourceNavigation(
         target,
         rosterNpcs.map((n) => ({ id: n.id, name: n.name, profileName: n.profile?.profileName })),
       );
-      // 채널에 그 프로필의 NPC 가 없으면(해고 등) 갈 곳이 없으니 모달을 그대로 둔다.
+      // If the channel has no NPC for that profile (fired, etc.) there is nowhere to go, so leave the modal as is.
       if (!plan) return;
       closeArtifacts();
       if (plan.closeKanban) closeKanban();
@@ -2578,7 +2578,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           "npc:return-home",
           { channelId, npcId },
           (error: Error | null, result?: { ok: boolean; error?: string }) => {
-            // 복귀가 거절되면 직원은 돌아가지 않는다 — 복귀 중 표시를 풀어 다시 부를 수 있게 한다.
+            // If the return is refused the employee does not go back — clear the returning marker so they can be called again.
             if (error || !result?.ok)
               returningNpcsRef.current = withoutNpc(returningNpcsRef.current, npcId);
             if (error || !result?.ok)
@@ -2595,10 +2595,10 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           },
         );
       mapChatParticipantsRef.current.dismiss(npcId);
-      // 자리에 닿을 때까지 보고 호출 후보에서 뺀다(`settleReturningNpcs` 가 도착을 확인해 푼다).
+      // Exclude them from report call candidates until they reach their seat (`settleReturningNpcs` clears it on confirmed arrival).
       returningNpcsRef.current = new Set([...returningNpcsRef.current, npcId]);
-      // 보고하러 온 직원을 돌려보냈다 = 그 보고를 받은 것으로 본다(단테 결정 2026-09-21).
-      // 안 그러면 집에 닿는 순간 같은 보고로 다시 불려온다. 방 알림은 남는다.
+      // Sending back an employee who came to report = treat that report as received (Dante's decision, 2026-09-21).
+      // Otherwise the moment they reach home they are called back for the same report. The room notice stays.
       const report = reportingItemRef.current;
       if (report && report.npcId === npcId) {
         acknowledgeReports(report);
@@ -2661,11 +2661,11 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   );
 
   const npcResponsePhases = npcPresentationPhases(chatResponses);
-  // 크론 화면의 NPC 후보 — 출근부의 active 만, 이름은 프로필 표시명(출근부가 이미 그것이다).
+  // NPC candidates for the cron screen — only active ones from the roster, names are profile display names (the roster already has them).
   const cronNpcs = rosterNpcs
     .filter((npc) => npc.active)
     .map((npc) => ({ npcId: npc.id, npcName: npc.name }));
-  // 결과물 모달의 NPC 필터 — 크론과 같은 출근부지만 잠든 NPC 도 넣는다(서버 목록 범위와 같다).
+  // The NPC filter for the artifacts modal — the same roster as cron but sleeping NPCs are included too (matches the server list scope).
   const artifactNpcs = rosterNpcs.flatMap((npc) =>
     npc.profile?.profileName
       ? [{ npcId: npc.id, npcName: npc.name, profileName: npc.profile.profileName }]
@@ -2686,7 +2686,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
   });
 
-  // 목록에 그릴 DM 줄. 이름·출근 여부는 출근부가 정본이고, 명단에 없는 직원의 줄은 빠진다.
+  // DM lines to draw in the list. The roster is the source of truth for names and clock-in status, and lines for employees not on the roster are dropped.
   const dmThreadEntries = buildDmThreadEntries(
     dmThreads,
     rosterNpcs.map((npc) => ({ id: npc.id, name: npc.name, active: npc.active })),
@@ -3032,8 +3032,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                 NPC {rosterNpcs.filter((npc) => npc.active).length}
               </span>
             </span>
-            {/* 보고 큐 진단 — 이 큐의 결함은 화면으로만 드러나고 console.debug 는 자동화 도구에
-                잡히지 않는다. 실측에서 DOM 으로 상태를 읽는다(값은 id·상태뿐, 내용 없음). */}
+            {/* Report queue diagnostics — defects in this queue show only on screen and console.debug is not
+                captured by automation tools. Measurements read the state from the DOM (values are ids and states only, no content). */}
             <span
               hidden
               data-testid="report-diagnostics"
@@ -3064,7 +3064,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             </span>
           </button>
 
-          {/* 회의실 입장 — 회의 화면에서는 숨긴다. 나가는 버튼은 맵 위(ThreeGame)에 있다. */}
+          {/* Enter the meeting room — hidden on the meeting screen. The leave button is on the map (ThreeGame). */}
           {mode === "office" && (
             <button
               data-meeting-entry="navbar"
@@ -3081,7 +3081,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             </button>
           )}
 
-          {/* Kanban board (T8) — 옛 태스크 보드 버튼 자리 */}
+          {/* Kanban board (T8) — where the old task board button was */}
           <button
             onClick={() => setShowKanban(true)}
             title={t("kanban.title")}
@@ -3092,7 +3092,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             <span className="header-full-label">{t("kanban.open")}</span>
           </button>
 
-          {/* 채널 크론 화면 (T10, R15) */}
+          {/* Channel cron screen (T10, R15) */}
           <button
             onClick={() => setShowCron(true)}
             title={t("cron.title")}
@@ -3103,7 +3103,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             <span className="header-full-label">{t("cron.open")}</span>
           </button>
 
-          {/* 채널 결과물 */}
+          {/* Channel artifacts */}
           <button
             onClick={() => openArtifacts()}
             title={t("artifacts.title")}
@@ -3156,7 +3156,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                     {t("game.settings")}
                   </button>
                 )}
-                {/* 보기 설정은 누구나 — 이 브라우저에만 적용되는 개인 설정이다. */}
+                {/* View settings are for everyone — a personal setting that applies only to this browser. */}
                 <button
                   data-menu-item="view-settings"
                   onClick={() => {
@@ -3285,7 +3285,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                         "channelId",
                       );
                       if (channelId && socketRef.current) {
-                        // EventBus 로 시뮬레이션에 위치를 묻는다
+                        // Ask the simulation for the position through the EventBus
                         const pos = await new Promise<{ x: number; y: number } | null>(
                           (resolve) => {
                             let resolved = false;

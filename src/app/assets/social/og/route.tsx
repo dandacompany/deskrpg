@@ -21,7 +21,7 @@ export async function GET(): Promise<Response> {
         background: "#eff7f1",
       }}
     >
-      {/* 실제 제품 캡처를 유지하고 로그인 폼 영역만 브랜드 카피로 덮는다. */}
+      {/* Keep the real product capture and cover only the login form area with brand copy. */}
       <img
         src={screenshotUrl}
         alt=""

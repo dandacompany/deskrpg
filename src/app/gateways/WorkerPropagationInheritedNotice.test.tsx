@@ -42,7 +42,7 @@ for (const locale of ["ko", "en", "ja", "zh"] as Locale[]) {
   });
 }
 
-test("끄기를 누르면 요청하고, 끈 뒤에는 버튼 대신 결과 문구를 보이고 목록을 다시 읽게 한다", async () => {
+test("pressing turn off sends the request, and afterwards shows the result text instead of the button and has the list reread", async () => {
   let calls = 0;
   let changed = 0;
   const { host, cleanup } = await render(
@@ -64,7 +64,7 @@ test("끄기를 누르면 요청하고, 끈 뒤에는 버튼 대신 결과 문�
   await cleanup();
 });
 
-test("끄기에 실패하면 코드를 보이고 버튼을 남긴다", async () => {
+test("if turning off fails, show the code and keep the button", async () => {
   const { host, cleanup } = await render(
     <WorkerPropagationInheritedNotice
       turnOff={async () => ({ ok: false, errorCode: "setup_busy" })}
@@ -77,7 +77,7 @@ test("끄기에 실패하면 코드를 보이고 버튼을 남긴다", async () 
   await cleanup();
 });
 
-test("끄기 요청은 enabled:false 를 보내고, 끄였다고 말하지 않으면 실패로 본다", async () => {
+test("the turn-off request sends enabled:false, and not saying it turned off counts as failure", async () => {
   const seen: { url: string; body: string }[] = [];
   const reply = (status: number, body: unknown) =>
     (async (url: string, init?: RequestInit) => {
@@ -90,7 +90,7 @@ test("끄기 요청은 enabled:false 를 보내고, 끄였다고 말하지 않�
   );
   assert.equal(seen[0].url, "/api/gateways/g%201/plugin/worker-propagation");
   assert.deepEqual(JSON.parse(seen[0].body), { enabled: false });
-  // .env 변수가 켜 두어 여전히 enabled 면 끄지 못한 것이다.
+  // If an .env variable keeps it on so it is still enabled, it could not be turned off.
   assert.deepEqual(
     await disableWorkerPropagationRequest("g", reply(200, { propagation: "enabled" })),
     { ok: false, errorCode: "propagation_still_enabled" },

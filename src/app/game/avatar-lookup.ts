@@ -1,9 +1,9 @@
 /**
- * 발화자 → 외형. 말풍선·헤더의 원형 아바타가 쓴다.
+ * Speaker → appearance. Used by the round avatars in bubbles and headers.
  *
- * 외형은 메시지에 실려 오지 않는다 — 채널 명부(직원)와 접속자 목록(사람)에 이미 있으므로
- * 거기서 찾는다. id 로 먼저 찾고, id 가 없거나 안 맞으면 이름으로 찾는다(옛 메시지에는
- * `senderId` 가 없을 수 있다). 못 찾으면 `null` — 아바타는 기본 표시로 그려진다.
+ * Appearance is not carried in messages — it already exists in the channel roster (employees) and the online list (people),
+ * so look it up there. Look up by id first, and by name when the id is missing or does not match (old messages may
+ * lack `senderId`). `null` when not found — the avatar is drawn with the default display.
  */
 export type AvatarSubject = { kind: "npc" | "user"; id?: string | null; name: string };
 export type AvatarLookup = (who: AvatarSubject) => unknown;

@@ -57,7 +57,7 @@ const rejected = (messageId: string, signature: string) => ({
 const A = item("a", "npc-1", "2026-09-21T00:00:01.000Z");
 const B = item("b", "npc-2", "2026-09-21T00:00:02.000Z");
 
-test("큐가 비어 있으면 아무도 부르지 않는다", () => {
+test("nobody is called when the queue is empty", () => {
   assert.equal(
     decideReportCall({
       queue: [],
@@ -70,7 +70,7 @@ test("큐가 비어 있으면 아무도 부르지 않는다", () => {
   );
 });
 
-test("맨 앞 보고의 NPC 를 부른다", () => {
+test("calls the NPC of the first report", () => {
   assert.equal(
     decideReportCall({
       queue: [A, B],
@@ -83,7 +83,7 @@ test("맨 앞 보고의 NPC 를 부른다", () => {
   );
 });
 
-test("대화창·모달이 열려 있으면 부르지 않는다 — 큐는 남는다", () => {
+test("does not call while the dialog or a modal is open — the queue stays", () => {
   assert.equal(
     decideReportCall({
       queue: [A, B],
@@ -96,7 +96,7 @@ test("대화창·모달이 열려 있으면 부르지 않는다 — 큐는 남�
   );
 });
 
-test("이미 호출을 쏜 보고는 다시 부르지 않는다 — 걸어오는 중에 재호출하지 않는다", () => {
+test("a report whose call was already fired is not called again — no recall while walking over", () => {
   assert.equal(
     decideReportCall({
       queue: [A, B],
@@ -109,7 +109,7 @@ test("이미 호출을 쏜 보고는 다시 부르지 않는다 — 걸어오는
   );
 });
 
-test("전하던 보고가 끝나 큐에서 빠지면 다음 보고를 부른다", () => {
+test("when the report being delivered finishes and leaves the queue, the next report is called", () => {
   assert.equal(
     decideReportCall({
       queue: [B],
@@ -122,7 +122,7 @@ test("전하던 보고가 끝나 큐에서 빠지면 다음 보고를 부른다"
   );
 });
 
-test("확인 지점 저장 키는 채널마다 다르다", () => {
+test("the acknowledgment storage key differs per channel", () => {
   assert.equal(reportAckKey("ch-1"), "deskrpg.reportAck.ch-1");
   assert.notEqual(reportAckKey("ch-1"), reportAckKey("ch-2"));
 });
@@ -154,7 +154,7 @@ const notice = (id: string, npcId: string): RoomMessage => ({
   },
 });
 
-test("사무실 방이 아직 없으면 빈 큐다 — 접속 직후 목록이 오기 전", () => {
+test("an empty queue when the office room does not exist yet — right after connecting, before the list arrives", () => {
   assert.deepEqual(
     reportsForChannel({
       rooms: [room("g", "group")],
@@ -166,7 +166,7 @@ test("사무실 방이 아직 없으면 빈 큐다 — 접속 직후 목록이 �
   );
 });
 
-test("사무실 방의 알림만 본다 — 그룹 방 알림은 보고가 아니다", () => {
+test("only office room notices count — group room notices are not reports", () => {
   const queue = reportsForChannel({
     rooms: [room("office", "office"), room("g", "group")],
     messages: { office: [notice("a", "npc-1")], g: [notice("b", "npc-1")] },
@@ -179,7 +179,7 @@ test("사무실 방의 알림만 본다 — 그룹 방 알림은 보고가 아�
   );
 });
 
-test("잠든 NPC 의 보고는 큐에 넣지 않는다 — 걸어올 수 없다", () => {
+test("reports from sleeping NPCs are not queued — they cannot walk over", () => {
   assert.deepEqual(
     reportsForChannel({
       rooms: [room("office", "office")],
@@ -191,9 +191,9 @@ test("잠든 NPC 의 보고는 큐에 넣지 않는다 — 걸어올 수 없다"
   );
 });
 
-test("거절된 보고는 건너뛰고 다음 직원을 부른다 — 맨 앞이 큐 전체를 막지 않는다", () => {
-  // sophie 의 호출이 거절되면 activeMessageId 가 비고, 그 항목은 calledMessageIds 에 남는다.
-  // 예전에는 여기서 큐가 멈춰 noah 가 영영 걸어오지 못했다.
+test("a refused report is skipped and the next employee is called — the first one does not block the whole queue", () => {
+  // When sophie's call is refused, activeMessageId empties and that entry stays in calledMessageIds.
+  // The queue used to stall here, and noah never walked over.
   const next = decideReportCall({
     queue: [A, B],
     activeMessageId: null,
@@ -215,7 +215,7 @@ test("거절된 보고는 건너뛰고 다음 직원을 부른다 — 맨 앞이
   );
 });
 
-test("전하는 중인 보고가 있으면 그 보고가 우선이고 재호출은 하지 않는다", () => {
+test("a report being delivered takes priority and is not recalled", () => {
   assert.equal(
     decideReportCall({
       queue: [A, B],
@@ -240,7 +240,7 @@ test("전하는 중인 보고가 있으면 그 보고가 우선이고 재호출�
   );
 });
 
-test("보고를 열 곳은 종류로 갈린다 — 크론 실패는 카드가 아니다", () => {
+test("where to open a report depends on its kind — a cron failure is not a card", () => {
   assert.deepEqual(reportTarget(A), { kind: "card", cardId: "c-a" });
   assert.deepEqual(
     reportTarget({ ...A, kind: "cron_failed", cardId: null, boardSlug: null, jobId: "job-7" }),
@@ -253,7 +253,7 @@ test("보고를 열 곳은 종류로 갈린다 — 크론 실패는 카드가 �
   );
 });
 
-test("거절된 보고는 그 직원의 상태가 그대로인 동안 다시 부르지 않는다", () => {
+test("a refused report is not called again while that employee's state stays the same", () => {
   assert.equal(
     decideReportCall({
       queue: [A],
@@ -267,9 +267,9 @@ test("거절된 보고는 그 직원의 상태가 그대로인 동안 다시 부
   );
 });
 
-test("거절된 보고는 그 직원의 상태가 바뀌면 다시 후보가 된다", () => {
-  // 실측 시나리오: 이긴 탭이 떠나며 소유권이 이 탭으로 넘어온다(`idle:sock-1` → `idle:mine`).
-  // 예전에는 여기서 영영 다시 부르지 않아, 새로고침해야만 직원이 걸어왔다.
+test("a refused report becomes a candidate again when that employee's state changes", () => {
+  // The measured scenario: the winning tab leaves and ownership passes to this tab (`idle:sock-1` → `idle:mine`).
+  // This used to never call again, so the employee walked over only after a reload.
   assert.equal(
     decideReportCall({
       queue: [A],
@@ -282,8 +282,8 @@ test("거절된 보고는 그 직원의 상태가 바뀌면 다시 후보가 된
   );
 });
 
-test("미확인 보고가 전부 같은 직원 것이어도 상태가 바뀌면 되살아난다", () => {
-  // 큐 전진만으로는 못 구하던 경우 — 실측에서 소피의 보고 둘이 함께 막혀 있었다.
+test("even when all unacknowledged reports belong to the same employee, they revive when the state changes", () => {
+  // A case queue advancement alone could not rescue — in measurement two of Sophie's reports were stuck together.
   const same = { ...B, npcId: "npc-1" };
   assert.equal(
     decideReportCall({
@@ -308,7 +308,7 @@ test("미확인 보고가 전부 같은 직원 것이어도 상태가 바뀌면 
   );
 });
 
-test("응답을 기다리는 중인 보고(sent)는 상태가 바뀌어도 다시 부르지 않는다", () => {
+test("a report awaiting a response (sent) is not called again even if the state changes", () => {
   assert.equal(
     decideReportCall({
       queue: [A],
@@ -323,14 +323,14 @@ test("응답을 기다리는 중인 보고(sent)는 상태가 바뀌어도 다�
 });
 
 // ---------------------------------------------------------------------------
-// 회의실에 있는 동안에는 보고하러 부르지 않는다.
+// Do not call anyone to report while in the meeting room.
 //
-// 자동 보고 호출은 직원을 **내 호출**에 묶는다. 묶인 직원은 회의 집결이 원위치를 캡처하지
-// 못해 "참가자를 찾을 수 없습니다" 로 집결이 깨졌다 — 밀린 보고가 있으면 회의를 시작할 수
-// 없었다(스테이징 실측). 큐는 그대로 남고 회의실을 나오면 이어진다.
+// Automatic report calls bind the employee to **my call**. For a bound employee the meeting gathering could not capture
+// the original position and the gathering broke with "참가자를 찾을 수 없습니다" — with pending reports a meeting could not
+// be started (staging measurement). The queue stays as is and continues after leaving the meeting room.
 // ---------------------------------------------------------------------------
 
-test("회의실에 있으면 보고 호출이 막힌다 — 대화창·칸반·크론과 같은 자리", () => {
+test("report calls are blocked while in the meeting room — same slot as dialog, kanban and cron", () => {
   const base = { dialogOpen: false, kanbanOpen: false, cronOpen: false, inMeeting: false };
   assert.equal(reportCallBlocked(base), false);
   assert.equal(reportCallBlocked({ ...base, inMeeting: true }), true, "회의 중에 직원을 부른다");
@@ -339,7 +339,7 @@ test("회의실에 있으면 보고 호출이 막힌다 — 대화창·칸반·�
   assert.equal(reportCallBlocked({ ...base, cronOpen: true }), true);
 });
 
-test("회의 중에 막힌 보고는 큐에 남아 회의실을 나오면 다시 후보가 된다", () => {
+test("reports blocked during a meeting stay in the queue and become candidates again after leaving the meeting room", () => {
   const queue = [item("m1", "n1", "2026-09-21T10:00:00.000Z")];
   const during = decideReportCall({
     queue,
@@ -370,14 +370,14 @@ test("회의 중에 막힌 보고는 큐에 남아 회의실을 나오면 다시
 });
 
 // ---------------------------------------------------------------------------
-// 회의가 끝나고 돌아와도 보고하러 오지 않던 두 경로.
+// Two paths where employees did not come to report even after returning from a meeting.
 //
-// 재시도는 "직원 상태가 거절 당시와 달라졌다" 로만 일어난다. 그런데 회의 전후로 직원의
-// 상태는 **같은 모양으로 돌아온다** — 회의석에 앉은 직원도, 자리로 돌아온 직원도
-// `idle` · 주인 없음이다. 그래서 상태가 한 바퀴 돌아도 "달라졌다" 가 보이지 않았다.
+// Retries happen only on "the employee's state differs from when it was refused". But before and after a meeting the employee's
+// state **comes back in the same shape** — an employee seated at the meeting and an employee back at their seat
+// are both `idle` · no owner. So even after the state went full circle, "it changed" was not visible.
 // ---------------------------------------------------------------------------
 
-test("서명은 자기 자리에 있는지를 가른다 — 회의석의 idle 과 집의 idle 은 다르다", () => {
+test("the signature tells whether they are at their own seat — idle at the meeting seat differs from idle at home", () => {
   assert.notEqual(
     npcSignature("idle", undefined, "me", false),
     npcSignature("idle", undefined, "me", true),
@@ -385,10 +385,10 @@ test("서명은 자기 자리에 있는지를 가른다 — 회의석의 idle �
   );
 });
 
-test("경로 2 — 회의가 끝나는 순간 낡은 상태로 거절된 호출도, 집에 돌아오면 다시 부른다", () => {
+test("path 2 — even a call refused with stale state the moment the meeting ends is called again once they are home", () => {
   const queue = [item("m1", "n1", "2026-09-21T10:00:00.000Z")];
-  // 회의실을 나온 직후: 화면은 아직 "회의석에 앉은 idle" 인데 서버는 이미 복귀를 시작해
-  // `meeting_reserved` 로 거절했다. 기록되는 서명은 화면이 본 회의석 상태다.
+  // Right after leaving the meeting room: the screen still shows "idle seated at the meeting" while the server has already started
+  // the return and refused with `meeting_reserved`. The recorded signature is the meeting seat state the screen saw.
   const atMeetingSeat = npcSignature("idle", undefined, "me", false);
   const attempts = [{ messageId: "m1", outcome: "rejected" as const, signature: atMeetingSeat }];
   const home = npcSignature("idle", undefined, "me", true);
@@ -402,26 +402,26 @@ test("경로 2 — 회의가 끝나는 순간 낡은 상태로 거절된 호출�
   assert.equal(next?.messageId, "m1", "집에 돌아왔는데 다시 부르지 않는다");
 });
 
-test("경로 1 — 내 호출로 오던 직원을 누가 가져가면, 보낸 시도를 거절로 바꿔 다시 부를 수 있게 한다", () => {
+test("path 1 — if someone takes the employee coming on my call, the sent attempt turns into a refusal so they can be called again", () => {
   const sentAt = npcSignature("idle", undefined, "me", true);
   let attempts: ReportAttempt[] = [{ messageId: "m1", outcome: "sent", signature: sentAt }];
 
-  // 아직 내 것이 되기 전(스냅샷이 오기 전)에는 건드리지 않는다 — 방금 보낸 호출을 잃은 것으로 보면 안 된다.
+  // Do not touch it before they have become mine (before the snapshot arrives) — the call just sent must not be seen as lost.
   attempts = reconcileReportAttempts(attempts, { n1: sentAt }, queueOf("m1", "n1"));
   assert.equal(attempts[0].outcome, "sent");
 
-  // 내 호출로 걸어오는 중.
+  // Walking over on my call.
   const mine = npcSignature("moving-to-player", "me", "me", false);
   attempts = reconcileReportAttempts(attempts, { n1: mine }, queueOf("m1", "n1"));
   assert.equal(attempts[0].outcome, "sent");
 
-  // 회의가 데려갔다 — 더 이상 내 것이 아니다.
+  // A meeting took them — no longer mine.
   const taken = npcSignature("moving-to-player", "leader", "me", false);
   attempts = reconcileReportAttempts(attempts, { n1: taken }, queueOf("m1", "n1"));
   assert.equal(attempts[0].outcome, "rejected", "빼앗긴 호출이 영영 '보냄' 으로 남는다");
   assert.equal(attempts[0].signature, taken);
 
-  // 회의가 끝나 집에 돌아오면 다시 후보가 된다.
+  // When the meeting ends and they are home, they become a candidate again.
   const next = decideReportCall({
     queue: queueOf("m1", "n1"),
     activeMessageId: null,
@@ -436,14 +436,14 @@ function queueOf(messageId: string, npcId: string) {
   return [item(messageId, npcId, "2026-09-21T10:00:00.000Z")];
 }
 
-test("대화창을 확인 없이 닫으면 보고 중인 직원이 큐 전체를 막는다 — 닫힌 보고를 풀면 다음으로 넘어간다", () => {
+test("closing the dialog without acknowledging lets the reporting employee block the whole queue — releasing the closed report moves on to the next", () => {
   const queue = [
     item("m1", "sophie", "2026-09-21T01:00:00Z"),
     item("m2", "oliver", "2026-09-21T02:00:00Z"),
   ];
   const signatures = { sophie: "waiting:mine:away", oliver: "idle:none:home" };
   const attempts: ReportAttempt[] = [{ ...sent("m1", "idle:none:home"), acquired: true }];
-  // 재현: 소피가 도착해 대기, 시도는 "보냄" — 올리버도 부르지 않는다.
+  // Repro: Sophie arrives and waits, the attempt is "sent" — Oliver is not called either.
   assert.equal(
     decideReportCall({ queue, activeMessageId: "m1", attempts, signatures, blocked: false }),
     null,
@@ -458,7 +458,7 @@ test("대화창을 확인 없이 닫으면 보고 중인 직원이 큐 전체를
   assert.equal(next?.messageId, "m2");
 });
 
-test("닫은 보고 한 건만 접는다 — 같은 직원의 다음 보고는 시간순 차례에 온다", () => {
+test("only the one closed report is folded — the same employee's next report comes in chronological turn", () => {
   const queue = [
     item("m1", "sophie", "2026-09-21T01:00:00Z"),
     item("m2", "sophie", "2026-09-21T02:00:00Z"),
@@ -475,7 +475,7 @@ test("닫은 보고 한 건만 접는다 — 같은 직원의 다음 보고는 �
   );
 });
 
-test("도착 신호를 놓치고 내 곁에서 기다리는 직원은 대화창을 대신 연다 — 한 번만", () => {
+test("an employee who missed the arrival signal and waits beside me gets the dialog opened for them — only once", () => {
   const queue = [item("m1", "sophie", "2026-09-21T01:00:00Z")];
   const signatures = { sophie: "waiting:mine:away" };
   const attempts: ReportAttempt[] = [{ ...sent("m1"), acquired: true }];
@@ -486,7 +486,7 @@ test("도착 신호를 놓치고 내 곁에서 기다리는 직원은 대화창�
     missedReportArrival({ ...input, attempts: [{ ...attempts[0], opened: true }] }),
     null,
   );
-  // 아직 걸어오는 중이면 기다린다.
+  // If they are still walking over, wait.
   assert.equal(
     missedReportArrival({ ...input, signatures: { sophie: "moving-to-player:mine:away" } }),
     null,
@@ -494,7 +494,7 @@ test("도착 신호를 놓치고 내 곁에서 기다리는 직원은 대화창�
   assert.equal(missedReportArrival({ ...input, activeMessageId: null }), null);
 });
 
-// 단테 결정(2026-09-21): 큐 시간순 우선 · 건 단위 확인 · 복귀 = 확인.
+// Dante's decision (2026-09-21): queue in chronological order · acknowledge per report · return = acknowledge.
 
 const officeRoom = {
   id: "office",
@@ -515,7 +515,7 @@ const reportMessage = (id: string, npcId: string, createdAt: string): RoomMessag
   createdAt,
   notice: { kind: "card_review", cardId: `c-${id}`, cardTitle: id, boardSlug: "b", npcName: npcId },
 });
-// 소피(목차) → 올리버(본문) → 소피(검수) — 스테이징에서 올리버가 오지 못했던 큐.
+// Sophie (outline) → Oliver (body) → Sophie (review) — the queue where Oliver could not come on staging.
 const interleaved = [
   reportMessage("toc", "sophie", "2026-09-21T01:00:00Z"),
   reportMessage("body", "oliver", "2026-09-21T02:00:00Z"),
@@ -532,11 +532,11 @@ const interleavedQueue = (acknowledged = EMPTY_REPORT_ACK) =>
     acknowledged,
   });
 
-test("교차 큐 — 소피의 첫 보고가 확인되면 둘째는 소피가 아니라 올리버가 온다", () => {
+test("interleaved queue — once Sophie's first report is acknowledged, Oliver comes second, not Sophie", () => {
   const queue = interleavedQueue(acknowledgeReport(EMPTY_REPORT_ACK, "toc"));
   const next = decideReportCall({
     queue,
-    // 방금까지 소피가 보고하던 중이었다 — 그래도 새치기하지 않는다.
+    // Sophie was reporting until just now — still, no cutting in line.
     activeMessageId: "toc",
     attempts: [{ ...sent("toc"), acquired: true }],
     signatures: { sophie: "waiting:mine:away", oliver: "idle:none:home" },
@@ -546,7 +546,7 @@ test("교차 큐 — 소피의 첫 보고가 확인되면 둘째는 소피가 �
   assert.equal(next?.npcId, "oliver");
 });
 
-test("한 건 확인은 다른 직원의 보고를 확인하지 않는다 — 뒤의 보고를 확인해도 앞의 올리버 보고가 남는다", () => {
+test("acknowledging one report does not acknowledge other employees' reports — acknowledging a later one leaves Oliver's earlier report", () => {
   const queue = interleavedQueue(acknowledgeReport(EMPTY_REPORT_ACK, "review"));
   assert.deepEqual(
     queue.map((entry) => entry.messageId),
@@ -554,14 +554,14 @@ test("한 건 확인은 다른 직원의 보고를 확인하지 않는다 — �
   );
 });
 
-test("복귀 = 그 보고를 확인 — 같은 보고로 재호출되지 않고 다음 보고로 넘어간다", () => {
-  // 복귀 핸들러는 전하던 보고를 `acknowledgeReport` 로 확인하고 전하던 보고를 비운다.
+test("return = acknowledge that report — not recalled for the same report, it moves on to the next", () => {
+  // The return handler acknowledges the report being delivered with `acknowledgeReport` and clears it.
   const queue = interleavedQueue(acknowledgeReport(EMPTY_REPORT_ACK, "toc"));
   const next = decideReportCall({
     queue,
     activeMessageId: null,
     attempts: [],
-    // 집에 돌아와 상태가 바뀐 소피 — 예전에는 이 순간 같은 보고로 다시 불렸다.
+    // Sophie, back home with a changed state — this used to be the moment she was called again for the same report.
     signatures: { sophie: "idle:none:home", oliver: "idle:none:home" },
     blocked: false,
   });
@@ -569,7 +569,7 @@ test("복귀 = 그 보고를 확인 — 같은 보고로 재호출되지 않고 
   assert.ok(!queue.some((entry) => entry.messageId === "toc"));
 });
 
-test("보고 항목은 대화창 요약에 쓸 알림 본문을 싣는다", () => {
+test("report entries carry the notice body used for the dialog summary", () => {
   assert.equal(interleavedQueue()[0].summary, "toc 결과 요약");
   assert.equal(
     pendingReports(interleaved, EMPTY_REPORT_ACK, ["oliver"])[0].summary,
@@ -577,14 +577,14 @@ test("보고 항목은 대화창 요약에 쓸 알림 본문을 싣는다", () =
   );
 });
 
-// …75v1A — 서버가 돌려보낸(사용자 조작 없는) 복귀 뒤 큐가 멈추던 두 경로.
+// …75v1A — two paths where the queue stalled after a return the server sent (no user action).
 
-test("자동 복귀 — 전하던 보고가 거절로 바뀌면 그 보고가 큐를 쥐지 않고 다음 보고가 호출된다", () => {
+test("automatic return — when the report being delivered turns into a refusal, it does not hold the queue and the next report is called", () => {
   const queue = [
     item("m1", "oliver", "2026-09-21T01:00:00Z"),
     item("m2", "sophie", "2026-09-21T02:00:00Z"),
   ];
-  // 올리버가 돌아가는 중(away)에 소유를 잃었다 — 거절 서명은 그 순간의 것이다.
+  // Oliver lost ownership while heading back (away) — the refusal signature is from that moment.
   const attempts = reconcileReportAttempts(
     [{ ...sent("m1"), acquired: true }],
     { oliver: "returning:none:away", sophie: "idle:none:home" },
@@ -604,7 +604,7 @@ test("자동 복귀 — 전하던 보고가 거절로 바뀌면 그 보고가 �
   );
 });
 
-test("자동 복귀 — 소유를 잃은 순간 이미 집이면 서명이 더 바뀌지 않아도 즉시 재후보가 된다", () => {
+test("automatic return — if already home the moment ownership is lost, they become a candidate immediately even without a further signature change", () => {
   const queue = [item("m1", "oliver", "2026-09-21T01:00:00Z")];
   const signatures = { oliver: "idle:none:home" };
   const attempts = reconcileReportAttempts([{ ...sent("m1"), acquired: true }], signatures, queue);
@@ -616,7 +616,7 @@ test("자동 복귀 — 소유를 잃은 순간 이미 집이면 서명이 더 �
   );
 });
 
-test("자동 복귀 — 돌아가는 중에 거절된 보고는 집에 닿아 서명이 바뀌면 다시 부른다", () => {
+test("automatic return — a report refused while heading back is called again once they reach home and the signature changes", () => {
   const queue = [item("m1", "oliver", "2026-09-21T01:00:00Z")];
   const attempts = reconcileReportAttempts(
     [{ ...sent("m1"), acquired: true }],
@@ -635,9 +635,9 @@ test("자동 복귀 — 돌아가는 중에 거절된 보고는 집에 닿아 �
   assert.equal(decide("idle:none:home")?.messageId, "m1");
 });
 
-// …75v1A ③ — 접힌 보고의 자동 재후보(단테 결정: 다른 보고 확인 또는 약 10분).
+// …75v1A ③ — automatic re-candidacy of folded reports (Dante's decision: another report acknowledged, or about 10 minutes).
 
-test("접힌 보고는 약 10분이 지나면 다시 후보가 된다", () => {
+test("a folded report becomes a candidate again after about 10 minutes", () => {
   const queue = [item("m1", "oliver", "2026-09-21T01:00:00Z")];
   const attempts = dismissReport([], "m1", 1_000);
   const decide = (a: ReportAttempt[]) =>
@@ -649,7 +649,7 @@ test("접힌 보고는 약 10분이 지나면 다시 후보가 된다", () => {
   );
 });
 
-test("접힌 뒤 다른 보고를 확인하면 접힌 보고가 다시 후보가 된다 — 접기 전 확인은 세지 않는다", () => {
+test("acknowledging another report after folding makes the folded one a candidate again — acknowledgments before folding do not count", () => {
   const queue = [item("m1", "oliver", "2026-09-21T01:00:00Z")];
   const attempts = dismissReport([], "m1", 5_000);
   assert.deepEqual(reviveDismissedReports(attempts, 6_000, 4_000), attempts);
@@ -666,7 +666,7 @@ test("접힌 뒤 다른 보고를 확인하면 접힌 보고가 다시 후보가
   );
 });
 
-test("다시 부르기는 접힌 보고를 즉시 후보로 만든다 — 막힘 규칙은 그대로", () => {
+test("call again makes a folded report a candidate immediately — the blocking rules stay", () => {
   const queue = [item("m1", "oliver", "2026-09-21T01:00:00Z")];
   const attempts = recallReport(dismissReport([], "m1", 0), "m1");
   assert.equal(dismissedReportIds(attempts).size, 0);
@@ -675,10 +675,10 @@ test("다시 부르기는 접힌 보고를 즉시 후보로 만든다 — 막힘
   assert.equal(decideReportCall({ ...input, blocked: true }), null);
 });
 
-// 스테이징 실측(34369ac8): 복귀가 보고를 확인하는 순간 같은 직원의 접힌 보고가 되살아나
-// 곧바로 다시 불렸고, 그 호출이 복귀를 뒤집어 직원이 곁에 남았다.
+// Staging measurement (34369ac8): the moment a return acknowledged a report, the same employee's folded report revived
+// and was called again right away, and that call reversed the return so the employee stayed beside us.
 
-test("복귀 중인 직원은 자리에 닿을 때까지 보고 호출 후보가 아니다 — 다음 직원이 온다", () => {
+test("an employee being returned is not a report call candidate until reaching their seat — the next employee comes", () => {
   const queue = [
     item("m1", "oliver", "2026-09-21T01:00:00Z"),
     item("m2", "sophie", "2026-09-21T02:00:00Z"),
@@ -687,7 +687,7 @@ test("복귀 중인 직원은 자리에 닿을 때까지 보고 호출 후보가
     queue,
     activeMessageId: null,
     attempts: [],
-    // 복귀를 누른 직후라 스냅샷은 아직 "내 호출에 대기" 다.
+    // Right after pressing return, the snapshot still says "waiting on my call".
     signatures: { oliver: "waiting:mine:away", sophie: "idle:none:home" },
     blocked: false,
   };
@@ -705,7 +705,7 @@ test("복귀 중인 직원은 자리에 닿을 때까지 보고 호출 후보가
   );
 });
 
-test("복귀한 직원은 자리에 닿으면 다시 후보가 된다", () => {
+test("a returned employee becomes a candidate again after reaching their seat", () => {
   const returning = new Set(["oliver"]);
   assert.equal(settleReturningNpcs(returning, { oliver: "waiting:mine:away" }), returning);
   assert.equal(settleReturningNpcs(returning, { oliver: "returning:none:away" }), returning);
@@ -724,9 +724,9 @@ test("복귀한 직원은 자리에 닿으면 다시 후보가 된다", () => {
   );
 });
 
-test("ack 전에 끊기면 재연결 뒤 같은 보고가 다시 후보가 된다", () => {
-  // 보낸 호출의 응답을 받기 전에 소켓이 끊기면 서버가 그 호출을 받았는지 알 수 없다.
-  // 예전에는 "보냄" 으로 남아 새로고침 전까지 그 보고를 다시 부르지 않았다.
+test("if disconnected before the ack, the same report becomes a candidate again after reconnecting", () => {
+  // If the socket drops before the response to a sent call, it is unknown whether the server received that call.
+  // It used to stay "sent" and that report was not called again until a reload.
   const attempts = releaseUnacquiredReportCalls([sent("a", "idle:none:home")]);
   assert.deepEqual(attempts, [{ messageId: "a", outcome: "rejected", signature: "" }]);
   assert.equal(activeReportReleased(attempts, "a"), true);
@@ -742,7 +742,7 @@ test("ack 전에 끊기면 재연결 뒤 같은 보고가 다시 후보가 된�
   );
 });
 
-test("획득된 보고는 끊김으로 거절이 되지 않는다 — 이미 와 있는 직원을 다시 부르지 않는다", () => {
+test("an acquired report does not become a refusal on disconnect — an employee already here is not called again", () => {
   const acquired: ReportAttempt = { ...sent("a", "idle:mine:away"), acquired: true };
   const others: ReportAttempt[] = [
     acquired,

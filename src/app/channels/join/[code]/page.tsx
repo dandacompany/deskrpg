@@ -40,7 +40,7 @@ function JoinChannelPageInner() {
           return;
         }
 
-        // 캐릭터는 고르지 않는다 — 게임 화면이 내 캐릭터를 읽고, 없으면 만들고 돌아오게 한다.
+        // No character is picked — the game screen reads my character, and if none exists sends me to create one and come back.
         router.replace(`/game?channelId=${data.channel.id}`);
       })
       .catch(() => {

@@ -12,7 +12,7 @@
   padding: 28px 4%;
 }
 .commute-brand {
-  /* 3D 미니어처 마크 + 워드마크 + 태그라인. 사이드바 브랜드와 같은 구성이다. */
+  /* 3D miniature mark + wordmark + tagline. The same composition as the sidebar brand. */
   display: inline-flex;
   align-items: center;
   gap: 9px;
@@ -29,7 +29,7 @@
 }
 .commute-sun {
   position: absolute;
-  /* 화면을 누르지 않을 만큼만. 예전 170px 은 도시보다 커 보였다(2026-09-20 단테 지적). */
+  /* Just enough not to crowd the screen. The old 170px looked bigger than the city (pointed out by Dante, 2026-09-20). */
   width: 104px;
   height: 104px;
   border-radius: 50%;
@@ -39,8 +39,8 @@
   box-shadow: 0 0 70px 30px #ffedbc4d;
 }
 /*
- * 아침 하늘의 구름 — 모델은 `src/game/three/sky-clouds.ts`, 그림은
- * `npx tsx scripts/sky/render-clouds.ts` 가 굽는다. CSS 도형으로 만들면 타원이 겹쳐 보인다.
+ * Morning sky clouds — the model is `src/game/three/sky-clouds.ts`, and the image is baked by
+ * `npx tsx scripts/sky/render-clouds.ts`. Built from CSS shapes, the overlapping ellipses show.
  */
 .commute-clouds {
   position: absolute;
@@ -53,7 +53,7 @@
   position: absolute;
   background-repeat: no-repeat;
   background-size: contain;
-  /* 아주 느리게 흐른다 — 눈에 띄게 움직이면 로그인 화면이 산만해진다. */
+  /* Drifts very slowly — visible motion would make the login screen distracting. */
   animation: commute-drift linear infinite;
 }
 .commute-cloud:nth-child(1) {
@@ -147,7 +147,7 @@
   line-height: 1.12;
 }
 .commute-intro h1 span {
-  /* 서브타이틀은 늘 제목 아랫줄에 둔다 — 인라인이면 폭에 따라 "AI" 만 윗줄에 걸린다. */
+  /* Always put the subtitle on the line below the title — inline, depending on width, only "AI" wraps onto the upper line. */
   display: block;
   margin-top: 6px;
   font-size: clamp(26px, 3vw, 40px);

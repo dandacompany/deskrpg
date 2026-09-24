@@ -12,11 +12,11 @@ import { backLinkTarget } from "@/app/gateways/return-target";
 import { hireDoneHref, hireFinishedHref } from "../hire-navigation";
 
 /**
- * 직원 채용 — **이 페이지는 마법사 하나만 책임진다.**
+ * Hiring employees — **this page is responsible for just the wizard.**
  *
- * 예전에는 직원 목록 화면 안에서 같은 마법사가 펼쳐져, 목록·생성·인격 편집·모델 설정이 한
- * 화면에 겹쳐 있었다. 마법사가 필요한 값(플러그인 상태·대시보드 주소·기존 직원 이름·로컬 탐색)만
- * 여기서 읽는다.
+ * The same wizard used to unfold inside the employee list screen, so list, creation, persona editing and model settings overlapped
+ * on one screen. Only the values the wizard needs (plugin status, dashboard address, existing employee names, local discovery)
+ * are read here.
  */
 export default function HireEmployeePage() {
   const t = useT();
@@ -97,7 +97,7 @@ function HireEmployeeContent() {
           return;
         }
       } catch {
-        // 목록 조회가 실패해도 재프로브로 진행한다.
+        // Proceed with a reprobe even if the list read fails.
       }
       const status = await reprobePlugin();
       if (!cancelled) setPluginStatus(status);

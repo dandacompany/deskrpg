@@ -3,7 +3,7 @@ import test from "node:test";
 import sharp from "sharp";
 import { GET } from "./route";
 
-test("공개 소셜 이미지는 1200×630 PNG로 내려온다", async () => {
+test("the public social image comes down as a 1200×630 PNG", async () => {
   const response = await GET();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^image\/png/);

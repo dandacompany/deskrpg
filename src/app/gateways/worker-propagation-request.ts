@@ -1,11 +1,11 @@
 /**
- * [설정에서 켜기] 요청 — `POST /api/gateways/:id/plugin/worker-propagation` `{ enabled: true }`.
+ * The [설정에서 켜기] request — `POST /api/gateways/:id/plugin/worker-propagation` `{ enabled: true }`.
  *
- * 응답 세 갈래를 `WorkerPluginLine` 이 쓰는 모양으로 접는다.
- * - 200 `{ propagation: "enabled", results? }` → 켰고(적용까지 됐으면 결과를 싣는다) `ok: true`.
- * - 200 `{ propagation: "enabled", errorCode }`(헤더에도 코드) → 켰지만 적용 단계가 실패 — `applyErrorCode`.
- * - 4xx `{ errorCode }` → 호스트 단계에서 못 켰다(`plugin_update_unsupported_host` 면 명령 복사로 떨어진다).
- * 200 인데 켜졌다고 말하지 않으면 켜진 것으로 보지 않는다.
+ * Folds the three response branches into the shape `WorkerPluginLine` uses.
+ * - 200 `{ propagation: "enabled", results? }` → turned on (with results when apply also succeeded), `ok: true`.
+ * - 200 `{ propagation: "enabled", errorCode }` (code also in a header) → turned on but the apply step failed — `applyErrorCode`.
+ * - 4xx `{ errorCode }` → could not turn on at the host step (`plugin_update_unsupported_host` falls back to copying the command).
+ * A 200 that does not say it turned on is not treated as on.
  */
 import { withHeaderErrorCode } from "@/lib/i18n/error-codes";
 

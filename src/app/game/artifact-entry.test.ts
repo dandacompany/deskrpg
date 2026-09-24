@@ -10,7 +10,7 @@ import {
   type ArtifactSocketEvent,
 } from "./artifact-entry";
 
-test("결과물 모달 — 열린 동안의 사건만 tick·마지막 사건에 쌓는다", () => {
+test("artifacts modal — only events while open accumulate into tick and the last event", () => {
   let s = reduceArtifactsModal(INITIAL_ARTIFACTS_MODAL, {
     type: "event",
     kind: "artifact.deleted",
@@ -28,7 +28,7 @@ test("결과물 모달 — 열린 동안의 사건만 tick·마지막 사건에 
   assert.deepEqual(s.lastEvent, { kind: "artifact.versioned", artifactId: "a2" });
 });
 
-test("결과물 모달 — 닫으면 tick·마지막 사건·초기값을 비워 다시 열린 모달이 옛 사건을 되풀이하지 않는다", () => {
+test("artifacts modal — closing clears tick, the last event and the initial value so a reopened modal does not replay old events", () => {
   let s = reduceArtifactsModal(INITIAL_ARTIFACTS_MODAL, {
     type: "open",
     initial: { artifactId: "a1" },
@@ -50,7 +50,7 @@ const ev = (
   payload: NonNullable<ArtifactSocketEvent["event"]>["payload"],
 ): ArtifactSocketEvent => ({ channelId: "ch", event: { kind, payload } });
 
-test("채팅 칩 — 열린 NPC 프로필의 채팅 출처 created/versioned 만 더한다", () => {
+test("chat chips — add only chat-origin created/versioned for the open NPC's profile", () => {
   const chat = { artifact_id: "a1", title: "대시보드", profile: "sophie", source_kind: "chat" };
   assert.deepEqual(nextArtifactChips([], ev("artifact.created", chat), "sophie"), [
     { artifactId: "a1", title: "대시보드" },
@@ -67,7 +67,7 @@ test("채팅 칩 — 열린 NPC 프로필의 채팅 출처 created/versioned 만
   assert.deepEqual(nextArtifactChips([], ev("artifact.created", chat), null), []);
 });
 
-test("채팅 칩 — 같은 결과물은 한 번만, 새 버전의 제목은 갱신한다", () => {
+test("chat chips — the same artifact only once, and a new version updates the title", () => {
   const chat = { artifact_id: "a1", title: "대시보드", profile: "sophie", source_kind: "chat" };
   const first = nextArtifactChips([], ev("artifact.created", chat), "sophie");
   const same = nextArtifactChips(first, ev("artifact.versioned", chat), "sophie");
@@ -80,7 +80,7 @@ test("채팅 칩 — 같은 결과물은 한 번만, 새 버전의 제목은 갱
   assert.deepEqual(renamed, [{ artifactId: "a1", title: "대시보드 v2" }]);
 });
 
-test("출처로 이동 — 채팅은 칸반·크론을 닫고 그 NPC 대화를 연다", () => {
+test("go to source — chat closes kanban and cron and opens that NPC's conversation", () => {
   const npcs = [{ id: "n1", name: "소피", profileName: "sophie" }];
   assert.deepEqual(planSourceNavigation({ type: "chat", profile: "sophie" }, npcs), {
     closeKanban: true,
@@ -94,7 +94,7 @@ test("출처로 이동 — 채팅은 칸반·크론을 닫고 그 NPC 대화를 
   );
 });
 
-test("출처로 이동 — 크론은 칸반을 닫고, 칸반은 크론을 닫는다(두 모달이 겹치지 않게)", () => {
+test("go to source — cron closes kanban and kanban closes cron (so the two modals do not overlap)", () => {
   assert.deepEqual(planSourceNavigation({ type: "cron", jobId: "j1", profile: "sophie" }, []), {
     closeKanban: true,
     closeCron: false,
@@ -112,7 +112,7 @@ test("출처로 이동 — 크론은 칸반을 닫고, 칸반은 크론을 닫�
   });
 });
 
-test("칸반 포커스 요청 — 같은 카드를 다시 요청해도 seq 가 올라 새 요청이 된다", () => {
+test("kanban focus request — requesting the same card again bumps seq and becomes a new request", () => {
   const a = nextKanbanFocus(null, "t1");
   assert.deepEqual(a, { taskId: "t1", seq: 1 });
   const b = nextKanbanFocus(a, "t1");

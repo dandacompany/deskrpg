@@ -32,7 +32,7 @@
   --color-text-muted: var(--text-muted);
   --color-text-dim: var(--text-dim);
 
-  /* 브랜드 radius 상한(8px)을 Tailwind 스케일에 물린다 — rounded-xl·2xl 을 쓰는 화면도 함께 맞는다. */
+  /* Tie the brand radius cap (8px) into the Tailwind scale — screens using rounded-xl/2xl line up too. */
   --radius-sm: 2px;
   --radius-md: 4px;
   --radius-lg: 8px;
@@ -132,7 +132,7 @@ body {
   color: var(--text-muted);
   margin-top: 3px;
 }
-/* 마크 자체가 3D 미니어처라 뒤에 녹색 판을 깔지 않는다 — 건물이 그대로 보인다. */
+/* The mark itself is a 3D miniature, so no green plate goes behind it — the building shows as is. */
 .workspace-brand-mark {
   display: grid;
   place-items: center;
@@ -171,8 +171,8 @@ body {
   min-height: 100dvh;
 }
 /*
- * 워크스페이스 화면의 본문 틀. 여백과 최대 폭은 여기서만 정한다 — 화면마다 p-8·p-6·px-4 가
- * 제각각이라 통일감이 없었다(2026-09-20 단테 지적). 새 화면은 이 두 클래스를 쓴다.
+ * The body frame of workspace screens. Padding and max width are decided only here — p-8, p-6 and px-4 varied
+ * per screen, with no sense of unity (pointed out by Dante, 2026-09-20). New screens use these two classes.
  */
 .workspace-page {
   min-height: 100dvh;
@@ -185,7 +185,7 @@ body {
   width: 100%;
   max-width: 1200px;
 }
-/* 비밀번호 3칸이 1200px 로 벌어지지 않게. 유틸리티(max-w-lg)는 이 규칙에 밀린다(2026-09-20 실측). */
+/* So the three password fields do not spread to 1200px. The utility (max-w-lg) loses to this rule (2026-09-20 measurement). */
 .workspace-page-inner--narrow {
   max-width: 560px;
 }
@@ -194,7 +194,7 @@ body {
   font-size: clamp(24px, 2.3vw, 32px);
 }
 .workspace-content :is(.bg-surface.rounded-lg, .bg-surface.rounded-xl) {
-  /* 브랜드 shadow 는 헤어라인 인셋을 품고 있어 테두리를 따로 두지 않는다. */
+  /* The brand shadow includes a hairline inset, so no separate border. */
   border: 0;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
@@ -202,7 +202,7 @@ body {
 .workspace-content :is(input, select, textarea) {
   color: var(--text);
 }
-/* 사이드바 아래의 공통 동작(로그아웃·언어). 그림 위에 놓고, 좁은 화면에서는 한 줄로 눕는다. */
+/* Common actions below the sidebar (logout, language). Placed over the illustration, lying in one row on narrow screens. */
 .workspace-sidebar-action-link {
   padding: 6px 12px;
   font-size: 12px;
@@ -469,8 +469,8 @@ body {
   margin-top: 0;
 }
 
-/* 칸반 이동 — 상태는 전부 data 속성이 갖는다. 컴포넌트가 classList 를 직접
-   만지면 스타일이 두 곳으로 갈라지고 테스트가 클래스 문자열에 묶인다. */
+/* Kanban moves — all state lives in data attributes. If components touched classList directly,
+   styles would split in two places and tests would be tied to class strings. */
 [data-column] {
   transition:
     background-color 140ms ease,
@@ -480,7 +480,7 @@ body {
   background-color: color-mix(in srgb, var(--color-info) 10%, transparent);
   box-shadow: inset 0 0 0 2px var(--color-info);
 }
-/* Hermes 가 소유한 열은 드래그 중에만 자신이 잠겼음을 드러낸다. */
+/* Columns owned by Hermes reveal that they are locked only while dragging. */
 [data-column][data-move-locked="true"] {
   cursor: not-allowed;
   opacity: 0.55;
@@ -491,8 +491,8 @@ body {
 [data-kanban-drag-preview] {
   rotate: -2deg;
 }
-/* reduced-motion 에서도 프리뷰는 남긴다 — 그건 장식이 아니라 "무엇을 들고 있는지"의
-   유일한 표시다. 없애는 것은 기울임과 전환뿐이다. */
+/* Keep the preview even under reduced-motion — it is not decoration but the only indication of
+   "what you are holding". Only the tilt and transitions are removed. */
 @media (prefers-reduced-motion: reduce) {
   [data-column] {
     transition: none;

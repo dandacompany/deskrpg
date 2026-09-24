@@ -1,13 +1,13 @@
 /**
- * 직원 상세 화면의 **되돌릴 수 없는 결정**을 순수 함수로 뽑아 둔다.
+ * Pull the **irreversible decisions** of the employee detail screen out into pure functions.
  *
- * 직원을 지우면 그 인격의 NPC 자리와 태스크가 CASCADE 로 함께 사라진다. 문구가 수치를 잃어도,
- * 삭제 뒤 알림이 서버 필드 이름과 어긋나도 화면은 아무 일 없다는 얼굴을 한다(실제로 그랬다 —
- * `unboundNpcs` 를 읽는 코드가 `deletedNpcs` 를 보내는 서버를 만나 알림이 조용히 사라져 있었다).
- * 그래서 이 세 판정은 화면이 아니라 여기서 고정한다.
+ * Deleting an employee removes that persona's NPC seats and tasks along with it via CASCADE. Even if the text loses the numbers,
+ * or the post-delete notice disagrees with the server field names, the screen wears a face as if nothing happened (it really did —
+ * code reading `unboundNpcs` met a server sending `deletedNpcs`, and the notice had quietly vanished).
+ * So these three verdicts are pinned here, not in the screen.
  */
 
-/** 삭제를 묻는 문구에 넣을 수치. 개수를 모른 채 누르는 확인은 확인이 아니다. */
+/** The numbers to put in the delete question. A confirmation pressed without knowing the count is not a confirmation. */
 export function deleteConfirmParams(
   name: string,
   usage: { npcs?: unknown; channels?: unknown } | null | undefined,
@@ -19,7 +19,7 @@ export function deleteConfirmParams(
   return { name, npcs: toCount(usage?.npcs), channels: toCount(usage?.channels) };
 }
 
-/** 삭제 응답에서 알림 수치를 읽는다. 서버 필드는 `deletedNpcs`·`channels` 다. */
+/** Read the notice numbers from the delete response. The server fields are `deletedNpcs` and `channels`. */
 export function deletedNoticeFrom(data: unknown): { npcs: number; channels: number } | null {
   if (!data || typeof data !== "object") return null;
   const npcs = Number((data as { deletedNpcs?: unknown }).deletedNpcs ?? 0);
@@ -29,8 +29,8 @@ export function deletedNoticeFrom(data: unknown): { npcs: number; channels: numb
 }
 
 /**
- * 소유자만 인격·외형·AI 모델·계정·삭제를 만진다. 공유받은 사용자는 상태 확인까지다.
- * 외형은 따로 두지 않는다 — 마법사의 ③ 외형 단계가 그 편집기다(같은 편집기가 두 번 보였다).
+ * Only the owner touches persona, appearance, AI model, account and delete. Shared users get as far as checking status.
+ * Appearance is not separate — the wizard's ③ appearance step is its editor (the same editor used to appear twice).
  */
 export function visibleSections(isOwner: boolean): ReadonlyArray<"status" | "persona" | "account"> {
   return isOwner ? ["status", "persona", "account"] : ["status"];

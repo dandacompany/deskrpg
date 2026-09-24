@@ -5,7 +5,7 @@ import { useT } from "@/lib/i18n";
 import GamePageClient from "./GamePageClient";
 import { WebglGate } from "./webgl-gate";
 
-/** 게임 페이지의 배선 — 관문을 통과한 뒤에만 채널 화면이 마운트된다. */
+/** Wiring for the game page — the channel screen mounts only after passing the gate. */
 export default function GameWebglGate() {
   const t = useT();
 

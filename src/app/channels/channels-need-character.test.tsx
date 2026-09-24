@@ -12,7 +12,7 @@ import {
 import { I18nProvider } from "@/lib/i18n";
 import ChannelsPage from "./page";
 
-// `/channels` 는 `useRouter` 를 쓴다 — 테스트에는 앱 라우터가 없으므로 빈 라우터를 심는다.
+// `/channels` uses `useRouter` — tests have no app router, so plant an empty one.
 const router: AppRouterInstance = {
   back() {},
   forward() {},
@@ -74,7 +74,7 @@ async function render(me: unknown) {
         </AppRouterContext.Provider>,
       ),
     );
-    // 목록·캐릭터 조회가 끝나 로딩이 풀릴 때까지 기다린다.
+    // Wait until the list and character reads finish and loading clears.
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));
     });
@@ -90,7 +90,7 @@ async function render(me: unknown) {
   };
 }
 
-test("캐릭터가 없으면 채널 목록 대신 내 캐릭터로 가는 안내 카드를 그린다", async () => {
+test("without a character it draws a guide card to my character instead of the channel list", async () => {
   const { el, cleanup } = await render(null);
   try {
     const text = el.textContent ?? "";
@@ -104,7 +104,7 @@ test("캐릭터가 없으면 채널 목록 대신 내 캐릭터로 가는 안내
   }
 });
 
-test("캐릭터가 있으면 안내 카드 없이 채널 목록을 그린다", async () => {
+test("with a character it draws the channel list without the guide card", async () => {
   const { el, cleanup } = await render({ id: "c1", name: "나", bio: null, appearance: {} });
   try {
     const text = el.textContent ?? "";

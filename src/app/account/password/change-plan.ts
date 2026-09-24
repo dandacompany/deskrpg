@@ -5,9 +5,9 @@ export type PasswordChangePlan =
   | { ok: false; errorCode: string };
 
 /**
- * 화면이 서버에 보내기 전에 거르는 것들. 서버도 같은 규칙을 다시 검사한다 —
- * 여기는 왕복을 줄이려는 것이지 보안 경계가 아니다.
- * `password_mismatch` 만 화면 전용이다(확인칸은 서버로 가지 않는다).
+ * What the screen filters before sending to the server. The server checks the same rules again —
+ * this is to save a round trip, not a security boundary.
+ * Only `password_mismatch` is screen-only (the confirmation field never goes to the server).
  */
 export function planPasswordChange(input: {
   current: string;

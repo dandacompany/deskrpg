@@ -1,11 +1,11 @@
 /**
- * 맵의 "작업 중" 상태(R27) — 채널 소켓의 `npc:working` 을 NPC 별로 접는다.
+ * The map's "working" state (R27) — folds the channel socket's `npc:working` per NPC.
  *
- * 서버(`automation-events.ts`)는 값이 바뀔 때만 쏘고, 접속(`player:join`) 때는 지금 작업 중인
- * NPC 만 스냅샷으로 준다. 그래서 클라이언트의 기본값은 "작업 아님" 이고, `working:false` 는
- * 항목을 지운다. 낙관적 갱신은 없다(R26) — 이 맵은 서버가 말한 것만 담는다.
+ * The server (`automation-events.ts`) fires only when the value changes, and on connect (`player:join`) it gives a snapshot of only
+ * the NPCs working now. So the client's default is "not working", and `working:false`
+ * removes the entry. There are no optimistic updates (R26) — this map holds only what the server said.
  *
- * 서버 모듈을 import 하지 않는다 — 클라이언트 번들 경계(`client-bundle-boundary.test.ts`).
+ * It imports no server modules — the client bundle boundary (`client-bundle-boundary.test.ts`).
  */
 
 export type NpcWorkingPayload = {
@@ -18,7 +18,7 @@ export type NpcWorkingMap = Readonly<Record<string, NpcWorkingPayload>>;
 
 export const EMPTY_NPC_WORKING: NpcWorkingMap = Object.freeze({});
 
-/** 페이로드 모양이 아니면 null — 소켓에서 온 값을 그대로 믿지 않는다. */
+/** null if it is not a payload shape — values from the socket are not trusted as is. */
 export function parseNpcWorkingPayload(raw: unknown): NpcWorkingPayload | null {
   if (!raw || typeof raw !== "object") return null;
   const p = raw as Partial<NpcWorkingPayload>;
@@ -34,7 +34,7 @@ export function parseNpcWorkingPayload(raw: unknown): NpcWorkingPayload | null {
   };
 }
 
-/** 한 페이로드를 접는다. 바뀐 게 없으면 같은 객체를 돌려줘 렌더를 아낀다. */
+/** Fold one payload. If nothing changed, return the same object to save a render. */
 export function reduceNpcWorking(map: NpcWorkingMap, payload: NpcWorkingPayload): NpcWorkingMap {
   const current = map[payload.npcId];
   if (!payload.working) {
@@ -52,17 +52,17 @@ export function reduceNpcWorking(map: NpcWorkingMap, payload: NpcWorkingPayload)
   return { ...map, [payload.npcId]: payload };
 }
 
-/** 지금 작업 중인 NPC id — 맵 시뮬레이션에 넘기는 형태. */
+/** The ids of NPCs working now — the form handed to the map simulation. */
 export function workingNpcIds(map: NpcWorkingMap): string[] {
   return Object.keys(map).filter((id) => map[id].working);
 }
 
 /**
- * NPC 별로 **몇 건**을 돌리고 있는가(카드 + 크론).
+ * **How many items** each NPC is running (cards + cron).
  *
- * 서버는 이 숫자를 `sources` 로 이미 보내는데 맵은 id 목록으로 접어 버려, 한 직원이 카드를
- * 두 장 돌려도 화면은 한 장처럼 보였다. Hermes 의 프로필별 동시 실행 상한은 설정하지 않으면
- * 무제한이라(`kanban_db_dispatch.py`) 두 장 이상은 드문 일이 아니다.
+ * The server already sends this number as `sources`, but the map folded it into an id list, so an employee running two
+ * cards looked like one on screen. Hermes's per-profile concurrency limit is unlimited unless configured
+ * (`kanban_db_dispatch.py`), so two or more is not unusual.
  */
 export function workingNpcCounts(map: NpcWorkingMap): Record<string, number> {
   const out: Record<string, number> = {};

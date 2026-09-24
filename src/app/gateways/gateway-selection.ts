@@ -1,9 +1,9 @@
 /**
- * 게이트웨이 목록을 다시 불러온 뒤 무엇을 선택할지 정한다.
+ * Decides what to select after reloading the gateway list.
  *
- * 빈 선택은 "연결 마법사를 보여 준다" 는 뜻이다. 마법사가 주소 연결을 막 저장한 직후
- * 목록만 새로 고칠 때는 `autoSelect: false` 로 부른다 — 그러지 않으면 새 게이트웨이가
- * 자동 선택되면서 마법사와 그 안의 플러그인 설치 안내가 사라진다.
+ * An empty selection means "show the connection wizard". Right after the wizard saves an address connection,
+ * when only the list is refreshed, call with `autoSelect: false` — otherwise the new gateway gets
+ * auto-selected and the wizard, with its plugin install guidance, disappears.
  */
 export function nextSelectedGatewayId(
   current: string,

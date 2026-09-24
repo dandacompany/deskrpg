@@ -25,11 +25,11 @@ interface Channel {
   inviteCode: string | null;
   maxPlayers: number;
   createdAt: string;
-  /** 맵으로 판정한 오피스 환경 — 썸네일에 쓴다. 모르면 null. */
+  /** The office environment judged from the map — used for the thumbnail. null if unknown. */
   environmentId?: string | null;
-  /** 소유자 + 멤버(사람). */
+  /** Owner + members (people). */
   memberCount?: number;
-  /** 앞 다섯 명. appearance 는 최근 캐릭터 외형. */
+  /** The first five. appearance is the latest character's appearance. */
   participants?: Array<{ nickname: string | null; appearance: unknown }>;
   canView?: boolean;
   canJoin?: boolean;
@@ -78,7 +78,7 @@ function ChannelsPageInner() {
   const [passwordChannel, setPasswordChannel] = useState<Channel | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [availableGroups, setAvailableGroups] = useState<GroupOption[]>([]);
-  // 사무실에 들어가는 "나" 는 서버가 정한다. 여기서는 있는지만 본다 — 없으면 안내 카드를 그린다.
+  // The server decides the "me" entering the office. Here we only check existence — if none, draw the guide card.
   const [hasCharacter, setHasCharacter] = useState(true);
 
   const fetchLobbyData = async () => {
@@ -108,7 +108,7 @@ function ChannelsPageInner() {
         setChannels(data.channels);
         setCurrentUserId(data.currentUserId);
         setAvailableGroups(data.availableGroups);
-        // 조회 자체가 실패하면 목록을 막지 않는다 — 입장 시 서버가 character_missing 으로 다시 막는다.
+        // If the read itself fails, do not block the list — on entry the server blocks again with character_missing.
         setHasCharacter(mine ? mine.character !== null : true);
       } finally {
         setLoading(false);
@@ -286,7 +286,7 @@ function ChannelsPageInner() {
           </div>
         )}
 
-        {/* 참여 코드·그룹 참여는 상단 버튼 → 팝업이다(2026-09-20 단테 결정) — 목록 위를 비워 둔다. */}
+        {/* Join code and group join are top button → popup (Dante's decision, 2026-09-20) — keep the space above the list empty. */}
         {joinDialog && (
           <Modal
             open
@@ -392,7 +392,7 @@ function ChannelsPageInner() {
                     </button>
                   )}
                 </div>
-                {/* 설명이 없거나 길어도 아래 줄이 흔들리지 않게 두 줄 자리를 늘 차지한다. */}
+                {/* Always take two lines of space so the row below does not shift when the description is missing or long. */}
                 <p
                   className="mb-3 line-clamp-2 min-h-[2.5rem] text-sm text-text-muted"
                   title={channel.description ?? undefined}
@@ -453,7 +453,7 @@ function ChannelsPageInner() {
 
 const THUMBNAILS = environmentThumbnails as Record<string, string>;
 
-/** 새 채널 만들기(`OfficeEnvironmentPicker`)와 같은 사전 렌더 썸네일·비율. */
+/** The same pre-rendered thumbnail and aspect ratio as new channel creation (`OfficeEnvironmentPicker`). */
 function ChannelThumbnail({ environmentId, name }: { environmentId: string | null; name: string }) {
   const src = environmentId ? THUMBNAILS[environmentId] : undefined;
   return (
@@ -477,7 +477,7 @@ function ChannelThumbnail({ environmentId, name }: { environmentId: string | nul
 
 const AVATAR_SIZE = 24;
 
-/** 참여자 원형 아바타(최대 다섯)를 겹쳐 놓고, 넘치면 +N, 옆에 "N명 참여". */
+/** Overlap participant round avatars (up to five), +N when they overflow, and "N명 참여" beside them. */
 function ParticipantStack({
   participants,
   count,

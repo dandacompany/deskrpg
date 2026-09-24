@@ -8,7 +8,7 @@ import { getLocalizedErrorMessage, withHeaderErrorCode } from "@/lib/i18n/error-
 import { planPasswordChange } from "./change-plan";
 
 export default function AccountPasswordPage() {
-  // useSearchParams 는 서스펜스 경계가 있어야 정적 렌더가 깨지지 않는다(admin/groups 와 같은 방식).
+  // useSearchParams needs a Suspense boundary so static rendering does not break (same approach as admin/groups).
   return (
     <Suspense fallback={null}>
       <AccountPasswordPageInner />
@@ -20,7 +20,7 @@ function AccountPasswordPageInner() {
   const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
-  // 임시 비밀번호로 들어온 사람은 로그인 화면이 ?forced=1 로 보낸다.
+  // People who came in with a temporary password are sent here by the login screen with ?forced=1.
   const forced = searchParams.get("forced") === "1";
 
   const [current, setCurrent] = useState("");

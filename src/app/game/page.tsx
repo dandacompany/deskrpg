@@ -20,7 +20,7 @@ export async function generateMetadata({ searchParams }: GamePageProps): Promise
 }
 
 export default function GamePage() {
-  // 채널 화면은 관문을 통과한 뒤에만 마운트된다 — 이 파일은 서버 컴포넌트로 남아야
-  // `generateMetadata` 가 산다. 검사는 그 아래 `"use client"` 관문이 한다.
+  // The channel screen mounts only after passing the gate — this file must stay a server component for
+  // `generateMetadata` to live. The check is done by the `"use client"` gate below it.
   return <GameWebglGate />;
 }

@@ -12,7 +12,7 @@ function fakeFetch(status: number, body: unknown, headers: Record<string, string
   return { calls, impl };
 }
 
-test("{enabled:true} 를 POST 하고, 켜고 적용까지 됐으면 결과를 싣는다", async () => {
+test("POSTs {enabled:true}, and includes the results when it turned on and applied", async () => {
   const results = [{ profile: "sophie", link: "created", enabled: "added" }];
   const { calls, impl } = fakeFetch(200, { propagation: "enabled", results });
   assert.deepEqual(await enableWorkerPropagationRequest("gw 1", impl), { ok: true, results });
@@ -21,7 +21,7 @@ test("{enabled:true} 를 POST 하고, 켜고 적용까지 됐으면 결과를 �
   assert.equal(calls[0].init?.body, JSON.stringify({ enabled: true }));
 });
 
-test("켰지만 적용이 실패하면(200 + 헤더 코드) applyErrorCode", async () => {
+test("turned on but apply failed (200 + header code) gives applyErrorCode", async () => {
   const { impl } = fakeFetch(
     200,
     { propagation: "enabled" },
@@ -33,7 +33,7 @@ test("켰지만 적용이 실패하면(200 + 헤더 코드) applyErrorCode", asy
   });
 });
 
-test("호스트 단계 실패(4xx)는 코드를 그대로, 본문이 없으면 http_상태", async () => {
+test("host-step failures (4xx) keep their code, and without a body it is http_<status>", async () => {
   const unsupported = fakeFetch(400, { errorCode: "plugin_update_unsupported_host" });
   assert.deepEqual(await enableWorkerPropagationRequest("gw", unsupported.impl), {
     ok: false,
@@ -46,7 +46,7 @@ test("호스트 단계 실패(4xx)는 코드를 그대로, 본문이 없으면 h
   });
 });
 
-test("200 인데 켜졌다고 말하지 않으면 켜진 것으로 보지 않는다", async () => {
+test("a 200 that does not say it turned on is not treated as on", async () => {
   const { impl } = fakeFetch(200, { propagation: "disabled" });
   assert.deepEqual(await enableWorkerPropagationRequest("gw", impl), {
     ok: false,

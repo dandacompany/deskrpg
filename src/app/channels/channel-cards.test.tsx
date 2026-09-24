@@ -12,7 +12,7 @@ import {
 import { I18nProvider } from "@/lib/i18n";
 import ChannelsPage from "./page";
 
-// `/channels` 는 `useRouter` 를 쓴다 — 테스트에는 앱 라우터가 없으므로 빈 라우터를 심는다.
+// `/channels` uses `useRouter` — tests have no app router, so plant an empty one.
 const router: AppRouterInstance = {
   back() {},
   forward() {},
@@ -80,7 +80,7 @@ async function render(me: unknown) {
         </AppRouterContext.Provider>,
       ),
     );
-    // 목록·캐릭터 조회가 끝나 로딩이 풀릴 때까지 기다린다.
+    // Wait until the list and character reads finish and loading clears.
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));
     });
@@ -100,7 +100,7 @@ const me = { id: "c1", name: "나", bio: null, appearance: {} };
 const people = (n: number) =>
   Array.from({ length: n }, (_, i) => ({ nickname: `사람${i + 1}`, appearance: null }));
 
-test("채널 카드는 맵 썸네일·원형 아바타·'N명 참여' 를 그리고 '접속중' 을 쓰지 않는다", async () => {
+test("channel cards draw a map thumbnail, round avatars and 'N명 참여', and do not use '접속중'", async () => {
   channelsBody = [
     channel({
       id: "tech",
@@ -129,7 +129,7 @@ test("채널 카드는 맵 썸네일·원형 아바타·'N명 참여' 를 그리
   }
 });
 
-test("미리보기보다 참여자가 많으면 +N 을, 환경을 모르면 썸네일 대신 빈 자리를 그린다", async () => {
+test("with more participants than the preview it draws +N, and without a known environment it draws an empty slot instead of the thumbnail", async () => {
   channelsBody = [
     channel({ id: "big", environmentId: null, memberCount: 7, participants: people(5) }),
   ];

@@ -7,7 +7,7 @@ import { createRoot } from "react-dom/client";
 import { I18nProvider } from "../../lib/i18n/context";
 import { WebglGate } from "./webgl-gate";
 
-// `next/link` 는 마운트 시 `self.requestIdleCallback` 을 만진다 — happy-dom 창을 그대로 붙인다.
+// `next/link` touches `self.requestIdleCallback` on mount — attach the happy-dom window as is.
 Object.defineProperty(globalThis, "self", {
   value: globalThis.window,
   writable: true,
@@ -15,15 +15,15 @@ Object.defineProperty(globalThis, "self", {
 });
 
 /**
- * 관문의 계약을 고정한다 — 검사가 실패하면 워크스페이스는 **마운트조차 되지 않는다**
- * (소켓 접속·데이터 로드가 그 안에서 일어나므로 "렌더는 하되 숨긴다" 로는 부족하다).
+ * Pin the gate's contract — when the check fails, the workspace **does not even mount**
+ * (socket connection and data loading happen inside it, so "render but hide" is not enough).
  */
 async function mount(options: { detect: () => boolean; onRetry?: () => void }) {
   const mounts: number[] = [];
   const fatalRef: { current: (() => void) | null } = { current: null };
 
   function Workspace({ onFatal }: { onFatal: () => void }) {
-    // 렌더가 아니라 커밋에서 센다 — "실제로 마운트됐는가" 가 이 관문의 계약이다.
+    // Count at commit, not render — "was it actually mounted" is this gate's contract.
     useEffect(() => {
       mounts.push(1);
       fatalRef.current = onFatal;
@@ -61,7 +61,7 @@ async function mount(options: { detect: () => boolean; onRetry?: () => void }) {
   };
 }
 
-test("WebGL 검사가 실패하면 워크스페이스를 마운트하지 않고 안내를 띄운다", async () => {
+test("when the WebGL check fails, the workspace is not mounted and guidance is shown", async () => {
   const f = await mount({ detect: () => false });
   try {
     assert.equal(f.mountCount(), 0);
@@ -73,7 +73,7 @@ test("WebGL 검사가 실패하면 워크스페이스를 마운트하지 않고 
   }
 });
 
-test("검사를 통과하면 워크스페이스가 정상적으로 마운트된다", async () => {
+test("when the check passes, the workspace mounts normally", async () => {
   const f = await mount({ detect: () => true });
   try {
     assert.equal(f.mountCount(), 1);
@@ -84,7 +84,7 @@ test("검사를 통과하면 워크스페이스가 정상적으로 마운트된�
   }
 });
 
-test("세션 중 치명적 실패가 오면 워크스페이스를 내리고 안내로 바꾼다", async () => {
+test("a fatal failure during the session unmounts the workspace and switches to guidance", async () => {
   const f = await mount({ detect: () => true });
   try {
     await f.fireFatal();
@@ -95,7 +95,7 @@ test("세션 중 치명적 실패가 오면 워크스페이스를 내리고 안�
   }
 });
 
-test("다시 시도 버튼은 전체 페이지를 다시 검사하게 한다", async () => {
+test("the retry button makes the whole page recheck", async () => {
   let retried = 0;
   const f = await mount({ detect: () => false, onRetry: () => (retried += 1) });
   try {
@@ -110,7 +110,7 @@ test("다시 시도 버튼은 전체 페이지를 다시 검사하게 한다", a
   }
 });
 
-test("안내에는 채널 목록으로 돌아가는 링크가 있다", async () => {
+test("the guidance has a link back to the channel list", async () => {
   const f = await mount({ detect: () => false });
   try {
     const link = f.host.querySelector('a[href="/channels"]');

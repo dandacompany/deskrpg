@@ -1,9 +1,9 @@
 /**
- * 게이트웨이 화면 **전체**를 렌더해, 작업이 끝난 뒤의 목록 재조회가 결과 알림을 지우지 않는지 본다.
+ * Render the **whole** gateway screen and check that the list reload after an operation does not erase the result notices.
  *
- * 알림은 자식 컴포넌트의 지역 상태(`PluginVersionLine.inherited`, `WorkerPluginLine.enableState`)에 있다.
- * 재조회가 페이지를 로딩 화면으로 바꾸면 자식이 언마운트돼 알림이 사라진다(2026-09-24 E2E 실측).
- * 컴포넌트 단위 테스트는 부모 없이 렌더해 이 경로를 보지 못하므로 여기서 고정한다.
+ * The notices live in child components' local state (`PluginVersionLine.inherited`, `WorkerPluginLine.enableState`).
+ * If the reload turns the page into the loading screen, the children unmount and the notices vanish (2026-09-24 E2E measurement).
+ * Component unit tests render without the parent and cannot see this path, so it is pinned here.
  */
 import "../../test-setup/dom";
 import assert from "node:assert/strict";
@@ -33,8 +33,8 @@ const gateway = (over: Json = {}) => ({
 });
 
 /**
- * `"METHOD path"` → 응답. 함수면 그 경로의 몇 번째 호출인지(0부터)를 받아 답한다.
- * `delays` 는 경로별 추가 지연 — 함수면 호출 순번을 받는다.
+ * `"METHOD path"` → response. If a function, it receives which call of that path it is (from 0) and answers.
+ * `delays` is extra delay per path — if a function, it receives the call index.
  */
 function mockFetch(
   routes: Record<string, Route>,
@@ -53,8 +53,8 @@ function mockFetch(
     counts[key] = n + 1;
     const extra = delays[key]?.(n) ?? 0;
     if (extra > 0) await new Promise((r) => setTimeout(r, extra));
-    // 실제 네트워크처럼 한 박자 늦게 답한다 — 즉시 답하면 React 가 로딩 on/off 를 한 번에 묶어
-    // 로딩 화면이 그려지지 않고, 언마운트 결함이 테스트에서 드러나지 않는다.
+    // Answer one beat late like a real network — answering immediately lets React batch loading on/off into one,
+    // the loading screen is never drawn, and the unmount defect does not show in the test.
     await new Promise((r) => setTimeout(r, 5));
     if (!route) return new Response(JSON.stringify({}), { status: 404 });
     const body = typeof route === "function" ? route(n) : route;
@@ -115,7 +115,7 @@ test.afterEach(async () => {
   globalThis.fetch = originalFetch;
 });
 
-test("플러그인 갱신이 워커 전파를 이어받으면, 목록을 다시 읽은 뒤에도 '계속 켭니다 [끄기]' 가 남고 [끄기] 는 {enabled:false} 를 보낸다", async () => {
+test("after a plugin update inherits worker propagation, '계속 켭니다 [끄기]' stays even after the list reloads, and [끄기] sends {enabled:false}", async () => {
   const log = mockFetch({
     "GET /api/gateways": (n) => ({
       gateways: [gateway({ pluginVersion: n === 0 ? "0.1.0" : "0.16.0" })],
@@ -128,7 +128,7 @@ test("플러그인 갱신이 워커 전파를 이어받으면, 목록을 다시 
   });
   await renderPage();
   await click(buttonByText("지금 갱신") ?? host.querySelector("[data-plugin-version] ~ button"));
-  // 잡 조회는 1.5초 간격이다.
+  // Job polling runs every 1.5 seconds.
   await act(async () => {
     await new Promise((r) => setTimeout(r, 1700));
   });
@@ -153,7 +153,7 @@ test("플러그인 갱신이 워커 전파를 이어받으면, 목록을 다시 
   );
 });
 
-test("[설정에서 켜기] 성공 문구는 목록을 다시 읽은 뒤에도 남는다", async () => {
+test("the [설정에서 켜기] success text stays even after the list reloads", async () => {
   const log = mockFetch({
     "GET /api/gateways": (n) => ({
       gateways: [gateway({ workerPropagation: n === 0 ? "disabled" : "enabled" })],
@@ -182,7 +182,7 @@ const wait = (ms: number) =>
     await new Promise((r) => setTimeout(r, ms));
   });
 
-test("재조회가 늦으면 알림을 지우지 않은 채 '새로 읽는 중' 을 보이고, 끝나면 거둔다", async () => {
+test("a slow reload shows '새로 읽는 중' without erasing the notices, and removes it when done", async () => {
   mockFetch(
     {
       "GET /api/gateways": (n) => ({
@@ -210,7 +210,7 @@ test("재조회가 늦으면 알림을 지우지 않은 채 '새로 읽는 중' 
   assert.ok(host.querySelector('[data-worker-propagation-result="enabled"]'));
 });
 
-test("빠른 재조회는 '새로 읽는 중' 을 깜빡이지 않는다", async () => {
+test("a fast reload does not flash '새로 읽는 중'", async () => {
   const seen: boolean[] = [];
   mockFetch({
     "GET /api/gateways": (n) => ({

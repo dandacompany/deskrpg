@@ -30,7 +30,7 @@ async function render(node: React.ReactElement, locale: Locale = "ko") {
 
 const noop = async (): Promise<WorkerPluginApplyResponse> => ({ ok: true, results: [] });
 
-test("경고가 없으면 줄 자체가 없다", async () => {
+test("without a warning there is no line at all", async () => {
   const { host, cleanup } = await render(
     <WorkerPluginLine warning={null} isOwner apply={noop} onApplied={() => {}} />,
   );
@@ -48,13 +48,13 @@ for (const locale of LOCALES) {
     assert.match(text, /2/);
     assert.match(text, /sophie, oliver/);
     assert.equal(host.querySelectorAll("button").length, 1);
-    // 번역 키가 그대로 새지 않는다.
+    // Translation keys do not leak through as is.
     assert.doesNotMatch(text, /gateways\.workerPlugin/);
     await cleanup();
   });
 }
 
-test("소유자가 아니면 버튼이 없다", async () => {
+test("non-owners get no button", async () => {
   const { host, cleanup } = await render(
     <WorkerPluginLine warning={WARN} isOwner={false} apply={noop} onApplied={() => {}} />,
   );
@@ -63,7 +63,7 @@ test("소유자가 아니면 버튼이 없다", async () => {
   await cleanup();
 });
 
-test("운영자가 끈 직원은 따로 말한다", async () => {
+test("employees the operator turned off are mentioned separately", async () => {
   const { host, cleanup } = await render(
     <WorkerPluginLine
       warning={{ fixable: ["sophie"], disabledByOperator: ["mia"] }}
@@ -76,7 +76,7 @@ test("운영자가 끈 직원은 따로 말한다", async () => {
   await cleanup();
 });
 
-test("적용하면 목록을 다시 부르고, 경고가 사라진 뒤에도 결과 안내가 남는다", async () => {
+test("applying reloads the list, and the result notice stays even after the warning disappears", async () => {
   let reloaded = 0;
   const { host, root, cleanup } = await render(
     <WorkerPluginLine
@@ -102,7 +102,7 @@ test("적용하면 목록을 다시 부르고, 경고가 사라진 뒤에도 결
   assert.ok(host.querySelector('[data-worker-plugin-failure="oliver"]'));
   assert.equal(host.querySelector('[data-worker-plugin-failure="sophie"]'), null);
 
-  // 목록을 다시 불러와 경고가 사라진 상태 — 크론 재시작 안내를 사용자가 읽어야 하므로 결과는 남는다.
+  // The list was reloaded and the warning is gone — the user must read the cron restart notice, so the result stays.
   await act(async () => {
     root.render(
       <I18nProvider initialLocale="ko">
@@ -114,7 +114,7 @@ test("적용하면 목록을 다시 부르고, 경고가 사라진 뒤에도 결
   await cleanup();
 });
 
-test("요청이 실패하면 코드를 보이고 목록을 다시 부르지 않는다", async () => {
+test("a failed request shows the code and does not reload the list", async () => {
   let reloaded = 0;
   const { host, cleanup } = await render(
     <WorkerPluginLine
@@ -135,7 +135,7 @@ test("요청이 실패하면 코드를 보이고 목록을 다시 부르지 않�
   await cleanup();
 });
 
-// --- 0.16.0 워커 전파 옵트인 -------------------------------------------------
+// --- 0.16.0 worker propagation opt-in -------------------------------------------------
 
 const click = async (el: Element) => {
   await act(async () => {
@@ -168,7 +168,7 @@ for (const locale of LOCALES) {
   });
 }
 
-test("전파가 꺼져 있으면 [적용] 은 숨기고, [다시 확인] 은 onRecheck 를 부른다", async () => {
+test("with propagation off, [적용] is hidden and [다시 확인] calls onRecheck", async () => {
   let rechecked = 0;
   const { host, cleanup } = await render(
     <WorkerPluginLine
@@ -189,7 +189,7 @@ test("전파가 꺼져 있으면 [적용] 은 숨기고, [다시 확인] 은 onR
   await cleanup();
 });
 
-test("켜기 진입점이 있으면 [설정에서 켜기] 로 켜고 목록을 다시 부른다 — 명령은 처음엔 없다", async () => {
+test("with an enable entry point, [설정에서 켜기] turns it on and reloads the list — no command at first", async () => {
   let calls = 0;
   let reloaded = 0;
   const { host, cleanup } = await render(
@@ -215,7 +215,7 @@ test("켜기 진입점이 있으면 [설정에서 켜기] 로 켜고 목록을 �
   await cleanup();
 });
 
-test("명령을 돌릴 수 없는 호스트(plugin_update_unsupported_host)면 명령 복사로 떨어진다", async () => {
+test("a host where commands cannot run (plugin_update_unsupported_host) falls back to copying the command", async () => {
   let reloaded = 0;
   const { host, cleanup } = await render(
     <WorkerPluginLine
@@ -237,7 +237,7 @@ test("명령을 돌릴 수 없는 호스트(plugin_update_unsupported_host)면 �
   await cleanup();
 });
 
-test("켰지만 적용 단계가 실패하면 그 사실을 알리고 목록을 다시 부른다([적용] 이 다시 나온다)", async () => {
+test("turned on but the apply step failed reports that and reloads the list ([적용] shows again)", async () => {
   let reloaded = 0;
   const { host, cleanup } = await render(
     <WorkerPluginLine
@@ -258,7 +258,7 @@ test("켰지만 적용 단계가 실패하면 그 사실을 알리고 목록을 
   await cleanup();
 });
 
-test("적용 요청이 409 worker_propagation_disabled 면 날것의 코드 대신 설명과 켜는 방법", async () => {
+test("an apply request answered with 409 worker_propagation_disabled shows an explanation and how to turn it on instead of the raw code", async () => {
   let reloaded = 0;
   const { host, cleanup } = await render(
     <WorkerPluginLine
@@ -281,7 +281,7 @@ test("적용 요청이 409 worker_propagation_disabled 면 날것의 코드 대�
   await cleanup();
 });
 
-test("소유자가 아니면 설명만 — 명령·버튼 없음", async () => {
+test("non-owners get only the explanation — no command or button", async () => {
   const { host, cleanup } = await render(
     <WorkerPluginLine
       warning={null}
@@ -298,7 +298,7 @@ test("소유자가 아니면 설명만 — 명령·버튼 없음", async () => {
   await cleanup();
 });
 
-test("전파가 켜져 있거나 모르면(옛 플러그인) 지금과 같다", async () => {
+test("when propagation is on or unknown (old plugin), it behaves as before", async () => {
   for (const propagation of ["enabled", null, undefined] as const) {
     const { host, cleanup } = await render(
       <WorkerPluginLine

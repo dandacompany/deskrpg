@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { showGatewayPicker } from "./gateway-picker-visibility";
 
-test("게이트웨이가 둘 이상일 때만 선택기를 보인다", () => {
+test("the picker is shown only when there are two or more gateways", () => {
   assert.equal(showGatewayPicker(0), false);
   assert.equal(showGatewayPicker(1), false);
   assert.equal(showGatewayPicker(2), true);

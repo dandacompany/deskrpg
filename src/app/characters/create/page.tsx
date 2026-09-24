@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 
 /**
- * "내 캐릭터" 는 사용자당 하나라 별도의 생성 화면이 없다(스펙 2026-09-18).
- * `/characters` 가 등록/수정을 겸하는 단일 폼이므로 여기로 리다이렉트만 한다.
+ * "My character" is one per user, so there is no separate creation screen (spec 2026-09-18).
+ * `/characters` is a single form for both registration and editing, so this only redirects there.
  */
 export default async function CharacterCreatePage({
   searchParams,

@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * 플러그인 갱신이 워커 전파를 **켠 채로 이어받았을 때** 한 번 보이는 줄.
+ * A line shown once when a plugin update **inherited worker propagation turned on**.
  *
- * 옛 플러그인(0.16.0 전)은 직원 프로필마다 링크를 만들어 두었다. 0.16.0 부터 전파는 기본 꺼짐이라,
- * 갱신이 그 흔적을 보고 운영자 설정을 켜 둔다(`startPluginUpdate`, 잡의 `workerPropagationInherited`).
- * 여기서는 그 사실을 알리고 [끄기] 로 되돌릴 길을 준다 — 끄면 새 직원에게만 적용하지 않고, 이미 있는
- * 링크는 플러그인이 지우지 않는다.
+ * Old plugins (before 0.16.0) created links in every employee profile. From 0.16.0 propagation is off by default,
+ * so the update sees those traces and turns the operator setting on (`startPluginUpdate`, the job's `workerPropagationInherited`).
+ * Here we report that and give a way back with [끄기] — turning it off only stops applying to new employees; existing
+ * links are not deleted by the plugin.
  */
 import { useState } from "react";
 
@@ -15,7 +15,7 @@ import { withHeaderErrorCode } from "@/lib/i18n/error-codes";
 
 export type TurnOffResult = { ok: true } | { ok: false; errorCode: string };
 
-/** `POST /api/gateways/:id/plugin/worker-propagation` `{ enabled: false }`. 실제로 꺼졌다고 답해야 성공이다. */
+/** `POST /api/gateways/:id/plugin/worker-propagation` `{ enabled: false }`. Success only if it answers that it actually turned off. */
 export async function disableWorkerPropagationRequest(
   gatewayId: string,
   fetchImpl: typeof fetch = fetch,
@@ -34,7 +34,7 @@ export async function disableWorkerPropagationRequest(
   };
   const errorCode = typeof body.errorCode === "string" ? body.errorCode : null;
   if (!res.ok) return { ok: false, errorCode: errorCode ?? `http_${res.status}` };
-  // 루트 .env 의 환경변수가 켜 두었으면 설정을 꺼도 여전히 enabled 다 — 꺼졌다고 말하지 않는다.
+  // If an environment variable in the root .env keeps it on, it is still enabled even after turning the setting off — do not say it turned off.
   if (body.propagation !== "disabled")
     return { ok: false, errorCode: errorCode ?? "propagation_still_enabled" };
   return { ok: true };
@@ -45,7 +45,7 @@ export default function WorkerPropagationInheritedNotice({
   onChanged,
 }: {
   turnOff: () => Promise<TurnOffResult>;
-  /** 끈 뒤 게이트웨이 목록(전파 상태)을 다시 읽게 한다. */
+  /** After turning off, have the gateway list (propagation state) reread. */
   onChanged: () => void;
 }) {
   const t = useT();

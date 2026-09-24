@@ -1,4 +1,4 @@
-/** 서버가 보내는 방 에러 코드 7종(`src/server/room-socket.ts` 의 `RoomErrorCode`). */
+/** The 7 room error codes the server sends (`RoomErrorCode` in `src/server/room-socket.ts`). */
 const ROOM_ERROR_CODES = [
   "forbidden",
   "not_found",
@@ -12,9 +12,9 @@ type RoomErrorCode = (typeof ROOM_ERROR_CODES)[number];
 
 export type ChatErrorDecision = {
   toastKey: string;
-  /** 소켓 재조인이 필요하다 — 서버가 이 소켓을 방에 없는 것으로 본다. */
+  /** A socket rejoin is needed — the server considers this socket not in the room. */
   rejoin: boolean;
-  /** 이 방은 더 볼 수 없다(사라졌거나 권한이 없다) — 목록으로 돌아가 새로 받는다. */
+  /** This room can no longer be seen (gone or no permission) — go back to the list and fetch fresh. */
   backToList: boolean;
 };
 
@@ -22,7 +22,7 @@ function isRoomErrorCode(code: unknown): code is RoomErrorCode {
   return ROOM_ERROR_CODES.includes(code as RoomErrorCode);
 }
 
-/** 서버 `room:error` 를 UI 동작으로 옮긴다. React·socket 을 모르므로 node:test 가 붙는다. */
+/** Translate the server's `room:error` into UI actions. It knows neither React nor socket, so node:test can cover it. */
 export function decideChatError(payload: unknown): ChatErrorDecision {
   const code = (payload as { code?: unknown } | null)?.code;
   if (!isRoomErrorCode(code)) {

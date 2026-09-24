@@ -1,11 +1,11 @@
 /**
- * 방마다, 이번 대화에 참여한 NPC 들.
+ * Per room, the NPCs that took part in this conversation.
  *
- * 대화방을 닫으면 곁에 있던 NPC 가 자리로 돌아가고, 사용자가 다시 메시지를 보내면
- * 그 **방의** 참여자 전원이 되돌아온다 — "누가 참여자였나" 를 패널이 닫힌 뒤에도
- * 들고 있어야 한다. 컨텍스트 메뉴로 부른 NPC 는 참여자가 아니다(그건 1:1 이다).
+ * Closing the chat room sends NPCs that were beside us back to their seats, and when the user sends a message again
+ * every participant of **that room** comes back — so "who were the participants" must be held even after the panel
+ * closes. NPCs called via the context menu are not participants (that is 1:1).
  *
- * 방별로 가르는 이유: 기획방에서 부른 NPC 가 office 방에 말했다고 되돌아오면 안 된다.
+ * Why split per room: an NPC called in a planning room must not come back because someone spoke in the office room.
  */
 export class MapChatParticipants {
   private readonly byRoom = new Map<string, Set<string>>();
@@ -21,14 +21,14 @@ export class MapChatParticipants {
   }
 
   /**
-   * 사용자가 명시적으로 돌려보냈다 — 다음 메시지에 다시 부르지 않는다.
-   * 돌려보내기는 맵 위의 행동이지 방 안의 행동이 아니므로 **모든 방**에서 뺀다.
+   * The user explicitly sent them back — do not call them again on the next message.
+   * Sending back is an action on the map, not in a room, so remove them from **every room**.
    */
   dismiss(npcId: string): void {
     for (const ids of this.byRoom.values()) ids.delete(npcId);
   }
 
-  /** 다시 부를 대상: 그 방의 참여자 중 지금 곁에 없는(자리로 돌아간) NPC. */
+  /** Those to call again: participants of that room who are not beside us now (went back to their seats). */
   recallTargets(roomId: string | null | undefined, present: ReadonlySet<string>): string[] {
     if (!roomId) return [];
     return [...(this.byRoom.get(roomId) ?? [])].filter((id) => !present.has(id));
