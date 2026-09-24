@@ -61,6 +61,46 @@ function isPlainTitle(node: ts.Expression): boolean {
   );
 }
 
+/** Blank the literal text of a title; an interpolated title keeps its expressions so they still compare. */
+function blankTitle(factory: ts.NodeFactory, title: ts.Expression): ts.Expression {
+  if (!ts.isTemplateExpression(title)) return factory.createStringLiteral("");
+  return factory.createTemplateExpression(
+    factory.createTemplateHead(""),
+    title.templateSpans.map((span, index) =>
+      factory.createTemplateSpan(
+        span.expression,
+        index === title.templateSpans.length - 1
+          ? factory.createTemplateTail("")
+          : factory.createTemplateMiddle(""),
+      ),
+    ),
+  );
+}
+
+/**
+ * The printer keeps the original line layout of some nodes (e.g. a destructuring prettier wrapped after a longer
+ * title), so compare token sequences instead of text: layout and trailing commas are ignored, token text —
+ * including string contents — is not.
+ */
+function tokenize(text: string, fileName: string): string {
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKind(fileName) === ts.ScriptKind.TS
+      ? ts.LanguageVariant.Standard
+      : ts.LanguageVariant.JSX,
+    text,
+  );
+  const tokens: string[] = [];
+  for (let kind = scanner.scan(); kind !== ts.SyntaxKind.EndOfFileToken; kind = scanner.scan()) {
+    const token = scanner.getTokenText();
+    // A trailing comma (what prettier adds when it wraps) carries no meaning.
+    if ((token === "}" || token === "]" || token === ")") && tokens.at(-1) === ",") tokens.pop();
+    tokens.push(token);
+  }
+  return tokens.join("\u0001");
+}
+
 /** Reprint without comments, with plain test titles blanked. */
 export function normalizeSource(text: string, fileName: string): string {
   const source = parse(text, fileName);
@@ -68,14 +108,14 @@ export function normalizeSource(text: string, fileName: string): string {
     const visit = (node: ts.Node): ts.Node => {
       if (ts.isCallExpression(node) && isTitleCall(node) && node.arguments.length > 0) {
         const [first, ...rest] = node.arguments;
-        if (isPlainTitle(first)) {
+        if (isPlainTitle(first) || ts.isTemplateExpression(first)) {
           const visited = ts.visitEachChild(node, visit, context) as ts.CallExpression;
           return context.factory.updateCallExpression(
             visited,
             visited.expression,
             visited.typeArguments,
             [
-              context.factory.createStringLiteral(""),
+              blankTitle(context.factory, visited.arguments[0]),
               ...visited.arguments.slice(1, 1 + rest.length),
             ],
           );
@@ -89,7 +129,7 @@ export function normalizeSource(text: string, fileName: string): string {
   const printer = ts.createPrinter({ removeComments: true, newLine: ts.NewLineKind.LineFeed });
   const printed = printer.printFile(result.transformed[0]);
   result.dispose();
-  return printed;
+  return tokenize(printed, fileName);
 }
 
 function commentRanges(text: string, fileName: string): ts.CommentRange[] {

@@ -39,10 +39,35 @@ test("changes to code, string literals or assertion messages are detected", () =
   }
 });
 
-test("only a test title literal is exempt, not a computed title", () => {
-  const before = `test(\`제목 \${n}\`, () => {});\n`;
-  const after = `test(\`title \${n}\`, () => {});\n`;
+test("an interpolated title may change its text but not its expressions", () => {
+  const before = `test(\`제목 \${n} 개\`, () => {});\n`;
+  assert.equal(
+    normalizeSource(before, "x.test.ts"),
+    normalizeSource(`test(\`title \${n} items\`, () => {});\n`, "x.test.ts"),
+  );
+  assert.notEqual(
+    normalizeSource(before, "x.test.ts"),
+    normalizeSource(`test(\`title \${m} items\`, () => {});\n`, "x.test.ts"),
+  );
+});
+
+test("a title computed from identifiers is not exempt", () => {
+  const before = `test(prefix + "제목", () => {});\n`;
+  const after = `test(prefix + "title", () => {});\n`;
   assert.notEqual(normalizeSource(before, "x.test.ts"), normalizeSource(after, "x.test.ts"));
+});
+
+test("line wrapping from prettier does not count as a code change", () => {
+  const before = `test("짧은", async ({ page }) => {\n  await page.goto("/");\n});\n`;
+  const after = `test("a much longer English title that wraps", async ({\n  page,\n}) => {\n  await page.goto("/");\n});\n`;
+  assert.equal(normalizeSource(before, "x.spec.ts"), normalizeSource(after, "x.spec.ts"));
+});
+
+test("whitespace inside string literals still counts", () => {
+  assert.notEqual(
+    normalizeSource(`const a = "x y";\n`, "x.ts"),
+    normalizeSource(`const a = "x  y";\n`, "x.ts"),
+  );
 });
 
 test("hangulCommentLines counts comment lines with Hangul and ignores strings", () => {
