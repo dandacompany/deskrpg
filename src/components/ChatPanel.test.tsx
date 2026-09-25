@@ -240,8 +240,8 @@ test("with no cron context, the NPC DM has no tabs (same as pre-wiring behavior)
       />
     </I18nProvider>,
   );
-  assert.equal(el.querySelector('[data-testid="npc-dialog-tabs"]'), null);
-  assert.equal(el.querySelector('[data-testid="cron-panel"]'), null);
+  assert.ok(!el.querySelector('[data-testid="npc-dialog-tabs"]'));
+  assert.ok(!el.querySelector('[data-testid="cron-panel"]'));
 });
 
 test("with a cron context, the 'cron' tab opens single-mode for just that NPC (R15)", async () => {
@@ -279,7 +279,7 @@ test("with a cron context, the 'cron' tab opens single-mode for just that NPC (R
     const tabs = el.querySelector('[data-testid="npc-dialog-tabs"]');
     assert.ok(tabs, "탭 바가 있어야 한다");
     // Chat is the default tab — cron isn't fetched yet.
-    assert.equal(el.querySelector('[data-testid="cron-panel"]'), null);
+    assert.ok(!el.querySelector('[data-testid="cron-panel"]'));
     assert.equal(urls.length, 0);
 
     await click(buttonByText(el, "크론"));
@@ -287,16 +287,12 @@ test("with a cron context, the 'cron' tab opens single-mode for just that NPC (R
       await Promise.resolve();
     });
     assert.ok(el.querySelector('[data-testid="cron-panel"]'));
-    assert.equal(
-      el.querySelector('[data-testid="cron-filter-npc"]'),
-      null,
-      "단일 모드는 필터 없음",
-    );
+    assert.ok(!el.querySelector('[data-testid="cron-filter-npc"]'), "단일 모드는 필터 없음");
     assert.deepEqual(urls, ["/api/channels/ch1/cron/jobs?npcId=npc-a"]);
 
     // Returning to the chat tab makes the input box visible again.
     await click(buttonByText(el, "대화"));
-    assert.equal(el.querySelector('[data-testid="cron-panel"]'), null);
+    assert.ok(!el.querySelector('[data-testid="cron-panel"]'));
     assert.ok(el.querySelector("textarea"), "대화 입력창");
   } finally {
     globalThis.fetch = originalFetch;
@@ -592,8 +588,8 @@ test("draws no avatar when avatarFor is absent — same as the existing screen",
   };
   const { node } = avatarPanel(state, { avatarFor: undefined });
   const el = await mount(node);
-  assert.equal(el.querySelector("[data-chat-avatar]"), null);
-  assert.equal(el.querySelector("[data-room-avatars]"), null);
+  assert.ok(!el.querySelector("[data-chat-avatar]"));
+  assert.ok(!el.querySelector("[data-room-avatars]"));
 });
 
 // ---------------------------------------------------------------------------
@@ -656,7 +652,7 @@ test("there are five tabs (chat/cron/cards/skills/connectors)", async () => {
 test("the unread count shows as a badge, and there's no badge when it's 0", async () => {
   const el = await mount(cardsPanel({ badges: { cards: 3, cron: 0 } }));
   assert.equal(el.querySelector('[data-badge="cards"]')?.textContent, "3");
-  assert.equal(el.querySelector('[data-badge="cron"]'), null);
+  assert.ok(!el.querySelector('[data-badge="cron"]'));
 });
 
 test("opening a tab records that tab's view — the chat tab is not recorded", async () => {
@@ -724,7 +720,7 @@ test("when the board fetch is blocked, the server's code is passed through to th
     assert.ok(alert, "게이트 안내가 보이지 않는다");
     // The `board_unavailable`-specific copy — must not fall back to the generic ("unknown error") message.
     assert.match(alert.textContent ?? "", /보드/);
-    assert.equal(el.querySelector('[data-testid="cards-empty"]'), null);
+    assert.ok(!el.querySelector('[data-testid="cards-empty"]'));
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1031,7 +1027,7 @@ test("the previous list stays visible during a refetch — never treated as an e
     await settle(20);
     assert.equal(urls.length, 2, "둘째 조회가 나가야 한다");
     assert.equal(cardTitles(view.el).length, 1, "재조회 중에 목록이 비었다");
-    assert.equal(view.el.querySelector('[data-testid="cards-empty"]'), null);
+    assert.ok(!view.el.querySelector('[data-testid="cards-empty"]'));
     release();
     await settle(10);
   } finally {
@@ -1151,7 +1147,7 @@ test("an employee's chat coming to report shows that report's summary and an ope
   assert.deepEqual(opened, [["card-1", "board-1"]]);
 
   const plain = await mount(withDialog(null));
-  assert.equal(plain.querySelector('[data-testid="dialog-report-summary"]'), null);
+  assert.ok(!plain.querySelector('[data-testid="dialog-report-summary"]'));
 });
 
 test("with a modal open, Esc closes only the modal and not the employee chat behind it", async () => {
@@ -1255,11 +1251,7 @@ test("with the report list popover open, Esc closes only the list and the chat p
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
     );
   });
-  assert.equal(
-    el.querySelector('[data-testid="report-list"]'),
-    null,
-    "가장 위 레이어인 목록이 닫힌다",
-  );
+  assert.ok(!el.querySelector('[data-testid="report-list"]'), "가장 위 레이어인 목록이 닫힌다");
   assert.equal(closed, 0, "목록을 닫는 Esc 가 뒤의 대화창까지 닫으면 안 된다");
 
   // In a real browser, the chat panel's listener runs only after the list has already left the DOM
@@ -1486,7 +1478,7 @@ test("with no reply in progress the NPC chat keeps its send button", async () =>
       onStopNpcResponse: () => {},
     }),
   );
-  assert.equal(el.querySelector('[data-testid="chat-stop"]'), null);
+  assert.ok(!el.querySelector('[data-testid="chat-stop"]'));
 });
 
 test("a room reply to my own message can be stopped; a reply to someone else's cannot", async () => {
@@ -1534,5 +1526,5 @@ test("a room reply to my own message can be stopped; a reply to someone else's c
       onStopRoomResponse: () => {},
     }),
   );
-  assert.equal(otherEl.querySelector('[data-testid="chat-stop"]'), null);
+  assert.ok(!otherEl.querySelector('[data-testid="chat-stop"]'));
 });
