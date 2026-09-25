@@ -127,3 +127,37 @@ test("M3: showing up, leaving, and toggling all refresh updated_at", async () =>
   await setNpcActive(seeded.id, false);
   assert.notDeepEqual(await updatedAt(seeded.id), stale, "토글이 updated_at 을 갱신한다");
 });
+
+test("two concurrent hires of the same gateway create each employee once and both succeed", async () => {
+  const { hireGatewayProfilesIntoChannel } = await import("./npc-roster");
+  const { selectChannelNpcs } = await import("./npc-projection");
+  const { channelId, gatewayId } = await seedChannelWithProfiles({
+    profiles: 3,
+    mapData: buildOfficeEnvironment("executive"),
+  });
+
+  const results = await Promise.all([
+    hireGatewayProfilesIntoChannel(channelId, gatewayId),
+    hireGatewayProfilesIntoChannel(channelId, gatewayId),
+  ]);
+
+  assert.equal(results[0].created + results[1].created, 3, "each employee is counted once");
+  assert.equal((await selectChannelNpcs(channelId, { roster: true })).length, 3);
+});
+
+test("a profile hired into bound channels twice at once is created once per channel", async () => {
+  const { hireProfileIntoBoundChannels } = await import("./npc-roster");
+  const { selectChannelNpcs } = await import("./npc-projection");
+  const { gatewayId, channelIds } = await seedGatewayBoundToChannels({ channels: 2 });
+  const profileId = await seedProfile(gatewayId);
+
+  const results = await Promise.all([
+    hireProfileIntoBoundChannels(profileId),
+    hireProfileIntoBoundChannels(profileId),
+  ]);
+
+  assert.equal(results[0].created + results[1].created, 2);
+  for (const channelId of channelIds) {
+    assert.equal((await selectChannelNpcs(channelId, { roster: true })).length, 1);
+  }
+});
