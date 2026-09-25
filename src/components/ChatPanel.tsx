@@ -34,6 +34,7 @@ import NpcConnectorsTab from "./connectors/NpcConnectorsTab";
 import NpcSkillsTab from "./skills/NpcSkillsTab";
 import { tabFor, type NpcPanelTab, type NpcTabState } from "./chat/npc-tab-state";
 import { createKanbanApi, KanbanApiError, type BoardResponse } from "./kanban/kanban-api";
+import { formatMention } from "@/lib/conversation/mention";
 
 /**
  * How long the cards tab coalesces bursts of `kanban:event` so it doesn't reread the board
@@ -404,7 +405,7 @@ export default function ChatPanel({
           const npcName = notice?.kind === "card_proposal" ? notice.npcName : "";
           onRoomSend(
             npcName
-              ? `@[${npcName}] ${t("notice.cardProposal.inlineFollowUp")}`
+              ? `${formatMention(npcName)} ${t("notice.cardProposal.inlineFollowUp")}`
               : t("notice.cardProposal.inlineFollowUp"),
           );
         }
