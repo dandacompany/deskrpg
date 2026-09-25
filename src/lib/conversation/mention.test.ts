@@ -1,7 +1,13 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseMention, parseAllMentions, extractMentionNames, MentionParticipant } from "./mention";
+import {
+  parseMention,
+  parseAllMentions,
+  extractMentionNames,
+  formatMention,
+  MentionParticipant,
+} from "./mention";
 
 const P = [
   { npcId: "n-danbi", displayName: "단비" },
@@ -197,5 +203,36 @@ describe("extractMentionNames — raw names before resolution", () => {
 
   test("returns an empty array when the input isn't a string", () => {
     assert.deepEqual(extractMentionNames(null as unknown as string), []);
+  });
+});
+
+describe("mention delimiters inside names", () => {
+  const odd = [
+    { npcId: "n-bracket", displayName: "Kim [Ops] ]" },
+    { npcId: "n-slash", displayName: "a\\b" },
+    { npcId: "n-plain", displayName: "소피" },
+  ];
+
+  test("a plain name is written exactly as before", () => {
+    assert.equal(formatMention("소피"), "@[소피]");
+  });
+
+  test("brackets and backslashes in a name are escaped", () => {
+    assert.equal(formatMention("Kim [Ops] ]"), "@[Kim \\[Ops\\] \\]]");
+    assert.equal(formatMention("a\\b"), "@[a\\\\b]");
+  });
+
+  test("formatted mentions round-trip through the parser, even with delimiters in the name", () => {
+    const text = `${formatMention("Kim [Ops] ]")} and ${formatMention("a\\b")} and ${formatMention("소피")} please`;
+    assert.deepEqual(extractMentionNames(text), ["Kim [Ops] ]", "a\\b", "소피"]);
+    assert.deepEqual(parseAllMentions(text, odd, null), ["n-bracket", "n-slash", "n-plain"]);
+    assert.equal(
+      parseMention(`${formatMention("Kim [Ops] ]")} hi`, odd, "n-plain").npcId,
+      "n-bracket",
+    );
+  });
+
+  test("hand-typed plain mentions still parse", () => {
+    assert.deepEqual(parseAllMentions("@[소피] 안녕", odd, null), ["n-plain"]);
   });
 });

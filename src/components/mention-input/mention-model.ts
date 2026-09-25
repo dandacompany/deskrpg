@@ -7,13 +7,15 @@
  * users used to type `@[Sophie]` by hand.
  */
 
+import { formatMention } from "@/lib/conversation/mention";
+
 export type MentionCandidate = { id: string; name: string };
 
 export type Segment =
   { kind: "text"; text: string } | { kind: "mention"; id: string; name: string };
 
 export function serializeSegments(segments: Segment[]): string {
-  return segments.map((s) => (s.kind === "text" ? s.text : `@[${s.name}]`)).join("");
+  return segments.map((s) => (s.kind === "text" ? s.text : formatMention(s.name))).join("");
 }
 
 /**

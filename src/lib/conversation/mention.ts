@@ -26,11 +26,23 @@ function splitToLine(text: string): [string, string] | null {
   return [match[1].trim(), rest.trim()];
 }
 
-/** Extracts @[name] mentions from the body in order of appearance. */
+/**
+ * Writes the `@[name]` mention for a name. Display names are free text, so `\`, `[` and `]`
+ * inside the name are escaped with a backslash — a plain name is written exactly as before.
+ * Every place that builds a mention must use this, so the parser below can read it back.
+ */
+export function formatMention(name: string): string {
+  return `@[${name.replace(/[\\[\]]/g, "\\$&")}]`;
+}
+
+/**
+ * Extracts @[name] mentions from the body in order of appearance. A backslash escapes the next
+ * character (see `formatMention`), so a `]` inside a name does not end the mention.
+ */
 function bracketMentions(text: string): string[] {
   const names: string[] = [];
-  for (const m of text.matchAll(/@\[([^\]]*)\]/g)) {
-    names.push(m[1].trim());
+  for (const m of text.matchAll(/@\[((?:\\.|[^\]\\])*)\]/g)) {
+    names.push(m[1].replace(/\\(.)/g, "$1").trim());
   }
   return names;
 }
