@@ -65,8 +65,8 @@ export default function GatewaySetupWizard({
   onSaved,
 }: {
   onConnected: (gatewayId: string) => void;
-  /** The address connection was saved — the gateway is in the list even if the plugin isn't ready. */
-  onSaved?: (gatewayId: string) => void;
+  /** A gateway was saved — it is in the list even if the plugin isn't ready. */
+  onSaved?: (gatewayId: string, pluginStatus: string) => void;
 }) {
   const { locale } = useLocale();
   const t = useT();
@@ -125,6 +125,11 @@ export default function GatewaySetupWizard({
   // Worker propagation (plugin 0.16.0 worker propagation). On by default — needed for Kanban/cron results to arrive (recommended).
   const [workerPropagation, setWorkerPropagation] = useState(true);
   const generation = useRef(0);
+  // The job poll reads the callback through a ref so a new parent callback does not restart it.
+  const onSavedRef = useRef(onSaved);
+  useEffect(() => {
+    onSavedRef.current = onSaved;
+  }, [onSaved]);
   const controller = useRef<AbortController | null>(null);
 
   async function request<T>(body?: object, suffix = "", signal?: AbortSignal): Promise<T> {
@@ -260,6 +265,7 @@ export default function GatewaySetupWizard({
     if (next.gatewayId) {
       setResult({ gatewayId: next.gatewayId, pluginStatus: "plugin_ready" });
       setScreen("success");
+      onSavedRef.current?.(next.gatewayId, "plugin_ready");
       return;
     }
     // A job that finished without a gateway was an install-only job. The job screen shows it's done,
@@ -1139,7 +1145,7 @@ export default function GatewaySetupWizard({
                 setToken("");
                 setResult(data);
                 setScreen("success");
-                onSaved?.(data.gatewayId);
+                onSaved?.(data.gatewayId, data.pluginStatus);
               },
             );
           }}

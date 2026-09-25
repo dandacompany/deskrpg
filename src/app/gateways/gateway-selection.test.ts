@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { nextSelectedGatewayId } from "./gateway-selection";
+import { nextSelectedGatewayId, reloadAfterSave } from "./gateway-selection";
 
 const rows = [{ id: "a" }, { id: "b" }];
 
@@ -19,4 +19,23 @@ test("keeps an empty selection when autoSelect is off — so the connection wiza
 
 test("a vanished selection is cleared even when autoSelect is off", () => {
   assert.equal(nextSelectedGatewayId("gone", rows, { autoSelect: false }), "");
+});
+
+test("right after creation, the new gateway is chosen", () => {
+  assert.equal(nextSelectedGatewayId("", rows, reloadAfterSave("b", "plugin_ready")), "b");
+});
+
+test("a new gateway whose plugin is not ready keeps the wizard and its install guidance", () => {
+  for (const status of ["plugin_absent", "plugin_unauthorized", "unknown"]) {
+    assert.equal(nextSelectedGatewayId("", rows, reloadAfterSave("b", status)), "", status);
+  }
+});
+
+test("a preferred id missing from the list falls back to the no-auto-select rule", () => {
+  assert.equal(nextSelectedGatewayId("", rows, { prefer: "gone", autoSelect: false }), "");
+});
+
+test("a periodic reload keeps the current selection", () => {
+  assert.equal(nextSelectedGatewayId("a", rows, { autoSelect: false }), "a");
+  assert.equal(nextSelectedGatewayId("a", rows), "a");
 });
