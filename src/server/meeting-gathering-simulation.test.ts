@@ -22,7 +22,11 @@ const FRAME_MS = 16;
 
 type Handler = (...args: unknown[]) => unknown;
 
-async function gather(fixture: string, npcCount: number) {
+async function gather(
+  fixture: string,
+  npcCount: number,
+  options: { walkOutAndBack?: boolean } = {},
+) {
   const mapData = JSON.parse(
     readFileSync(new URL(`../lib/fixtures/${fixture}.json`, import.meta.url), "utf8"),
   );
@@ -166,6 +170,8 @@ async function gather(fixture: string, npcCount: number) {
     boot(data: unknown): void;
     step(now: number, delta: number): void;
     dispose(): void;
+    handlePointerDown(x: number, y: number, button: number, sx: number, sy: number): void;
+    player: { x: number; y: number };
   };
   const run = async (ms: number, until?: () => boolean) => {
     for (let elapsed = 0; elapsed < ms; elapsed += FRAME_MS) {
@@ -195,28 +201,45 @@ async function gather(fixture: string, npcCount: number) {
     });
     await run(500);
 
-    // Walk into the meeting room, join, sit down, then open the meeting with every NPC.
-    let entryState = "";
-    const onEntry = (state: { status: string }) => {
-      entryState = state.status;
+    // Walk into the meeting room with the "meeting room" button, join, sit down.
+    const enterAndSit = async () => {
+      let entryState = "";
+      const onEntry = (state: { status: string }) => {
+        entryState = state.status;
+      };
+      EventBus.on("meeting:entry-state", onEntry);
+      EventBus.emit("meeting:request-entry");
+      await run(30_000, () => entryState === "arrived");
+      EventBus.off("meeting:entry-state", onEntry);
+      assert.equal(entryState, "arrived", "the host never reached the meeting room");
+      await spatial.joinPlayer(CHANNEL, "host", SOCKET);
+      await flush();
+      EventBus.emit("meeting:mode", { active: true });
+      const seated = () =>
+        latest?.participants.find((p) => p.actorId === "host")?.state === "seated";
+      assert.equal(await run(30_000, seated), true, "the host never sat down");
     };
-    EventBus.on("meeting:entry-state", onEntry);
-    EventBus.emit("meeting:request-entry");
-    await run(30_000, () => entryState === "arrived");
-    EventBus.off("meeting:entry-state", onEntry);
-    assert.equal(entryState, "arrived", "the host never reached the meeting room");
-    await spatial.joinPlayer(CHANNEL, "host", SOCKET);
-    await flush();
-    EventBus.emit("meeting:mode", { active: true });
-    const seated = () => latest?.participants.find((p) => p.actorId === "host")?.state === "seated";
-    assert.equal(await run(30_000, seated), true, "the host never sat down");
-
-    const generation = await spatial.start(
-      CHANNEL,
-      "host",
-      homes.map((home) => home.id),
-    );
     const settled = () => latest?.phase !== "assembling";
+    const npcIds = homes.map((home) => home.id);
+    await enterAndSit();
+    let generation = await spatial.start(CHANNEL, "host", npcIds);
+
+    if (options.walkOutAndBack) {
+      // The meeting ends; the host goes back to the office, still on the meeting screen's participation, and walks
+      // out of the room — then opens the next meeting with the button.
+      await run(120_000, settled);
+      await spatial.cancel(CHANNEL);
+      await run(60_000, () => latest?.phase === "idle");
+      EventBus.emit("meeting:mode", { active: false });
+      await run(1_000);
+      sim.handlePointerDown((spawn.x + 0.5) * 32, (spawn.y + 0.5) * 32, 0, 0, 0);
+      const outside = () =>
+        Math.hypot(sim.player.x - (spawn.x + 0.5) * 32, sim.player.y - (spawn.y + 0.5) * 32) < 2;
+      assert.equal(await run(30_000, outside), true, "the host never walked out");
+      await enterAndSit();
+      generation = await spatial.start(CHANNEL, "host", npcIds);
+    }
+
     const began = clock;
     await run(120_000, settled);
     return {
@@ -244,3 +267,10 @@ for (const fixture of ["official-agency-v2", "official-trading-v2"]) {
     assert.ok(seconds < 60, `the gathering took ${seconds}s`);
   });
 }
+
+test("a host who walked out of the room after a meeting walks back to a seat for the next one", async () => {
+  // Same layout as the staging office where the host stood still at "walking" until the gathering timed out.
+  const { state } = await gather("official-publishing-v3-initial", 2, { walkOutAndBack: true });
+  assert.equal(state?.participants.find((p) => p.actorId === "host")?.state, "seated");
+  assert.equal(state?.phase, "ready");
+});

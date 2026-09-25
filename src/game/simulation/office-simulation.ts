@@ -1821,6 +1821,11 @@ export class OfficeSimulation {
       snapshot.ambientLeaderId === this.socket?.id;
     if (!this.motionSnapshot.accept(snapshot, this.channelId)) return;
     const ownSeat = snapshot.seats.find((seat) => seat.actorId === this.socket?.id);
+    // The latch remembers which meeting seat we are already walking to, so it must not outlive the reservation.
+    // After a meeting the host walked away (the server dropped the seat) and the next meeting reserved the *same*
+    // seat — the latch still named it, no path was made, and the host stood still at "walking" until the gathering
+    // timed out (observed on staging).
+    if (!ownSeat?.spatial) this.meetingSeatTarget = null;
     if (ownSeat?.spatial && this.player && this.meetingSeatTarget !== ownSeat.seatId) {
       this.meetingSeatTarget = ownSeat.seatId;
       this.playerSeatGoal = ownSeat.seatId.startsWith("standing:") ? null : ownSeat.seatId;
