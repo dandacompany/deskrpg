@@ -531,3 +531,39 @@ test("the caller can stop a room NPC's reply; nothing is persisted and other use
   assert.deepEqual(ev(emitted, "room:npc-aborted"), [], "a stop is not reported as a failure");
   assert.equal(cancelRoomResponse(room.id, requestId, "caller"), false, "already finished");
 });
+
+test("a room reply the provider rejected fails with its cause and without the provider's text", async (t) => {
+  t.mock.method(console, "error", () => {});
+  const { seeded, room } = await seedRoom({ npcCount: 1, memberCount: 1 });
+  const emitted: Emitted[] = [];
+  const { HermesError } = await import("@/lib/hermes/hermes-client");
+  // Measured on staging (Hermes 0.21.2) with an expired openai-codex sign-in; the key is masked.
+  const providerText =
+    "ChatGPT or Codex Subscription rejected your sign-in, so the model can't be reached. " +
+    "Sign in again: `hermes -p sophie auth add openai-codex --type oauth`.\n\n" +
+    "Provider said: HTTP 401: Incorrect API key provided: sk-test*****.";
+  const adapter = mockAdapter("unused");
+  adapter.execute = async () => {
+    throw new HermesError("run_failed", providerText, 200);
+  };
+  const rt = await getOrCreateRoomRuntime(
+    fakeIo(emitted) as never,
+    room,
+    seeded.userId,
+    injected(seeded.channelId, [{ id: seeded.npcIds[0], name: "소피", adapter }]),
+  );
+  assert.ok(rt);
+  await rt.handleHumanMessage("단테", "안녕", "socket", "source-message");
+  await settle();
+
+  const final = (
+    ev(emitted, "room:response-state").at(-1) as {
+      response: import("@/lib/chat-response").ChatResponse;
+    }
+  ).response;
+  assert.equal(final.status, "failed");
+  assert.equal(final.error, "provider_auth_expired");
+  const wire = JSON.stringify(emitted);
+  assert.equal(wire.includes("Incorrect API key"), false, "provider text reached the room");
+  assert.equal(wire.includes("sk-test"), false, "a key fragment reached the room");
+});

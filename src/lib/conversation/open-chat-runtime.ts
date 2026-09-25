@@ -1,4 +1,5 @@
 import { withStreamDiagnosticRequest } from "@/lib/hermes/stream-diagnostics";
+import { gatewayFailureMessageCode } from "@/lib/hermes/classify-gateway-failure";
 // In map chat, the NPCs that were called respond at the same time. There's no loop — it only
 // wakes up when a human's message arrives.
 //
@@ -324,7 +325,9 @@ export class OpenChatRuntime {
               ? "empty_response"
               : outcome.timedOut
                 ? `timeout:${outcome.timedOut.kind}`
-                : "adapter_error",
+                : // The same cause a DM shows (an expired provider sign-in, a limit…); the
+                  // adapter's own text stays with onError, which only logs it.
+                  gatewayFailureMessageCode(outcome.error),
         },
         context,
       );
