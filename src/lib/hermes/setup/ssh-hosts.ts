@@ -17,7 +17,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -122,11 +122,150 @@ function run(command: string, args: string[], timeoutMs: number): Promise<string
   });
 }
 
-const defaultScan: ScanFn = async (target) => {
-  // keyscan does not accept `--` — the host was validated above so it cannot start with `-`.
-  const out = await run("ssh-keyscan", ["-T", "5", "-p", String(target.port), target.host], 15_000);
-  return out;
+/** What ssh-keyscan prints when the server picks a key exchange this OpenSSH build cannot run. */
+const UNSUPPORTED_KEX = /unsupported KEX method/i;
+const SCAN_TIMEOUT_MS = 8_000;
+
+type ScanSpawn = (
+  command: string,
+  args: string[],
+  options: { stdio: ["ignore", "pipe", "pipe"]; shell: false },
+) => {
+  stdout: NodeJS.ReadableStream;
+  stderr: NodeJS.ReadableStream;
+  kill(signal?: NodeJS.Signals): boolean;
+  once(event: "close", listener: (code: number | null) => void): unknown;
+  once(event: "error", listener: (error: Error) => void): unknown;
 };
+
+/**
+ * Reads a host's public keys. `ssh-keyscan` first; when it reports an unsupported key exchange
+ * — Windows' bundled OpenSSH offers sntrup761 but cannot run it, and then stalls past its own
+ * `-T` — the key is read through `ssh`, which negotiates another method, into a throwaway
+ * known_hosts. Both are trust-on-first-use reads of the same key; the user still confirms the
+ * fingerprint before anything is saved.
+ */
+export function createDefaultScan(
+  deps: { spawn?: ScanSpawn; timeoutMs?: number; platform?: string } = {},
+): ScanFn {
+  const spawnFn: ScanSpawn = deps.spawn ?? (spawn as unknown as ScanSpawn);
+  const timeoutMs = deps.timeoutMs ?? SCAN_TIMEOUT_MS;
+  const platform = deps.platform ?? process.platform;
+  const nullDevice = nullDevicePath(platform);
+  // keyscan reports the unsupported key exchange only once its own -T runs out. That stall is a
+  // Windows-build problem, so Windows waits 3 seconds (a reachable host answers in well under
+  // one) to keep the whole read within five.
+  const keyscanTimeout = platform === "win32" ? "3" : "5";
+
+  function keyscan(target: SshTarget): Promise<{ out: string; kexUnsupported: boolean }> {
+    return new Promise((resolve, reject) => {
+      // keyscan does not accept `--` — the host was validated above so it cannot start with `-`.
+      const child = spawnFn(
+        "ssh-keyscan",
+        ["-T", keyscanTimeout, "-p", String(target.port), target.host],
+        { stdio: ["ignore", "pipe", "pipe"], shell: false },
+      );
+      let out = "";
+      let kexUnsupported = false;
+      const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
+      child.stdout.on("data", (chunk: Buffer) => {
+        out += chunk.toString();
+        if (out.length > 65536) child.kill("SIGKILL");
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        if (!kexUnsupported && UNSUPPORTED_KEX.test(chunk.toString())) {
+          kexUnsupported = true;
+          child.kill("SIGKILL");
+        }
+      });
+      child.once("error", () => {
+        clearTimeout(timer);
+        reject(new Error("ssh_unavailable"));
+      });
+      child.once("close", () => {
+        clearTimeout(timer);
+        resolve({ out, kexUnsupported });
+      });
+    });
+  }
+
+  async function viaSsh(target: SshTarget): Promise<string> {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "deskrpg-hostkey-"));
+    const knownHosts = path.join(dir, "known_hosts");
+    try {
+      return await new Promise<string>((resolve, reject) => {
+        const child = spawnFn(
+          "ssh",
+          [
+            "-n",
+            "-T",
+            "-F",
+            nullDevice,
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=5",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            `UserKnownHostsFile=${knownHosts}`,
+            "-o",
+            `GlobalKnownHostsFile=${nullDevice}`,
+            "-o",
+            "PreferredAuthentications=none",
+            "-o",
+            "LogLevel=ERROR",
+            "-p",
+            String(target.port),
+            "-l",
+            target.user,
+            target.host,
+            "exit",
+          ],
+          { stdio: ["ignore", "pipe", "pipe"], shell: false },
+        );
+        let settled = false;
+        const finish = (error: Error | null) => {
+          if (settled) return;
+          settled = true;
+          clearInterval(poll);
+          clearTimeout(timer);
+          child.kill("SIGKILL");
+          let recorded = "";
+          try {
+            recorded = readFileSync(knownHosts, "utf8");
+          } catch {
+            // Nothing was recorded.
+          }
+          if (parseKeyscan(recorded).length) resolve(recorded);
+          else reject(error ?? new Error("ssh_connection_failed"));
+        };
+        // ssh writes the key before authenticating, and on Windows it can then hang after the
+        // refused login — stop as soon as the key is on disk instead of waiting for it to exit.
+        const poll = setInterval(() => {
+          if (existsSync(knownHosts)) finish(null);
+        }, 50);
+        const timer = setTimeout(() => finish(null), timeoutMs);
+        child.stdout.resume();
+        child.stderr.resume();
+        child.once("error", () => finish(new Error("ssh_unavailable")));
+        child.once("close", () => finish(null));
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  return async (target) => {
+    const { out, kexUnsupported } = await keyscan(target);
+    if (parseKeyscan(out).length) return out;
+    if (kexUnsupported) return viaSsh(target);
+    if (!out) throw new Error("ssh_connection_failed");
+    return out;
+  };
+}
+
+const defaultScan: ScanFn = createDefaultScan();
 
 const defaultKeygen: KeygenFn = async (keyPath, comment) => {
   await run("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-C", comment, "-f", keyPath], 15_000);
