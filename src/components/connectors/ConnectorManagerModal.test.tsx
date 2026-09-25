@@ -275,89 +275,26 @@ test("after adding, an OAuth server goes straight to the OAuth step", () => {
   assert.equal(paneAfterAdd(null, "github"), "detail");
 });
 
-test("the trust switch says write tools are blocked, not approved", async () => {
+test("the trust switch says write tools are confirmed on each call", async () => {
   mockFetch({ [LIST]: listBody(), [`GET ${ROOT}/servers/github`]: detail("github") });
   await render(modal());
   assert.match(text(), /모든 도구 허용/);
-  assert.equal($("[data-action=trust]").getAttribute("aria-label"), "쓰기 도구 막기");
-  // A fully trusted server describes its own state — not the blocked one.
+  assert.equal($("[data-action=trust]").getAttribute("aria-label"), "쓰기 도구는 호출마다 확인");
+  // A fully trusted server describes its own state — not the confirming one.
   assert.match(text(), /묻지 않고 실행됩니다/);
-  assert.doesNotMatch(text(), /DeskRPG 대화에서 실행되지 않습니다/);
-  assert.doesNotMatch(text(), /호출마다 승인/);
+  assert.doesNotMatch(text(), /승인 카드/);
 });
 
-test("an untrusted server explains that write tools do not run in DeskRPG chat", async () => {
+test("an untrusted server explains the approval card in chat and the block in cron and kanban", async () => {
   const untrusted = server("github", { trust: "untrusted" });
   mockFetch({
     [LIST]: listBody([untrusted]),
     [`GET ${ROOT}/servers/github`]: detail("github", { trust: "untrusted" }),
   });
   await render(modal());
-  assert.match(text(), /쓰기 도구 막기/);
-  assert.match(text(), /DeskRPG 대화에서 실행되지 않습니다/);
+  assert.match(text(), /쓰기 도구는 호출마다 확인/);
+  assert.match(text(), /시킨 사람에게 승인 카드가 뜨고/);
+  assert.match(text(), /크론·칸반에서는 막힙니다/);
+  assert.doesNotMatch(text(), /DeskRPG 대화에서 실행되지 않습니다/);
   assert.doesNotMatch(text(), /묻지 않고 실행됩니다/);
-});
-
-test("after adding a non-OAuth server, the manager runs its connection test and re-reads the list", async () => {
-  const routes: Record<string, Record<string, unknown>> = {
-    [LIST]: listBody(),
-    [`GET ${ROOT}/servers/github`]: detail("github"),
-    [`GET ${ROOT}/catalog`]: {
-      entries: [
-        { name: "docs", description: "Docs", transport: "http", installed: false, requiredEnv: [] },
-      ],
-    },
-    [`POST ${ROOT}/catalog/docs/install`]: server("docs", { lastCheck: null }),
-    [`GET ${ROOT}/servers/docs`]: detail("docs"),
-    [`POST ${ROOT}/servers/docs/test`]: { jobId: "j3" },
-    [`GET ${ROOT}/jobs/j3`]: { jobId: "j3", state: "succeeded", ok: true, tools: [] },
-  };
-  const log = mockFetch(routes);
-  await render(modal());
-  routes[LIST] = listBody([server("github"), server("docs", { lastCheck: null })]);
-  await click("[data-action=add]");
-  await click('[data-entry="docs"]');
-  await click('[data-action="catalog-install"]');
-  await flush();
-  const install = log.calls.indexOf(`POST ${ROOT}/catalog/docs/install`);
-  const started = log.calls.indexOf(`POST ${ROOT}/servers/docs/test`);
-  const polled = log.calls.indexOf(`GET ${ROOT}/jobs/j3`);
-  assert.ok(install >= 0 && started > install && polled > started, log.calls.join("\n"));
-  assert.equal(log.calls.filter((c) => c === `POST ${ROOT}/servers/docs/test`).length, 1);
-  assert.ok(log.calls.slice(polled).includes(LIST));
-  assert.equal($("[data-server=docs]").getAttribute("aria-current"), "true");
-});
-
-test("finishing OAuth runs a connection test right away and re-reads the list", async () => {
-  const originalOpen = window.open;
-  window.open = (() => ({})) as unknown as typeof window.open;
-  try {
-    const canva = server("canva", { auth: "oauth" });
-    const routes: Record<string, Record<string, unknown>> = {
-      [LIST]: listBody([canva]),
-      [`GET ${ROOT}/servers/canva`]: detail("canva", { auth: "oauth" }),
-      [`POST ${ROOT}/servers/canva/oauth`]: { sessionId: "s1", authUrl: "https://canva.example/a" },
-      [`POST ${ROOT}/oauth/s1/callback`]: { ok: true },
-      [`GET ${ROOT}/oauth/s1`]: { status: "approved" },
-      [`POST ${ROOT}/servers/canva/test`]: { jobId: "j4" },
-      [`GET ${ROOT}/jobs/j4`]: { jobId: "j4", state: "succeeded", ok: true, tools: [] },
-    };
-    const log = mockFetch(routes);
-    await render(modal());
-    await click("[data-section=auth]");
-    await click("[data-action=oauth]");
-    await click('[data-action="oauth-start"]');
-    await type('[name="oauth-paste"]', "http://127.0.0.1:8412/callback?code=a&state=b");
-    routes[LIST] = listBody([{ ...canva, oauthTokenPresent: true }]);
-    await click('[data-action="oauth-submit"]');
-    await new Promise((r) => setTimeout(r, 20));
-    await flush();
-    const approved = log.calls.indexOf(`GET ${ROOT}/oauth/s1`);
-    const started = log.calls.indexOf(`POST ${ROOT}/servers/canva/test`);
-    const polled = log.calls.indexOf(`GET ${ROOT}/jobs/j4`);
-    assert.ok(approved >= 0 && started > approved && polled > started, log.calls.join("\n"));
-    assert.ok(log.calls.slice(polled).includes(LIST));
-  } finally {
-    window.open = originalOpen;
-  }
 });

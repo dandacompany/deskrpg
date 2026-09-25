@@ -2730,6 +2730,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     <ConversationPane label={conversationLabel}>
       <ChatPanel
         presentation="workspace"
+        approvalSocket={socket}
         width={conversationPanelWidth}
         onWidthChange={setConversationPanelWidth}
         dialogNpc={dialogNpc}
