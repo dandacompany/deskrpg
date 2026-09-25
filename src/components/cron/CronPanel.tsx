@@ -34,7 +34,7 @@ import { CronErrorNotice, TimezoneLabel } from "./cron-notices";
 import CronEditorDialog, { type CronEditorSubmit } from "./CronEditorDialog";
 import BlueprintGallery from "./BlueprintGallery";
 import CronRunItem from "./CronRunItem";
-import { runStatusKey } from "./cron-run-view";
+import { isRunDue, runStatusKey } from "./cron-run-view";
 
 export type CronPanelNpc = { npcId: string; npcName: string; profileName?: string };
 
@@ -507,9 +507,11 @@ export default function CronPanel({
                         job.state === "disabled" ||
                         job.state === "completed"
                           ? t(`cron.state.${job.state}`)
-                          : next !== null
-                            ? relativeTime(next, nowMs, locale)
-                            : t("cron.noNextRun")}
+                          : isRunDue(next, nowMs)
+                            ? t("cron.nextRun.due")
+                            : next !== null
+                              ? relativeTime(next, nowMs, locale)
+                              : t("cron.noNextRun")}
                       </span>
                     </div>
                   </button>
@@ -641,12 +643,18 @@ export default function CronPanel({
                   </span>
                 </dd>
                 <dt className="text-text-muted">{t("cron.nextRun")}</dt>
-                <dd>
-                  {formatLocalDateTime(selected.next_run_at, locale)}
-                  {parseIsoMs(selected.next_run_at) !== null && (
-                    <span className="ml-1 text-text-dim">
-                      ({relativeTime(parseIsoMs(selected.next_run_at)!, nowMs, locale)})
-                    </span>
+                <dd data-testid="cron-next-run">
+                  {isRunDue(parseIsoMs(selected.next_run_at), nowMs) ? (
+                    t("cron.nextRun.due")
+                  ) : (
+                    <>
+                      {formatLocalDateTime(selected.next_run_at, locale)}
+                      {parseIsoMs(selected.next_run_at) !== null && (
+                        <span className="ml-1 text-text-dim">
+                          ({relativeTime(parseIsoMs(selected.next_run_at)!, nowMs, locale)})
+                        </span>
+                      )}
+                    </>
                   )}
                 </dd>
                 <dt className="text-text-muted">{t("cron.lastRun")}</dt>

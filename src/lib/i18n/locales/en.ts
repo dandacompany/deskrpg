@@ -2670,6 +2670,7 @@ const en: Record<string, string> = {
   "cron.empty": "No cron jobs",
   "cron.deletedJob": "This cron was deleted. Its past results remain in the chat notices.",
   "cron.noNextRun": "Not scheduled",
+  "cron.nextRun.due": "Running or about to run",
   "cron.nextRun": "Next run",
   "cron.lastRun": "Last run",
   "cron.lastError": "Last error",

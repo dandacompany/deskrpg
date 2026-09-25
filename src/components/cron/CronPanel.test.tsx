@@ -528,3 +528,48 @@ test("the detail tab labels the last run's status like the history does", async 
     await cleanup();
   }
 });
+
+// Measured on staging: after "run now" the job's next run is pulled to "now", and until the result
+// arrived both the row and the detail counted that moment into the past ("37초 전"), which read as
+// stale data. A next run that has come due is waiting or running — say that, and refetch on the
+// finished event like any other change.
+test("a next run that has come due reads as running or about to run, not as a time in the past", async () => {
+  const past = new Date(Date.now() - 37_000).toISOString();
+  const later = new Date(Date.now() + 12 * 3600_000).toISOString();
+  let jobs = [job({ id: "j1", npcId: "npc-a", next_run_at: past })];
+  const r = router(() => json(200, { jobs, timezone: "Asia/Seoul" }));
+  const socket = new FakeSocket();
+  const { host, cleanup } = await mount(
+    <CronPanel channelId="ch1" npcs={NPCS} socket={socket} />,
+    r.handler,
+  );
+  try {
+    await click(allByTestId(host, "cron-row")[0].querySelector("button"));
+    const due = /실행 중이거나 곧 실행/;
+    assert.match(byTestId(host, "cron-countdown")?.textContent ?? "", due);
+    assert.doesNotMatch(byTestId(host, "cron-countdown")?.textContent ?? "", /전/);
+    assert.match(byTestId(host, "cron-next-run")?.textContent ?? "", due);
+    assert.doesNotMatch(byTestId(host, "cron-next-run")?.textContent ?? "", /전\)/);
+
+    // The run finishes: Hermes moves the next run on and records the last one.
+    jobs = [
+      job({
+        id: "j1",
+        npcId: "npc-a",
+        next_run_at: later,
+        last_run_at: new Date().toISOString(),
+        last_status: "ok",
+      }),
+    ];
+    await act(async () => {
+      socket.emit("cron:event", { channelId: "ch1", event: { kind: "cron.run.finished" } });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    assert.doesNotMatch(byTestId(host, "cron-next-run")?.textContent ?? "", due);
+    assert.equal(byTestId(host, "cron-last-status")?.textContent, "(성공)");
+  } finally {
+    await cleanup();
+  }
+});
