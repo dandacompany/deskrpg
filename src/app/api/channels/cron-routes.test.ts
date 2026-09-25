@@ -699,6 +699,93 @@ test("reading delivery targets and templates, and instantiating a template (orig
   assert.equal(await countOrigins(seed.gatewayId), 1);
 });
 
+test("a template job takes the name the user saw — Hermes' fill_blueprint always names it after the English title", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedCronChannel();
+  server.setBlueprints("sophie", [
+    {
+      key: "custom-reminder",
+      title: "Custom reminder",
+      description: "",
+      category: "general",
+      tags: [],
+      fields: [{ name: "what", type: "text", label: "Remind me to…" }],
+      command: "Remind the user: {what}",
+      appUrl: "",
+    },
+  ]);
+
+  const made = await routes.instantiate.POST(
+    req(seed.ownerId, "POST", `${base(seed.channelId)}/blueprints/instantiate`, {
+      npcId: seed.npcId,
+      blueprint: "custom-reminder",
+      values: { what: "물 한 잔 마시기" },
+      name: "  직접 쓰는 알림 — 물 한 잔 마시기  ",
+    }),
+    ctx(seed.channelId),
+  );
+  assert.equal(made.status, 201);
+  const body = await made.json();
+  assert.equal(body.job.name, "직접 쓰는 알림 — 물 한 잔 마시기");
+
+  const listed = await routes.jobs.GET(
+    req(seed.ownerId, "GET", `${base(seed.channelId)}/jobs?npcId=${seed.npcId}`),
+    ctx(seed.channelId),
+  );
+  const jobs = (await listed.json()).jobs as Array<{ id: string; name: string }>;
+  assert.equal(
+    jobs.find((job) => job.id === body.job.id)?.name,
+    "직접 쓰는 알림 — 물 한 잔 마시기",
+  );
+  // Hermes' own call is untouched — the template and values go as they are, and only the job
+  // name is changed afterwards through the ordinary update.
+  const calls = server.requests().filter((r) => r.path.includes("/deskrpg/cron/"));
+  const instantiate = calls.find((r) => r.path.endsWith("/blueprints/instantiate"));
+  assert.deepEqual(instantiate?.json, {
+    blueprint: "custom-reminder",
+    values: { what: "물 한 잔 마시기" },
+  });
+  const rename = calls.find((r) => r.method === "PUT");
+  assert.deepEqual(rename?.json, { updates: { name: "직접 쓰는 알림 — 물 한 잔 마시기" } });
+});
+
+test("without a name the template job keeps Hermes' title", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedCronChannel();
+  server.setBlueprints("sophie", [
+    {
+      key: "daily-summary",
+      title: "Daily summary",
+      description: "",
+      category: "reports",
+      tags: [],
+      fields: [],
+      command: "summarize",
+      appUrl: "",
+    },
+  ]);
+  const before = server.requests().length;
+  const made = await routes.instantiate.POST(
+    req(seed.ownerId, "POST", `${base(seed.channelId)}/blueprints/instantiate`, {
+      npcId: seed.npcId,
+      blueprint: "daily-summary",
+      values: {},
+      name: "   ",
+    }),
+    ctx(seed.channelId),
+  );
+  assert.equal((await made.json()).job.name, "Daily summary");
+  assert.ok(
+    !server
+      .requests()
+      .slice(before)
+      .some((r) => r.method === "PUT"),
+    "no rename call when there is no name",
+  );
+});
+
 test("script-only jobs can be created without a prompt; with neither prompt nor script it is 400", async () => {
   server.reset();
   const routes = await loadRoutes();

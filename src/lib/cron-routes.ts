@@ -128,11 +128,16 @@ export function parseUpdateBody(
   return { ok: true, npcId, update: { updates } };
 }
 
-/** R21 instantiate body — `{npcId, blueprint, values}`. */
+const MAX_JOB_NAME = 120;
+
+/**
+ * R21 instantiate body — `{npcId, blueprint, values, name?}`. `name` is DeskRPG's: Hermes names a
+ * template job after its English catalog title, so the job is renamed to what the user saw.
+ */
 export function parseInstantiateBody(
   body: JsonBody,
 ):
-  | { ok: true; npcId: string; request: InstantiateBlueprintBody }
+  | { ok: true; npcId: string; request: InstantiateBlueprintBody; name: string | null }
   | { ok: false; response: NextResponse } {
   const npcId = requiredString(body.npcId);
   if (!npcId) return { ok: false, response: invalidBody("npcId is required") };
@@ -144,7 +149,8 @@ export function parseInstantiateBody(
       if (typeof value === "string") values[key] = value;
     }
   }
-  return { ok: true, npcId, request: { blueprint, values } };
+  const name = typeof body.name === "string" ? body.name.trim().slice(0, MAX_JOB_NAME) : "";
+  return { ok: true, npcId, request: { blueprint, values }, name: name || null };
 }
 
 /** `?npcId=` — how a bodyless GET/DELETE specifies the assigned NPC. */
@@ -310,10 +316,15 @@ export async function instantiateCronBlueprint(req: NextRequest, channelId: stri
   if (!parsed.ok) return parsed.response;
   const resolved = await resolveCronRequest(req, channelId, parsed.npcId);
   if (!resolved.ok) return resolved.response;
-  return createdJobResponse(
-    resolved.value,
-    await resolved.value.npc.client.cron.instantiateBlueprint(parsed.request),
-  );
+  const cron = resolved.value.npc.client.cron;
+  const made = await cron.instantiateBlueprint(parsed.request);
+  if (made.ok && parsed.name && made.data.job.name !== parsed.name) {
+    // The plugin's instantiate takes no name. A failed rename keeps the job under Hermes' title —
+    // the job exists either way, and the user can rename it in the editor.
+    const renamed = await cron.updateJob(made.data.job.id, { updates: { name: parsed.name } });
+    if (renamed.ok) return createdJobResponse(resolved.value, renamed);
+  }
+  return createdJobResponse(resolved.value, made);
 }
 
 export async function listCronDeliveryTargets(req: NextRequest, channelId: string) {

@@ -70,3 +70,24 @@ export function localizeBlueprint(
     fields: blueprint.fields.map((field) => localizeField(key, field, tr)),
   };
 }
+
+const NAME_DETAIL_MAX = 40;
+
+/**
+ * The job name DeskRPG gives a template job. Hermes names it after the English catalog title, so
+ * several reminders would all read "Custom reminder"; the name is the translated title plus the
+ * first thing the user typed, e.g. "직접 쓰는 알림 — 물 한 잔 마시기".
+ */
+export function blueprintJobName(
+  blueprint: LocalizedBlueprint,
+  values: Record<string, string>,
+): string {
+  const typed = blueprint.fields
+    .filter((field) => field.type === "text")
+    .map((field) => (values[field.name] ?? "").trim().replace(/\s+/g, " "))
+    .find((value) => value.length > 0);
+  if (!typed) return blueprint.title;
+  const detail =
+    typed.length > NAME_DETAIL_MAX ? `${typed.slice(0, NAME_DETAIL_MAX).trimEnd()}…` : typed;
+  return `${blueprint.title} — ${detail}`;
+}

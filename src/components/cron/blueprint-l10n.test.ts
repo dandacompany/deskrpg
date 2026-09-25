@@ -5,7 +5,7 @@ import type { AutomationBlueprint } from "@/lib/hermes/deskrpg-plugin-types";
 import en from "@/lib/i18n/locales/en";
 import ko from "@/lib/i18n/locales/ko";
 
-import { localizeBlueprint, type Translate } from "./blueprint-l10n";
+import { blueprintJobName, localizeBlueprint, type Translate } from "./blueprint-l10n";
 
 // Hermes owns the blueprint catalog (cron/blueprint_catalog.py) and serves it in English. DeskRPG
 // only overlays display text by blueprint key; values sent back to Hermes (enum options, times,
@@ -140,4 +140,27 @@ test("the time help never promises a 24-hour input — the browser decides how t
     assert.ok(help.length > 0);
     assert.doesNotMatch(help, /24/, help);
   }
+});
+
+test("a template job is named after the translated title and what the user typed", () => {
+  const view = localizeBlueprint(REMINDER, translator(ko));
+  const name = blueprintJobName(view, { what: "  물 한 잔 마시기  ", time: "14:00" });
+  assert.equal(name, `${view.title} — 물 한 잔 마시기`);
+  assert.equal(
+    blueprintJobName(view, { what: "   " }),
+    view.title,
+    "nothing typed: the title alone",
+  );
+  const long = blueprintJobName(view, { what: "가".repeat(80) });
+  assert.ok(long.length <= view.title.length + 3 + 41, long);
+  assert.ok(long.endsWith("…"));
+});
+
+test("a template without a text field is named after its title", () => {
+  const noText: AutomationBlueprint = {
+    ...REMINDER,
+    fields: [REMINDER.fields[1], REMINDER.fields[2]],
+  };
+  const view = localizeBlueprint(noText, translator(ko));
+  assert.equal(blueprintJobName(view, { time: "14:00", recurrence: "everyday" }), view.title);
 });
