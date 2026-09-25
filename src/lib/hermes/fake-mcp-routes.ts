@@ -23,6 +23,8 @@ export type FakeMcpState = {
   >;
   reloads: number;
   lastActor: string | null;
+  /** The body of the last `POST servers` (create), as received. */
+  lastCreateBody: Record<string, unknown> | null;
   /** When set, the next connection test fails with this message. */
   failNextTest: string | null;
   seed(
@@ -82,6 +84,7 @@ export function createFakeMcpState(): FakeMcpState {
     jobs: new Map(),
     reloads: 0,
     lastActor: null,
+    lastCreateBody: null,
     failNextTest: null,
     seed(name, patch = {}) {
       const { entry = { url: `https://${name}.example/mcp` }, tools = null, ...view } = patch;
@@ -103,6 +106,7 @@ export function routeMcp(state: FakeMcpState, req: Req): Reply | null {
     if (req.method === "GET")
       return { status: 200, body: { servers: [...state.servers.values()].map((s) => s.view) } };
     if (req.method === "POST") {
+      state.lastCreateBody = body;
       const name = String(body.name ?? "");
       if (state.servers.has(name)) return err(409, "name_taken");
       if (body.transport === "stdio" && body.confirmName !== name)
@@ -115,7 +119,13 @@ export function routeMcp(state: FakeMcpState, req: Req): Reply | null {
       const entry =
         body.transport === "stdio"
           ? { command: body.command, args: body.args ?? [], trust: body.trust ?? "untrusted" }
-          : { url: body.url, ...(body.auth === "oauth" ? { auth: "oauth" } : {}) };
+          : {
+              url: body.url,
+              ...(body.headers && typeof body.headers === "object"
+                ? { headers: body.headers }
+                : {}),
+              ...(body.auth === "oauth" ? { auth: "oauth" } : {}),
+            };
       state.seed(name, { entry });
       return { status: 201, body: state.servers.get(name)!.view };
     }
@@ -226,6 +236,11 @@ export function routeMcp(state: FakeMcpState, req: Req): Reply | null {
       if (req.method === "PUT") {
         if (body.baseRevision !== srv.view.revision) return err(409, "revision_conflict");
         const include = body.include as string[] | undefined;
+        const exclude = body.exclude as string[] | undefined;
+        srv.entry = {
+          ...srv.entry,
+          tools: { ...(include ? { include } : {}), ...(exclude ? { exclude } : {}) },
+        };
         srv.tools = (srv.tools ?? []).map((t) => ({
           ...t,
           on: include ? include.includes(t.name) : true,
@@ -233,6 +248,7 @@ export function routeMcp(state: FakeMcpState, req: Req): Reply | null {
         srv.view = {
           ...srv.view,
           tools: { total: srv.tools.length, enabled: srv.tools.filter((t) => t.on).length },
+          revision: rev(srv.entry),
         };
         return { status: 200, body: srv.view };
       }

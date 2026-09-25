@@ -14,7 +14,7 @@ import {
   type ConnectorContext,
 } from "@/lib/connector-access";
 import { cronError, pluginFailureResponse, resolveNpcProfileClient } from "@/lib/cron-access";
-import type { McpServerInput, PluginResponse } from "@/lib/hermes/plugin-client-types";
+import type { McpAdminApi, McpServerInput, PluginResponse } from "@/lib/hermes/plugin-client-types";
 import { getUserId } from "@/lib/internal-rpc";
 import { parseOAuthPaste } from "@/lib/mcp-oauth-paste";
 import { requireOwner, sharedChannelCount } from "@/lib/skill-access";
@@ -60,18 +60,20 @@ async function oauthCallback(
   );
 }
 
+/** What copy carries from one exported server: the create body plus settings applied after create. */
+type CopySource = {
+  input: McpServerInput;
+  toolFilter: { include?: string[]; exclude?: string[] } | null;
+  disabled: boolean;
+};
+
 async function copy(c: ConnectorContext, a: HandlerArgs): Promise<Response> {
   const names = [...new Set(strList(a.body.names))];
   const targets = [...new Set(strList(a.body.targetNpcIds))].filter((id) => id !== c.npcId);
-  const exported = new Map<string, McpServerInput | { code: string }>();
+  const exported = new Map<string, CopySource | { code: string }>();
   for (const name of names) {
     const res = await c.client.mcp.exportServer(name);
-    exported.set(
-      name,
-      res.ok
-        ? { name, ...(res.data.entry as McpServerInput), confirmName: name }
-        : { code: res.failure.code },
-    );
+    exported.set(name, res.ok ? toCopySource(name, res.data.entry) : { code: res.failure.code });
   }
   const results: CopyResult[] = [];
   for (const npcId of targets) {
@@ -86,35 +88,82 @@ async function copy(c: ConnectorContext, a: HandlerArgs): Promise<Response> {
         results.push({ npcId, name, ok: false, code: src.code });
         continue;
       }
-      const res = await target.value.client.mcp.create(toInput(src), c.userId);
-      results.push(
-        res.ok ? { npcId, name, ok: true } : { npcId, name, ok: false, code: res.failure.code },
-      );
+      const code = await copyOne(target.value.client.mcp, name, src, c.userId);
+      results.push(code ? { npcId, name, ok: false, code } : { npcId, name, ok: true });
     }
   }
   return NextResponse.json({ results });
 }
 
+/** Creates one server on the target, then its tool filter and disabled state. Returns the failure code, if any. */
+async function copyOne(
+  mcp: McpAdminApi,
+  name: string,
+  src: CopySource,
+  actor: string,
+): Promise<string | null> {
+  const created = await mcp.create(src.input, actor);
+  if (!created.ok) return created.failure.code;
+  if (src.toolFilter) {
+    const res = await mcp.setTools(
+      name,
+      { ...src.toolFilter, baseRevision: created.data.revision },
+      actor,
+    );
+    if (!res.ok) return res.failure.code;
+  }
+  if (src.disabled) {
+    const res = await mcp.setEnabled(name, false, actor);
+    if (!res.ok) return res.failure.code;
+  }
+  return null;
+}
+
+/** A header value that is only an env reference, optionally after a scheme word (`Bearer ${KEY}`). */
+const HEADER_REF = /^(?:[A-Za-z][\w-]* )?\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
+
 /**
- * Converts an exported Hermes entry (`url`/`command`/`headers`/`env`/`auth`) to the create body.
- * Secret values never travel: env is sent as keys only (the plugin stores `${KEY}` references) and
- * a bearer header is rebuilt by the plugin from the server name. The target starts enabled with no
- * tool filter and must be re-authenticated.
+ * Converts an exported Hermes entry to what copy sends. Settings travel; secret values and
+ * OAuth tokens do not: env goes as keys only (the plugin stores `${KEY}` references), headers go
+ * only when their value is a `${KEY}` reference, and a bearer header is rebuilt by the plugin from
+ * the server name. The target must be re-authenticated.
  */
-function toInput(e: McpServerInput & Record<string, unknown>): McpServerInput {
-  const headers = (e.headers ?? {}) as Record<string, string>;
+function toCopySource(name: string, e: Record<string, unknown>): CopySource {
+  const http = typeof e.url === "string";
+  const rawHeaders = (e.headers ?? {}) as Record<string, unknown>;
+  const headers = Object.fromEntries(
+    Object.entries(rawHeaders).filter(
+      (kv): kv is [string, string] => typeof kv[1] === "string" && HEADER_REF.test(kv[1]),
+    ),
+  );
   const bearer =
-    typeof headers.Authorization === "string" && headers.Authorization.startsWith("Bearer ${");
+    typeof rawHeaders.Authorization === "string" &&
+    rawHeaders.Authorization.startsWith("Bearer ${");
+  const env = e.env && typeof e.env === "object" ? (e.env as Record<string, string>) : null;
+  const tools = (e.tools ?? {}) as Record<string, unknown>;
+  const filter = {
+    ...(Array.isArray(tools.include) ? { include: strList(tools.include) } : {}),
+    ...(Array.isArray(tools.exclude) ? { exclude: strList(tools.exclude) } : {}),
+  };
   return {
-    name: e.name,
-    transport: typeof e.url === "string" ? "http" : "stdio",
-    ...(typeof e.url === "string"
-      ? { url: e.url }
-      : { command: str(e.command), args: strList(e.args), ...(e.cwd ? { cwd: str(e.cwd) } : {}) }),
-    ...(e.env ? { env: e.env as Record<string, string> } : {}),
-    auth: e.auth === "oauth" ? "oauth" : bearer ? "bearer" : e.env ? "env" : "none",
-    ...(e.trust ? { trust: e.trust } : {}),
-    confirmName: e.name,
+    input: {
+      name,
+      transport: http ? "http" : "stdio",
+      ...(http
+        ? { url: String(e.url), ...(Object.keys(headers).length ? { headers } : {}) }
+        : {
+            command: str(e.command),
+            args: strList(e.args),
+            ...(e.cwd ? { cwd: str(e.cwd) } : {}),
+          }),
+      ...(env ? { env } : {}),
+      auth: e.auth === "oauth" ? "oauth" : bearer ? "bearer" : env ? "env" : "none",
+      ...(e.trust === "full" || e.trust === "untrusted" ? { trust: e.trust } : {}),
+      // Already confirmed on the source NPC.
+      confirmName: name,
+    },
+    toolFilter: Object.keys(filter).length ? filter : null,
+    disabled: e.enabled === false,
   };
 }
 

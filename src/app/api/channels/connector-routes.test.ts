@@ -224,19 +224,26 @@ test("oauth callback parses the pasted URL on the server and forwards only code/
   assert.equal(poll.status, "approved");
 });
 
-test("copy exports without secrets and reports per-target results", async () => {
+test("copy carries settings but no secret values and reports per-target results", async () => {
   const s = await seed();
   server.mcp("sophie").seed("github", {
     entry: {
       url: "https://gh.example/mcp",
-      headers: { Authorization: "Bearer ${MCP_GITHUB_API_KEY}" },
+      headers: {
+        Authorization: "Bearer ${MCP_GITHUB_API_KEY}",
+        "X-Team": "${MCP_GITHUB_TEAM}",
+        "X-Literal": "ghp_abc_literal_value",
+      },
+      tools: { include: ["read_*"], exclude: ["read_secret"] },
+      enabled: false,
     },
   });
   server.mcp("sophie").seed("notion");
   server.mcp("max").seed("notion");
   const res = await call(s.owner.id, "POST", s.channel.id, s.npc.id, ["copy"], {
     targetNpcIds: [s.npc2.id, "no-such-npc"],
-    names: ["github", "notion"],
+    // github last, so its create body is the one the fake records.
+    names: ["notion", "github"],
   });
   assert.equal(res.status, 200);
   const { results } = await res.json();
@@ -248,13 +255,26 @@ test("copy exports without secrets and reports per-target results", async () => 
       r.code ?? null,
     ]),
     [
-      ["max", "github", true, null],
       ["max", "notion", false, "name_taken"],
-      ["no-such-npc", "github", false, "npc_not_found"],
+      ["max", "github", true, null],
       ["no-such-npc", "notion", false, "npc_not_found"],
+      ["no-such-npc", "github", false, "npc_not_found"],
     ],
   );
-  assert.ok(server.mcp("max").servers.has("github"));
+  const copied = server.mcp("max").servers.get("github");
+  assert.ok(copied);
+  // The create body carries only `${KEY}` references — a literal header value never travels.
+  const created = server.mcp("max").lastCreateBody!;
+  assert.equal(created.name, "github");
+  assert.deepEqual(created.headers, {
+    Authorization: "Bearer ${MCP_GITHUB_API_KEY}",
+    "X-Team": "${MCP_GITHUB_TEAM}",
+  });
+  assert.equal(created.auth, "bearer");
+  assert.ok(!JSON.stringify(created).includes("ghp_abc_literal_value"));
+  // Settings follow: the tool filter and the disabled state.
+  assert.deepEqual(copied.entry.tools, { include: ["read_*"], exclude: ["read_secret"] });
+  assert.equal(copied.view.enabled, false);
 });
 
 test("responses never contain the profile key", async () => {
