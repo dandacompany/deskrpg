@@ -2527,3 +2527,47 @@ test("restarts only once even when several restart conditions are true", async (
     1,
   );
 });
+test("a separately running profile gateway is read through gateway.status, where get_running_pid lives", () => {
+  // hermes_cli.gateway only imports get_running_pid inside its functions — importing it from there fails.
+  const result = fixture(String.raw`
+import types
+sys.modules['hermes_cli'] = types.ModuleType('hermes_cli')
+sys.modules['hermes_cli.gateway'] = types.ModuleType('hermes_cli.gateway')
+gateway_pkg = types.ModuleType('gateway')
+status = types.ModuleType('gateway.status')
+status.get_running_pid = lambda path, cleanup_stale=True: 4242 if 'sophie' in str(path) else None
+gateway_pkg.status = status
+sys.modules['gateway'] = gateway_pkg
+sys.modules['gateway.status'] = status
+(ROOT / 'profiles' / 'sophie').mkdir(parents=True)
+(ROOT / 'profiles' / 'sophie' / 'gateway.pid').write_text('4242')
+found = main('discover')['candidates'][0]
+out = {'state': [found['gatewayState'], found.get('profileGateways')]}
+print(json.dumps(out))
+`);
+  assert.deepEqual(result.body.state, ["profile_gateways", ["sophie"]]);
+});
+test("the multiplex preflight sees an unmanaged profile gateway instead of crashing on the import", () => {
+  const result = fixture(
+    String.raw`
+import types
+sys.modules['hermes_cli'] = types.ModuleType('hermes_cli')
+sys.modules['hermes_cli.gateway'] = types.ModuleType('hermes_cli.gateway')
+gateway_pkg = types.ModuleType('gateway')
+status = types.ModuleType('gateway.status')
+status.get_running_pid = lambda path, cleanup_stale=True: 4242
+gateway_pkg.status = status
+sys.modules['gateway'] = gateway_pkg
+sys.modules['gateway.status'] = status
+(ROOT / 'profiles' / 'sophie').mkdir(parents=True)
+(ROOT / 'profiles' / 'sophie' / 'gateway.pid').write_text('4242')
+try:
+    preflight('default', ROOT, candidate('default', ROOT))
+    print(json.dumps({'error': None}))
+except Failure as error:
+    print(json.dumps({'error': str(error)}))
+`,
+    { config: { multiplex_profiles: true } },
+  );
+  assert.equal(result.body.error, "multiplex_conflict");
+});
