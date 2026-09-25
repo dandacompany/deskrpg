@@ -1,13 +1,10 @@
 /**
- * Phase 2A Integration Tests — CLI Adapter Pipeline
+ * Phase 2A Integration Tests — workspace and subprocess helpers
  *
- * Verifies the complete CLI adapter stack:
- * 1. All 4 CLI adapters instantiate and have correct types
- * 2. buildArgs produces correct flags for each adapter
- * 3. WorkspaceManager creates correct persona files per adapter
- * 4. SubprocessPool executes real subprocesses
- * 5. CliBaseAdapter end-to-end with a TestAdapter
- * 6. Adapter registry holds all adapters
+ * The CLI adapters (claude/codex/gemini/opencode) are gone; what remains here covers the helpers
+ * the provider CLI login route still uses:
+ * 1. WorkspaceManager creates the right persona file per adapter type
+ * 2. SubprocessPool executes real subprocesses
  */
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -15,124 +12,11 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import os from "node:os";
 
-import { AdapterRegistry } from "./types";
-import { ClaudeAdapter } from "./claude-adapter";
-import { CodexAdapter } from "./codex-adapter";
-import { GeminiAdapter } from "./gemini-adapter";
 import { WorkspaceManager } from "./workspace-manager";
 import { SubprocessPool } from "./subprocess-pool";
 
-// Dynamic import for OpenCodeAdapter (may be named OpencodeAdapter)
-let OpenCodeAdapterClass: new () => InstanceType<typeof ClaudeAdapter>;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require("./opencode-adapter");
-  OpenCodeAdapterClass = mod.OpenCodeAdapter || mod.OpencodeAdapter;
-} catch {
-  // Will skip opencode tests if not found
-}
-
 // ---------------------------------------------------------------------------
-// 1. All CLI adapters instantiate with correct types
-// ---------------------------------------------------------------------------
-
-describe("Phase2A: Adapter instantiation", () => {
-  test("ClaudeAdapter has type 'claude'", () => {
-    const adapter = new ClaudeAdapter();
-    assert.equal(adapter.type, "claude");
-    assert.equal(adapter.cliCommand, "claude");
-  });
-
-  test("CodexAdapter has type 'codex'", () => {
-    const adapter = new CodexAdapter();
-    assert.equal(adapter.type, "codex");
-    assert.equal(adapter.cliCommand, "codex");
-  });
-
-  test("GeminiAdapter has type 'gemini'", () => {
-    const adapter = new GeminiAdapter();
-    assert.equal(adapter.type, "gemini");
-    assert.equal(adapter.cliCommand, "gemini");
-  });
-
-  test("OpenCodeAdapter has type 'opencode'", () => {
-    if (!OpenCodeAdapterClass) {
-      assert.ok(true, "OpenCodeAdapter not available — skipping");
-      return;
-    }
-    const adapter = new OpenCodeAdapterClass();
-    assert.ok(["opencode", "openCode"].includes(adapter.type));
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 2. buildArgs for each adapter
-// ---------------------------------------------------------------------------
-
-describe("Phase2A: buildArgs output", () => {
-  test("ClaudeAdapter default args include stream-json and skip-permissions", () => {
-    const adapter = new ClaudeAdapter();
-    const args = adapter.buildArgs({ sessionKey: "k", prompt: "p" });
-    assert.ok(
-      args.includes("--output-format") || args.some((a) => a.includes("stream-json")),
-      "should include stream-json output format",
-    );
-    assert.ok(
-      args.some((a) => a.includes("dangerously-skip-permissions")),
-      "should include dangerously-skip-permissions",
-    );
-  });
-
-  test("ClaudeAdapter adds --model when specified", () => {
-    const adapter = new ClaudeAdapter();
-    const args = adapter.buildArgs({
-      sessionKey: "k",
-      prompt: "p",
-      model: "claude-sonnet-4-20250514",
-    });
-    assert.ok(args.includes("--model"), "should include --model flag");
-    assert.ok(args.includes("claude-sonnet-4-20250514"), "should include model name");
-  });
-
-  test("ClaudeAdapter adds --resume when session exists", () => {
-    const adapter = new ClaudeAdapter();
-    const args = adapter.buildArgs({ sessionKey: "k", prompt: "p" }, "session-abc-123");
-    assert.ok(
-      args.some((a) => a.includes("resume") || a === "--resume" || a === "-r"),
-      "should include resume flag",
-    );
-    assert.ok(args.includes("session-abc-123"), "should include session ref");
-  });
-
-  test("CodexAdapter default args include bypass flag", () => {
-    const adapter = new CodexAdapter();
-    const args = adapter.buildArgs({ sessionKey: "k", prompt: "p" });
-    assert.ok(args.includes("exec"), "should include exec subcommand");
-    assert.ok(
-      args.some((a) => a.includes("bypass")),
-      "should include bypass approvals flag",
-    );
-  });
-
-  test("GeminiAdapter default args include yolo approval mode", () => {
-    const adapter = new GeminiAdapter();
-    const args = adapter.buildArgs({ sessionKey: "k", prompt: "p" });
-    assert.ok(
-      args.some((a) => a === "yolo" || a.includes("yolo")),
-      "should include yolo approval mode",
-    );
-  });
-
-  test("GeminiAdapter adds -m model when specified", () => {
-    const adapter = new GeminiAdapter();
-    const args = adapter.buildArgs({ sessionKey: "k", prompt: "p", model: "gemini-2.5-pro" });
-    assert.ok(args.includes("-m") || args.includes("--model"), "should include model flag");
-    assert.ok(args.includes("gemini-2.5-pro"), "should include model name");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 3. WorkspaceManager persona files per adapter
+// 1. WorkspaceManager persona files per adapter
 // ---------------------------------------------------------------------------
 
 describe("Phase2A: WorkspaceManager persona per adapter", () => {
@@ -221,7 +105,7 @@ describe("Phase2A: WorkspaceManager persona per adapter", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. SubprocessPool real execution
+// 2. SubprocessPool real execution
 // ---------------------------------------------------------------------------
 
 describe("Phase2A: SubprocessPool real execution", () => {
@@ -264,80 +148,5 @@ describe("Phase2A: SubprocessPool real execution", () => {
     });
     assert.ok(chunks.length >= 1, "should receive at least one chunk");
     assert.equal(chunks.join(""), "abc");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 5. Full registry with all adapters
-// ---------------------------------------------------------------------------
-
-describe("Phase2A: Full adapter registry", () => {
-  test("registry holds every CLI adapter type", () => {
-    const registry = new AdapterRegistry();
-    registry.register(new ClaudeAdapter());
-    registry.register(new CodexAdapter());
-    registry.register(new GeminiAdapter());
-    if (OpenCodeAdapterClass) {
-      registry.register(new OpenCodeAdapterClass());
-    }
-
-    assert.ok(registry.has("claude"));
-    assert.ok(registry.has("codex"));
-    assert.ok(registry.has("gemini"));
-
-    const installed = registry.listInstalled();
-    assert.ok(installed.length >= 4);
-  });
-
-  test("each adapter implements NpcAdapter interface", async () => {
-    const adapters = [new ClaudeAdapter(), new CodexAdapter(), new GeminiAdapter()];
-
-    for (const adapter of adapters) {
-      assert.ok(typeof adapter.type === "string", `${adapter.type} should have type`);
-      assert.ok(typeof adapter.execute === "function", `${adapter.type} should have execute`);
-      assert.ok(
-        typeof adapter.testConnection === "function",
-        `${adapter.type} should have testConnection`,
-      );
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 6. parseStreamChunk robustness
-// ---------------------------------------------------------------------------
-
-describe("Phase2A: parseStreamChunk robustness", () => {
-  test("Claude adapter handles valid stream-json event", () => {
-    const adapter = new ClaudeAdapter();
-    const result = adapter.parseStreamChunk('{"type":"assistant","content":"hello"}');
-    // Should extract content or return something meaningful
-    assert.ok(typeof result === "string");
-  });
-
-  test("Claude adapter handles non-JSON gracefully", () => {
-    const adapter = new ClaudeAdapter();
-    const result = adapter.parseStreamChunk("plain text line");
-    assert.ok(typeof result === "string"); // should not throw
-  });
-
-  test("Codex adapter passes through plain text", () => {
-    const adapter = new CodexAdapter();
-    const result = adapter.parseStreamChunk("Hello from codex");
-    assert.equal(typeof result, "string");
-  });
-
-  test("Gemini adapter handles JSON content", () => {
-    const adapter = new GeminiAdapter();
-    const result = adapter.parseStreamChunk('{"content":"gemini response"}');
-    assert.ok(typeof result === "string");
-  });
-
-  test("All adapters handle empty string without error", () => {
-    const adapters = [new ClaudeAdapter(), new CodexAdapter(), new GeminiAdapter()];
-    for (const adapter of adapters) {
-      const result = adapter.parseStreamChunk("");
-      assert.ok(typeof result === "string", `${adapter.type} should handle empty string`);
-    }
   });
 });
