@@ -55,14 +55,14 @@ test("Clicking the badge opens the remaining report list instead of the kanban, 
     </I18nProvider>
   );
   const { el, rerender } = await mount(view(queue));
-  assert.equal(el.querySelector('[data-testid="report-list"]'), null);
+  assert.ok(!el.querySelector('[data-testid="report-list"]'));
   await click(el.querySelector('[data-testid="report-badge"]'));
   const rows = el.querySelectorAll('[data-testid="report-list-item"]');
   assert.equal(rows.length, 2);
   assert.match(rows[0].textContent ?? "", /올리버/);
   assert.match(rows[0].textContent ?? "", /본문 초안/);
   // Only a dismissed report has "다시 부르기" (recall).
-  assert.equal(rows[0].querySelector('[data-testid="report-list-recall"]'), null);
+  assert.ok(!rows[0].querySelector('[data-testid="report-list-recall"]'));
   await click(rows[1].querySelector('[data-testid="report-list-recall"]'));
   await click(rows[0].querySelector('[data-testid="report-list-open"]'));
   assert.deepEqual(opened, ["m1"]);

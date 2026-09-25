@@ -65,8 +65,8 @@ test("when the WebGL check fails, the workspace is not mounted and guidance is s
   const f = await mount({ detect: () => false });
   try {
     assert.equal(f.mountCount(), 0);
-    assert.equal(f.host.querySelector('[data-testid="workspace"]'), null);
-    assert.equal(f.host.querySelector('[data-testid="checking"]'), null);
+    assert.ok(!f.host.querySelector('[data-testid="workspace"]'));
+    assert.ok(!f.host.querySelector('[data-testid="checking"]'));
     assert.match(f.host.textContent!, /3D 오피스를 시작할 수 없습니다/);
   } finally {
     await f.cleanup();
@@ -88,7 +88,7 @@ test("a fatal failure during the session unmounts the workspace and switches to 
   const f = await mount({ detect: () => true });
   try {
     await f.fireFatal();
-    assert.equal(f.host.querySelector('[data-testid="workspace"]'), null);
+    assert.ok(!f.host.querySelector('[data-testid="workspace"]'));
     assert.match(f.host.textContent!, /3D 오피스를 시작할 수 없습니다/);
   } finally {
     await f.cleanup();

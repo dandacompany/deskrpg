@@ -77,8 +77,8 @@ test("renders decisions and follow-ups, and suggests bundling into a project whe
 
 test("does not render the register suggestion when there are no follow-ups", async () => {
   const el = await mount({ outcome: { ...outcome, followUps: [] } });
-  assert.equal(el.querySelector("[data-outcome-register]"), null);
-  assert.equal(el.querySelector("[data-outcome-item]"), null);
+  assert.ok(!el.querySelector("[data-outcome-register]"));
+  assert.ok(!el.querySelector("[data-outcome-item]"));
   // Decisions are still shown.
   assert.match(el.textContent ?? "", /A안 채택/);
 });
@@ -131,7 +131,7 @@ test("an already-registered meeting renders the result instead of the button", a
   const el = await mount({
     registered: { boardSlug: "b", tenant: "가격-개편", taskIds: ["t1", "t2"] },
   });
-  assert.equal(el.querySelector("[data-outcome-register]"), null);
+  assert.ok(!el.querySelector("[data-outcome-register]"));
   assert.match(el.querySelector("[data-outcome-registered]")?.textContent ?? "", /2/);
 });
 
@@ -153,12 +153,12 @@ test("when the summary fails, it says so and offers a retry", async () => {
 test("without register permission, the draft is shown but there is no register button", async () => {
   const el = await mount({ canRegister: false });
   assert.equal(el.querySelectorAll("[data-outcome-item]").length, 2);
-  assert.equal(el.querySelector("[data-outcome-register]"), null);
+  assert.ok(!el.querySelector("[data-outcome-register]"));
 });
 
 test("when the plugin can't create pending-approval cards, it renders an upgrade notice instead of the button and locks the draft", async () => {
   const el = await mount({ registerSupported: false });
-  assert.equal(el.querySelector("[data-outcome-register]"), null);
+  assert.ok(!el.querySelector("[data-outcome-register]"));
   assert.match(el.querySelector("[data-outcome-upgrade]")?.textContent ?? "", /0\.11\.0/);
   assert.equal(el.querySelectorAll("[data-outcome-item]").length, 2);
   const firstCheckbox = el.querySelector("[data-outcome-item] input[type=checkbox]");

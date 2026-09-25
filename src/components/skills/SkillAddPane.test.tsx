@@ -79,7 +79,7 @@ test("a skill Hermes blocks (policy block) draws no install button", async () =>
   await type('[name="hub-query"]', "pdf");
   await click('[data-action="hub-go"]');
   await click('[data-hub="official/pdf-tools"]');
-  assert.equal(container.querySelector('[data-action="install"]'), null);
+  assert.ok(!container.querySelector('[data-action="install"]'));
   assert.ok(text().includes("위험"));
 });
 
@@ -226,7 +226,7 @@ test("when the preview times out (504 timeout), shows that notice and [Retry], w
   routes[PREVIEW] = preview();
   await click('[data-action="preview-retry"]');
   assert.ok(text().includes("스캔 판정: caution"));
-  assert.equal(container.querySelector('[data-action="preview-retry"]'), null);
+  assert.ok(!container.querySelector('[data-action="preview-retry"]'));
 });
 
 test("scrolls the preview pane into view once it opens", async () => {

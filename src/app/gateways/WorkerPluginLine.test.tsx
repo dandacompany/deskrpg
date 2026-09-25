@@ -34,7 +34,7 @@ test("without a warning there is no line at all", async () => {
   const { host, cleanup } = await render(
     <WorkerPluginLine warning={null} isOwner apply={noop} onApplied={() => {}} />,
   );
-  assert.equal(host.querySelector("[data-worker-plugin-line]"), null);
+  assert.ok(!host.querySelector("[data-worker-plugin-line]"));
   await cleanup();
 });
 
@@ -100,7 +100,7 @@ test("applying reloads the list, and the result notice stays even after the warn
   assert.equal(reloaded, 1);
   assert.ok(host.querySelector('[data-worker-plugin-result="applied"]'));
   assert.ok(host.querySelector('[data-worker-plugin-failure="oliver"]'));
-  assert.equal(host.querySelector('[data-worker-plugin-failure="sophie"]'), null);
+  assert.ok(!host.querySelector('[data-worker-plugin-failure="sophie"]'));
 
   // The list was reloaded and the warning is gone — the user must read the cron restart notice, so the result stays.
   await act(async () => {
@@ -274,7 +274,7 @@ test("an apply request answered with 409 worker_propagation_disabled shows an ex
   await click(buttonText(host, /^적용$/)!);
   const text = host.textContent ?? "";
   assert.equal(reloaded, 0);
-  assert.equal(host.querySelector('[data-worker-plugin-result="error"]'), null);
+  assert.ok(!host.querySelector('[data-worker-plugin-result="error"]'));
   assert.ok(host.querySelector('[data-worker-propagation="disabled"]'));
   assert.doesNotMatch(text, /worker_propagation_disabled/);
   assert.match(text, /hermes config set/);
@@ -309,7 +309,7 @@ test("when propagation is on or unknown (old plugin), it behaves as before", asy
         onApplied={() => {}}
       />,
     );
-    assert.equal(host.querySelector("[data-worker-plugin-line]"), null);
+    assert.ok(!host.querySelector("[data-worker-plugin-line]"));
     await cleanup();
   }
 });

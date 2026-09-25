@@ -279,7 +279,7 @@ test("R4/R5: channel change hides stale cards and cannot submit until the new bo
       key(staleHandle, "ArrowRight");
       key(staleHandle, "Enter");
     });
-    assert.equal(f.host.querySelector('[data-task-id="t-todo"]'), null);
+    assert.ok(!f.host.querySelector('[data-task-id="t-todo"]'));
     assert.equal(patches, 0);
     await act(async () => releaseStatus(json(status())));
   } finally {
@@ -411,7 +411,7 @@ test("R4: a superseded post-PATCH reload reconciles with the newer applied serve
     await act(async () => releaseOldRead(json(board())));
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     assert.equal(patches, 1);
-    assert.equal(f.host.querySelector('[data-move-status="unconfirmed"]'), null);
+    assert.ok(!f.host.querySelector('[data-move-status="unconfirmed"]'));
     assert.match(f.host.querySelector('[data-move-status="success"]')?.textContent ?? "", /예약됨/);
   } finally {
     await f.cleanup();
@@ -489,7 +489,7 @@ test("R1/R5: stale source and server failure cancel/fail without false success",
       f.host.querySelector('[data-move-status="error"]')?.textContent ?? "",
       /권한 없음/,
     );
-    assert.equal(f.host.querySelector('[data-move-status="success"]'), null);
+    assert.ok(!f.host.querySelector('[data-move-status="success"]'));
   } finally {
     await f.cleanup();
   }
@@ -661,7 +661,7 @@ test("R31: 428 renders the upgrade notice with the install command and minVersio
     assert.match(blocker?.textContent ?? "", /플러그인 업데이트 필요/);
     assert.match(blocker?.textContent ?? "", /0\.6\.0/);
     assert.ok(blocker?.textContent?.includes(PLUGIN_INSTALL_COMMAND));
-    assert.equal(f.host.querySelector("[data-column]"), null, "no columns behind a blocker");
+    assert.ok(!f.host.querySelector("[data-column]"), "no columns behind a blocker");
   } finally {
     await f.cleanup();
   }
@@ -810,7 +810,7 @@ test("R8/R9: create posts to the server, shows the 400 message verbatim, and sur
       await new Promise((r) => setTimeout(r, 0));
     });
     // On success the form closes and the warning shows at the top of the board and in the drawer.
-    assert.equal(f.host.querySelector("#kanban-title"), null);
+    assert.ok(!f.host.querySelector("#kanban-title"));
     assert.equal(
       f.host
         .querySelector<HTMLElement>('[data-banner="board"]')
@@ -910,7 +910,7 @@ test("unbound gateway offers connection to owners and guidance to members", asyn
     assert.ok(!f.host.querySelector("[data-blocker]")?.textContent?.includes("재시도"));
     await f.render({});
     assert.match(f.host.textContent ?? "", /오피스 소유자에게/);
-    assert.equal(f.host.querySelector("[data-blocker] button"), null);
+    assert.ok(!f.host.querySelector("[data-blocker] button"));
   } finally {
     await f.cleanup();
   }
@@ -1522,7 +1522,7 @@ test("a conversation draft only opens the confirmation form, and canceling never
       false,
     );
     await f.click("취소");
-    assert.equal(f.host.querySelector("#kanban-title"), null);
+    assert.ok(!f.host.querySelector("#kanban-title"));
     assert.equal(
       f.calls.some((call) => call.startsWith("POST")),
       false,

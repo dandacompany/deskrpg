@@ -114,7 +114,7 @@ test("unknown gateway query is ignored", async () => {
   const { el, cleanup } = await render("gatewayId=unknown");
   try {
     assert.match(el.textContent ?? "", /AI 게이트웨이를 연결하지 않으면/);
-    assert.equal(el.querySelector<HTMLSelectElement>('select option[value="unknown"]'), null);
+    assert.ok(!el.querySelector<HTMLSelectElement>('select option[value="unknown"]'));
   } finally {
     await cleanup();
   }

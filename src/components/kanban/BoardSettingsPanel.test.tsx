@@ -91,7 +91,7 @@ test("orchestration=null hides that section; editable board saves default_workdi
     hints: {},
   });
   try {
-    assert.equal(f.host.querySelector('[data-section="orchestration"]'), null);
+    assert.ok(!f.host.querySelector('[data-section="orchestration"]'));
     const input = f.host.querySelector<HTMLInputElement>("#kanban-default-workdir");
     assert.ok(input);
     assert.equal(input.disabled, false);

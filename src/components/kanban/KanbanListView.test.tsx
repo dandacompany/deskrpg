@@ -97,9 +97,8 @@ test("cards with an empty tenant collect into the 'No subproject' group", async 
 
 test("list rows have no move handle (design D5)", async () => {
   const { host } = await mount({ tasks: [task("a")] });
-  assert.equal(
-    host.querySelector("[data-kanban-move-handle]"),
-    null,
+  assert.ok(
+    !host.querySelector("[data-kanban-move-handle]"),
     "목록에서 끌기가 순서인지 상태인지 모호하다 — 손잡이를 두지 않는다",
   );
 });

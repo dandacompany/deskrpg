@@ -217,7 +217,7 @@ test("once the board recovers, the open checklist closes itself", async () => {
     bound = true;
     await mount(1);
     await settle();
-    assert.equal(host.querySelector("[data-blocker]"), null, "the board recovered");
+    assert.ok(!host.querySelector("[data-blocker]"), "the board recovered");
     assert.ok(
       !document.body.textContent?.includes("이 동작에는 준비가 필요합니다"),
       "the checklist closed itself",

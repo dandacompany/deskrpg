@@ -49,7 +49,7 @@ test("renders nothing at all when it gets a 404", async () => {
     async () => new Response(JSON.stringify({ errorCode: "not_found" }), { status: 404 }),
   );
   try {
-    assert.equal(host.querySelector("[data-testid='diagnostics-panel']"), null);
+    assert.ok(!host.querySelector("[data-testid='diagnostics-panel']"));
     assert.equal(host.textContent, "");
   } finally {
     await cleanup();

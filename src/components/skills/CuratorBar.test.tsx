@@ -40,8 +40,8 @@ test("status, last run, and threshold days on one line", async () => {
   assert.ok(text().includes("2026-09-23 08:30"));
   assert.ok(text().includes("14일"));
   assert.ok(text().includes("30일"));
-  assert.equal(container.querySelector('[data-action="curator-pause"]'), null);
-  assert.equal(container.querySelector('[data-action="curator-run"]'), null);
+  assert.ok(!container.querySelector('[data-action="curator-pause"]'));
+  assert.ok(!container.querySelector('[data-action="curator-run"]'));
 });
 
 test("pause sends PUT …/curator/paused then reloads", async () => {

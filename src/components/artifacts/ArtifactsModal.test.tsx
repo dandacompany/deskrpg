@@ -706,9 +706,8 @@ test("if the same card's same file also exists as an artifact, it doesn't reappe
     },
   });
   await render();
-  assert.equal(
-    container.querySelector('[data-testid="card-attachments"]'),
-    null,
+  assert.ok(
+    !container.querySelector('[data-testid="card-attachments"]'),
     "같은 문서가 두 번 나온다",
   );
 });

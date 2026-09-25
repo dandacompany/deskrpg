@@ -232,7 +232,7 @@ test("pending and unavailable are different states — no reason line while a re
   const { host, cleanup } = await render(
     <CardProposalNotice notice={base} onResolve={() => {}} pending error={null} />,
   );
-  assert.equal(host.querySelector("[data-testid='card-proposal-unavailable']"), null);
+  assert.ok(!host.querySelector("[data-testid='card-proposal-unavailable']"));
   assert.ok(
     [...host.querySelectorAll("button")].every((b) => (b as HTMLButtonElement).disabled),
     "요청 중에는 버튼이 비활성이어야 한다",

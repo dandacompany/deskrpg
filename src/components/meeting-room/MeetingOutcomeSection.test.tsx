@@ -83,7 +83,7 @@ test("permission and registered status use the values returned by the minutes fe
   });
   const el = await mount();
   assert.equal(el.querySelectorAll("[data-outcome-item]").length, 1);
-  assert.equal(el.querySelector("[data-outcome-register]"), null);
+  assert.ok(!el.querySelector("[data-outcome-register]"));
 });
 
 test("when registration succeeds, the button turns into the result", async () => {
@@ -108,7 +108,7 @@ test("when registration succeeds, the button turns into the result", async () =>
     items: [{ index: 0, title: "조사", npcId: "npc-1", after: [] }],
   });
   assert.ok(el.querySelector("[data-outcome-registered]"));
-  assert.equal(el.querySelector("[data-outcome-register]"), null);
+  assert.ok(!el.querySelector("[data-outcome-register]"));
 });
 
 test("when registration is rejected, it shows the message for the returned code and keeps the button", async () => {
@@ -143,7 +143,7 @@ test("retrying a failed summary swaps the panel for the new outcome", async () =
   const el = await mount();
   await act(async () => (el.querySelector("[data-outcome-retry]") as HTMLElement).click());
   await act(async () => {});
-  assert.equal(el.querySelector("[data-outcome-retry]"), null);
+  assert.ok(!el.querySelector("[data-outcome-retry]"));
   assert.equal(el.querySelectorAll("[data-outcome-item]").length, 1);
 });
 
@@ -179,7 +179,7 @@ test("does not render the register button when the plugin doesn't advertise init
     }),
   });
   const el = await mount();
-  assert.equal(el.querySelector("[data-outcome-register]"), null);
+  assert.ok(!el.querySelector("[data-outcome-register]"));
   assert.ok(Boolean(el.querySelector("[data-outcome-upgrade]")), "갱신 안내가 보여야 한다");
 });
 
@@ -195,7 +195,7 @@ test("treats it as unsupported when the automation status can't be read — does
     }),
   });
   const el = await mount();
-  assert.equal(el.querySelector("[data-outcome-register]"), null);
+  assert.ok(!el.querySelector("[data-outcome-register]"));
 });
 
 test("the end screen hears whether follow-ups remain to register, and can click 'don't register'", async () => {
@@ -241,5 +241,5 @@ test("without a callback passed, as in the minutes archive, there is no 'don't r
   });
   const el = await mount();
   assert.ok(el.querySelector("[data-outcome-register]"));
-  assert.equal(el.querySelector("[data-outcome-decline]"), null);
+  assert.ok(!el.querySelector("[data-outcome-decline]"));
 });

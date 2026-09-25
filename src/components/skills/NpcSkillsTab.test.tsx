@@ -69,7 +69,7 @@ test("without the capability, shows an upgrade notice and no manage button", asy
   mockFetch({ [LIST]: view({ capabilityReady: false }) });
   await render(tab());
   assert.ok(text().includes("0.15.0"));
-  assert.equal(container.querySelector('[data-testid="open-skill-manager"]'), null);
+  assert.ok(!container.querySelector('[data-testid="open-skill-manager"]'));
 });
 
 test("group headers, use/view counts, and description on row click", async () => {

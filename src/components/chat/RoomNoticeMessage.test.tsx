@@ -115,7 +115,7 @@ test("card_blocked — all four locales show a blocked sentence (R29)", async ()
       text.includes(CARD_BLOCKED_HINT[locale]),
       `${locale}: 로케일 문장이 아니다 — ${text}`,
     );
-    assert.equal(host.querySelector("button"), null, "핸들러가 없으면 링크도 없다");
+    assert.ok(!host.querySelector("button"), "핸들러가 없으면 링크도 없다");
     assert.equal(
       host.querySelector("[data-room-notice]")?.getAttribute("data-room-notice"),
       "card_blocked",
@@ -208,11 +208,7 @@ test("approval_requested — a button before the decision, the result after", as
       />,
       locale,
     );
-    assert.equal(
-      resolved.host.querySelector("button"),
-      null,
-      `${locale}: 결정 뒤에도 버튼이 남았다`,
-    );
+    assert.ok(!resolved.host.querySelector("button"), `${locale}: 결정 뒤에도 버튼이 남았다`);
     assert.ok(resolved.host.querySelector("[data-approval-resolved]"), `${locale}: 결과 줄이 없다`);
     await resolved.cleanup();
   }
@@ -335,7 +331,7 @@ test("cron_result ok — no failure badge", async () => {
     />,
     "ko",
   );
-  assert.equal(host.querySelector('[data-testid="notice-cron-failed"]'), null);
+  assert.ok(!host.querySelector('[data-testid="notice-cron-failed"]'));
   assert.ok((host.textContent ?? "").includes("ok body"));
   await cleanup();
 });
@@ -354,7 +350,7 @@ test("an unknown notice.kind — falls back to content, no link", async () => {
     "en",
   );
   assert.ok((host.textContent ?? "").includes("raw fallback"));
-  assert.equal(host.querySelector("button"), null);
+  assert.ok(!host.querySelector("button"));
   assert.equal(
     host.querySelector("[data-room-notice]")?.getAttribute("data-room-notice"),
     "unknown",

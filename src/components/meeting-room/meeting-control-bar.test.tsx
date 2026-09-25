@@ -41,7 +41,7 @@ test("while stopping, the stop and next-turn buttons are locked and the bar says
 test("before stopping, the stop button works and no stopping label shows", async () => {
   let stops = 0;
   await render(bar(false, () => stops++));
-  assert.equal(container.querySelector("[data-meeting-stopping]"), null);
+  assert.ok(!container.querySelector("[data-meeting-stopping]"));
   await click("[data-meeting-stop]");
   assert.equal(stops, 1);
 });

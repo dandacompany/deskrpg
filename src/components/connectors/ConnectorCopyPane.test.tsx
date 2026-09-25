@@ -130,5 +130,5 @@ test("a failed copy call shows an error and no results", async () => {
   await click('[data-target="n-2"]');
   await click('[data-action="copy"]');
   assert.ok($("[data-error]"));
-  assert.equal(document.querySelector("[data-result]"), null);
+  assert.ok(!document.querySelector("[data-result]"));
 });

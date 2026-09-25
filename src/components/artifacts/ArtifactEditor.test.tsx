@@ -159,5 +159,5 @@ test("with no unsaved changes, cancel calls onCancel immediately", async () => {
   });
   await click(byText("취소"));
   assert.equal(cancelled, true);
-  assert.equal(container.querySelector('[role="alertdialog"]'), null);
+  assert.ok(!container.querySelector('[role="alertdialog"]'));
 });

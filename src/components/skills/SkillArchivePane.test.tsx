@@ -60,8 +60,8 @@ test("members have no restore/permanently-delete buttons", async () => {
   mockFetch({ [ARCHIVE]: archived });
   await render(pane(false));
   assert.ok(text().includes("weekly"));
-  assert.equal(container.querySelector('[data-action="restore"]'), null);
-  assert.equal(container.querySelector('[data-action="purge"]'), null);
+  assert.ok(!container.querySelector('[data-action="restore"]'));
+  assert.ok(!container.querySelector('[data-action="purge"]'));
 });
 
 test("shows a notice when empty", async () => {

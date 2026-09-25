@@ -369,7 +369,7 @@ test("oauth_device: a non-http(s) verification URL is never rendered as a link",
   const view = await mount(CODEX);
   try {
     await click(button(view.host, "로그인"));
-    assert.equal(view.host.querySelector("a"), null);
+    assert.ok(!view.host.querySelector("a"));
     assert.ok(!view.host.innerHTML.includes("javascript:"));
     assert.ok(view.host.textContent?.includes("ABCD-1234"));
   } finally {

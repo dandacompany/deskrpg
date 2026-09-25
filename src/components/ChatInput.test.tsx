@@ -26,7 +26,7 @@ test("with no candidates, it's still a textarea as before", async () => {
     </I18nProvider>,
   );
   assert.ok(el.querySelector("textarea"));
-  assert.equal(el.querySelector('[contenteditable="true"]'), null);
+  assert.ok(!el.querySelector('[contenteditable="true"]'));
 });
 
 test("with candidates present, it uses the mention editor and serializes the send value as @[name]", async () => {
@@ -38,7 +38,7 @@ test("with candidates present, it uses the mention editor and serializes the sen
   );
   const ed = el.querySelector('[contenteditable="true"]') as HTMLElement;
   assert.ok(ed);
-  assert.equal(el.querySelector("textarea"), null);
+  assert.ok(!el.querySelector("textarea"));
   await act(async () => {
     ed.appendChild(document.createTextNode("@소"));
     ed.dispatchEvent(new Event("input", { bubbles: true }));

@@ -99,7 +99,7 @@ test("an MCP request is labelled as a tool call, and a request without session h
     request({ kind: "mcp", choices: ["once", "deny"] }),
   );
   assert.match(text(), /MCP 도구 호출/);
-  assert.equal(container.querySelector("[data-choice=session]"), null);
+  assert.ok(!container.querySelector("[data-choice=session]"));
 });
 
 test("clicking a choice emits decide, locks the buttons, and the resolution replaces them then folds away", async () => {
@@ -112,11 +112,11 @@ test("clicking a choice emits decide, locks the buttons, and the resolution repl
   ]);
   assert.equal(($("[data-choice=deny]") as HTMLButtonElement).disabled, true);
   await socket.fire(TOOL_APPROVAL_EVENTS.resolved, { key: "run-1:req-1", status: "approved_once" });
-  assert.equal(container.querySelector("[data-choice]"), null);
+  assert.ok(!container.querySelector("[data-choice]"));
   assert.match(text(), /한 번 허용했습니다/);
   await new Promise((r) => setTimeout(r, 60));
   await flush();
-  assert.equal(container.querySelector("[data-testid=tool-approval-card]"), null);
+  assert.ok(!container.querySelector("[data-testid=tool-approval-card]"));
 });
 
 test("a refused decision (not the approver) unlocks the buttons again", async () => {
@@ -137,7 +137,7 @@ test("the countdown runs out into a timeout with no buttons", async () => {
   assert.match($("[data-approval-remaining]").textContent ?? "", /0:0[12]/);
   await new Promise((r) => setTimeout(r, 2_100));
   await flush();
-  assert.equal(container.querySelector("[data-choice]"), null);
+  assert.ok(!container.querySelector("[data-choice]"));
   assert.equal($("[data-testid=tool-approval-card]").getAttribute("data-status"), "expired");
   assert.match(text(), /시간 초과/);
 });
@@ -182,9 +182,9 @@ test("meeting participants see a waiting line until it clears; the approver sees
     approverName: "단테",
   });
   assert.match($("[data-approval-pending]").textContent ?? "", /Max.*단테/);
-  assert.equal(container.querySelector("[data-choice]"), null);
+  assert.ok(!container.querySelector("[data-choice]"));
   await socket.fire(TOOL_APPROVAL_EVENTS.pending, { key: "r:1", cleared: true });
-  assert.equal(container.querySelector("[data-approval-pending]"), null);
+  assert.ok(!container.querySelector("[data-approval-pending]"));
 
   await socket.fire(TOOL_APPROVAL_EVENTS.pending, {
     key: "r:2",
@@ -192,7 +192,7 @@ test("meeting participants see a waiting line until it clears; the approver sees
     approverName: "단테",
   });
   await socket.fire(TOOL_APPROVAL_EVENTS.request, request({ key: "r:2", context: "meeting" }));
-  assert.equal(container.querySelector("[data-approval-pending]"), null);
+  assert.ok(!container.querySelector("[data-approval-pending]"));
   assert.ok($("[data-choice=once]"));
 });
 
@@ -227,7 +227,7 @@ test("under the page provider, a room card that arrived while another chat was s
     TOOL_APPROVAL_EVENTS.request,
     request({ key: "r:room", context: "room", roomId: "room-1" }),
   );
-  assert.equal(container.querySelector("[data-choice]"), null, "a DM does not show a room card");
+  assert.ok(!container.querySelector("[data-choice]"), "a DM does not show a room card");
   await click("[data-open-room]");
   assert.ok($("[data-choice=once]"), "switching to the room shows the card");
   await click("[data-choice=once]");
@@ -285,7 +285,7 @@ test("a chat room shows only its own cards and waiting lines", async () => {
     npcId: "n2",
     approverName: "단테",
   });
-  assert.equal(container.querySelector("[data-approval-pending]"), null);
+  assert.ok(!container.querySelector("[data-approval-pending]"));
   await socket.fire(TOOL_APPROVAL_EVENTS.pending, {
     key: "w:3",
     npcId: "n2",
@@ -306,5 +306,5 @@ test("a meeting stack ignores a chat room's waiting line", async () => {
     approverName: "단테",
     roomId: "room-a",
   });
-  assert.equal(container.querySelector("[data-approval-pending]"), null);
+  assert.ok(!container.querySelector("[data-approval-pending]"));
 });

@@ -37,7 +37,7 @@ test("the Star button shows an abbreviated count, and links to the repo without 
   await withCount.cleanup();
 
   const noCount = await mount(<GrowthStarButton stars={null} clicked={false} onClick={() => {}} />);
-  assert.equal(noCount.host.querySelector("[data-testid=growth-star-count]"), null);
+  assert.ok(!noCount.host.querySelector("[data-testid=growth-star-count]"));
   await noCount.cleanup();
 });
 
