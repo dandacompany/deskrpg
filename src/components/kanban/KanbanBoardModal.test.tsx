@@ -1317,11 +1317,13 @@ test("does not show the timeline button when the capability is absent", async ()
   }
 });
 
-test("the timeline actually draws the target date and dependency arrows — values must flow through the modal", async () => {
+test("the timeline actually draws the target date and dependency arrows — values must flow through the modal", async (t) => {
   // Pins down a bug where each piece was green individually, but the wiring between them was
   // broken so neither the target date nor the arrow showed on screen.
   // Asserts on **values**, not nodes — not whether a line exists, but whether that line is on that date.
   // The timeline draws a "today" window — hardcoding a date would fail the instant that day passes (observed 2026-09-22).
+  // The clock is pinned too: the test and the modal each read "today", and across midnight they disagreed.
+  t.mock.timers.enable({ apis: ["Date"], now: new Date(2026, 8, 22, 12, 0, 0).getTime() });
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const dayStart = today.getTime();
@@ -1417,8 +1419,11 @@ test("the timeline actually draws the target date and dependency arrows — valu
   }
 });
 
-test("the subproject filter also applies to the timeline", async () => {
+test("the subproject filter also applies to the timeline", async (t) => {
   // A filter that only applies to the board/list is a silent failure — this exact bug happened once in the board view.
+  // The clock is pinned to local noon: the "today" window starts at local midnight, so a run
+  // "ten minutes ago" fell on yesterday between 00:00 and 00:10 and the test failed every night.
+  t.mock.timers.enable({ apis: ["Date"], now: new Date(2026, 8, 22, 12, 0, 0).getTime() });
   const runStart = Math.floor(Date.now() / 1000) - 600;
   const f = await mount((url) => {
     if (url.includes("/automation/status"))
