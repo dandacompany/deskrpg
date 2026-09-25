@@ -16,6 +16,7 @@ import type { UserContext } from "@/lib/user-context";
 import type * as chatRooms from "@/lib/chat-rooms";
 import type { PlayerState } from "./socket-handlers";
 import type { getOrCreateRoomRuntime, invalidateRoomRuntime } from "./room-runtime";
+import { cancelRoomResponse } from "./room-runtime";
 import { broadcastRoomMessage, roomSocketRoom } from "./room-broadcast";
 
 export type RoomErrorCode =
@@ -59,6 +60,8 @@ export type RegisterRoomHandlersArgs = {
     rooms: typeof chatRooms;
     getRuntime: typeof getOrCreateRoomRuntime;
     invalidateRuntime: typeof invalidateRoomRuntime;
+    /** Stops a room reply as this user. Defaults to the live room runtimes. */
+    cancelResponse?: typeof cancelRoomResponse;
     now?: () => number;
   };
 };
@@ -73,6 +76,7 @@ export type RoomHandlers = {
   leave: (payload: unknown) => Promise<void>;
   rename: (payload: unknown) => Promise<void>;
   delete: (payload: unknown) => Promise<void>;
+  cancel: (payload: unknown) => Promise<void>;
 };
 
 function asString(value: unknown): string | null {
@@ -106,6 +110,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
     getParticipationAccess,
     rooms,
     getRuntime,
+    cancelResponse = cancelRoomResponse,
     invalidateRuntime,
     now = () => Date.now(),
   } = deps;
@@ -445,6 +450,15 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       roomIo.to(socketRoom(id)).emit("room:deleted", { roomId: id });
       socket.leave(socketRoom(id));
     },
+
+    // The stop button. The runtime lets only the user who started the turn stop it.
+    async cancel(payload) {
+      const { roomId, requestId } = (payload ?? {}) as { roomId?: unknown; requestId?: unknown };
+      const id = asString(roomId);
+      const request = asString(requestId);
+      if (!id || !request) return;
+      cancelResponse(id, request, user.userId);
+    },
   };
 
   socket.on("room:list", (p) => handlers.list(p));
@@ -456,6 +470,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
   socket.on("room:leave", (p) => handlers.leave(p));
   socket.on("room:rename", (p) => handlers.rename(p));
   socket.on("room:delete", (p) => handlers.delete(p));
+  socket.on("room:cancel-response", (p) => handlers.cancel(p));
 
   return handlers;
 }

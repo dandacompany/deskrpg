@@ -82,6 +82,7 @@ test("socket-handlers still registers the events server.js used to own", () => {
     "npc:position-update",
     "tool-approval:decide",
     "npc:cancel-response",
+    "room:cancel-response",
   ]) {
     assert.ok(
       events.includes(required),
