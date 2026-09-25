@@ -690,7 +690,7 @@ def gateway_state(public, owner, cfg):
         running = bool(identity(child, childhome)['pid'])
         if not running and (childhome / 'gateway.pid').exists():
             try:
-                from hermes_cli.gateway import get_running_pid
+                from gateway.status import get_running_pid
                 running = bool(get_running_pid(childhome / 'gateway.pid', cleanup_stale=False))
             except Exception: running = False
         if running: others.append(child)
@@ -823,7 +823,7 @@ def preflight(name, home, item):
             if other['pid']: fail('multiplex_conflict')
             # Also catch unmanaged profile processes; PID files alone are never treated as service ownership.
             if (childhome / 'gateway.pid').exists():
-                from hermes_cli.gateway import get_running_pid
+                from gateway.status import get_running_pid
                 if get_running_pid(childhome / 'gateway.pid', cleanup_stale=False): fail('multiplex_conflict')
     assert_port_owned(public, owner)
 

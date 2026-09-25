@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { spawn, execSync } = require("node:child_process");
+const { spawn, spawnSync, execSync } = require("node:child_process");
 const readline = require("node:readline");
 
 const EXTERNAL_ALIAS_PACKAGE_MAP = new Map([
@@ -459,8 +459,13 @@ async function runDoctor() {
   // From here on we check "can it actually work", not whether files exist.
   loadEnvFile(envPath);
 
-  const { checkDatabaseReachable, checkPortAvailable, inspectEnvironment } =
-    loadStartupCheckModule();
+  const {
+    checkDatabaseReachable,
+    checkPortAvailable,
+    checkServerState,
+    inspectEnvironment,
+    probeHttp,
+  } = loadStartupCheckModule();
   const inspection = inspectEnvironment(process.env);
 
   const environmentLabel = msg("doctor.environment");
@@ -502,8 +507,20 @@ async function runDoctor() {
   );
 
   const port = parseDoctorPort();
+  const pid = readPidFile();
+  const server = checkServerState({
+    pid,
+    alive: pid ? isProcessRunning(pid) : false,
+    responding: await probeHttp(port),
+    port,
+  });
+  reportCheck(server.status, msg("doctor.server"), server.message);
   const portProbe = await checkPortAvailable(port);
-  reportCheck(portProbe.free ? "ok" : "warn", msg("doctor.port", { port }), portProbe.message);
+  if (!portProbe.free && server.portInUseIsOurs) {
+    reportCheck("ok", msg("doctor.port", { port }), msg("doctor.portOurs"));
+  } else {
+    reportCheck(portProbe.free ? "ok" : "warn", msg("doctor.port", { port }), portProbe.message);
+  }
 
   if (inspection.errors.length > 0 || !dbProbe.ok) {
     console.error(msg("doctor.problemsFound"));
@@ -596,6 +613,10 @@ async function runStart() {
     path.join(serverRoot, "server.js"),
   ];
 
+  if (daemon && process.platform === "win32") {
+    return runWindowsDaemon(runtimePaths, portOverride, serverRoot);
+  }
+
   if (daemon) {
     const logsDir = runtimePaths.getDeskRpgLogsDir();
     const logFile = path.join(logsDir, "deskrpg.log");
@@ -655,6 +676,50 @@ async function runStart() {
       resolve(signaled ? 0 : (code ?? 0));
     });
   });
+}
+
+/**
+ * Windows `start -d`: a detached child would die with the launching shell's job object, so the
+ * CLI's own foreground `start` is created through WMI instead, and this waits for the PID file
+ * it writes.
+ */
+async function runWindowsDaemon(runtimePaths, portOverride, serverRoot) {
+  const { launchWindowsDaemon } = require(path.join(getPackageRoot(), "src/lib/windows-daemon.js"));
+  const logFile = path.join(runtimePaths.getDeskRpgLogsDir(), "deskrpg.log");
+  removePidFile();
+  try {
+    launchWindowsDaemon(
+      {
+        nodePath: process.execPath,
+        cliPath: __filename,
+        logFile,
+        env: { DESKRPG_HOME: runtimePaths.getDeskRpgHomeDir() },
+        args: portOverride ? ["-p", String(portOverride)] : [],
+        cwd: serverRoot,
+      },
+      spawnSync,
+    );
+  } catch {
+    console.error(`DeskRPG could not start in the background. Run "deskrpg start" instead.`);
+    console.error(`  Logs: ${logFile}`);
+    return 1;
+  }
+  let pid = null;
+  for (let i = 0; i < 300 && !pid; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    pid = readPidFile();
+  }
+  if (!pid) {
+    console.error(`DeskRPG did not start in the background. See the log for the reason.`);
+    console.error(`  Logs: ${logFile}`);
+    return 1;
+  }
+  const port = process.env.PORT || "3000";
+  console.log(`DeskRPG server started in background (PID ${pid})`);
+  console.log(`  URL:  http://localhost:${port}`);
+  console.log(`  Logs: ${logFile}`);
+  console.log(`  Stop: deskrpg stop`);
+  return 0;
 }
 
 async function runStop() {
