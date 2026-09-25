@@ -3450,6 +3450,8 @@ const en: Record<string, string> = {
   "connectors.add.transport.http": "HTTP",
   "connectors.add.transport.stdio": "Command (stdio)",
   "connectors.add.url": "URL",
+  "connectors.add.urlSecretWarning":
+    "This address carries a secret in its query. Hermes logs it as-is, so move it to [Bearer token] if you can.",
   "connectors.add.headers": "Headers",
   "connectors.add.headerKey": "Header name",
   "connectors.add.headerValue": "Value",

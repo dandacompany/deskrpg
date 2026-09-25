@@ -3427,6 +3427,8 @@ const ko: Record<string, string> = {
   "connectors.add.transport.http": "HTTP",
   "connectors.add.transport.stdio": "명령 실행(stdio)",
   "connectors.add.url": "URL",
+  "connectors.add.urlSecretWarning":
+    "이 주소의 쿼리에 비밀값이 들어 있습니다. Hermes 로그에 그대로 남으니 가능하면 [Bearer 토큰]으로 옮기세요.",
   "connectors.add.headers": "헤더",
   "connectors.add.headerKey": "헤더 이름",
   "connectors.add.headerValue": "값",

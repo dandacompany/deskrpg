@@ -249,3 +249,33 @@ test("stdio env values are sent only as secrets for keys the server reports", as
   assert.deepEqual(log.bodies[`PUT ${ROOT}/servers/fs/secrets/FS_TOKEN`], { value: "ghp_abc" });
   assert.deepEqual(added, ["fs"]);
 });
+
+test("a typed URL with a secret in its query warns but still saves", async () => {
+  const log = mockFetch({
+    [CATALOG]: catalog,
+    [`POST ${ROOT}/servers`]: view("zap"),
+    [`POST ${ROOT}/servers/zap/test`]: { jobId: "j1" },
+  });
+  await render(pane());
+  await click('[data-tab="custom"]');
+  await type('[name="name"]', "zap");
+  await type('[name="url"]', "https://mcp.example.com/mcp?page=2");
+  assert.equal(container.querySelector("[data-url-secret-warning]"), null);
+  await type('[name="url"]', "https://mcp.example.com/mcp?api_key=fake");
+  assert.ok($("[data-url-secret-warning]").textContent?.includes("Hermes 로그에 그대로 남으니"));
+  assert.equal(($('[data-action="save"]') as HTMLButtonElement).disabled, false);
+  await click('[data-action="save"]');
+  assert.ok(log.calls.includes(`POST ${ROOT}/servers`));
+  assert.deepEqual(added, ["zap"]);
+});
+
+test("a URL filled from pasted JSON gets the same warning", async () => {
+  mockFetch({ [CATALOG]: catalog });
+  await render(pane());
+  await click('[data-tab="custom"]');
+  await type(
+    '[name="json-import"]',
+    JSON.stringify({ zap: { url: "https://mcp.example.com/mcp?Token=fake" } }),
+  );
+  assert.ok($("[data-url-secret-warning]"));
+});

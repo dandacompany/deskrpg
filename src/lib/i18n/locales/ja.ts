@@ -3466,6 +3466,8 @@ const ja: Record<string, string> = {
   "connectors.add.transport.http": "HTTP",
   "connectors.add.transport.stdio": "コマンド実行 (stdio)",
   "connectors.add.url": "URL",
+  "connectors.add.urlSecretWarning":
+    "このアドレスのクエリに秘密の値が含まれています。Hermes のログにそのまま残るため、可能なら [Bearer トークン] に移してください。",
   "connectors.add.headers": "ヘッダー",
   "connectors.add.headerKey": "ヘッダー名",
   "connectors.add.headerValue": "値",
