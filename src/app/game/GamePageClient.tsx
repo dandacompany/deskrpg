@@ -103,8 +103,8 @@ import { isNpcCallRejected, npcCallErrorKey } from "@/lib/npc-call-errors";
 import WorkspaceNavigator, {
   type NavigatorNpc,
   type NpcNavigatorAction,
+  type RosterNpc,
 } from "@/components/conversation/WorkspaceNavigator";
-import type { RosterNpc } from "@/components/NpcRoster";
 import { createAvatarLookup } from "./avatar-lookup";
 import type { NpcChatMessage } from "@/components/NpcDialog";
 import PasswordModal from "@/components/PasswordModal";

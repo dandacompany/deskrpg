@@ -5,8 +5,21 @@ import { sortRooms, type RoomSummary } from "@/lib/chat-rooms-policy";
 import { roomMessagePreview } from "@/components/rooms/room-message-preview";
 import type { DmThreadEntry } from "@/lib/dm-threads";
 import { useT } from "@/lib/i18n";
-import type { RosterNpc } from "../NpcRoster";
 import ParticipantRow from "./ParticipantRow";
+
+/**
+ * A clocked-in employee as the game screen tracks it. A clocked-in employee always has a
+ * spot: a desk seat number, or "standing" when the desks are full.
+ */
+export type RosterNpc = {
+  id: string;
+  name: string;
+  appearance?: unknown;
+  active: boolean;
+  placed: boolean;
+  seatNumber?: number | null;
+  profile?: { ownerUserId?: string; profileName?: string } | null;
+};
 
 export type NavigatorNpc = RosterNpc & {
   role?: string;
