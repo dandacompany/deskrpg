@@ -4,18 +4,40 @@ import { OpenChatRuntime } from "./open-chat-runtime";
 import type { EngineParticipant } from "./types";
 import type { NpcAdapter, AdapterExecuteOptions } from "@/lib/adapters/types";
 
-/** A mock that waits the given time before returning a fixed reply. For concurrency verification. */
-function delayed(reply: string, ms: number): NpcAdapter {
-  return {
+/**
+ * A mock whose replies are held until the test releases them — completion order is decided by the
+ * test, not by timers that a busy event loop can reorder. `started()` is true once it was called.
+ */
+function gated(reply: string) {
+  let open = false;
+  const waiting: (() => void)[] = [];
+  let called = false;
+  const adapter = {
     type: "mock",
     async execute(o: AdapterExecuteOptions) {
-      await new Promise((r) => setTimeout(r, ms));
+      called = true;
+      if (!open) await new Promise<void>((r) => waiting.push(r));
       return { response: reply, session: { sessionRef: o.sessionKey } };
     },
     async testConnection() {
       return { status: "ok" as const };
     },
   } as NpcAdapter;
+  return {
+    adapter,
+    started: () => called,
+    /** Lets the held call and every later call finish. */
+    release() {
+      open = true;
+      for (const resolve of waiting.splice(0)) resolve();
+    },
+  };
+}
+
+/** Yields until `done()` holds — bounded so a broken runtime fails instead of hanging. */
+async function until(done: () => boolean) {
+  for (let i = 0; i < 1000 && !done(); i += 1) await new Promise((r) => setImmediate(r));
+  assert.ok(done(), "condition never held");
 }
 
 function always(reply: string): NpcAdapter {
@@ -74,15 +96,23 @@ describe("OpenChatRuntime", () => {
 
   test("whichever finishes first speaks first — it doesn't go in call order", async () => {
     // This assertion is the whole point of "simultaneous speaking." A sequential implementation would always come out in mention order (단비→하늘).
-    const a = p("n1", "단비", delayed("느린 답", 80));
-    const b = p("n2", "하늘", delayed("빠른 답", 10));
+    const slow = gated("느린 답");
+    const fast = gated("빠른 답");
+    const a = p("n1", "단비", slow.adapter);
+    const b = p("n2", "하늘", fast.adapter);
     const spoke: string[] = [];
     const rt = new OpenChatRuntime(
       { participants: [a, b], recent: () => [], turnTimeout: TIMEOUT },
       { onTurnEnd: (npcId) => spoke.push(npcId) },
     );
 
-    await rt.handleHumanMessage("지호", "@[단비] @[하늘] 어때?");
+    const handled = rt.handleHumanMessage("지호", "@[단비] @[하늘] 어때?");
+    // Both calls are in flight before either finishes — a sequential runtime never starts 하늘 here.
+    await until(() => slow.started() && fast.started());
+    fast.release();
+    await until(() => spoke.length === 1);
+    slow.release();
+    await handled;
 
     assert.deepEqual(
       spoke,
@@ -126,7 +156,8 @@ describe("OpenChatRuntime", () => {
   });
 
   test("calling an already-speaking NPC again is processed in order", async () => {
-    const a = p("n1", "단비", delayed("네", 60));
+    const held = gated("네");
+    const a = p("n1", "단비", held.adapter);
     const starts: string[] = [];
     const rt = new OpenChatRuntime(
       { participants: [a], recent: () => [], turnTimeout: TIMEOUT },
@@ -134,11 +165,12 @@ describe("OpenChatRuntime", () => {
     );
 
     const first = rt.handleHumanMessage("지호", "@[단비] 하나");
-    // Call it again before the first turn finishes
-    await new Promise((r) => setTimeout(r, 10));
+    // Call it again while the first turn is still held
+    await until(held.started);
     assert.equal(rt.isSpeaking("n1"), true);
-    await rt.handleHumanMessage("지호", "@[단비] 둘");
-    await first;
+    const second = rt.handleHumanMessage("지호", "@[단비] 둘");
+    held.release();
+    await Promise.all([first, second]);
 
     assert.deepEqual(starts, ["n1", "n1"], "두 번째 사람 호출을 버리지 않고 다음 턴으로 처리한다");
   });

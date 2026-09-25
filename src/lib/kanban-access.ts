@@ -27,6 +27,7 @@ import type { NextResponse } from "next/server";
 import { db, hermesProfiles, npcs, users } from "@/db";
 import {
   cronError,
+  gateError,
   pluginGateResponse,
   requireChannelMember,
   type CronChannelContext,
@@ -170,7 +171,7 @@ async function resolveContext(
   if (!resolved.ok) {
     return {
       ok: false,
-      response: cronError(409, "gateway_not_bound", "Channel has no gateway bound"),
+      response: gateError("gateway_not_bound", "Channel has no gateway bound"),
     };
   }
   if (!resolved.pluginGate.ok) {

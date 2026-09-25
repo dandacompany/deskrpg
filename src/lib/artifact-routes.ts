@@ -11,7 +11,7 @@ import {
   loadScopedArtifact,
   resolveArtifactChannelContext,
 } from "@/lib/artifact-access";
-import { cronError, pluginFailureResponse } from "@/lib/cron-access";
+import { cronError, gateError, pluginFailureResponse } from "@/lib/cron-access";
 import {
   ARTIFACT_CATEGORIES,
   ARTIFACT_KINDS,
@@ -61,8 +61,7 @@ export async function listArtifacts(req: NextRequest, channelId: string): Promis
   }
   if (profile && !ctx.profiles.includes(profile)) return cronError(400, "invalid_field", "profile");
   if (taskId && (compareSemver(ctx.pluginVersion, ARTIFACTS_TASK_FILTER_MIN_VERSION) ?? -1) < 0) {
-    return cronError(
-      428,
+    return gateError(
       "plugin_upgrade_required",
       `deskrpg-hermes-plugin ${ARTIFACTS_TASK_FILTER_MIN_VERSION}+ required`,
       { minVersion: ARTIFACTS_TASK_FILTER_MIN_VERSION },

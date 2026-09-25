@@ -569,10 +569,12 @@ time.sleep(30)
     const result = spawnSync("python3", ["-c", HOST_BOOTSTRAP], {
       env: { ...process.env, HOME: temp },
       encoding: "utf8",
-      // CI runs the full suite concurrently; allow the child enough cold-start time
-      // to publish its owned PIDs before exercising the watchdog.
-      input: JSON.stringify({ action: "install", timeout: 2, script }),
-      timeout: 8000,
+      // This test is about killing the owned group, not about the watchdog's exact budget. The
+      // budget has to cover a python3 cold start plus a descendant spawn on a machine running
+      // several suites at once (2s lost that race), so it is generous; the child sleeps 30s, so a
+      // survivor is still caught.
+      input: JSON.stringify({ action: "install", timeout: 6, script }),
+      timeout: 30000,
     });
     assert.equal(result.status, 0);
     assert.deepEqual(JSON.parse(result.stdout), { error: "host_operation_failed" });
@@ -2446,9 +2448,10 @@ test("HOST_BOOTSTRAP round-trips a Korean payload even under a non-UTF-8 locale"
     const script = String.raw`print(__import__('json').dumps({'echo': '한글 확인 문자열'}))`;
     const result = spawnSync("python3", ["-c", HOST_BOOTSTRAP], {
       encoding: "utf8",
-      input: JSON.stringify({ action: "run", timeout: 5, script }),
+      // The script returns at once, so a wide budget costs nothing and a loaded machine can't trip it.
+      input: JSON.stringify({ action: "run", timeout: 20, script }),
       env: { ...process.env, HOME: temp, PYTHONUTF8: "0", LC_ALL: "C", LANG: "C" },
-      timeout: 15000,
+      timeout: 30000,
     });
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout), { echo: "한글 확인 문자열" });
