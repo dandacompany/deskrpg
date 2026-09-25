@@ -275,6 +275,9 @@ test("create → origin recorded (only after success); origin channel members ca
   const runsBody = await runs.json();
   assert.equal(runsBody.limit, 5);
   assert.equal(runsBody.runs.length, 1);
+  // The plugin sends epoch seconds (Hermes' session rows); the route hands the screen ISO strings.
+  assert.equal(typeof runsBody.runs[0].started_at, "string");
+  assert.ok(!Number.isNaN(Date.parse(runsBody.runs[0].started_at)));
 
   // detail
   const detail = await routes.job.GET(

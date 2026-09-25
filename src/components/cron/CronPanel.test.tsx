@@ -391,3 +391,65 @@ test("a partial NPC fetch failure (errors) shows a warning while keeping the lis
     await cleanup();
   }
 });
+
+// Measured on staging: a history row showed only "— · ok · Custom reminder · Sep 26 00:49". The
+// result itself was visible only in the chat notice, and the row did not open.
+test("a history row shows the time, a readable status and the result, expandable in full", async () => {
+  const jobs = [job({ id: "j1", npcId: "npc-a" })];
+  const long = Array.from({ length: 12 }, (_, i) => `${i + 1}. 오늘 할 일`).join("\n");
+  const r = router((url) => {
+    if (url.includes("/runs"))
+      return json(200, {
+        runs: [
+          {
+            id: "r1",
+            started_at: "2026-09-26T00:49:00+09:00",
+            ended_at: "2026-09-26T00:49:40+09:00",
+            status: "ok",
+            summary: "Custom reminder · Sep 26 00:49",
+            result_text: long,
+          },
+          {
+            id: "r2",
+            started_at: "2026-09-25T14:00:00+09:00",
+            ended_at: null,
+            status: "error",
+            summary: "Custom reminder · Sep 25 14:00",
+            result_text: "",
+          },
+        ],
+        limit: 20,
+      });
+    return json(200, { jobs, timezone: "Asia/Seoul" });
+  });
+  const { host, cleanup } = await mount(<CronPanel channelId="ch1" npcs={NPCS} />, r.handler);
+  try {
+    await click(allByTestId(host, "cron-row")[0].querySelector("button"));
+    await click(byTestId(host, "cron-tab-runs"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const [done, failed] = allByTestId(host, "cron-run");
+    assert.doesNotMatch(done.textContent ?? "", /—/, "the time is shown");
+    assert.match(done.textContent ?? "", /2026/);
+    assert.match(done.textContent ?? "", /성공/);
+    assert.match(failed.textContent ?? "", /실패/);
+
+    const result = done.querySelector<HTMLElement>("[data-testid='cron-run-result']");
+    assert.ok(result, "the result body is in the row");
+    assert.match(result.textContent ?? "", /12\. 오늘 할 일/);
+    const toggle = done.querySelector<HTMLButtonElement>("[data-testid='cron-run-toggle']");
+    assert.ok(toggle);
+    assert.equal(toggle.getAttribute("aria-expanded"), "false");
+    assert.ok(result.className.includes("line-clamp"), "folded by default");
+    await click(toggle);
+    assert.equal(toggle.getAttribute("aria-expanded"), "true");
+    assert.ok(!result.className.includes("line-clamp"), "unfolded shows the whole result");
+
+    // No result body: say where it went instead of showing nothing.
+    assert.ok(!failed.querySelector("[data-testid='cron-run-toggle']"));
+    assert.match(failed.textContent ?? "", /채팅/);
+  } finally {
+    await cleanup();
+  }
+});

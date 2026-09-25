@@ -395,8 +395,8 @@ import type {
   CreateTaskBody,
   CronDeliveryTarget,
   CronJob,
-  CronRun,
   DispatchResult,
+  PluginCronRun,
   EventsPage,
   InstantiateBlueprintBody,
   KanbanAttachment,
@@ -580,7 +580,10 @@ export type OwnerPluginClient = {
 export type CronApi = {
   listJobs(opts?: { includeDisabled?: boolean }): Promise<PluginResponse<{ jobs: CronJob[] }>>;
   getJob(id: string): Promise<PluginResponse<{ job: CronJob }>>;
-  listRuns(id: string, opts?: { limit?: number }): Promise<PluginResponse<{ runs: CronRun[] }>>;
+  listRuns(
+    id: string,
+    opts?: { limit?: number },
+  ): Promise<PluginResponse<{ runs: PluginCronRun[] }>>;
   createJob(body: CreateCronJobBody): Promise<PluginResponse<{ job: CronJob }>>;
   updateJob(id: string, body: UpdateCronJobBody): Promise<PluginResponse<{ job: CronJob }>>;
   pauseJob(id: string): Promise<PluginResponse<{ job: CronJob }>>;
