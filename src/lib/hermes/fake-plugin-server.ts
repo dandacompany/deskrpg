@@ -510,6 +510,24 @@ export async function startFakePluginServer(
     return { status: 201, body: { board: boardMeta(record) } };
   }
 
+  /** Mirrors the plugin's `archived` PATCH key: capability-gated, never the default board, never with running cards. */
+  function patchBoardArchived(record: BoardRecord, value: unknown) {
+    if (!info.capabilities?.includes("board_archive"))
+      throw badRequest("unknown_field", "archived");
+    if (typeof value !== "boolean") throw badRequest("invalid_field", "archived");
+    if (value && record.meta.slug === "default") throw badRequest("invalid_board");
+    if (value) {
+      const running = [...record.tasks.values()].filter((t) => t.task.status === "running").length;
+      if (running > 0)
+        throw new HttpError(409, {
+          error: "board_has_running_cards",
+          detail: `${running} running`,
+          running,
+        });
+    }
+    record.meta.archived = value;
+  }
+
   function boardMeta(record: BoardRecord): BoardMeta {
     return {
       ...record.meta,
@@ -1583,10 +1601,12 @@ export async function startFakePluginServer(
 
     if (pathname === "/deskrpg/kanban/boards") {
       if (method === "GET") {
-        return {
-          status: 200,
-          body: { boards: [...boards.values()].map(boardMeta), current: currentBoard },
-        };
+        // 0.19.0 plugin: archived boards appear only with `?include_archived=true`.
+        const includeArchived = params.get("include_archived") === "true";
+        const listed = [...boards.values()].filter(
+          (record) => includeArchived || !record.meta.archived,
+        );
+        return { status: 200, body: { boards: listed.map(boardMeta), current: currentBoard } };
       }
       if (method === "POST") return createBoard(body);
       throw notFound();
@@ -1595,6 +1615,7 @@ export async function startFakePluginServer(
     if (m && method === "PATCH") {
       const record = boards.get(decodeURIComponent(m[1]));
       if (!record) throw notFound("unknown_board");
+      if ("archived" in body) patchBoardArchived(record, body.archived);
       for (const key of ["name", "description", "default_workdir"] as const) {
         if (typeof body[key] === "string") record.meta[key] = body[key];
       }

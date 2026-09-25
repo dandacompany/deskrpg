@@ -31,6 +31,8 @@ import { and, eq } from "drizzle-orm";
 import { channelKanbanBoards, channelProjects, channelSubprojects, db, npcs, nowForDb } from "@/db";
 import type { BoardMeta } from "@/lib/hermes/deskrpg-plugin-types";
 import type { OwnerPluginClient } from "@/lib/hermes/plugin-client-types";
+import type { PluginInfo } from "@/lib/hermes/deskrpg-plugin-types";
+import { supportsBoardArchive } from "@/lib/hermes/plugin-capability";
 import {
   ensureChannelBoard,
   ensureChannelCarrier,
@@ -66,6 +68,8 @@ export class ProjectRegistryError extends Error {
     readonly status: number,
     readonly code: string,
     message?: string,
+    /** Extra response fields the screen reads, e.g. `running` for `board_has_running_cards`. */
+    readonly details: Record<string, unknown> = {},
   ) {
     super(message ?? code);
   }
@@ -355,7 +359,13 @@ export async function updateChannelProject(
     const resolved = await resolveChannelBoard(args[0]);
     if (!resolved.ok) throw new EventCarrierError(409, resolved.code);
     if (!resolved.pluginGate.ok) throw new EventCarrierError(428, resolved.pluginGate.code);
-    return updateChannelProjectUnlocked(args[0], args[1], resolved.ownerClient, args[3]);
+    return updateChannelProjectUnlocked(
+      args[0],
+      args[1],
+      resolved.ownerClient,
+      args[3],
+      resolved.pluginGate.info,
+    );
   });
   schedulePollNow(args[0]);
   return result;
@@ -366,6 +376,7 @@ async function updateChannelProjectUnlocked(
   projectId: string,
   client: OwnerPluginClient,
   input: UpdateProjectInput,
+  info: PluginInfo | null = null,
 ): Promise<ProjectView> {
   const project = await readProject(channelId, projectId);
   let board = await readProjectBoard(project);
@@ -391,6 +402,13 @@ async function updateChannelProjectUnlocked(
   if (input.status === "completed" || input.status === "cancelled") {
     await archiveChannelProjectUnlocked(channelId, projectId, input.status);
     board = await readProjectBoard(project);
+  } else if (
+    input.status !== undefined &&
+    ARCHIVED_STATUSES.has(project.status) &&
+    supportsBoardArchive(info)
+  ) {
+    // Reopening: the dispatcher skips an archived Hermes board, so its ready cards would never run.
+    await setBoardArchived(client, board.boardSlug, false);
   }
   const patch: Partial<ProjectRow> = { updatedAt: nowForDb() };
   if (input.status !== undefined) patch.status = input.status;
@@ -442,29 +460,62 @@ async function archiveChannelProjectUnlocked(
   );
   if (stillActive.length === 0) throw new ProjectRegistryError(400, "last_board");
 
-  let carrierMovedTo: string | null = null;
-  if (board.isEventCarrier) {
-    const next = stillActive[0];
-    const resolved = await resolveChannelBoard(channelId);
-    if (!resolved.ok) throw new EventCarrierError(409, resolved.code);
-    if (!resolved.pluginGate.ok) throw new EventCarrierError(428, resolved.pluginGate.code);
-    await handoffEventCarrier({
-      channelId,
-      sourceId: board.id,
-      targetId: next.id,
-      projectId: project.id,
-      status,
-      client: resolved.ownerClient,
-    });
-    carrierMovedTo = next.boardSlug;
-  }
+  const resolved = await resolveChannelBoard(channelId);
+  if (!resolved.ok) throw new EventCarrierError(409, resolved.code);
+  if (!resolved.pluginGate.ok) throw new EventCarrierError(428, resolved.pluginGate.code);
+  const client = resolved.ownerClient;
 
-  const [updated] = await db
-    .update(channelProjects)
-    .set({ status, updatedAt: nowForDb() })
-    .where(eq(channelProjects.id, project.id))
-    .returning();
-  return { project: updated, carrierMovedTo };
+  // Archive the Hermes board first: the plugin refuses a board with running cards, and that refusal
+  // must leave the carrier and our status untouched. An older plugin keeps the metadata-only archive.
+  const archiveBoard = supportsBoardArchive(resolved.pluginGate.info);
+  if (archiveBoard) await setBoardArchived(client, board.boardSlug, true);
+
+  try {
+    let carrierMovedTo: string | null = null;
+    if (board.isEventCarrier) {
+      const next = stillActive[0];
+      await handoffEventCarrier({
+        channelId,
+        sourceId: board.id,
+        targetId: next.id,
+        projectId: project.id,
+        status,
+        client,
+      });
+      carrierMovedTo = next.boardSlug;
+    }
+
+    const [updated] = await db
+      .update(channelProjects)
+      .set({ status, updatedAt: nowForDb() })
+      .where(eq(channelProjects.id, project.id))
+      .returning();
+    return { project: updated, carrierMovedTo };
+  } catch (err) {
+    if (archiveBoard) {
+      // Put the board back so its cards keep dispatching; the project stays active on our side.
+      await setBoardArchived(client, board.boardSlug, false).catch((undo) => {
+        console.warn(
+          `[project-registry] could not unarchive ${board.boardSlug}: ${undo instanceof Error ? undo.message : String(undo)}`,
+        );
+      });
+    }
+    throw err;
+  }
+}
+
+async function setBoardArchived(client: OwnerPluginClient, slug: string, archived: boolean) {
+  const res = await client.kanban.updateBoard(slug, { archived });
+  if (res.ok) return;
+  const status = res.status === 409 || res.status === 400 ? res.status : 503;
+  // Only the count the screen shows is passed on — other plugin fields stay on the server.
+  const running = res.failure.details.running;
+  throw new ProjectRegistryError(
+    status,
+    res.failure.code,
+    res.failure.message,
+    typeof running === "number" ? { running } : {},
+  );
 }
 
 // ---------------------------------------------------------------------------
