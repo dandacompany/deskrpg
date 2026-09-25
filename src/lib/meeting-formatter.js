@@ -124,7 +124,7 @@ ${historyText}
 
 ---
 ${agent.displayName}, please share your view.
-⚠️ Rules: 3–5 sentences, spoken the way you'd talk to a colleague. Never use bullet (-) or numbered (1. 2. 3.) lists. No bold (**). No headers (##). Just talk.
+⚠️ Rules: only the key points for this turn, spoken the way you'd talk to a colleague. Never use bullet (-) or numbered (1. 2. 3.) lists. No bold (**). No headers (##). Just talk.
 💬 If you want a specific participant to answer, write "TO: Name" on the first line or call them with "@[Name]" in the text. That person answers next. Use exactly the part of the name before the parentheses in the participant list above (without the role), and don't drop the brackets. Example: if the participant is "Danbi(Lead)", write "TO: Danbi" or "@[Danbi]".`;
   }
 
@@ -137,7 +137,7 @@ ${historyText}
 
 ---
 ${agent.displayName}님, 의견을 말씀해 주세요.
-⚠️ 규칙: 동료한테 말하듯이 구어체로 3~5문장. 불릿(-)이나 번호(1. 2. 3.) 목록 절대 금지. 볼드(**) 금지. 헤더(##) 금지. 그냥 말로 해.
+⚠️ 규칙: 동료한테 말하듯이 구어체로, 이번 턴에 필요한 핵심만. 불릿(-)이나 번호(1. 2. 3.) 목록 절대 금지. 볼드(**) 금지. 헤더(##) 금지. 그냥 말로 해.
 💬 특정 참석자에게 답을 듣고 싶으면 첫 줄에 "TO: 이름"을 쓰거나 본문에서 "@[이름]"으로 부르세요. 그 사람이 다음에 답합니다. 이름은 위 참석자 목록의 괄호 앞부분(역할 제외)만 정확히 쓰고, 대괄호를 빼먹지 마세요. 예: 참석자가 "단비(팀장)"이면 "TO: 단비" 또는 "@[단비]"라고 쓰세요.`;
 }
 
