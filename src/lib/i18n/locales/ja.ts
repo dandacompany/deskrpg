@@ -2147,6 +2147,7 @@ const ja: Record<string, string> = {
   "meeting.discussionIntro": "NPCと構造化されたディスカッションを開始",
   "meeting.aborted": "(中断)",
   "meeting.polling": "投票中",
+  "meeting.pollStatus.other": "進行中",
   "meeting.raiseLabel": "挙手:",
   "meeting.passLabel": "パス:",
 

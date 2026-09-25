@@ -10,7 +10,12 @@ import { useLocale, useT } from "@/lib/i18n";
 import { ChevronDown, ChevronUp, Pause, Play } from "lucide-react";
 import { appendMeetingMessage } from "./meeting-room/message-state";
 import { mentionSkipI18nKey } from "./meeting-room/mention-skip-notice";
-import { formatPollRaises, formatPollPasses, type PollRaiseItem } from "./meeting-room/poll-status";
+import {
+  formatPollRaises,
+  formatPollPasses,
+  type PollRaiseItem,
+  pollStatusNoteKey,
+} from "./meeting-room/poll-status";
 import {
   restoreMeetingNpcs,
   type MeetingDiscussionState,
@@ -34,6 +39,7 @@ import {
 } from "./meeting-room/stream-text";
 import MeetingSidebar from "./meeting-room/MeetingSidebar";
 import { useMeetingStop } from "./meeting-room/use-meeting-stop";
+import { meetingErrorDisplay } from "./meeting-room/meeting-error-display";
 import RosterAvatar from "./RosterAvatar";
 import { createAvatarLookup } from "@/app/game/avatar-lookup";
 import { CHAT_AVATAR_SIZE } from "./ui/ChatBubble";
@@ -904,6 +910,7 @@ export default function MeetingRoom({
     participantCountRef.current = sceneParticipants.length;
   }, [sceneParticipants.length]);
   const raiseNames = formatPollRaises(pollStatus?.raises);
+  const pollNoteKey = pollStatusNoteKey(pollStatus?.status);
 
   // Collect streaming NPC messages for display
   const streamingEntries = Object.entries(npcStreams);
@@ -1106,10 +1113,7 @@ export default function MeetingRoom({
         {meetingError && (
           <p role="alert" className="shrink-0 p-3 text-danger">
             {t("meeting.entryFailed", {
-              reason:
-                t(`meeting.reason.${meetingError}`) === `meeting.reason.${meetingError}`
-                  ? meetingError
-                  : t(`meeting.reason.${meetingError}`),
+              reason: meetingErrorDisplay(meetingError, t),
             })}
           </p>
         )}
@@ -1220,7 +1224,7 @@ export default function MeetingRoom({
                     ).join(", ")}
                   </span>
                 )}
-                {pollStatus.status && <span className="text-text-muted">{pollStatus.status}</span>}
+                {pollNoteKey && <span className="text-text-muted">{t(pollNoteKey)}</span>}
               </div>
             ) : null
           }

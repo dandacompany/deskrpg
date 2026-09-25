@@ -29,3 +29,14 @@ test("pass votes resolve NPC IDs to display names without exposing unknown UUIDs
   ]);
   assert.deepEqual(formatPollPasses(undefined, npcs, "Unknown NPC"), []);
 });
+
+test("the poll status line never shows the server's raw status value", async () => {
+  const { pollStatusNoteKey } = await import("./poll-status");
+  // "polling" is what the heading already says — repeating it untranslated was the staging bug.
+  assert.equal(pollStatusNoteKey("polling"), null);
+  assert.equal(pollStatusNoteKey(undefined), null);
+  assert.equal(pollStatusNoteKey(""), null);
+  // A status a newer server adds gets a generic phrase, not its English code.
+  assert.equal(pollStatusNoteKey("tallying"), "meeting.pollStatus.other");
+  assert.equal(pollStatusNoteKey(42), null);
+});
