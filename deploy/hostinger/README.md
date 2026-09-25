@@ -28,9 +28,19 @@ Measured with both shapes: first deploy, full recreate, a new image recreating o
 
 ## 2. One-click
 
+There are two ways in. Both end with DeskRPG and Hermes on one VPS.
+
+### Starting with a new VPS — the catalog
+
+DeskRPG is in Hostinger's one-click VPS catalog. Open its page, order a VPS and pick **DeskRPG** as the application. It needs 8 GB, so it is offered on **KVM 2** or larger.
+
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/applications/deskrpg)
+
+### Already have a VPS — Docker Manager
+
 [![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/vps/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/docker-compose.yml)
 
-No VPS yet? [Get one here first](https://hostinger.com/DANTE-DOCKER) — a referral link that supports this project at no extra cost to you. It lands on Hostinger's offer page, not on Docker Manager, so buy there and then press the button above.
+Want a VPS for this route? [Get one here first](https://hostinger.com/DANTE-DOCKER) — a referral link that supports this project at no extra cost to you. It lands on Hostinger's offer page, not on Docker Manager, so buy there and then press the button above.
 
 The button opens Docker Hosting. Pick **KVM 2** (2 vCPU / 8 GB — Hostinger's own minimum for Hermes), finish checkout, and Docker Manager opens with this compose already loaded.
 

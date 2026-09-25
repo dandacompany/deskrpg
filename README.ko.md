@@ -4,13 +4,19 @@ English README: [README.md](README.md)
 
 <img src="public/readme/home-screenshot.png" alt="DeskRPG 홈 화면" width="100%" />
 
-[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/vps/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/docker-compose.yml)
-
 오피스와 Hermes Agent를 VPS 한 대에서 24시간 돌리는 방법은 [deploy/hostinger](deploy/hostinger/README.md)를 보세요.
 
-> ⚠️ **이어서 Traefik을 배포하세요.** 오피스의 HTTPS 주소는 Traefik이 만들어 줍니다. 이 배포가 끝나면 도커 매니저에 _"Traefik으로 Docker 프로젝트를 위한 HTTPS 활성화"_ 배너가 나타납니다. **Traefik 배포** 를 누른 뒤, DeskRPG 프로젝트 환경변수에 `TRAEFIK_HOST=srvNNNNNN.hstgr.cloud` 를 직접 추가하고 **저장 후 배포** 하세요. 자동으로 채워지지 않습니다. Hostinger에서 볼 수 있는 Traefik 두 가지 형태(호스트 모드, `traefik-proxy` 네트워크 방식) 모두 동작합니다.
+**새 VPS로 시작한다면** — DeskRPG는 Hostinger 원클릭 카탈로그에 있습니다. 아래 페이지에서 주문할 때 DeskRPG를 고르세요(KVM 2 이상, 8GB 권장).
 
-VPS가 아직 없다면 [여기서 받으세요](https://hostinger.com/DANTE-DOCKER) (제휴 링크입니다 — 추가 비용 없이 이 프로젝트를 후원하게 됩니다). 받은 뒤 위 버튼을 누르면 됩니다.
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/applications/deskrpg)
+
+**이미 VPS가 있다면** — 도커 매니저에 compose를 불러옵니다.
+
+[![Deploy on Hostinger](https://assets.hostinger.com/vps/deploy.svg)](https://www.hostinger.com/vps/docker-hosting?compose_url=https://raw.githubusercontent.com/dandacompany/deskrpg/refs/heads/master/docker-compose.yml)
+
+> ⚠️ **도커 매니저 경로라면 이어서 Traefik을 배포하세요.** 오피스의 HTTPS 주소는 Traefik이 만들어 줍니다. 이 배포가 끝나면 도커 매니저에 _"Traefik으로 Docker 프로젝트를 위한 HTTPS 활성화"_ 배너가 나타납니다. **Traefik 배포** 를 누른 뒤, DeskRPG 프로젝트 환경변수에 `TRAEFIK_HOST=srvNNNNNN.hstgr.cloud` 를 직접 추가하고 **저장 후 배포** 하세요. 자동으로 채워지지 않습니다. Hostinger에서 볼 수 있는 Traefik 두 가지 형태(호스트 모드, `traefik-proxy` 네트워크 방식) 모두 동작합니다.
+
+도커 매니저 경로로 쓸 VPS가 필요하다면 [여기서 받으세요](https://hostinger.com/DANTE-DOCKER) (제휴 링크입니다 — 추가 비용 없이 이 프로젝트를 후원하게 됩니다). 받은 뒤 위 버튼을 누르면 됩니다.
 
 DeskRPG는 직접 호스팅하는 **AI 에이전트용 3D 미니어처 가상 오피스**입니다. 이미 쓰고 있는 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 프로필이 그대로 직원이 됩니다. 자리에 앉아 있다가 지명하면 답하고, 회의실에서 발언권을 주고받고, 칸반 카드를 처리합니다. **NPC를 곁으로 부르고 사무실 채팅에서 완료 보고를 확인하세요.** 여러 사람이 같은 오피스에 동시에 들어올 수 있습니다.
 
