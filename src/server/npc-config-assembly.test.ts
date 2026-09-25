@@ -29,6 +29,9 @@ test("a hired NPC gets the meeting protocol even with an empty agent_config", as
     /<team-instructions>/,
     "agent_config 가 NULL 이면 기본 회의 규약으로 떨어져야 한다",
   );
+  // The protocol reaches the NPC only through `instructions` — a raw copy next to it would
+  // disagree with it whenever the user left the protocol empty.
+  assert.equal("meetingProtocol" in config, false);
 });
 
 test("dormant NPCs drop out of the conversation roster, unplaced ones stay", async () => {

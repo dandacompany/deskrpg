@@ -30,6 +30,7 @@ import {
   type SubprojectRow,
 } from "@/lib/project-registry";
 import { resolveKanbanChannelContext, type KanbanChannelContext } from "@/lib/kanban-access";
+import { readJsonObject } from "@/lib/api-body";
 
 export type ChannelParams = {
   params: Promise<{ id: string; projectId?: string; subprojectId?: string }>;
@@ -41,17 +42,6 @@ function failure(err: unknown): NextResponse {
   const reason = err instanceof Error ? err.message : String(err);
   console.warn(`[project-routes] unexpected failure: ${reason}`);
   return cronError(500, "internal_error", "internal error");
-}
-
-async function readJsonBody(req: NextRequest): Promise<Record<string, unknown> | null> {
-  try {
-    const parsed = await req.json();
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 /** A context that has already passed the gate once. No board is specified — a project covers the entire board list. */
@@ -109,7 +99,7 @@ export async function postProject(req: NextRequest, channelId: string) {
   const denied = requireOwner(resolved.ctx);
   if (denied) return denied;
 
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return cronError(400, "invalid_body", "JSON body required");
   if (typeof body.name !== "string") return cronError(400, "invalid_body", "name is required");
 
@@ -172,7 +162,7 @@ export async function patchProject(req: NextRequest, channelId: string, projectI
   const denied = requireOwner(resolved.ctx);
   if (denied) return denied;
 
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return cronError(400, "invalid_body", "JSON body required");
   try {
     const leadNpcId = optionalString(body, "leadNpcId");
@@ -199,7 +189,7 @@ export async function postProjectArchive(req: NextRequest, channelId: string, pr
   const denied = requireOwner(resolved.ctx);
   if (denied) return denied;
 
-  const body = (await readJsonBody(req)) ?? {};
+  const body = (await readJsonObject(req)) ?? {};
   const status = body.status === "cancelled" ? "cancelled" : "completed";
   try {
     const result = await archiveChannelProject(channelId, projectId, status);
@@ -245,7 +235,7 @@ export async function postSubproject(req: NextRequest, channelId: string, projec
   const denied = requireOwner(resolved.ctx);
   if (denied) return denied;
 
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return cronError(400, "invalid_body", "JSON body required");
   if (typeof body.name !== "string") return cronError(400, "invalid_body", "name is required");
   try {
@@ -273,7 +263,7 @@ export async function patchSubproject(
   const denied = requireOwner(resolved.ctx);
   if (denied) return denied;
 
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return cronError(400, "invalid_body", "JSON body required");
   try {
     const project = await readProject(channelId, projectId);
@@ -306,7 +296,7 @@ export async function postSubprojectArchive(
   const denied = requireOwner(resolved.ctx);
   if (denied) return denied;
 
-  const body = (await readJsonBody(req)) ?? {};
+  const body = (await readJsonObject(req)) ?? {};
   const status = body.status === "cancelled" ? "cancelled" : "completed";
   try {
     const project = await readProject(channelId, projectId);

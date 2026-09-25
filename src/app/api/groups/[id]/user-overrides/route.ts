@@ -12,6 +12,7 @@ import {
 } from "@/lib/rbac/group-api";
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { readJsonObject } from "@/lib/api-body";
 
 async function requirePermissionManager(groupId: string, userId: string) {
   const context = await getGroupActorContext(groupId, userId);
@@ -62,7 +63,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const auth = await requirePermissionManager(groupId, userId);
   if ("response" in auth) return auth.response;
 
-  const body = await req.json();
+  const body = await readJsonObject(req);
   const { targetUserId, permissionKey, effect } = body ?? {};
 
   if (

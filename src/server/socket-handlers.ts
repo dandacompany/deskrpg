@@ -124,6 +124,7 @@ import {
   persistHermesSessionRef,
   registerHermesRun,
 } from "./hermes-dispatch";
+import { isUuid } from "@/lib/uuid";
 
 export const adapterRegistry = new AdapterRegistry();
 
@@ -171,8 +172,6 @@ interface NpcConfig {
   _name: string;
   role?: string | null;
   passPolicy?: string | null;
-  /** This NPC's meeting speaking rules. Falls back to the locale default when absent. */
-  meetingProtocol?: string | null;
   /** Language of the prompt document. Task procedures are built in that language. */
   locale?: string | null;
   /**
@@ -527,7 +526,6 @@ async function getNpcConfig(
       _name: npc.name,
       role: "Participant",
       passPolicy: typeof oc.passPolicy === "string" ? oc.passPolicy : null,
-      meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
       locale: typeof oc.locale === "string" ? oc.locale : null,
       instructions: resolveNpcInstructions(oc, requestLocale),
     };
@@ -559,7 +557,6 @@ export async function getNpcConfigsForChannel(
         hermesProfileId: typeof npc.hermesProfileId === "string" ? npc.hermesProfileId : null,
         _channelId: channelId,
         _name: npc.name,
-        meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
         locale: typeof oc.locale === "string" ? oc.locale : null,
         instructions: resolveNpcInstructions(oc, requestLocale),
         role: "Participant",
@@ -1261,18 +1258,37 @@ export function setupSocketHandlers(io: Server) {
     // ----- player:join -----
     socket.on(
       "player:join",
-      async (data: {
-        /** Optional — if sent, only checks that it's my character. Name and appearance are filled by the server. */
-        characterId?: string;
-        characterName?: string;
-        appearance?: unknown;
-        mapId: string;
-        mapRevision?: string;
-        x: number;
-        y: number;
-      }) => {
+      async (
+        data: {
+          /** Optional — if sent, only checks that it's my character. Name and appearance are filled by the server. */
+          characterId?: string;
+          characterName?: string;
+          appearance?: unknown;
+          mapId: string;
+          mapRevision?: string;
+          x: number;
+          y: number;
+        } | null,
+      ) => {
+        // A malformed payload is answered before any query — a non-uuid id throws in PostgreSQL,
+        // and a thrown async handler leaves the client waiting with no answer.
+        if (!data || !isUuid(data.mapId)) {
+          socket.emit("channel:access-denied", {
+            channelId: typeof data?.mapId === "string" ? data.mapId : null,
+            action: "player:join",
+            reason: "forbidden",
+            errorCode: "invalid_request_body",
+          });
+          return;
+        }
         const mapGeneration = mapRefresh.generation(data.mapId);
-        const accessResult = await getSocketChannelParticipationAccess(data.mapId, user.userId);
+        let accessResult: Awaited<ReturnType<typeof getSocketChannelParticipationAccess>>;
+        try {
+          accessResult = await getSocketChannelParticipationAccess(data.mapId, user.userId);
+        } catch (err) {
+          console.error("[player:join] channel access lookup failed:", err);
+          accessResult = null;
+        }
         if (!accessResult) {
           socket.emit("channel:access-denied", {
             channelId: data.mapId,

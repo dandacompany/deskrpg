@@ -10,6 +10,7 @@ import {
 } from "@/lib/rbac/group-api";
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { readJsonObject } from "@/lib/api-body";
 
 function toDbTimestamp(value: string): Date | string {
   return isPostgres ? new Date(value) : value;
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ alreadyMember: true });
   }
 
-  const body = await req.json();
+  const body = await readJsonObject(req);
   const now = new Date().toISOString();
   const [joinRequest] = await db
     .insert(groupJoinRequests)
@@ -111,7 +112,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const auth = await requireJoinRequestManager(groupId, userId);
   if ("response" in auth) return auth.response;
 
-  const body = await req.json();
+  const body = await readJsonObject(req);
   const { requestId, action } = body ?? {};
 
   if (typeof requestId !== "string" || (action !== "approve" && action !== "reject")) {

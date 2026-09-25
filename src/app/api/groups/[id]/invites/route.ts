@@ -13,6 +13,7 @@ import {
 } from "@/lib/rbac/group-api";
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { invalidJsonBody, isOptionalString, readJsonObject } from "@/lib/api-body";
 
 function normalizeTimestamp(value: string | Date | null | undefined): string | null {
   if (!value) return null;
@@ -83,8 +84,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const auth = await requireInviteManager(groupId, userId);
   if ("response" in auth) return auth.response;
 
-  const body = await req.json();
+  const body = await readJsonObject(req);
   const { targetUserId, targetLoginId, expiresAt } = body ?? {};
+  if (
+    !isOptionalString(targetUserId) ||
+    !isOptionalString(targetLoginId) ||
+    !isOptionalString(expiresAt)
+  ) {
+    return invalidJsonBody();
+  }
   const normalized = normalizeInviteCreationInput({
     targetUserId,
     targetLoginId,
@@ -138,7 +146,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const auth = await requireInviteManager(groupId, userId);
   if ("response" in auth) return auth.response;
 
-  const body = await req.json();
+  const body = await readJsonObject(req);
   const { inviteId } = body ?? {};
   if (typeof inviteId !== "string" || !inviteId) {
     return NextResponse.json(

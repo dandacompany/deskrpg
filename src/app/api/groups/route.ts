@@ -15,6 +15,7 @@ import { GROUP_MEMBER_ROLES } from "@/lib/rbac/constants";
 import type { GroupMemberRole } from "@/lib/rbac/constants";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { readJsonObject } from "@/lib/api-body";
 
 function slugifyGroupName(name: string) {
   return (
@@ -139,7 +140,7 @@ export async function POST(req: NextRequest) {
     return systemAdminRequiredResponse();
   }
 
-  const body = await req.json();
+  const body = await readJsonObject(req);
   const { name, description, slug, role } = body ?? {};
 
   if (!name || typeof name !== "string") {

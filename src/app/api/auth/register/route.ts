@@ -5,6 +5,7 @@ import { signJWT, isSecureCookie } from "@/lib/jwt";
 import { isAccountPasswordValid } from "@/lib/security-policy";
 import { NextRequest, NextResponse } from "next/server";
 import { count, eq, or } from "drizzle-orm";
+import { invalidJsonBody, readJsonObject } from "@/lib/api-body";
 
 export async function POST(req: NextRequest) {
   // Registration gate: block when REGISTRATION_DISABLED=true (bootstrap exception: allow if no users exist)
@@ -18,10 +19,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const body = await req.json();
+  const body = await readJsonObject(req);
+  if (!body) return invalidJsonBody();
   const { loginId, nickname, password } = body;
 
-  if (!loginId || !nickname || !password) {
+  if (
+    typeof loginId !== "string" ||
+    typeof nickname !== "string" ||
+    typeof password !== "string" ||
+    !loginId ||
+    !nickname ||
+    !password
+  ) {
     return NextResponse.json(
       {
         errorCode: "login_id_nickname_password_required",

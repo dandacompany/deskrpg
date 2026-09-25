@@ -3,11 +3,8 @@ import { meetingMinutes, channelMembers, channels } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
-import {
-  canManageMeetingMinutes,
-  resolveMeetingMinutesAccess,
-  resolveMeetingMinutesOwnerAccess,
-} from "../meeting-access";
+import { canManageMeetingMinutes, resolveMeetingMinutesOwnerAccess } from "../meeting-access";
+import { resolveChannelMemberAccess } from "@/lib/channel-membership";
 import { normalizeMeetingMinutesRecord } from "@/lib/meeting-minutes";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -23,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!row)
       return NextResponse.json({ errorCode: "not_found", error: "Not found" }, { status: 404 });
 
-    const access = await resolveMeetingMinutesAccess({
+    const access = await resolveChannelMemberAccess({
       userId,
       channelId: row.channelId,
       deps: {
