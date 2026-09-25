@@ -180,9 +180,26 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
      * is not appended — appending it would lock every list read to the currently chosen board.
      */
     projects: () =>
-      request<{ projects: ProjectSummary[] }>(
+      request<{ projects: ProjectSummary[]; canManage?: boolean }>(
         f,
         `/api/channels/${encodeURIComponent(channelId)}/projects`,
+      ),
+    /**
+     * Archives a project. A board with running cards answers 409 `board_has_running_cards` with
+     * `extra.running`; the last active project answers 400 `last_board`.
+     */
+    archiveProject: (projectId: string) =>
+      request<{ project: { id: string; status: string } }>(
+        f,
+        `/api/channels/${encodeURIComponent(channelId)}/projects/${encodeURIComponent(projectId)}/archive`,
+        json("POST", { status: "completed" }),
+      ),
+    /** Reopens an archived project — the server also unarchives its Hermes board. */
+    reopenProject: (projectId: string) =>
+      request<{ project: ProjectSummary }>(
+        f,
+        `/api/channels/${encodeURIComponent(channelId)}/projects/${encodeURIComponent(projectId)}`,
+        json("PATCH", { status: "in_progress" }),
       ),
     board: (includeArchived: boolean) =>
       request<BoardResponse>(f, `${root}/board${includeArchived ? "?include_archived=true" : ""}`),

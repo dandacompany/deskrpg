@@ -88,6 +88,8 @@ export async function listProjects(req: NextRequest, channelId: string) {
   try {
     return NextResponse.json({
       projects: await listChannelProjects(channelId, resolved.ctx.client),
+      // The archive and reopen routes are owner-only; the picker hides their buttons for everyone else.
+      canManage: resolved.ctx.isChannelOwner,
     });
   } catch (err) {
     return failure(err);

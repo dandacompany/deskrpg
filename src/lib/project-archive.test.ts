@@ -170,3 +170,24 @@ test("a carrier handoff failure after the Hermes archive puts the board back", a
   );
   assert.equal((await readProject(f.channel.id, f.carrierProject.id)).status, "planned");
 });
+
+test("the project list tells the owner, and only the owner, that archiving is theirs", async () => {
+  const f = await fixture();
+  const { NextRequest } = await import("next/server");
+  const { listProjects } = await import("./project-routes");
+  const { db, channelMembers } = await import("@/db");
+  const owner = await listProjects(
+    new NextRequest("http://localhost/projects", { headers: { "x-user-id": f.channel.ownerId } }),
+    f.channel.id,
+  );
+  assert.equal((await owner.json()).canManage, true);
+  const member = await seedUser("archive-member");
+  await db
+    .insert(channelMembers)
+    .values({ channelId: f.channel.id, userId: member.id, role: "member" });
+  const asMember = await listProjects(
+    new NextRequest("http://localhost/projects", { headers: { "x-user-id": member.id } }),
+    f.channel.id,
+  );
+  assert.equal((await asMember.json()).canManage, false);
+});

@@ -144,6 +144,8 @@ export default function KanbanBoardModal({
 }: KanbanBoardModalProps) {
   const t = useT();
   const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [canManageProjects, setCanManageProjects] = useState(false);
+  const [projectsTick, setProjectsTick] = useState(0);
   const { selected: selectedBoard, select: selectBoard } = useSelectedBoard(channelId, projects);
   // When the board changes, a new api is created, and the loading effect below refetches for that board.
   const api = useMemo(
@@ -250,7 +252,9 @@ export default function KanbanBoardModal({
       .projects()
       .then((data) => {
         // If the shape doesn't match expectations, treat it as an empty list — kanban must not stall over a single picker.
-        if (alive) setProjects(Array.isArray(data?.projects) ? data.projects : []);
+        if (!alive) return;
+        setProjects(Array.isArray(data?.projects) ? data.projects : []);
+        setCanManageProjects(data?.canManage === true);
       })
       .catch(() => {
         if (alive) setProjects([]);
@@ -258,7 +262,24 @@ export default function KanbanBoardModal({
     return () => {
       alive = false;
     };
-  }, [channelId]);
+  }, [channelId, projectsTick]);
+
+  // Failures are thrown back to the picker, which explains them next to the button.
+  const archiveProject = useCallback(
+    async (projectId: string) => {
+      await createKanbanApi(channelId).archiveProject(projectId);
+      selectBoard(null);
+      setProjectsTick((n) => n + 1);
+    },
+    [channelId, selectBoard],
+  );
+  const reopenProject = useCallback(
+    async (projectId: string) => {
+      await createKanbanApi(channelId).reopenProject(projectId);
+      setProjectsTick((n) => n + 1);
+    },
+    [channelId],
+  );
 
   const reload = useCallback((): Promise<ReloadResult> => {
     const sequence = ++reloadSequence.current;
@@ -759,7 +780,14 @@ export default function KanbanBoardModal({
             )}
           </h2>
           <div className="flex items-center gap-1.5 text-xs">
-            <ProjectPicker options={projects} selected={selectedBoard} onSelect={selectBoard} />
+            <ProjectPicker
+              options={projects}
+              selected={selectedBoard}
+              onSelect={selectBoard}
+              canManage={canManageProjects}
+              onArchive={archiveProject}
+              onReopen={reopenProject}
+            />
             <button
               type="button"
               onClick={() => openEditor({ mode: "create" })}
