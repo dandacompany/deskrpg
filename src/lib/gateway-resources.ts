@@ -23,7 +23,8 @@ import {
   setGatewayRuntimeState,
 } from "@/lib/gateway-runtime-cache";
 import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
-import { supportsProfileClone } from "@/lib/hermes/plugin-capability";
+import { shouldReprobePlugin, supportsProfileClone } from "@/lib/hermes/plugin-capability";
+import { forceReprobePluginInfo } from "@/lib/automation-gate";
 import { workerPluginWarning, type WorkerPluginWarning } from "@/lib/hermes/worker-plugin";
 import type { WorkerPropagation } from "@/lib/hermes/deskrpg-plugin-types";
 
@@ -198,11 +199,48 @@ export async function getOwnedGatewayResource(ownerUserId: string, gatewayId: st
   return resource ?? null;
 }
 
-export async function listAccessibleGatewayResources(userId: string) {
-  const owned = await db
+/**
+ * Re-probes the owned gateways whose cache no longer describes the install (older than the hour,
+ * never probed, or a version behind the pin — `shouldReprobePlugin`) and returns the owned rows
+ * re-read. Throttled per gateway by `forceReprobePluginInfo`; probes run in parallel.
+ */
+async function refreshOwnedPluginCaches(
+  owned: (typeof gatewayResources.$inferSelect)[],
+  userId: string,
+) {
+  const now = new Date();
+  const due = owned.filter((resource) =>
+    shouldReprobePlugin({
+      checkedAt: resource.pluginCheckedAt,
+      now,
+      version: resource.pluginVersion,
+    }),
+  );
+  if (due.length === 0) return owned;
+  await Promise.all(
+    due.map((resource) =>
+      // deskrpg-allow-token-arg: an argument the server uses to call Hermes, not a response.
+      forceReprobePluginInfo(resource, decryptGatewayToken(resource.tokenEncrypted)).catch(
+        () => null,
+      ),
+    ),
+  );
+  return db.select().from(gatewayResources).where(eq(gatewayResources.ownerUserId, userId));
+}
+
+/**
+ * `refreshPlugin` is for screens that judge plugin capabilities (hiring, employee detail, the
+ * gateway page). Other callers keep the cheap cached read.
+ */
+export async function listAccessibleGatewayResources(
+  userId: string,
+  options: { refreshPlugin?: boolean } = {},
+) {
+  let owned = await db
     .select()
     .from(gatewayResources)
     .where(eq(gatewayResources.ownerUserId, userId));
+  if (options.refreshPlugin) owned = await refreshOwnedPluginCaches(owned, userId);
 
   const shares = await db.select().from(gatewayShares).where(eq(gatewayShares.userId, userId));
 

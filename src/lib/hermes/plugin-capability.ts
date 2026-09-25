@@ -19,6 +19,7 @@
 
 import { parseWorkerPluginReport } from "./worker-plugin";
 import type { PluginInfo } from "./deskrpg-plugin-types";
+import { PLUGIN_VERSION } from "./setup/pin";
 
 export type PluginStatus = "plugin_ready" | "plugin_unauthorized" | "plugin_absent" | "unknown";
 
@@ -331,18 +332,34 @@ export function isMissingPluginRoute(res: { status: number; failure: { code: str
 const REPROBE_AFTER_MS = 60 * 60 * 1000;
 
 /**
+ * Shorter interval while the cached version is below the pinned one. A host upgraded outside the
+ * app (`git pull` + restart) keeps reporting the old version — and hiding new capabilities — until
+ * the next probe; an install that really is old is then probed at most this often.
+ */
+const OUTDATED_REPROBE_AFTER_MS = 5 * 60 * 1000;
+
+/** True only when `version` parses and is strictly below the version this app installs. */
+function isBehindPinnedPlugin(version: string | null | undefined): boolean {
+  if (!version) return false;
+  return compareSemver(version, PLUGIN_VERSION) === -1;
+}
+
+/**
  * `checkedAt` is an ISO string in SQLite, and in PostgreSQL it is a `timestamp(withTimezone)`
- * column that drizzle reads as a `Date` object — both dialects are accepted.
+ * column that drizzle reads as a `Date` object — both dialects are accepted. Pass the cached
+ * `version` to apply the shorter interval for an install behind the pin.
  */
 export function shouldReprobePlugin(input: {
   checkedAt: string | Date | null;
   now: Date;
+  version?: string | null;
 }): boolean {
   if (!input.checkedAt) return true;
   const at =
     input.checkedAt instanceof Date ? input.checkedAt.getTime() : Date.parse(input.checkedAt);
   if (Number.isNaN(at)) return true;
-  return input.now.getTime() - at >= REPROBE_AFTER_MS;
+  const after = isBehindPinnedPlugin(input.version) ? OUTDATED_REPROBE_AFTER_MS : REPROBE_AFTER_MS;
+  return input.now.getTime() - at >= after;
 }
 
 /**
@@ -354,15 +371,24 @@ export function shouldReprobePlugin(input: {
  * fresh and has a value, use it as-is; if stale (or absent altogether), say a re-probe is
  * needed. The caller (`HermesProfileList`) only has to decide whether to call `/test`
  * based on this result.
+ *
+ * With `pluginVersion` behind the pin, a cache younger than the hour keeps its status (the screen
+ * is not locked meanwhile) but still asks for a reprobe after the shorter interval.
  */
 export function resolvePluginStatusFromCache(input: {
   pluginStatus: string | null;
   pluginCheckedAt: string | Date | null;
+  pluginVersion?: string | null;
   now: Date;
 }): { status: PluginStatus; needsReprobe: boolean } {
   const stale = shouldReprobePlugin({ checkedAt: input.pluginCheckedAt, now: input.now });
   if (!stale && isPluginStatus(input.pluginStatus)) {
-    return { status: input.pluginStatus, needsReprobe: false };
+    const needsReprobe = shouldReprobePlugin({
+      checkedAt: input.pluginCheckedAt,
+      now: input.now,
+      version: input.pluginVersion,
+    });
+    return { status: input.pluginStatus, needsReprobe };
   }
   return { status: "unknown", needsReprobe: true };
 }
