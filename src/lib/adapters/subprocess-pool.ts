@@ -1,4 +1,5 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, type ChildProcessByStdio } from "node:child_process";
+import type { Readable, Writable } from "node:stream";
 import { randomUUID } from "node:crypto";
 
 const DEFAULT_MAX_CONCURRENT = 10;
@@ -46,8 +47,11 @@ interface PendingRequest {
   reject: (reason?: unknown) => void;
 }
 
+/** All three streams are pipes, so spawn's own overload types them non-null — no cast needed. */
+type PipedChild = ChildProcessByStdio<Writable, Readable, Readable>;
+
 interface RunningRequest extends PendingRequest {
-  child: ChildProcessWithoutNullStreams;
+  child: PipedChild;
   startedAt: number;
   stdout: string;
   stderr: string;
@@ -138,7 +142,7 @@ export class SubprocessPool {
   }
 
   private startRequest(pending: PendingRequest): void {
-    let child: ChildProcessWithoutNullStreams;
+    let child: PipedChild;
 
     try {
       child = spawn(pending.request.command, pending.request.args, {
@@ -149,7 +153,7 @@ export class SubprocessPool {
         },
         shell: false,
         stdio: ["pipe", "pipe", "pipe"],
-      }) as ChildProcessWithoutNullStreams;
+      });
     } catch (error) {
       pending.reject(error);
       this.drainQueue();
