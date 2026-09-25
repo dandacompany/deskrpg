@@ -8,20 +8,20 @@
 // This file is also bundled into the browser, so hermes-client isn't imported — HermesError
 // is instead recognized by its name/code/status shape.
 
+import { runFailureCause } from "./run-failure-cause";
+
 export type MeetingFailureCode =
   | "backend_usage_limit"
   | "gateway_busy"
   | "backend_unavailable"
   | "backend_unauthorized"
+  | "provider_auth_expired"
+  | "model_error"
   | "npc_response_failed";
 
 export type MeetingFailure = { error: MeetingFailureCode; detail: string | null };
 
 const DETAIL_MAX = 160;
-
-// The model provider's account/billing limit. What the user needs to do differs from the
-// gateway's concurrent-run limit (HTTP 429).
-const USAGE_LIMIT = /\b429\b|usage limit|rate[ _-]?limit|quota|insufficient[ _]credits?/i;
 
 function field(value: unknown, key: string): unknown {
   return value !== null && typeof value === "object"
@@ -48,16 +48,29 @@ function sanitize(text: string | null): string | null {
 }
 
 export function describeMeetingFailure(err: unknown): MeetingFailure {
-  const detail = sanitize(rawMessage(err));
+  const raw = rawMessage(err);
+  const detail = sanitize(raw);
   const code = field(err, "code");
   const status = field(err, "status");
 
+  // The same reading as a DM (run-failure-cause.ts). A usage limit is a different thing to do
+  // from the gateway's concurrent-run limit (HTTP 429).
+  const cause = runFailureCause(raw);
+  if (code === "run_failed" && cause === "usage_limit")
+    return { error: "backend_usage_limit", detail };
+  // A named provider cause is the whole message; its text (the provider's sentence, a masked
+  // key) stays on the server, as it does for a DM.
+  if (code === "run_failed" && cause === "provider_auth")
+    return { error: "provider_auth_expired", detail: null };
+  if (code === "run_failed" && cause === "model_error")
+    return { error: "model_error", detail: null };
+
   let error: MeetingFailureCode = "npc_response_failed";
-  if (code === "run_failed" && detail && USAGE_LIMIT.test(detail)) error = "backend_usage_limit";
-  else if (status === 429) error = "gateway_busy";
+  if (status === 429) error = "gateway_busy";
   else if (code === "unreachable") error = "backend_unavailable";
   else if (code === "unauthorized") error = "backend_unauthorized";
-  else if (!code && detail && USAGE_LIMIT.test(detail)) error = "backend_usage_limit";
+  // Without a code only the limit is trusted — "401" in a plain error may be the gateway's key.
+  else if (!code && cause === "usage_limit") error = "backend_usage_limit";
 
   return { error, detail };
 }

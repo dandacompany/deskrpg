@@ -41,6 +41,9 @@ const zh: Record<string, string> = {
     "AI 后端已达到使用上限。请在上限重置后重试,或更改模型设置。",
   "meeting.reason.gateway_busy": "网关的并发请求已满。请稍后重试。",
   "meeting.reason.backend_unauthorized": "网关拒绝了认证。请检查网关连接。",
+  "meeting.reason.provider_auth_expired":
+    "模型提供商的登录已过期。网关所有者需要在 Hermes 中重新登录。",
+  "meeting.reason.model_error": "模型提供商不提供所配置的模型。请在员工设置中检查模型。",
   "meeting.reason.npc_response_failed": "员工未能回复。",
   "meeting.reason.driver_disconnected": "移动连接已断开。",
   "meeting.reason.path_unavailable": "没有通往会议室的步行路线。",

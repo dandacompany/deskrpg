@@ -50,6 +50,10 @@ const en: Record<string, string> = {
     "The gateway is handling as many requests as it can. Try again shortly.",
   "meeting.reason.backend_unauthorized":
     "The gateway rejected authentication. Check the gateway connection.",
+  "meeting.reason.provider_auth_expired":
+    "The model provider sign-in has expired. The gateway owner needs to sign in again in Hermes.",
+  "meeting.reason.model_error":
+    "The model provider does not serve the configured model. Check the model in the staff settings.",
   "meeting.reason.npc_response_failed": "The employee could not respond.",
   "meeting.reason.driver_disconnected": "Movement connection disconnected.",
   "meeting.reason.path_unavailable": "No walking route to the meeting room.",

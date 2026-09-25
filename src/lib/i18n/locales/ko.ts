@@ -49,6 +49,10 @@ const ko: Record<string, string> = {
     "게이트웨이가 동시에 처리할 수 있는 요청이 가득 찼습니다. 잠시 뒤 다시 시도하세요.",
   "meeting.reason.backend_unauthorized":
     "게이트웨이가 인증을 거절했습니다. 게이트웨이 연결을 확인하세요.",
+  "meeting.reason.provider_auth_expired":
+    "모델 제공자 로그인이 만료되었습니다. 게이트웨이 소유자가 Hermes에서 다시 로그인해야 합니다.",
+  "meeting.reason.model_error":
+    "모델 제공자가 설정된 모델을 제공하지 않습니다. 직원 설정에서 모델을 확인하세요.",
   "meeting.reason.npc_response_failed": "직원이 응답하지 못했습니다.",
   "meeting.reason.driver_disconnected": "이동 담당 연결이 끊겼습니다.",
   "meeting.reason.path_unavailable": "회의실까지 걸어갈 경로가 없습니다.",
