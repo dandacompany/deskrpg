@@ -15,7 +15,7 @@ import {
 export type ToolApprovalSocket = {
   on(event: string, handler: (payload: unknown) => void): unknown;
   off(event: string, handler: (payload: unknown) => void): unknown;
-  emit(event: string, payload: unknown): unknown;
+  emit(event: string, payload: unknown, ack?: (reply: unknown) => void): unknown;
 };
 
 export type ApprovalCardState = {
@@ -34,6 +34,7 @@ type Action =
   | { type: "resolved"; key: string; status: ToolApprovalStatus }
   | { type: "pending"; payload: ToolApprovalPending }
   | { type: "deciding"; key: string }
+  | { type: "undecided"; key: string }
   | { type: "remove"; key: string };
 
 /** Keeps cards in arrival order. A repeated request (the server resends on reconnect) never duplicates or reopens a card. */
@@ -54,6 +55,13 @@ export function approvalsReducer(state: State, action: Action): State {
         ...state,
         cards: state.cards.map((c) =>
           c.request.key === action.key ? { ...c, status: action.status, deciding: false } : c,
+        ),
+      };
+    case "undecided":
+      return {
+        ...state,
+        cards: state.cards.map((c) =>
+          c.request.key === action.key ? { ...c, deciding: false } : c,
         ),
       };
     case "deciding":
@@ -138,7 +146,14 @@ export function useToolApprovals(
     (key: string, choice: ToolApprovalChoice) => {
       if (!socket) return;
       dispatch({ type: "deciding", key });
-      socket.emit(TOOL_APPROVAL_EVENTS.decide, { key, choice });
+      // The server acks with {result}. `closed`/`failed` also arrive as `resolved`; a refusal
+      // (not_approver, invalid_choice) does not, so unlock the buttons here.
+      socket.emit(TOOL_APPROVAL_EVENTS.decide, { key, choice }, (reply: unknown) => {
+        const result = isObject(reply) ? reply.result : undefined;
+        if (result === "not_approver" || result === "invalid_choice") {
+          dispatch({ type: "undecided", key });
+        }
+      });
     },
     [socket],
   );

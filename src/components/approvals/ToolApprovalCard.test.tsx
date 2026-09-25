@@ -24,8 +24,10 @@ class FakeSocket implements ToolApprovalSocket {
     this.handlers.get(event)?.delete(handler);
     return this;
   }
-  emit(event: string, payload: unknown) {
+  acks: Array<(reply: unknown) => void> = [];
+  emit(event: string, payload: unknown, ack?: (reply: unknown) => void) {
     this.emitted.push([event, payload]);
+    if (ack) this.acks.push(ack);
     return this;
   }
   async fire(event: string, payload: unknown) {
@@ -114,6 +116,17 @@ test("clicking a choice emits decide, locks the buttons, and the resolution repl
   await new Promise((r) => setTimeout(r, 60));
   await flush();
   assert.equal(container.querySelector("[data-testid=tool-approval-card]"), null);
+});
+
+test("a refused decision (not the approver) unlocks the buttons again", async () => {
+  const socket = new FakeSocket();
+  await render(dm(socket));
+  await socket.fire(TOOL_APPROVAL_EVENTS.request, request());
+  await click("[data-choice=once]");
+  assert.equal(($("[data-choice=deny]") as HTMLButtonElement).disabled, true);
+  await act(async () => socket.acks[0]({ result: "not_approver" }));
+  await flush();
+  assert.equal(($("[data-choice=deny]") as HTMLButtonElement).disabled, false);
 });
 
 test("the countdown runs out into a timeout with no buttons", async () => {
