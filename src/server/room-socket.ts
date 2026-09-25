@@ -284,6 +284,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
               saved.id,
               socket.data?.userContext ?? null,
               readLocaleCookie(socket.handshake?.headers?.cookie),
+              user.userId,
             )
             .catch((err) => console.error("[room] turn failed:", err));
         }

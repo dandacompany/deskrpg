@@ -1414,3 +1414,42 @@ test("the NPC chat tab shows that NPC's tool approval card above the input", asy
   assert.equal(cards[0].getAttribute("data-key"), "r:2");
   assert.ok((cards[0].textContent ?? "").includes("소피"));
 });
+
+test("an open chat room shows its NPC's tool approval card above the room input, and only that room's", async () => {
+  const handlers = new Map<string, (payload: unknown) => void>();
+  const socket = {
+    on: (event: string, handler: (payload: unknown) => void) => handlers.set(event, handler),
+    off: (event: string) => handlers.delete(event),
+    emit: () => true,
+  };
+  const el = await mount(
+    panel(
+      { ...listState(), view: "room" },
+      {
+        channelChatOpen: true,
+        approvalSocket: socket,
+        mentionCandidatesFor: () => [{ id: "npc-a", name: "소피" }],
+      },
+    ),
+  );
+  const request = {
+    runId: "r",
+    requestId: "1",
+    npcId: "npc-a",
+    channelId: "ch1",
+    context: "room",
+    kind: "command",
+    command: "rm -r /tmp/probe",
+    description: "",
+    choices: ["once", "deny"],
+    expiresAt: Date.now() + 60_000,
+  };
+  await act(async () => {
+    handlers.get("tool-approval:request")!({ ...request, key: "r:1", roomId: "office" });
+    handlers.get("tool-approval:request")!({ ...request, key: "r:2", roomId: "g1" });
+  });
+  const cards = el.querySelectorAll('[data-testid="tool-approval-card"]');
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].getAttribute("data-key"), "r:2");
+  assert.ok((cards[0].textContent ?? "").includes("소피"));
+});

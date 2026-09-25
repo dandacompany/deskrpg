@@ -211,6 +211,24 @@ test("a meeting card tells the meeting it is pending and clears it when decided"
   assert.deepEqual(h.meetingEmits[1].payload, { key: "run_1:req_1", cleared: true });
 });
 
+test("a chat-room card tells that room it is pending, with the room id, and clears it", async () => {
+  const roomEmits: Emit[] = [];
+  const registry = createToolApprovalRegistry({
+    emitToUser: () => {},
+    emitToMeeting: () => assert.fail("a room card must not reach the meeting"),
+    emitToRoom: (to, event, payload) => roomEmits.push({ to, event, payload }),
+    clientFor: async () => ({ resolveRunApproval: async () => ({ resolved: 1 }) }),
+  });
+  registry.add(req({ context: "room", roomId: "room-7" }));
+  assert.deepEqual(roomEmits[0], {
+    to: "room-7",
+    event: "tool-approval:pending",
+    payload: { key: "run_1:req_1", npcId: "npc-sophie", approverName: "Dante", roomId: "room-7" },
+  });
+  assert.equal(await registry.decide("user-dante", "run_1:req_1", "once"), "ok");
+  assert.deepEqual(roomEmits[1].payload, { key: "run_1:req_1", cleared: true });
+});
+
 test("pendingFor lists only that approver's cards", () => {
   const h = harness();
   h.registry.add(req({ requestId: "a" }));

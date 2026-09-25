@@ -370,3 +370,109 @@ test("invalidated pending room construction cannot replace a newer response snap
   const { getRoomResponseSnapshot } = await import("./room-runtime");
   assert.equal(getRoomResponseSnapshot(room.id).length, 1);
 });
+
+// ---------------------------------------------------------------------------
+// Live tool approvals in chat rooms
+// ---------------------------------------------------------------------------
+
+/** An adapter whose run asks Hermes for one tool approval, then answers. */
+function approvalAdapter(reply: string, runId: string): NpcAdapter {
+  return {
+    type: "mock",
+    async execute(o: AdapterExecuteOptions) {
+      o.onRunStarted?.(runId);
+      o.onApprovalRequest?.({
+        runId,
+        requestId: "req-1",
+        command: "rm -r /tmp/probe",
+        description: "recursive delete",
+        kind: "command",
+        choices: ["once", "session", "deny"],
+      });
+      // Let the card be registered while the run is still going.
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+      return { response: reply, session: { sessionRef: o.sessionKey } };
+    },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
+  } as NpcAdapter;
+}
+
+test("a room NPC's approval goes to the human who called it — through a chained NPC turn too — and expires with the run", async () => {
+  const { withToolApprovals } = await import("./tool-approvals");
+  const { seeded, room } = await seedRoom({ npcCount: 2, memberCount: 2 });
+  const added: Array<{
+    key: string;
+    npcId: string;
+    context: string;
+    roomId?: string;
+    approverUserId: string;
+    approverName: string;
+  }> = [];
+  const expired: string[] = [];
+  const deps: RoomRuntimeDeps = {
+    ...injected(seeded.channelId, [
+      {
+        id: seeded.npcIds[0],
+        name: "Sophie",
+        adapter: approvalAdapter("@Haneul please check", "run-a"),
+      },
+      { id: seeded.npcIds[1], name: "Haneul", adapter: approvalAdapter("done", "run-b") },
+    ]),
+    routeApprovals: (adapter, route) =>
+      withToolApprovals(adapter, route, {
+        registry: { add: (r) => added.push(r), expireRun: (id) => expired.push(id) },
+        timeoutFor: async () => 60,
+      }),
+    nameOf: (userId) => (userId === "user-caller" ? "Caller" : "Owner"),
+  };
+
+  invalidateRoomRuntime(room.id);
+  const runtime = await getOrCreateRoomRuntime(fakeIo([]) as never, room, seeded.userId, deps);
+  assert.ok(runtime);
+  await runtime.handleHumanMessage(
+    "Caller",
+    "@Sophie run the cleanup",
+    "sock-1",
+    "m-1",
+    null,
+    "en",
+    "user-caller",
+  );
+  await settle();
+
+  assert.deepEqual(
+    added.map((a) => [a.npcId, a.approverUserId, a.approverName, a.context, a.roomId]),
+    [
+      [seeded.npcIds[0], "user-caller", "Caller", "room", room.id],
+      // Haneul was called by Sophie, not a human — the chain keeps the human who started it.
+      [seeded.npcIds[1], "user-caller", "Caller", "room", room.id],
+    ],
+  );
+  assert.deepEqual(expired.sort(), ["run-a", "run-b"]);
+});
+
+test("a room turn with no known caller asks the room's creator", async () => {
+  const { withToolApprovals } = await import("./tool-approvals");
+  const { seeded, room } = await seedRoom({ npcCount: 1, memberCount: 1 });
+  const approvers: string[] = [];
+  const deps: RoomRuntimeDeps = {
+    ...injected(seeded.channelId, [
+      { id: seeded.npcIds[0], name: "Sophie", adapter: approvalAdapter("ok", "run-c") },
+    ]),
+    routeApprovals: (adapter, route) =>
+      withToolApprovals(adapter, route, {
+        registry: { add: (r) => approvers.push(r.approverUserId), expireRun: () => {} },
+        timeoutFor: async () => 60,
+      }),
+    nameOf: () => "",
+  };
+  invalidateRoomRuntime(room.id);
+  const runtime = await getOrCreateRoomRuntime(fakeIo([]) as never, room, seeded.userId, deps);
+  assert.ok(runtime);
+  await runtime.handleHumanMessage("Someone", "go", null, "m-2");
+  await settle();
+  assert.deepEqual(approvers, [room.createdBy]);
+});

@@ -18,7 +18,12 @@ import type { RoomRow } from "@/lib/chat-rooms";
 import { resolveNpcAdapter } from "./meeting-discussion";
 import { broadcastRoomMessage } from "./room-broadcast";
 import { getOrCreateCached } from "./promise-cache";
-import { adapterRegistry, getNpcConfigsForChannel } from "./socket-handlers";
+import {
+  adapterRegistry,
+  getNpcConfigsForChannel,
+  playerNameOf,
+  routeToolApprovals,
+} from "./socket-handlers";
 
 /** Number of recent conversation lines to put in the prompt. Same as the old channel history's `slice(-10)`. */
 const RECENT_LIMIT = 10;
@@ -95,6 +100,7 @@ class RoomChatRuntime extends OpenChatRuntime {
     sourceMessageId?: string,
     callerContext: UserContext | null = null,
     callerLocale?: string | null,
+    callerUserId: string | null = null,
   ): Promise<void> {
     if (sourceMessageId) {
       // Admission must stay synchronous: an awaited refresh lets a later send overtake this one.
@@ -110,6 +116,7 @@ class RoomChatRuntime extends OpenChatRuntime {
       sourceMessageId,
       callerContext,
       callerLocale,
+      callerUserId,
     );
   }
 }
@@ -138,6 +145,10 @@ export type RoomRuntimeDeps = {
   resolveAdapter?: typeof resolveNpcAdapter;
   /** Display language of the user who created the runtime. Sets the response language of the NPC protocol. */
   locale?: string | null;
+  /** Live tool approvals — wraps each participant adapter. Defaults to the socket server's registry. */
+  routeApprovals?: typeof routeToolApprovals;
+  /** A user's display name for "waiting for <name>'s approval". */
+  nameOf?: (userId: string) => string;
 };
 
 export function getOrCreateRoomRuntime(
@@ -192,6 +203,14 @@ async function createRoomRuntime(
   const allowed = room.kind === "group" ? new Set(await roomNpcMemberIds(room.id)) : null;
   const candidates = allowed ? npcConfigs.filter((npc) => allowed.has(npc.id)) : npcConfigs;
 
+  const routeApprovals = deps.routeApprovals ?? routeToolApprovals;
+  const nameOf = deps.nameOf ?? playerNameOf;
+  // npcId → the user whose turn that NPC is answering right now. A room NPC speaks one turn at a time (the runtime
+  // queues per NPC), so the request that arrives mid-turn belongs to that turn's caller — through chained NPC turns
+  // too, since the original human is carried along. Without one, the room's creator (the channel owner for the
+  // office room) is asked.
+  const turnCallers = new Map<string, string>();
+
   const participants: EngineParticipant[] = [];
   for (const npc of candidates) {
     const resolved = await resolveAdapter(npc, {
@@ -206,7 +225,16 @@ async function createRoomRuntime(
       seated: true,
       turnCount: 0,
       lastSpokeAt: 0,
-      adapter: resolved.adapter,
+      adapter: routeApprovals(resolved.adapter, {
+        npcId: resolved.participant.npcId,
+        channelId: room.channelId,
+        context: "room",
+        roomId: room.id,
+        approver: () => {
+          const userId = turnCallers.get(resolved.participant.npcId) ?? room.createdBy;
+          return userId ? { userId, name: nameOf(userId) } : null;
+        },
+      }),
       sessionKey: resolved.sessionKey,
       role: resolved.participant.role,
       passPolicy: resolved.participant.passPolicy,
@@ -262,6 +290,8 @@ async function createRoomRuntime(
         tracker.update(context.requestId, { status: "streaming", content });
       },
       onTurnStart: (npcId, _displayName, callerSocketId, context) => {
+        if (context.callerUserId) turnCallers.set(npcId, context.callerUserId);
+        else turnCallers.delete(npcId);
         tracker.update(context.requestId, { status: "thinking" });
         // Walking and speaking start together — no waiting for arrival. targetPlayerId must
         // be a real socket id for the client to run A* (if null, nobody walks).
@@ -277,6 +307,7 @@ async function createRoomRuntime(
       },
       onTurnEnd: async (npcId, fullResponse, meta, context) => {
         buffers.delete(context.requestId);
+        turnCallers.delete(npcId);
         if (disposed) return;
         const npc = participants.find((x) => x.npcId === npcId);
         if (meta?.aborted || !fullResponse) {

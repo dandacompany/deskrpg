@@ -1,12 +1,12 @@
 /**
  * Contract for live Hermes tool approvals (dangerous commands, untrusted MCP write tools) in
- * NPC 1:1 chat and meetings. The socket server holds pending approvals in memory; the browser
+ * NPC 1:1 chat, meetings, and chat rooms. The socket server holds pending approvals in memory; the browser
  * only ever sees these shapes and answers with `tool-approval:decide`.
  *
  * Socket events (registered in socket-event-parity.test.ts):
  * - server → approver sockets `tool-approval:request`  ToolApprovalRequest
  * - server → approver sockets `tool-approval:resolved` ToolApprovalResolved
- * - server → meeting room      `tool-approval:pending`  ToolApprovalPending
+ * - server → meeting / chat room `tool-approval:pending` ToolApprovalPending
  * - client → server            `tool-approval:decide`   ToolApprovalDecide
  */
 
@@ -21,7 +21,9 @@ export type ToolApprovalRequest = {
   requestId: string | null;
   npcId: string;
   channelId: string;
-  context: "dm" | "meeting";
+  context: "dm" | "meeting" | "room";
+  /** `room` only: the chat room whose NPC turn is waiting. */
+  roomId?: string;
   kind: "mcp" | "command";
   /** Hermes-redacted; never logged. */
   command: string;
@@ -36,8 +38,10 @@ export type ToolApprovalStatus =
 
 export type ToolApprovalResolved = { key: string; status: ToolApprovalStatus };
 
+/** `roomId` is set for a chat-room turn — a meeting's line has none. */
 export type ToolApprovalPending =
-  { key: string; npcId: string; approverName: string } | { key: string; cleared: true };
+  | { key: string; npcId: string; approverName: string; roomId?: string }
+  | { key: string; cleared: true };
 
 export type ToolApprovalDecide = { key: string; choice: ToolApprovalChoice };
 

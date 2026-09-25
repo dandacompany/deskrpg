@@ -67,6 +67,7 @@ function setup(
   const woke: { roomId: string; text: string }[] = [];
   const callerContexts: unknown[] = [];
   const callerLocales: unknown[] = [];
+  const callerUserIds: unknown[] = [];
   return {
     emitted,
     socket,
@@ -74,6 +75,7 @@ function setup(
     woke,
     callerContexts,
     callerLocales,
+    callerUserIds,
     async register(seeded: Seeded) {
       // Default identity is the channel owner. Given `userId`, registers as that person — for permission branches.
       const actingUserId = opts.userId ?? seeded.userId;
@@ -110,10 +112,12 @@ function setup(
                 _sourceMessageId: string,
                 callerContext: unknown,
                 callerLocale: unknown,
+                callerUserId: unknown,
               ) => {
                 woke.push({ roomId: room.id, text });
                 callerContexts.push(callerContext);
                 callerLocales.push(callerLocale);
+                callerUserIds.push(callerUserId);
               },
             }) as never,
           invalidateRuntime: () => {},
@@ -204,6 +208,8 @@ test("room:send passes the sender's language cookie to the runtime, and null wit
   await without.socket.trigger("room:open", { roomId: office.id });
   await without.socket.trigger("room:send", { roomId: office.id, message: "@[소피] hi" });
   assert.deepEqual(without.callerLocales, [null]);
+  // The sender's user id rides along — a tool approval the NPC asks for during the turn goes to them.
+  assert.deepEqual(without.callerUserIds, [seeded.userId]);
 });
 
 test("room:create passes the creator's language so an unnamed room gets a name in it", async () => {

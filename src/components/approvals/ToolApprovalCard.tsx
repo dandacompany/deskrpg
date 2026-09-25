@@ -109,16 +109,18 @@ export function ToolApprovalCard({ card, npcName, onDecide }: ToolApprovalCardPr
 export type ToolApprovalStackProps = {
   socket: ToolApprovalSocket | null | undefined;
   channelId: string;
-  context: "dm" | "meeting";
+  context: "dm" | "meeting" | "room";
   /** DM only: the NPC whose chat is open. */
   npcId?: string;
+  /** Room only: the chat room that is open. */
+  roomId?: string;
   npcNames: Record<string, string>;
   collapseMs?: number;
 };
 
 /**
- * The approval cards (and, in a meeting, the "waiting for approval" lines other participants
- * see) for one chat. Which sockets receive a request is the server's decision; this only
+ * The approval cards (and, in a meeting or chat room, the "waiting for approval" lines other
+ * participants see) for one chat. Which sockets receive a request is the server's decision; this only
  * filters what arrived down to the chat being shown.
  */
 export default function ToolApprovalStack({
@@ -126,19 +128,28 @@ export default function ToolApprovalStack({
   channelId,
   context,
   npcId,
+  roomId,
   npcNames,
   collapseMs,
 }: ToolApprovalStackProps) {
   const t = useT();
   const { cards, waiting, decide } = useToolApprovals(socket, { collapseMs });
-  const shown = cards.filter(
-    (c) =>
-      c.request.channelId === channelId &&
-      c.request.context === context &&
-      (npcId === undefined || c.request.npcId === npcId),
+  const shown = cards.filter((c) =>
+    context === "room"
+      ? c.request.context === "room" && c.request.roomId === roomId
+      : c.request.channelId === channelId &&
+        c.request.context === context &&
+        (npcId === undefined || c.request.npcId === npcId),
   );
+  // A room's waiting lines carry its id; a meeting's carry none.
   const lines =
-    context === "meeting" ? waiting.filter((w) => !cards.some((c) => c.request.key === w.key)) : [];
+    context === "dm"
+      ? []
+      : waiting.filter(
+          (w) =>
+            !cards.some((c) => c.request.key === w.key) &&
+            (context === "room" ? w.roomId === roomId : w.roomId === undefined),
+        );
   if (shown.length === 0 && lines.length === 0) return null;
 
   return (

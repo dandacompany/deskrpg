@@ -49,6 +49,8 @@ export type ToolApprovalRegistryDeps = {
   clearTimer?: (handle: unknown) => void;
   emitToUser: (userId: string, event: string, payload: unknown) => void;
   emitToMeeting: (channelId: string, event: string, payload: unknown) => void;
+  /** Chat-room turns: the "waiting for approval" line goes to everyone in that room. */
+  emitToRoom?: (roomId: string, event: string, payload: unknown) => void;
   /** The profile-key Hermes client of an NPC — null when the NPC lost its profile. */
   clientFor: (npcId: string) => Promise<RunApprovalClient | null>;
 };
@@ -73,10 +75,16 @@ export function createToolApprovalRegistry(deps: ToolApprovalRegistryDeps) {
     clearTimer(entry.timer);
     const resolved: ToolApprovalResolved = { key, status };
     deps.emitToUser(entry.req.approverUserId, TOOL_APPROVAL_EVENTS.resolved, resolved);
-    if (entry.req.context === "meeting") {
-      const cleared: ToolApprovalPending = { key, cleared: true };
-      deps.emitToMeeting(entry.req.channelId, TOOL_APPROVAL_EVENTS.pending, cleared);
-    }
+    const cleared: ToolApprovalPending = { key, cleared: true };
+    emitPending(entry.req, cleared);
+  }
+
+  /** Meeting and chat-room turns tell the other participants an approval is waiting; a DM has none. */
+  function emitPending(req: PendingApproval, payload: ToolApprovalPending) {
+    if (req.context === "meeting")
+      deps.emitToMeeting(req.channelId, TOOL_APPROVAL_EVENTS.pending, payload);
+    else if (req.context === "room" && req.roomId)
+      deps.emitToRoom?.(req.roomId, TOOL_APPROVAL_EVENTS.pending, payload);
   }
 
   return {
@@ -87,14 +95,12 @@ export function createToolApprovalRegistry(deps: ToolApprovalRegistryDeps) {
       const timer = setTimer(() => close(req.key, "expired"), Math.max(0, req.expiresAt - now()));
       entries.set(req.key, { req: stored, timer, deciding: false });
       deps.emitToUser(req.approverUserId, TOOL_APPROVAL_EVENTS.request, publicView(stored));
-      if (req.context === "meeting") {
-        const pending: ToolApprovalPending = {
-          key: req.key,
-          npcId: req.npcId,
-          approverName: req.approverName,
-        };
-        deps.emitToMeeting(req.channelId, TOOL_APPROVAL_EVENTS.pending, pending);
-      }
+      emitPending(req, {
+        key: req.key,
+        npcId: req.npcId,
+        approverName: req.approverName,
+        ...(req.roomId ? { roomId: req.roomId } : {}),
+      });
     },
 
     async decide(userId: string, key: unknown, choice: unknown): Promise<DecideResult> {
@@ -152,9 +158,15 @@ export function createToolApprovalRegistry(deps: ToolApprovalRegistryDeps) {
 export type ApprovalRoute = {
   npcId: string;
   channelId: string;
-  context: "dm" | "meeting";
-  /** Evaluated per request — a meeting's opener can change between turns. null = nobody to ask. */
-  approver: () => { userId: string; name: string } | null;
+  context: "dm" | "meeting" | "room";
+  /** `room` only. */
+  roomId?: string;
+  /**
+   * Called when the request arrives (not when the adapter is wrapped) — a meeting's opener or a room turn's caller
+   * changes between turns. null = nobody to ask; Hermes then denies on its own timeout.
+   */
+  approver: () =>
+    { userId: string; name: string } | null | Promise<{ userId: string; name: string } | null>;
 };
 
 export type ApprovalRouting = {
@@ -179,30 +191,37 @@ export function withToolApprovals(
     const onApprovalRequest = (event: ParsedApprovalEvent) => {
       options.onApprovalRequest?.(event);
       runs.add(event.runId);
-      const approver = route.approver();
-      if (!approver) return;
-      void routing
-        .timeoutFor(route.npcId)
-        .catch(() => DEFAULT_APPROVAL_TIMEOUT_SECONDS)
-        .then((timeoutSeconds) => {
-          // The run may have ended while the timeout was being looked up.
-          if (finished) return;
-          routing.registry.add({
-            key: toolApprovalKey(event.runId, event.requestId),
-            runId: event.runId,
-            requestId: event.requestId,
-            npcId: route.npcId,
-            channelId: route.channelId,
-            context: route.context,
-            kind: event.kind,
-            command: event.command,
-            description: event.description,
-            choices: event.choices,
-            expiresAt: now() + timeoutSeconds * 1000,
-            approverUserId: approver.userId,
-            approverName: approver.name,
-          });
+      // Read the approver now — the turn it belongs to is the one running at this moment.
+      let current: ReturnType<ApprovalRoute["approver"]>;
+      try {
+        current = route.approver();
+      } catch {
+        current = null;
+      }
+      const approverOf = Promise.resolve(current).catch(() => null);
+      void Promise.all([
+        approverOf,
+        routing.timeoutFor(route.npcId).catch(() => DEFAULT_APPROVAL_TIMEOUT_SECONDS),
+      ]).then(([approver, timeoutSeconds]) => {
+        // The run may have ended while the approver or timeout was being looked up.
+        if (finished || !approver) return;
+        routing.registry.add({
+          key: toolApprovalKey(event.runId, event.requestId),
+          runId: event.runId,
+          requestId: event.requestId,
+          npcId: route.npcId,
+          channelId: route.channelId,
+          context: route.context,
+          ...(route.roomId ? { roomId: route.roomId } : {}),
+          kind: event.kind,
+          command: event.command,
+          description: event.description,
+          choices: event.choices,
+          expiresAt: now() + timeoutSeconds * 1000,
+          approverUserId: approver.userId,
+          approverName: approver.name,
         });
+      });
     };
     try {
       return await adapter.execute({

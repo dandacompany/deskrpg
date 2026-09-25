@@ -28,7 +28,7 @@ import {
   type ToolApprovalRegistry,
 } from "./tool-approvals";
 import { getProfileClientForNpc } from "@/lib/hermes-profiles";
-import { userSocketRoom } from "./room-broadcast";
+import { roomSocketRoom, userSocketRoom } from "./room-broadcast";
 import { jwtVerify } from "jose";
 import { eq, and } from "drizzle-orm";
 import {
@@ -256,7 +256,7 @@ export function getToolApprovalRegistry(): ToolApprovalRegistry | null {
 }
 
 /** Routes a run's `approval.request` events to the approver as cards (no-op before setup). */
-function routeToolApprovals(adapter: NpcAdapter, route: ApprovalRoute): NpcAdapter {
+export function routeToolApprovals(adapter: NpcAdapter, route: ApprovalRoute): NpcAdapter {
   if (!toolApprovals) return adapter;
   return withToolApprovals(adapter, route, {
     registry: toolApprovals,
@@ -265,7 +265,7 @@ function routeToolApprovals(adapter: NpcAdapter, route: ApprovalRoute): NpcAdapt
 }
 
 /** A user's character name in this process, for "waiting for <name>'s approval". */
-function playerNameOf(userId: string): string {
+export function playerNameOf(userId: string): string {
   for (const player of players.values()) {
     if (player.userId === userId) return player.characterName;
   }
@@ -1104,6 +1104,7 @@ export function setupSocketHandlers(io: Server) {
     emitToUser: (userId, event, payload) => io.to(userRoom(userId)).emit(event, payload),
     emitToMeeting: (channelId, event, payload) =>
       io.to(`meeting-${channelId}`).emit(event, payload),
+    emitToRoom: (roomId, event, payload) => io.to(roomSocketRoom(roomId)).emit(event, payload),
     clientFor: (npcId) => getProfileClientForNpc(npcId),
   });
   const loadMotionLayout = async (channelId: string) => {

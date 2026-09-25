@@ -208,3 +208,61 @@ test("remaining time is m:ss", () => {
   assert.equal(formatRemaining(61_000), "1:01");
   assert.equal(formatRemaining(299_400), "5:00");
 });
+
+test("a chat room shows only its own cards and waiting lines", async () => {
+  const socket = new FakeSocket();
+  await render(
+    <ToolApprovalStack
+      socket={socket}
+      channelId="c1"
+      context="room"
+      roomId="room-a"
+      npcNames={names}
+    />,
+  );
+  await socket.fire(
+    TOOL_APPROVAL_EVENTS.request,
+    request({ key: "x:1", context: "room", roomId: "room-b" }),
+  );
+  await socket.fire(TOOL_APPROVAL_EVENTS.request, request({ key: "x:2", context: "meeting" }));
+  assert.equal(container.querySelectorAll("[data-testid=tool-approval-card]").length, 0);
+  await socket.fire(
+    TOOL_APPROVAL_EVENTS.request,
+    request({ key: "x:3", context: "room", roomId: "room-a" }),
+  );
+  assert.equal(container.querySelectorAll("[data-testid=tool-approval-card]").length, 1);
+
+  await socket.fire(TOOL_APPROVAL_EVENTS.pending, {
+    key: "w:1",
+    npcId: "n2",
+    approverName: "단테",
+    roomId: "room-b",
+  });
+  await socket.fire(TOOL_APPROVAL_EVENTS.pending, {
+    key: "w:2",
+    npcId: "n2",
+    approverName: "단테",
+  });
+  assert.equal(container.querySelector("[data-approval-pending]"), null);
+  await socket.fire(TOOL_APPROVAL_EVENTS.pending, {
+    key: "w:3",
+    npcId: "n2",
+    approverName: "단테",
+    roomId: "room-a",
+  });
+  assert.match($("[data-approval-pending]").textContent ?? "", /Max.*단테/);
+});
+
+test("a meeting stack ignores a chat room's waiting line", async () => {
+  const meetingSocket = new FakeSocket();
+  await render(
+    <ToolApprovalStack socket={meetingSocket} channelId="c1" context="meeting" npcNames={names} />,
+  );
+  await meetingSocket.fire(TOOL_APPROVAL_EVENTS.pending, {
+    key: "w:4",
+    npcId: "n2",
+    approverName: "단테",
+    roomId: "room-a",
+  });
+  assert.equal(container.querySelector("[data-approval-pending]"), null);
+});

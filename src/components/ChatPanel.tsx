@@ -1050,6 +1050,17 @@ export default function ChatPanel({
                 })}
               />
             </div>
+            {roomState.currentRoomId && (
+              <ToolApprovalStack
+                socket={approvalSocket}
+                channelId={cron?.channelId ?? ""}
+                context="room"
+                roomId={roomState.currentRoomId}
+                npcNames={Object.fromEntries(
+                  mentionCandidatesFor(roomState.currentRoomId).map((c) => [c.id, c.name]),
+                )}
+              />
+            )}
             <ChatInput
               onSend={onRoomSend}
               value={conversationDraft}

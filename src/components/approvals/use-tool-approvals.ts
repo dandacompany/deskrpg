@@ -25,7 +25,8 @@ export type ApprovalCardState = {
   deciding: boolean;
 };
 
-export type ApprovalWaiting = { key: string; npcId: string; approverName: string };
+/** `roomId` marks a chat-room turn; a meeting's waiting line has none. */
+export type ApprovalWaiting = { key: string; npcId: string; approverName: string; roomId?: string };
 
 type State = { cards: ApprovalCardState[]; waiting: ApprovalWaiting[] };
 

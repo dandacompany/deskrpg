@@ -38,6 +38,11 @@ export type TurnContext = {
    * cookie) gets English.
    */
   callerLocale?: string | null;
+  /**
+   * The user id of the human who started this chain — kept on chained turns like `callerLocale`. A tool approval
+   * an NPC asks for during the turn goes to this person. null when no human is known.
+   */
+  callerUserId?: string | null;
 };
 
 export type OpenChatCallbacks = {
@@ -135,6 +140,7 @@ export class OpenChatRuntime {
     sourceMessageId: string = randomUUID(),
     callerContext: UserContext | null = null,
     callerLocale?: string | null,
+    callerUserId: string | null = null,
   ): Promise<void> {
     if (this.disposed) return;
     this.quota.resetByHuman();
@@ -155,6 +161,7 @@ export class OpenChatRuntime {
       recent,
       callerContext,
       callerLocale,
+      callerUserId,
     );
   }
 
@@ -171,6 +178,7 @@ export class OpenChatRuntime {
     recent: ChatLine[],
     callerContext: UserContext | null = null,
     callerLocale?: string | null,
+    callerUserId: string | null = null,
   ): Promise<void> {
     if (this.disposed) return;
     const work: Promise<void>[] = [];
@@ -192,6 +200,7 @@ export class OpenChatRuntime {
         callerSocketId,
         callerContext: fromHuman ? callerContext : null,
         callerLocale,
+        callerUserId,
       };
       this.callbacks.onTurnQueued?.(npcId, runtime.displayName, context);
       // The chain runs after this job releases its queue slot, avoiding A -> B -> A deadlocks.
@@ -210,6 +219,7 @@ export class OpenChatRuntime {
               this.deps.recent().map((line) => ({ ...line })),
               null,
               callerLocale,
+              callerUserId,
             );
         }),
       );
