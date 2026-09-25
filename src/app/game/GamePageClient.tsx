@@ -2751,6 +2751,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         width={conversationPanelWidth}
         onWidthChange={setConversationPanelWidth}
         dialogNpc={dialogNpc}
+        npcRunningCards={dialogNpc ? (npcWorking[dialogNpc.npcId]?.sources.runningCards ?? 0) : 0}
         npcMessages={npcMessages}
         npcActivityKey={npcActivityKey}
         isNpcStreaming={isNpcStreaming}

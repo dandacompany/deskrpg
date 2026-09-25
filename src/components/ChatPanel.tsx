@@ -59,6 +59,8 @@ interface ChatPanelProps {
   width?: number;
   onWidthChange?: (width: number) => void;
   dialogNpc: { npcId: string; npcName: string } | null;
+  /** Cards the open NPC is running now across the channel's boards (`npc:working`). */
+  npcRunningCards?: number;
   npcMessages: NpcChatMessage[];
   /** Translation key describing what the NPC is doing right now. When absent, nothing is shown. */
   npcActivityKey?: string | null;
@@ -168,6 +170,7 @@ export default function ChatPanel({
   width: controlledWidth,
   onWidthChange,
   dialogNpc,
+  npcRunningCards = 0,
   npcMessages,
   npcActivityKey = null,
   isNpcStreaming,
@@ -768,6 +771,7 @@ export default function ChatPanel({
                   npcProfile={cardsNpcProfile}
                   board={cardsBoard}
                   error={cardsError}
+                  runningCards={npcRunningCards}
                   onOpenCard={(taskId) => onOpenAssignedCard?.(taskId)}
                 />
               </div>
