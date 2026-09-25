@@ -16,6 +16,7 @@ import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gat
 import { cronApi, classifyCronError, isCronApiError, type CronJobView } from "./cron-api";
 import { composeDeliver, parseDeliver } from "./cron-schedule";
 import {
+  blueprintJobName,
   localizeBlueprint,
   type LocalizedBlueprint,
   type LocalizedBlueprintField,
@@ -235,6 +236,7 @@ export default function BlueprintGallery({
         npcId,
         blueprint: selected.key,
         values,
+        name: blueprintJobName(selected, values),
       });
       onCreated(res.job);
     } catch (err) {

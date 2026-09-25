@@ -114,6 +114,7 @@ test("gallery — list (title/description/category/tags) -> select -> field form
       npcId: "npc-b",
       blueprint: "daily-brief",
       values: { time: "09:00", days: "weekdays", focus: "", deliver: "local" },
+      name: "아침 브리핑",
     });
     assert.deepEqual(created, ["new"]);
   } finally {
@@ -229,6 +230,11 @@ test("an English Hermes blueprint shows in Korean, offers only this channel's bo
       /[가-힣]/,
       "the editable reminder sentence is in the user's language",
     );
+    const named = calls.find((c) => c.url.endsWith("/blueprints/instantiate"))?.body as {
+      name: string;
+    };
+    assert.match(named.name, /^[^A-Za-z]+ — /, "the job is named in the user's language");
+    assert.ok(named.name.endsWith(sent.values.what), "and carries what the user typed");
   } finally {
     await act(async () => root.unmount());
     host.remove();

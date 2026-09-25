@@ -47,6 +47,8 @@ export type InstantiateBlueprintInput = {
   npcId: string;
   blueprint: string;
   values: Record<string, string>;
+  /** The job name the user sees; Hermes would name it after the English catalog title. */
+  name?: string;
 };
 
 export class CronApiError extends Error {
