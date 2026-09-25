@@ -59,6 +59,22 @@ export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 /** Statuses collapsed by default in the listing — done work. Polling keeps going regardless (§5-3). */
 export const ARCHIVED_STATUSES: ReadonlySet<string> = new Set(["completed", "cancelled"]);
 
+/**
+ * A target date is a calendar day, `YYYY-MM-DD`, that exists. The timeline reads it as the end of
+ * that day in the viewer's time zone, so no time or offset is stored. Without this check a bad
+ * value reaches PG's `date` column as a 500, or SQLite's text column as a date nobody can draw.
+ */
+export function isTargetDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const day = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(day.getTime()) && day.toISOString().slice(0, 10) === value;
+}
+
+function assertTargetDate(value: string | null | undefined) {
+  if (typeof value === "string" && !isTargetDate(value))
+    throw new ProjectRegistryError(400, "invalid_target_date");
+}
+
 export function isProjectStatus(value: unknown): value is ProjectStatus {
   return typeof value === "string" && (PROJECT_STATUSES as readonly string[]).includes(value);
 }
@@ -282,6 +298,7 @@ async function createChannelProjectUnlocked(
 ): Promise<{ project: ProjectView; subprojects: SubprojectRow[] }> {
   const name = input.name.trim();
   if (!name || name.length > 120) throw new ProjectRegistryError(400, "invalid_project_name");
+  assertTargetDate(input.targetDate);
   if (input.status !== undefined && !isProjectStatus(input.status))
     throw new ProjectRegistryError(400, "invalid_project_status");
 
@@ -383,6 +400,7 @@ async function updateChannelProjectUnlocked(
 
   if (input.status !== undefined && !isProjectStatus(input.status))
     throw new ProjectRegistryError(400, "invalid_project_status");
+  assertTargetDate(input.targetDate);
 
   // Name/description are Hermes' source of truth, so they aren't written to our table — they're passed through to Hermes instead.
   let meta: BoardMeta | undefined;
@@ -639,6 +657,7 @@ export async function updateSubproject(
 
   if (input.status !== undefined && !isProjectStatus(input.status))
     throw new ProjectRegistryError(400, "invalid_project_status");
+  assertTargetDate(input.targetDate);
 
   const patch: Partial<SubprojectRow> = { updatedAt: nowForDb() };
   if (input.name !== undefined) {

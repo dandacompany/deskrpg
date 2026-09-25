@@ -194,6 +194,13 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
         `/api/channels/${encodeURIComponent(channelId)}/projects/${encodeURIComponent(projectId)}/archive`,
         json("POST", { status: "completed" }),
       ),
+    /** `YYYY-MM-DD`, or null to clear. A day that doesn't exist answers 400 `invalid_target_date`. */
+    setProjectTargetDate: (projectId: string, targetDate: string | null) =>
+      request<{ project: ProjectSummary }>(
+        f,
+        `/api/channels/${encodeURIComponent(channelId)}/projects/${encodeURIComponent(projectId)}`,
+        json("PATCH", { targetDate }),
+      ),
     /** Reopens an archived project — the server also unarchives its Hermes board. */
     reopenProject: (projectId: string) =>
       request<{ project: ProjectSummary }>(
