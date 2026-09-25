@@ -136,6 +136,13 @@ export function executeDmAdapter(
               options.onRunStarted?.(id);
             }
           },
+          // Waiting for the user's approval is silent; the next progress event re-arms idle.
+          onApprovalRequest: (event) => {
+            if (!finished) {
+              timeout.hold();
+              options.onApprovalRequest?.(event);
+            }
+          },
         });
       })
       .then(

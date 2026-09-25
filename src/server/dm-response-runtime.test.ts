@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { ChatResponseTracker, SessionQueue } from "./chat-response-tracker";
 import { runTrackedDm } from "./dm-response-runtime";
 import type { ChatResponse } from "@/lib/chat-response";
+import type { ParsedApprovalEvent } from "@/lib/tool-approval-event";
 
 const identity = (requestId: string) => ({
   requestId,
@@ -78,6 +79,45 @@ test("DM adapter timeout closes the turn and suppresses late callbacks", async (
   delayed();
   assert.equal(aborts, 1);
   assert.deepEqual(chunks, []);
+});
+
+const approvalEvent: ParsedApprovalEvent = {
+  runId: "run_1",
+  requestId: "req_1",
+  command: "mcp_probe_write_note",
+  description: "write-capable MCP tool",
+  kind: "mcp",
+  choices: ["once", "session", "deny"],
+};
+
+test("a DM waiting on a tool approval does not expire on idle", async () => {
+  const { executeDmAdapter } = await import("./dm-response-runtime");
+  const forwarded: string[] = [];
+  const adapter = {
+    type: "fake",
+    execute: async (opts: {
+      onApprovalRequest?: (event: ParsedApprovalEvent) => void;
+      onToolProgress?: (name: string, delta: string) => void;
+    }) => {
+      opts.onApprovalRequest?.(approvalEvent);
+      // Silent for 3x idleMs, as a run is while a person decides.
+      await new Promise((r) => setTimeout(r, 60));
+      opts.onToolProgress?.("mcp_probe_write_note", "");
+      return { response: "done", session: { sessionRef: "s" } };
+    },
+    testConnection: async () => ({ status: "ok" as const }),
+  };
+  const result = await executeDmAdapter(
+    adapter,
+    {
+      sessionKey: "s",
+      prompt: "hi",
+      onApprovalRequest: (event) => forwarded.push(event.runId),
+    },
+    { idleMs: 20, maxMs: 1000 },
+  );
+  assert.equal(result.response, "done");
+  assert.deepEqual(forwarded, ["run_1"]);
 });
 
 test("cancelling an active DM aborts its adapter and releases the next request", async () => {

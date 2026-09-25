@@ -2,6 +2,8 @@
 //   idle — resets whenever a liveness signal arrives (tool.progress, assistant.delta).
 //          Catches "did it stop?".
 //   max  — an absolute cap regardless of activity. Catches "did it run away?".
+// hold() stops the idle deadline until the next touch() — a run waiting on a person's tool
+// approval is silent by design, and Hermes enforces that wait's own timeout. max still applies.
 // A single timer can't distinguish the two: set it generously and a stalled agent waits
 // forever; set it tight and it kills normal work that legitimately takes long.
 
@@ -10,7 +12,7 @@ export type TurnTimeoutConfig = { idleMs: number; maxMs: number };
 export function createTurnTimeout(
   config: TurnTimeoutConfig,
   onTimeout: (kind: "idle" | "max") => void,
-): { touch(): void; clear(): void } {
+): { touch(): void; hold(): void; clear(): void } {
   let done = false;
   let idleTimer: ReturnType<typeof setTimeout>;
 
@@ -32,6 +34,9 @@ export function createTurnTimeout(
   return {
     touch() {
       if (!done) armIdle();
+    },
+    hold() {
+      clearTimeout(idleTimer);
     },
     clear() {
       done = true;

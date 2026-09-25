@@ -442,6 +442,63 @@ describe("ConversationEngine — turn timeout", () => {
       assert.deepEqual(ends, [["a", "", { aborted: true, reason: "timeout:idle" }]]);
     },
   );
+
+  test("a turn waiting on a tool approval is not cut off by idle", { timeout: 5000 }, async () => {
+    // The run goes silent while a person decides; only the next progress event re-arms idle.
+    const waits: NpcAdapter = {
+      type: "mock",
+      execute: async (opts: AdapterExecuteOptions) => {
+        opts.onApprovalRequest?.({
+          runId: "run_1",
+          requestId: "req_1",
+          command: "mcp_probe_write_note",
+          description: "write-capable MCP tool",
+          kind: "mcp",
+          choices: ["once", "session", "deny"],
+        });
+        await new Promise((r) => setTimeout(r, 60));
+        opts.onToolProgress?.("mcp_probe_write_note", "");
+        return { response: "기록했습니다", session: { sessionRef: opts.sessionKey } };
+      },
+      async abort() {},
+      async testConnection() {
+        return { status: "ok" as const };
+      },
+    };
+    const a: EngineParticipant = {
+      npcId: "a",
+      displayName: "a",
+      seated: true,
+      turnCount: 0,
+      lastSpokeAt: 0,
+      adapter: waits,
+      sessionKey: "sk-a",
+    };
+    const ends: Array<[string, string, unknown]> = [];
+    const errors: string[] = [];
+    const engine = new ChannelRuntime(
+      {
+        mode: "meeting",
+        topic: "T",
+        participants: [a],
+        initialRunMode: "directed",
+        turnTimeout: { idleMs: 20, maxMs: 1000 },
+        quota: { maxConsecutivePasses: 2, cooldownMs: 0, maxTotalTurns: 50, maxTurnsPerAgent: 20 },
+      },
+      {
+        onTurnEnd: (npcId: string, text: string, meta?: unknown) => ends.push([npcId, text, meta]),
+        onError: (err: unknown) => errors.push(String(err)),
+        onWaitingInput: () => {
+          engine.stop();
+        },
+      },
+    );
+    engine.directSpeak("a");
+    await engine.run();
+    assert.deepEqual(errors, []);
+    assert.equal(ends.length, 1);
+    assert.equal(ends[0][1], "기록했습니다");
+  });
 });
 
 describe("ConversationEngine — participant list in the speak prompt", () => {

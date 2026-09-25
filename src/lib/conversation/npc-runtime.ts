@@ -235,6 +235,10 @@ export class NpcRuntime {
             onToolProgress: () => {
               timeout.touch();
             },
+            // Waiting for a person's approval is silent; the next progress event re-arms idle.
+            onApprovalRequest: () => {
+              timeout.hold();
+            },
           })
           .then((result) => {
             timeout.clear();

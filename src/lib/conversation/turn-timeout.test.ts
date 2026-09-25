@@ -47,4 +47,23 @@ describe("createTurnTimeout", () => {
     await tick(80);
     assert.deepEqual(fired, []);
   });
+
+  test("hold suspends idle until the next touch, but not max", { timeout: 5000 }, async () => {
+    const fired: string[] = [];
+    const t = createTurnTimeout({ idleMs: 40, maxMs: 5000 }, (kind) => fired.push(kind));
+    t.hold();
+    await tick(120);
+    assert.deepEqual(fired, [], "a held turn does not expire on idle");
+    t.touch();
+    await tick(120);
+    t.clear();
+    assert.deepEqual(fired, ["idle"], "touch re-arms the idle deadline");
+
+    const capped: string[] = [];
+    const c = createTurnTimeout({ idleMs: 2000, maxMs: 60 }, (kind) => capped.push(kind));
+    c.hold();
+    await tick(150);
+    c.clear();
+    assert.deepEqual(capped, ["max"], "hold never lifts the absolute cap");
+  });
 });
