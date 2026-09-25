@@ -398,10 +398,44 @@ test("a partial NPC fetch failure (errors) shows a warning while keeping the lis
 });
 
 // Measured on staging: a history row showed only "— · ok · Custom reminder · Sep 26 00:49". The
-// result itself was visible only in the chat notice, and the row did not open.
-test("a history row shows the time, a readable status and the result, expandable in full", async () => {
+// result itself was visible only in the chat notice, and the row did not open. A later pass showed
+// markdown marks, an English session title repeating the time, and "show all" on a one-line result.
+
+/** happy-dom has no layout: give the folded result a height that depends on how much text it holds. */
+function stubFoldedLayout() {
+  const proto = window.HTMLElement.prototype;
+  const scroll = Object.getOwnPropertyDescriptor(proto, "scrollHeight");
+  const client = Object.getOwnPropertyDescriptor(proto, "clientHeight");
+  const lines = (el: HTMLElement) => Math.max(1, Math.ceil((el.textContent ?? "").length / 40));
+  Object.defineProperty(proto, "scrollHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return lines(this) * 16;
+    },
+  });
+  Object.defineProperty(proto, "clientHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.className.includes("line-clamp-3")
+        ? Math.min(lines(this), 3) * 16
+        : lines(this) * 16;
+    },
+  });
+  return () => {
+    if (scroll) Object.defineProperty(proto, "scrollHeight", scroll);
+    else delete (proto as unknown as Record<string, unknown>).scrollHeight;
+    if (client) Object.defineProperty(proto, "clientHeight", client);
+    else delete (proto as unknown as Record<string, unknown>).clientHeight;
+  };
+}
+
+test("a history row shows the time, a readable status and the result, expandable only when it overflows", async () => {
+  const restore = stubFoldedLayout();
   const jobs = [job({ id: "j1", npcId: "npc-a" })];
-  const long = Array.from({ length: 12 }, (_, i) => `${i + 1}. 오늘 할 일`).join("\n");
+  const long = Array.from(
+    { length: 12 },
+    (_, i) => `${i + 1}. 오늘 할 일 항목을 조금 길게 적어 둔다`,
+  ).join("\n");
   const r = router((url) => {
     if (url.includes("/runs"))
       return json(200, {
@@ -422,6 +456,14 @@ test("a history row shows the time, a readable status and the result, expandable
             summary: "Custom reminder · Sep 25 14:00",
             result_text: "",
           },
+          {
+            id: "r3",
+            started_at: "2026-09-24T14:00:00+09:00",
+            ended_at: "2026-09-24T14:00:20+09:00",
+            status: "ok",
+            summary: "오늘 할 일 세 가지",
+            result_text: "🔔 **물 한 잔 마시기**",
+          },
         ],
         limit: 20,
       });
@@ -434,26 +476,54 @@ test("a history row shows the time, a readable status and the result, expandable
     await act(async () => {
       await Promise.resolve();
     });
-    const [done, failed] = allByTestId(host, "cron-run");
+    const [done, failed, short] = allByTestId(host, "cron-run");
     assert.doesNotMatch(done.textContent ?? "", /—/, "the time is shown");
     assert.match(done.textContent ?? "", /2026/);
     assert.match(done.textContent ?? "", /성공/);
     assert.match(failed.textContent ?? "", /실패/);
+    // Hermes' automatic title repeats the job and time in English — hidden; a written one stays.
+    assert.ok(!done.querySelector("[data-testid='cron-run-summary']"));
+    assert.doesNotMatch(done.textContent ?? "", /Sep 26/);
+    assert.match(
+      short.querySelector("[data-testid='cron-run-summary']")?.textContent ?? "",
+      /세 가지/,
+    );
 
     const result = done.querySelector<HTMLElement>("[data-testid='cron-run-result']");
     assert.ok(result, "the result body is in the row");
-    assert.match(result.textContent ?? "", /12\. 오늘 할 일/);
+    assert.match(result.textContent ?? "", /12\. |오늘 할 일/);
     const toggle = done.querySelector<HTMLButtonElement>("[data-testid='cron-run-toggle']");
-    assert.ok(toggle);
+    assert.ok(toggle, "an overflowing result can be opened");
     assert.equal(toggle.getAttribute("aria-expanded"), "false");
     assert.ok(result.className.includes("line-clamp"), "folded by default");
     await click(toggle);
     assert.equal(toggle.getAttribute("aria-expanded"), "true");
     assert.ok(!result.className.includes("line-clamp"), "unfolded shows the whole result");
 
+    // Markdown renders like the chat notice; a result that fits has nothing to open.
+    const shortResult = short.querySelector("[data-testid='cron-run-result']");
+    assert.ok(shortResult?.querySelector("strong"), "bold is rendered, not shown as **");
+    assert.doesNotMatch(shortResult?.textContent ?? "", /\*\*/);
+    assert.ok(!short.querySelector("[data-testid='cron-run-toggle']"));
+
     // No result body: say where it went instead of showing nothing.
     assert.ok(!failed.querySelector("[data-testid='cron-run-toggle']"));
     assert.match(failed.textContent ?? "", /채팅/);
+  } finally {
+    await cleanup();
+    restore();
+  }
+});
+
+test("the detail tab labels the last run's status like the history does", async () => {
+  const jobs = [
+    job({ id: "j1", npcId: "npc-a", last_run_at: "2026-09-26T01:24:00+09:00", last_status: "ok" }),
+  ];
+  const r = router(() => json(200, { jobs, timezone: "Asia/Seoul" }));
+  const { host, cleanup } = await mount(<CronPanel channelId="ch1" npcs={NPCS} />, r.handler);
+  try {
+    await click(allByTestId(host, "cron-row")[0].querySelector("button"));
+    assert.equal(byTestId(host, "cron-last-status")?.textContent, "(성공)");
   } finally {
     await cleanup();
   }

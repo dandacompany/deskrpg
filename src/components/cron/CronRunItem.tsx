@@ -1,29 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
+import MarkdownContent from "@/components/ui/MarkdownContent";
 import type { CronRun } from "@/lib/hermes/deskrpg-plugin-types";
 import { useLocale, useT } from "@/lib/i18n";
 
+import { isAutoRunTitle, runStatusKey } from "./cron-run-view";
 import { formatLocalDateTime } from "./cron-schedule";
 
-const STATUS_KEYS: Record<string, string> = {
-  ok: "cron.runs.status.ok",
-  error: "cron.runs.status.error",
-  running: "cron.runs.status.running",
-};
-
 /**
- * One run-history row: when it ran, how it ended and what it produced. The result is folded to a
- * few lines and opens in place — before, only the session title showed and the result lived in the
- * chat notice alone. A run with no result body says where the result went instead.
+ * One run-history row: when it ran, how it ended and what it produced. The result is rendered as
+ * markdown like the chat's result notice, folded to a few lines, and the toggle appears only when
+ * the folded text actually overflows. A run with no result body says where the result went instead.
  */
 export default function CronRunItem({ run }: { run: CronRun }) {
   const t = useT();
   const { locale } = useLocale();
   const [open, setOpen] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
   const result = run.result_text.trim();
-  const statusKey = STATUS_KEYS[run.status] ?? "cron.runs.status.unknown";
+
+  // Measured folded: a one-line result used to offer "show all" that changed nothing.
+  useLayoutEffect(() => {
+    const el = body.current;
+    if (!el || open) return;
+    setOverflows(el.scrollHeight > el.clientHeight + 1);
+  }, [result, open]);
 
   return (
     <li
@@ -41,29 +45,36 @@ export default function CronRunItem({ run }: { run: CronRun }) {
               : "bg-surface-raised text-text-muted"
           }`}
         >
-          {t(statusKey)}
+          {t(runStatusKey(run.status))}
         </span>
       </div>
-      {run.summary && <p className="mt-0.5 text-[11px] text-text-dim break-words">{run.summary}</p>}
+      {run.summary && !isAutoRunTitle(run.summary) && (
+        <p data-testid="cron-run-summary" className="mt-0.5 text-[11px] text-text-dim break-words">
+          {run.summary}
+        </p>
+      )}
       {result ? (
         <>
-          <p
+          <div
+            ref={body}
             data-testid="cron-run-result"
-            className={`mt-1 text-text whitespace-pre-wrap break-words ${
+            className={`mt-1 text-text break-words ${
               open ? "max-h-80 overflow-y-auto" : "line-clamp-3"
             }`}
           >
-            {result}
-          </p>
-          <button
-            type="button"
-            data-testid="cron-run-toggle"
-            aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
-            className="mt-1 text-[11px] text-primary hover:underline"
-          >
-            {open ? t("cron.runs.collapse") : t("cron.runs.expand")}
-          </button>
+            <MarkdownContent content={result} />
+          </div>
+          {(overflows || open) && (
+            <button
+              type="button"
+              data-testid="cron-run-toggle"
+              aria-expanded={open}
+              onClick={() => setOpen((v) => !v)}
+              className="mt-1 text-[11px] text-primary hover:underline"
+            >
+              {open ? t("cron.runs.collapse") : t("cron.runs.expand")}
+            </button>
+          )}
         </>
       ) : (
         run.status !== "running" && (
