@@ -104,7 +104,8 @@ test("an MCP request is labelled as a tool call, and a request without session h
 
 test("clicking a choice emits decide, locks the buttons, and the resolution replaces them then folds away", async () => {
   const socket = new FakeSocket();
-  await render(dm(socket));
+  // Long enough that a loaded test run still sees the result before the card folds.
+  await render(dm(socket, { collapseMs: 1_000 }));
   await socket.fire(TOOL_APPROVAL_EVENTS.request, request());
   await click("[data-choice=once]");
   assert.deepEqual(socket.emitted, [
@@ -114,7 +115,7 @@ test("clicking a choice emits decide, locks the buttons, and the resolution repl
   await socket.fire(TOOL_APPROVAL_EVENTS.resolved, { key: "run-1:req-1", status: "approved_once" });
   assert.equal(container.querySelector("[data-choice]"), null);
   assert.match(text(), /한 번 허용했습니다/);
-  await new Promise((r) => setTimeout(r, 60));
+  await new Promise((r) => setTimeout(r, 1_100));
   await flush();
   assert.equal(container.querySelector("[data-testid=tool-approval-card]"), null);
 });
