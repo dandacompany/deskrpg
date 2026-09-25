@@ -106,6 +106,7 @@ import WorkspaceNavigator, {
   type RosterNpc,
 } from "@/components/conversation/WorkspaceNavigator";
 import { createAvatarLookup } from "./avatar-lookup";
+import { pushNotification, type GameNotification } from "./notification-list";
 import type { NpcChatMessage } from "@/components/NpcDialog";
 import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
@@ -187,13 +188,6 @@ interface Character {
   id: string;
   name: string;
   appearance: CharacterAppearanceData;
-}
-
-interface GameNotification {
-  id: string;
-  message: string;
-  timestamp: number;
-  read: boolean;
 }
 
 interface ChannelInfo {
@@ -629,7 +623,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToastMessage(null), 4000);
     setNotifications((prev) =>
-      [{ id, message, timestamp: Date.now(), read: false }, ...prev].slice(0, 20),
+      pushNotification(prev, { id, message, timestamp: Date.now(), read: false }),
     );
   }, []);
   // Toasts for the cron screen and tab (R19). A new id per message — so they do not stack in the notice list.
