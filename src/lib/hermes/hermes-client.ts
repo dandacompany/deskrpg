@@ -337,6 +337,19 @@ export class HermesClient {
     });
   }
 
+  /** Answers a pending tool approval of a run (`POST /v1/runs/{id}/approval`). `always` is never sent. */
+  async resolveRunApproval(
+    runId: string,
+    body: { choice: "once" | "session" | "deny"; request_id?: string },
+  ): Promise<{ resolved: number }> {
+    const res = await this.request(`/v1/runs/${encodeURIComponent(runId)}/approval`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const parsed = (await res.json().catch(() => ({}))) as { resolved?: unknown };
+    return { resolved: typeof parsed.resolved === "number" ? parsed.resolved : 0 };
+  }
+
   async steerRun(runId: string, text: string): Promise<void> {
     await this.request(`/v1/runs/${encodeURIComponent(runId)}/steer`, {
       method: "POST",

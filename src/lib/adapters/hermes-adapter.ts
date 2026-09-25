@@ -7,6 +7,7 @@
 
 import { HermesClient } from "@/lib/hermes/hermes-client";
 import type { SseEvent } from "@/lib/hermes/sse";
+import { parseApprovalEvent } from "@/lib/tool-approval-event";
 import type {
   AdapterExecuteOptions,
   AdapterHealthResult,
@@ -53,6 +54,11 @@ export class HermesAdapter implements NpcAdapter {
       // preview isn't passed through. tool.progress's `_thinking` preview is the entire
       // finished answer, and streaming that as a chat chunk used to make the answer show up
       // twice. Consumers get **only the name**.
+      // Both the 1:1 session stream (Hermes with #58856) and the meeting runs stream carry this.
+      if (event.event === "approval.request") {
+        const parsed = parseApprovalEvent(event.data);
+        if (parsed) options.onApprovalRequest?.(parsed);
+      }
       if (event.event === "tool.started" || event.event === "tool.progress") {
         const name = typeof event.data.tool_name === "string" ? event.data.tool_name : "";
         options.onToolProgress?.(name, "");

@@ -736,6 +736,35 @@ export type McpAdminApi = {
   exportServer(name: string): Promise<PluginResponse<McpExport>>;
 };
 
+// ---------------------------------------------------------------------------
+// 0.18.0 — unattended run approval policy (`/p/{profile}/deskrpg/approval-policy`)
+// ---------------------------------------------------------------------------
+
+export type ApprovalMode = "deny" | "approve";
+
+export type ApprovalPolicy = {
+  /** `approvals.cron_mode` — dangerous commands in cron jobs. */
+  cronMode: ApprovalMode;
+  /** `approvals.single_query_mode` — dangerous commands in kanban card runs (`hermes chat -q`). */
+  singleQueryMode: ApprovalMode;
+  /** `command_allowlist` — rule keys or command patterns that run even under `deny`. */
+  allowlist: string[];
+  /** `approvals.timeout` — how long Hermes waits for a live approval before denying. */
+  timeoutSeconds: number;
+  /** Whether worker processes load the plugin (needed for blocked-run notices). null = unknown. */
+  workerPropagation: boolean | null;
+};
+
+export type ApprovalPolicyApi = {
+  getPolicy(): Promise<PluginResponse<ApprovalPolicy>>;
+  setModes(
+    body: { cronMode?: ApprovalMode; singleQueryMode?: ApprovalMode },
+    actor: string,
+  ): Promise<PluginResponse<ApprovalPolicy>>;
+  addAllowlist(entry: string, actor: string): Promise<PluginResponse<ApprovalPolicy>>;
+  removeAllowlist(entry: string, actor: string): Promise<PluginResponse<ApprovalPolicy>>;
+};
+
 export type ProfilePluginClient = {
   profileName: string;
   cron: CronApi;
@@ -743,4 +772,6 @@ export type ProfilePluginClient = {
   skills: SkillAdminApi;
   /** 0.17.0 `profile_mcp_admin` — with an old plugin the call comes back 404. */
   mcp: McpAdminApi;
+  /** 0.18.0 `profile_approval_policy` — with an old plugin the call comes back 404. */
+  approvals: ApprovalPolicyApi;
 };

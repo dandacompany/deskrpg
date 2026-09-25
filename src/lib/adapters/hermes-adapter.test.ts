@@ -56,6 +56,44 @@ describe("HermesAdapter", () => {
     assert.ok(urls[0].includes("/p/sophie/api/sessions/sess-1/chat/stream"), urls[0]);
   });
 
+  test("forwards approval.request from the 1:1 stream without the always choice", async () => {
+    const client = clientWith(() =>
+      sseResponse([
+        'event: approval.request\ndata: {"run_id":"r1","request_id":"q1","command":"rm -r /tmp/x","pattern_key":"recursive delete","choices":["once","session","always","deny"]}\n\n',
+        'event: assistant.completed\ndata: {"content":"done","session_id":"sess-1","run_id":"r1"}\n\n',
+      ]),
+    );
+    const seen: unknown[] = [];
+    await new HermesAdapter(client, { sessionId: "sess-1" }).execute({
+      sessionKey: "npc-1-dm-user-9",
+      prompt: "x",
+      onApprovalRequest: (e) => seen.push(e),
+    });
+    assert.deepEqual(seen, [
+      {
+        runId: "r1",
+        requestId: "q1",
+        command: "rm -r /tmp/x",
+        description: "",
+        kind: "command",
+        choices: ["once", "session", "deny"],
+      },
+    ]);
+  });
+
+  test("resolveRunApproval posts the choice to the profile-scoped run", async () => {
+    const calls: Array<{ url: string; body: string }> = [];
+    const client = clientWith((url, init) => {
+      calls.push({ url, body: String(init?.body) });
+      return new Response(JSON.stringify({ resolved: 1 }), { status: 200 });
+    });
+    assert.deepEqual(await client.resolveRunApproval("r1", { choice: "once", request_id: "q1" }), {
+      resolved: 1,
+    });
+    assert.ok(calls[0].url.endsWith("/p/sophie/v1/runs/r1/approval"), calls[0].url);
+    assert.deepEqual(JSON.parse(calls[0].body), { choice: "once", request_id: "q1" });
+  });
+
   test("uses the runs path when the caller declares a multi-party turn", async () => {
     const urls: string[] = [];
     const client = clientWith((url) => {

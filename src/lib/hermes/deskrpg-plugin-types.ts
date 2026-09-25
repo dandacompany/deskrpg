@@ -418,9 +418,30 @@ export const PLUGIN_EVENT_KINDS = [
   "artifact.versioned",
   "artifact.deleted",
   "card_proposal.created",
+  "approval.blocked",
 ] as const;
 
 export type PluginEventKind = (typeof PLUGIN_EVENT_KINDS)[number];
+
+/**
+ * 0.18.0 — a cron or kanban worker hit a tool approval with nobody to answer
+ * (`approvals.cron_mode`/`single_query_mode: deny`, or an untrusted MCP write tool). Opt-in via
+ * `include=approvals`. `command` is capped and redacted by the plugin.
+ */
+export type ApprovalBlockedEventPayload = {
+  profile: string;
+  source: "cron" | "kanban";
+  kind: "command" | "mcp";
+  jobId?: string;
+  taskId?: string;
+  runId?: string;
+  tool: string;
+  patternKey?: string | null;
+  patternDescription?: string | null;
+  command?: string;
+  mcpServer?: string;
+  at: string;
+};
 
 /** Title, description, priority, assignee or attachment change — list of changed field names. The screen
  * reflects it by refetching the board. */
@@ -706,3 +727,7 @@ export const SKILL_ADMIN_CAPABILITY = "profile_skill_admin";
 /** 0.17.0 — NPC MCP connector management (`/p/{profile}/deskrpg/mcp/**`). */
 export const MCP_ADMIN_MIN_VERSION = "0.17.0";
 export const MCP_ADMIN_CAPABILITY = "profile_mcp_admin";
+
+/** 0.18.0 — unattended run approval policy (`/p/{profile}/deskrpg/approval-policy`) and `approval.blocked` events. */
+export const APPROVAL_POLICY_MIN_VERSION = "0.18.0";
+export const APPROVAL_POLICY_CAPABILITY = "profile_approval_policy";

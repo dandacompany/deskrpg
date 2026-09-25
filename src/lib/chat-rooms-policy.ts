@@ -90,6 +90,30 @@ export type RoomNotice =
       jobName: string;
       npcName: string;
       status: "ok" | "error";
+    }
+  | {
+      /**
+       * A cron/kanban run was blocked by an unattended approval policy. Private: only `audience`
+       * (the person who ordered the run) may receive it — the server filters it out for everyone
+       * else, the client never hides it.
+       */
+      kind: "approval_blocked";
+      audience: string;
+      npcId: string;
+      npcName: string;
+      source: "cron" | "kanban";
+      blockKind: "command" | "mcp";
+      jobId?: string;
+      jobName?: string;
+      taskId?: string;
+      taskTitle?: string;
+      tool: string;
+      command?: string;
+      patternKey?: string | null;
+      patternDescription?: string | null;
+      mcpServer?: string;
+      /** Set once the owner added the rule to the allowlist from this notice. */
+      resolved?: { allowlisted: string; by: string; at: string };
     };
 
 const ROOM_NOTICE_KINDS = new Set([
@@ -100,6 +124,7 @@ const ROOM_NOTICE_KINDS = new Set([
   "card_proposal",
   "meeting_outcome",
   "cron_result",
+  "approval_blocked",
 ]);
 
 /** Reads back the stored JSON string. A broken value or unknown kind yields null — the message itself is still kept. */

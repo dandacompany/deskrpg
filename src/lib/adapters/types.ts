@@ -1,6 +1,8 @@
 // src/lib/adapters/types.ts
 // NPC Adapter abstraction layer — all agent backends implement this interface.
 
+import type { ParsedApprovalEvent } from "@/lib/tool-approval-event";
+
 export interface AdapterExecuteOptions {
   sessionKey: string;
   prompt: string;
@@ -27,6 +29,8 @@ export interface AdapterExecuteOptions {
   onToolProgress?: (toolName: string, preview: string) => void;
   /** Fires as soon as the backend assigns a run handle, for abort/steer. */
   onRunStarted?: (runId: string) => void;
+  /** Hermes paused this run for a tool approval (dangerous command or untrusted MCP write tool). */
+  onApprovalRequest?: (event: ParsedApprovalEvent) => void;
   attachments?: AdapterAttachment[];
   model?: string;
   locale?: string;

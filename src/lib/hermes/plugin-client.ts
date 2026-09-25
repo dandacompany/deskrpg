@@ -31,6 +31,7 @@ import type {
   CardProposalsApi,
   CronApi,
   EventsApi,
+  ApprovalPolicyApi,
   KanbanApi,
   McpAdminApi,
   OwnerPluginClient,
@@ -645,5 +646,16 @@ export function createProfilePluginClient(
     exportServer: (name) => call(`${mcpRoot}/export/${seg(name)}`, token),
   };
 
-  return { profileName: input.profileName, cron, skills, mcp };
+  const policy = `${prof}/approval-policy`;
+  const approvals: ApprovalPolicyApi = {
+    getPolicy: () => call(policy, token),
+    setModes: (body, actor) => call(policy, token, { method: "PUT", body, ...as(actor) }),
+    addAllowlist: (entry, actor) =>
+      call(`${policy}/allowlist`, token, { method: "POST", body: { entry }, ...as(actor) }),
+    // The entry travels in the body: it may contain `/` or spaces.
+    removeAllowlist: (entry, actor) =>
+      call(`${policy}/allowlist`, token, { method: "DELETE", body: { entry }, ...as(actor) }),
+  };
+
+  return { profileName: input.profileName, cron, skills, mcp, approvals };
 }
