@@ -48,10 +48,16 @@ try:
         child = subprocess.Popen([str(python), '-'], text=True, encoding='utf-8', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **spawn)
         output, unused = child.communicate(payload['script'], timeout=payload['timeout'])
         terminate_owned()
-        if child.returncode or len(output) > 262144:
+        data = output.encode('utf-8')
+        # max_output is the most the client's transport delivers (Windows ssh.exe: 64 KiB). Past it,
+        # answer with a short named error instead of a reply that would never arrive whole.
+        limit = payload.get('max_output', 262144)
+        if child.returncode:
             print(json.dumps({'error': 'host_operation_failed'}))
+        elif len(data) > limit:
+            print(json.dumps({'error': 'host_output_too_large'}))
         else:
-            sys.stdout.buffer.write(output.encode('utf-8'))
+            sys.stdout.buffer.write(data)
             sys.stdout.buffer.flush()
 except Exception:
     terminate_owned()
