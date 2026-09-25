@@ -41,6 +41,11 @@ import type {
   WorkerLog,
 } from "./deskrpg-plugin-types";
 import { KANBAN_TASK_STATUSES } from "./deskrpg-plugin-types";
+import {
+  createFakeApprovalPolicyState,
+  routeApprovalPolicy,
+  type FakeApprovalPolicyState,
+} from "./fake-approval-policy-routes";
 import { createFakeMcpState, routeMcp, type FakeMcpState } from "./fake-mcp-routes";
 import { createFakeSkillState, routeSkills, type FakeSkillState } from "./fake-skill-routes";
 import { BLACKBOARD_PREFIX } from "@/components/kanban/kanban-view-model";
@@ -124,6 +129,8 @@ export type FakePluginServer = {
   skills(profile: string): FakeSkillState;
   /** That profile's 0.17.0 MCP connector state (`fake-mcp-routes.ts`). Creates an empty state if absent. */
   mcp(profile: string): FakeMcpState;
+  /** That profile's 0.18.0 approval policy state (`fake-approval-policy-routes.ts`). Creates a default if absent. */
+  approvalPolicy(profile: string): FakeApprovalPolicyState;
 };
 
 // ---------------------------------------------------------------------------
@@ -237,6 +244,7 @@ export async function startFakePluginServer(
   let cardProposals = new Map<string, CardProposalRecord>();
   let skillStates = new Map<string, FakeSkillState>();
   let mcpStates = new Map<string, FakeMcpState>();
+  let approvalPolicyStates = new Map<string, FakeApprovalPolicyState>();
   let seq = 0;
 
   const nextId = (prefix: string) => `${prefix}_${(seq += 1).toString(36).padStart(4, "0")}`;
@@ -254,6 +262,7 @@ export async function startFakePluginServer(
     cardProposals = new Map();
     skillStates = new Map();
     mcpStates = new Map();
+    approvalPolicyStates = new Map();
     seq = 0;
   }
 
@@ -262,6 +271,15 @@ export async function startFakePluginServer(
     if (!state) {
       state = createFakeSkillState();
       skillStates.set(profile, state);
+    }
+    return state;
+  }
+
+  function approvalPolicyFor(profile: string): FakeApprovalPolicyState {
+    let state = approvalPolicyStates.get(profile);
+    if (!state) {
+      state = createFakeApprovalPolicyState();
+      approvalPolicyStates.set(profile, state);
     }
     return state;
   }
@@ -1646,6 +1664,8 @@ export async function startFakePluginServer(
     if (skillReply) return skillReply;
     const mcpReply = routeMcp(mcpFor(profile), req);
     if (mcpReply) return mcpReply;
+    const policyReply = routeApprovalPolicy(approvalPolicyFor(profile), req);
+    if (policyReply) return policyReply;
     const { method, pathname, params, json } = req;
     const state = cronFor(profile);
     const rest = pathname.replace(/^\/deskrpg\/cron/, "");
@@ -1837,6 +1857,7 @@ export async function startFakePluginServer(
     seedAttachment,
     skills: skillsFor,
     mcp: mcpFor,
+    approvalPolicy: approvalPolicyFor,
     seedCardProposal: (proposalId) => {
       cardProposals.set(proposalId, {
         resolvedAt: null,
