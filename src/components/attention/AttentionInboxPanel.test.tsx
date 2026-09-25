@@ -183,3 +183,125 @@ test("on failure, shows the reason and lets the user retry", async () => {
   assert.ok(host.querySelector("[data-attention-empty]"));
   await cleanup();
 });
+
+const blockedRow = (over: Record<string, unknown> = {}) =>
+  ({
+    kind: "approval_blocked",
+    id: "m1",
+    messageId: "m1",
+    title: "nightly backup",
+    at: "2026-09-25T00:00:00.000Z",
+    requestedBy: null,
+    count: 1,
+    npcId: "n-1",
+    subtitle: "rm -rf /tmp/build",
+    patternKey: "recursive delete",
+    canAllowlist: true,
+    source: "cron",
+    jobName: "nightly backup",
+    blockKind: "command",
+    ...over,
+  }) as unknown as AttentionRow;
+
+function fakePolicy(fail = false) {
+  const added: { npcId: string; entry: string }[] = [];
+  return {
+    added,
+    factory: (npcId: string) =>
+      ({
+        async addAllowlist(entry: string) {
+          if (fail) throw new Error("boom");
+          added.push({ npcId, entry });
+          return {};
+        },
+      }) as never,
+  };
+}
+
+test("a blocked unattended run shows the job and the blocked command", async () => {
+  const api = fakeApi([{ rows: [blockedRow()], counts: EMPTY_COUNTS }]);
+  const { host, cleanup } = await render(<AttentionInboxPanel channelId="c1" api={api.client} />);
+  const row = host.querySelector('[data-attention-row="approval_blocked"]');
+  assert.ok(row);
+  assert.ok((row!.textContent ?? "").includes("무인 실행이 막힘"));
+  assert.ok((row!.textContent ?? "").includes("nightly backup"));
+  assert.equal(row!.querySelector("code")?.textContent, "rm -rf /tmp/build");
+  await cleanup();
+});
+
+test("the owner adds the blocking rule key to the allowlist, then sees it added", async () => {
+  const api = fakeApi([{ rows: [blockedRow()], counts: EMPTY_COUNTS }]);
+  const policy = fakePolicy();
+  const { host, cleanup } = await render(
+    <AttentionInboxPanel channelId="c1" api={api.client} policyApi={policy.factory} />,
+  );
+  const button = host.querySelector('[data-action="allowlist-add"]') as HTMLButtonElement;
+  assert.ok((button.textContent ?? "").includes("규칙 'recursive delete'"));
+  await act(async () => button.click());
+  assert.deepEqual(policy.added, [{ npcId: "n-1", entry: "recursive delete" }]);
+  assert.ok(host.querySelector("[data-allowlist-added]"));
+  assert.equal(host.querySelector('[data-action="allowlist-add"]'), null);
+  await cleanup();
+});
+
+test("a failed allowlist add keeps the button and shows an error", async () => {
+  const api = fakeApi([{ rows: [blockedRow()], counts: EMPTY_COUNTS }]);
+  const policy = fakePolicy(true);
+  const { host, cleanup } = await render(
+    <AttentionInboxPanel channelId="c1" api={api.client} policyApi={policy.factory} />,
+  );
+  await act(async () =>
+    (host.querySelector('[data-action="allowlist-add"]') as HTMLButtonElement).click(),
+  );
+  assert.ok(host.querySelector("[data-error]"));
+  assert.ok(host.querySelector('[data-action="allowlist-add"]'));
+  await cleanup();
+});
+
+test("an owner's block without a rule key offers the run policy instead", async () => {
+  const api = fakeApi([
+    {
+      rows: [
+        blockedRow({
+          patternKey: null,
+          blockKind: "mcp",
+          subtitle: "github.delete_repo",
+          tool: "github.delete_repo",
+          source: "kanban",
+          taskTitle: "Clean up repos",
+          jobName: undefined,
+        }),
+      ],
+      counts: EMPTY_COUNTS,
+    },
+  ]);
+  const opened: string[] = [];
+  const { host, cleanup } = await render(
+    <AttentionInboxPanel
+      channelId="c1"
+      api={api.client}
+      onOpenApprovalPolicy={(npcId) => opened.push(npcId)}
+    />,
+  );
+  const text = host.textContent ?? "";
+  assert.ok(text.includes("도구 github.delete_repo"));
+  assert.ok(text.includes("Clean up repos"));
+  assert.ok(text.includes("모드를 바꾸는 것만 가능합니다"));
+  assert.equal(host.querySelector('[data-action="allowlist-add"]'), null);
+  await act(async () =>
+    (host.querySelector('[data-action="open-policy"]') as HTMLButtonElement).click(),
+  );
+  assert.deepEqual(opened, ["n-1"]);
+  await cleanup();
+});
+
+test("a non-owner is told to ask the gateway owner", async () => {
+  const api = fakeApi([{ rows: [blockedRow({ canAllowlist: false })], counts: EMPTY_COUNTS }]);
+  const { host, cleanup } = await render(<AttentionInboxPanel channelId="c1" api={api.client} />);
+  assert.ok(
+    (host.querySelector("[data-ask-owner]")?.textContent ?? "").includes("게이트웨이 소유자"),
+  );
+  assert.equal(host.querySelector('[data-action="allowlist-add"]'), null);
+  assert.equal(host.querySelector('[data-action="open-policy"]'), null);
+  await cleanup();
+});

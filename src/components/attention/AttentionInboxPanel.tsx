@@ -12,27 +12,79 @@ import type { AttentionRow } from "@/lib/attention-inbox";
 import { parseRequester } from "@/lib/approval-requester";
 import { useT } from "@/lib/i18n";
 
+import {
+  createApprovalPolicyApi,
+  type ApprovalPolicyClientApi,
+} from "../approvals/approval-policy-api";
 import { createAttentionApi, type AttentionInbox } from "./attention-api";
+
+/**
+ * The fields of an `approval_blocked` row — an unattended cron/kanban run that the NPC's run
+ * policy blocked. Read defensively from the row: the server assembles it (`attention-inbox.ts`).
+ */
+export type ApprovalBlockedFields = {
+  npcId: string;
+  /** The blocked command (Hermes-redacted), or the MCP tool for `blockKind: "mcp"`. */
+  subtitle: string;
+  /** The dangerous-pattern rule key; the allowlist holds these keys, not commands. */
+  patternKey: string | null;
+  /** The viewer owns the gateway and may change the NPC's run policy. */
+  canAllowlist: boolean;
+  source: "cron" | "kanban";
+  jobName?: string;
+  taskTitle?: string;
+  blockKind: "command" | "mcp";
+  tool?: string;
+};
+
+export function approvalBlockedFields(row: AttentionRow): ApprovalBlockedFields | null {
+  if ((row.kind as string) !== "approval_blocked") return null;
+  const r = row as unknown as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+  const npcId = str(r.npcId);
+  if (!npcId) return null;
+  return {
+    npcId,
+    subtitle: str(r.subtitle) ?? "",
+    patternKey: str(r.patternKey) ?? null,
+    canAllowlist: r.canAllowlist === true,
+    source: r.source === "kanban" ? "kanban" : "cron",
+    jobName: str(r.jobName),
+    taskTitle: str(r.taskTitle),
+    blockKind: r.blockKind === "mcp" ? "mcp" : "command",
+    tool: str(r.tool),
+  };
+}
 
 export interface AttentionInboxPanelProps {
   channelId: string;
   onOpenCard?: (taskId: string) => void;
   onOpenCronJob?: (jobId: string) => void;
+  /** Opens the NPC's unattended run policy modal (owner, blocked row without a rule key). */
+  onOpenApprovalPolicy?: (npcId: string) => void;
   /** Stands in for the real fetch in tests/stories. */
   api?: ReturnType<typeof createAttentionApi>;
+  /** Stands in for the run policy API in tests. */
+  policyApi?: (npcId: string) => ApprovalPolicyClientApi;
 }
 
 export default function AttentionInboxPanel({
   channelId,
   onOpenCard,
   onOpenCronJob,
+  onOpenApprovalPolicy,
   api,
+  policyApi,
 }: AttentionInboxPanelProps) {
   const t = useT();
   const client = useRef(api ?? createAttentionApi(channelId));
   const [inbox, setInbox] = useState<AttentionInbox | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const policyFor = useCallback(
+    (npcId: string) => (policyApi ? policyApi(npcId) : createApprovalPolicyApi(channelId, npcId)),
+    [policyApi, channelId],
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -99,6 +151,8 @@ export default function AttentionInboxPanel({
           onDecide={decide}
           onOpenCard={onOpenCard}
           onOpenCronJob={onOpenCronJob}
+          onOpenApprovalPolicy={onOpenApprovalPolicy}
+          policyFor={policyFor}
         />
       ))}
     </div>
@@ -111,14 +165,148 @@ function AttentionRowView({
   onDecide,
   onOpenCard,
   onOpenCronJob,
+  onOpenApprovalPolicy,
+  policyFor,
 }: {
   row: AttentionRow;
   busy: boolean;
   onDecide: (row: AttentionRow, d: "approve" | "reject" | "request_revision", note: string) => void;
   onOpenCard?: (taskId: string) => void;
   onOpenCronJob?: (jobId: string) => void;
+  onOpenApprovalPolicy?: (npcId: string) => void;
+  policyFor: (npcId: string) => ApprovalPolicyClientApi;
 }) {
   const t = useT();
+  const blocked = approvalBlockedFields(row);
+  if (blocked) {
+    return (
+      <ApprovalBlockedRowView
+        row={row}
+        fields={blocked}
+        onOpenApprovalPolicy={onOpenApprovalPolicy}
+        policyFor={policyFor}
+      />
+    );
+  }
+  return (
+    <DecisionRowView
+      row={row}
+      busy={busy}
+      onDecide={onDecide}
+      onOpenCard={onOpenCard}
+      onOpenCronJob={onOpenCronJob}
+      t={t}
+    />
+  );
+}
+
+/**
+ * A blocked unattended run. The owner can allow the rule that blocked it (the allowlist holds
+ * rule keys); without a rule key (Tirith, execute_code, MCP) only the run policy's modes can
+ * help, so the owner gets a shortcut to it. Others are told to ask the gateway owner.
+ */
+function ApprovalBlockedRowView({
+  row,
+  fields,
+  onOpenApprovalPolicy,
+  policyFor,
+}: {
+  row: AttentionRow;
+  fields: ApprovalBlockedFields;
+  onOpenApprovalPolicy?: (npcId: string) => void;
+  policyFor: (npcId: string) => ApprovalPolicyClientApi;
+}) {
+  const t = useT();
+  const [state, setState] = useState<"idle" | "busy" | "added" | "failed">("idle");
+  const name = fields.source === "cron" ? fields.jobName : fields.taskTitle;
+  const allow = async () => {
+    if (!fields.patternKey) return;
+    setState("busy");
+    try {
+      await policyFor(fields.npcId).addAllowlist(fields.patternKey);
+      setState("added");
+    } catch {
+      setState("failed");
+    }
+  };
+
+  return (
+    <div
+      className="rounded-lg border border-border bg-surface-raised px-3 py-2"
+      data-attention-row="approval_blocked"
+      data-row-id={row.id}
+    >
+      <div className="flex items-center gap-2 text-caption text-text-muted">
+        <span className="font-semibold">{t("attention.kind.approval_blocked")}</span>
+        <span>{t(`attention.blockedRun.source.${fields.source}`)}</span>
+      </div>
+      <div className="mt-0.5 break-words text-body text-text">{name || row.title}</div>
+      <div className="mt-0.5 break-all text-caption text-text-muted" data-blocked-subject>
+        {fields.blockKind === "mcp" ? (
+          t("attention.blockedRun.tool", { tool: fields.tool ?? fields.subtitle })
+        ) : (
+          <code className="font-mono">{fields.subtitle}</code>
+        )}
+      </div>
+      {fields.canAllowlist && fields.patternKey ? (
+        <div className="mt-1 flex items-center gap-2">
+          {state === "added" ? (
+            <span className="text-caption text-text-muted" data-allowlist-added>
+              {t("attention.blockedRun.added")}
+            </span>
+          ) : (
+            <button
+              type="button"
+              data-action="allowlist-add"
+              disabled={state === "busy"}
+              className="text-caption font-semibold text-primary hover:underline disabled:opacity-50"
+              onClick={() => void allow()}
+            >
+              {t("attention.blockedRun.allow", { patternKey: fields.patternKey })}
+            </button>
+          )}
+          {state === "failed" && (
+            <span className="text-caption text-danger" data-error>
+              {t("attention.blockedRun.failed")}
+            </span>
+          )}
+        </div>
+      ) : fields.canAllowlist ? (
+        <div className="mt-1 flex flex-col gap-0.5">
+          <span className="text-caption text-text-muted">{t("attention.blockedRun.noRule")}</span>
+          <button
+            type="button"
+            data-action="open-policy"
+            className="self-start text-caption font-semibold text-primary hover:underline"
+            onClick={() => onOpenApprovalPolicy?.(fields.npcId)}
+          >
+            {t("attention.blockedRun.openPolicy")}
+          </button>
+        </div>
+      ) : (
+        <p className="mt-1 text-caption text-text-muted" data-ask-owner>
+          {t("attention.blockedRun.askOwner")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function DecisionRowView({
+  row,
+  busy,
+  onDecide,
+  onOpenCard,
+  onOpenCronJob,
+  t,
+}: {
+  row: AttentionRow;
+  busy: boolean;
+  onDecide: (row: AttentionRow, d: "approve" | "reject" | "request_revision", note: string) => void;
+  onOpenCard?: (taskId: string) => void;
+  onOpenCronJob?: (jobId: string) => void;
+  t: ReturnType<typeof useT>;
+}) {
   const [note, setNote] = useState("");
   const requester = row.requestedBy ? parseRequester(row.requestedBy) : null;
 
