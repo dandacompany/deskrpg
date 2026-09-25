@@ -762,8 +762,6 @@ const ja: Record<string, string> = {
   "npc.name": "NPC名",
   "npc.namePlaceholder": "AIアシスタント",
   "npc.adapterType": "AIエンジン",
-  "npc.cliAdapterNote":
-    "このNPCは選択したCLIツールを使用します。ツールがインストールされ、プロバイダが設定されていることを確認してください。",
   "npc.activity.writingFile": "ファイルを書いています…",
   "npc.activity.speaking": "音声を作成中…",
   "npc.activity.thinking": "考え中…",

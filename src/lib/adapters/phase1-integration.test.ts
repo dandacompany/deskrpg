@@ -11,9 +11,20 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { CodexAdapter } from "./codex-adapter";
 import { AdapterRegistry } from "./types";
 import type { NpcAdapter } from "./types";
+
+function stubAdapter(type: string): NpcAdapter {
+  return {
+    type,
+    async execute() {
+      return { response: `from-${type}`, session: { sessionRef: "s" } };
+    },
+    async testConnection() {
+      return { status: "ok" as const };
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // 1. DB Schema — adapter_type and adapter_config columns
@@ -55,18 +66,6 @@ describe("Phase1: DB Schema", () => {
 // ---------------------------------------------------------------------------
 
 describe("Phase1: AdapterRegistry routing", () => {
-  function stubAdapter(type: string): NpcAdapter {
-    return {
-      type,
-      async execute() {
-        return { response: `from-${type}`, session: { sessionRef: "s" } };
-      },
-      async testConnection() {
-        return { status: "ok" as const };
-      },
-    };
-  }
-
   test("registry routes to correct adapter by type", () => {
     const registry = new AdapterRegistry();
     const claude = stubAdapter("claude");
@@ -169,14 +168,12 @@ describe("Phase1: NpcConfig shape", () => {
 // ---------------------------------------------------------------------------
 
 describe("Phase1: Unsupported adapter path", () => {
-  test("registry.has returns false for unregistered CLI adapters", () => {
+  test("registry.has is true only for registered adapter types", () => {
     const registry = new AdapterRegistry();
-    registry.register(new CodexAdapter());
+    registry.register(stubAdapter("codex"));
 
     assert.equal(registry.has("codex"), true);
     assert.equal(registry.has("claude"), false);
-    assert.equal(registry.has("gemini"), false);
-    assert.equal(registry.has("opencode"), false);
   });
 
   test("unsupported_adapter response message key exists", async () => {
@@ -193,7 +190,7 @@ describe("Phase1: Unsupported adapter path", () => {
   test("adapter routing guard: an unregistered type is rejected before dispatch", () => {
     // Same check as streamNpcResponse's guard — never dispatches to an adapter that isn't in the registry.
     const registry = new AdapterRegistry();
-    registry.register(new CodexAdapter());
+    registry.register(stubAdapter("codex"));
 
     const npcConfig = { adapterType: "claude" };
 

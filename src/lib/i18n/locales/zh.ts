@@ -692,7 +692,6 @@ const zh: Record<string, string> = {
   "npc.name": "NPC名称",
   "npc.namePlaceholder": "AI助手",
   "npc.adapterType": "AI引擎",
-  "npc.cliAdapterNote": "此NPC将使用所选CLI工具。请确保已安装工具并配置了提供商。",
   "npc.activity.writingFile": "写入文件中…",
   "npc.activity.speaking": "生成语音中…",
   "npc.activity.thinking": "思考中…",

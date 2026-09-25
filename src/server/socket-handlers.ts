@@ -112,10 +112,6 @@ import { registerMeetingHooks } from "@/lib/meeting-registry";
 import { prefixReportFormat } from "@/lib/report-format";
 import { prefixUserContext, type UserContext } from "@/lib/user-context";
 import { AdapterRegistry } from "../lib/adapters/types.js";
-import { ClaudeAdapter } from "../lib/adapters/claude-adapter.js";
-import { CodexAdapter } from "../lib/adapters/codex-adapter.js";
-import { GeminiAdapter } from "../lib/adapters/gemini-adapter.js";
-import { OpencodeAdapter as OpenCodeAdapter } from "../lib/adapters/opencode-adapter.js";
 import {
   classifyNpcDispatch,
   clearHermesRun,
@@ -128,21 +124,10 @@ import { isUuid } from "@/lib/uuid";
 import { registerNpcsPlacedNotifier } from "@/lib/npc-roster-registry";
 import { broadcastPlacedNpcs } from "./npc-placement-broadcast";
 
+// Nothing registers here at boot — Hermes NPCs dispatch through hermes-dispatch. The registry is
+// the seam for any other adapter type; an NPC whose type is not registered gets
+// `unsupported_adapter`.
 export const adapterRegistry = new AdapterRegistry();
-
-// Register CLI adapters when the corresponding local CLI is installed.
-for (const AdapterClass of [ClaudeAdapter, CodexAdapter, GeminiAdapter, OpenCodeAdapter]) {
-  const adapter = new AdapterClass();
-  void adapter
-    .testConnection({})
-    .then((result) => {
-      if (result.status === "ok") {
-        adapterRegistry.register(adapter);
-        console.log("[adapters] Registered", adapter.type, "adapter (", result.version, ")");
-      }
-    })
-    .catch(() => {});
-}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -705,7 +690,7 @@ async function streamNpcResponse(
       socket.emit(responseEvent, { npcId, chunk: "", done: true });
       return response || "";
     } catch (err) {
-      console.error("[npc] CLI adapter error for " + npcId + ":", err);
+      console.error("[npc] " + adapterType + " adapter error for " + npcId + ":", err);
       emitNpcSystemResponse(socket, npcId, gatewayFailureMessageCode(err));
       return "";
     }
