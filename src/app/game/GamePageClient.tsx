@@ -95,6 +95,7 @@ import ChatPanel from "@/components/ChatPanel";
 import ConversationPane from "@/components/conversation/ConversationPane";
 import ConversationWorkspace from "@/components/conversation/ConversationWorkspace";
 import MeetingWorkspace from "@/components/conversation/MeetingWorkspace";
+import { ToolApprovalsProvider } from "@/components/approvals/ToolApprovalsProvider";
 import { useMeetingEntry } from "@/components/meeting-room/use-meeting-entry";
 import "@/components/meeting-room/meeting-mode.css";
 import { buildDmThreadEntries, needsCallBeforeDmSend, type DmThread } from "@/lib/dm-threads";
@@ -2817,7 +2818,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     </ConversationPane>
   );
 
-  return (
+  const page = (
     <div
       data-game-meeting={mode === "meeting"}
       className="theme-game ui2-game h-screen w-screen overflow-hidden bg-bg text-text"
@@ -3898,4 +3899,6 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       )}
     </div>
   );
+  // Approval cards outlive whichever chat is shown — see ToolApprovalsProvider.
+  return <ToolApprovalsProvider socket={socket}>{page}</ToolApprovalsProvider>;
 }

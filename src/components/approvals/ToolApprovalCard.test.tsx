@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { act } from "react";
+import { act, useState } from "react";
 
 import {
   TOOL_APPROVAL_EVENTS,
@@ -10,6 +10,7 @@ import {
 
 import { $, cleanup, click, container, flush, render, text } from "../skills/skills-test-harness";
 import ToolApprovalStack, { formatRemaining } from "./ToolApprovalCard";
+import { ToolApprovalsProvider } from "./ToolApprovalsProvider";
 import type { ToolApprovalSocket } from "./use-tool-approvals";
 
 class FakeSocket implements ToolApprovalSocket {
@@ -193,6 +194,47 @@ test("meeting participants see a waiting line until it clears; the approver sees
   await socket.fire(TOOL_APPROVAL_EVENTS.request, request({ key: "r:2", context: "meeting" }));
   assert.equal(container.querySelector("[data-approval-pending]"), null);
   assert.ok($("[data-choice=once]"));
+});
+
+test("under the page provider, a room card that arrived while another chat was shown is still there", async () => {
+  const socket = new FakeSocket();
+  function Page() {
+    const [room, setRoom] = useState(false);
+    // Different keys: the room stack is a fresh mount, as it is in the chat panel.
+    return room ? (
+      <ToolApprovalStack
+        key="room"
+        socket={socket}
+        channelId="c1"
+        context="room"
+        roomId="room-1"
+        npcNames={names}
+      />
+    ) : (
+      <div key="dm">
+        <button data-open-room onClick={() => setRoom(true)} />
+        {dm(socket)}
+      </div>
+    );
+  }
+  await render(
+    <ToolApprovalsProvider socket={socket}>
+      <Page />
+    </ToolApprovalsProvider>,
+  );
+  // The DM of the same NPC is open; the room turn's request arrives now.
+  await socket.fire(
+    TOOL_APPROVAL_EVENTS.request,
+    request({ key: "r:room", context: "room", roomId: "room-1" }),
+  );
+  assert.equal(container.querySelector("[data-choice]"), null, "a DM does not show a room card");
+  await click("[data-open-room]");
+  assert.ok($("[data-choice=once]"), "switching to the room shows the card");
+  await click("[data-choice=once]");
+  assert.deepEqual(socket.emitted.at(-1), [
+    TOOL_APPROVAL_EVENTS.decide,
+    { key: "r:room", choice: "once" },
+  ]);
 });
 
 test("unmounting unsubscribes from the socket", async () => {

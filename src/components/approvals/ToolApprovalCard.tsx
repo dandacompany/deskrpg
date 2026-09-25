@@ -10,6 +10,7 @@ import {
   type ApprovalCardState,
   type ToolApprovalSocket,
 } from "./use-tool-approvals";
+import { useSharedToolApprovals } from "./ToolApprovalsProvider";
 
 /** `m:ss`, rounded up so the last second still reads 0:01. */
 export function formatRemaining(ms: number): string {
@@ -133,7 +134,10 @@ export default function ToolApprovalStack({
   collapseMs,
 }: ToolApprovalStackProps) {
   const t = useT();
-  const { cards, waiting, decide } = useToolApprovals(socket, { collapseMs });
+  const shared = useSharedToolApprovals();
+  // Without a page-wide provider (tests, a standalone meeting) the stack subscribes on its own.
+  const own = useToolApprovals(shared ? null : socket, { collapseMs });
+  const { cards, waiting, decide } = shared ?? own;
   const shown = cards.filter((c) =>
     context === "room"
       ? c.request.context === "room" && c.request.roomId === roomId
