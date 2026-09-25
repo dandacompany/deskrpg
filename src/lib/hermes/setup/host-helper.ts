@@ -376,6 +376,9 @@ PORT_MAX = 8699
 RESTART_MIN = 90
 RESTART_MAX = 300
 RESTART_START_MARGIN = 30
+# Windows restart through Hermes' own CLI: it drains up to 30s, waits up to 40s for the old process,
+# then starts and waits for the new one. The restart budget is this plus RESTART_START_MARGIN.
+WINDOWS_RESTART_SECONDS = 120
 # Plugin 0.16.0 worker propagation opt-in. The plugin only reads this value — the operator (and this wizard) turns it on.
 WORKER_ENV = 'DESKRPG_WORKER_PROPAGATION'
 WORKER_TRUTHY = ('1', 'true', 'yes', 'on')
@@ -458,6 +461,26 @@ def restart_timeout(owner):
     stop = owner.get('stop')
     wait = (stop if isinstance(stop, int) and stop > 0 else 0) + RESTART_START_MARGIN
     return min(RESTART_MAX, max(RESTART_MIN, wait))
+def cli_drains():
+    # Does the installed Hermes restart its Windows gateway with a drain (planned-stop marker, then wait)?
+    # Read the module source instead of importing it: importing a CLI module can have side effects.
+    try:
+        import importlib.util
+        spec = importlib.util.find_spec('hermes_cli.gateway_windows')
+        source = read(pathlib.Path(spec.origin)) if spec and spec.origin else ''
+    except Exception: return False
+    return 'write_planned_stop_marker' in source and re.search(r'^def restart\(', source, re.M) is not None
+def windows_restart(task, name, home, python):
+    # schtasks /End ends the task at once and can cut off a running card or cron job. Hermes' own
+    # 'gateway restart' writes the planned-stop marker, lets the gateway drain, ends the task, waits for it
+    # to be gone and starts it again. Use it when the installed Hermes has it; otherwise keep /End + /Run.
+    # Returns (command, env, stop seconds).
+    if cli_drains():
+        command = [python, '-m', 'hermes_cli.main'] + (['--profile', name] if name != 'default' else []) + ['gateway', 'restart']
+        # The CLI prints non-ASCII status marks; on a cp949 pipe that would raise mid-restart.
+        env = {**os.environ, 'HERMES_HOME': str(home), 'PYTHONUTF8': '1', 'PYTHONIOENCODING': 'utf-8'}
+        return command, env, WINDOWS_RESTART_SECONDS
+    return ['cmd', '/c', 'schtasks /End /TN ' + task + ' & schtasks /Run /TN ' + task], None, None
 def launches(arguments, target):
     # wscript.exe runs the 'first' argument that isn't a switch (//B, //Nologo). Look only at that one actually executed —
     # someone else's task that appends our launcher path after it must not pass.
@@ -481,6 +504,8 @@ def identity(name, home):
     definition, service, command, pid, warning = '', 'manual', None, 0, 'managed_service_required'
     # Time (seconds) the service can use for graceful shutdown. None if unknown — the restart limit uses the lower bound.
     stop = None
+    # Extra environment for the restart command (Windows CLI restart pins HERMES_HOME). None keeps ours.
+    restart_env = None
     python = str(pathlib.Path(sys.executable))
     if sys.platform == 'darwin':
         label = 'ai.hermes.gateway' + suffix
@@ -606,15 +631,15 @@ def identity(name, home):
                     from gateway.status import get_running_pid
                     pid = int(get_running_pid(home / 'gateway.pid', cleanup_stale=False) or 0)
                 except Exception: pid = 0
-                # A restart path exists only when there's a scheduled task. It must be /End then /Run to reread changed settings.
+                # A restart path exists only when there's a scheduled task; a stop and start rereads changed settings.
                 # With only the Startup folder fallback there's no way to stop it, so a managed service is required.
                 if registered.returncode == 0 and re.fullmatch(r'[A-Za-z0-9_-]+', task):
-                    command = ['cmd', '/c', 'schtasks /End /TN ' + task + ' & schtasks /Run /TN ' + task]
+                    command, restart_env, stop = windows_restart(task, name, home, python)
                     warning = None
                 else: warning = 'managed_service_required'
             else: warning = 'service_identity_mismatch'
     digest = hashlib.sha256((str(INSTALL.resolve()) + '\0' + str(home) + '\0' + service + '\0' + definition).encode()).hexdigest()
-    return {'id': digest, 'service': service, 'command': command, 'pid': pid, 'warning': warning, 'stop': stop}
+    return {'id': digest, 'service': service, 'command': command, 'env': restart_env, 'pid': pid, 'warning': warning, 'stop': stop}
 
 def plugin(home, cfg):
     manifests = []
@@ -1108,7 +1133,9 @@ def main(action, candidate_id=None, option=None):
             atomic(home / '.env', old.rstrip('\n') + '\nAPI_SERVER_KEY=' + secrets.token_hex(32) + '\n')
     elif action == 'restart':
         # Past the limit, report with a code that carries the cause — if not caught, the top-level except mashes it into host_operation_failed.
-        try: code = run(owner['command'], timeout=restart_timeout(owner)).returncode
+        # env only when the restart plan pins one (Windows CLI restart); otherwise the helper's own environment.
+        extra = {'env': owner['env']} if owner.get('env') else {}
+        try: code = run(owner['command'], timeout=restart_timeout(owner), **extra).returncode
         except subprocess.TimeoutExpired: fail('gateway_restart_failed')
         if code: fail('gateway_restart_failed')
     elif action == 'verify':
