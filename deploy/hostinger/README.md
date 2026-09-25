@@ -106,6 +106,8 @@ Skipping the model lines leaves the profile on Hermes' default model (`anthropic
 | `ANTHROPIC_API_KEY`  | none; set `model.provider anthropic` and `model.default` to avoid the Opus default |
 | `OPENAI_API_KEY`     | **required** — the key alone is ignored and requests still go to OpenRouter        |
 
+Hermes reads provider keys from the volume's `/opt/data/.env`, not from the container environment: a key passed only as an environment variable leaves every employee answering `Provider authentication failed` (measured 2026-09-22 with the current `latest` image; on 2026-09-17 the environment variable alone was enough). So the one-shot `hermes-plugins` service (4-2) copies every non-empty key from the Environment box into that file on each deploy, and new employees inherit it from there. Emptying a key in the Environment box does **not** remove a key already written — to retire a key, revoke it at the provider.
+
 ```bash
 # OpenAI key only
 docker compose exec hermes hermes config set model.provider openai-api

@@ -89,13 +89,25 @@ services:
       HERMES_UID: ${HERMES_UID:-10000}
       HERMES_GID: ${HERMES_GID:-10000}
       API_SERVER_KEY: ${HERMES_API_KEY:-change-this-hermes-api-key}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - hermes-data:/opt/data
+    # Hermes reads provider keys from /opt/data/.env, not the env: copy the non-empty ones.
     command:
       - sh
       - -c
       - |
         set -e
+        touch /opt/data/.env
+        for v in OPENROUTER_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY; do
+          val=$$(printenv "$$v" || true)
+          [ -n "$$val" ] || continue
+          grep -v "^$$v=" /opt/data/.env > /tmp/env.next || true
+          printf '%s=%s\n' "$$v" "$$val" >> /tmp/env.next
+          cat /tmp/env.next > /opt/data/.env
+        done
         if hermes plugins list --plain --no-bundled | grep -q ' deskrpg$$'; then
           hermes plugins update deskrpg || echo "plugin update failed; keeping installed version"
         else
