@@ -2422,7 +2422,9 @@ const ja: Record<string, string> = {
   "auth.getStarted": "はじめる",
   "auth.setupDescription": "管理者アカウントを作成して始めましょう",
   "auth.setupAdminNotice":
-    "最初に作るアカウントがこのサーバーの管理者になります。他の人がアクセスできる場所なら、アカウントを作った後は登録を閉じてください。",
+    "最初に作成するアカウントがこのサーバーの管理者になります。管理者はこのサーバーへの Hermes のインストール、グループとメンバー権限の管理、他の人のパスワードの再設定ができます。後から登録した人は一般メンバーになります。",
+  "auth.setupSignupNotice":
+    "他の人がアクセスできる場所なら、アカウント作成後にサーバーの環境変数 REGISTRATION_DISABLED=true を設定して再起動し、登録を閉じてください。",
   "channels.backToChannels": "チャンネル一覧に戻る",
   "chat.returnNpcToOrigin": "NPCを元の位置に戻す",
   "chat.options": "チャットオプション",

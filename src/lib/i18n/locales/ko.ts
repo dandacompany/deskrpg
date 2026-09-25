@@ -2394,7 +2394,9 @@ const ko: Record<string, string> = {
   "auth.getStarted": "시작하기",
   "auth.setupDescription": "관리자 계정을 만들어 시작하세요",
   "auth.setupAdminNotice":
-    "지금 만드는 첫 계정이 이 서버의 관리자가 됩니다. 여러 사람이 접속할 수 있는 곳이라면, 계정을 만든 뒤 가입을 닫으세요.",
+    "지금 만드는 첫 계정이 이 서버의 관리자가 됩니다. 관리자는 이 서버에 Hermes 를 설치하고, 그룹과 멤버 권한을 정하고, 다른 사람의 비밀번호를 재설정할 수 있습니다. 나중에 가입하는 사람은 일반 멤버가 됩니다.",
+  "auth.setupSignupNotice":
+    "여러 사람이 접속할 수 있는 곳이라면, 계정을 만든 뒤 서버 환경변수 REGISTRATION_DISABLED=true 를 두고 다시 시작해 가입을 닫으세요.",
   "channels.backToChannels": "오피스 목록으로 돌아가기",
   "chat.returnNpcToOrigin": "NPC를 원래 자리로 복귀",
   "chat.options": "채팅 옵션",

@@ -2407,7 +2407,9 @@ const en: Record<string, string> = {
   "auth.getStarted": "Get Started",
   "auth.setupDescription": "Create an admin account to get started",
   "auth.setupAdminNotice":
-    "The first account you create becomes this server's administrator. If other people can reach this instance, close signups once your account exists.",
+    "The first account you create becomes this server's administrator. The administrator can install Hermes on this server, manage groups and member permissions, and reset other people's passwords. Anyone who signs up later joins as a regular member.",
+  "auth.setupSignupNotice":
+    "If other people can reach this server, close signups once your account exists: set REGISTRATION_DISABLED=true in the server environment and restart it.",
   "channels.backToChannels": "Back to Channels",
   "chat.returnNpcToOrigin": "Return NPC to original position",
   "chat.options": "Chat options",

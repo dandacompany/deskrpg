@@ -2312,7 +2312,9 @@ const zh: Record<string, string> = {
   "auth.getStarted": "开始使用",
   "auth.setupDescription": "创建管理员账户以开始使用",
   "auth.setupAdminNotice":
-    "您创建的第一个账号将成为此服务器的管理员。如果其他人可以访问此实例，请在创建账号后关闭注册。",
+    "你现在创建的第一个账户将成为此服务器的管理员。管理员可以在此服务器上安装 Hermes、管理群组和成员权限，并重置他人的密码。之后注册的人将成为普通成员。",
+  "auth.setupSignupNotice":
+    "如果其他人也能访问此服务器，请在创建账户后在服务器环境变量中设置 REGISTRATION_DISABLED=true 并重启，以关闭注册。",
   "channels.backToChannels": "返回频道列表",
   "chat.returnNpcToOrigin": "让 NPC 返回原位",
   "chat.options": "聊天选项",
