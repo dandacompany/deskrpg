@@ -1826,6 +1826,8 @@ const en: Record<string, string> = {
   "game.notMember": "Not a member of this channel",
   "game.loadFailed": "Failed to load character",
   "game.calledWhileWorking": "{name} is working on {count} task(s). The work continues.",
+  "game.comingToReportWhileWorking":
+    "{name} is coming over to report. The {count} task(s) in progress continue.",
   "game.pressToTalk": "Click {name} or press / to talk",
   "game.menuSettings": "Settings",
   "viewSettings.menu": "View settings",

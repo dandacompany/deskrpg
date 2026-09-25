@@ -682,7 +682,10 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
               reason: "map-chat",
               ...(typeof payload.roomId === "string" ? { roomId: payload.roomId } : {}),
             }
-          : {}),
+          : // A report call walks over like a person-pressed one; the reason only lets the screen say why.
+            payload.reason === "report"
+            ? { reason: "report" }
+            : {}),
       });
     });
     handle("npc:return-home", (payload, state, channelId) => {

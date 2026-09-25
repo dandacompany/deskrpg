@@ -2294,3 +2294,17 @@ test("a meeting walk that brushes past its spot and is pushed off again keeps it
     await h.close();
   }
 });
+
+test("a report call tells everyone why the employee is coming over", async () => {
+  const h = await harness();
+  try {
+    const a = await h.connect();
+    const coming = new Promise<Record<string, unknown>>((resolve) =>
+      a.socket.once("npc:come-to-player", resolve),
+    );
+    assert.equal((await ack(a, "npc:call", { npcId: "n1", reason: "report" })).ok, true);
+    assert.equal((await coming).reason, "report");
+  } finally {
+    await h.close();
+  }
+});

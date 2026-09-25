@@ -419,6 +419,44 @@ test("calling a working employee is not blocked, and that fact is reported", () 
   }
 });
 
+test("a working employee coming over to report says so instead of reading like an interruption", () => {
+  const sim = new OfficeSimulation() as Runtime;
+  const toasts: { key: string; params?: Record<string, string> }[] = [];
+  const onToast = (d: { messageKey?: string; params?: Record<string, string> }) =>
+    toasts.push({ key: d.messageKey ?? "", params: d.params });
+  EventBus.on("toast:show", onToast);
+  try {
+    sim["player"] = { x: 0, y: 0 } as never;
+    sim["motionSnapshot"] = { current: {} } as never;
+    sim["npcs"] = [
+      {
+        id: "n1",
+        name: "소피",
+        pixelX: 0,
+        pixelY: 0,
+        moveState: "idle",
+        calledForRoom: null,
+        distanceTo: () => 9999,
+        moveTo: () => true,
+      },
+    ] as never;
+    sim["workingCounts"] = { n1: 1 };
+    sim["ensureLocalNpcOwnership"] = () => true;
+    sim["npcTilePositions"] = new Set() as never;
+
+    sim["handleNpcCallToPlayer"]({ npcId: "n1", npcName: "소피", reason: "report" } as never);
+
+    assert.deepEqual(
+      toasts.map((t) => t.key),
+      ["game.comingToReportWhileWorking"],
+    );
+    assert.equal(toasts[0].params?.count, "1");
+  } finally {
+    EventBus.off("toast:show", onToast);
+    sim.dispose();
+  }
+});
+
 test("calling an idle employee does not show the working notice", () => {
   const sim = new OfficeSimulation() as Runtime;
   const toasts: string[] = [];

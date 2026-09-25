@@ -1764,6 +1764,7 @@ const zh: Record<string, string> = {
   "game.notMember": "你不是此频道的成员",
   "game.loadFailed": "角色加载失败",
   "game.calledWhileWorking": "{name} 正在处理 {count} 项任务，工作会继续。",
+  "game.comingToReportWhileWorking": "{name} 正在过来汇报，进行中的 {count} 项任务会继续。",
   "game.pressToTalk": "点击{name}或按 / 开始对话",
   "game.menuSettings": "设置",
   "viewSettings.menu": "显示设置",
