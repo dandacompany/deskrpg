@@ -95,9 +95,11 @@ export function executeDmAdapter(
 ): ReturnType<import("@/lib/adapters/types").NpcAdapter["execute"]> {
   return new Promise((resolve, reject) => {
     let finished = false;
+    let cancelled = false;
     const abort = () => {
       if (finished) return;
       finished = true;
+      cancelled = true;
       timeout.clear();
       void adapter.abort?.(options.sessionKey)?.catch(() => {});
       reject(new Error("DM cancelled"));
@@ -134,6 +136,9 @@ export function executeDmAdapter(
             if (!finished) {
               timeout.touch();
               options.onRunStarted?.(id);
+            } else if (cancelled) {
+              // Cancelled before the run existed, so the first abort had no run id to stop.
+              void adapter.abort?.(options.sessionKey)?.catch(() => {});
             }
           },
           // Waiting for the user's approval is silent; the next progress event re-arms idle.

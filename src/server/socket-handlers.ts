@@ -1807,6 +1807,24 @@ export function setupSocketHandlers(io: Server) {
       }
     });
 
+    // The stop button. The tracker lives under the requester's own scope (user + character + NPC),
+    // so reaching it at all proves ownership; cancelling aborts the adapter, which stops the run.
+    socket.on("npc:cancel-response", async (payload: unknown) => {
+      const { npcId, requestId, characterId } = (payload ?? {}) as Record<string, unknown>;
+      if (typeof npcId !== "string" || typeof requestId !== "string") return;
+      const historyCharacterId = await resolveHistoryCharacterId(
+        socket,
+        user.userId,
+        typeof characterId === "string" ? characterId : null,
+      );
+      if (!historyCharacterId) return;
+      const tracker = dmResponseTrackers.get(
+        dmResponseScope(user.userId, historyCharacterId, npcId),
+      );
+      if (!tracker?.isActive(requestId)) return;
+      tracker.update(requestId, { status: "cancelled" });
+    });
+
     socket.on("npc:reset-chat", async ({ npcId }: { npcId: string }) => {
       if (!npcId) return;
       const characterId = myCharacterIdOf(socket);
