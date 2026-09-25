@@ -287,7 +287,7 @@ The map also asks the GitHub API for the star count and the latest release throu
 
 ## Licenses And Credits
 
-- Project license: [LICENSE.md](LICENSE.md)
+- Project license: [LICENSE.md](LICENSE.md) — hosting providers may offer one-click installers onto customer-controlled servers under its "Infrastructure Provider Permission"; operating DeskRPG for others as a managed service is not permitted.
 - Third-party licenses: [public/third-party-licenses.html](public/third-party-licenses.html)
 
 ## Support

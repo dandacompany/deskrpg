@@ -28,6 +28,18 @@ personal use. You may distribute the software or provide it to others only if yo
 non-commercial purposes. You may not alter, remove, or obscure any licensing, copyright, or other notices of
 the licensor in the software. Any use of the licensor's trademarks is subject to applicable law.
 
+### Infrastructure Provider Permission
+
+Notwithstanding the limitations above, a hosting or cloud infrastructure provider may offer templates,
+images, or one-click installers that deploy the software onto infrastructure provisioned for and controlled
+by its customer, provided that:
+
+1. the provider charges no fee specifically for the software (fees for the underlying infrastructure are
+   permitted);
+2. the software is deployed unmodified, with all licensing, copyright, and other notices intact;
+3. each customer's use of the deployed software remains subject to this license; and
+4. the provider does not itself operate the software on behalf of customers as a managed or hosted service.
+
 ### Patents
 
 The licensor grants you a license, under any patent claims the licensor can license, or becomes able to

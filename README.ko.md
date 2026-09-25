@@ -285,7 +285,7 @@ DeskRPG는 플러그인이 없거나 낡았다고 판단하면 보드·일정 �
 
 ## 라이선스와 크레딧
 
-- 프로젝트 라이선스: [LICENSE.md](LICENSE.md)
+- 프로젝트 라이선스: [LICENSE.md](LICENSE.md) — 호스팅 업체는 "Infrastructure Provider Permission" 조항에 따라 고객이 관리하는 서버에 원클릭으로 설치해 주는 템플릿을 제공할 수 있습니다. 다른 사람을 위해 DeskRPG 를 대신 운영하는 관리형 서비스는 허용되지 않습니다.
 - 서드파티 라이선스: [public/third-party-licenses.html](public/third-party-licenses.html)
 
 ## 문의
