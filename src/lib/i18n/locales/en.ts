@@ -1925,14 +1925,12 @@ const en: Record<string, string> = {
     "Disconnected. Information on screen may be out of date. Reconnecting automatically.",
   "game.socketReconnecting": "Connecting to the office…",
   "game.socketRetry": "Reconnect",
-  "game.socketDisconnected": "Real-time connection lost: {reason}",
-  "game.socketConnectFailed": "Failed to connect in real time. Refresh and try again.",
   "game.npcGreetingBubble": "Hello! Good to see you.",
   "game.npcGreeting": "{name} says hello!",
   "game.npcChatDisconnected":
-    "Cannot send NPC messages because the real-time connection is lost. Refresh and try again.",
+    "Cannot send NPC messages while the real-time connection is down. Send again once it reconnects.",
   "game.channelChatDisconnected":
-    "Cannot send chat because the real-time connection is lost. Refresh and try again.",
+    "Cannot send chat while the real-time connection is down. Send again once it reconnects.",
   "game.channelChatNotJoined":
     "Reconnected and rejoined the office. Please send your message again.",
   // Room error codes (RoomErrorCode in src/server/room-socket.ts), 7 of them.
