@@ -132,3 +132,39 @@ test("the default broker runs English turn prompts and minutes for a non-Korean 
   assert.ok(adapter.prompts[0]?.startsWith("📋 [Meeting poll: Roadmap]"));
   assert.ok(transcript.startsWith("# Meeting minutes: Roadmap"));
 });
+
+test("the default broker runs every participant through wrapAdapter (live tool approvals)", async () => {
+  const adapter = recordingAdapter("PASS");
+  const registry = new AdapterRegistry();
+  registry.register(adapter as never);
+  const wrapped: string[] = [];
+  const broker = await defaultCreateMeetingBroker(
+    {
+      topic: "Roadmap",
+      npcs: [npcConfig()],
+      userId: "u1",
+      channelId: "c1",
+      adapterRegistry: registry,
+      sessionKeyPrefix: "sess-1",
+      meetingId: "meet-1",
+      settings: {},
+      quota: { maxTotalTurns: 2 },
+      locale: "en",
+      wrapAdapter: (npcId: string, inner: { execute: (o: never) => Promise<unknown> }) => {
+        wrapped.push(npcId);
+        return {
+          ...inner,
+          execute: (o: never) => {
+            wrapped.push(`execute:${npcId}`);
+            return inner.execute(o);
+          },
+        };
+      },
+    } as unknown as Parameters<typeof defaultCreateMeetingBroker>[0],
+    {},
+  );
+  await broker.run();
+  assert.equal(wrapped[0], "npc-1");
+  assert.ok(wrapped.includes("execute:npc-1"), "turns go through the wrapped adapter");
+  assert.ok(adapter.prompts.length > 0);
+});

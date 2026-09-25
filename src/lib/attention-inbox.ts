@@ -7,9 +7,38 @@
  * A pure function — assembly must live in one place for the screen and the metrics to see the
  * same list. Counting is `needs-attention.ts`'s job; this file **builds the rows.**
  */
-export type AttentionRowKind = "approval" | "blocked" | "review" | "cron_failed";
+export type AttentionRowKind =
+  "approval" | "blocked" | "review" | "cron_failed" | "approval_blocked";
 
-export type AttentionRow = {
+/**
+ * What an unattended run hit — flattened onto `approval_blocked` rows, which only their audience receives. The
+ * screen reads these fields from the row itself (`AttentionInboxPanel.approvalBlockedFields`).
+ */
+export type BlockedRunDetail = {
+  /** The office-room notice this row comes from (also the row id) — sent back with [Add to allowlist]. */
+  messageId: string;
+  npcId: string;
+  npcName: string;
+  source: "cron" | "kanban";
+  blockKind: "command" | "mcp";
+  tool: string;
+  command: string | null;
+  /** Hermes' rule key for the command — what [Add to allowlist] adds when present. */
+  patternKey: string | null;
+  patternDescription: string | null;
+  mcpServer: string | null;
+  jobName: string | null;
+  taskTitle: string | null;
+  /** One line of what was blocked: the (redacted) command, else the tool (the MCP tool for MCP blocks). */
+  subtitle: string;
+  /**
+   * The viewer owns the gateway and may change the NPC's run policy. Whether the allowlist can unblock it is
+   * `patternKey` — the screen offers [Add to allowlist] with a key and [Open run policy] without one.
+   */
+  canAllowlist: boolean;
+};
+
+type AttentionRowBase = {
   kind: AttentionRowKind;
   /** approvalId for an approval, taskId for a card, jobId for a cron job. */
   id: string;
@@ -20,6 +49,10 @@ export type AttentionRow = {
   /** The number of bundled cards for an approval, 1 for everything else. */
   count: number;
 };
+
+export type AttentionRow =
+  | (AttentionRowBase & { kind: Exclude<AttentionRowKind, "approval_blocked"> })
+  | (AttentionRowBase & { kind: "approval_blocked" } & BlockedRunDetail);
 
 export type AttentionInboxInput = {
   /** `at` is the value the caller read with `taskTimeMs` and converted to ISO. Null if it couldn't be read. */
@@ -36,6 +69,12 @@ export type AttentionInboxInput = {
     jobId: string;
     jobName: string;
     createdAt: string;
+  }[];
+  /** Blocked unattended runs addressed to the viewer (already filtered by audience, unresolved only). */
+  blockedRuns?: readonly {
+    title: string;
+    createdAt: string;
+    detail: BlockedRunDetail;
   }[];
 };
 
@@ -83,6 +122,17 @@ export function buildAttentionInbox(input: AttentionInboxInput): AttentionRow[] 
       at: cron.createdAt,
       requestedBy: null,
       count: 1,
+    });
+
+  for (const run of input.blockedRuns ?? [])
+    rows.push({
+      kind: "approval_blocked",
+      id: run.detail.messageId,
+      title: run.title,
+      at: run.createdAt,
+      requestedBy: null,
+      count: 1,
+      ...run.detail,
     });
 
   // Oldest goes to the top — surfacing neglect is this screen's job. Only rows whose time

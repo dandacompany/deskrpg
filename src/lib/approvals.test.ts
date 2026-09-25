@@ -360,7 +360,7 @@ test("creating an approval leaves a system notice in the office room", async () 
   const ownerId = await getChannelOwnerId(channelId);
   assert.ok(ownerId);
   const room = await ensureOfficeRoom(channelId, ownerId!);
-  const messages = await recentRoomMessages(room.id, 20);
+  const messages = await recentRoomMessages(room.id, 20, null);
   const notice = messages.map((m) => m.notice).find((n) => n?.kind === "approval_requested");
   assert.ok(notice, "승인 알림이 방에 없다");
   assert.deepEqual(notice, {
@@ -391,7 +391,7 @@ test("a batch requested by a person doesn't carry an employee name in the notice
     await import("@/lib/chat-rooms");
   const ownerId = await getChannelOwnerId(channelId);
   const room = await ensureOfficeRoom(channelId, ownerId!);
-  const messages = await recentRoomMessages(room.id, 20);
+  const messages = await recentRoomMessages(room.id, 20, null);
   const notice = messages.map((m) => m.notice).find((n) => n?.kind === "approval_requested");
   assert.ok(notice && notice.kind === "approval_requested");
   if (!notice || notice.kind !== "approval_requested") return;

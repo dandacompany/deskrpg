@@ -13,6 +13,7 @@ import { approvals, chatRoomMessages, chatRooms, db } from "@/db";
 import { buildAttentionInbox, type AttentionInboxInput } from "@/lib/attention-inbox";
 import { approvalBoardSlug, approvalTargetsByApproval } from "@/lib/approvals";
 import { parseRoomNotice } from "@/lib/chat-rooms-policy";
+import { visibleToSql } from "@/lib/room-audience";
 import { pluginFailureResponse } from "@/lib/cron-access";
 import { getUserId } from "@/lib/internal-rpc";
 import { countNeedsAttention } from "@/lib/needs-attention";
@@ -50,6 +51,60 @@ async function recentCronFailures(channelId: string) {
       jobId: notice.jobId,
       jobName: notice.jobName,
       createdAt: String(row.createdAt),
+    });
+  }
+  return out;
+}
+
+/**
+ * Unresolved `approval_blocked` notices addressed to this viewer. The audience filter is here, on the server —
+ * nobody else's blocked runs leave the database for this response.
+ */
+async function recentBlockedRuns(
+  channelId: string,
+  viewerUserId: string,
+  isGatewayOwner: boolean,
+): Promise<NonNullable<AttentionInboxInput["blockedRuns"]>> {
+  const [office] = await db
+    .select({ id: chatRooms.id })
+    .from(chatRooms)
+    .where(and(eq(chatRooms.channelId, channelId), eq(chatRooms.kind, "office")))
+    .limit(1);
+  if (!office) return [];
+  const rows = await db
+    .select({
+      id: chatRoomMessages.id,
+      noticeJson: chatRoomMessages.noticeJson,
+      createdAt: chatRoomMessages.createdAt,
+    })
+    .from(chatRoomMessages)
+    .where(and(eq(chatRoomMessages.roomId, office.id), visibleToSql(viewerUserId)))
+    .orderBy(desc(chatRoomMessages.createdAt))
+    .limit(CRON_SCAN_LIMIT);
+  const out: NonNullable<AttentionInboxInput["blockedRuns"]>[number][] = [];
+  for (const row of rows) {
+    const notice = parseRoomNotice(row.noticeJson);
+    if (notice?.kind !== "approval_blocked" || notice.audience !== viewerUserId) continue;
+    if (notice.resolved) continue;
+    out.push({
+      title: notice.jobName ?? notice.taskTitle ?? notice.jobId ?? notice.taskId ?? notice.tool,
+      createdAt: String(row.createdAt),
+      detail: {
+        messageId: row.id,
+        npcId: notice.npcId,
+        npcName: notice.npcName,
+        source: notice.source,
+        blockKind: notice.blockKind,
+        tool: notice.tool,
+        command: notice.command ?? null,
+        patternKey: notice.patternKey ?? null,
+        patternDescription: notice.patternDescription ?? null,
+        mcpServer: notice.mcpServer ?? null,
+        jobName: notice.jobName ?? null,
+        taskTitle: notice.taskTitle ?? null,
+        subtitle: notice.command ?? notice.tool,
+        canAllowlist: isGatewayOwner,
+      },
     });
   }
   return out;
@@ -120,6 +175,7 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
       taskIds: targets.get(a.id) ?? [],
     })),
     cronFailures: await recentCronFailures(channelId),
+    blockedRuns: await recentBlockedRuns(channelId, ctx.userId, ctx.isGatewayOwner),
   };
 
   const pendingTaskIds = new Set<string>();

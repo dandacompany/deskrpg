@@ -20,6 +20,15 @@ import { ChatResponseTracker, SessionQueue } from "./chat-response-tracker";
 import { runTrackedDm, executeDmAdapter } from "./dm-response-runtime";
 import { Server, Socket } from "socket.io";
 import type { NpcAdapter } from "../lib/adapters/types";
+import {
+  createApprovalTimeoutLookup,
+  createToolApprovalRegistry,
+  withToolApprovals,
+  type ApprovalRoute,
+  type ToolApprovalRegistry,
+} from "./tool-approvals";
+import { getProfileClientForNpc } from "@/lib/hermes-profiles";
+import { userSocketRoom } from "./room-broadcast";
 import { jwtVerify } from "jose";
 import { eq, and } from "drizzle-orm";
 import {
@@ -234,6 +243,33 @@ function getDmResponseTracker(io: Server, scope: string): ChatResponseTracker {
   );
   dmResponseTrackers.set(scope, tracker);
   return tracker;
+}
+
+// Live tool approvals — set up by setupSocketHandlers (it needs `io`). Until then adapters run unwrapped.
+let toolApprovals: ToolApprovalRegistry | null = null;
+const approvalTimeoutFor = createApprovalTimeoutLookup();
+const userRoom = userSocketRoom;
+
+/** The live approval registry of this process (null before setupSocketHandlers) — for tests. */
+export function getToolApprovalRegistry(): ToolApprovalRegistry | null {
+  return toolApprovals;
+}
+
+/** Routes a run's `approval.request` events to the approver as cards (no-op before setup). */
+function routeToolApprovals(adapter: NpcAdapter, route: ApprovalRoute): NpcAdapter {
+  if (!toolApprovals) return adapter;
+  return withToolApprovals(adapter, route, {
+    registry: toolApprovals,
+    timeoutFor: approvalTimeoutFor,
+  });
+}
+
+/** A user's character name in this process, for "waiting for <name>'s approval". */
+function playerNameOf(userId: string): string {
+  for (const player of players.values()) {
+    if (player.userId === userId) return player.characterName;
+  }
+  return "";
 }
 
 // Gateway connections: gatewayId -> gateway instance
@@ -571,15 +607,22 @@ async function streamNpcResponse(
   }
 
   if (dispatchKind === "hermes") {
-    const adapter = await createHermesAdapterForNpc(
+    const hermesAdapter = await createHermesAdapterForNpc(
       npcId,
       userId,
       deriveHermesContextKey(sessionKey, sessionKeyPrefix || npcId),
     );
-    if (!adapter) {
+    if (!hermesAdapter) {
       emitNpcSystemResponse(socket, npcId, "npc_unbound");
       return "";
     }
+    // The approver of a 1:1 run is the user who talked to the NPC.
+    const adapter = routeToolApprovals(hermesAdapter, {
+      npcId,
+      channelId: _channelId,
+      context: "dm",
+      approver: () => ({ userId, name: userContextOf(socket)?.name ?? playerNameOf(userId) }),
+    });
 
     if (attachments?.some((a) => a.type === "image")) {
       socket.emit(responseEvent, {
@@ -724,7 +767,7 @@ async function streamMeetingNpcResponse(
     locale,
   );
 
-  let hermesAdapter: Awaited<ReturnType<typeof createHermesAdapterForNpc>> = null;
+  let hermesAdapter: NpcAdapter | null = null;
   let hermesContextKey = "";
 
   if (dispatchKind === "openclaw") {
@@ -740,7 +783,19 @@ async function streamMeetingNpcResponse(
     return;
   } else if (dispatchKind === "hermes") {
     hermesContextKey = deriveHermesContextKey(sessionKey, sessionKeyPrefix || _name);
-    hermesAdapter = await createHermesAdapterForNpc(npcId, userId, hermesContextKey);
+    const created = await createHermesAdapterForNpc(npcId, userId, hermesContextKey);
+    // In a meeting the approver is whoever opened it; a chat outside a running discussion asks the speaker.
+    hermesAdapter = created
+      ? routeToolApprovals(created, {
+          npcId,
+          channelId,
+          context: "meeting",
+          approver: () => {
+            const approverId = discussionInitiators.get(channelId) ?? userId;
+            return { userId: approverId, name: playerNameOf(approverId) };
+          },
+        })
+      : null;
     if (!hermesAdapter) {
       emitMeetingNpcStream(io, channelId, {
         npcId,
@@ -1045,6 +1100,12 @@ async function isChannelOwner(channelId: string, userId: string): Promise<boolea
 // ---------------------------------------------------------------------------
 
 export function setupSocketHandlers(io: Server) {
+  toolApprovals = createToolApprovalRegistry({
+    emitToUser: (userId, event, payload) => io.to(userRoom(userId)).emit(event, payload),
+    emitToMeeting: (channelId, event, payload) =>
+      io.to(`meeting-${channelId}`).emit(event, payload),
+    clientFor: (npcId) => getProfileClientForNpc(npcId),
+  });
   const loadMotionLayout = async (channelId: string) => {
     const [[channel], channelNpcs] = await Promise.all([
       db
@@ -1175,6 +1236,12 @@ export function setupSocketHandlers(io: Server) {
     if (!user) {
       socket.disconnect(true);
       return;
+    }
+    // Every socket of a user joins that user's room — approval cards reach all of their tabs, and a
+    // reconnecting tab gets the cards still waiting on it.
+    await socket.join(userRoom(user.userId));
+    for (const pending of toolApprovals?.pendingFor(user.userId) ?? []) {
+      socket.emit("tool-approval:request", pending);
     }
 
     socket.use((packet, next) => {
@@ -1900,6 +1967,17 @@ export function setupSocketHandlers(io: Server) {
         },
         spatial,
         announceOutcome: announceMeetingOutcome,
+        // The meeting's opener answers its NPCs' tool approvals; the others only see "waiting".
+        wrapParticipantAdapter: (channelId, npcId, adapter) =>
+          routeToolApprovals(adapter, {
+            npcId,
+            channelId,
+            context: "meeting",
+            approver: () => {
+              const approverId = discussionInitiators.get(channelId);
+              return approverId ? { userId: approverId, name: playerNameOf(approverId) } : null;
+            },
+          }),
         canStartMeeting: async (channelId, userId) => {
           const access = await getSocketChannelParticipationAccess(channelId, userId);
           return (
@@ -1914,6 +1992,15 @@ export function setupSocketHandlers(io: Server) {
     });
 
     // ----- disconnect -----
+    // ----- tool-approval:decide ----- only the approver may answer; the registry checks it.
+    socket.on("tool-approval:decide", async (data: unknown, ack?: unknown) => {
+      const { key, choice } = (data ?? {}) as { key?: unknown; choice?: unknown };
+      const result = toolApprovals
+        ? await toolApprovals.decide(user.userId, key, choice)
+        : ("closed" as const);
+      if (typeof ack === "function") ack({ result });
+    });
+
     socket.on("disconnect", () => {
       const player = players.get(socket.id);
       if (player) {

@@ -126,7 +126,7 @@ export async function createApprovalBatch(
       ...(parents.length > 0 ? { parents: parents as string[] } : {}),
       ...(item.idempotencyKey ? { idempotency_key: item.idempotencyKey } : {}),
     };
-    const res = await ctx.client.kanban.createTask(board, body);
+    const res = await ctx.client.kanban.createTask(board, body, ctx.userId);
     if (!res.ok) {
       failed.push({ index, errorCode: res.failure.code || "create_failed" });
       continue;

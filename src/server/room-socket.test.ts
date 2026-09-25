@@ -172,7 +172,7 @@ test("room:send success is store + room broadcast + runtime call; forbidden with
   assert.equal(msg.message.content, "@[소피] 안녕");
   assert.equal(msg.message.senderName, "단테");
   assert.deepEqual(t.woke, [{ roomId: office.id, text: "@[소피] 안녕" }]);
-  assert.equal((await rooms.recentRoomMessages(office.id, 5)).length, 1);
+  assert.equal((await rooms.recentRoomMessages(office.id, 5, null)).length, 1);
   const t2 = setup({ allowed: false });
   await t2.register(seeded);
   await t2.socket.trigger("room:open", { roomId: office.id });

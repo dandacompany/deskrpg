@@ -171,7 +171,7 @@ test("NPC answers are stored in the DB and broadcast to room-<id>", async () => 
   assert.equal(broadcast.message.senderId, seeded.npcIds[0]);
   assert.equal(broadcast.message.content, "점심은 김치찌개요");
 
-  const stored = await rooms.recentRoomMessages(room.id, 10);
+  const stored = await rooms.recentRoomMessages(room.id, 10, null);
   assert.deepEqual(
     stored.map((m) => [m.senderKind, m.content]),
     [["npc", "점심은 김치찌개요"]],
@@ -341,7 +341,7 @@ test("room emits receipt, thinking and cumulative content before final persisted
   ).response;
   assert.equal(final.status, "complete");
   assert.equal(final.content, "안녕하세요");
-  const messages = await rooms.recentRoomMessages(room.id, 10);
+  const messages = await rooms.recentRoomMessages(room.id, 10, null);
   assert.equal(final.messageId, messages[0].id);
 });
 

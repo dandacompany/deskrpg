@@ -100,7 +100,7 @@ test("deciding makes the room's approval-request line report the result — the 
 
   const { ensureOfficeRoom, recentRoomMessages } = await import("@/lib/chat-rooms");
   const room = await ensureOfficeRoom(channelId, ownerId);
-  const notice = (await recentRoomMessages(room.id, 20))
+  const notice = (await recentRoomMessages(room.id, 20, null))
     .map((m) => m.notice)
     .find((n) => n?.kind === "approval_requested" && n.approvalId === batch.approvalId);
   assert.ok(notice && notice.kind === "approval_requested");

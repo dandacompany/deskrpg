@@ -114,6 +114,8 @@ type MeetingBrokerConfig = {
   };
   /** The meeting opener's language — turn prompts and minutes follow it. Omitted means Korean. */
   locale?: string | null;
+  /** Wraps each participant's adapter (live tool approvals). Omitted means the adapter is used as is. */
+  wrapAdapter?: (npcId: string, adapter: NpcAdapter) => NpcAdapter;
 };
 
 /** `outcome`/`status` are optional — without them it is treated as a successful summary with no structured result. */
@@ -229,6 +231,8 @@ type RegisterMeetingDiscussionHandlersArgs = {
       locale?: string | null,
     ) => Promise<MeetingSummary>;
     persistMeetingMinutes: (input: PersistMeetingMinutesInput) => Promise<string | null>;
+    /** Wraps each participant adapter of a meeting in this channel (live tool approvals). */
+    wrapParticipantAdapter?: (channelId: string, npcId: string, adapter: NpcAdapter) => NpcAdapter;
   };
 };
 
@@ -351,7 +355,11 @@ export async function defaultCreateMeetingBroker(
     if ("excluded" in result) {
       excluded.push(result.excluded);
     } else {
-      resolved.push(result);
+      resolved.push(
+        config.wrapAdapter
+          ? { ...result, adapter: config.wrapAdapter(npc.id, result.adapter) }
+          : result,
+      );
     }
   }
 
@@ -648,6 +656,12 @@ export function registerMeetingDiscussionHandlers({
           maxTotalTurns: settings?.maxTotalTurns || 50,
         },
         locale: meetingLocale,
+        ...(deps.wrapParticipantAdapter
+          ? {
+              wrapAdapter: (npcId: string, adapter: NpcAdapter) =>
+                deps.wrapParticipantAdapter!(channelId, npcId, adapter),
+            }
+          : {}),
       },
       {
         onPollStart: () => {
