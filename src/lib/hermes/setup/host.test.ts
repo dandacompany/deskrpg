@@ -115,7 +115,7 @@ import {
   rmSync,
   existsSync,
 } from "node:fs";
-import { tmpdir, homedir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   HOST_BOOTSTRAP,
@@ -125,9 +125,6 @@ import {
   hostLaunch,
 } from "./host-helper";
 import { PLUGIN_PIN, PLUGIN_VERSION } from "./pin";
-const installedPython = ["venv", ".venv"]
-  .map((name) => join(homedir(), ".hermes/hermes-agent", name, "bin/python"))
-  .find(existsSync);
 function fixture(
   script: string,
   initial: { config?: object; env?: string; hermesVersion?: string | null; plugin?: object } = {},
@@ -147,10 +144,11 @@ function fixture(
     mkdirSync(join(root, "plugins/deskrpg"), { recursive: true });
     writeFileSync(join(root, "plugins/deskrpg/plugin.yaml"), JSON.stringify(initial.plugin));
   }
-  // The portable branch supplies only YAML/env parsing; no Hermes installation or service is needed in CI.
-  const portable = installedPython
-    ? ""
-    : String.raw`
+  // YAML and env parsing are stubbed so the helper never touches a real Hermes install. Using the
+  // developer's own ~/.hermes venv made results depend on that install: its editable-install
+  // finder only knows the modules present when it was installed, so a newer checkout broke imports
+  // the helper resolves fine in production (where the install root is first on sys.path).
+  const portable = String.raw`
 import types, sys, json
 sys.modules['yaml'] = types.SimpleNamespace(safe_load=lambda text: json.loads(text) if text else {}, safe_dump=lambda value, **kwargs: json.dumps(value))
 def fixture_env(path):
@@ -179,7 +177,7 @@ def main(action,candidate_id=None,option=None):
         if LOCK is not None: LOCK.close(); LOCK = None
 `;
   try {
-    const result = spawnSync(installedPython ?? "python3", ["-"], {
+    const result = spawnSync("python3", ["-"], {
       input: portable + HOST_HELPER + overrides + script,
       encoding: "utf8",
       env: { ...process.env, HOME: temp, HERMES_HOME: root, PYTHONDONTWRITEBYTECODE: "1" },
@@ -2570,4 +2568,12 @@ except Failure as error:
     { config: { multiplex_profiles: true } },
   );
   assert.equal(result.body.error, "multiplex_conflict");
+});
+test("the helper puts the Hermes install root first on sys.path before importing Hermes modules", () => {
+  // A stale editable-install finder in the Hermes venv does not know modules added after install
+  // (hermes_yaml, 2026-09). The helper stays correct only because the install root wins the lookup.
+  const insert = HOST_HELPER.indexOf("sys.path.insert(0, str(INSTALL))");
+  assert.ok(insert > 0);
+  assert.ok(insert < HOST_HELPER.indexOf("from agent.secret_scope import load_env_file"));
+  assert.ok(HOST_HELPER.indexOf("INSTALL = ROOT / 'hermes-agent'") < insert);
 });
