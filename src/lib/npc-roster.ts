@@ -3,6 +3,21 @@ import { db, npcs, hermesProfiles, channelGatewayBindings, nowForDb } from "@/db
 import { placeUnplacedNpcs } from "./npc-seating";
 
 /**
+ * Creates the channel's employee for a profile. Two hires can race between the lookup and the
+ * insert (connecting a gateway while a profile is being added to it); the
+ * `(channel_id, hermes_profile_id)` unique index lets only one row in, and the loser learns it
+ * created nothing instead of failing the whole hire.
+ */
+async function insertNpcOnce(channelId: string, hermesProfileId: string): Promise<boolean> {
+  const inserted = await db
+    .insert(npcs)
+    .values({ channelId, hermesProfileId, active: true, updatedAt: nowForDb() })
+    .onConflictDoNothing({ target: [npcs.channelId, npcs.hermesProfileId] })
+    .returning({ id: npcs.id });
+  return inserted.length > 0;
+}
+
+/**
  * "Clocks in" every profile of the channel's bound gateway — relying on the
  * `(channel_id, hermes_profile_id)` unique constraint, creates the row if it's missing and
  * revives it with `active=true` if it exists. `placeUnplacedNpcs` immediately seats a newly
@@ -28,10 +43,7 @@ export async function hireGatewayProfilesIntoChannel(
       .limit(1);
 
     if (!existing) {
-      await db
-        .insert(npcs)
-        .values({ channelId, hermesProfileId: profile.id, active: true, updatedAt: nowForDb() });
-      created += 1;
+      if (await insertNpcOnce(channelId, profile.id)) created += 1;
     } else if (!existing.active) {
       await db
         .update(npcs)
@@ -69,13 +81,7 @@ export async function hireProfileIntoBoundChannels(
       .from(npcs)
       .where(and(eq(npcs.channelId, binding.channelId), eq(npcs.hermesProfileId, profileId)))
       .limit(1);
-    if (!existing) {
-      await db.insert(npcs).values({
-        channelId: binding.channelId,
-        hermesProfileId: profileId,
-        active: true,
-        updatedAt: nowForDb(),
-      });
+    if (!existing && (await insertNpcOnce(binding.channelId, profileId))) {
       created += 1;
       await placeUnplacedNpcs(binding.channelId);
     }

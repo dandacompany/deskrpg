@@ -9,6 +9,8 @@ import {
   type RunMode,
 } from "../lib/conversation/conversation-engine";
 import type { Turn } from "../lib/conversation/transcript";
+import { getProfileClientForNpc } from "../lib/hermes-profiles";
+import { readMaxConcurrentRuns } from "../lib/hermes/types";
 import type {
   MeetingOutcome,
   MeetingSummaryStatus,
@@ -337,10 +339,32 @@ export async function resolveNpcAdapter(
   };
 }
 
+const CAPABILITIES_TIMEOUT_MS = 3000;
+
+/** Hermes' `max_concurrent_runs` for the gateway serving this NPC; the default when unreachable. */
+async function readGatewayMaxConcurrentRuns(npcId: string): Promise<number> {
+  const client = await getProfileClientForNpc(npcId);
+  if (!client) return readMaxConcurrentRuns(null);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), CAPABILITIES_TIMEOUT_MS);
+  });
+  try {
+    const caps = await Promise.race([client.getCapabilities().catch(() => null), timeout]);
+    return readMaxConcurrentRuns(caps);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function defaultCreateMeetingBroker(
   config: MeetingBrokerConfig,
   callbacks: MeetingBrokerCallbacks,
-  deps: { createHermesAdapter?: CreateHermesAdapter } = {},
+  deps: {
+    createHermesAdapter?: CreateHermesAdapter;
+    /** The poll concurrency for a meeting served by this NPC's gateway. Defaults to asking Hermes. */
+    readMaxConcurrentRuns?: (npcId: string) => Promise<number>;
+  } = {},
 ): Promise<MeetingBrokerLike> {
   const resolved: ResolvedMeetingParticipant[] = [];
   const excluded: ExcludedMeetingNpc[] = [];
@@ -384,6 +408,18 @@ export async function defaultCreateMeetingBroker(
     }),
   );
 
+  // Every participant of a channel is served by the channel's one gateway, so asking through the
+  // first Hermes participant is enough. A failure only costs the default, never the meeting.
+  const hermesNpcId = resolved.find(
+    ({ participant }) =>
+      config.npcs.find((npc) => npc.id === participant.npcId)?.hermesProfileId != null,
+  )?.participant.npcId;
+  const maxConcurrentPolls = hermesNpcId
+    ? await (deps.readMaxConcurrentRuns ?? readGatewayMaxConcurrentRuns)(hermesNpcId).catch(() =>
+        readMaxConcurrentRuns(null),
+      )
+    : undefined;
+
   let turns: Turn[] = [];
   const startedAt = Date.now();
 
@@ -405,6 +441,7 @@ export async function defaultCreateMeetingBroker(
       hybridMode: Boolean(config.settings?.hybridMode),
       hybridAutoResumeMs: (config.settings?.hybridAutoResumeMs as number) ?? null,
       locale: config.locale,
+      maxConcurrentPolls,
     },
     {
       onPollStart: () => callbacks.onPollStart?.(),

@@ -887,3 +887,21 @@ test("an unknown source or a kanban block without a card lookup is dropped", asy
   );
   assert.equal(h.posted.length, 0);
 });
+
+test("npc:working counts running cards on every board of the channel, even when task ids repeat", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  const research = { ...h.deps, boardSlug: "research-board" };
+  const onBoard = (board: string, kind: "task.run.started" | "task.run.finished") =>
+    ev({ kind, board, task_id: "t_0001", profile: "sophie", run_id: `run-${board}` });
+
+  await ingest(CHANNEL, [onBoard(BOARD, "task.run.started")], h.deps);
+  await ingest(CHANNEL, [onBoard("research-board", "task.run.started")], research);
+  assert.equal(workingEvents(h.emitted).at(-1)!.sources.runningCards, 2);
+
+  await ingest(CHANNEL, [onBoard("research-board", "task.run.finished")], research);
+  assert.equal(
+    workingEvents(h.emitted).at(-1)!.sources.runningCards,
+    1,
+    "finishing a card on one board leaves the same-id card on the other board running",
+  );
+});

@@ -2544,6 +2544,7 @@ const zh: Record<string, string> = {
   "cron.tab.cards": "卡片",
   "cron.tab.skills": "技能",
   "cards.empty": "没有指派的卡片",
+  "cards.runningCount": "正在执行 {count} 张",
   "cron.tzLabel": "以 {tz} 为准",
   "cron.tzUnknown": "网关时区未知",
   "cron.refresh": "刷新",

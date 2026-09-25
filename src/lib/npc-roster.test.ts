@@ -127,3 +127,76 @@ test("M3: showing up, leaving, and toggling all refresh updated_at", async () =>
   await setNpcActive(seeded.id, false);
   assert.notDeepEqual(await updatedAt(seeded.id), stale, "토글이 updated_at 을 갱신한다");
 });
+
+test("two concurrent hires of the same gateway create each employee once and both succeed", async () => {
+  const { hireGatewayProfilesIntoChannel } = await import("./npc-roster");
+  const { selectChannelNpcs } = await import("./npc-projection");
+  const { channelId, gatewayId } = await seedChannelWithProfiles({
+    profiles: 3,
+    mapData: buildOfficeEnvironment("executive"),
+  });
+
+  const results = await Promise.all([
+    hireGatewayProfilesIntoChannel(channelId, gatewayId),
+    hireGatewayProfilesIntoChannel(channelId, gatewayId),
+  ]);
+
+  assert.equal(results[0].created + results[1].created, 3, "each employee is counted once");
+  assert.equal((await selectChannelNpcs(channelId, { roster: true })).length, 3);
+});
+
+test("a profile hired into bound channels twice at once is created once per channel", async () => {
+  const { hireProfileIntoBoundChannels } = await import("./npc-roster");
+  const { selectChannelNpcs } = await import("./npc-projection");
+  const { gatewayId, channelIds } = await seedGatewayBoundToChannels({ channels: 2 });
+  const profileId = await seedProfile(gatewayId);
+
+  const results = await Promise.all([
+    hireProfileIntoBoundChannels(profileId),
+    hireProfileIntoBoundChannels(profileId),
+  ]);
+
+  assert.equal(results[0].created + results[1].created, 2);
+  for (const channelId of channelIds) {
+    assert.equal((await selectChannelNpcs(channelId, { roster: true })).length, 1);
+  }
+});
+
+test("seating new employees tells the socket server which NPCs appeared on the map", async (t) => {
+  const { hireGatewayProfilesIntoChannel } = await import("./npc-roster");
+  const { registerNpcsPlacedNotifier } = await import("./npc-roster-registry");
+  const calls: Array<{ channelId: string; npcIds: string[] }> = [];
+  registerNpcsPlacedNotifier((channelId, npcIds) => calls.push({ channelId, npcIds }));
+  t.after(() => registerNpcsPlacedNotifier(undefined));
+
+  const { channelId, gatewayId } = await seedChannelWithProfiles({
+    profiles: 2,
+    mapData: buildOfficeEnvironment("executive"),
+  });
+  await hireGatewayProfilesIntoChannel(channelId, gatewayId);
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].channelId, channelId);
+  assert.equal(calls[0].npcIds.length, 2);
+
+  await hireGatewayProfilesIntoChannel(channelId, gatewayId);
+  assert.equal(calls.length, 1, "nothing new was seated, so nothing is announced");
+});
+
+test("a broken placement notifier does not fail the hire", async (t) => {
+  const { hireGatewayProfilesIntoChannel } = await import("./npc-roster");
+  const { registerNpcsPlacedNotifier } = await import("./npc-roster-registry");
+  registerNpcsPlacedNotifier(() => {
+    throw new Error("socket server gone");
+  });
+  t.after(() => registerNpcsPlacedNotifier(undefined));
+  const { channelId, gatewayId } = await seedChannelWithProfiles({
+    profiles: 1,
+    mapData: buildOfficeEnvironment("executive"),
+  });
+
+  assert.deepEqual(await hireGatewayProfilesIntoChannel(channelId, gatewayId), {
+    created: 1,
+    reactivated: 0,
+  });
+});

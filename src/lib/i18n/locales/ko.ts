@@ -2635,6 +2635,7 @@ const ko: Record<string, string> = {
   "cron.tab.cards": "카드",
   "cron.tab.skills": "스킬",
   "cards.empty": "담당 카드 없음",
+  "cards.runningCount": "지금 실행 중 {count}개",
   "cron.tzLabel": "{tz} 기준",
   "cron.tzUnknown": "게이트웨이 시간대 미확인",
   "cron.refresh": "새로고침",

@@ -2666,6 +2666,7 @@ const ja: Record<string, string> = {
   "cron.tab.cards": "カード",
   "cron.tab.skills": "スキル",
   "cards.empty": "担当カードなし",
+  "cards.runningCount": "実行中 {count}件",
   "cron.tzLabel": "{tz} 基準",
   "cron.tzUnknown": "ゲートウェイのタイムゾーン不明",
   "cron.refresh": "更新",
