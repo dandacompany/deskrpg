@@ -54,7 +54,11 @@ function sandbox() {
   };
 }
 
-test("runs with the Hermes venv python when present", () => {
+// These run the sh launcher, which is the POSIX path. Windows uses HOST_LAUNCHER_PS, covered by the
+// Windows runtime tests.
+const posixOnly = process.platform === "win32" ? "the sh launcher is POSIX-only" : false;
+
+test("runs with the Hermes venv python when present", { skip: posixOnly }, () => {
   const s = sandbox();
   try {
     s.script(path.join(s.home, ".hermes/hermes-agent/venv/bin/python"), 'echo "venv:$2"');
@@ -65,7 +69,7 @@ test("runs with the Hermes venv python when present", () => {
   }
 });
 
-test("uses the system python3 when there is no venv", () => {
+test("uses the system python3 when there is no venv", { skip: posixOnly }, () => {
   const s = sandbox();
   try {
     s.tools();
@@ -76,41 +80,52 @@ test("uses the system python3 when there is no venv", () => {
   }
 });
 
-test("with no python at all, discovery returns the given JSON as-is (-> install offer)", () => {
-  const s = sandbox();
-  try {
-    assert.equal(s.run("run"), '{"candidates": []}');
-  } finally {
-    s.done();
-  }
-});
+test(
+  "with no python at all, discovery returns the given JSON as-is (-> install offer)",
+  { skip: posixOnly },
+  () => {
+    const s = sandbox();
+    try {
+      assert.equal(s.run("run"), '{"candidates": []}');
+    } finally {
+      s.done();
+    }
+  },
+);
 
-test("when packages that can't be installed without sudo are missing, returns the list and distro before install", () => {
-  const s = sandbox();
-  try {
-    s.script(path.join(s.bin, "sudo"), "exit 1");
-    const body = JSON.parse(s.run("install"));
-    assert.equal(body.error, "system_packages_missing");
-    assert.deepEqual(body.packages.trim().split(" "), ["curl", "git", "cxx"]);
-    s.tools();
-    s.script(path.join(s.bin, "curl"), "exit 0");
-    s.script(path.join(s.bin, "python3"), 'echo "system:$2"');
-    assert.equal(s.run("install").trim(), "system:CODE");
-  } finally {
-    s.done();
-  }
-});
+test(
+  "when packages that can't be installed without sudo are missing, returns the list and distro before install",
+  { skip: posixOnly },
+  () => {
+    const s = sandbox();
+    try {
+      s.script(path.join(s.bin, "sudo"), "exit 1");
+      const body = JSON.parse(s.run("install"));
+      assert.equal(body.error, "system_packages_missing");
+      assert.deepEqual(body.packages.trim().split(" "), ["curl", "git", "cxx"]);
+      s.tools();
+      s.script(path.join(s.bin, "curl"), "exit 0");
+      s.script(path.join(s.bin, "python3"), 'echo "system:$2"');
+      assert.equal(s.run("install").trim(), "system:CODE");
+    } finally {
+      s.done();
+    }
+  },
+);
 
-test("install without python3 downloads uv into ~/.hermes/bin and runs the driver with uv python", () => {
-  const s = sandbox();
-  try {
-    s.tools();
-    const py = path.join(s.root, "uvpython", "python3.12");
-    s.script(py, 'echo "uv-python:$2"');
-    // Fake curl: writes a "uv install script" to the -o target. That script creates uv in UV_UNMANAGED_INSTALL.
-    s.script(
-      path.join(s.bin, "curl"),
-      `out=""; while [ $# -gt 0 ]; do [ "$1" = "-o" ] && out=$2; shift; done
+test(
+  "install without python3 downloads uv into ~/.hermes/bin and runs the driver with uv python",
+  { skip: posixOnly },
+  () => {
+    const s = sandbox();
+    try {
+      s.tools();
+      const py = path.join(s.root, "uvpython", "python3.12");
+      s.script(py, 'echo "uv-python:$2"');
+      // Fake curl: writes a "uv install script" to the -o target. That script creates uv in UV_UNMANAGED_INSTALL.
+      s.script(
+        path.join(s.bin, "curl"),
+        `out=""; while [ $# -gt 0 ]; do [ "$1" = "-o" ] && out=$2; shift; done
 cat > "$out" <<'UV'
 mkdir -p "$UV_UNMANAGED_INSTALL"
 cat > "$UV_UNMANAGED_INSTALL/uv" <<'BIN'
@@ -120,15 +135,16 @@ exit 0
 BIN
 chmod +x "$UV_UNMANAGED_INSTALL/uv"
 UV`,
-    );
-    assert.equal(s.run("install").trim(), "uv-python:CODE");
-    assert.ok(existsSync(path.join(s.home, ".hermes/bin/uv")));
-  } finally {
-    s.done();
-  }
-});
+      );
+      assert.equal(s.run("install").trim(), "uv-python:CODE");
+      assert.ok(existsSync(path.join(s.home, ".hermes/bin/uv")));
+    } finally {
+      s.done();
+    }
+  },
+);
 
-test("downloads nothing when ~/.hermes is a symlink", () => {
+test("downloads nothing when ~/.hermes is a symlink", { skip: posixOnly }, () => {
   const s = sandbox();
   try {
     mkdirSync(path.join(s.root, "elsewhere"));
