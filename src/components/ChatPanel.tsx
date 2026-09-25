@@ -106,6 +106,8 @@ interface ChatPanelProps {
   onOpenSkillManager?: (npcId: string, skillName?: string) => void;
   /** "Manage" in the connectors tab — opens that employee's connector manager, optionally on one server. */
   onOpenConnectorManager?: (npcId: string, serverName?: string) => void;
+  /** Opens an NPC's unattended run policy modal (from the [Connectors] tab, owner only). */
+  onOpenApprovalPolicy?: (npcId: string) => void;
   /** A card was clicked in the cards tab — points kanban at that card. Without it, it can't be clicked. */
   onOpenAssignedCard?: (taskId: string) => void;
   onCreateTaskFromChat?: (draft: ChatTaskDraft) => void;
@@ -203,6 +205,7 @@ export default function ChatPanel({
   onOpenAssignedCard,
   onOpenSkillManager,
   onOpenConnectorManager,
+  onOpenApprovalPolicy,
   onCreateTaskFromChat,
   cardsRefreshTick = 0,
   cardsDebounceMs = CARDS_EVENT_DEBOUNCE_MS,
@@ -739,6 +742,9 @@ export default function ChatPanel({
                   npcId={dialogNpc!.npcId}
                   onOpenManager={(serverName) =>
                     onOpenConnectorManager?.(dialogNpc!.npcId, serverName)
+                  }
+                  onOpenPolicy={
+                    onOpenApprovalPolicy ? () => onOpenApprovalPolicy(dialogNpc!.npcId) : undefined
                   }
                 />
               </div>

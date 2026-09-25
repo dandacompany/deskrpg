@@ -3487,6 +3487,41 @@ const ko: Record<string, string> = {
     "이 서버는 명령을 실행합니다: {command}. 받는 직원의 Hermes 호스트에서도 같은 명령이 실행됩니다.",
   "connectors.copy.stdioConfirm": "받는 직원의 호스트에서도 이 명령이 실행되는 것을 확인했습니다",
   // --- /connectors: add · oauth · copy ---
+  // --- approval-policy ---
+  "approvalPolicy.title": "{name} · 무인 실행 정책",
+  "approvalPolicy.open": "실행 정책",
+  "approvalPolicy.intro":
+    "크론과 칸반 카드는 사람이 지켜보지 않는 동안 실행됩니다. 위험한 명령을 만났을 때 막을지 허용할지 여기서 정합니다.",
+  "approvalPolicy.readOnly": "게이트웨이 소유자만 바꿀 수 있습니다",
+  "approvalPolicy.sharedWarning": "이 직원을 고용한 다른 채널 {n}곳에도 같이 적용됩니다",
+  "approvalPolicy.workerPropagationOff":
+    "막힘 알림은 워커 전파가 켜져 있어야 합니다. 지금은 명령이 막혀도 알림이 오지 않습니다.",
+  "approvalPolicy.cron.title": "크론 중 위험 명령",
+  "approvalPolicy.cron.hint": "예약 작업이 위험한 명령을 실행하려 할 때",
+  "approvalPolicy.single.title": "칸반·단발 실행 중 위험 명령",
+  "approvalPolicy.single.hint": "칸반 카드나 한 번만 실행하는 작업이 위험한 명령을 실행하려 할 때",
+  "approvalPolicy.mode.deny": "막기",
+  "approvalPolicy.mode.approve": "허용",
+  "approvalPolicy.approveConfirm":
+    "승인 없이 모든 위험 명령이 실행됩니다. 허용 목록으로 필요한 명령만 여는 편이 안전합니다.",
+  "approvalPolicy.approveConfirmSubmit": "허용으로 바꾸기",
+  "approvalPolicy.cancel": "취소",
+  "approvalPolicy.allowlist.title": "허용 목록",
+  "approvalPolicy.allowlist.hint": "막기 상태에서도 여기 있는 규칙이나 명령 패턴은 실행됩니다",
+  "approvalPolicy.allowlist.empty": "허용 목록이 비어 있습니다",
+  "approvalPolicy.allowlist.placeholder": "규칙 이름이나 명령 패턴",
+  "approvalPolicy.allowlist.add": "추가",
+  "approvalPolicy.allowlist.remove": "허용 목록에서 지우기",
+  "approvalPolicy.appliesNext":
+    "다음 실행부터 적용됩니다. 대화 중 실시간 승인은 {seconds}초 동안 기다립니다.",
+  "approvalPolicy.loading": "불러오는 중…",
+  "approvalPolicy.upgradeRequired": "실행 정책에는 플러그인 {version} 이상이 필요합니다",
+  "approvalPolicy.gatewayDisconnected": "게이트웨이 연결이 끊겼습니다. 다시 연결한 뒤 여세요",
+  "approvalPolicy.error.load": "실행 정책을 불러오지 못했습니다",
+  "approvalPolicy.error.action": "바꾸지 못했습니다. 잠시 뒤 다시 시도하세요",
+  "approvalPolicy.error.forbidden": "게이트웨이 소유자만 바꿀 수 있습니다",
+  "approvalPolicy.error.invalidEntry": "한 줄로 된 1~200자 문자열이어야 합니다",
+  // --- /approval-policy ---
 };
 
 export default ko;

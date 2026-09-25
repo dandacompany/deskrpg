@@ -3530,6 +3530,43 @@ const ja: Record<string, string> = {
   "connectors.copy.stdioConfirm":
     "受け取るスタッフのホストでもこのコマンドが実行されることを確認しました",
   // --- /connectors: add · oauth · copy ---
+  // --- approval-policy ---
+  "approvalPolicy.title": "{name} · 無人実行ポリシー",
+  "approvalPolicy.open": "実行ポリシー",
+  "approvalPolicy.intro":
+    "クロンとカンバンのカードは誰も見ていない間に実行されます。危険なコマンドを止めるか許可するかをここで決めます。",
+  "approvalPolicy.readOnly": "ゲートウェイの所有者だけが変更できます",
+  "approvalPolicy.sharedWarning": "このスタッフを雇用している他の {n} チャンネルにも適用されます",
+  "approvalPolicy.workerPropagationOff":
+    "ブロック通知にはワーカー伝播が必要です。現在はコマンドがブロックされても通知されません。",
+  "approvalPolicy.cron.title": "クロン中の危険なコマンド",
+  "approvalPolicy.cron.hint": "予約ジョブが危険なコマンドを実行しようとしたとき",
+  "approvalPolicy.single.title": "カンバン・単発実行中の危険なコマンド",
+  "approvalPolicy.single.hint":
+    "カンバンのカードや単発の作業が危険なコマンドを実行しようとしたとき",
+  "approvalPolicy.mode.deny": "ブロック",
+  "approvalPolicy.mode.approve": "許可",
+  "approvalPolicy.approveConfirm":
+    "承認なしですべての危険なコマンドが実行されます。必要なコマンドだけを許可リストで開くほうが安全です。",
+  "approvalPolicy.approveConfirmSubmit": "許可に切り替える",
+  "approvalPolicy.cancel": "キャンセル",
+  "approvalPolicy.allowlist.title": "許可リスト",
+  "approvalPolicy.allowlist.hint": "ブロック中でもここにあるルールやコマンドパターンは実行されます",
+  "approvalPolicy.allowlist.empty": "許可リストは空です",
+  "approvalPolicy.allowlist.placeholder": "ルール名またはコマンドパターン",
+  "approvalPolicy.allowlist.add": "追加",
+  "approvalPolicy.allowlist.remove": "許可リストから削除",
+  "approvalPolicy.appliesNext":
+    "次回の実行から適用されます。会話中のリアルタイム承認は {seconds} 秒待ちます。",
+  "approvalPolicy.loading": "読み込み中…",
+  "approvalPolicy.upgradeRequired": "実行ポリシーにはプラグイン {version} 以上が必要です",
+  "approvalPolicy.gatewayDisconnected":
+    "ゲートウェイの接続が切れました。再接続してから開いてください",
+  "approvalPolicy.error.load": "実行ポリシーを読み込めませんでした",
+  "approvalPolicy.error.action": "変更できませんでした。しばらくしてから再試行してください",
+  "approvalPolicy.error.forbidden": "ゲートウェイの所有者だけが変更できます",
+  "approvalPolicy.error.invalidEntry": "1〜200 文字の 1 行の文字列である必要があります",
+  // --- /approval-policy ---
 };
 
 export default ja;

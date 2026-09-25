@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Plug, Settings2 } from "lucide-react";
+import { Plug, Settings2, ShieldCheck } from "lucide-react";
 
 import { useT } from "@/lib/i18n";
 import { MCP_ADMIN_MIN_VERSION } from "@/lib/hermes/deskrpg-plugin-types";
@@ -14,6 +14,8 @@ export type NpcConnectorsTabProps = {
   npcId: string;
   /** Opens the manager modal; with `serverName`, opens it with that server selected. */
   onOpenManager(serverName?: string): void;
+  /** Opens the unattended run policy modal (owner only). */
+  onOpenPolicy?(): void;
   api?: ConnectorsApi;
 };
 
@@ -40,6 +42,7 @@ export default function NpcConnectorsTab({
   channelId,
   npcId,
   onOpenManager,
+  onOpenPolicy,
   api: injected,
 }: NpcConnectorsTabProps) {
   const t = useT();
@@ -99,6 +102,17 @@ export default function NpcConnectorsTab({
         <span className="flex-1 text-xs text-text-muted">
           {t("connectors.count", { n: view.servers.length })}
         </span>
+        {view.canManage && onOpenPolicy && (
+          <button
+            type="button"
+            data-testid="connectors-open-policy"
+            onClick={onOpenPolicy}
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary hover:bg-surface-raised"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            {t("approvalPolicy.open")}
+          </button>
+        )}
         {view.canManage && (
           <button
             type="button"
