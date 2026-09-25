@@ -22,6 +22,7 @@ const zh: Record<string, string> = {
   "meeting.join": "加入会议",
   "meeting.cancelPreparation": "取消集合",
   "meeting.returnBeforeRetry": "请等待返回完成后再以新的参与者开始。",
+  "meeting.overflowNotice": "参与者比会议位置多 {count} 位 — 多出的参与者将在原地参加。",
   "meeting.spatial.assembling": "参与者正在集合",
   "meeting.spatial.ready": "参与者已就绪",
   "meeting.spatial.returning": "正在返回原位",

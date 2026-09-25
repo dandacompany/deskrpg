@@ -21,6 +21,7 @@ import { EventBus } from "@/game/EventBus";
 import { MeetingSpeakerTracker } from "./meeting-room/speaker-tracker";
 import ToolApprovalStack from "./approvals/ToolApprovalCard";
 import MeetingTopicInput, { canSubmitMeetingTopic } from "./meeting-room/MeetingTopicInput";
+import { meetingOverflow, type MeetingCapacity } from "./meeting-room/capacity";
 import {
   restoreMeetingChat,
   restoreMeetingExecution,
@@ -221,6 +222,14 @@ export default function MeetingRoom({
   const [messages, setMessages] = useState<MeetingMessage[]>([]);
   const [npcStreams, setNpcStreams] = useState<Record<string, string>>({});
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [capacity, setCapacity] = useState<MeetingCapacity | null>(null);
+  useEffect(() => {
+    EventBus.on("meeting:capacity", setCapacity);
+    EventBus.emit("meeting:capacity-request");
+    return () => {
+      EventBus.off("meeting:capacity", setCapacity);
+    };
+  }, []);
   const [input, setInput] = useState("");
   const [cooldown, setCooldown] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -904,6 +913,11 @@ export default function MeetingRoom({
     selectedNpcIds.size === 0 ||
     spatial?.phase === "returning" ||
     joinState !== "joined";
+  const overflow = meetingOverflow(
+    capacity,
+    selectedNpcIds.size,
+    participants.filter((p) => p.type === "user").length,
+  );
 
   // Shared meeting start form (used in pre-meeting and post-meeting views)
   const renderMeetingStartForm = () => (
@@ -1059,6 +1073,11 @@ export default function MeetingRoom({
             )}
           </div>
         </>
+      )}
+      {overflow > 0 && (
+        <p role="note" data-meeting-overflow className="text-caption">
+          {t("meeting.overflowNotice", { count: overflow })}
+        </p>
       )}
       <MeetingTopicInput
         value={meetingTopic}
