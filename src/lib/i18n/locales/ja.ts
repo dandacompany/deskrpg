@@ -2070,6 +2070,12 @@ const ja: Record<string, string> = {
     "ゲートウェイが時間内に応答しませんでした。しばらくしてからもう一度送信してください。",
   "npc.gatewayUnknownError":
     "AIゲートウェイの呼び出しに失敗しました。詳細はサーバーログを確認してください。",
+  "npc.providerAuthExpired":
+    "モデルプロバイダーのログインが期限切れです。ゲートウェイの所有者がHermesでそのプロバイダーに再ログインする必要があります。",
+  "npc.providerUsageLimit":
+    "モデルプロバイダーのアカウントが利用上限に達しました。上限が解除されてから再送するか、プランを確認してください。",
+  "npc.providerModelError":
+    "モデルプロバイダーが設定されたモデルを提供していません。スタッフ設定でモデルを確認してください。",
   "npc.unsupportedAdapter": "このNPCはサポートされていないアダプターを使用しています。",
   "npc.unbound": "このNPCはまだHermesプロファイルに接続されていません。",
   "npc.hermesImageUnsupported": "このNPCはまだ画像を受け取れません。",

@@ -2045,6 +2045,12 @@ const ko: Record<string, string> = {
     "게이트웨이가 제한 시간 안에 응답하지 않았습니다. 잠시 후 다시 보내 보세요.",
   "npc.gatewayUnknownError":
     "AI 게이트웨이 호출이 실패했습니다. 자세한 원인은 서버 로그를 확인하세요.",
+  "npc.providerAuthExpired":
+    "모델 제공자 로그인이 만료되었습니다. 게이트웨이 소유자가 Hermes에서 그 제공자에 다시 로그인해야 합니다.",
+  "npc.providerUsageLimit":
+    "모델 제공자 계정의 사용 한도에 도달했습니다. 한도가 풀린 뒤 다시 보내거나 요금제를 확인하세요.",
+  "npc.providerModelError":
+    "모델 제공자가 설정된 모델을 제공하지 않습니다. 직원 설정에서 모델을 확인하세요.",
   "npc.unsupportedAdapter": "이 NPC는 지원하지 않는 어댑터를 사용합니다.",
   "npc.unbound": "이 NPC는 아직 Hermes 프로필에 연결되지 않았습니다.",
   "npc.hermesImageUnsupported": "이 NPC는 아직 이미지를 받을 수 없습니다.",

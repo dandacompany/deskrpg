@@ -2050,6 +2050,12 @@ const en: Record<string, string> = {
   "npc.gatewayTimeout":
     "The gateway did not respond in time. Try sending the message again in a moment.",
   "npc.gatewayUnknownError": "The AI gateway call failed. Check the server logs for the cause.",
+  "npc.providerAuthExpired":
+    "The model provider sign-in has expired. The gateway owner needs to sign in to that provider again in Hermes.",
+  "npc.providerUsageLimit":
+    "The model provider account has reached its usage limit. Send again once the limit resets, or check the plan.",
+  "npc.providerModelError":
+    "The model provider does not serve the configured model. Check the model in the staff settings.",
   "npc.unsupportedAdapter": "This NPC uses an unsupported adapter.",
   "npc.unbound": "This NPC is not yet linked to a Hermes profile.",
   "npc.hermesImageUnsupported": "This NPC cannot receive images yet.",

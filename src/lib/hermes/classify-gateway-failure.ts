@@ -1,4 +1,5 @@
 import type { HermesErrorCode } from "./hermes-client";
+import { runFailureCause, type RunFailureCause } from "../run-failure-cause";
 
 /**
  * Folds an exception thrown by an adapter call into a **cause to show the user**.
@@ -12,10 +13,12 @@ import type { HermesErrorCode } from "./hermes-client";
  *      `HermesError("unreachable")` (the `catch` around `fetch` in `HermesClient.request`), so cancellations and timeouts also
  *      arrive as "couldn't reach". Looking only at the code would always misdiagnose a timeout as unreachable.
  *   2. **Structured code** (`HermesError.code`). Always takes precedence over string matching.
+ *      A `run_failed` (the gateway accepted the run, then the model provider failed it) is read
+ *      further by `runFailureCause` — an expired provider sign-in must not read as "unknown".
  *   3. Message/`cause.code` heuristics only last — needed because there are paths where the adapter throws
  *      something other than `HermesError` (plugin client, raw `fetch`).
  */
-export type GatewayFailureKind = "unreachable" | "auth" | "timeout" | "unknown";
+export type GatewayFailureKind = "unreachable" | "auth" | "timeout" | "unknown" | RunFailureCause;
 
 /** Recognizes `HermesError` by structure — importing the class would drag in the transport layer. */
 function hermesCode(err: unknown): HermesErrorCode | null {
@@ -87,8 +90,8 @@ export function classifyGatewayFailure(err: unknown): GatewayFailureKind {
     if (TIMEOUT_MESSAGE_RE.test(message)) return "timeout";
     return "unreachable";
   }
-  if (code === "unknown_profile" || code === "http_error" || code === "run_failed")
-    return "unknown";
+  if (code === "run_failed") return runFailureCause(message) ?? "unknown";
+  if (code === "unknown_profile" || code === "http_error") return "unknown";
 
   // 3. Heuristics — the non-HermesError exception path.
   if (UNREACHABLE_CAUSE_CODES.has(cause)) return "unreachable";
@@ -105,6 +108,9 @@ export const GATEWAY_FAILURE_MESSAGE_CODE = {
   auth: "gateway_auth_failed",
   timeout: "gateway_timeout",
   unknown: "gateway_unknown_error",
+  provider_auth: "provider_auth_expired",
+  usage_limit: "provider_usage_limit",
+  model_error: "provider_model_error",
 } as const;
 
 export type GatewayFailureMessageCode = (typeof GATEWAY_FAILURE_MESSAGE_CODE)[GatewayFailureKind];
