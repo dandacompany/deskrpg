@@ -80,6 +80,23 @@ jobs:
         if: always()
         run: npm run format:check
 
+  # Windows-only runtime paths — the PowerShell launcher, the ANSI code page, ssh.exe's pipe stalls,
+  # null stdio streams, ACLs and WMI daemons. Six Windows defects once passed every test on Linux,
+  # because the tests pinned argument shapes and faked spawn; this job runs the real processes.
+  # The runtime tests skip themselves on other platforms, so this is the only place they run.
+  windows-runtime:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Windows 런타임 테스트
+        run: npm run test:windows
+
   game-fixtures:
     runs-on: ubuntu-latest
     timeout-minutes: 15
