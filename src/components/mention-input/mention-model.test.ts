@@ -57,3 +57,11 @@ test("dropdown keyboard: up/down cycles, Enter selects, Esc closes", () => {
     "후보 0건이면 선택 없음",
   );
 });
+
+test("a chip whose name contains brackets serializes with the shared mention escape", () => {
+  const segs: Segment[] = [
+    { kind: "mention", id: "n1", name: "Kim ]" },
+    { kind: "text", text: " hi" },
+  ];
+  assert.equal(serializeSegments(segs), "@[Kim \\]] hi");
+});

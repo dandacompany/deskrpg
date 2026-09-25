@@ -184,9 +184,12 @@ export default function AuthPageClient({ isComingSoon }: { isComingSoon: boolean
                     <p className="text-center text-sm text-text-secondary">
                       {t("auth.setupDescription")}
                     </p>
-                    {/* The first account becomes the admin. For someone who put it on a public server, knowing when to close sign-ups matters. */}
+                    {/* The first account becomes the admin: what that means, and how to close sign-ups on a reachable server. */}
                     <p className="text-center text-xs text-text-muted">
                       {t("auth.setupAdminNotice")}
+                    </p>
+                    <p className="text-center text-xs text-text-muted">
+                      {t("auth.setupSignupNotice")}
                     </p>
                   </div>
                 )}

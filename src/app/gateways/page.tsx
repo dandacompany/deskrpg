@@ -6,7 +6,11 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 import GatewaySetupWizard from "@/components/gateway/GatewaySetupWizard";
-import { nextSelectedGatewayId } from "./gateway-selection";
+import {
+  nextSelectedGatewayId,
+  reloadAfterSave,
+  type GatewayReloadOptions,
+} from "./gateway-selection";
 import GatewayOnboardingGuide from "@/components/gateway/GatewayOnboardingGuide";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 import DiagnosticsPanel from "@/components/gateway/DiagnosticsPanel";
@@ -253,7 +257,7 @@ function GatewayManagementPageInner() {
   );
 
   const loadGateways = useCallback(
-    async (options: { autoSelect?: boolean } = {}) => {
+    async (options: GatewayReloadOptions = {}) => {
       const isRefresh = loadedOnce.current;
       if (isRefresh) {
         refreshesInFlight.current += 1;
@@ -753,7 +757,9 @@ function GatewayManagementPageInner() {
                   setSelectedGatewayId(gatewayId);
                   void loadGateways();
                 }}
-                onSaved={() => void loadGateways({ autoSelect: false })}
+                onSaved={(gatewayId, pluginStatus) =>
+                  void loadGateways(reloadAfterSave(gatewayId, pluginStatus))
+                }
               />
             ) : (
               <section className="rounded-xl border border-border bg-surface p-5">

@@ -458,6 +458,8 @@ const en: Record<string, string> = {
     "No Hermes on that host uses this gateway\u2019s port. Check whether the gateway address changed or Hermes is stopped.",
   "hermes.wizard.error.serviceInstallFailed":
     "The gateway could not be registered as a service. Ask the administrator to run hermes gateway install on the host and read its output, then check again.",
+  "hermes.wizard.error.windowsScheduledTaskMissing":
+    "This Windows host has no scheduled task for the gateway; it is registered only in the Startup folder. DeskRPG cannot stop or restart it that way, so plugin updates and setting changes are blocked. Check Task Scheduler for the Hermes gateway task. If it is missing, run hermes gateway install on that host again to register it as a scheduled task, then check again.",
   "hermes.wizard.error.timezoneInvalid":
     "That time zone is not an IANA name. Use a valid name such as Asia/Seoul, or turn the time zone step off and continue.",
   "hermes.wizard.error.timezoneWriteFailed":
@@ -2407,7 +2409,9 @@ const en: Record<string, string> = {
   "auth.getStarted": "Get Started",
   "auth.setupDescription": "Create an admin account to get started",
   "auth.setupAdminNotice":
-    "The first account you create becomes this server's administrator. If other people can reach this instance, close signups once your account exists.",
+    "The first account you create becomes this server's administrator. The administrator can install Hermes on this server, manage groups and member permissions, and reset other people's passwords. Anyone who signs up later joins as a regular member.",
+  "auth.setupSignupNotice":
+    "If other people can reach this server, close signups once your account exists: set REGISTRATION_DISABLED=true in the server environment and restart it.",
   "channels.backToChannels": "Back to Channels",
   "chat.returnNpcToOrigin": "Return NPC to original position",
   "chat.options": "Chat options",
@@ -2654,6 +2658,7 @@ const en: Record<string, string> = {
   "cron.filter.allNpcs": "All NPCs",
   "cron.search.placeholder": "Search name or prompt",
   "cron.empty": "No cron jobs",
+  "cron.deletedJob": "This cron was deleted. Its past results remain in the chat notices.",
   "cron.noNextRun": "Not scheduled",
   "cron.nextRun": "Next run",
   "cron.lastRun": "Last run",

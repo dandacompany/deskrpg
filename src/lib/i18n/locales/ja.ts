@@ -467,6 +467,8 @@ const ja: Record<string, string> = {
     "このゲートウェイと同じポートを使う Hermes をホストで見つけられませんでした。アドレスの変更や Hermes の停止を確認してください。",
   "hermes.wizard.error.serviceInstallFailed":
     "ゲートウェイをサービスとして登録できませんでした。管理者がホストでhermes gateway installを実行し、結果を確認してから再確認してください。",
+  "hermes.wizard.error.windowsScheduledTaskMissing":
+    "この Windows ホストにはゲートウェイのスケジュールタスクがなく、スタートアップフォルダーにだけ登録されています。この状態では DeskRPG がゲートウェイを停止・再起動できないため、プラグインの更新と設定変更ができません。タスクスケジューラで Hermes ゲートウェイのタスクがあるか確認し、なければそのホストで hermes gateway install を再実行してスケジュールタスクとして登録してから、もう一度確認してください。",
   "hermes.wizard.error.timezoneInvalid":
     "タイムゾーン名がIANA形式ではありません。Asia/Tokyoのような正しい名前を使うか、タイムゾーン設定をオフにして進めてください。",
   "hermes.wizard.error.timezoneWriteFailed":
@@ -2422,7 +2424,9 @@ const ja: Record<string, string> = {
   "auth.getStarted": "はじめる",
   "auth.setupDescription": "管理者アカウントを作成して始めましょう",
   "auth.setupAdminNotice":
-    "最初に作るアカウントがこのサーバーの管理者になります。他の人がアクセスできる場所なら、アカウントを作った後は登録を閉じてください。",
+    "最初に作成するアカウントがこのサーバーの管理者になります。管理者はこのサーバーへの Hermes のインストール、グループとメンバー権限の管理、他の人のパスワードの再設定ができます。後から登録した人は一般メンバーになります。",
+  "auth.setupSignupNotice":
+    "他の人がアクセスできる場所なら、アカウント作成後にサーバーの環境変数 REGISTRATION_DISABLED=true を設定して再起動し、登録を閉じてください。",
   "channels.backToChannels": "チャンネル一覧に戻る",
   "chat.returnNpcToOrigin": "NPCを元の位置に戻す",
   "chat.options": "チャットオプション",
@@ -2670,6 +2674,7 @@ const ja: Record<string, string> = {
   "cron.filter.allNpcs": "すべての NPC",
   "cron.search.placeholder": "名前・プロンプトを検索",
   "cron.empty": "クーロンがありません",
+  "cron.deletedJob": "このクーロンは削除されました。過去の実行結果はチャットの通知に残っています。",
   "cron.noNextRun": "予定なし",
   "cron.nextRun": "次回実行",
   "cron.lastRun": "前回実行",

@@ -791,10 +791,18 @@ def needs_service(owner):
     # identity_mismatch/ambiguous means someone else's unit or a hand-edited unit, so don't overwrite it.
     return not owner['command'] and owner['warning'] == 'managed_service_required'
 
+def service_failure(owner):
+    # On Windows, upstream falls back to a Startup-folder entry when it cannot register the scheduled
+    # task, and that entry can be neither stopped nor restarted. Name the missing scheduled task so the
+    # screen can point at Task Scheduler instead of a generic "no managed service".
+    if owner['warning'] == 'managed_service_required' and sys.platform == 'win32':
+        return 'windows_scheduled_task_missing'
+    return owner['warning'] or 'managed_service_required'
+
 def preflight(name, home, item):
     public, owner, cfg, token, plugin_name = item
     if version_below(public['version'], HERMES_MIN): fail('hermes_version_unsupported')
-    if not owner['command']: fail(owner['warning'] or 'managed_service_required')
+    if not owner['command']: fail(service_failure(owner))
     if settings(home)[4]:
         listening = assert_port_owned(public,owner)
         code, models = request(public['port'],token,'/v1/models') if token and listening else (0,None)
@@ -968,7 +976,7 @@ def main(action, candidate_id=None, option=None):
         if bounded([sys.executable, '-m', 'hermes_cli.main', '--profile', name, 'gateway', 'install'], env)[0]:
             fail('service_install_failed')
         fresh = identity(name, home)
-        if needs_service(fresh): fail('service_install_failed')
+        if needs_service(fresh): fail('windows_scheduled_task_missing' if sys.platform == 'win32' else 'service_install_failed')
         # The candidate id includes a hash of the service definition. We just created the unit, so the id changed —
         # without returning the new id, every following step dies with candidate_changed (measured).
         return {'ok': True, 'candidateId': fresh['id']}

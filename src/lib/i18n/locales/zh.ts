@@ -427,6 +427,8 @@ const zh: Record<string, string> = {
     "未在该主机上找到使用此网关端口的 Hermes。请检查网关地址是否更改或 Hermes 是否已停止。",
   "hermes.wizard.error.serviceInstallFailed":
     "未能将网关注册为服务。请管理员在主机上执行hermes gateway install并查看输出，然后重新检查。",
+  "hermes.wizard.error.windowsScheduledTaskMissing":
+    "此 Windows 主机上没有网关的计划任务，只在启动文件夹中注册了。在这种状态下 DeskRPG 无法停止或重启网关，因此插件更新和设置更改会被阻止。请在任务计划程序中确认是否有 Hermes 网关任务；如果没有，请在该主机上重新运行 hermes gateway install 将其注册为计划任务，然后再检查。",
   "hermes.wizard.error.timezoneInvalid":
     "时区名称不符合IANA格式。请使用Asia/Shanghai这样的正确名称，或关闭时区设置后继续。",
   "hermes.wizard.error.timezoneWriteFailed":
@@ -2312,7 +2314,9 @@ const zh: Record<string, string> = {
   "auth.getStarted": "开始使用",
   "auth.setupDescription": "创建管理员账户以开始使用",
   "auth.setupAdminNotice":
-    "您创建的第一个账号将成为此服务器的管理员。如果其他人可以访问此实例，请在创建账号后关闭注册。",
+    "你现在创建的第一个账户将成为此服务器的管理员。管理员可以在此服务器上安装 Hermes、管理群组和成员权限，并重置他人的密码。之后注册的人将成为普通成员。",
+  "auth.setupSignupNotice":
+    "如果其他人也能访问此服务器，请在创建账户后在服务器环境变量中设置 REGISTRATION_DISABLED=true 并重启，以关闭注册。",
   "channels.backToChannels": "返回频道列表",
   "chat.returnNpcToOrigin": "让 NPC 返回原位",
   "chat.options": "聊天选项",
@@ -2548,6 +2552,7 @@ const zh: Record<string, string> = {
   "cron.filter.allNpcs": "所有 NPC",
   "cron.search.placeholder": "搜索名称或提示词",
   "cron.empty": "暂无定时任务",
+  "cron.deletedJob": "此定时任务已被删除。过去的执行结果仍保留在聊天通知中。",
   "cron.noNextRun": "未计划",
   "cron.nextRun": "下次运行",
   "cron.lastRun": "上次运行",

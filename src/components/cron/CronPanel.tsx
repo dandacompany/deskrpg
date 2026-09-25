@@ -188,6 +188,14 @@ export default function CronPanel({
     () => (jobs ?? []).find((job) => job.id === selectedId) ?? null,
     [jobs, selectedId],
   );
+  // Opened from a chat notice ("open history") for a cron that no longer exists. Only said when
+  // every NPC's list loaded — a failed list may just be hiding the job.
+  const initialJobDeleted =
+    initialJobId !== null &&
+    jobs !== null &&
+    loadError === null &&
+    partialErrors.length === 0 &&
+    !jobs.some((job) => job.id === initialJobId);
 
   // ---- Run-history tab --------------------------------------------------------
   useEffect(() => {
@@ -429,6 +437,16 @@ export default function CronPanel({
               ))}
             </ul>
           </div>
+        )}
+
+        {initialJobDeleted && (
+          <p
+            role="status"
+            data-testid="cron-deleted-notice"
+            className="p-2 rounded border border-border bg-surface-raised text-xs text-text-muted"
+          >
+            {t("cron.deletedJob")}
+          </p>
         )}
 
         {/* List */}

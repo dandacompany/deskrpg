@@ -457,6 +457,8 @@ const ko: Record<string, string> = {
     "이 게이트웨이와 같은 포트를 쓰는 Hermes 를 호스트에서 찾지 못했습니다. 게이트웨이 주소가 바뀌었거나 Hermes 가 멈춰 있는지 확인하세요.",
   "hermes.wizard.error.serviceInstallFailed":
     "게이트웨이를 서비스로 등록하지 못했습니다. 관리자가 호스트에서 hermes gateway install 을 직접 실행해 결과를 확인한 뒤 다시 확인하세요.",
+  "hermes.wizard.error.windowsScheduledTaskMissing":
+    "이 Windows 호스트에는 게이트웨이의 예약 작업이 없고 시작 프로그램 폴더에만 등록돼 있습니다. 이 상태에서는 DeskRPG 가 게이트웨이를 멈추거나 다시 시작할 수 없어 플러그인 갱신과 설정 변경이 막힙니다. 작업 스케줄러에서 Hermes 게이트웨이 예약 작업이 있는지 확인하고, 없으면 그 호스트에서 hermes gateway install 을 다시 실행해 예약 작업으로 등록한 뒤 다시 확인하세요.",
   "hermes.wizard.error.timezoneInvalid":
     "시간대 이름이 IANA 형식이 아닙니다. Asia/Seoul 처럼 올바른 이름을 쓰거나 시간대 설정을 끄고 진행하세요.",
   "hermes.wizard.error.timezoneWriteFailed":
@@ -2394,7 +2396,9 @@ const ko: Record<string, string> = {
   "auth.getStarted": "시작하기",
   "auth.setupDescription": "관리자 계정을 만들어 시작하세요",
   "auth.setupAdminNotice":
-    "지금 만드는 첫 계정이 이 서버의 관리자가 됩니다. 여러 사람이 접속할 수 있는 곳이라면, 계정을 만든 뒤 가입을 닫으세요.",
+    "지금 만드는 첫 계정이 이 서버의 관리자가 됩니다. 관리자는 이 서버에 Hermes 를 설치하고, 그룹과 멤버 권한을 정하고, 다른 사람의 비밀번호를 재설정할 수 있습니다. 나중에 가입하는 사람은 일반 멤버가 됩니다.",
+  "auth.setupSignupNotice":
+    "여러 사람이 접속할 수 있는 곳이라면, 계정을 만든 뒤 서버 환경변수 REGISTRATION_DISABLED=true 를 두고 다시 시작해 가입을 닫으세요.",
   "channels.backToChannels": "오피스 목록으로 돌아가기",
   "chat.returnNpcToOrigin": "NPC를 원래 자리로 복귀",
   "chat.options": "채팅 옵션",
@@ -2639,6 +2643,7 @@ const ko: Record<string, string> = {
   "cron.filter.allNpcs": "모든 NPC",
   "cron.search.placeholder": "이름·프롬프트 검색",
   "cron.empty": "크론이 없습니다",
+  "cron.deletedJob": "이 크론은 삭제됐습니다. 지난 실행 결과는 채팅 알림에 남아 있습니다.",
   "cron.noNextRun": "예정 없음",
   "cron.nextRun": "다음 실행",
   "cron.lastRun": "마지막 실행",
