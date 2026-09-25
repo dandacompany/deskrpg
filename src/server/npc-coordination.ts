@@ -102,6 +102,43 @@ const atReservationPoint = (
   position: { x: number; y: number },
 ) => distance(reservation, position) <= PLAYER_ARRIVAL_RADIUS;
 
+/**
+ * How far an actor must have walked between two position reports: the straight line when it is clear, otherwise the
+ * shortest walkable way between the two tiles — null when there is none (through a wall).
+ *
+ * Walkers follow waypoint paths. Two reports that straddle a waypoint have a chord that cuts the corner, and at a
+ * wall's corner that chord grazes the body clearance the straight-line check keeps. Refusing it froze the server
+ * position there, and every later report was measured from that stale point and refused too, so the walk never
+ * arrived (reproduced headlessly: 12 NPCs on the official maps). The speed credit still bounds the way round.
+ */
+function travelled(
+  data: CoordinationChannel,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): number | null {
+  const walkable = data.isWalkable;
+  const straight = distance(from, to);
+  const tile = (p: { x: number; y: number }) => ({ x: p.x / 32 - 0.5, y: p.y / 32 - 0.5 });
+  if (!walkable || clearSegment(tile(from), tile(to), walkable)) return straight;
+  const path = findPath(
+    Math.floor(from.x / 32),
+    Math.floor(from.y / 32),
+    Math.floor(to.x / 32),
+    Math.floor(to.y / 32),
+    walkable,
+    (a, b) => clearSegment(a, b, walkable),
+  );
+  if (!path) return null;
+  const points = [
+    from,
+    ...path.slice(1, -1).map((p) => ({ x: (p.x + 0.5) * 32, y: (p.y + 0.5) * 32 })),
+    to,
+  ];
+  let length = 0;
+  for (let i = 1; i < points.length; i++) length += distance(points[i - 1], points[i]);
+  return Math.max(straight, length);
+}
+
 const tileOf = (point: { x: number; y: number }) =>
   `${Math.floor(point.x / 32)},${Math.floor(point.y / 32)}`;
 /**
@@ -527,7 +564,10 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
     for (const [id, seat] of state.reservations)
       if (seat.actorId === actorId) {
         const separation = distance(seat, position);
-        if (seat.arrived && separation > 20) {
+        // A meeting walk still on its way keeps its spot: brushing past it and being nudged off by passing traffic
+        // used to drop the reservation, and the later arrival was refused as `reservation_lost`.
+        const walking = seat.spatial && !!state.npcs.get(actorId)?.spatialTarget;
+        if (seat.arrived && separation > 20 && !walking) {
           state.reservations.delete(id);
           changed(state);
         } else {
@@ -684,15 +724,9 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
         if (
           !consumeMotion(
             `${channelId}:${npc.npcId}`,
-            distance(npc, destination),
+            travelled(state.data, npc, destination) ?? Infinity,
             speedCap(channelId),
-          ) ||
-          (state.data.isWalkable &&
-            !clearSegment(
-              { x: npc.x / 32 - 0.5, y: npc.y / 32 - 0.5 },
-              { x: destination.x / 32 - 0.5, y: destination.y / 32 - 0.5 },
-              state.data.isWalkable,
-            ))
+          )
         )
           return { error: "invalid_motion" };
         spatialLastMotion.set(`${channelId}:${npc.npcId}`, now());
@@ -983,13 +1017,7 @@ export function createNpcCoordination(io: Server, dependencies: CoordinationDepe
       const previous = validatedPlayers.get(key);
       if (
         previous &&
-        (!consumeMotion(key, distance(previous, { x, y }), 220) ||
-          (state.data.isWalkable &&
-            !clearSegment(
-              { x: previous.x / 32 - 0.5, y: previous.y / 32 - 0.5 },
-              { x: x / 32 - 0.5, y: y / 32 - 0.5 },
-              state.data.isWalkable,
-            )))
+        !consumeMotion(key, travelled(state.data, previous, { x, y }) ?? Infinity, 220)
       ) {
         if (reservation) return;
       } else validatedPlayers.set(key, { x, y });
