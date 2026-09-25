@@ -798,7 +798,7 @@ test("whatever the broker onError passes, meeting:error carries a string code an
 // A meeting where every turn fails due to the model backend limit (429). Uses the real engine
 // (defaultCreateMeetingBroker) and the real spatial coordinator — a fake broker can't show "does the engine end after
 // turn errors".
-async function runFailingMeeting(opts: { hang?: boolean } = {}) {
+async function runFailingMeeting(opts: { hang?: boolean; thrown?: unknown } = {}) {
   const calls: RecordedCall[] = [];
   const socket = createFakeSocket("socket-1", calls);
   const released: string[] = [];
@@ -821,6 +821,7 @@ async function runFailingMeeting(opts: { hang?: boolean } = {}) {
       adapterCalls++;
       // Hold the response to observe the host leaving while the meeting is in progress.
       if (opts.hang) return new Promise(() => {});
+      if (opts.thrown) throw opts.thrown;
       throw Object.assign(new Error("HTTP 429: The usage limit has been reached"), {
         name: "HermesError",
         code: "run_failed",
@@ -894,6 +895,19 @@ test("a meeting where every call fails with a limit error ends on its own and se
     "브로커가 activeBrokers 에 남아 다음 회의를 막는다",
   );
   assert.deepEqual(r.released, ["n1"], "직원이 회의석에서 풀려나지 않았다");
+});
+
+test("a meeting whose gateway is unreachable tells the room why before it ends", async () => {
+  const r = await runFailingMeeting({
+    thrown: Object.assign(new Error("fetch failed"), { name: "HermesError", code: "unreachable" }),
+  });
+  assert.equal(r.activeBrokers.has("a"), false);
+  const events = r.calls
+    .filter((call) => call.event === "meeting:error" || call.event === "meeting:end")
+    .map((call) => call.event);
+  assert.deepEqual(events, ["meeting:error", "meeting:end"]);
+  const error = r.calls.find((call) => call.event === "meeting:error")?.payload;
+  assert.deepEqual(error, { error: "backend_unavailable", detail: "fetch failed" });
 });
 
 test("a meeting emptied by the host leaving also sends employees back to their seats and can restart in the same channel", async () => {
