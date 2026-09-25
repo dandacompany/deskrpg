@@ -379,12 +379,15 @@ async function updateWorking(
     }
   };
 
+  // Every board of the channel feeds this one state, and task ids are only unique within a board.
+  const cardKey = event.task_id ? `${event.board ?? deps.boardSlug}:${event.task_id}` : null;
+
   switch (event.kind) {
     case "task.run.started":
-      await add("runningCards", event.task_id ?? null);
+      await add("runningCards", cardKey);
       break;
     case "task.run.finished":
-      remove("runningCards", event.task_id ?? null);
+      remove("runningCards", cardKey);
       break;
     case "cron.run.started":
       await add("cronRuns", cronRunKey(event));
