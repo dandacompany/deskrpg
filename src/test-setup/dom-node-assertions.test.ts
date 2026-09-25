@@ -15,7 +15,7 @@ const SELF = "test-setup/dom-node-assertions.test.ts";
  * Files another branch is editing right now. Remove an entry once that file is converted — the
  * list must only shrink.
  */
-const PENDING = new Set(["components/ChatPanel.test.tsx"]);
+const PENDING = new Set<string>();
 
 function testFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
