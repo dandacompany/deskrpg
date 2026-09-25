@@ -30,7 +30,7 @@ import { eq, and } from "drizzle-orm";
 import { approvalTargets, approvals, db, hermesProfiles, npcs } from "@/db";
 import type { RoomMessage, RoomNotice } from "@/lib/chat-rooms-policy";
 import { appendRoomMessage, ensureOfficeRoom, getChannelOwnerId } from "@/lib/chat-rooms";
-import { requireChannelMember } from "@/lib/cron-access";
+import { isChannelMember } from "@/lib/channel-membership";
 import { findCronOrigin, resolveOriginForGateway } from "@/lib/cron-origins";
 import type { OwnerPluginClient } from "@/lib/hermes/plugin-client-types";
 import { listChannelBoards } from "@/lib/kanban-boards";
@@ -752,7 +752,7 @@ export function createLiveIngestDeps(wiring: LiveIngestWiring): IngestDeps {
     },
 
     async isChannelMember(channelId, userId) {
-      return (await requireChannelMember(channelId, userId)).ok;
+      return isChannelMember(channelId, userId);
     },
 
     getChannelOwnerId,
