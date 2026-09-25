@@ -519,7 +519,7 @@ function ProviderAuthPanelInner(props: ProviderAuthPanelProps): JSX.Element | nu
             placeholder={t("hermes.providerAuth.keyPlaceholder")}
             disabled={disabled || busy}
             onChange={(e) => setHasKeyValue(e.target.value !== "")}
-            className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+            className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-primary-light"
           />
         </label>
         <div className="flex flex-wrap items-center gap-2">

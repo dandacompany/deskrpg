@@ -238,7 +238,7 @@ export default function ToolProviderPanel({
                       : t("hermes.providerAuth.keyPlaceholder")
                 }
                 onChange={(ev) => setValues((prev) => ({ ...prev, [e.key]: ev.target.value }))}
-                className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+                className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-primary-light"
               />
             </label>
           ))}
