@@ -17,8 +17,16 @@ import { formatElapsed } from "./kanban-view-model";
  */
 export default function KanbanMetricsPanel({ metrics }: { metrics: OperationalMetrics }) {
   const t = useT();
-  const { attention, duration, outcomes, successRate, terminalRuns, throughput, openRuns } =
-    metrics;
+  const {
+    attention,
+    duration,
+    handedOff,
+    outcomes,
+    successRate,
+    terminalRuns,
+    throughput,
+    openRuns,
+  } = metrics;
 
   return (
     <section
@@ -51,6 +59,10 @@ export default function KanbanMetricsPanel({ metrics }: { metrics: OperationalMe
       />
 
       <Cell label={t("kanban.metrics.throughput")} value={String(throughput)} />
+
+      {handedOff > 0 && (
+        <Cell metric="handedOff" label={t("kanban.metrics.handedOff")} value={String(handedOff)} />
+      )}
 
       <Cell
         label={t("kanban.metrics.successRate")}
@@ -87,7 +99,7 @@ export default function KanbanMetricsPanel({ metrics }: { metrics: OperationalMe
           <ul className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
             {outcomes.map((entry) => (
               <li key={entry.outcome} className="text-text-secondary">
-                {entry.outcome} <span className="text-text">{entry.count}</span>
+                {outcomeLabel(t, entry.outcome)} <span className="text-text">{entry.count}</span>
               </li>
             ))}
           </ul>
@@ -97,12 +109,24 @@ export default function KanbanMetricsPanel({ metrics }: { metrics: OperationalMe
   );
 }
 
+/**
+ * Hermes outcome values the locale files know are translated; anything newer keeps its raw name
+ * so it is never hidden or renamed as the core adds vocabulary.
+ */
+function outcomeLabel(t: ReturnType<typeof useT>, outcome: string): string {
+  const key = `kanban.outcome.${outcome}`;
+  const label = t(key);
+  return label === key ? outcome : label;
+}
+
 function Cell({
+  metric,
   label,
   value,
   detail,
   emphasis = false,
 }: {
+  metric?: string;
   label: string;
   value: string;
   detail?: string | null;
@@ -110,6 +134,7 @@ function Cell({
 }) {
   return (
     <div
+      data-metric={metric}
       className={`flex min-w-[96px] flex-col rounded-md border px-2 py-1 ${
         emphasis ? "border-danger bg-danger-bg" : "border-border bg-surface"
       }`}

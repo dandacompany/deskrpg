@@ -35,7 +35,7 @@ function metrics(
 // Success rate — counted using outcome vocabulary
 // ---------------------------------------------------------------------------
 
-test("only completed counts as success — the rest are not lumped together", () => {
+test("failures are not lumped together — each outcome keeps its own count", () => {
   const m = metrics([
     run({ outcome: "completed" }),
     run({ outcome: "crashed" }),
@@ -49,6 +49,36 @@ test("only completed counts as success — the rest are not lumped together", ()
     ["completed", "crashed", "gave_up", "timed_out"],
     "실패를 한 덩어리로 뭉개면 무엇을 고쳐야 하는지가 사라진다",
   );
+});
+
+test("a run handed to human review ended normally — it counts as success, not failure", () => {
+  const m = metrics([
+    run({ outcome: "review_requested" }),
+    run({ outcome: "review_requested" }),
+    run({ outcome: "crashed" }),
+  ]);
+  assert.equal(m.terminalRuns, 3);
+  assert.equal(m.successRate, 2 / 3);
+});
+
+test("a card handed to review is not finished yet — it is counted apart from throughput", () => {
+  const m = metrics([
+    run({ task_id: "waiting", outcome: "review_requested" }),
+    run({ task_id: "approved", outcome: "review_requested" }),
+    run({ task_id: "approved", outcome: "completed", started_at: 1_500, ended_at: 1_500 }),
+  ]);
+  assert.equal(m.throughput, 1, "only the approved card is done");
+  assert.equal(m.handedOff, 1, "the card still waiting for a human is counted on its own");
+});
+
+test("approval board: review hand-offs give the duration, the zero-length approval run does not", () => {
+  // Hermes records a human approval as a synthesized `completed` run with started_at == ended_at.
+  const m = metrics([
+    run({ task_id: "a", outcome: "review_requested", started_at: 1_100, ended_at: 1_130 }),
+    run({ task_id: "a", outcome: "completed", started_at: 1_500, ended_at: 1_500 }),
+  ]);
+  assert.deepEqual(m.duration, { medianMs: 30_000, samples: 1 });
+  assert.equal(m.successRate, 1);
 });
 
 test("success rate is null when there are no finished runs — showing 0% would be a lie", () => {

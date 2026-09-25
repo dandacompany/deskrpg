@@ -100,9 +100,35 @@ test("lists the outcome distribution by kind", async () => {
     run({ outcome: "completed" }),
   ]);
   const text = host.textContent ?? "";
-  for (const outcome of ["crashed", "gave_up", "completed"]) {
-    assert.ok(text.includes(outcome), `${outcome} 이 분포에 없다`);
+  for (const label of ["Crashed", "Gave up", "Completed"]) {
+    assert.ok(text.includes(label), `${label} is missing from the distribution`);
   }
+});
+
+test("outcome names are translated, and a value the screen does not know keeps its raw name", async () => {
+  const host = await mount([
+    run({ outcome: "review_requested" }),
+    run({ outcome: "brand_new_outcome" }),
+  ]);
+  const text = host.textContent ?? "";
+  assert.equal(text.includes("review_requested"), false, "the raw value must not show");
+  assert.ok(text.includes("Sent for review"));
+  assert.ok(text.includes("brand_new_outcome"), "an unknown value is never renamed or dropped");
+});
+
+test("an approval board shows its hand-offs as success and the cards waiting for a person", async () => {
+  const host = await mount([
+    run({ task_id: "a", outcome: "review_requested" }),
+    run({ task_id: "b", outcome: "review_requested" }),
+  ]);
+  const text = host.textContent ?? "";
+  assert.ok(text.includes("Handed to review2"), "the hand-off cell shows the card count");
+  assert.ok(text.includes("2 of 2"), "both runs count as successes");
+});
+
+test("the hand-off cell stays hidden when nothing is waiting for review", async () => {
+  const host = await mount([run()]);
+  assert.equal(host.querySelector('[data-metric="handedOff"]') !== null, false);
 });
 
 test("does not show that cell when there are no runs in progress", async () => {
