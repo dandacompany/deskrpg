@@ -16,6 +16,8 @@
  *  (c) Room notices — a card entering blocked (all), a top-level card entering done (R28), cron results originating
  *      from this channel (R30), and card proposals an NPC made during conversation (`card_proposal.created`). If the
  *      assigned NPC is asleep or gone, post a system message but prefix the NPC name (R22) — nothing is missed.
+ *      An unattended run blocked by the approval policy (`approval.blocked`) becomes a **private** notice
+ *      (`audience`) for whoever ordered it: the cron's creator, the card's requester, else the channel owner.
  *
  * The same event ID is never processed twice (per-channel recent-ID set, size cap tunable).
  *
@@ -28,9 +30,13 @@ import { eq, and } from "drizzle-orm";
 import { approvalTargets, approvals, db, hermesProfiles, npcs } from "@/db";
 import type { RoomMessage, RoomNotice } from "@/lib/chat-rooms-policy";
 import { appendRoomMessage, ensureOfficeRoom, getChannelOwnerId } from "@/lib/chat-rooms";
+import { requireChannelMember } from "@/lib/cron-access";
 import { findCronOrigin, resolveOriginForGateway } from "@/lib/cron-origins";
+import type { OwnerPluginClient } from "@/lib/hermes/plugin-client-types";
+import { listChannelBoards } from "@/lib/kanban-boards";
 import {
   PLUGIN_EVENT_KINDS,
+  type ApprovalBlockedEventPayload,
   type CardProposalEventPayload,
   type CronRunFinishedPayload,
   type CronRunStartedPayload,
@@ -184,7 +190,21 @@ export type IngestDeps = {
     gatewayId: string;
     profileName: string;
     jobId: string;
-  }): Promise<{ channelId: string; gatewayId: string } | null>;
+  }): Promise<{ channelId: string; gatewayId: string; createdByUserId?: string | null } | null>;
+  /**
+   * A kanban card on one of this channel's boards — null when the card isn't this channel's. `createdBy` is the
+   * plugin's `created_by` (`deskrpg:<userId>` for cards DeskRPG created with an actor). Optional; without it
+   * `approval.blocked` from kanban runs is not announced.
+   */
+  findChannelCard?(
+    channelId: string,
+    taskId: string,
+    /** The board the plugin reported, tried first when it is one of this channel's. */
+    board?: string,
+  ): Promise<{ title: string; createdBy: string | null } | null>;
+  /** Owner or member of the channel — a requester who left is not told; the owner is. */
+  isChannelMember?(channelId: string, userId: string): Promise<boolean>;
+  getChannelOwnerId?(channelId: string): Promise<string | null>;
   /** The channel's office room id. null if it cannot be created — only posting is skipped. */
   ensureOfficeRoomId(channelId: string): Promise<string | null>;
   appendRoomMessage(args: {
@@ -276,8 +296,8 @@ async function broadcast(channelId: string, event: PluginEvent, deps: IngestDeps
     deps.emitChannel(channelId, AUTOMATION_SOCKET_EVENTS.cron, { channelId, event });
     return;
   }
-  if (event.kind === "card_proposal.created") {
-    // Proposals go out only as room notices (`postNotice`) — no new socket event is created.
+  if (event.kind === "card_proposal.created" || event.kind === "approval.blocked") {
+    // Proposals and blocked runs go out only as room notices (`postNotice`) — no new socket event is created.
     return;
   }
   // Outside the allow list — events whose channel scope is unknown are not passed to the browser.
@@ -525,6 +545,11 @@ async function postNotice(channelId: string, event: PluginEvent, deps: IngestDep
     return;
   }
 
+  if (event.kind === "approval.blocked") {
+    await postApprovalBlocked(channelId, event, deps);
+    return;
+  }
+
   if (event.kind === "cron.run.finished") {
     const p = event.payload as Partial<CronRunFinishedPayload>;
     const profileName = profileOf(event);
@@ -561,6 +586,72 @@ async function postNotice(channelId: string, event: PluginEvent, deps: IngestDep
   }
 }
 
+const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+
+/**
+ * `approval.blocked` → a private notice for whoever ordered the run. Scoped to this channel: a cron job must
+ * originate here (same rule as cron results), a card must sit on one of this channel's boards. The recipient is the
+ * cron's creator or the card's requester if still in the channel, otherwise the channel owner.
+ */
+async function postApprovalBlocked(channelId: string, event: PluginEvent, deps: IngestDeps) {
+  const p = event.payload as Partial<ApprovalBlockedEventPayload>;
+  const profile = profileOf(event);
+  if (!profile || (p.source !== "cron" && p.source !== "kanban")) return;
+  // An MCP block names the MCP tool separately from the generic tool name.
+  const tool = str((p as Record<string, unknown>).mcpTool) ?? str(p.tool) ?? "";
+
+  let orderedBy: string | null = null;
+  let jobId: string | undefined;
+  let taskId: string | undefined;
+  let taskTitle: string | undefined;
+  if (p.source === "cron") {
+    jobId = str(p.jobId) ?? str(event.job_id);
+    if (!jobId) return;
+    const origin = await deps.findCronOriginChannel({
+      gatewayId: deps.gatewayId,
+      profileName: profile,
+      jobId,
+    });
+    if (!origin || origin.gatewayId !== deps.gatewayId || origin.channelId !== channelId) return;
+    orderedBy = origin.createdByUserId ?? null;
+  } else {
+    taskId = str(p.taskId) ?? str(event.task_id);
+    if (!taskId || !deps.findChannelCard) return;
+    const board = str((p as Record<string, unknown>).board) ?? str(event.board);
+    const card = await deps.findChannelCard(channelId, taskId, board);
+    if (!card) return;
+    taskTitle = card.title || undefined;
+    const m = card.createdBy?.match(/^deskrpg:(.+)$/);
+    orderedBy = m ? m[1] : null;
+  }
+
+  if (orderedBy && deps.isChannelMember && !(await deps.isChannelMember(channelId, orderedBy)))
+    orderedBy = null;
+  const audience = orderedBy ?? (await deps.getChannelOwnerId?.(channelId)) ?? null;
+  if (!audience) return;
+
+  const lookup = await deps.findNpcByProfile(channelId, profile);
+  const sender = await resolveSender(channelId, profile, deps);
+  const blockKind = p.kind === "mcp" ? "mcp" : "command";
+  const notice: Extract<RoomNotice, { kind: "approval_blocked" }> = {
+    kind: "approval_blocked",
+    audience,
+    npcId: lookup?.npc?.id ?? "",
+    npcName: sender.npcName,
+    source: p.source,
+    blockKind,
+    tool,
+    ...(jobId ? { jobId } : {}),
+    ...(taskId ? { taskId } : {}),
+    ...(taskTitle ? { taskTitle } : {}),
+    ...(str(p.command) ? { command: str(p.command) } : {}),
+    ...(p.patternKey ? { patternKey: p.patternKey } : {}),
+    ...(p.patternDescription ? { patternDescription: p.patternDescription } : {}),
+    ...(str(p.mcpServer) ? { mcpServer: str(p.mcpServer) } : {}),
+  };
+  await post(channelId, sender, notice.command ?? tool, notice, deps);
+}
+
 // ---------------------------------------------------------------------------
 // Real wiring — DB lookups and room storage. The poller (and a future push route) builds deps with this.
 // ---------------------------------------------------------------------------
@@ -568,6 +659,8 @@ async function postNotice(channelId: string, event: PluginEvent, deps: IngestDep
 export type LiveIngestWiring = {
   gatewayId: string;
   boardSlug: string;
+  /** The gateway owner's plugin client — reads cards on the channel's boards for blocked-run notices. */
+  ownerClient?: Pick<OwnerPluginClient, "kanban">;
   emitChannel: IngestDeps["emitChannel"];
   emitRoomMessage: IngestDeps["emitRoomMessage"];
 };
@@ -633,8 +726,36 @@ export function createLiveIngestDeps(wiring: LiveIngestWiring): IngestDeps {
 
     async findCronOriginChannel(key) {
       const origin = resolveOriginForGateway(await findCronOrigin(key), key.gatewayId);
-      return origin ? { channelId: origin.channelId, gatewayId: origin.gatewayId } : null;
+      return origin
+        ? {
+            channelId: origin.channelId,
+            gatewayId: origin.gatewayId,
+            createdByUserId: origin.createdByUserId,
+          }
+        : null;
     },
+
+    async findChannelCard(channelId, taskId, reportedBoard) {
+      const client = wiring.ownerClient;
+      if (!client) return null;
+      const boards = (await listChannelBoards(channelId))
+        .filter((b) => b.gatewayId === wiring.gatewayId)
+        .map((b) => b.boardSlug);
+      // Only this channel's boards are read — the reported board first, when it is one of them.
+      const order = reportedBoard && boards.includes(reportedBoard) ? [reportedBoard] : boards;
+      for (const slug of order) {
+        const res = await client.kanban.getTask(slug, taskId);
+        if (res.ok)
+          return { title: res.data.task.title, createdBy: res.data.task.created_by ?? null };
+      }
+      return null;
+    },
+
+    async isChannelMember(channelId, userId) {
+      return (await requireChannelMember(channelId, userId)).ok;
+    },
+
+    getChannelOwnerId,
 
     async ensureOfficeRoomId(channelId) {
       const ownerId = await getChannelOwnerId(channelId);

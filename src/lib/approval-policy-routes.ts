@@ -6,7 +6,12 @@
  * (428, reading included) -> writes require the gateway owner (403). Every success response is
  * the policy plus the permission fields the screen needs.
  */
+import { and, eq } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
+
+import { chatRoomMessages, chatRooms, db } from "@/db";
+import { requestEmitRoomMessage } from "@/lib/automation-registry";
+import { parseRoomNotice, type RoomNotice } from "@/lib/chat-rooms-policy";
 
 import {
   cronError,
@@ -54,6 +59,55 @@ function modesOf(body: Record<string, unknown>): {
   };
 }
 
+/**
+ * Records on the blocked-run notice the owner acted from that its rule is now allowed, so the attention row
+ * goes away and the notice shows what unblocked it. Only an `approval_blocked` notice in this channel's office
+ * room, addressed to the requester (or the requester owns the gateway). Otherwise nothing changes — the
+ * allowlist change itself already succeeded.
+ */
+async function resolveBlockedNotice(input: {
+  channelId: string;
+  messageId: string;
+  entry: string;
+  userId: string;
+  isGatewayOwner: boolean;
+}): Promise<void> {
+  const [row] = await db
+    .select({ message: chatRoomMessages })
+    .from(chatRoomMessages)
+    .innerJoin(chatRooms, eq(chatRooms.id, chatRoomMessages.roomId))
+    .where(
+      and(
+        eq(chatRoomMessages.id, input.messageId),
+        eq(chatRooms.channelId, input.channelId),
+        eq(chatRooms.kind, "office"),
+      ),
+    )
+    .limit(1);
+  const notice = parseRoomNotice(row?.message.noticeJson);
+  if (!row || notice?.kind !== "approval_blocked" || notice.resolved) return;
+  if (notice.audience !== input.userId && !input.isGatewayOwner) return;
+  const next: RoomNotice = {
+    ...notice,
+    resolved: { allowlisted: input.entry, by: input.userId, at: new Date().toISOString() },
+  };
+  await db
+    .update(chatRoomMessages)
+    .set({ noticeJson: JSON.stringify(next) })
+    .where(eq(chatRoomMessages.id, row.message.id));
+  const m = row.message;
+  requestEmitRoomMessage(m.roomId, {
+    id: m.id,
+    roomId: m.roomId,
+    senderKind: m.senderKind,
+    senderId: m.senderId,
+    senderName: m.senderName,
+    content: m.content,
+    createdAt: m.createdAt instanceof Date ? m.createdAt.toISOString() : String(m.createdAt),
+    notice: next,
+  });
+}
+
 export async function handleApprovalPolicyRoute(
   req: NextRequest,
   params: Params,
@@ -85,6 +139,7 @@ export async function handleApprovalPolicyRoute(
 
   let call: (() => Promise<PluginResponse<ApprovalPolicy>>) | null = null;
   let write = true;
+  let resolveNotice: { messageId: string; entry: string } | null = null;
   if (path.length === 0 && req.method === "GET") {
     call = () => approvals.getPolicy();
     write = false;
@@ -94,7 +149,12 @@ export async function handleApprovalPolicyRoute(
   } else if (path.length === 1 && path[0] === "allowlist") {
     const body = await readBody(req);
     const entry = typeof body.entry === "string" ? body.entry : "";
-    if (req.method === "POST") call = () => approvals.addAllowlist(entry, actor);
+    if (req.method === "POST") {
+      call = () => approvals.addAllowlist(entry, actor);
+      // Optional: the blocked-run notice the owner acted from (the attention row's id).
+      if (typeof body.noticeMessageId === "string" && body.noticeMessageId)
+        resolveNotice = { messageId: body.noticeMessageId, entry };
+    }
     if (req.method === "DELETE") call = () => approvals.removeAllowlist(entry, actor);
   }
   if (!call) return cronError(404, "not_found", "Unknown approval policy route");
@@ -105,6 +165,16 @@ export async function handleApprovalPolicyRoute(
 
   const res = await call();
   if (!res.ok) return pluginFailureResponse(res);
+  if (resolveNotice) {
+    await resolveBlockedNotice({
+      channelId: params.id,
+      ...resolveNotice,
+      userId: actor,
+      isGatewayOwner: ctx.isGatewayOwner,
+    }).catch((err: unknown) =>
+      console.warn("[approval-policy] failed to mark the blocked-run notice resolved", err),
+    );
+  }
   return NextResponse.json({
     ...res.data,
     canManage: ctx.isGatewayOwner,

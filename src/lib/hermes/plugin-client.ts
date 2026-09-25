@@ -355,8 +355,12 @@ export function createOwnerPluginClient(
         })}`,
         token,
       ),
-    createTask: (board, body) =>
-      call(`/deskrpg/kanban/tasks${query({ board })}`, token, { method: "POST", body }),
+    createTask: (board, body, actor) =>
+      call(`/deskrpg/kanban/tasks${query({ board })}`, token, {
+        method: "POST",
+        body,
+        ...(actor ? { headers: { "x-deskrpg-actor": actor } } : {}),
+      }),
     updateTask: (board, id, body) => call(task(board, id), token, { method: "PATCH", body }),
     deleteTask: (board, id) => call(task(board, id), token, { method: "DELETE" }),
     addComment: (board, id, body) =>

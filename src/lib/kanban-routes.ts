@@ -316,7 +316,7 @@ export async function createTask(req: NextRequest, channelId: string) {
     const locale = readLocaleCookie(req.headers.get("cookie"));
     task.body = appendRequesterLine(task.body, { name: mine.name, bio: mine.bio }, locale);
   }
-  const res = await ctx.client.kanban.createTask(ctx.boardSlug, task);
+  const res = await ctx.client.kanban.createTask(ctx.boardSlug, task, ctx.userId);
   if (!res.ok) return pluginFailureResponse(res);
 
   await dispatchOnce(ctx);

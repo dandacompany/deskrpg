@@ -699,3 +699,173 @@ test("a proposal event without proposal_id or title is dropped", async () => {
   assert.equal(h.posted.length, 0);
   assert.deepEqual(result.errors, []);
 });
+
+// ---------------------------------------------------------------------------
+// approval.blocked — a private notice for whoever ordered the blocked run
+// ---------------------------------------------------------------------------
+
+function blockedHarness(
+  opts: {
+    origin?: { channelId: string; gatewayId: string; createdByUserId?: string | null } | null;
+    card?: { title: string; createdBy: string | null } | null;
+    members?: string[];
+    owner?: string | null;
+  } = {},
+) {
+  const h = harness({
+    npcs: {
+      sophie: { profileName: "sophie", displayName: "Sophie", npc: { id: "npc-1", active: true } },
+    },
+  });
+  const cardLookups: Array<{ taskId: string; board?: string }> = [];
+  h.deps.findCronOriginChannel = async () =>
+    opts.origin === undefined
+      ? { channelId: CHANNEL, gatewayId: GATEWAY, createdByUserId: "user-creator" }
+      : opts.origin;
+  h.deps.findChannelCard = async (_c, taskId, board) => {
+    cardLookups.push({ taskId, board });
+    return opts.card === undefined
+      ? { title: "Weekly report", createdBy: "deskrpg:user-requester" }
+      : opts.card;
+  };
+  h.deps.isChannelMember = async (_c, userId) =>
+    (opts.members ?? ["user-creator", "user-requester", "user-owner"]).includes(userId);
+  h.deps.getChannelOwnerId = async () => (opts.owner === undefined ? "user-owner" : opts.owner);
+  return { ...h, cardLookups };
+}
+
+function blocked(payload: Record<string, unknown>) {
+  return ev({
+    kind: "approval.blocked",
+    profile: "sophie",
+    payload: { profile: "sophie", ...payload },
+  });
+}
+
+test("a blocked cron run notifies the cron's creator privately — no channel socket event", async () => {
+  const h = blockedHarness();
+  await ingest(
+    CHANNEL,
+    [
+      blocked({
+        source: "cron",
+        kind: "command",
+        jobId: "job-1",
+        tool: "terminal",
+        command: "rm -r /tmp/probe",
+        patternKey: "recursive delete",
+        patternDescription: "recursive delete",
+      }),
+    ],
+    h.deps,
+  );
+  assert.equal(h.emitted.length, 0);
+  assert.equal(h.posted.length, 1);
+  assert.deepEqual(h.posted[0].notice, {
+    kind: "approval_blocked",
+    audience: "user-creator",
+    npcId: "npc-1",
+    npcName: "Sophie",
+    source: "cron",
+    blockKind: "command",
+    tool: "terminal",
+    jobId: "job-1",
+    command: "rm -r /tmp/probe",
+    patternKey: "recursive delete",
+    patternDescription: "recursive delete",
+  });
+  assert.equal(h.roomEmits.length, 1);
+});
+
+test("a blocked cron run from another channel or gateway is not announced here", async () => {
+  for (const origin of [
+    null,
+    { channelId: "other-channel", gatewayId: GATEWAY, createdByUserId: "user-creator" },
+    { channelId: CHANNEL, gatewayId: "other-gateway", createdByUserId: "user-creator" },
+  ]) {
+    const h = blockedHarness({ origin });
+    await ingest(
+      CHANNEL,
+      [blocked({ source: "cron", kind: "command", jobId: "job-1", tool: "terminal" })],
+      h.deps,
+    );
+    assert.equal(h.posted.length, 0, JSON.stringify(origin));
+  }
+});
+
+test("a blocked kanban run notifies the card's requester, looking at the reported board first", async () => {
+  const h = blockedHarness();
+  await ingest(
+    CHANNEL,
+    [
+      blocked({
+        source: "kanban",
+        kind: "mcp",
+        taskId: "task-9",
+        board: "team-board",
+        tool: "mcp_call",
+        mcpTool: "write_note",
+        mcpServer: "notes",
+      }),
+    ],
+    h.deps,
+  );
+  assert.deepEqual(h.cardLookups, [{ taskId: "task-9", board: "team-board" }]);
+  const notice = h.posted[0].notice as Record<string, unknown>;
+  assert.equal(notice.audience, "user-requester");
+  assert.equal(notice.taskId, "task-9");
+  assert.equal(notice.taskTitle, "Weekly report");
+  assert.equal(notice.blockKind, "mcp");
+  assert.equal(notice.tool, "write_note");
+  assert.equal(notice.mcpServer, "notes");
+  assert.equal(h.posted[0].content, "write_note");
+});
+
+test("a card without a DeskRPG requester, or whose requester left, notifies the channel owner", async () => {
+  for (const [card, members] of [
+    [{ title: "Old card", createdBy: null }, undefined],
+    [{ title: "Profile card", createdBy: "sophie" }, undefined],
+    [{ title: "Left", createdBy: "deskrpg:user-gone" }, ["user-owner"]],
+  ] as const) {
+    const h = blockedHarness({ card, members: members ? [...members] : undefined });
+    await ingest(
+      CHANNEL,
+      [blocked({ source: "kanban", kind: "command", taskId: "t", tool: "terminal" })],
+      h.deps,
+    );
+    assert.equal((h.posted[0].notice as { audience: string }).audience, "user-owner", card.title);
+  }
+});
+
+test("a card that is not on this channel's boards is not announced; no owner means no notice", async () => {
+  const notHere = blockedHarness({ card: null });
+  await ingest(
+    CHANNEL,
+    [blocked({ source: "kanban", kind: "command", taskId: "t", tool: "terminal" })],
+    notHere.deps,
+  );
+  assert.equal(notHere.posted.length, 0);
+
+  const noOwner = blockedHarness({
+    origin: { channelId: CHANNEL, gatewayId: GATEWAY, createdByUserId: null },
+    owner: null,
+  });
+  await ingest(
+    CHANNEL,
+    [blocked({ source: "cron", kind: "command", jobId: "j", tool: "terminal" })],
+    noOwner.deps,
+  );
+  assert.equal(noOwner.posted.length, 0);
+});
+
+test("an unknown source or a kanban block without a card lookup is dropped", async () => {
+  const h = blockedHarness();
+  await ingest(CHANNEL, [blocked({ source: "chat", kind: "command", tool: "terminal" })], h.deps);
+  h.deps.findChannelCard = undefined;
+  await ingest(
+    CHANNEL,
+    [blocked({ source: "kanban", kind: "command", taskId: "t", tool: "terminal" })],
+    h.deps,
+  );
+  assert.equal(h.posted.length, 0);
+});

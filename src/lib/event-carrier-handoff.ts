@@ -4,6 +4,12 @@ import { channelGatewayBindings, channelKanbanBoards, channelProjects, db, nowFo
 import type { OwnerPluginClient } from "./hermes/plugin-client-types";
 import { withChannelAutomationLock } from "./channel-automation-lock";
 
+/**
+ * Event tokens only the carrier board polls. They share the plugin's `artifact_events` table and one cursor, so they
+ * are always requested together — asking for fewer would advance the cursor past the others silently.
+ */
+export const CARRIER_INCLUDE = "artifacts,card_proposals,approvals";
+
 export class EventCarrierError extends Error {
   constructor(
     readonly status: number,
@@ -206,7 +212,7 @@ export async function handoffEventCarrier(input: {
       if (sourceCursor === null) {
         const first = await input.client.events.poll({
           board: source.boardSlug,
-          include: "artifacts,card_proposals",
+          include: CARRIER_INCLUDE,
         });
         if (!first.ok) throw new EventCarrierError(first.status || 503, first.failure.code);
         if (!nonempty(first.data.cursor)) throw new EventCarrierError(502, "malformed_response");

@@ -400,6 +400,7 @@ export async function startFakePluginServer(
       if (source === "a" && e.kind.startsWith("artifact.") && !include.has("artifacts")) continue;
       if (source === "a" && e.kind.startsWith("card_proposal.") && !include.has("card_proposals"))
         continue;
+      if (source === "a" && e.kind.startsWith("approval.") && !include.has("approvals")) continue;
       if (page.length === limit) {
         hasMore = true;
         break;
@@ -606,7 +607,11 @@ export async function startFakePluginServer(
     return summary;
   }
 
-  function createTask(board: BoardRecord, body: Record<string, unknown>): Reply {
+  function createTask(
+    board: BoardRecord,
+    body: Record<string, unknown>,
+    actor: string | null = null,
+  ): Reply {
     const title = typeof body.title === "string" ? body.title.trim() : "";
     if (!title) throw badRequest("title_required");
     const id = nextId("task");
@@ -643,6 +648,8 @@ export async function startFakePluginServer(
       created_at: nowEpochSeconds(),
       comment_count: 0,
       link_counts: { parents: parents.length, children: 0 },
+      // 0.18.0: the `X-DeskRPG-Actor` of the creating request becomes `created_by`.
+      ...(actor ? { created_by: `deskrpg:${actor}` } : {}),
       ...pick(body, [
         "body",
         "assignee",
@@ -1597,7 +1604,7 @@ export async function startFakePluginServer(
       return { status: 200, body: renderBoard(board, params.get("include_archived") === "true") };
     }
     if (pathname === "/deskrpg/kanban/tasks" && method === "POST") {
-      return createTask(boardOf(params), body);
+      return createTask(boardOf(params), body, req.headers["x-deskrpg-actor"] ?? null);
     }
     if (pathname === "/deskrpg/kanban/dispatch" && method === "POST") {
       return dispatch(boardOf(params), params);

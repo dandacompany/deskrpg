@@ -16,6 +16,7 @@ import { decideResponders } from "@/lib/chat-rooms-policy";
 import { appendRoomMessage, recentRoomMessages, roomNpcMemberIds } from "@/lib/chat-rooms";
 import type { RoomRow } from "@/lib/chat-rooms";
 import { resolveNpcAdapter } from "./meeting-discussion";
+import { broadcastRoomMessage } from "./room-broadcast";
 import { getOrCreateCached } from "./promise-cache";
 import { adapterRegistry, getNpcConfigsForChannel } from "./socket-handlers";
 
@@ -62,7 +63,8 @@ class RecentCache {
  * in the transcript for rooms with frequent invites/renames. Read generously, filter, then cut the tail.
  */
 async function loadRecentEntries(roomId: string): Promise<RecentEntry[]> {
-  return (await recentRoomMessages(roomId, RECENT_LIMIT * 3))
+  // No viewer: private notices never reach an NPC transcript.
+  return (await recentRoomMessages(roomId, RECENT_LIMIT * 3, null))
     .filter((m) => m.senderKind !== "system")
     .slice(-RECENT_LIMIT)
     .map((m) => ({ id: m.id, sender: m.senderName, content: m.content }));
@@ -306,7 +308,7 @@ async function createRoomRuntime(
             content: fullResponse,
             messageId: message.id,
           });
-          io.to(socketRoom).emit("room:message", { roomId: room.id, message });
+          broadcastRoomMessage(io, room.id, message);
           return message.id;
         } catch (error) {
           tracker.update(context.requestId, { status: "failed", error: "persistence_error" });

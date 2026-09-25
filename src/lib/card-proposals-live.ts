@@ -142,12 +142,17 @@ export function liveResolveDeps(): {
 
     createTask: async ({ ctx, task }) => {
       const body = taskBody(task);
-      const res = await ctx.client.kanban.createTask(ctx.boardSlug, {
-        title: task.title,
-        review_policy: { version: 1, mode: "human", reviewer_profile: null },
-        ...(body ? { body } : {}),
-        ...(task.assignee ? { assignee: task.assignee } : {}),
-      });
+      const res = await ctx.client.kanban.createTask(
+        ctx.boardSlug,
+        {
+          title: task.title,
+          review_policy: { version: 1, mode: "human", reviewer_profile: null },
+          ...(body ? { body } : {}),
+          ...(task.assignee ? { assignee: task.assignee } : {}),
+        },
+        // Whoever accepted the proposal ordered the work.
+        ctx.userId,
+      );
       if (!res.ok) throwPluginFailure(res);
       return { task: { id: res.data.task.id } };
     },

@@ -124,3 +124,90 @@ test("401 when not logged in", async () => {
   const res = await getAttentionInbox(new NextRequest(`http://localhost/x`), channelId);
   assert.equal(res.status, 401);
 });
+
+test("a blocked unattended run is a row only for its audience; the allowlist action needs the owner and a pattern key", async () => {
+  const { ownerId, channelId } = await seedCtx();
+  const member = await seedUser(`att-m-${Math.random().toString(36).slice(2, 8)}`);
+  const { db, channelMembers } = await import("@/db");
+  await db.insert(channelMembers).values({ channelId, userId: member.id });
+  const { ensureOfficeRoom, appendRoomMessage } = await import("@/lib/chat-rooms");
+  const office = await ensureOfficeRoom(channelId, ownerId);
+  const notice = (audience: string, extra: Record<string, unknown> = {}) => ({
+    kind: "approval_blocked" as const,
+    audience,
+    npcId: "npc-1",
+    npcName: "Sophie",
+    source: "cron" as const,
+    blockKind: "command" as const,
+    tool: "terminal",
+    jobId: "job-1",
+    jobName: "Nightly cleanup",
+    command: "rm -r /tmp/probe",
+    patternKey: "recursive delete",
+    ...extra,
+  });
+  const post = (n: ReturnType<typeof notice>) =>
+    appendRoomMessage({
+      roomId: office.id,
+      senderKind: "system",
+      senderId: null,
+      senderName: "Sophie",
+      content: n.command ?? n.tool,
+      notice: n,
+    });
+  const forOwner = await post(notice(ownerId));
+  await post(
+    notice(member.id, {
+      blockKind: "mcp",
+      command: undefined,
+      patternKey: undefined,
+      mcpServer: "notes",
+      tool: "write_note",
+    }),
+  );
+  await post(
+    notice(ownerId, {
+      resolved: { allowlisted: "recursive delete", by: ownerId, at: "2026-09-25T00:00:00Z" },
+    }),
+  );
+
+  const { getAttentionInbox } = await import("@/lib/attention-routes");
+  const ownerRows = (await (await getAttentionInbox(get(ownerId, channelId), channelId)).json())
+    .rows as Array<Record<string, unknown>>;
+  const ownerBlocked = ownerRows.filter((r) => r.kind === "approval_blocked");
+  assert.equal(ownerBlocked.length, 1, "someone else's and a resolved notice are not rows");
+  assert.equal(ownerBlocked[0].id, forOwner.id);
+  assert.equal(ownerBlocked[0].title, "Nightly cleanup");
+  assert.deepEqual(ownerBlocked[0], {
+    kind: "approval_blocked",
+    id: forOwner.id,
+    title: "Nightly cleanup",
+    at: ownerBlocked[0].at,
+    requestedBy: null,
+    count: 1,
+    messageId: forOwner.id,
+    npcId: "npc-1",
+    npcName: "Sophie",
+    source: "cron",
+    blockKind: "command",
+    tool: "terminal",
+    command: "rm -r /tmp/probe",
+    patternKey: "recursive delete",
+    patternDescription: null,
+    mcpServer: null,
+    jobName: "Nightly cleanup",
+    taskTitle: null,
+    subtitle: "rm -r /tmp/probe",
+    canAllowlist: true,
+  });
+
+  const memberRows = (await (await getAttentionInbox(get(member.id, channelId), channelId)).json())
+    .rows as Array<Record<string, unknown>>;
+  const memberBlocked = memberRows.filter((r) => r.kind === "approval_blocked");
+  assert.equal(memberBlocked.length, 1);
+  // An MCP block's subtitle is the MCP tool; a member is not the gateway owner.
+  assert.equal(memberBlocked[0].subtitle, "write_note");
+  assert.equal(memberBlocked[0].tool, "write_note");
+  assert.equal(memberBlocked[0].patternKey, null);
+  assert.equal(memberBlocked[0].canAllowlist, false);
+});

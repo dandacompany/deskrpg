@@ -41,6 +41,8 @@ import {
   type ResolvedChannelBoard,
 } from "@/lib/kanban-boards";
 import type { RoomMessage } from "@/lib/chat-rooms-policy";
+import { CARRIER_INCLUDE } from "@/lib/event-carrier-handoff";
+import type { OwnerPluginClient } from "@/lib/hermes/plugin-client-types";
 import { broadcastRoomMessage } from "./room-socket";
 import {
   createLiveIngestDeps,
@@ -96,7 +98,12 @@ export type PollOnceDeps = {
     boardLinkId: string,
     patch: { eventCursor?: string; lastError: string | null },
   ): Promise<void>;
-  makeIngestDeps(ctx: { channelId: string; gatewayId: string; boardSlug: string }): IngestDeps;
+  makeIngestDeps(ctx: {
+    channelId: string;
+    gatewayId: string;
+    boardSlug: string;
+    ownerClient?: Pick<OwnerPluginClient, "kanban">;
+  }): IngestDeps;
   ingest: typeof ingest;
   pageLimit: number;
   maxPages: number;
@@ -194,6 +201,7 @@ export function createDefaultPollDeps(
       createLiveIngestDeps({
         gatewayId: ctx.gatewayId,
         boardSlug: ctx.boardSlug,
+        ownerClient: ctx.ownerClient,
         emitChannel: emit.emitChannel,
         emitRoomMessage: emit.emitRoomMessage,
       }),
@@ -313,7 +321,12 @@ async function pollBoardOnce(
 ): Promise<BoardPollOutcome> {
   const boardSlug = row.boardSlug;
   const gatewayId = resolved.binding.resource.id;
-  const ingestDeps = deps.makeIngestDeps({ channelId, gatewayId, boardSlug });
+  const ingestDeps = deps.makeIngestDeps({
+    channelId,
+    gatewayId,
+    boardSlug,
+    ownerClient: resolved.ownerClient,
+  });
   let cursor: string | null = row.eventCursor;
   let restarted = false;
   let pages = 0;
@@ -332,7 +345,8 @@ async function pollBoardOnce(
       // artifacts and the proposals in between would never arrive, with no error or log. Proposals are also
       // gateway-wide (no board/channel column), so they're attached only to the receiving board.
       // Older plugins ignore unknown tokens, so no version/capability branching is needed.
-      ...(row.isEventCarrier ? { include: "artifacts,card_proposals" } : {}),
+      // Blocked-run events (`approvals`, 0.18.0) share that table and cursor too — always together.
+      ...(row.isEventCarrier ? { include: CARRIER_INCLUDE } : {}),
     });
 
     if (!res.ok) {

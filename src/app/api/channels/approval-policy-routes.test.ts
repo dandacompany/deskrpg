@@ -193,3 +193,63 @@ test("responses never contain the profile key", async () => {
   const text = await (await call(s.owner.id, "GET", s.channel.id, s.npc.id, [])).text();
   assert.ok(!text.includes("profile-key-1234567890"));
 });
+
+test("adding a rule from a blocked-run notice marks that notice resolved, and only that one", async () => {
+  const s = await seed();
+  const { ensureOfficeRoom, appendRoomMessage, recentRoomMessages } =
+    await import("@/lib/chat-rooms");
+  const office = await ensureOfficeRoom(s.channel.id, s.owner.id);
+  const blocked = (patternKey: string) =>
+    appendRoomMessage({
+      roomId: office.id,
+      senderKind: "system",
+      senderId: null,
+      senderName: "Sophie",
+      content: "rm -r /tmp/probe",
+      notice: {
+        kind: "approval_blocked",
+        audience: s.owner.id,
+        npcId: s.npc.id,
+        npcName: "Sophie",
+        source: "cron",
+        blockKind: "command",
+        tool: "terminal",
+        jobId: "job-1",
+        patternKey,
+      },
+    });
+  const acted = await blocked("recursive delete");
+  const sameRule = await blocked("recursive delete");
+  const plain = await appendRoomMessage({
+    roomId: office.id,
+    senderKind: "system",
+    senderId: null,
+    senderName: "",
+    content: "hello",
+  });
+
+  const res = await call(s.owner.id, "POST", s.channel.id, s.npc.id, ["allowlist"], {
+    entry: "recursive delete",
+    noticeMessageId: acted.id,
+  });
+  assert.equal(res.status, 200);
+  // A notice id that is not a blocked-run notice changes nothing, and the add still succeeds.
+  const other = await call(s.owner.id, "POST", s.channel.id, s.npc.id, ["allowlist"], {
+    entry: "recursive delete",
+    noticeMessageId: plain.id,
+  });
+  assert.equal(other.status, 200);
+
+  const byId = new Map(
+    (await recentRoomMessages(office.id, 20, s.owner.id)).map((m) => [m.id, m.notice]),
+  );
+  const resolved = (id: string) =>
+    (byId.get(id) as { resolved?: { allowlisted: string; by: string } } | null)?.resolved;
+  assert.deepEqual(
+    { allowlisted: resolved(acted.id)?.allowlisted, by: resolved(acted.id)?.by },
+    { allowlisted: "recursive delete", by: s.owner.id },
+  );
+  assert.equal(resolved(sameRule.id), undefined);
+  assert.equal(byId.get(plain.id), null);
+  server.approvalPolicy("sophie").policy.allowlist = [];
+});

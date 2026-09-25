@@ -380,6 +380,9 @@ test("card creation — assignee is taken as npcId and sent as profile_name, one
   assert.equal(sentBody.unknown_field, undefined);
   assert.deepEqual(sentBody.skills, ["research"]);
   assert.equal(sentBody.goal_max_turns, 3);
+  // The creator is the card's requester — the plugin records `created_by: deskrpg:<userId>` from this header, the
+  // person told when an unattended run of the card is blocked.
+  assert.equal(sent.headers["x-deskrpg-actor"], member.id);
 
   assert.equal(dispatchCalls(before).length, 1, "생성 직후 dispatch 를 한 번 요청한다");
   assert.deepEqual(polled, [seed.channelId], "생성 직후 즉시 폴링을 요청한다");

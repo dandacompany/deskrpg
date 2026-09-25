@@ -447,9 +447,14 @@ export type KanbanApi = {
     board: string,
     opts?: { from?: number; to?: number; limit?: number },
   ): Promise<PluginResponse<KanbanRunsPage>>;
+  /**
+   * `actor` (a DeskRPG user id) is sent as `X-DeskRPG-Actor`; plugin 0.18.0 records it as the
+   * card's `created_by` (`deskrpg:<userId>`) — the person told when an unattended run is blocked.
+   */
   createTask(
     board: string,
     body: CreateTaskBody,
+    actor?: string,
   ): Promise<PluginResponse<{ task: KanbanTask; warning?: string }>>;
   updateTask(
     board: string,

@@ -51,7 +51,7 @@ async function officeNotices(channelId: string) {
   const ownerId = await getChannelOwnerId(channelId);
   assert.ok(ownerId);
   const room = await ensureOfficeRoom(channelId, ownerId!);
-  const messages = await recentRoomMessages(room.id, 20);
+  const messages = await recentRoomMessages(room.id, 20, null);
   return messages.filter((m) => m.notice?.kind === "meeting_outcome");
 }
 

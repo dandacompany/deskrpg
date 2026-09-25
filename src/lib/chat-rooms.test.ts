@@ -87,7 +87,7 @@ test("stacking messages bumps last_message_at and returns the most recent N line
     senderName: "",
     content: "3",
   });
-  const recent = await recentRoomMessages(room.id, 2);
+  const recent = await recentRoomMessages(room.id, 2, null);
   assert.deepEqual(
     recent.map((m) => m.content),
     ["2", "3"],
@@ -150,7 +150,7 @@ test("inviting an NPC member ignores duplicates, and deleting a room cascades", 
     content: "x",
   });
   await deleteRoom(room.id);
-  assert.deepEqual(await recentRoomMessages(room.id, 10), []);
+  assert.deepEqual(await recentRoomMessages(room.id, 10, null), []);
 });
 
 test('a new office room is stored as "Office" — the screen names it from its kind, so display is unchanged', async () => {

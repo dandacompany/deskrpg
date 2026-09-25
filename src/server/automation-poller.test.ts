@@ -172,7 +172,7 @@ test("events after the token are ingested and the cursor advances; the next roun
     npcName: "소피",
   });
   const { recentRoomMessages } = await import("@/lib/chat-rooms");
-  const stored = await recentRoomMessages(h.roomEmits[0].roomId, 10);
+  const stored = await recentRoomMessages(h.roomEmits[0].roomId, 10, null);
   assert.equal(stored.length, 1);
   assert.deepEqual(stored[0].notice, message.notice, "notice_json → RoomMessage.notice");
   assert.deepEqual(
@@ -691,7 +691,7 @@ test("include goes only on the receiving board, and the artifact·card-proposal 
   }
   assert.equal(byBoard.size, 2);
   for (const [board, includes] of byBoard) {
-    const expected = board === second ? null : "artifacts,card_proposals";
+    const expected = board === second ? null : "artifacts,card_proposals,approvals";
     assert.deepEqual(
       [...new Set(includes)],
       [expected],
@@ -1177,7 +1177,7 @@ test("hands over from the old carrier position even if the new receiving candida
   // would make the card below vanish too.
   const primed = await resolved.ownerClient.events.poll({
     board: second,
-    include: "artifacts,card_proposals",
+    include: "artifacts,card_proposals,approvals",
   });
   assert.ok(primed.ok);
   plugin.pushEvent({
@@ -1192,7 +1192,7 @@ test("hands over from the old carrier position even if the new receiving candida
   const ahead = await resolved.ownerClient.events.poll({
     board: second,
     cursor: primed.data.cursor,
-    include: "artifacts,card_proposals",
+    include: "artifacts,card_proposals,approvals",
   });
   assert.ok(ahead.ok);
   await h.deps.saveRow(target.id, { eventCursor: ahead.data.cursor, lastError: null });

@@ -26,6 +26,7 @@ import {
 export type { RoomMessage, RoomNotice, RoomRow } from "./chat-rooms-policy";
 import type { RoomRow } from "./chat-rooms-policy";
 import { translateServer } from "@/lib/i18n/server";
+import { isVisibleTo, visibleToRawSql, visibleToSql } from "@/lib/room-audience";
 
 function toIso(value: Date | string | null): string | null {
   if (value == null) return null;
@@ -196,7 +197,10 @@ async function memberDisplayNames(
  * The `chat_room_messages`/column names inside the subquery are raw SQL, but they're fixed
  * strings with no user input mixed in, so there's no binding-safety issue.
  */
-async function lastMessages(roomIds: string[]): Promise<Map<string, RoomMessage>> {
+async function lastMessages(
+  roomIds: string[],
+  viewerUserId: string | null,
+): Promise<Map<string, RoomMessage>> {
   const result = new Map<string, RoomMessage>();
   if (roomIds.length === 0) return result;
 
@@ -206,9 +210,12 @@ async function lastMessages(roomIds: string[]): Promise<Map<string, RoomMessage>
     .where(
       and(
         inArray(chatRoomMessages.roomId, roomIds),
+        // A private notice for someone else is neither the preview nor what hides an older preview.
+        visibleToSql(viewerUserId),
         sql`NOT EXISTS (
           SELECT 1 FROM chat_room_messages m2
           WHERE m2.room_id = chat_room_messages.room_id
+            AND ${visibleToRawSql("m2", viewerUserId)}
             AND (
               m2.created_at > chat_room_messages.created_at
               OR (m2.created_at = chat_room_messages.created_at AND m2.id > chat_room_messages.id)
@@ -217,7 +224,10 @@ async function lastMessages(roomIds: string[]): Promise<Map<string, RoomMessage>
       ),
     );
 
-  for (const row of rows) result.set(row.roomId, toRoomMessage(row));
+  for (const row of rows) {
+    const message = toRoomMessage(row);
+    if (isVisibleTo(message, viewerUserId)) result.set(row.roomId, message);
+  }
   return result;
 }
 
@@ -275,7 +285,7 @@ export async function listRoomsForUser(channelId: string, userId: string): Promi
   const roomIds = rooms.map((r) => r.id);
   const [membersByRoom, lastByRoom] = await Promise.all([
     memberDisplayNames(roomIds),
-    lastMessages(roomIds),
+    lastMessages(roomIds, userId),
   ]);
   const summaries = rooms.map((r) => toSummary(r, membersByRoom, lastByRoom));
   return sortRooms(summaries);
@@ -430,12 +440,20 @@ export async function appendRoomMessage(args: {
  * this doesn't affect new messages, it only leaves the within-one-millisecond order of old
  * conversations unstable.
  */
-export async function recentRoomMessages(roomId: string, limit: number): Promise<RoomMessage[]> {
+export async function recentRoomMessages(
+  roomId: string,
+  limit: number,
+  /** Whose view — private notices of others are left out. null (NPC transcripts) sees none. */
+  viewerUserId: string | null,
+): Promise<RoomMessage[]> {
   const rows = await db
     .select()
     .from(chatRoomMessages)
-    .where(eq(chatRoomMessages.roomId, roomId))
+    .where(and(eq(chatRoomMessages.roomId, roomId), visibleToSql(viewerUserId)))
     .orderBy(desc(chatRoomMessages.createdAt), desc(chatRoomMessages.id))
     .limit(limit);
-  return rows.reverse().map(toRoomMessage);
+  return rows
+    .reverse()
+    .map(toRoomMessage)
+    .filter((m) => isVisibleTo(m, viewerUserId));
 }

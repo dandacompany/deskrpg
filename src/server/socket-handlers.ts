@@ -28,6 +28,7 @@ import {
   type ToolApprovalRegistry,
 } from "./tool-approvals";
 import { getProfileClientForNpc } from "@/lib/hermes-profiles";
+import { userSocketRoom } from "./room-broadcast";
 import { jwtVerify } from "jose";
 import { eq, and } from "drizzle-orm";
 import {
@@ -247,7 +248,7 @@ function getDmResponseTracker(io: Server, scope: string): ChatResponseTracker {
 // Live tool approvals — set up by setupSocketHandlers (it needs `io`). Until then adapters run unwrapped.
 let toolApprovals: ToolApprovalRegistry | null = null;
 const approvalTimeoutFor = createApprovalTimeoutLookup();
-const userRoom = (userId: string) => `user:${userId}`;
+const userRoom = userSocketRoom;
 
 /** The live approval registry of this process (null before setupSocketHandlers) — for tests. */
 export function getToolApprovalRegistry(): ToolApprovalRegistry | null {

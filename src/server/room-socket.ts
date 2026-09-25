@@ -10,12 +10,13 @@ import { getRoomResponseSnapshot } from "./room-runtime";
 
 import type { Server } from "socket.io";
 import { resolveRoomAccessDecision, type RoomAccess } from "@/lib/chat-rooms-policy";
-import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
+import type { RoomSummary } from "@/lib/chat-rooms-policy";
 import { readLocaleCookie } from "@/lib/i18n/server";
 import type { UserContext } from "@/lib/user-context";
 import type * as chatRooms from "@/lib/chat-rooms";
 import type { PlayerState } from "./socket-handlers";
 import type { getOrCreateRoomRuntime, invalidateRoomRuntime } from "./room-runtime";
+import { broadcastRoomMessage, roomSocketRoom } from "./room-broadcast";
 
 export type RoomErrorCode =
   "forbidden" | "not_found" | "not_open" | "empty" | "cooldown" | "not_joined" | "invalid";
@@ -41,18 +42,7 @@ type RoomIo = {
   to(room: string): { emit(event: string, payload: unknown): void };
 };
 
-/** Socket room name for room `roomId`. Prefixed so it doesn't collide with channel rooms (`<channelId>`). */
-export function roomSocketRoom(roomId: string): string {
-  return `room-${roomId}`;
-}
-
-/**
- * Broadcasts one message to a room. Human and NPC utterances and automation notices (the poller's `ingest`) must
- * take the same path so the client receives them with one listener — `room:message` is the only such path.
- */
-export function broadcastRoomMessage(io: RoomIo, roomId: string, message: RoomMessage): void {
-  io.to(roomSocketRoom(roomId)).emit("room:message", { roomId, message });
-}
+export { broadcastRoomMessage, roomSocketRoom } from "./room-broadcast";
 
 export type RegisterRoomHandlersArgs = {
   io: Server;
@@ -219,7 +209,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       // `history` only fills `messages[roomId]` — it doesn't make the room appear opened.
       socket.emit("room:history", {
         roomId: office.id,
-        messages: await rooms.recentRoomMessages(office.id, HISTORY_LIMIT),
+        messages: await rooms.recentRoomMessages(office.id, HISTORY_LIMIT, user.userId),
       });
     },
 
@@ -233,7 +223,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
       socket.join(socketRoom(id));
       socket.emit("room:history", {
         roomId: id,
-        messages: await rooms.recentRoomMessages(id, HISTORY_LIMIT),
+        messages: await rooms.recentRoomMessages(id, HISTORY_LIMIT, user.userId),
       });
       socket.emit("room:response-snapshot", { roomId: id, responses: getRoomResponseSnapshot(id) });
     },
