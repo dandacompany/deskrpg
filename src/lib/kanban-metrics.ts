@@ -17,11 +17,21 @@ import { taskTimeMs } from "@/lib/plugin-time";
 /**
  * The outcome vocabulary for finished runs (Hermes `task_runs.outcome`).
  *
- * Only `completed` counts as success. The rest are not lumped together as one "failure" —
+ * `completed` finishes the card. The rest are not lumped together as one "failure" —
  * `gave_up` and `crashed` call for different human action, and merging them loses what
  * needs to be fixed.
  */
 export const RUN_SUCCESS_OUTCOME = "completed";
+
+/**
+ * The worker finished and, by the board's policy, handed the card to a human for review
+ * (`kanban_db.request_review`). The run ended normally, so it counts toward the success rate, but
+ * the card is not done until someone approves it — approval is recorded as a separate
+ * `completed` run, which is what throughput counts.
+ */
+export const RUN_REVIEW_OUTCOME = "review_requested";
+
+const SUCCESS_OUTCOMES: ReadonlySet<string> = new Set([RUN_SUCCESS_OUTCOME, RUN_REVIEW_OUTCOME]);
 
 export type OutcomeCount = { outcome: string; count: number };
 
@@ -36,6 +46,8 @@ export type OperationalMetrics = {
   window: { fromMs: number; toMs: number };
   /** **Number of cards** with at least one completed run in this window. The same card counts once even if it ran several times. */
   throughput: number;
+  /** **Number of cards** handed to human review in this window that were not completed in it — work done, waiting for a person. */
+  handedOff: number;
   /** Success rate among finished runs (0-1). null if there are no finished runs — writing 0% would be a lie. */
   successRate: number | null;
   /** Count of finished runs. Both the denominator for `successRate` and the sample size. */
@@ -44,7 +56,11 @@ export type OperationalMetrics = {
   openRuns: number;
   /** Count per outcome, highest first. Ties break by name — so the order doesn't shift between requeries. */
   outcomes: OutcomeCount[];
-  /** Duration of completed runs. Failed runs are excluded since their duration means something different. */
+  /**
+   * Duration of runs that ended well (`completed`, `review_requested`). Failed runs are excluded
+   * since their duration means something different, and so are zero-length runs: Hermes
+   * synthesizes one with started_at == ended_at when a human approves a card, and it measures no work.
+   */
   duration: DurationStats;
   /** Cards needing attention. Counted with the **same function** as the judgment aggregate. */
   attention: AttentionCounts;
@@ -74,6 +90,7 @@ export function computeOperationalMetrics(
   window: { fromMs: number; toMs: number },
 ): OperationalMetrics {
   const completedTasks = new Set<string>();
+  const reviewTasks = new Set<string>();
   const outcomes = new Map<string, number>();
   const durations: number[] = [];
   let terminalRuns = 0;
@@ -92,18 +109,20 @@ export function computeOperationalMetrics(
     const outcome = run.outcome ?? "unrecorded";
     outcomes.set(outcome, (outcomes.get(outcome) ?? 0) + 1);
 
-    if (outcome === RUN_SUCCESS_OUTCOME) {
+    if (SUCCESS_OUTCOMES.has(outcome)) {
       successes += 1;
-      completedTasks.add(run.task_id);
+      if (outcome === RUN_SUCCESS_OUTCOME) completedTasks.add(run.task_id);
+      else reviewTasks.add(run.task_id);
       const started = taskTimeMs(run.started_at);
       const ended = taskTimeMs(run.ended_at);
-      if (started !== null && ended !== null && ended >= started) durations.push(ended - started);
+      if (started !== null && ended !== null && ended > started) durations.push(ended - started);
     }
   }
 
   return {
     window,
     throughput: completedTasks.size,
+    handedOff: [...reviewTasks].filter((id) => !completedTasks.has(id)).length,
     successRate: terminalRuns > 0 ? successes / terminalRuns : null,
     terminalRuns,
     openRuns,
