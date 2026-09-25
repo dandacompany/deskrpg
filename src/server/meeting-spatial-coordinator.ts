@@ -1,6 +1,8 @@
 import type { MeetingSpatialState, MeetingSpatialTarget } from "../lib/meeting-discussion-state";
 
 type Target = MeetingSpatialTarget;
+/** Within this many px of a meeting spot counts as already standing on it (half a tile). */
+const HERE = 16;
 type Dependencies = {
   timeoutMs?: number;
   layout(channelId: string): Promise<{ spaceId: string; targets: Target[] }>;
@@ -25,6 +27,8 @@ type Dependencies = {
    * at reservation time, this is what detects it.
    */
   atReservation?(channelId: string, socketId: string): Promise<boolean>;
+  /** Where that socket's avatar stands now, if known. A person already on a meeting spot keeps that spot. */
+  position?(channelId: string, socketId: string): Promise<{ x: number; y: number } | null>;
   returnTarget(channelId: string, actorId: string, origin: Target): Promise<Target | null>;
   publish(state: MeetingSpatialState): void;
 };
@@ -43,8 +47,19 @@ type Session = {
 export function createMeetingSpatialCoordinator(deps: Dependencies) {
   const sessions = new Map<string, Session>();
   const playerSockets = new Map<string, string>();
+  /**
+   * Other sockets of the same person that joined the meeting while `playerSockets` stayed bound elsewhere — a second
+   * tab, or a reconnect the server has not noticed as a disconnect yet. One of them takes over when the bound socket
+   * leaves, so that socket leaving does not end the person's participation.
+   */
+  const standby = new Map<string, Set<string>>();
   const operations = new Map<string, Promise<unknown>>();
   const epochs = new Map<string, number>();
+  const waitingSockets = (key: string) => {
+    let set = standby.get(key);
+    if (!set) standby.set(key, (set = new Set()));
+    return set;
+  };
   const generations = new Map<string, number>();
   const nextGeneration = (channelId: string) => {
     const value = (generations.get(channelId) ?? 0) + 1;
@@ -71,6 +86,23 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
     clearTimeout(s.timer);
     s.resolve(ready);
   };
+  /** Ready once nobody is still walking. Arrival notices do this too, but a gathering whose last NPC was demoted in
+   * place gets no arrival notice. */
+  function settleIfGathered(s: Session) {
+    if (
+      s.state.phase === "assembling" &&
+      s.state.participants.every((p) => p.state === "seated" || p.state === "standing")
+    ) {
+      s.state.phase = "ready";
+      settle(s, true);
+    }
+  }
+  /** Attend from where it stands: no spot and nothing to walk to. A full room must not stop the meeting. */
+  function standInPlace(p: MeetingSpatialState["participants"][number]) {
+    p.state = "standing";
+    p.seatId = null;
+    p.target = null;
+  }
   function block(channelId: string, actorId: string, reasonCode: string, generation?: number) {
     const s = sessions.get(channelId);
     if (!s || (generation !== undefined && s.state.generation !== generation)) return;
@@ -163,8 +195,8 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
         }
         if (!current()) break;
         if (!target) {
-          block(channelId, actorId, "space_full", generation);
-          break;
+          standInPlace(p);
+          continue;
         }
         p.seatId = target.seatId;
         p.target = { x: target.x, y: target.y };
@@ -176,6 +208,7 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
       if (current() && npcIds.length === 0)
         block(channelId, ownerId, "actor_unavailable", generation);
       if (current()) {
+        settleIfGathered(s);
         publish(s);
         s.timer = setTimeout(() => {
           const p = s.state.participants.find((p) => p.state === "walking");
@@ -210,11 +243,25 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
     const key = `${channelId}:${userId}`;
     const current = () => sessions.get(channelId) === s;
     const previousSocket = playerSockets.get(key);
-    if (previousSocket && previousSocket !== socketId)
-      await deps.release(channelId, previousSocket);
-    if (!current()) return false;
-    playerSockets.set(key, socketId);
     const existing = s.state.participants.find((p) => p.actorId === userId && p.kind === "player");
+    if (previousSocket && previousSocket !== socketId) {
+      // A socket that is sitting on its reserved seat keeps it. Another socket of the same person — a background tab
+      // rejoining after its connection blinked, or a reconnect while the old socket still looks alive — used to take
+      // the participation over, reserve a new seat for an avatar that never walks, and freeze the gathering at
+      // "walking" (observed on staging, retries included).
+      if (existing?.state === "seated" && (await deps.atReservation?.(channelId, previousSocket))) {
+        if (!current()) return false;
+        waitingSockets(key).add(socketId);
+        return true;
+      } else {
+        await deps.release(channelId, previousSocket);
+        if (!current()) return false;
+        waitingSockets(key).add(previousSocket);
+      }
+    }
+    if (!current()) return false;
+    standby.get(key)?.delete(socketId);
+    playerSockets.set(key, socketId);
     if (existing && previousSocket === socketId && existing.state !== "blocked") return true;
     const p: MeetingSpatialState["participants"][number] = existing ?? {
       actorId: userId,
@@ -228,7 +275,17 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
       const layout = await deps.layout(channelId);
       if (!current()) return false;
       s.state.spaceId = layout.spaceId;
-      for (const target of layout.targets) {
+      // The spot the person is standing on goes first, so someone already seated is not sent to another seat.
+      const at = await deps.position?.(channelId, socketId);
+      if (!current()) return false;
+      const targets = at
+        ? [...layout.targets].sort(
+            (a, b) =>
+              Number(Math.hypot(a.x - at.x, a.y - at.y) > HERE) -
+              Number(Math.hypot(b.x - at.x, b.y - at.y) > HERE),
+          )
+        : layout.targets;
+      for (const target of targets) {
         const reserved = await deps.reserve(channelId, socketId, target);
         if (!current()) return false;
         if (reserved) {
@@ -247,18 +304,32 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
           return true;
         }
       }
-      block(channelId, userId, "space_full");
+      standInPlace(p);
+      if (s.state.phase === "assembling") settleIfGathered(s);
+      publish(s);
+      return true;
     } catch {
       if (current()) block(channelId, userId, "layout_unavailable");
     }
     return false;
   }
   async function leavePlayer(channelId: string, userId: string, socketId: string) {
-    if (playerSockets.get(`${channelId}:${userId}`) !== socketId) return;
-    playerSockets.delete(`${channelId}:${userId}`);
+    const key = `${channelId}:${userId}`;
+    const waiting = standby.get(key);
+    if (playerSockets.get(key) !== socketId) {
+      waiting?.delete(socketId);
+      return;
+    }
+    playerSockets.delete(key);
     const s = sessions.get(channelId);
     await deps.release(channelId, socketId);
     if (!s || sessions.get(channelId) !== s) return;
+    const heir = waiting?.values().next().value;
+    if (heir) {
+      waiting!.delete(heir);
+      await joinPlayer(channelId, userId, heir);
+      return;
+    }
     s.state.participants = s.state.participants.filter(
       (p) => p.kind !== "player" || p.actorId !== userId,
     );
@@ -299,6 +370,11 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
     const current = () => sessions.get(channelId) === s && s.state.generation === generation;
     s.state.phase = "returning";
     s.state.failure = null;
+    // NPCs attending in place were never sent anywhere and hold no reservation — nothing to walk back from.
+    const inPlace = (p: MeetingSpatialState["participants"][number]) =>
+      p.kind === "npc" && p.state === "standing" && !p.target;
+    for (const p of s.state.participants.filter(inPlace)) s.origins.delete(p.actorId);
+    s.state.participants = s.state.participants.filter((p) => !inPlace(p));
     const npcs = s.state.participants.filter((p) => p.kind === "npc");
     for (const p of npcs) p.state = "returning";
     publish(s);
@@ -349,6 +425,7 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
       }
       for (const key of playerSockets.keys())
         if (key.startsWith(`${channelId}:`)) playerSockets.delete(key);
+      for (const key of standby.keys()) if (key.startsWith(`${channelId}:`)) standby.delete(key);
     },
     start: (channelId: string, ownerId: string, npcIds: string[]) =>
       enqueue(channelId, () => start(channelId, ownerId, npcIds), null),

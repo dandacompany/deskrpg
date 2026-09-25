@@ -108,13 +108,11 @@ test("assembly becomes ready only once after everyone arrives on the server, and
   assert.equal(c.arrived("a", "n2", generation!), false);
 });
 
-test("a failed seat claim is reassigned to standing, and lack of space is blocked along with the target", async () => {
+test("a failed seat claim is reassigned to standing", async () => {
   const { coordinator: c, occupied, moves } = harness();
   occupied.add("80:80");
-  const generation = await c.start("a", "u1", ["n1", "n2"]);
+  await c.start("a", "u1", ["n1", "n2"]);
   assert.equal(moves[0].x, 112);
-  assert.deepEqual(c.snapshot("a")?.failure, { actorId: "n2", reasonCode: "space_full" });
-  assert.equal(await c.ready("a", generation!), false);
 });
 
 test("cancel walks back to the original actual position, and a duplicate cancel issues no duplicate commands", async () => {
@@ -384,4 +382,135 @@ test("assembly passes the opener's socket to capture — so only staff that pers
   await c.joinPlayer("a", "guest", "guest-socket");
   await c.start("a", "host", ["n1"]);
   assert.deepEqual(seen, ["host-socket"], "여는 사람이 아닌 소켓을 넘긴다");
+});
+
+/** Seats shared by several sockets of one user: which socket is on which seat, and who holds which reservation. */
+function multiSocketHarness(positions: Map<string, { x: number; y: number }>) {
+  const holders = new Map<string, string>();
+  const released: string[] = [];
+  const reserved: Array<{ actorId: string; seatId: string | null }> = [];
+  const coordinator = createMeetingSpatialCoordinator({
+    layout: async () => ({
+      spaceId: "meeting",
+      targets: [
+        { seatId: "80:80", x: 80, y: 80 },
+        { seatId: "112:80", x: 112, y: 80 },
+        { seatId: "144:80", x: 144, y: 80 },
+      ],
+    }),
+    capture: async () => ({ x: 16, y: 16, seatId: null }),
+    reserve: async (_channel, actorId, target) => {
+      const key = `${target.x}:${target.y}`;
+      const holder = holders.get(key);
+      if (holder && holder !== actorId) return false;
+      for (const [other, id] of holders) if (id === actorId) holders.delete(other);
+      holders.set(key, actorId);
+      reserved.push({ actorId, seatId: target.seatId });
+      return true;
+    },
+    move: async () => true,
+    release: async (_channel, actorId) => {
+      released.push(actorId);
+      for (const [key, holder] of holders) if (holder === actorId) holders.delete(key);
+    },
+    returnTarget: async (_channel, _actorId, origin) => origin,
+    position: async (_channel, socketId) => positions.get(socketId) ?? null,
+    atReservation: async (_channel, socketId) => {
+      const at = positions.get(socketId);
+      return (
+        !!at &&
+        [...holders].some(([key, holder]) => holder === socketId && key === `${at.x}:${at.y}`)
+      );
+    },
+    publish: () => {},
+  });
+  return { coordinator, holders, released, reserved };
+}
+
+test("a player keeps the meeting seat they are already sitting on instead of taking the first free seat", async () => {
+  const { coordinator: c, reserved } = multiSocketHarness(new Map([["s1", { x: 144, y: 80 }]]));
+  await c.joinPlayer("a", "u1", "s1");
+  assert.deepEqual(reserved, [{ actorId: "s1", seatId: "144:80" }]);
+  assert.equal(playerState(c, "u1"), "seated");
+});
+
+test("another live socket of the same user does not take over a host who is seated", async () => {
+  // Tab A sits on its seat; a background tab B of the same user (re)joins the meeting from elsewhere in the room.
+  const positions = new Map([
+    ["A", { x: 80, y: 80 }],
+    ["B", { x: 200, y: 200 }],
+  ]);
+  const { coordinator: c, released } = multiSocketHarness(positions);
+  await c.joinPlayer("a", "u1", "A");
+  assert.equal(playerState(c, "u1"), "seated");
+  await c.joinPlayer("a", "u1", "B");
+  assert.equal(
+    playerState(c, "u1"),
+    "seated",
+    "the background tab moved the seated host to a new seat",
+  );
+  assert.deepEqual(released, [], "the seated socket lost its reservation");
+
+  const generation = await c.start("a", "u1", ["n1"]);
+  const ready = c.ready("a", generation!);
+  c.arrived("a", "n1", generation!);
+  assert.equal(await ready, true);
+  // Arrival reports from the standby socket are ignored; the seated socket is the participant.
+  c.playerArrived("a", "u1", "B");
+  assert.equal(c.snapshot("a")?.phase, "ready");
+});
+
+test("when the seated socket leaves, a standby socket of the same user takes over without breaking the gathering", async () => {
+  // Reconnect: the new socket joined while the old one still looked seated, then the old one disconnects.
+  const positions = new Map([
+    ["old", { x: 80, y: 80 }],
+    ["new", { x: 80, y: 80 }],
+  ]);
+  const { coordinator: c, reserved } = multiSocketHarness(positions);
+  await c.joinPlayer("a", "u1", "old");
+  await c.joinPlayer("a", "u1", "new");
+  const generation = await c.start("a", "u1", ["n1"]);
+  const ready = c.ready("a", generation!);
+  await c.leavePlayer("a", "u1", "old");
+  assert.equal(c.snapshot("a")?.failure, null, "the old socket leaving aborted the gathering");
+  assert.equal(reserved.at(-1)?.actorId, "new");
+  assert.equal(playerState(c, "u1"), "seated");
+  c.arrived("a", "n1", generation!);
+  assert.equal(await ready, true);
+});
+
+test("a standby socket leaving does not touch the participant", async () => {
+  const positions = new Map([
+    ["A", { x: 80, y: 80 }],
+    ["B", { x: 200, y: 200 }],
+  ]);
+  const { coordinator: c, released } = multiSocketHarness(positions);
+  await c.joinPlayer("a", "u1", "A");
+  await c.joinPlayer("a", "u1", "B");
+  await c.leavePlayer("a", "u1", "B");
+  assert.equal(playerState(c, "u1"), "seated");
+  assert.deepEqual(released, []);
+});
+
+test("an NPC with no meeting spot left attends from where it stands instead of blocking the gathering", async () => {
+  const { coordinator: c, occupied, moves } = harness();
+  occupied.add("80:80");
+  const generation = await c.start("a", "u1", ["n1", "n2"]);
+  const n2 = c.snapshot("a")?.participants.find((p) => p.actorId === "n2");
+  assert.deepEqual(
+    { state: n2?.state, seatId: n2?.seatId, target: n2?.target },
+    { state: "standing", seatId: null, target: null },
+  );
+  assert.equal(c.snapshot("a")?.failure, null);
+  assert.equal(moves.length, 1, "the demoted NPC was sent somewhere");
+  const ready = c.ready("a", generation!);
+  c.arrived("a", "n1", generation!);
+  assert.equal(await ready, true);
+
+  // Ending the meeting does not walk the demoted NPC "back" — it never left.
+  await c.cancel("a");
+  assert.deepEqual(
+    moves.slice(1).map((m) => m.actorId),
+    ["n1"],
+  );
 });
