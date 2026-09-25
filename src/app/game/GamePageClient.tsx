@@ -120,6 +120,7 @@ import Modal from "@/components/ui/Modal";
 import MinutesModal from "@/components/MinutesModal";
 import CronModal from "@/components/cron/CronModal";
 import ArtifactsModal from "@/components/artifacts/ArtifactsModal";
+import ConnectorManagerModal from "@/components/connectors/ConnectorManagerModal";
 import SkillManagerModal from "@/components/skills/SkillManagerModal";
 import type { SourceTarget } from "@/components/artifacts/artifact-view-model";
 import { createArtifactsApi } from "@/components/artifacts/artifacts-api";
@@ -366,6 +367,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     npcId: string;
     npcName: string;
     skillName: string | null;
+  } | null>(null);
+  /** The employee whose connector manager is open — opened from the dialog's [Connectors] tab. */
+  const [connectorManagerNpc, setConnectorManagerNpc] = useState<{
+    npcId: string;
+    npcName: string;
+    server?: string;
   } | null>(null);
   // The report queue — derived from office notices. Only acknowledgment points are kept in the browser (`reportAckKey`).
   const [reportAck, setReportAck] = useState<ReportAck>(EMPTY_REPORT_ACK);
@@ -2774,6 +2781,15 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
               (dialogNpc?.npcId === npcId ? dialogNpc.npcName : ""),
           })
         }
+        onOpenConnectorManager={(npcId, server) =>
+          setConnectorManagerNpc({
+            npcId,
+            server,
+            npcName:
+              rosterNpcs.find((npc) => npc.id === npcId)?.name ??
+              (dialogNpc?.npcId === npcId ? dialogNpc.npcName : ""),
+          })
+        }
         onCreateTaskFromChat={(draft) => {
           if (!channelId) return;
           setChatTaskDraft({ ...draft, channelId, seq: Date.now() });
@@ -3567,6 +3583,19 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           npcName={skillManagerNpc.npcName}
           initialSkill={skillManagerNpc.skillName}
           onClose={() => setSkillManagerNpc(null)}
+        />
+      )}
+
+      {connectorManagerNpc && channelId && (
+        <ConnectorManagerModal
+          channelId={channelId}
+          npcId={connectorManagerNpc.npcId}
+          npcName={connectorManagerNpc.npcName}
+          initialServer={connectorManagerNpc.server}
+          copyTargets={rosterNpcs
+            .filter((npc) => npc.active && npc.id !== connectorManagerNpc.npcId)
+            .map((npc) => ({ npcId: npc.id, name: npc.name }))}
+          onClose={() => setConnectorManagerNpc(null)}
         />
       )}
 

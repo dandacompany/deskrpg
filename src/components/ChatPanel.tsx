@@ -28,6 +28,7 @@ import { ConversationSessionStore } from "@/app/game/conversation-session";
 import CronPanel, { type CronEventSource } from "./cron/CronPanel";
 import RoomNoticeMessage from "./chat/RoomNoticeMessage";
 import NpcCardsTab from "./chat/NpcCardsTab";
+import NpcConnectorsTab from "./connectors/NpcConnectorsTab";
 import NpcSkillsTab from "./skills/NpcSkillsTab";
 import { tabFor, type NpcPanelTab, type NpcTabState } from "./chat/npc-tab-state";
 import { createKanbanApi, KanbanApiError, type BoardResponse } from "./kanban/kanban-api";
@@ -103,6 +104,8 @@ interface ChatPanelProps {
   onMarkSeen?: (tab: "cron" | "cards") => void;
   /** "Open management" in the skills tab — opens that employee's skill management modal. Without it, the button does nothing. */
   onOpenSkillManager?: (npcId: string, skillName?: string) => void;
+  /** "Manage" in the connectors tab — opens that employee's connector manager, optionally on one server. */
+  onOpenConnectorManager?: (npcId: string, serverName?: string) => void;
   /** A card was clicked in the cards tab — points kanban at that card. Without it, it can't be clicked. */
   onOpenAssignedCard?: (taskId: string) => void;
   onCreateTaskFromChat?: (draft: ChatTaskDraft) => void;
@@ -199,6 +202,7 @@ export default function ChatPanel({
   onMarkSeen,
   onOpenAssignedCard,
   onOpenSkillManager,
+  onOpenConnectorManager,
   onCreateTaskFromChat,
   cardsRefreshTick = 0,
   cardsDebounceMs = CARDS_EVENT_DEBOUNCE_MS,
@@ -698,8 +702,8 @@ export default function ChatPanel({
                 data-testid="npc-dialog-tabs"
                 className="flex border-b border-border bg-surface/60 text-xs"
               >
-                {(["chat", "cron", "cards", "skills"] as const).map((tab) => {
-                  const unseen = tab === "chat" || tab === "skills" ? 0 : (badges?.[tab] ?? 0);
+                {(["chat", "cron", "cards", "skills", "connectors"] as const).map((tab) => {
+                  const unseen = tab === "cron" || tab === "cards" ? (badges?.[tab] ?? 0) : 0;
                   return (
                     <button
                       key={tab}
@@ -728,7 +732,17 @@ export default function ChatPanel({
                 })}
               </div>
             )}
-            {cron && npcTab === "skills" ? (
+            {cron && npcTab === "connectors" ? (
+              <div className="flex-1 min-h-0">
+                <NpcConnectorsTab
+                  channelId={cron.channelId}
+                  npcId={dialogNpc!.npcId}
+                  onOpenManager={(serverName) =>
+                    onOpenConnectorManager?.(dialogNpc!.npcId, serverName)
+                  }
+                />
+              </div>
+            ) : cron && npcTab === "skills" ? (
               <div className="flex-1 min-h-0">
                 <NpcSkillsTab
                   channelId={cron.channelId}
