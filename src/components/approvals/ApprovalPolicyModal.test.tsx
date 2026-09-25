@@ -155,3 +155,13 @@ test("escape closes", async () => {
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
   assert.equal(closed, 1);
 });
+
+test("the api sends noticeMessageId with an allowlist add only when given", async () => {
+  const { createApprovalPolicyApi } = await import("./approval-policy-api");
+  const log = mockFetch({ [ADD]: bare(policy()) });
+  const api = createApprovalPolicyApi("ch-1", "n-1");
+  await api.addAllowlist("recursive delete", "m1");
+  assert.deepEqual(log.bodies[ADD], { entry: "recursive delete", noticeMessageId: "m1" });
+  await api.addAllowlist("git push");
+  assert.deepEqual(log.bodies[ADD], { entry: "git push" });
+});

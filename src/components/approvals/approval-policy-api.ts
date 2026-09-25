@@ -57,7 +57,12 @@ export function createApprovalPolicyApi(
     get: () => req<ApprovalPolicyView>("GET", ""),
     setModes: (body: { cronMode?: ApprovalMode; singleQueryMode?: ApprovalMode }) =>
       req<ApprovalPolicy>("PUT", "", body),
-    addAllowlist: (entry: string) => req<ApprovalPolicy>("POST", "allowlist", { entry }),
+    /** `noticeMessageId` marks that blocked-run notice resolved, so the attention row drops out. */
+    addAllowlist: (entry: string, noticeMessageId?: string) =>
+      req<ApprovalPolicy>("POST", "allowlist", {
+        entry,
+        ...(noticeMessageId ? { noticeMessageId } : {}),
+      }),
     removeAllowlist: (entry: string) => req<ApprovalPolicy>("DELETE", "allowlist", { entry }),
   };
 }

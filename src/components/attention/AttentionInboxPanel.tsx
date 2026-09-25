@@ -24,6 +24,8 @@ import { createAttentionApi, type AttentionInbox } from "./attention-api";
  */
 export type ApprovalBlockedFields = {
   npcId: string;
+  /** The blocked-run notice; sent with an allowlist add so the server resolves it. */
+  messageId?: string;
   /** The blocked command (Hermes-redacted), or the MCP tool for `blockKind: "mcp"`. */
   subtitle: string;
   /** The dangerous-pattern rule key; the allowlist holds these keys, not commands. */
@@ -45,6 +47,7 @@ export function approvalBlockedFields(row: AttentionRow): ApprovalBlockedFields 
   if (!npcId) return null;
   return {
     npcId,
+    messageId: str(r.messageId),
     subtitle: str(r.subtitle) ?? "",
     patternKey: str(r.patternKey) ?? null,
     canAllowlist: r.canAllowlist === true,
@@ -223,7 +226,7 @@ function ApprovalBlockedRowView({
     if (!fields.patternKey) return;
     setState("busy");
     try {
-      await policyFor(fields.npcId).addAllowlist(fields.patternKey);
+      await policyFor(fields.npcId).addAllowlist(fields.patternKey, fields.messageId);
       setState("added");
     } catch {
       setState("failed");

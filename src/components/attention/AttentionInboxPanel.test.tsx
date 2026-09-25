@@ -204,14 +204,14 @@ const blockedRow = (over: Record<string, unknown> = {}) =>
   }) as unknown as AttentionRow;
 
 function fakePolicy(fail = false) {
-  const added: { npcId: string; entry: string }[] = [];
+  const added: { npcId: string; entry: string; noticeMessageId?: string }[] = [];
   return {
     added,
     factory: (npcId: string) =>
       ({
-        async addAllowlist(entry: string) {
+        async addAllowlist(entry: string, noticeMessageId?: string) {
           if (fail) throw new Error("boom");
-          added.push({ npcId, entry });
+          added.push({ npcId, entry, noticeMessageId });
           return {};
         },
       }) as never,
@@ -238,7 +238,9 @@ test("the owner adds the blocking rule key to the allowlist, then sees it added"
   const button = host.querySelector('[data-action="allowlist-add"]') as HTMLButtonElement;
   assert.ok((button.textContent ?? "").includes("규칙 'recursive delete'"));
   await act(async () => button.click());
-  assert.deepEqual(policy.added, [{ npcId: "n-1", entry: "recursive delete" }]);
+  assert.deepEqual(policy.added, [
+    { npcId: "n-1", entry: "recursive delete", noticeMessageId: "m1" },
+  ]);
   assert.ok(host.querySelector("[data-allowlist-added]"));
   assert.equal(host.querySelector('[data-action="allowlist-add"]'), null);
   await cleanup();
