@@ -433,6 +433,8 @@ export type ApprovalBlockedEventPayload = {
   source: "cron" | "kanban";
   kind: "command" | "mcp";
   jobId?: string;
+  /** 0.18.1 — the cron job's name from the profile's cron/jobs.json. */
+  jobName?: string;
   taskId?: string;
   runId?: string;
   tool: string;

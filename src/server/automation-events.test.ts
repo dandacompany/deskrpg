@@ -777,6 +777,24 @@ test("a blocked cron run notifies the cron's creator privately — no channel so
   assert.equal(h.roomEmits.length, 1);
 });
 
+test("a blocked cron run carries the job name the plugin read (0.18.1)", async () => {
+  const h = blockedHarness();
+  await ingest(
+    CHANNEL,
+    [
+      blocked({
+        source: "cron",
+        kind: "command",
+        jobId: "job-1",
+        jobName: "야간 정리",
+        tool: "terminal",
+      }),
+    ],
+    h.deps,
+  );
+  assert.equal((h.posted[0].notice as { jobName?: string }).jobName, "야간 정리");
+});
+
 test("a blocked cron run from another channel or gateway is not announced here", async () => {
   for (const origin of [
     null,

@@ -86,7 +86,7 @@ test("a request shows who wants to run what, with once/session/deny in order and
   );
   assert.deepEqual(buttons, ["once", "session", "deny"]);
   assert.match(text(), /한 번 허용/);
-  assert.match(text(), /이 대화에서 계속 허용/);
+  assert.match(text(), /이번 답변 동안 허용/);
   assert.match(text(), /거절/);
 });
 

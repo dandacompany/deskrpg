@@ -642,6 +642,9 @@ async function postApprovalBlocked(channelId: string, event: PluginEvent, deps: 
     blockKind,
     tool,
     ...(jobId ? { jobId } : {}),
+    ...(p.source === "cron" && str((p as Record<string, unknown>).jobName)
+      ? { jobName: str((p as Record<string, unknown>).jobName) }
+      : {}),
     ...(taskId ? { taskId } : {}),
     ...(taskTitle ? { taskTitle } : {}),
     ...(str(p.command) ? { command: str(p.command) } : {}),
