@@ -674,3 +674,70 @@ test("denied observer cannot retrieve a discussion roster", async () => {
     false,
   );
 });
+
+test("availability before player:join answers forbidden, never a channel-access reason like a password prompt", async () => {
+  // Right after a reconnect the client probes availability before player:join lands. That is
+  // "not in this channel yet", not "this channel needs a password" — routing it through the
+  // channel-access mapper turned it into a password_required toast on every reconnect.
+  for (const scenario of ["missing-player", "wrong-channel", "not-found"] as const) {
+    const calls: RecordedCall[] = [];
+    const mapped: unknown[] = [];
+    const socket = createFakeSocket("s1", calls);
+    registerMeetingSocketHandlers({
+      io: createFakeIo(calls),
+      socket,
+      deps: {
+        meetingRooms: new Map(),
+        players: new Map(
+          scenario === "missing-player"
+            ? []
+            : [["s1", { mapId: scenario === "wrong-channel" ? "b" : "a" }]],
+        ),
+        lastChatTime: new Map(),
+        chatCooldownMs: 0,
+        user: { userId: "u1" },
+        getParticipationAccess: async () => null,
+        emitChannelAccessDenied: (_socket, input) => mapped.push(input),
+      },
+    });
+    await socket.trigger("meeting:availability", { channelId: "a" });
+    assert.deepEqual(mapped, [], scenario);
+    assert.deepEqual(
+      calls.map((call) => call.payload),
+      [
+        {
+          channelId: "a",
+          action: "meeting:availability",
+          reason: "forbidden",
+          errorCode: "forbidden",
+        },
+      ],
+      scenario,
+    );
+  }
+});
+
+test("availability still reports a real channel-access denial through the mapper", async () => {
+  const calls: RecordedCall[] = [];
+  const mapped: unknown[] = [];
+  const socket = createFakeSocket("s1", calls);
+  registerMeetingSocketHandlers({
+    io: createFakeIo(calls),
+    socket,
+    deps: {
+      meetingRooms: new Map(),
+      players: new Map([["s1", { mapId: "a" }]]),
+      lastChatTime: new Map(),
+      chatCooldownMs: 0,
+      user: { userId: "u1" },
+      getParticipationAccess: async () => ({
+        access: { allowed: false, reason: "group_membership_required" },
+      }),
+      emitChannelAccessDenied: (_socket, input) => mapped.push(input),
+    },
+  });
+  await socket.trigger("meeting:availability", { channelId: "a" });
+  assert.deepEqual(mapped, [
+    { channelId: "a", action: "meeting:availability", reason: "group_membership_required" },
+  ]);
+});

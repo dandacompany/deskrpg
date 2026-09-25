@@ -166,20 +166,27 @@ export function registerMeetingSocketHandlers({
   socket.on("meeting:availability", async (payload: unknown) => {
     const { channelId } = (payload ?? {}) as { channelId?: unknown };
     if (typeof channelId !== "string" || !channelId) return;
+    // Only a real channel-access reason goes through the mapper. "Not joined here (yet)" is plain
+    // forbidden — the mapper reads any unknown reason as password_required, and the client probes
+    // right after a reconnect, before player:join lands.
     const deny = (reason?: string) => {
-      if (emitChannelAccessDenied) {
+      if (emitChannelAccessDenied && reason) {
         emitChannelAccessDenied(socket, { channelId, action: "meeting:availability", reason });
       } else {
         emitForbidden(socket, channelId, "meeting:availability");
       }
     };
     if (players.get(socket.id)?.mapId !== channelId || !getParticipationAccess) {
-      deny("forbidden");
+      deny();
       return;
     }
     const accessResult = await getParticipationAccess(channelId, user.userId).catch(() => null);
-    if (players.get(socket.id)?.mapId !== channelId || !accessResult?.access.allowed) {
-      deny(accessResult?.access.reason ?? "forbidden");
+    if (players.get(socket.id)?.mapId !== channelId || !accessResult) {
+      deny();
+      return;
+    }
+    if (!accessResult.access.allowed) {
+      deny(accessResult.access.reason);
       return;
     }
     const spatial = deps.spatial?.snapshot(channelId);

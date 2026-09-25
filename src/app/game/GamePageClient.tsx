@@ -56,6 +56,7 @@ import {
 import type { Socket } from "socket.io-client";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import { decideChatError } from "./chat-error-dispatch";
+import { shouldToastAccessDenied } from "./access-denied-toast";
 import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
 import {
   activeReportReleased,
@@ -1015,6 +1016,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             );
             return;
           }
+          if (!shouldToastAccessDenied(data)) return;
           showToastNotification(
             `channel-access-denied-${data.action ?? "unknown"}-${data.reason ?? "unknown"}`,
             message,

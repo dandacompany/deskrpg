@@ -50,6 +50,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "reasoning_effort",
   "enabledToolsets",
   "disabledSkills",
+  "clearBaseUrl",
 ]);
 
 export type ConfigPutValidation =
@@ -58,10 +59,10 @@ export type ConfigPutValidation =
   | { ok: false; errorCode: "unsupported_config_key"; unknownKeys: string[] };
 
 /**
- * Passes only the six keys the plugin allows (`model`/`provider`/`toolsets`/`reasoning_effort`/
- * `enabledToolsets`/`disabledSkills`). If the screen
+ * Passes only the keys the plugin allows (`model`/`provider`/`toolsets`/`reasoning_effort`/
+ * `enabledToolsets`/`disabledSkills`/`clearBaseUrl`). If the screen
  * accidentally sends another key the remote gives 400; blocking it here makes it clear
- * why it was blocked.
+ * why it was blocked. `clearBaseUrl` is a one-way signal (plugin 0.10.1+) — only `true` means anything.
  */
 export function validateConfigPatch(input: unknown): ConfigPutValidation {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
@@ -71,6 +72,9 @@ export function validateConfigPatch(input: unknown): ConfigPutValidation {
   const unknownKeys = Object.keys(patch).filter((k) => !ALLOWED_CONFIG_KEYS.has(k));
   if (unknownKeys.length > 0) {
     return { ok: false, errorCode: "unsupported_config_key", unknownKeys };
+  }
+  if ("clearBaseUrl" in patch && patch.clearBaseUrl !== true) {
+    return { ok: false, errorCode: "bad_request" };
   }
   return { ok: true, patch };
 }

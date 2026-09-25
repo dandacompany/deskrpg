@@ -10,6 +10,22 @@ describe("validateConfigPatch — picker keys", () => {
   });
 });
 
+describe("validateConfigPatch — clearing model.base_url", () => {
+  it("passes clearBaseUrl: true next to a provider change, as the hire wizard sends it", () => {
+    const patch = { provider: "copilot", model: "gpt-5.4-mini", clearBaseUrl: true };
+    assert.deepEqual(validateConfigPatch(patch), { ok: true, patch });
+  });
+  it("rejects any clearBaseUrl other than true, like the plugin does", () => {
+    for (const value of [false, "yes", 1, null]) {
+      assert.deepEqual(
+        validateConfigPatch({ clearBaseUrl: value }),
+        { ok: false, errorCode: "bad_request" },
+        String(value),
+      );
+    }
+  });
+});
+
 describe("validateCreateOptions", () => {
   it("cloneFrom accepts only default", () => {
     assert.deepEqual(validateCreateOptions({ name: "n" }), { ok: true });
