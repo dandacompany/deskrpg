@@ -619,8 +619,12 @@ export function createProfilePluginClient(
       call(server(name, "/test"), token, { method: "POST", body: {}, ...as(actor) }),
     job: (jobId) => call(`${mcpRoot}/jobs/${seg(jobId)}`, token),
     tools: (name) => call(server(name, "/tools"), token),
-    oauthStart: (name, actor) =>
-      call(server(name, "/oauth"), token, { method: "POST", body: {}, ...as(actor) }),
+    oauthStart: (name, actor, opts) =>
+      call(server(name, "/oauth"), token, {
+        method: "POST",
+        body: opts?.restart ? { restart: true } : {},
+        ...as(actor),
+      }),
     oauthCallback: (sessionId, body, actor) =>
       call(`${mcpRoot}/oauth/${seg(sessionId)}/callback`, token, {
         method: "POST",

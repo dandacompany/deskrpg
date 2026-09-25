@@ -295,7 +295,8 @@ const ROWS: Row[] = [
     method: "POST",
     pattern: ["servers", "*", "oauth"],
     access: "owner",
-    handler: (c, a) => c.client.mcp.oauthStart(a.args[0], c.userId),
+    handler: (c, a) =>
+      c.client.mcp.oauthStart(a.args[0], c.userId, { restart: a.body.restart === true }),
   },
 ];
 

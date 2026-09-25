@@ -88,7 +88,8 @@ export function createConnectorsApi(
     job: (jobId: string) => req<McpJob>("GET", `jobs/${seg(jobId)}`),
     tools: (name: string) =>
       req<{ tools: McpTool[]; checkedAt: string; revision: string }>("GET", srv(name, "/tools")),
-    oauthStart: (name: string) => req<McpOAuthStart>("POST", srv(name, "/oauth"), {}),
+    oauthStart: (name: string, restart = false) =>
+      req<McpOAuthStart>("POST", srv(name, "/oauth"), restart ? { restart: true } : {}),
     /** Sends the whole pasted address — the server extracts `code`/`state` itself. */
     oauthCallback: (sessionId: string, redirectUrl: string) =>
       req<{ ok: true }>("POST", `oauth/${seg(sessionId)}/callback`, { redirectUrl }),

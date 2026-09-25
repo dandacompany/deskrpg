@@ -6,7 +6,7 @@ import { parseOAuthPaste } from "@/lib/mcp-oauth-paste";
 import { useT } from "@/lib/i18n";
 
 import { connectorErrorText } from "./connector-error-text";
-import type { ConnectorsApi } from "./connectors-api";
+import { ConnectorsApiError, type ConnectorsApi } from "./connectors-api";
 import { CONNECTOR_OAUTH_TIMEOUT_MS, useConnectorJob } from "./use-connector-job";
 
 export type ConnectorOAuthStepProps = {
@@ -43,6 +43,8 @@ export default function ConnectorOAuthStep({
   const [busy, setBusy] = useState(false);
   const [approved, setApproved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The plugin reported an open attempt this screen did not start (409 oauth_in_progress).
+  const [foreign, setForeign] = useState(false);
   const job = useConnectorJob({ timeoutMs: CONNECTOR_OAUTH_TIMEOUT_MS });
   // The open session to cancel on unmount — cleared once approved or cancelled.
   const openSession = useRef<string | null>(null);
@@ -72,14 +74,14 @@ export default function ConnectorOAuthStep({
     done.current();
   };
 
-  const start = async () => {
+  const start = async (restartOpen = false) => {
     setBusy(true);
     setError(null);
     setPaste("");
     setBlocked(false);
     job.stop();
     try {
-      const res = await api.oauthStart(server);
+      const res = await api.oauthStart(server, restartOpen);
       if ("status" in res) {
         finish();
         return;
@@ -92,20 +94,25 @@ export default function ConnectorOAuthStep({
       if (w) w.opener = null;
       else setBlocked(true);
     } catch (e) {
+      // An attempt this screen does not know about (another tab, or before a reload) is still open —
+      // offer [Restart], which asks the plugin to end it first.
+      if (e instanceof ConnectorsApiError && e.code === "oauth_in_progress") setForeign(true);
       setError(connectorErrorText(t, e));
     } finally {
       setBusy(false);
     }
   };
 
-  /** Cancels the open session first — overlapping sessions race in Hermes and can wipe a fresh token. */
+  /**
+   * Ends the open attempt before starting a new one. The plugin (0.17.1 `restart`) cancels it and waits
+   * for its worker to finish — overlapping attempts race in Hermes and can wipe a fresh token.
+   */
   const restart = async () => {
-    const sid = openSession.current;
     openSession.current = null;
     setSession(null);
+    setForeign(false);
     job.stop();
-    if (sid) await api.oauthCancel(sid).catch(() => {});
-    await start();
+    await start(true);
   };
 
   const submit = async () => {
@@ -140,7 +147,7 @@ export default function ConnectorOAuthStep({
   const parsed = paste.trim() ? parseOAuthPaste(paste) : null;
   const waiting = job.state === "running";
   const canSubmit = !!session && parsed?.ok === true && !busy && !waiting && !approved;
-  const inProgress = !!session && !approved;
+  const inProgress = (!!session || foreign) && !approved;
 
   return (
     <div className="flex max-w-xl flex-col gap-3 text-sm">

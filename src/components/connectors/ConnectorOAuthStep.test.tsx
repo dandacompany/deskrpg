@@ -150,24 +150,33 @@ test("unmounting after approval does not cancel", async () => {
   assert.ok(!log.calls.some((c) => c.startsWith("DELETE")));
 });
 
-test("while a session is open, [Sign in] is disabled and [Restart] cancels it before starting anew", async () => {
+test("while a session is open, [Sign in] is disabled and [Restart] asks the plugin to restart", async () => {
   const routes: Record<string, Record<string, unknown>> = {
     [START]: { sessionId: "s1", authUrl: "https://canva.example/auth" },
-    [`DELETE ${ROOT}/oauth/s1`]: { ok: true },
   };
   const log = mockFetch(routes);
   await render(step());
   await click('[data-action="oauth-start"]');
   assert.equal(($('[data-action="oauth-start"]') as HTMLButtonElement).disabled, true);
   assert.ok($("[data-oauth-in-progress]"));
+  assert.deepEqual(log.bodies[START], {});
   routes[START] = { sessionId: "s2", authUrl: "https://canva.example/auth2" };
   await click('[data-action="oauth-restart"]');
-  const cancelAt = log.calls.indexOf(`DELETE ${ROOT}/oauth/s1`);
-  const starts = log.calls.map((c, i) => (c === START ? i : -1)).filter((i) => i >= 0);
-  assert.equal(starts.length, 2);
-  assert.ok(cancelAt > starts[0] && cancelAt < starts[1], log.calls.join("\n"));
+  // The plugin cancels the open attempt and waits for it to end — no separate cancel call.
+  assert.deepEqual(log.bodies[START], { restart: true });
+  assert.equal(log.calls.filter((c) => c.startsWith("DELETE")).length, 0, log.calls.join("\n"));
   assert.equal(opened.length, 2);
   assert.equal(opened[1][0], "https://canva.example/auth2");
+});
+
+test("an attempt the screen does not know about (409 oauth_in_progress) offers [Restart]", async () => {
+  mockFetch({
+    [START]: { status: 409, json: { code: "oauth_in_progress", message: "x", sessionId: "old" } },
+  });
+  await render(step());
+  await click('[data-action="oauth-start"]');
+  assert.ok($("[data-oauth-in-progress]"));
+  assert.ok($('[data-action="oauth-restart"]'));
 });
 
 test("after opening the tab, the paste field is highlighted as step 2 and focused", async () => {

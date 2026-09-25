@@ -3375,6 +3375,8 @@ const en: Record<string, string> = {
   "connectors.error.unreachable": "Couldn't reach the server",
   "connectors.error.oauth_in_progress":
     "Sign-in is already in progress. Use [Restart] to begin again",
+  "connectors.error.oauth_busy":
+    "The previous sign-in did not stop in time. Try [Restart] again in a moment",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   "game.camera.controls": "Camera controls",

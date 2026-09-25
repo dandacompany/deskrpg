@@ -3392,6 +3392,8 @@ const ja: Record<string, string> = {
   "connectors.error.unreachable": "サーバーに接続できませんでした",
   "connectors.error.oauth_in_progress":
     "すでに認証が進行中です。[やり直す] で最初から始めてください",
+  "connectors.error.oauth_busy":
+    "前の認証が時間内に終わりませんでした。少し待ってから [やり直す] を押してください",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   "game.camera.controls": "カメラ操作",

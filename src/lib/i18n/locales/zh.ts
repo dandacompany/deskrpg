@@ -3236,6 +3236,7 @@ const zh: Record<string, string> = {
   "connectors.error.timeout": "无响应，已中止",
   "connectors.error.unreachable": "无法连接到服务器",
   "connectors.error.oauth_in_progress": "认证已在进行中。请使用 [重新开始] 重新开始",
+  "connectors.error.oauth_busy": "上一次认证未能及时结束。请稍后再点 [重新开始]",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   "game.camera.controls": "相机控制",

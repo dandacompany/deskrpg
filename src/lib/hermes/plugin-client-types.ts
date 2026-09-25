@@ -713,7 +713,12 @@ export type McpAdminApi = {
   tools(
     name: string,
   ): Promise<PluginResponse<{ tools: McpTool[]; checkedAt: string; revision: string }>>;
-  oauthStart(name: string, actor: string): Promise<PluginResponse<McpOAuthStart>>;
+  /** `restart` (plugin 0.17.1) cancels the open attempt for this server and waits for it to end first. */
+  oauthStart(
+    name: string,
+    actor: string,
+    opts?: { restart?: boolean },
+  ): Promise<PluginResponse<McpOAuthStart>>;
   oauthCallback(
     sessionId: string,
     body: { code: string; state: string; iss?: string },

@@ -27,6 +27,7 @@ export const CONNECTOR_ERROR_CODES = [
   "oauth_not_configured",
   "oauth_start_failed",
   "oauth_in_progress",
+  "oauth_busy",
   "reload_failed",
   "job_busy",
   "missing_env",

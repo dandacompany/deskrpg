@@ -3352,6 +3352,8 @@ const ko: Record<string, string> = {
   "connectors.error.unreachable": "서버에 연결하지 못했습니다",
   "connectors.error.oauth_in_progress":
     "이미 인증이 진행 중입니다. [다시 시작]으로 새로 시작하세요",
+  "connectors.error.oauth_busy":
+    "이전 인증이 제때 끝나지 않았습니다. 잠시 뒤 [다시 시작]을 다시 누르세요",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   "game.camera.controls": "카메라 조작",
