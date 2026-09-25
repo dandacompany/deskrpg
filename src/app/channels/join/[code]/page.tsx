@@ -52,7 +52,7 @@ function JoinChannelPageInner() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg text-text">
         <div className="text-center">
-          <div className="text-xl mb-4 text-red-700">{error}</div>
+          <div className="text-xl mb-4 text-danger">{error}</div>
           <Link
             href="/channels"
             className="px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold text-white"

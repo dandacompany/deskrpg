@@ -186,9 +186,9 @@ function Notice({
 }) {
   const box =
     tone === "warn"
-      ? "border-amber-600/60 bg-amber-900/20"
+      ? "border-npc/60 bg-npc-dark/20"
       : tone === "error"
-        ? "border-red-700/60 bg-red-900/20"
+        ? "border-danger/60 bg-danger-hover/20"
         : "border-border bg-surface";
   return (
     <div

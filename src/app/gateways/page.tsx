@@ -684,7 +684,7 @@ function GatewayManagementPageInner() {
           </div>
         )}
         {notice && (
-          <div className="mb-6 rounded-lg border border-emerald-400/30 bg-surface px-4 py-3 text-sm text-emerald-700">
+          <div className="mb-6 rounded-lg border border-success/30 bg-surface px-4 py-3 text-sm text-success">
             {notice}
           </div>
         )}
@@ -988,7 +988,7 @@ function GatewayManagementPageInner() {
                               type="button"
                               onClick={() => void handleRemoveShare(share.userId)}
                               disabled={shareSaving}
-                              className="rounded bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 disabled:opacity-60"
+                              className="rounded bg-danger px-3 py-1.5 text-xs font-semibold text-white hover:bg-danger-hover disabled:opacity-60"
                             >
                               {t("common.delete")}
                             </button>

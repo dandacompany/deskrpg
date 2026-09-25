@@ -73,7 +73,7 @@ function AccountPasswordPageInner() {
         <p className="mt-1 text-text-muted">{t("account.password.description")}</p>
 
         {forced && (
-          <p className="mt-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p className="mt-4 rounded border border-npc/40 bg-npc/10 px-3 py-2 text-sm text-npc-dark">
             {t("account.password.forced")}
           </p>
         )}
@@ -111,7 +111,7 @@ function AccountPasswordPageInner() {
           </label>
 
           {error && <p className="text-sm text-danger">{error}</p>}
-          {saved && <p className="text-sm text-green-700">{t("account.password.saved")}</p>}
+          {saved && <p className="text-sm text-success">{t("account.password.saved")}</p>}
 
           <button
             type="submit"
