@@ -546,3 +546,88 @@ test("a cookie-less caller (null locale) gets the English script; an omitted loc
   assert.ok(prompts[0].startsWith("You are 단비."), prompts[0]);
   assert.ok(prompts[1].startsWith("당신은 단비 입니다."), prompts[1]);
 });
+
+describe("OpenChatRuntime — stopping a turn", () => {
+  /** Streams one chunk, then waits until aborted and resolves with what it had. */
+  function stoppable() {
+    let aborts = 0;
+    let finish!: () => void;
+    let started!: () => void;
+    const running = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const adapter = {
+      type: "mock",
+      async execute(o: AdapterExecuteOptions) {
+        o.onDelta?.("half ");
+        started();
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+        return { response: "half an answer @[하늘]", session: { sessionRef: o.sessionKey } };
+      },
+      async abort() {
+        aborts += 1;
+        finish();
+      },
+      async testConnection() {
+        return { status: "ok" as const };
+      },
+    } as NpcAdapter;
+    return { adapter, running, aborts: () => aborts };
+  }
+
+  test("a running turn is aborted, not persisted, and does not chain", async () => {
+    const s = stoppable();
+    const ended: string[] = [];
+    const cancelled: string[] = [];
+    let requestId = "";
+    const rt = new OpenChatRuntime(
+      {
+        participants: [p("n1", "단비", s.adapter), p("n2", "하늘", always("네"))],
+        recent: () => [],
+        turnTimeout: TIMEOUT,
+      },
+      {
+        onTurnQueued: (_npcId, _name, context) => {
+          requestId ||= context.requestId;
+        },
+        onTurnEnd: (npcId) => ended.push(npcId),
+        onTurnCancelled: (npcId) => cancelled.push(npcId),
+      },
+    );
+
+    const done = rt.handleHumanMessage("지호", "@[단비] 길게 써 줘");
+    await s.running;
+    assert.equal(rt.cancelTurn(requestId), true);
+    await done;
+
+    assert.equal(s.aborts(), 1);
+    assert.deepEqual(cancelled, ["n1"]);
+    assert.deepEqual(ended, [], "a stopped turn is neither persisted nor chained to 하늘");
+  });
+
+  test("a queued turn is dropped before it runs", async () => {
+    const s = stoppable();
+    const ids: string[] = [];
+    const cancelled: string[] = [];
+    const rt = new OpenChatRuntime(
+      { participants: [p("n1", "단비", s.adapter)], recent: () => [], turnTimeout: TIMEOUT },
+      {
+        onTurnQueued: (_npcId, _name, context) => ids.push(context.requestId),
+        onTurnCancelled: (npcId) => cancelled.push(npcId),
+      },
+    );
+
+    const first = rt.handleHumanMessage("지호", "@[단비] 하나");
+    await s.running;
+    const second = rt.handleHumanMessage("지호", "@[단비] 둘");
+    assert.equal(rt.cancelTurn(ids[1]), true);
+    assert.equal(rt.cancelTurn("unknown"), false);
+    rt.cancelTurn(ids[0]);
+    await Promise.all([first, second]);
+
+    assert.equal(s.aborts(), 1, "only the running turn reaches the backend");
+    assert.deepEqual(cancelled.sort(), ["n1", "n1"]);
+  });
+});

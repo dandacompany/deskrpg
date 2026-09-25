@@ -476,3 +476,58 @@ test("a room turn with no known caller asks the room's creator", async () => {
   await settle();
   assert.deepEqual(approvers, [room.createdBy]);
 });
+
+// ---------------------------------------------------------------------------
+// Stop button in chat rooms
+// ---------------------------------------------------------------------------
+
+test("the caller can stop a room NPC's reply; nothing is persisted and other users cannot stop it", async () => {
+  const { cancelRoomResponse } = await import("./room-runtime");
+  const { seeded, room } = await seedRoom({ npcCount: 1, memberCount: 1 });
+  const emitted: Emitted[] = [];
+  let aborts = 0;
+  let finish!: () => void;
+  let streamed!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    streamed = resolve;
+  });
+  const adapter = mockAdapter("");
+  adapter.execute = async (opts) => {
+    opts.onDelta?.("half");
+    streamed();
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    return { response: "half an answer", session: { sessionRef: "test" } };
+  };
+  adapter.abort = async () => {
+    aborts += 1;
+    finish();
+  };
+  invalidateRoomRuntime(room.id);
+  const rt = await getOrCreateRoomRuntime(
+    fakeIo(emitted) as never,
+    room,
+    seeded.userId,
+    injected(seeded.channelId, [{ id: seeded.npcIds[0], name: "소피", adapter }]),
+  );
+  assert.ok(rt);
+  const turn = rt.handleHumanMessage("단테", "길게", "socket", "source-1", null, "ko", "caller");
+  await ready;
+  const responses = () =>
+    (
+      ev(emitted, "room:response-state") as { response: { requestId: string; status: string } }[]
+    ).map((r) => r.response);
+  const requestId = responses()[0].requestId;
+
+  assert.equal(cancelRoomResponse(room.id, requestId, "someone-else"), false);
+  assert.equal(aborts, 0);
+  assert.equal(cancelRoomResponse(room.id, requestId, "caller"), true);
+  await turn;
+
+  assert.equal(responses().at(-1)!.status, "cancelled");
+  assert.equal(aborts, 1);
+  assert.deepEqual(await rooms.recentRoomMessages(room.id, 10, null), []);
+  assert.deepEqual(ev(emitted, "room:npc-aborted"), [], "a stop is not reported as a failure");
+  assert.equal(cancelRoomResponse(room.id, requestId, "caller"), false, "already finished");
+});

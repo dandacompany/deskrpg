@@ -70,6 +70,10 @@ interface ChatPanelProps {
   npcChatInputDisabled?: boolean;
   npcChatDisabledPlaceholder?: string;
   onSend: (message: string, files?: File[]) => void;
+  /** Stops the open NPC's reply in progress. Without it, no stop button is shown. */
+  onStopNpcResponse?: (requestId: string) => void;
+  /** Stops a room reply to the viewer's own message. Without it, no stop button is shown. */
+  onStopRoomResponse?: (roomId: string, requestId: string) => void;
   onClose: () => void;
   npcSelectList: { npcId: string; npcName: string }[] | null;
   onSelectNpc: (npcId: string, npcName: string) => void;
@@ -179,6 +183,8 @@ export default function ChatPanel({
   npcChatInputDisabled,
   npcChatDisabledPlaceholder,
   onSend,
+  onStopNpcResponse,
+  onStopRoomResponse,
   onClose,
   npcSelectList,
   onSelectNpc,
@@ -330,6 +336,8 @@ export default function ChatPanel({
   const [sessions] = useState(() => new ConversationSessionStore());
   const [, setSessionRevision] = useState(0);
   const t = useT();
+  // The newest reply still queued, thinking or streaming — what the stop button stops.
+  const activeNpcResponse = [...npcResponses].reverse().find(isActiveChatResponse) ?? null;
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelScrollRef = useRef<HTMLDivElement>(null);
@@ -372,6 +380,20 @@ export default function ChatPanel({
     () => (roomState.currentRoomId ? (roomState.messages[roomState.currentRoomId] ?? []) : []),
     [roomState.currentRoomId, roomState.messages],
   );
+  // The newest reply still running for a message the viewer sent — the server lets only its
+  // sender stop it, so replies to someone else's message get no stop button.
+  const activeRoomResponse = useMemo(() => {
+    const mine = new Set(
+      roomMessages
+        .filter((m) => m.senderKind === "user" && m.senderId === roomState.viewerUserId)
+        .map((m) => m.id),
+    );
+    return (
+      [...roomResponses]
+        .reverse()
+        .find((r) => isActiveChatResponse(r) && mine.has(r.sourceMessageId)) ?? null
+    );
+  }, [roomMessages, roomResponses, roomState.viewerUserId]);
 
   // ---- Card proposal resolution (T7) ---------------------------------------
   //
@@ -934,6 +956,11 @@ export default function ChatPanel({
                 )}
                 <ChatInput
                   onSend={onSend}
+                  onStop={
+                    onStopNpcResponse && activeNpcResponse
+                      ? () => onStopNpcResponse(activeNpcResponse.requestId)
+                      : undefined
+                  }
                   value={conversationDraft}
                   onValueChange={updateConversationDraft}
                   placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
@@ -1068,6 +1095,11 @@ export default function ChatPanel({
             )}
             <ChatInput
               onSend={onRoomSend}
+              onStop={
+                onStopRoomResponse && activeRoomResponse && roomState.currentRoomId
+                  ? () => onStopRoomResponse(roomState.currentRoomId!, activeRoomResponse.requestId)
+                  : undefined
+              }
               value={conversationDraft}
               onValueChange={updateConversationDraft}
               placeholder={t("chat.placeholder")}

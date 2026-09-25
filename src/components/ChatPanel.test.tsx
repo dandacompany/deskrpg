@@ -1453,3 +1453,86 @@ test("an open chat room shows its NPC's tool approval card above the room input,
   assert.equal(cards[0].getAttribute("data-key"), "r:2");
   assert.ok((cards[0].textContent ?? "").includes("소피"));
 });
+
+test("an NPC reply in progress shows a stop button that stops that reply", async () => {
+  const stopped: string[] = [];
+  const response = (requestId: string, status: "complete" | "streaming") => ({
+    requestId,
+    sourceMessageId: `m-${requestId}`,
+    npcId: "npc-noah",
+    npcName: "noah",
+    status,
+    content: "…",
+    updatedAt: 1,
+  });
+  const el = await mount(
+    panel(listState(), {
+      dialogNpc: { npcId: "npc-noah", npcName: "noah" },
+      npcResponses: [response("done", "complete"), response("live", "streaming")],
+      onStopNpcResponse: (requestId) => stopped.push(requestId),
+    }),
+  );
+  const stop = el.querySelector('[data-testid="chat-stop"]') as HTMLButtonElement;
+  assert.ok(stop);
+  await act(async () => stop.click());
+  assert.deepEqual(stopped, ["live"]);
+});
+
+test("with no reply in progress the NPC chat keeps its send button", async () => {
+  const el = await mount(
+    panel(listState(), {
+      dialogNpc: { npcId: "npc-noah", npcName: "noah" },
+      npcResponses: [],
+      onStopNpcResponse: () => {},
+    }),
+  );
+  assert.equal(el.querySelector('[data-testid="chat-stop"]'), null);
+});
+
+test("a room reply to my own message can be stopped; a reply to someone else's cannot", async () => {
+  const message = (id: string, senderId: string) => ({
+    id,
+    roomId: "g1",
+    senderKind: "user" as const,
+    senderId,
+    senderName: senderId,
+    content: "@Sophie help",
+    createdAt: "2026-09-10T00:00:00Z",
+  });
+  const reply = (requestId: string, sourceMessageId: string) => ({
+    requestId,
+    sourceMessageId,
+    npcId: "n1",
+    npcName: "Sophie",
+    status: "streaming" as const,
+    content: "…",
+    updatedAt: 1,
+  });
+  const stopped: string[][] = [];
+  const roomState = (messages: ReturnType<typeof message>[]): RoomState => ({
+    ...listState(),
+    view: "room",
+    messages: { g1: messages },
+  });
+
+  const mineEl = await mount(
+    panel(roomState([message("mine", "u1")]), {
+      channelChatOpen: true,
+      roomResponses: [reply("r-mine", "mine")],
+      onStopRoomResponse: (roomId, requestId) => stopped.push([roomId, requestId]),
+    }),
+  );
+  const stop = mineEl.querySelector('[data-testid="chat-stop"]') as HTMLButtonElement;
+  assert.ok(stop);
+  await act(async () => stop.click());
+  assert.deepEqual(stopped, [["g1", "r-mine"]]);
+
+  const otherEl = await mount(
+    panel(roomState([message("theirs", "u2")]), {
+      channelChatOpen: true,
+      roomResponses: [reply("r-theirs", "theirs")],
+      onStopRoomResponse: () => {},
+    }),
+  );
+  assert.equal(otherEl.querySelector('[data-testid="chat-stop"]'), null);
+});

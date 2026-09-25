@@ -508,3 +508,33 @@ test("without channel permission, a socket can't join the office room", async ()
   assert.equal(t.socket.joined.size, 0, "권한 없는 소켓은 어떤 방에도 들어가지 않는다");
   assert.equal(ev(t.emitted, "room:history").length, 0, "히스토리도 새지 않는다");
 });
+
+test("room:cancel-response stops the reply as the requesting user", async () => {
+  const emitted: Emitted[] = [];
+  const socket = fakeSocket(emitted);
+  const calls: unknown[][] = [];
+  registerRoomHandlers({
+    io: fakeIo(emitted) as never,
+    socket: socket as never,
+    deps: {
+      user: { userId: "u-caller", nickname: "dante" },
+      players: new Map(),
+      lastChatTime: new Map(),
+      cooldownMs: 2000,
+      getParticipationAccess: async () => ({ access: { allowed: true } }),
+      rooms,
+      getRuntime: async () => null,
+      invalidateRuntime: () => {},
+      cancelResponse: (...args) => {
+        calls.push(args);
+        return true;
+      },
+    },
+  });
+
+  await socket.trigger("room:cancel-response", { roomId: "r1", requestId: "q1" });
+  await socket.trigger("room:cancel-response", { roomId: "r1" });
+  await socket.trigger("room:cancel-response", null);
+
+  assert.deepEqual(calls, [["r1", "q1", "u-caller"]]);
+});

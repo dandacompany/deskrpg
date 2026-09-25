@@ -90,3 +90,21 @@ test("controlled draft reports edits and clears through its owner after sending"
   assert.deepEqual(sent, ["저장된 초안"]);
   assert.deepEqual(changes, ["수정된 초안", ""]);
 });
+
+test("while a reply is running, the send button becomes a stop button", async () => {
+  let stops = 0;
+  const el = await mount(
+    <I18nProvider initialLocale="ko">
+      <ChatInput onSend={() => {}} onStop={() => (stops += 1)} />
+    </I18nProvider>,
+  );
+  const stop = el.querySelector('[data-testid="chat-stop"]') as HTMLButtonElement;
+  assert.ok(stop, "a stop button replaces send");
+  assert.equal(stop.disabled, false, "stopping needs no draft");
+  assert.equal(
+    [...el.querySelectorAll("button")].some((b) => b.textContent?.trim() === "전송"),
+    false,
+  );
+  await act(async () => stop.click());
+  assert.equal(stops, 1);
+});

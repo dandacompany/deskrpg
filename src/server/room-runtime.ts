@@ -132,6 +132,17 @@ const roomChannels = new Map<string, string>();
 const roomGenerations = new Map<string, symbol>();
 const responseTrackers = new Map<string, ChatResponseTracker>();
 
+/** roomId → stops one reply of that room's live runtime, if the given user asked for it. */
+const roomCancelers = new Map<string, (requestId: string, userId: string) => boolean>();
+
+/**
+ * The stop button in a room. Only the human whose message started the turn — kept through
+ * chained NPC turns — may stop it. False when that is someone else or the reply already ended.
+ */
+export function cancelRoomResponse(roomId: string, requestId: string, userId: string): boolean {
+  return roomCancelers.get(roomId)?.(requestId, userId) ?? false;
+}
+
 export function getRoomResponseSnapshot(roomId: string) {
   return responseTrackers.get(roomId)?.snapshot() ?? [];
 }
@@ -255,9 +266,11 @@ async function createRoomRuntime(
   });
   responseTrackers.set(room.id, tracker);
   const buffers = new Map<string, string>();
+  // requestId → the human whose message started that turn; the only one who may stop it.
+  const requestCallers = new Map<string, string>();
   let disposed = false;
 
-  return new RoomChatRuntime(
+  const runtime = new RoomChatRuntime(
     recent,
     room.id,
     {
@@ -269,11 +282,22 @@ async function createRoomRuntime(
       selectResponders: (mentioned) => decideResponders(room.replyPolicy, mentioned, memberNpcIds),
     },
     {
-      onTurnQueued: (npcId, npcName, context) => tracker.accept({ ...context, npcId, npcName }),
+      onTurnQueued: (npcId, npcName, context) => {
+        if (context.callerUserId) requestCallers.set(context.requestId, context.callerUserId);
+        tracker.accept({ ...context, npcId, npcName });
+      },
       onDisposed: () => {
         disposed = true;
+        if (roomCancelers.get(room.id) === cancel) roomCancelers.delete(room.id);
         tracker.cancelAll();
         buffers.clear();
+        requestCallers.clear();
+      },
+      onTurnCancelled: (npcId, context) => {
+        buffers.delete(context.requestId);
+        requestCallers.delete(context.requestId);
+        turnCallers.delete(npcId);
+        tracker.update(context.requestId, { status: "cancelled" });
       },
       onQueueFull: (npcId) => {
         io.to(socketRoom).emit("room:npc-aborted", {
@@ -307,6 +331,7 @@ async function createRoomRuntime(
       },
       onTurnEnd: async (npcId, fullResponse, meta, context) => {
         buffers.delete(context.requestId);
+        requestCallers.delete(context.requestId);
         turnCallers.delete(npcId);
         if (disposed) return;
         const npc = participants.find((x) => x.npcId === npcId);
@@ -365,4 +390,14 @@ async function createRoomRuntime(
       },
     },
   );
+  // Marking the reply cancelled first answers the button at once; the runtime then drops a
+  // queued turn or aborts the running one.
+  const cancel = (requestId: string, userId: string): boolean => {
+    if (requestCallers.get(requestId) !== userId || !tracker.isActive(requestId)) return false;
+    tracker.update(requestId, { status: "cancelled" });
+    runtime.cancelTurn(requestId);
+    return true;
+  };
+  roomCancelers.set(room.id, cancel);
+  return runtime;
 }

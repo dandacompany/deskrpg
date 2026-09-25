@@ -218,3 +218,34 @@ test("slow source persistence cannot reorder admitted DMs, and failed source wri
   assert.deepEqual(order, ["first", "second"]);
   assert.equal(tracker.snapshot().at(-1)?.error, "persistence_error");
 });
+
+test("a run that starts after the DM was cancelled is stopped as soon as its id is known", async () => {
+  const { executeDmAdapter } = await import("./dm-response-runtime");
+  const controller = new AbortController();
+  let onRunStarted: (runId: string) => void = () => {};
+  let aborts = 0;
+  const pending = executeDmAdapter(
+    {
+      type: "fake",
+      execute: async (options) => {
+        onRunStarted = (id) => options.onRunStarted?.(id);
+        return new Promise<never>(() => {});
+      },
+      abort: async () => {
+        aborts++;
+      },
+      testConnection: async () => ({ status: "ok" as const }),
+    },
+    { sessionKey: "s", prompt: "hi" },
+    { idleMs: 1000, maxMs: 1000 },
+    controller.signal,
+  ).catch((err: Error) => err.message);
+  await new Promise((resolve) => setImmediate(resolve));
+  // Cancelled while the run is still being created — the adapter has no run id to stop yet.
+  controller.abort();
+  assert.equal(await pending, "DM cancelled");
+  assert.equal(aborts, 1);
+
+  onRunStarted("run-late");
+  assert.equal(aborts, 2, "the late run is stopped once its id exists");
+});
