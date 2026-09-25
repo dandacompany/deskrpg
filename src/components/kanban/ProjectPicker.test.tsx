@@ -125,13 +125,13 @@ test("no archive button for a member, or for the last active project", async () 
     options: [project("a", "planned", true), project("b")],
     canManage: false,
   });
-  assert.equal(member.host.querySelector("[data-project-archive]"), null);
+  assert.ok(!member.host.querySelector("[data-project-archive]"));
   await member.cleanup();
   const last = await mount({
     options: [project("a", "planned", true), project("c", "completed")],
     canManage: true,
   });
-  assert.equal(last.host.querySelector("[data-project-archive]"), null);
+  assert.ok(!last.host.querySelector("[data-project-archive]"));
   await last.cleanup();
 });
 
@@ -145,7 +145,7 @@ test("an archived selection offers reopening instead of archiving", async () => 
       reopened.push(id);
     },
   });
-  assert.equal(f.host.querySelector("[data-project-archive]"), null);
+  assert.ok(!f.host.querySelector("[data-project-archive]"));
   await click(f.host.querySelector("[data-project-reopen]"));
   await f.settle();
   assert.deepEqual(reopened, ["c"]);
