@@ -26,3 +26,13 @@ export function formatPollPasses(
     (value) => names.get(value) ?? (npcs.some((npc) => npc.name === value) ? value : unknownName),
   );
 }
+
+/**
+ * The locale key for the poll status note, or null when there is nothing to add. The server
+ * sends `polling` when a poll starts, which the heading already says; any other value is a
+ * status this client does not know, shown as a generic phrase rather than its raw code.
+ */
+export function pollStatusNoteKey(status: unknown): string | null {
+  if (typeof status !== "string" || status === "" || status === "polling") return null;
+  return "meeting.pollStatus.other";
+}

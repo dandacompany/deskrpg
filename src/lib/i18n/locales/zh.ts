@@ -2053,6 +2053,7 @@ const zh: Record<string, string> = {
   "meeting.discussionIntro": "与NPC开始结构化讨论",
   "meeting.aborted": "(已中断)",
   "meeting.polling": "投票中",
+  "meeting.pollStatus.other": "进行中",
   "meeting.raiseLabel": "发言:",
   "meeting.passLabel": "跳过:",
 

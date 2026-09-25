@@ -2122,6 +2122,7 @@ const ko: Record<string, string> = {
   "meeting.discussionIntro": "NPC와 구조화된 토론을 시작하세요",
   "meeting.aborted": "(중단됨)",
   "meeting.polling": "투표 중",
+  "meeting.pollStatus.other": "진행 중",
   "meeting.raiseLabel": "발언:",
   "meeting.passLabel": "패스:",
 

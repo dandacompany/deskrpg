@@ -2129,6 +2129,7 @@ const en: Record<string, string> = {
   "meeting.discussionIntro": "Start a structured discussion with NPCs",
   "meeting.aborted": "(aborted)",
   "meeting.polling": "Polling",
+  "meeting.pollStatus.other": "In progress",
   "meeting.raiseLabel": "Raise:",
   "meeting.passLabel": "Pass:",
 
