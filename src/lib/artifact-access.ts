@@ -12,6 +12,7 @@ import { db, hermesProfiles, npcs } from "@/db";
 
 import {
   cronError,
+  gateError,
   pluginFailureResponse,
   pluginGateResponse,
   requireChannelMember,
@@ -45,7 +46,7 @@ export async function resolveArtifactChannelContext(input: {
   if (!resolved.ok) {
     return {
       ok: false,
-      response: cronError(409, "gateway_not_bound", "Channel has no gateway bound"),
+      response: gateError("gateway_not_bound", "Channel has no gateway bound"),
     };
   }
   if (!resolved.pluginGate.ok)
@@ -54,8 +55,7 @@ export async function resolveArtifactChannelContext(input: {
   if (!info.capabilities.includes("artifacts")) {
     return {
       ok: false,
-      response: cronError(
-        428,
+      response: gateError(
         "plugin_upgrade_required",
         `deskrpg-hermes-plugin ${ARTIFACTS_MIN_VERSION}+ required`,
         {

@@ -23,6 +23,7 @@ import {
   type PluginGate as AutomationGate,
 } from "@/lib/automation-gate";
 import { channelMembers, channels, db, gatewayResources, hermesProfiles, npcs } from "@/db";
+import { GATE_ERROR_STATUS, type GateErrorCode } from "@/lib/gate-error-status";
 import { decryptGatewayToken, getChannelGatewayBinding } from "@/lib/gateway-resources";
 import type { PluginInfo } from "@/lib/hermes/deskrpg-plugin-types";
 import { createProfilePluginClient } from "@/lib/hermes/plugin-client";
@@ -38,6 +39,11 @@ export function cronError(status: number, code: string, message: string, extra?:
   return NextResponse.json({ code, message, ...(extra ?? {}) } satisfies CronErrorBody, {
     status,
   });
+}
+
+/** A gate failure — its status comes from `GATE_ERROR_STATUS`, never a literal at the call site. */
+export function gateError(code: GateErrorCode, message: string, extra?: object) {
+  return cronError(GATE_ERROR_STATUS[code], code, message, extra);
 }
 
 // ---------------------------------------------------------------------------
@@ -92,8 +98,7 @@ export function pluginGateResponse(gate: Extract<AutomationGate, { ok: false }>)
   switch (gate.code) {
     case "plugin_upgrade_required": {
       const verdict = gate.verdict;
-      return cronError(
-        428,
+      return gateError(
         "plugin_upgrade_required",
         `deskrpg-hermes-plugin ${verdict?.minVersion ?? ""}+ required (${verdict?.reason ?? gate.reason})`,
         {
@@ -103,21 +108,17 @@ export function pluginGateResponse(gate: Extract<AutomationGate, { ok: false }>)
       );
     }
     case "plugin_absent":
-      return cronError(
-        404,
-        "plugin_absent",
-        "deskrpg-hermes-plugin is not installed on this gateway",
-      );
+      return gateError("plugin_absent", "deskrpg-hermes-plugin is not installed on this gateway");
     case "plugin_unauthorized":
-      return cronError(401, "plugin_unauthorized", "gateway token was rejected by the plugin");
+      return gateError("plugin_unauthorized", "gateway token was rejected by the plugin");
     case "plugin_unknown":
       if (gate.transport === "timeout") {
-        return cronError(504, "timeout", "gateway did not answer the plugin probe in time");
+        return gateError("timeout", "gateway did not answer the plugin probe in time");
       }
       if (gate.transport === "unreachable") {
-        return cronError(503, "unreachable", "gateway could not be reached for the plugin probe");
+        return gateError("unreachable", "gateway could not be reached for the plugin probe");
       }
-      return cronError(503, "plugin_unknown", gate.reason);
+      return gateError("plugin_unknown", gate.reason);
   }
 }
 
@@ -172,7 +173,7 @@ export async function resolveCronChannelContext(input: {
   if (!binding) {
     return {
       ok: false,
-      response: cronError(409, "gateway_not_bound", "Channel has no gateway bound"),
+      response: gateError("gateway_not_bound", "Channel has no gateway bound"),
     };
   }
 

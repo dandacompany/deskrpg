@@ -23,6 +23,7 @@ import { liveResolveDeps, proposalFailureResponse } from "@/lib/card-proposals-l
 import { readWorkingSnapshot } from "@/lib/automation-registry";
 import {
   cronError,
+  gateError,
   ensureAutomationPlugin,
   pluginFailureResponse,
   requireChannelMember,
@@ -771,7 +772,7 @@ export async function getAutomationStatus(req: NextRequest, channelId: string) {
   if (!access.ok) return access.response;
 
   const binding = await getChannelGatewayBinding(channelId);
-  if (!binding) return cronError(409, "gateway_not_bound", "Channel has no gateway bound");
+  if (!binding) return gateError("gateway_not_bound", "Channel has no gateway bound");
 
   // If the cache is stale, it's refreshed here. The judgment result itself isn't used — status is read from the cache.
   await ensureAutomationPlugin(binding.resource);
