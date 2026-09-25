@@ -3600,6 +3600,7 @@ const ja: Record<string, string> = {
   "approvals.status.expired": "時間切れ — Hermes が拒否しました",
   "approvals.status.failed": "判断を伝えられませんでした",
   "approvals.pending": "{npc} は {approver} さんの承認を待っています",
+  "approvals.roomBadge": "承認待ち {n}",
 };
 
 export default ja;

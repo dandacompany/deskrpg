@@ -1,7 +1,11 @@
 "use client";
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 
-import { useToolApprovals, type ToolApprovalSocket } from "./use-tool-approvals";
+import {
+  pendingApprovalsByRoom,
+  useToolApprovals,
+  type ToolApprovalSocket,
+} from "./use-tool-approvals";
 
 type SharedApprovals = ReturnType<typeof useToolApprovals>;
 
@@ -28,4 +32,19 @@ export function ToolApprovalsProvider({
 /** The page-wide approvals when a provider is mounted, otherwise null. */
 export function useSharedToolApprovals(): SharedApprovals | null {
   return useContext(ToolApprovalsContext);
+}
+
+const NO_COUNTS: Record<string, number> = {};
+
+/**
+ * Pending approvals per chat room, for the navigator's room badges. Empty without a provider.
+ */
+export function useRoomApprovalCounts(): Record<string, number> {
+  const shared = useContext(ToolApprovalsContext);
+  const cards = shared?.cards;
+  const waiting = shared?.waiting;
+  return useMemo(
+    () => (cards && waiting ? pendingApprovalsByRoom(cards, waiting) : NO_COUNTS),
+    [cards, waiting],
+  );
 }

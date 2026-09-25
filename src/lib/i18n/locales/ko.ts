@@ -3555,6 +3555,7 @@ const ko: Record<string, string> = {
   "approvals.status.expired": "시간 초과 — Hermes 가 거부했습니다",
   "approvals.status.failed": "결정을 전달하지 못했습니다",
   "approvals.pending": "{npc}이(가) {approver}님의 승인을 기다리는 중",
+  "approvals.roomBadge": "승인 대기 {n}",
 };
 
 export default ko;

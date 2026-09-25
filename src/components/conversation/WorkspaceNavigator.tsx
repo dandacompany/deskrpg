@@ -5,6 +5,7 @@ import { sortRooms, type RoomSummary } from "@/lib/chat-rooms-policy";
 import { roomMessagePreview } from "@/components/rooms/room-message-preview";
 import type { DmThreadEntry } from "@/lib/dm-threads";
 import { useT } from "@/lib/i18n";
+import { useRoomApprovalCounts } from "@/components/approvals/ToolApprovalsProvider";
 import ParticipantRow from "./ParticipantRow";
 
 /**
@@ -90,6 +91,8 @@ function npcDetail(npc: NavigatorNpc, t: ReturnType<typeof useT>): string {
 
 export default function WorkspaceNavigator(props: Props) {
   const t = useT();
+  // A room approval raised while another view is open would otherwise go unseen until it expires.
+  const roomApprovals = useRoomApprovalCounts();
   const [menuNpcId, setMenuNpcId] = useState<string | null>(null);
   useEffect(() => {
     if (!menuNpcId) return;
@@ -151,29 +154,45 @@ export default function WorkspaceNavigator(props: Props) {
             </button>
           </div>
           <div className="space-y-1">
-            {sortRooms(props.rooms).map((room) => (
-              <button
-                type="button"
-                key={room.id}
-                onClick={() => props.onSelectRoom(room.id)}
-                aria-current={room.id === props.currentRoomId ? "page" : undefined}
-                aria-label={room.kind === "office" ? t("room.office") : room.name}
-                className={`w-full rounded-lg px-3 py-2 text-left ${
-                  room.id === props.currentRoomId
-                    ? "bg-surface-raised"
-                    : "hover:bg-surface-raised/70"
-                }`}
-              >
-                <span className="block truncate text-sm font-medium text-text">
-                  {room.kind === "office" ? t("room.office") : room.name}
-                </span>
-                {room.lastMessage && (
-                  <span className="mt-0.5 block truncate text-[11px] text-text-dim">
-                    {room.lastMessage.senderName}: {roomMessagePreview(room.lastMessage, t)}
+            {sortRooms(props.rooms).map((room) => {
+              const roomName = room.kind === "office" ? t("room.office") : room.name;
+              const approvals = room.id === props.currentRoomId ? 0 : (roomApprovals[room.id] ?? 0);
+              const approvalBadge =
+                approvals > 0 ? t("approvals.roomBadge", { n: approvals }) : null;
+              return (
+                <button
+                  type="button"
+                  key={room.id}
+                  onClick={() => props.onSelectRoom(room.id)}
+                  aria-current={room.id === props.currentRoomId ? "page" : undefined}
+                  aria-label={approvalBadge ? `${roomName}, ${approvalBadge}` : roomName}
+                  className={`w-full rounded-lg px-3 py-2 text-left ${
+                    room.id === props.currentRoomId
+                      ? "bg-surface-raised"
+                      : "hover:bg-surface-raised/70"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="block min-w-0 flex-1 truncate text-sm font-medium text-text">
+                      {roomName}
+                    </span>
+                    {approvalBadge && (
+                      <span
+                        data-room-approvals={room.id}
+                        className="shrink-0 rounded bg-npc/15 px-1.5 py-0.5 text-[10px] font-semibold text-npc-dark"
+                      >
+                        {approvalBadge}
+                      </span>
+                    )}
                   </span>
-                )}
-              </button>
-            ))}
+                  {room.lastMessage && (
+                    <span className="mt-0.5 block truncate text-[11px] text-text-dim">
+                      {room.lastMessage.senderName}: {roomMessagePreview(room.lastMessage, t)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
             {(props.dmThreads ?? []).map((thread) => (
               <button
                 type="button"

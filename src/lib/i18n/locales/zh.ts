@@ -3428,6 +3428,7 @@ const zh: Record<string, string> = {
   "approvals.status.expired": "已超时 — Hermes 已拒绝",
   "approvals.status.failed": "无法传达决定",
   "approvals.pending": "{npc} 正在等待 {approver} 的批准",
+  "approvals.roomBadge": "待批准 {n}",
 };
 
 export default zh;

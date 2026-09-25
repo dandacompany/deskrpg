@@ -84,6 +84,32 @@ export function approvalsReducer(state: State, action: Action): State {
   }
 }
 
+/**
+ * Pending chat-room approvals per room id — my own cards plus other people's waiting lines
+ * (a line with its own card counts once). DM and meeting approvals have no room and are left
+ * out. With `now`, a card past its deadline no longer counts; without it, it counts until the
+ * hook folds it away.
+ */
+export function pendingApprovalsByRoom(
+  cards: readonly ApprovalCardState[],
+  waiting: readonly ApprovalWaiting[],
+  now?: number,
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const seen = new Set<string>();
+  for (const { request, status } of cards) {
+    if (request.context !== "room" || !request.roomId || status !== "pending") continue;
+    if (now !== undefined && request.expiresAt <= now) continue;
+    seen.add(request.key);
+    counts[request.roomId] = (counts[request.roomId] ?? 0) + 1;
+  }
+  for (const line of waiting) {
+    if (!line.roomId || seen.has(line.key)) continue;
+    counts[line.roomId] = (counts[line.roomId] ?? 0) + 1;
+  }
+  return counts;
+}
+
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object";
 
 /**
