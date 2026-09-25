@@ -6,7 +6,7 @@
  * the previous staff member's tab never flashes for a frame.
  */
 
-export type NpcPanelTab = "chat" | "cron" | "cards" | "skills";
+export type NpcPanelTab = "chat" | "cron" | "cards" | "skills" | "connectors";
 
 export type NpcTabState = { npcId: string | null; tab: NpcPanelTab };
 

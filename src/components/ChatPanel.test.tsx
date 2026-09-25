@@ -644,9 +644,13 @@ async function withStubbedFetch<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-test("there are four tabs (chat/cron/cards/skills)", async () => {
+test("there are five tabs (chat/cron/cards/skills/connectors)", async () => {
   const el = await mount(cardsPanel());
-  assert.equal(el.querySelectorAll('[data-testid="npc-dialog-tabs"] [role="tab"]').length, 4);
+  const tabs = [...el.querySelectorAll('[data-testid="npc-dialog-tabs"] [role="tab"]')];
+  assert.deepEqual(
+    tabs.map((tab) => tab.getAttribute("data-tab")),
+    ["chat", "cron", "cards", "skills", "connectors"],
+  );
 });
 
 test("the unread count shows as a badge, and there's no badge when it's 0", async () => {
