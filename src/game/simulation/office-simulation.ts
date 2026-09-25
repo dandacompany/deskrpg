@@ -1487,10 +1487,14 @@ export class OfficeSimulation {
     // B-1. Working employees are also called **without blocking** — Hermes workers do the execution, so the card keeps running
     // even if they leave the seat. But do not leave the user unaware that they interrupted. The count is stated because
     // one employee can run several cards (the per-profile limit is unlimited by default).
+    // A report walk is the employee's own doing, not the user interrupting — say that instead.
     const busyCount = this.workingCounts[npc.id] ?? 0;
     if (busyCount > 0)
       EventBus.emit("toast:show", {
-        messageKey: "game.calledWhileWorking",
+        messageKey:
+          payload.reason === "report"
+            ? "game.comingToReportWhileWorking"
+            : "game.calledWhileWorking",
         params: { name: payload.npcName || npc.name, count: String(busyCount) },
       });
 

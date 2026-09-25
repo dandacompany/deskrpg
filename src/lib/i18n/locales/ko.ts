@@ -1821,6 +1821,8 @@ const ko: Record<string, string> = {
   "game.notMember": "이 오피스의 멤버가 아닙니다",
   "game.loadFailed": "캐릭터 로드에 실패했습니다",
   "game.calledWhileWorking": "{name} 님은 지금 {count}건을 처리하는 중입니다. 작업은 계속됩니다.",
+  "game.comingToReportWhileWorking":
+    "{name} 님이 보고하러 옵니다. 진행 중인 작업 {count}건은 계속됩니다.",
   "game.pressToTalk": "{name}을(를) 클릭하거나 /를 눌러 대화",
   "game.menuSettings": "설정",
   "viewSettings.menu": "보기 설정",

@@ -2340,22 +2340,26 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
     record("sent");
     setReportingMessageId(next.messageId);
-    socket.emit("npc:call", { channelId, npcId: next.npcId }, (result: unknown) => {
-      // Refusals (in a meeting, occupied by another user) pass quietly **for the user** — the notice and badge
-      // remain, and a toast saying they could not walk over gives the user nothing to do. But the trace
-      // must not be erased: this line used to be missing so nobody could see the refusal code,
-      // and the cause of "the employee does not come" had to be narrowed down by reasoning over code alone.
-      if (!isNpcCallRejected(result)) return;
-      console.debug("[report] npc:call rejected", {
-        npcId: next.npcId,
-        messageId: next.messageId,
-        signature,
-        error: (result as { error?: unknown })?.error,
-      });
-      // Record the refusal. When that employee's state changes, `decideReportCall` brings them back as a candidate.
-      record("rejected");
-      setReportingMessageId(null);
-    });
+    socket.emit(
+      "npc:call",
+      { channelId, npcId: next.npcId, reason: "report" },
+      (result: unknown) => {
+        // Refusals (in a meeting, occupied by another user) pass quietly **for the user** — the notice and badge
+        // remain, and a toast saying they could not walk over gives the user nothing to do. But the trace
+        // must not be erased: this line used to be missing so nobody could see the refusal code,
+        // and the cause of "the employee does not come" had to be narrowed down by reasoning over code alone.
+        if (!isNpcCallRejected(result)) return;
+        console.debug("[report] npc:call rejected", {
+          npcId: next.npcId,
+          messageId: next.messageId,
+          signature,
+          error: (result as { error?: unknown })?.error,
+        });
+        // Record the refusal. When that employee's state changes, `decideReportCall` brings them back as a candidate.
+        record("rejected");
+        setReportingMessageId(null);
+      },
+    );
   }, [
     socket,
     channelId,

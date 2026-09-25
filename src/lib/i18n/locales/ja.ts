@@ -1838,6 +1838,8 @@ const ja: Record<string, string> = {
   "game.notMember": "このチャンネルのメンバーではありません",
   "game.loadFailed": "キャラクターの読み込みに失敗しました",
   "game.calledWhileWorking": "{name} さんは現在 {count} 件を処理中です。作業は続きます。",
+  "game.comingToReportWhileWorking":
+    "{name} さんが報告に来ます。進行中の {count} 件の作業は続きます。",
   "game.pressToTalk": "{name}をクリック、または / で会話",
   "game.menuSettings": "設定",
   "viewSettings.menu": "表示設定",
