@@ -412,14 +412,14 @@ export default function ArtifactViewer({
       {confirming && (
         <div
           role="alertdialog"
-          className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border bg-red-500/10 text-xs"
+          className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border bg-danger/10 text-xs"
         >
           <span className="mr-auto text-text">{t("artifacts.deleteConfirm")}</span>
           <button
             type="button"
             disabled={deleting}
             onClick={() => void remove()}
-            className="px-2.5 py-1 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50"
+            className="px-2.5 py-1 rounded-md bg-danger hover:bg-danger-hover text-white font-semibold disabled:opacity-50"
           >
             {t("artifacts.delete")}
           </button>
