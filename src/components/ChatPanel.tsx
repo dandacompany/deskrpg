@@ -28,6 +28,8 @@ import { ConversationSessionStore } from "@/app/game/conversation-session";
 import CronPanel, { type CronEventSource } from "./cron/CronPanel";
 import RoomNoticeMessage from "./chat/RoomNoticeMessage";
 import NpcCardsTab from "./chat/NpcCardsTab";
+import ToolApprovalStack from "./approvals/ToolApprovalCard";
+import type { ToolApprovalSocket } from "./approvals/use-tool-approvals";
 import NpcConnectorsTab from "./connectors/NpcConnectorsTab";
 import NpcSkillsTab from "./skills/NpcSkillsTab";
 import { tabFor, type NpcPanelTab, type NpcTabState } from "./chat/npc-tab-state";
@@ -106,6 +108,8 @@ interface ChatPanelProps {
   onOpenSkillManager?: (npcId: string, skillName?: string) => void;
   /** "Manage" in the connectors tab — opens that employee's connector manager, optionally on one server. */
   onOpenConnectorManager?: (npcId: string, serverName?: string) => void;
+  /** Receives Hermes tool-approval requests for the open NPC chat. Without it, no approval cards show. */
+  approvalSocket?: ToolApprovalSocket | null;
   /** A card was clicked in the cards tab — points kanban at that card. Without it, it can't be clicked. */
   onOpenAssignedCard?: (taskId: string) => void;
   onCreateTaskFromChat?: (draft: ChatTaskDraft) => void;
@@ -203,6 +207,7 @@ export default function ChatPanel({
   onOpenAssignedCard,
   onOpenSkillManager,
   onOpenConnectorManager,
+  approvalSocket,
   onCreateTaskFromChat,
   cardsRefreshTick = 0,
   cardsDebounceMs = CARDS_EVENT_DEBOUNCE_MS,
@@ -897,6 +902,15 @@ export default function ChatPanel({
                     chunk** arrives, but tools run before that. Observed (2026-08-28): web_search ran
                     3 times with nothing showing on screen. Having an activity key at all already means
                     "still in progress," so that alone is enough. */}
+                {cron && dialogNpc && (
+                  <ToolApprovalStack
+                    socket={approvalSocket}
+                    channelId={cron.channelId}
+                    context="dm"
+                    npcId={dialogNpc.npcId}
+                    npcNames={{ [dialogNpc.npcId]: dialogNpc.npcName }}
+                  />
+                )}
                 {npcActivityKey && !npcResponses.some(isActiveChatResponse) && (
                   <div
                     className="flex items-center gap-2 px-3 pb-1 text-xs text-text-dim"

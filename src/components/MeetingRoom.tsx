@@ -19,6 +19,7 @@ import {
 import { selectMeetingNpcs } from "./meeting-room/participants";
 import { EventBus } from "@/game/EventBus";
 import { MeetingSpeakerTracker } from "./meeting-room/speaker-tracker";
+import ToolApprovalStack from "./approvals/ToolApprovalCard";
 import MeetingTopicInput, { canSubmitMeetingTopic } from "./meeting-room/MeetingTopicInput";
 import {
   restoreMeetingChat,
@@ -304,6 +305,10 @@ export default function MeetingRoom({
 
   // Build NPC participants
   const displayedNpcs = discussionNpcs ?? selectMeetingNpcs(npcs, selectedNpcIds);
+  // Names for approval cards — the channel roster plus whoever the discussion itself carries.
+  const npcNames = Object.fromEntries(
+    [...npcs, ...(discussionNpcs ?? [])].map((npc) => [npc.id, npc.name]),
+  );
   const npcParticipants: Participant[] = displayedNpcs.map((npc) => ({
     id: `npc-${npc.id}`,
     name: npc.name,
@@ -1192,6 +1197,12 @@ export default function MeetingRoom({
           footer={
             !meetingEnded ? (
               <div data-meeting-chat-input className="border-t border-border bg-bg">
+                <ToolApprovalStack
+                  socket={socket}
+                  channelId={channelId}
+                  context="meeting"
+                  npcNames={npcNames}
+                />
                 <ChatInput
                   onSend={(msg) => handleSend(msg)}
                   placeholder={t("meeting.speakToMeeting")}

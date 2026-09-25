@@ -3303,11 +3303,11 @@ const ko: Record<string, string> = {
   "connectors.overview.lastError": "마지막 오류: {detail}",
   "connectors.trust.label": "신뢰 단계",
   "connectors.trust.full": "모든 도구 허용",
-  "connectors.trust.untrusted": "쓰기 도구 막기",
+  "connectors.trust.untrusted": "쓰기 도구는 호출마다 확인",
   "connectors.trust.fullHelp":
-    "이 서버의 쓰기 도구까지 모든 도구가 묻지 않고 실행됩니다. [쓰기 도구 막기]를 켜면 읽기 전용 표시가 있는 도구만 씁니다.",
+    "이 서버의 쓰기 도구까지 모든 도구가 묻지 않고 실행됩니다. [쓰기 도구는 호출마다 확인]을 켜면 쓰기 도구를 부를 때마다 확인합니다.",
   "connectors.trust.untrustedHelp":
-    "이 서버의 쓰기 도구는 DeskRPG 대화에서 실행되지 않습니다(승인할 수단이 없어 Hermes 가 거부합니다). 읽기 전용 표시가 있는 도구만 씁니다.",
+    "쓰기 도구는 호출할 때마다 확인합니다. 대화에서는 시킨 사람에게 승인 카드가 뜨고(Hermes 가 지원하는 버전), 크론·칸반에서는 막힙니다.",
   "connectors.tools.search": "도구 검색",
   "connectors.tools.all": "모두 켜기",
   "connectors.tools.noDestructive": "파괴적 도구 끄기",
@@ -3487,6 +3487,21 @@ const ko: Record<string, string> = {
     "이 서버는 명령을 실행합니다: {command}. 받는 직원의 Hermes 호스트에서도 같은 명령이 실행됩니다.",
   "connectors.copy.stdioConfirm": "받는 직원의 호스트에서도 이 명령이 실행되는 것을 확인했습니다",
   // --- /connectors: add · oauth · copy ---
+  "approvals.card.title": "{npc}이(가) 실행하려고 합니다",
+  "approvals.kind.command": "명령 실행",
+  "approvals.kind.mcp": "MCP 도구 호출",
+  "approvals.card.remaining": "{time} 남음",
+  "approvals.choice.once": "한 번 허용",
+  "approvals.choice.session": "이 대화에서 계속 허용",
+  "approvals.choice.deny": "거절",
+  "approvals.deciding": "전달하는 중…",
+  "approvals.status.pending": "결정을 기다리는 중",
+  "approvals.status.approved_once": "한 번 허용했습니다",
+  "approvals.status.approved_session": "이 대화에서 계속 허용했습니다",
+  "approvals.status.denied": "거절했습니다",
+  "approvals.status.expired": "시간 초과 — Hermes 가 거부했습니다",
+  "approvals.status.failed": "결정을 전달하지 못했습니다",
+  "approvals.pending": "{npc}이(가) {approver}님의 승인을 기다리는 중",
 };
 
 export default ko;

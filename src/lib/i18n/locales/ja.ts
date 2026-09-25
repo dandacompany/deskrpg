@@ -3340,11 +3340,11 @@ const ja: Record<string, string> = {
   "connectors.overview.lastError": "直近のエラー: {detail}",
   "connectors.trust.label": "信頼レベル",
   "connectors.trust.full": "すべてのツールを許可",
-  "connectors.trust.untrusted": "書き込みツールをブロック",
+  "connectors.trust.untrusted": "書き込みツールは呼び出しごとに確認",
   "connectors.trust.fullHelp":
-    "このサーバーの書き込みツールを含むすべてのツールが確認なしで実行されます。[書き込みツールをブロック] をオンにすると読み取り専用のツールだけを使います。",
+    "このサーバーの書き込みツールを含むすべてのツールが確認なしで実行されます。[書き込みツールは呼び出しごとに確認] をオンにすると、書き込みツールを呼ぶたびに確認します。",
   "connectors.trust.untrustedHelp":
-    "このサーバーの書き込みツールは DeskRPG の会話では実行されません(承認する手段がないため Hermes が拒否します)。読み取り専用と表示されたツールだけを使います。",
+    "書き込みツールは呼び出すたびに確認します。会話では依頼した人に承認カードが表示され(対応する Hermes バージョン)、クーロン・カンバンではブロックされます。",
   "connectors.tools.search": "ツールを検索",
   "connectors.tools.all": "すべてオン",
   "connectors.tools.noDestructive": "破壊的なツールをオフ",
@@ -3530,6 +3530,21 @@ const ja: Record<string, string> = {
   "connectors.copy.stdioConfirm":
     "受け取るスタッフのホストでもこのコマンドが実行されることを確認しました",
   // --- /connectors: add · oauth · copy ---
+  "approvals.card.title": "{npc} が実行しようとしています",
+  "approvals.kind.command": "コマンド実行",
+  "approvals.kind.mcp": "MCP ツール呼び出し",
+  "approvals.card.remaining": "残り {time}",
+  "approvals.choice.once": "一度だけ許可",
+  "approvals.choice.session": "この会話では許可",
+  "approvals.choice.deny": "拒否",
+  "approvals.deciding": "送信中…",
+  "approvals.status.pending": "判断を待っています",
+  "approvals.status.approved_once": "一度だけ許可しました",
+  "approvals.status.approved_session": "この会話では許可しました",
+  "approvals.status.denied": "拒否しました",
+  "approvals.status.expired": "時間切れ — Hermes が拒否しました",
+  "approvals.status.failed": "判断を伝えられませんでした",
+  "approvals.pending": "{npc} は {approver} さんの承認を待っています",
 };
 
 export default ja;

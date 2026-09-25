@@ -3189,11 +3189,11 @@ const zh: Record<string, string> = {
   "connectors.overview.lastError": "最近错误：{detail}",
   "connectors.trust.label": "信任级别",
   "connectors.trust.full": "允许所有工具",
-  "connectors.trust.untrusted": "阻止写入工具",
+  "connectors.trust.untrusted": "写入工具每次调用都确认",
   "connectors.trust.fullHelp":
-    "此服务器的所有工具（包括写入工具）都会直接运行。开启 [阻止写入工具] 后只使用标记为只读的工具。",
+    "此服务器的所有工具（包括写入工具）都会直接运行而不询问。开启 [写入工具每次调用都确认] 后，每次调用写入工具都会确认。",
   "connectors.trust.untrustedHelp":
-    "此服务器的写入工具不会在 DeskRPG 对话中运行（没有审批途径，Hermes 会拒绝）。只使用标记为只读的工具。",
+    "写入工具每次调用都会确认。在对话中，发出请求的人会看到审批卡片（需 Hermes 支持的版本）；在定时任务和看板中则会被阻止。",
   "connectors.tools.search": "搜索工具",
   "connectors.tools.all": "全部开启",
   "connectors.tools.noDestructive": "关闭破坏性工具",
@@ -3363,6 +3363,21 @@ const zh: Record<string, string> = {
     "此服务器会运行命令：{command}。接收员工的 Hermes 主机上也会运行同样的命令。",
   "connectors.copy.stdioConfirm": "我已了解此命令也会在接收员工的主机上运行",
   // --- /connectors: add · oauth · copy ---
+  "approvals.card.title": "{npc} 想要运行此操作",
+  "approvals.kind.command": "执行命令",
+  "approvals.kind.mcp": "MCP 工具调用",
+  "approvals.card.remaining": "剩余 {time}",
+  "approvals.choice.once": "允许一次",
+  "approvals.choice.session": "在本次对话中一直允许",
+  "approvals.choice.deny": "拒绝",
+  "approvals.deciding": "正在发送…",
+  "approvals.status.pending": "等待决定",
+  "approvals.status.approved_once": "已允许一次",
+  "approvals.status.approved_session": "已在本次对话中允许",
+  "approvals.status.denied": "已拒绝",
+  "approvals.status.expired": "已超时 — Hermes 已拒绝",
+  "approvals.status.failed": "无法传达决定",
+  "approvals.pending": "{npc} 正在等待 {approver} 的批准",
 };
 
 export default zh;

@@ -1384,3 +1384,33 @@ test("a past reply with no link info does not assume the adjacent request is its
   assert.match(body, /원래 요청을 확인할 수 없습니다/);
   assert.match(body, /과거 답변/);
 });
+
+test("the NPC chat tab shows that NPC's tool approval card above the input", async () => {
+  const handlers = new Map<string, (payload: unknown) => void>();
+  const socket = {
+    on: (event: string, handler: (payload: unknown) => void) => handlers.set(event, handler),
+    off: (event: string) => handlers.delete(event),
+    emit: () => true,
+  };
+  const el = await mount(cardsPanel({ approvalSocket: socket }));
+  const request = {
+    key: "r:1",
+    runId: "r",
+    requestId: "1",
+    channelId: "ch1",
+    context: "dm",
+    kind: "command",
+    command: "rm -r /tmp/probe",
+    description: "",
+    choices: ["once", "deny"],
+    expiresAt: Date.now() + 60_000,
+  };
+  await act(async () => {
+    handlers.get("tool-approval:request")!({ ...request, npcId: "npc-b" });
+    handlers.get("tool-approval:request")!({ ...request, key: "r:2", npcId: "npc-a" });
+  });
+  const cards = el.querySelectorAll('[data-testid="tool-approval-card"]');
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].getAttribute("data-key"), "r:2");
+  assert.ok((cards[0].textContent ?? "").includes("소피"));
+});

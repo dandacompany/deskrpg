@@ -3326,11 +3326,11 @@ const en: Record<string, string> = {
   "connectors.overview.lastError": "Last error: {detail}",
   "connectors.trust.label": "Trust level",
   "connectors.trust.full": "Allow all tools",
-  "connectors.trust.untrusted": "Block write tools",
+  "connectors.trust.untrusted": "Confirm write tools on each call",
   "connectors.trust.fullHelp":
-    "Every tool of this server, including write tools, runs without asking. Turn on [Block write tools] to allow only tools marked read-only.",
+    "Every tool on this server, write tools included, runs without asking. Turn on [Confirm write tools on each call] to be asked before each write tool.",
   "connectors.trust.untrustedHelp":
-    "This server's write tools don't run in DeskRPG conversations (there is no way to approve them, so Hermes refuses). Only tools marked read-only are used.",
+    "Write tools are confirmed on each call. In a conversation, the person who asked gets an approval card (on Hermes versions that support it); in cron and kanban they are blocked.",
   "connectors.tools.search": "Search tools",
   "connectors.tools.all": "Turn all on",
   "connectors.tools.noDestructive": "Turn off destructive tools",
@@ -3514,6 +3514,21 @@ const en: Record<string, string> = {
     "This server runs a command: {command}. The same command will run on each recipient's Hermes host.",
   "connectors.copy.stdioConfirm": "I understand this command will run on the recipients' hosts",
   // --- /connectors: add · oauth · copy ---
+  "approvals.card.title": "{npc} wants to run this",
+  "approvals.kind.command": "Command",
+  "approvals.kind.mcp": "MCP tool call",
+  "approvals.card.remaining": "{time} left",
+  "approvals.choice.once": "Allow once",
+  "approvals.choice.session": "Allow for this conversation",
+  "approvals.choice.deny": "Deny",
+  "approvals.deciding": "Sending…",
+  "approvals.status.pending": "Waiting for a decision",
+  "approvals.status.approved_once": "Allowed once",
+  "approvals.status.approved_session": "Allowed for this conversation",
+  "approvals.status.denied": "Denied",
+  "approvals.status.expired": "Timed out — Hermes denied it",
+  "approvals.status.failed": "Couldn't deliver the decision",
+  "approvals.pending": "{npc} is waiting for {approver}'s approval",
 };
 
 export default en;
