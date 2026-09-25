@@ -15,7 +15,12 @@ import type {
   SetupProvisionRequest,
 } from "./types";
 
+/** The helper's own reply cap; a transport may lower it (`HostExecutor.stdoutLimit`). */
+const HELPER_OUTPUT_LIMIT = 262144;
+
 export const HOST_ERROR_CODES = new Set([
+  // The reply would exceed what the transport delivers — named so it never surfaces as command_timeout.
+  "host_output_too_large",
   "ssh_unknown_host",
   "ssh_host_key_failed",
   "ssh_connection_failed",
@@ -248,10 +253,12 @@ async function invoke(
     // hermes_not_found.
     const none = action === "discover" ? '{"candidates": []}' : '{"error": "hermes_not_found"}';
     const launch = hostLaunch(platform, "run", HOST_BOOTSTRAP, none);
+    const maxOutput = Math.min(execute.stdoutLimit ?? HELPER_OUTPUT_LIMIT, HELPER_OUTPUT_LIMIT);
     const result = await execute(launch.command, launch.args, {
       input: JSON.stringify({
         action,
         timeout,
+        max_output: maxOutput,
         script:
           HOST_HELPER +
           "\nentry(" +
@@ -267,8 +274,9 @@ async function invoke(
       env: launch.env,
     });
     checkAbort(signal);
-    if (result.code !== 0 || result.stdout.length > 262144)
-      throw new Error("host_operation_failed");
+    if (result.code !== 0) throw new Error("host_operation_failed");
+    if (Buffer.byteLength(result.stdout, "utf8") > maxOutput)
+      throw new Error("host_output_too_large");
     const body = record(JSON.parse(result.stdout));
     if ("error" in body) {
       const code =

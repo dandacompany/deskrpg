@@ -364,9 +364,24 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
   };
 }
 export const localExecutor = createExecutor();
+
+/**
+ * Windows' ssh.exe (Win32-OpenSSH 9.5p2, the inbox client) stops delivering stdout after two 32 KiB
+ * channel packets: up to 65536 bytes it exits normally, up to 98304 it delivers everything but never
+ * exits, and past that it stalls at 98304. The stdout being a file fd, a cmd.exe redirect or a pipe
+ * makes no difference (a pipe stalls sooner), and the same remote output arrives whole through macOS
+ * ssh and through Windows scp — so the limit is ssh.exe's, and replies must stay within it.
+ */
+export const WINDOWS_SSH_STDOUT_LIMIT = 65536;
+
+export function sshStdoutLimit(platform: string): number | undefined {
+  return isWindows(platform) ? WINDOWS_SSH_STDOUT_LIMIT : undefined;
+}
+
 export function sshExecutor(hostId: string, execute: HostExecutor = localExecutor): HostExecutor {
   assertSshHost(hostId);
-  return async (command, args, options) => {
+  const limit = sshStdoutLimit(process.platform);
+  const run: HostExecutor = async (command, args, options) => {
     assertSshHost(hostId);
     if (!/^[A-Za-z0-9_./-]+$/.test(command) || command.startsWith("-"))
       throw new Error("setup_invalid_request");
@@ -387,6 +402,8 @@ export function sshExecutor(hostId: string, execute: HostExecutor = localExecuto
     if (result.code === 255) throw new Error(sshFailureCode(result.stderr));
     return result;
   };
+  if (limit !== undefined) run.stdoutLimit = limit;
+  return run;
 }
 
 /** stderr of ssh exit code 255 → a safe error code. Raw stderr may contain banners/paths, so it is not passed on. */

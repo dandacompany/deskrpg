@@ -106,6 +106,7 @@ const SAFE_CODES = new Set([
   "plugin_verify_failed",
   "service_install_failed",
   "windows_scheduled_task_missing",
+  "host_output_too_large",
   "timezone_invalid",
   "timezone_write_failed",
   "worker_propagation_write_failed",
