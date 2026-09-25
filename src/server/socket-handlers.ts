@@ -124,6 +124,7 @@ import {
   persistHermesSessionRef,
   registerHermesRun,
 } from "./hermes-dispatch";
+import { isUuid } from "@/lib/uuid";
 
 export const adapterRegistry = new AdapterRegistry();
 
@@ -1261,18 +1262,37 @@ export function setupSocketHandlers(io: Server) {
     // ----- player:join -----
     socket.on(
       "player:join",
-      async (data: {
-        /** Optional — if sent, only checks that it's my character. Name and appearance are filled by the server. */
-        characterId?: string;
-        characterName?: string;
-        appearance?: unknown;
-        mapId: string;
-        mapRevision?: string;
-        x: number;
-        y: number;
-      }) => {
+      async (
+        data: {
+          /** Optional — if sent, only checks that it's my character. Name and appearance are filled by the server. */
+          characterId?: string;
+          characterName?: string;
+          appearance?: unknown;
+          mapId: string;
+          mapRevision?: string;
+          x: number;
+          y: number;
+        } | null,
+      ) => {
+        // A malformed payload is answered before any query — a non-uuid id throws in PostgreSQL,
+        // and a thrown async handler leaves the client waiting with no answer.
+        if (!data || !isUuid(data.mapId)) {
+          socket.emit("channel:access-denied", {
+            channelId: typeof data?.mapId === "string" ? data.mapId : null,
+            action: "player:join",
+            reason: "forbidden",
+            errorCode: "invalid_request_body",
+          });
+          return;
+        }
         const mapGeneration = mapRefresh.generation(data.mapId);
-        const accessResult = await getSocketChannelParticipationAccess(data.mapId, user.userId);
+        let accessResult: Awaited<ReturnType<typeof getSocketChannelParticipationAccess>>;
+        try {
+          accessResult = await getSocketChannelParticipationAccess(data.mapId, user.userId);
+        } catch (err) {
+          console.error("[player:join] channel access lookup failed:", err);
+          accessResult = null;
+        }
         if (!accessResult) {
           socket.emit("channel:access-denied", {
             channelId: data.mapId,
