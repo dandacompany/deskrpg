@@ -2741,6 +2741,17 @@ const en: Record<string, string> = {
   "attention.kind.blocked": "Blocked",
   "attention.kind.review": "Awaiting review",
   "attention.kind.cron_failed": "Cron failed",
+  "attention.kind.approval_blocked": "Unattended run blocked",
+  "attention.blockedRun.source.cron": "Cron",
+  "attention.blockedRun.source.kanban": "Kanban card",
+  "attention.blockedRun.tool": "Tool {tool}",
+  "attention.blockedRun.allow": "Add rule '{patternKey}' to the allowlist",
+  "attention.blockedRun.added": "Added to the allowlist — applies from the next run",
+  "attention.blockedRun.failed": "Could not add it. Try again shortly",
+  "attention.blockedRun.noRule":
+    "This block has no rule to allowlist. Only changing the run policy's mode can help.",
+  "attention.blockedRun.openPolicy": "Open run policy",
+  "attention.blockedRun.askOwner": "Ask the gateway owner to allow it",
   "attention.requestedByProfile": "Requested by {name}",
   "attention.requestedByUser": "Registered by a person",
   "attention.taskCount": "{count} task(s)",
@@ -3542,7 +3553,7 @@ const en: Record<string, string> = {
   "approvalPolicy.allowlist.add": "Add",
   "approvalPolicy.allowlist.remove": "Remove from allowlist",
   "approvalPolicy.appliesNext":
-    "Applies from the next run. Live approvals in conversations wait {seconds} seconds.",
+    "Cron jobs and kanban cards pick this up from their next run; conversations only after the gateway restarts. Live approvals in conversations wait {seconds} seconds.",
   "approvalPolicy.loading": "Loading…",
   "approvalPolicy.upgradeRequired": "The run policy needs plugin {version} or later",
   "approvalPolicy.gatewayDisconnected":

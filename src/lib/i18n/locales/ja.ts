@@ -2756,6 +2756,17 @@ const ja: Record<string, string> = {
   "attention.kind.blocked": "ブロック",
   "attention.kind.review": "確認待ち",
   "attention.kind.cron_failed": "クロン失敗",
+  "attention.kind.approval_blocked": "無人実行がブロックされました",
+  "attention.blockedRun.source.cron": "クロン",
+  "attention.blockedRun.source.kanban": "カンバンのカード",
+  "attention.blockedRun.tool": "ツール {tool}",
+  "attention.blockedRun.allow": "ルール「{patternKey}」を許可リストに追加",
+  "attention.blockedRun.added": "許可リストに追加しました — 次回の実行から適用",
+  "attention.blockedRun.failed": "追加できませんでした。しばらくしてから再試行してください",
+  "attention.blockedRun.noRule":
+    "許可リストに入れるルールがないブロックです。実行ポリシーのモード変更でのみ対応できます。",
+  "attention.blockedRun.openPolicy": "実行ポリシーを開く",
+  "attention.blockedRun.askOwner": "許可するにはゲートウェイの所有者に依頼してください",
   "attention.requestedByProfile": "{name} が依頼",
   "attention.requestedByUser": "人が登録",
   "attention.taskCount": "タスク {count}件",
@@ -3557,7 +3568,7 @@ const ja: Record<string, string> = {
   "approvalPolicy.allowlist.add": "追加",
   "approvalPolicy.allowlist.remove": "許可リストから削除",
   "approvalPolicy.appliesNext":
-    "次回の実行から適用されます。会話中のリアルタイム承認は {seconds} 秒待ちます。",
+    "クロン・カンバンは次回の実行から、会話にはゲートウェイの再起動後に反映されます。会話中のリアルタイム承認は {seconds} 秒待ちます。",
   "approvalPolicy.loading": "読み込み中…",
   "approvalPolicy.upgradeRequired": "実行ポリシーにはプラグイン {version} 以上が必要です",
   "approvalPolicy.gatewayDisconnected":

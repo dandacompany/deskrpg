@@ -3531,6 +3531,13 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
                 setShowAttention(false);
                 openNoticeCronJob(jobId);
               }}
+              onOpenApprovalPolicy={(npcId) => {
+                setShowAttention(false);
+                setApprovalPolicyNpc({
+                  npcId,
+                  npcName: rosterNpcs.find((npc) => npc.id === npcId)?.name ?? "",
+                });
+              }}
             />
           </Modal.Body>
         </Modal>
