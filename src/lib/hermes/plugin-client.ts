@@ -331,7 +331,8 @@ export function createOwnerPluginClient(
     `/deskrpg/kanban/tasks/${seg(id)}${suffix}${query({ board })}`;
 
   const kanban: KanbanApi = {
-    listBoards: () => call("/deskrpg/kanban/boards", token),
+    // Archived boards are still channel projects — the list must name them. Older plugins ignore the query.
+    listBoards: () => call(`/deskrpg/kanban/boards${query({ include_archived: true })}`, token),
     createBoard: (body) => call("/deskrpg/kanban/boards", token, { method: "POST", body }),
     updateBoard: (slug, body) =>
       call(`/deskrpg/kanban/boards/${seg(slug)}`, token, { method: "PATCH", body }),

@@ -37,8 +37,9 @@ export type ChannelParams = {
 };
 
 function failure(err: unknown): NextResponse {
-  if (err instanceof ProjectRegistryError || err instanceof EventCarrierError)
-    return cronError(err.status, err.code, err.message);
+  if (err instanceof ProjectRegistryError)
+    return cronError(err.status, err.code, err.message, err.details);
+  if (err instanceof EventCarrierError) return cronError(err.status, err.code, err.message);
   const reason = err instanceof Error ? err.message : String(err);
   console.warn(`[project-routes] unexpected failure: ${reason}`);
   return cronError(500, "internal_error", "internal error");
@@ -87,6 +88,8 @@ export async function listProjects(req: NextRequest, channelId: string) {
   try {
     return NextResponse.json({
       projects: await listChannelProjects(channelId, resolved.ctx.client),
+      // The archive and reopen routes are owner-only; the picker hides their buttons for everyone else.
+      canManage: resolved.ctx.isChannelOwner,
     });
   } catch (err) {
     return failure(err);

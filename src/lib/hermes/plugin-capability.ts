@@ -249,6 +249,14 @@ export function supportsBoardAttachmentList(info: PluginInfo | null): boolean {
   return Boolean(info?.capabilities?.includes("kanban_attachment_list"));
 }
 
+/**
+ * Can a board be archived in Hermes (`PATCH /kanban/boards/{slug}` `archived`). Without it, archiving a
+ * project only changes our status and the gateway keeps dispatching the board's cards.
+ */
+export function supportsBoardArchive(info: PluginInfo | null): boolean {
+  return Boolean(info?.capabilities?.includes("board_archive"));
+}
+
 export function supportsInitialStatus(info: PluginInfo | null): boolean {
   return Boolean(info?.capabilities?.includes("initial_status"));
 }

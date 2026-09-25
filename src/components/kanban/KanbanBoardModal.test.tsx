@@ -75,6 +75,8 @@ async function mount(
     artifactsRefreshTick?: number;
     /** The project list the header picker reads. Answers with an empty list if not given. */
     projects?: unknown[];
+    /** `canManage` on the project list — the owner's archive/reopen buttons. */
+    canManageProjects?: boolean;
   } = {},
 ) {
   // View mode/filters persist per-channel in localStorage. Clear it on every mount so one test's
@@ -93,7 +95,8 @@ async function mount(
     // deal with it too would silently throw off counts like "how many times was the board
     // fetched" — so it's answered here with an empty list. A test that needs multiple boards can
     // intercept this path directly in its own handler.
-    if (/\/projects(\?|$)/.test(url)) return json({ projects: props.projects ?? [] });
+    if (/\/projects(\?|$)/.test(url))
+      return json({ projects: props.projects ?? [], canManage: props.canManageProjects === true });
     return handler(url, init);
   }) as typeof fetch;
   const host = document.createElement("div");
@@ -1273,6 +1276,44 @@ test("with two boards, the picker shows up and the chosen board goes out as ?boa
     assert.ok(
       boardCalls.some((c) => c.includes("board=deskrpg-side")),
       `고른 보드가 요청에 실리지 않았습니다: ${boardCalls.join(" | ")}`,
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("the owner archives the chosen project, then the list reloads and the default board opens", async () => {
+  const f = await mount(
+    (url, init) => {
+      if (url.endsWith("/projects/p2/archive") && init?.method === "POST")
+        return json({ project: { id: "p2", status: "completed" } });
+      return plain(url);
+    },
+    { projects: [MAIN_PROJECT, SIDE_PROJECT], canManageProjects: true },
+  );
+  try {
+    const select = f.host.querySelector<HTMLSelectElement>("[data-project-picker]");
+    assert.ok(select);
+    await act(async () => {
+      select.value = "deskrpg-side";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const listsBefore = f.calls.filter((c) => /GET \S*\/projects$/.test(c)).length;
+    await f.click("보관");
+    await act(async () => {
+      f.host.querySelector<HTMLButtonElement>("[data-project-archive-confirm]")?.click();
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    assert.ok(
+      f.calls.some((c) => c === "POST /api/channels/ch-1/projects/p2/archive"),
+      f.calls.join(" | "),
+    );
+    assert.equal(f.calls.filter((c) => /GET \S*\/projects$/.test(c)).length, listsBefore + 1);
+    assert.equal(
+      f.host.querySelector<HTMLSelectElement>("[data-project-picker]")?.value,
+      "deskrpg-main",
     );
   } finally {
     await f.cleanup();

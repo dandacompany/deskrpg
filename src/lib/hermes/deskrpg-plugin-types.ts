@@ -100,6 +100,8 @@ export type BoardMeta = {
   default_workspace_kind?: string;
   project_id?: string;
   project_name?: string;
+  /** 0.19.0 `board_archive` — Hermes' board.json flag. The gateway dispatcher and notifier skip an archived board. */
+  archived?: boolean;
 };
 
 export type DiagnosticAction = {
@@ -346,6 +348,8 @@ export type UpdateBoardBody = {
   name?: string;
   description?: string;
   default_workdir?: string;
+  /** Needs the `board_archive` capability — an older plugin answers 400 `unknown_field`. */
+  archived?: boolean;
 };
 
 /** Set of action names for `POST /kanban/tasks/{id}/{action}`. */
