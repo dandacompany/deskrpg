@@ -17,7 +17,11 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-import { gateAutomationPlugin, type PluginGate as AutomationGate } from "@/lib/automation-gate";
+import {
+  forceReprobePluginInfo,
+  gateAutomationPlugin,
+  type PluginGate as AutomationGate,
+} from "@/lib/automation-gate";
 import { channelMembers, channels, db, gatewayResources, hermesProfiles, npcs } from "@/db";
 import { decryptGatewayToken, getChannelGatewayBinding } from "@/lib/gateway-resources";
 import type { PluginInfo } from "@/lib/hermes/deskrpg-plugin-types";
@@ -185,6 +189,23 @@ export async function resolveCronChannelContext(input: {
       timezone: gate.info.timezone ?? null,
     },
   };
+}
+
+/**
+ * Whether the channel's plugin has `capability`. The context's info comes from the 1-hour
+ * cache, so when it lacks the capability the plugin is re-probed once (throttled per gateway)
+ * before the caller answers 428 — a gateway upgraded after its last probe is recognized at once.
+ */
+export async function hasPluginCapability(
+  ctx: Pick<CronChannelContext, "gateway" | "info">,
+  capability: string,
+): Promise<boolean> {
+  if (ctx.info.capabilities.includes(capability)) return true;
+  const fresh = await forceReprobePluginInfo(
+    ctx.gateway,
+    decryptGatewayToken(ctx.gateway.tokenEncrypted),
+  );
+  return fresh?.capabilities.includes(capability) ?? false;
 }
 
 // ---------------------------------------------------------------------------

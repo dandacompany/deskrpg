@@ -176,6 +176,44 @@ test("428 without the capability, even for the list", async () => {
   }
 });
 
+const OLD_INFO = {
+  capabilities: FULL_INFO.capabilities.filter((c) => c !== "profile_mcp_admin"),
+  version: "0.16.0",
+};
+const infoProbes = () => server.requests().filter((r) => r.path === "/deskrpg/info").length;
+
+test("a gateway upgraded after the cached probe is served at once, not held at 428", async () => {
+  // Binding caches the old plugin's info; the gateway is then upgraded in place.
+  server.setInfo(OLD_INFO);
+  let s;
+  try {
+    s = await seed();
+  } finally {
+    server.setInfo(FULL_INFO);
+  }
+  const res = await call(s.owner.id, "GET", s.channel.id, s.npc.id, []);
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).canManage, true);
+  // The re-probe refreshed the cache: the next request needs no probe.
+  const before = infoProbes();
+  assert.equal((await call(s.owner.id, "GET", s.channel.id, s.npc.id, [])).status, 200);
+  assert.equal(infoProbes(), before);
+});
+
+test("an old gateway is re-probed at most once per throttle window", async () => {
+  server.setInfo(OLD_INFO);
+  try {
+    const s = await seed();
+    const start = infoProbes();
+    assert.equal((await call(s.owner.id, "GET", s.channel.id, s.npc.id, [])).status, 428);
+    assert.equal(infoProbes(), start + 1);
+    assert.equal((await call(s.owner.id, "GET", s.channel.id, s.npc.id, [])).status, 428);
+    assert.equal(infoProbes(), start + 1);
+  } finally {
+    server.setInfo(FULL_INFO);
+  }
+});
+
 test("oauth callback parses the pasted URL on the server and forwards only code/state", async () => {
   const s = await seed();
   server
