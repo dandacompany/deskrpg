@@ -214,6 +214,26 @@ test("without the capability only the list works and the rest are 428", async ()
   }
 });
 
+test("a gateway upgraded after the cached probe unlocks management on the first request", async () => {
+  // Binding caches the old plugin's info; the gateway is then upgraded in place.
+  server.setInfo({
+    capabilities: ["kanban", "cron", "events", "profile_skills"],
+    version: "0.14.0",
+  });
+  let seeded;
+  try {
+    seeded = await seed();
+  } finally {
+    server.setInfo(FULL_INFO);
+  }
+  const { owner, channel, npc } = seeded;
+  const list = await (await call(owner.id, "GET", channel.id, npc.id, [])).json();
+  assert.equal(list.capabilityReady, true);
+  assert.equal(list.canManage, true);
+  const res = await call(owner.id, "GET", channel.id, npc.id, ["archive"]);
+  assert.equal(res.status, 200);
+});
+
 test("fixed_segments_come_before_names", async () => {
   const { owner, channel, npc } = await seed();
   server.skills("sophie").seed("archive");

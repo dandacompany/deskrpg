@@ -12,7 +12,12 @@ import { and, countDistinct, eq, ne } from "drizzle-orm";
 import type { NextResponse } from "next/server";
 
 import { db, hermesProfiles, npcs } from "@/db";
-import { cronError, resolveCronChannelContext, resolveNpcProfileClient } from "@/lib/cron-access";
+import {
+  cronError,
+  hasPluginCapability,
+  resolveCronChannelContext,
+  resolveNpcProfileClient,
+} from "@/lib/cron-access";
 import { SKILL_ADMIN_CAPABILITY, SKILL_ADMIN_MIN_VERSION } from "@/lib/hermes/deskrpg-plugin-types";
 import type { ProfilePluginClient } from "@/lib/hermes/plugin-client-types";
 
@@ -49,7 +54,7 @@ export async function resolveSkillContext(input: {
       npcId: input.npcId,
       profileName: npc.value.profile.profileName,
       isGatewayOwner: channel.ctx.gateway.ownerUserId === channel.ctx.userId,
-      capabilityReady: channel.ctx.info.capabilities.includes(SKILL_ADMIN_CAPABILITY),
+      capabilityReady: await hasPluginCapability(channel.ctx, SKILL_ADMIN_CAPABILITY),
       client: npc.value.client,
       gatewayId: channel.ctx.gateway.id,
     },

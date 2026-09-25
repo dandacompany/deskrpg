@@ -119,3 +119,35 @@ export async function gateAutomationPlugin(
   // If verdict.ok, info isn't null (`no_info` would have caught it first).
   return { ok: true, status, info: info as PluginInfo };
 }
+
+/** Minimum gap between forced re-probes of one gateway — an old gateway is not probed on every request. */
+export const FORCED_REPROBE_MIN_MS = 30 * 1000;
+
+const lastForcedReprobe = new Map<string, number>();
+
+/**
+ * Re-probes the plugin **bypassing the 1-hour cache** and stores the result, for a caller that
+ * is about to answer 428 because the cached info lacks a capability. A gateway upgraded after
+ * its last probe would otherwise stay "old version" for up to an hour. Throttled per gateway
+ * (`FORCED_REPROBE_MIN_MS`, in memory). Returns the fresh info, or null when throttled, not
+ * `plugin_ready`, or unreachable.
+ */
+export async function forceReprobePluginInfo(
+  resource: GatewayResourceRow,
+  ownerToken: string,
+  now = Date.now(),
+): Promise<PluginInfo | null> {
+  const last = lastForcedReprobe.get(resource.id);
+  if (last !== undefined && now - last < FORCED_REPROBE_MIN_MS) return null;
+  lastForcedReprobe.set(resource.id, now);
+  const probe = await probeDeskrpgPluginWithInfo({
+    fetchImpl: transportFetch,
+    baseUrl: resource.baseUrl,
+    token: ownerToken,
+  });
+  await db
+    .update(gatewayResources)
+    .set({ ...buildPluginCacheUpdate(probe.capability), ...buildPluginInfoCacheUpdate(probe.info) })
+    .where(eq(gatewayResources.id, resource.id));
+  return probe.capability.status === "plugin_ready" ? probe.info : null;
+}

@@ -9,6 +9,7 @@ import type { NextResponse } from "next/server";
 
 import {
   cronError,
+  hasPluginCapability,
   resolveCronChannelContext,
   resolveNpcProfileClient,
   type CronChannelContext,
@@ -40,7 +41,7 @@ export async function resolveConnectorContext(input: {
       npcId: input.npcId,
       profileName: npc.value.profile.profileName,
       isGatewayOwner: channel.ctx.gateway.ownerUserId === channel.ctx.userId,
-      capabilityReady: channel.ctx.info.capabilities.includes(MCP_ADMIN_CAPABILITY),
+      capabilityReady: await hasPluginCapability(channel.ctx, MCP_ADMIN_CAPABILITY),
       client: npc.value.client,
       gatewayId: channel.ctx.gateway.id,
       channel: channel.ctx,
