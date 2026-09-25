@@ -715,6 +715,8 @@ test("a template job takes the name the user saw — Hermes' fill_blueprint alwa
       appUrl: "",
     },
   ]);
+  // The fake server's request log outlives reset(), so read only what this test sends.
+  const logStart = server.requests().length;
 
   const made = await routes.instantiate.POST(
     req(seed.ownerId, "POST", `${base(seed.channelId)}/blueprints/instantiate`, {
@@ -740,7 +742,10 @@ test("a template job takes the name the user saw — Hermes' fill_blueprint alwa
   );
   // Hermes' own call is untouched — the template and values go as they are, and only the job
   // name is changed afterwards through the ordinary update.
-  const calls = server.requests().filter((r) => r.path.includes("/deskrpg/cron/"));
+  const calls = server
+    .requests()
+    .slice(logStart)
+    .filter((r) => r.path.includes("/deskrpg/cron/"));
   const instantiate = calls.find((r) => r.path.endsWith("/blueprints/instantiate"));
   assert.deepEqual(instantiate?.json, {
     blueprint: "custom-reminder",
