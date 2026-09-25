@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   SCHEDULE_PRESETS,
   composeDeliver,
+  describeSchedule,
   exprForPreset,
   formatModelSpec,
   jobScheduleDisplay,
@@ -142,5 +143,48 @@ describe("state dot / not-editable reason (R16)", () => {
       "otherChannel",
     );
     assert.equal(readOnlyReason({ editable: false, origin: null }), "external");
+  });
+});
+
+describe("describeSchedule — the list says when a job runs in words, not as a cron expression", () => {
+  const TEXT: Record<string, string> = {
+    "cron.every.daily": "매일 {time}",
+    "cron.every.weekdays": "평일 {time}",
+    "cron.every.weekly": "매주 {day} {time}",
+    "cron.every.monthly": "매월 {date}일 {time}",
+    "cron.every.hourly": "매시 {minute}분",
+    "cron.every.minutes": "{n}분마다",
+  };
+  const t = (key: string, params: Record<string, string | number> = {}) =>
+    (TEXT[key] ?? key).replace(/\{(\w+)\}/g, (_, name: string) => String(params[name]));
+
+  // The time text itself comes from Intl, whose Korean day-period wording differs across ICU
+  // versions ("오후" in browsers, "PM" in some Node builds), so the expectation uses Intl too.
+  const at = (locale: string, h: number, m: number) =>
+    new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(
+      new Date(2023, 0, 1, h, m),
+    );
+
+  it("names the time of day in the viewer's locale", () => {
+    assert.equal(describeSchedule("0 14 * * *", "ko", t), `매일 ${at("ko", 14, 0)}`);
+    assert.equal(describeSchedule("30 8 * * 1-5", "ko", t), `평일 ${at("ko", 8, 30)}`);
+    assert.equal(describeSchedule("0 14 * * *", "en", t), "매일 2:00 PM");
+  });
+
+  it("names the weekday and the day of the month", () => {
+    assert.equal(describeSchedule("0 9 * * 1", "ko", t), `매주 월요일 ${at("ko", 9, 0)}`);
+    assert.equal(describeSchedule("0 9 * * 0", "ko", t), `매주 일요일 ${at("ko", 9, 0)}`);
+    assert.equal(describeSchedule("0 9 * * 7", "ko", t), `매주 일요일 ${at("ko", 9, 0)}`);
+    assert.equal(describeSchedule("0 9 15 * *", "ko", t), `매월 15일 ${at("ko", 9, 0)}`);
+  });
+
+  it("covers hourly and every-N-minutes", () => {
+    assert.equal(describeSchedule("5 * * * *", "ko", t), "매시 5분");
+    assert.equal(describeSchedule("*/15 * * * *", "ko", t), "15분마다");
+  });
+
+  it("returns null for anything it cannot say plainly, so the caller shows the original", () => {
+    for (const expr of ["0 9-17 * * *", "every 10m", "0 9 1 1 *", "", "0 25 * * *", "0 9 * * 8"])
+      assert.equal(describeSchedule(expr, "ko", t), null, expr);
   });
 });

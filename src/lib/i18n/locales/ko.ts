@@ -2700,7 +2700,7 @@ const ko: Record<string, string> = {
   "cron.toast.deleted": '"{name}" 을(를) 삭제했습니다',
   "cron.toast.paused": '"{name}" 을(를) 멈췄습니다',
   "cron.toast.resumed": '"{name}" 을(를) 다시 시작했습니다',
-  "cron.toast.runQueued": '"{name}" 실행을 요청했습니다 — 결과는 오피스 방에 올라옵니다',
+  "cron.toast.runQueued": '"{name}" 실행을 요청했습니다 — 결과는 "{room}" 방에 올라옵니다',
   "cron.error.upgradeRequired": "플러그인 업데이트 필요 (deskrpg-hermes-plugin {minVersion} 이상)",
   "cron.error.upgradeHint": "게이트웨이 호스트에서 아래 명령을 실행한 뒤 다시 시도하세요:",
   "cron.error.gatewayNotBound":
@@ -2708,6 +2708,12 @@ const ko: Record<string, string> = {
   "cron.error.partial": "{count}개 NPC 의 크론을 불러오지 못했습니다",
   // 자동화 알림·크론 진입 (T10)
   "cron.open": "크론",
+  "cron.every.daily": "매일 {time}",
+  "cron.every.weekdays": "평일 {time}",
+  "cron.every.weekly": "매주 {day} {time}",
+  "cron.every.monthly": "매월 {date}일 {time}",
+  "cron.every.hourly": "매시 {minute}분",
+  "cron.every.minutes": "{n}분마다",
   "notice.cardDone": "카드를 완료했습니다: {title}",
   "notice.cardBlocked": "카드가 막혔습니다: {title}",
   "notice.cardReview": "확인이 필요합니다: {title}",

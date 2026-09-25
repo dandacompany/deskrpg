@@ -140,7 +140,10 @@ test("list row — state dot/name/schedule/NPC name/countdown, plus NPC filter a
     assert.equal(rows.length, 2);
     assert.match(rows[0].textContent ?? "", /아침 브리핑/);
     assert.match(rows[0].textContent ?? "", /소피/);
-    assert.match(rows[0].textContent ?? "", /0 9 \* \* \*/);
+    // The row says the schedule in words; the cron expression stays in the tooltip.
+    assert.match(rows[0].textContent ?? "", /매일 .*9:00/);
+    assert.doesNotMatch(rows[0].textContent ?? "", /0 9 \* \* \*/);
+    assert.ok(rows[0].querySelector('[title="0 9 * * *"]'), "raw expression tooltip");
     assert.equal(byTestId(rows[0], "cron-state-dot")?.dataset.state, "scheduled");
     assert.ok(byTestId(rows[0], "cron-state-dot")?.className.includes("bg-success"));
     // 5 minutes out -> relative-time countdown
@@ -287,6 +290,8 @@ test("run now — a 202 response only toasts, no refetch (R19)", async () => {
     await click(byTestId(host, "cron-action-run"));
     assert.equal(toasts.length, 1);
     assert.match(toasts[0], /브리핑/);
+    // The page toast sits under the cron modal, so the panel says it too — staging showed nothing.
+    assert.match(byTestId(host, "cron-toast")?.textContent ?? "", /브리핑.*오피스 전체/);
     assert.deepEqual(
       r.calls.map((c) => `${c.method} ${c.url}`),
       ["GET /api/channels/ch1/cron/jobs", "POST /api/channels/ch1/cron/jobs/j1/run"],

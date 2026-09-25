@@ -2717,7 +2717,7 @@ const en: Record<string, string> = {
   "cron.toast.paused": 'Paused "{name}"',
   "cron.toast.resumed": 'Resumed "{name}"',
   "cron.toast.runQueued":
-    'Run requested for "{name}" — the result will be posted to the office room',
+    'Run requested for "{name}" — the result will be posted to the "{room}" room',
   "cron.error.upgradeRequired":
     "Plugin update required (deskrpg-hermes-plugin {minVersion} or newer)",
   "cron.error.upgradeHint": "Run this on the gateway host, then try again:",
@@ -2726,6 +2726,12 @@ const en: Record<string, string> = {
   "cron.error.partial": "Could not load cron jobs for {count} NPC(s)",
   // Automation notices / cron entry (T10)
   "cron.open": "Cron",
+  "cron.every.daily": "Every day at {time}",
+  "cron.every.weekdays": "Weekdays at {time}",
+  "cron.every.weekly": "Every {day} at {time}",
+  "cron.every.monthly": "Monthly on day {date} at {time}",
+  "cron.every.hourly": "Every hour at :{minute}",
+  "cron.every.minutes": "Every {n} minutes",
   "notice.cardDone": "Finished a card: {title}",
   "notice.cardBlocked": "A card is blocked: {title}",
   "notice.cardReview": "A card needs your review: {title}",

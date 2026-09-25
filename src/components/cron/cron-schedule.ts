@@ -100,6 +100,57 @@ export function scheduleOptionForExpr(expr: string): SchedulePreset {
   return CUSTOM_PRESET;
 }
 
+type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+function inRange(token: string, min: number, max: number): number | null {
+  if (!isIntegerToken(token)) return null;
+  const n = Number(token);
+  return n >= min && n <= max ? n : null;
+}
+
+/**
+ * The schedule in words — "매일 오후 2:00", "매주 월요일 오전 9:00" — for the shapes the preset
+ * picker makes (daily, weekdays, weekly, monthly, hourly, every N minutes). Times and weekdays
+ * follow the viewer's locale. Anything else returns null so the caller shows the original.
+ */
+export function describeSchedule(expr: string, locale: string, t: Translate): string | null {
+  const parts = cronParts(expr);
+  if (!parts) return null;
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+  if (month !== "*") return null;
+  const everyN = /^\*\/(\d+)$/.exec(minute);
+  if (everyN && hour === "*" && dayOfMonth === "*" && dayOfWeek === "*") {
+    const n = inRange(everyN[1], 1, 59);
+    return n === null ? null : t("cron.every.minutes", { n });
+  }
+  const m = inRange(minute, 0, 59);
+  if (m === null) return null;
+  if (hour === "*" && dayOfMonth === "*" && dayOfWeek === "*")
+    return t("cron.every.hourly", { minute: m });
+  const h = inRange(hour, 0, 23);
+  if (h === null) return null;
+  // A fixed local date only carries the hour and minute into the formatter.
+  const time = new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(
+    new Date(2023, 0, 1, h, m),
+  );
+  if (dayOfMonth === "*" && dayOfWeek === "*") return t("cron.every.daily", { time });
+  if (dayOfMonth === "*" && dayOfWeek === "1-5") return t("cron.every.weekdays", { time });
+  if (dayOfMonth === "*") {
+    const dow = inRange(dayOfWeek, 0, 7);
+    if (dow === null) return null;
+    // 2023-01-01 was a Sunday, so day 0 (and 7) lands on Sunday.
+    const day = new Intl.DateTimeFormat(locale, { weekday: "long" }).format(
+      new Date(2023, 0, 1 + (dow % 7)),
+    );
+    return t("cron.every.weekly", { day, time });
+  }
+  if (dayOfWeek === "*") {
+    const date = inRange(dayOfMonth, 1, 31);
+    return date === null ? null : t("cron.every.monthly", { date, time });
+  }
+  return null;
+}
+
 /** The expression to put in the edit form from a job. Falls back to the display string when Hermes doesn't provide `expr`. */
 export function jobScheduleExpr(job: Pick<CronJob, "schedule" | "schedule_display">): string {
   return job.schedule?.expr?.trim() || job.schedule_display?.trim() || "";
