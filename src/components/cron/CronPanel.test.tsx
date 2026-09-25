@@ -142,7 +142,7 @@ test("list row — state dot/name/schedule/NPC name/countdown, plus NPC filter a
     assert.match(rows[0].textContent ?? "", /소피/);
     assert.match(rows[0].textContent ?? "", /0 9 \* \* \*/);
     assert.equal(byTestId(rows[0], "cron-state-dot")?.dataset.state, "scheduled");
-    assert.ok(byTestId(rows[0], "cron-state-dot")?.className.includes("bg-emerald-400"));
+    assert.ok(byTestId(rows[0], "cron-state-dot")?.className.includes("bg-success"));
     // 5 minutes out -> relative-time countdown
     assert.match(byTestId(rows[0], "cron-countdown")?.textContent ?? "", /5분/);
     // A paused job shows a status label instead of a countdown
