@@ -668,6 +668,8 @@ export type McpExport = {
   entry: Record<string, unknown>;
   secretKeys: string[];
   oauth: boolean;
+  /** True when the plugin removed a query string from `entry.url` (it may carry a token). */
+  urlQueryDropped?: boolean;
 };
 
 export type McpOAuthStart = { sessionId: string; authUrl: string } | { status: "approved" };
