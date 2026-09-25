@@ -140,14 +140,11 @@ test("doesn't use a utility class with an undefined semantic-color name", () => 
  * each one by hand. Use a token of the same hue family with opacity instead (`bg-danger/10`,
  * `border-npc/40`, `bg-info`).
  *
- * The allowlist holds one line in a file another change owns. It may only shrink — a new
- * literal anywhere, or one more in a listed file, fails.
+ * The allowlist is empty and may only stay that way — a new literal anywhere fails.
  */
 const LITERAL_PALETTE =
   /(?<![\w-])(?:[a-z-]+:)*(?:bg|border|ring|from|via|to|fill|stroke|shadow|outline|divide|decoration|caret|placeholder)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)(?:\/\d+)?(?![\w-])/g;
-const PALETTE_ALLOWED: Record<string, string[]> = {
-  "components/ChatPanel.tsx": ["bg-amber-400"],
-};
+const PALETTE_ALLOWED: Record<string, string[]> = {};
 
 test("doesn't use palette background, border or other color utilities outside the allowlist", () => {
   const found: Record<string, string[]> = {};

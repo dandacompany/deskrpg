@@ -950,7 +950,7 @@ export default function ChatPanel({
                     role="status"
                     aria-live="polite"
                   >
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-npc animate-pulse" />
                     {t(npcActivityKey)}
                   </div>
                 )}
