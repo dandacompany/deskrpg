@@ -140,7 +140,6 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
         generation: nextGeneration(channelId),
         phase: "assembling",
         participants: [
-          ...(previous?.state.participants.filter((p) => p.kind === "player") ?? []),
           ...[...new Set(npcIds)].map((actorId) => ({
             actorId,
             kind: "npc" as const,
@@ -164,11 +163,12 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
       const layout = await deps.layout(channelId);
       if (!current()) return generation;
       s.state.spaceId = layout.spaceId;
-      for (const p of s.state.participants.filter(
-        (p) => p.kind === "player" && p.state === "blocked",
-      )) {
-        const socketId = playerSockets.get(`${channelId}:${p.actorId}`);
-        if (socketId) await joinPlayer(channelId, p.actorId, socketId);
+      // Every gathering seats the people in the room afresh — whoever is already on a meeting seat keeps it at once
+      // (`joinPlayer`), everyone else walks to one. Carrying seats over from the last gathering is what left the host
+      // waiting on a seat the client believed it had reached.
+      for (const [key, socketId] of [...playerSockets]) {
+        if (!key.startsWith(`${channelId}:`)) continue;
+        await joinPlayer(channelId, key.slice(channelId.length + 1), socketId);
         if (!current()) return generation;
       }
       for (const actorId of [...new Set(npcIds)]) {
@@ -370,6 +370,15 @@ export function createMeetingSpatialCoordinator(deps: Dependencies) {
     const current = () => sessions.get(channelId) === s && s.state.generation === generation;
     s.state.phase = "returning";
     s.state.failure = null;
+    // People keep their place in the room, not their meeting seat. A seat left reserved after the gathering pulled
+    // the host back to the meeting chair in the office, and the next gathering reused it while the client thought it
+    // had already arrived (observed on staging).
+    for (const p of s.state.participants.filter((p) => p.kind === "player")) {
+      const socketId = playerSockets.get(`${channelId}:${p.actorId}`);
+      if (socketId) await deps.release(channelId, socketId);
+      if (!current()) return;
+    }
+    s.state.participants = s.state.participants.filter((p) => p.kind !== "player");
     // NPCs attending in place were never sent anywhere and hold no reservation — nothing to walk back from.
     const inPlace = (p: MeetingSpatialState["participants"][number]) =>
       p.kind === "npc" && p.state === "standing" && !p.target;

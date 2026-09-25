@@ -514,3 +514,34 @@ test("an NPC with no meeting spot left attends from where it stands instead of b
     ["n1"],
   );
 });
+
+test("ending a gathering gives up the people's meeting seats, and the next one seats them afresh", async () => {
+  const positions = new Map([["A", { x: 80, y: 80 }]]);
+  const { coordinator: c, holders, released } = multiSocketHarness(positions);
+  await c.joinPlayer("a", "u1", "A");
+  const first = await c.start("a", "u1", ["n1"]);
+  c.arrived("a", "n1", first!);
+  await c.cancel("a");
+  c.arrived("a", "n1", c.snapshot("a")!.generation);
+  assert.equal(c.snapshot("a")?.phase, "idle");
+  assert.ok(released.includes("A"), "the host's meeting seat outlived the gathering");
+  assert.equal([...holders.values()].includes("A"), false);
+
+  // The host walked out of the room meanwhile — the next gathering must send them to a seat again.
+  positions.set("A", { x: 300, y: 300 });
+  await c.start("a", "u1", ["n1"]);
+  assert.equal(playerState(c, "u1"), "walking");
+  assert.equal([...holders.values()].includes("A"), true, "no seat was reserved for the host");
+});
+
+test("a host still sitting when the next gathering starts is seated at once", async () => {
+  const positions = new Map([["A", { x: 112, y: 80 }]]);
+  const { coordinator: c } = multiSocketHarness(positions);
+  await c.joinPlayer("a", "u1", "A");
+  const first = await c.start("a", "u1", ["n1"]);
+  c.arrived("a", "n1", first!);
+  await c.cancel("a");
+  c.arrived("a", "n1", c.snapshot("a")!.generation);
+  await c.start("a", "u1", ["n1"]);
+  assert.equal(playerState(c, "u1"), "seated");
+});
