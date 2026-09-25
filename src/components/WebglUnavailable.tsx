@@ -32,7 +32,7 @@ export default function WebglUnavailable({ onRetry }: WebglUnavailableProps) {
           <button
             type="button"
             onClick={onRetry}
-            className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded font-semibold"
+            className="w-full sm:w-auto px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold text-white"
           >
             {t("webgl.retry")}
           </button>

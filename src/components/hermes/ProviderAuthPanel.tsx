@@ -82,7 +82,7 @@ const EXPIRY_GRACE_MS = 30_000;
 const BTN =
   "rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold text-text hover:bg-surface-raised/80 disabled:opacity-50";
 const BTN_PRIMARY =
-  "rounded bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50";
+  "rounded bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-hover disabled:opacity-50";
 const BADGE = "rounded bg-surface-raised px-1.5 py-0.5 text-[10px] text-text-muted";
 
 /** Flows as `malformed_response` when the body isn't a JSON object (same as ToolsetSkillPicker). */

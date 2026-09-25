@@ -104,7 +104,7 @@ export default function NpcDialog({
                     <div
                       className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
                         msg.role === "player"
-                          ? "bg-indigo-600 text-white"
+                          ? "bg-primary text-white"
                           : "bg-surface-raised text-text"
                       }`}
                     >
