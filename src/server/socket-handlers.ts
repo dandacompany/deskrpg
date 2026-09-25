@@ -172,8 +172,6 @@ interface NpcConfig {
   _name: string;
   role?: string | null;
   passPolicy?: string | null;
-  /** This NPC's meeting speaking rules. Falls back to the locale default when absent. */
-  meetingProtocol?: string | null;
   /** Language of the prompt document. Task procedures are built in that language. */
   locale?: string | null;
   /**
@@ -528,7 +526,6 @@ async function getNpcConfig(
       _name: npc.name,
       role: "Participant",
       passPolicy: typeof oc.passPolicy === "string" ? oc.passPolicy : null,
-      meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
       locale: typeof oc.locale === "string" ? oc.locale : null,
       instructions: resolveNpcInstructions(oc, requestLocale),
     };
@@ -560,7 +557,6 @@ export async function getNpcConfigsForChannel(
         hermesProfileId: typeof npc.hermesProfileId === "string" ? npc.hermesProfileId : null,
         _channelId: channelId,
         _name: npc.name,
-        meetingProtocol: typeof oc.meetingProtocol === "string" ? oc.meetingProtocol : null,
         locale: typeof oc.locale === "string" ? oc.locale : null,
         instructions: resolveNpcInstructions(oc, requestLocale),
         role: "Participant",
