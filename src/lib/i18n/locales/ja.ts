@@ -467,6 +467,8 @@ const ja: Record<string, string> = {
     "このゲートウェイと同じポートを使う Hermes をホストで見つけられませんでした。アドレスの変更や Hermes の停止を確認してください。",
   "hermes.wizard.error.serviceInstallFailed":
     "ゲートウェイをサービスとして登録できませんでした。管理者がホストでhermes gateway installを実行し、結果を確認してから再確認してください。",
+  "hermes.wizard.error.windowsScheduledTaskMissing":
+    "この Windows ホストにはゲートウェイのスケジュールタスクがなく、スタートアップフォルダーにだけ登録されています。この状態では DeskRPG がゲートウェイを停止・再起動できないため、プラグインの更新と設定変更ができません。タスクスケジューラで Hermes ゲートウェイのタスクがあるか確認し、なければそのホストで hermes gateway install を再実行してスケジュールタスクとして登録してから、もう一度確認してください。",
   "hermes.wizard.error.timezoneInvalid":
     "タイムゾーン名がIANA形式ではありません。Asia/Tokyoのような正しい名前を使うか、タイムゾーン設定をオフにして進めてください。",
   "hermes.wizard.error.timezoneWriteFailed":

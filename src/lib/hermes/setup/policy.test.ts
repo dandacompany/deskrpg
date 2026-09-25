@@ -61,6 +61,13 @@ test("unexpected subprocess/DB messages never leave server", () => {
   assert.equal(safeSetupError(new Error("multiplex_conflict")), "multiplex_conflict");
 });
 
+test("the Windows scheduled-task failure reaches the screen as its own code", () => {
+  assert.equal(
+    safeSetupError(new Error("windows_scheduled_task_missing")),
+    "windows_scheduled_task_missing",
+  );
+});
+
 test("security scan and source failures are safe structured errors", () => {
   for (const code of ["plugin_security_review_required", "plugin_source_unavailable"])
     assert.equal(safeSetupError(new Error(code)), code);

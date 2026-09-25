@@ -458,6 +458,8 @@ const en: Record<string, string> = {
     "No Hermes on that host uses this gateway\u2019s port. Check whether the gateway address changed or Hermes is stopped.",
   "hermes.wizard.error.serviceInstallFailed":
     "The gateway could not be registered as a service. Ask the administrator to run hermes gateway install on the host and read its output, then check again.",
+  "hermes.wizard.error.windowsScheduledTaskMissing":
+    "This Windows host has no scheduled task for the gateway; it is registered only in the Startup folder. DeskRPG cannot stop or restart it that way, so plugin updates and setting changes are blocked. Check Task Scheduler for the Hermes gateway task. If it is missing, run hermes gateway install on that host again to register it as a scheduled task, then check again.",
   "hermes.wizard.error.timezoneInvalid":
     "That time zone is not an IANA name. Use a valid name such as Asia/Seoul, or turn the time zone step off and continue.",
   "hermes.wizard.error.timezoneWriteFailed":

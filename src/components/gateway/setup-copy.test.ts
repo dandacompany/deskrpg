@@ -11,6 +11,7 @@ import {
 test("host remediation is present in all four locales without raw error codes", () => {
   for (const code of [
     "managed_service_required",
+    "windows_scheduled_task_missing",
     "service_identity_ambiguous",
     "service_identity_mismatch",
     "listener_owner_required",
@@ -179,4 +180,14 @@ test("update-only errors also state a reason in all four languages — never exp
       assert.ok(!message.includes(code));
     }
   }
+});
+
+test("the Windows scheduled-task copy names the missing task and where to check, unlike the generic service copy", () => {
+  for (const locale of ["ko", "en", "ja", "zh"] as const) {
+    const windows = setupHostError(locale, "windows_scheduled_task_missing");
+    assert.ok(windows && windows.includes("hermes gateway install"), locale);
+    assert.notEqual(windows, setupHostError(locale, "managed_service_required"), locale);
+  }
+  assert.match(setupHostError("ko", "windows_scheduled_task_missing")!, /작업 스케줄러/);
+  assert.match(setupHostError("en", "windows_scheduled_task_missing")!, /Task Scheduler/);
 });

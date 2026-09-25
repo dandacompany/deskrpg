@@ -49,6 +49,7 @@ export const HOST_ERROR_CODES = new Set([
   "plugin_source_unavailable",
   "hermes_version_unsupported",
   "service_install_failed",
+  "windows_scheduled_task_missing",
   "timezone_invalid",
   "timezone_write_failed",
   "worker_propagation_write_failed",

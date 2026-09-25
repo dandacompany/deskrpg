@@ -961,6 +961,46 @@ entry('install-service',id)
   );
   assert.deepEqual(result.body, { error: "service_install_failed" });
 });
+test("on Windows a gateway without its scheduled task fails with the Windows-specific code", () => {
+  // Upstream falls back to a Startup-folder entry when it cannot register the scheduled task. That entry
+  // cannot be stopped, so the generic "no managed service" copy gave the user no way out.
+  const result = fixture(
+    MANUAL +
+      String.raw`
+id = main('discover')['candidates'][0]['id']
+sys.platform = 'win32'
+entry('install',id)
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, { error: "windows_scheduled_task_missing" });
+});
+test("off Windows the same gateway keeps the generic managed-service code", () => {
+  const result = fixture(
+    MANUAL +
+      String.raw`
+id = main('discover')['candidates'][0]['id']
+sys.platform = 'linux'
+entry('install',id)
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, { error: "managed_service_required" });
+});
+test("on Windows a service install that leaves only the Startup-folder entry names the missing scheduled task", () => {
+  const result = fixture(
+    MANUAL +
+      String.raw`
+id = main('discover')['candidates'][0]['id']
+import io
+subprocess.Popen = lambda argv, **kwargs: type('Result',(),{'stdout':io.BytesIO(b''), 'wait':lambda self:0})()
+sys.platform = 'win32'
+entry('install-service',id)
+`,
+    { config: { gateway: { multiplex_profiles: true } } },
+  );
+  assert.deepEqual(result.body, { error: "windows_scheduled_task_missing" });
+});
 test("does not overwrite an existing timezone", () => {
   const result = fixture(
     String.raw`
