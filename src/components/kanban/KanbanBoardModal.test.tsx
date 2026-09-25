@@ -1320,6 +1320,55 @@ test("the owner archives the chosen project, then the list reloads and the defau
   }
 });
 
+test("the owner sets the open project's target date and the project list reloads", async () => {
+  const bodies: unknown[] = [];
+  const f = await mount(
+    (url, init) => {
+      if (url.endsWith("/projects/p1") && init?.method === "PATCH") {
+        bodies.push(JSON.parse(String(init.body)));
+        return json({ project: { ...MAIN_PROJECT, targetDate: "2026-11-15" } });
+      }
+      if (url.includes("/automation/status")) return json(status({ boardSlug: "deskrpg-main" }));
+      return json(board());
+    },
+    { projects: [{ ...MAIN_PROJECT, targetDate: null }], canManageProjects: true },
+  );
+  try {
+    const input = f.host.querySelector<HTMLInputElement>("[data-project-target-date]");
+    assert.ok(input, "owner sees the target date input");
+    const listsBefore = f.calls.filter((c) => /GET \S*\/projects$/.test(c)).length;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        input,
+        "2026-11-15",
+      );
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    assert.deepEqual(bodies, [{ targetDate: "2026-11-15" }]);
+    assert.equal(f.calls.filter((c) => /GET \S*\/projects$/.test(c)).length, listsBefore + 1);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("a member sees no target date input", async () => {
+  const f = await mount(
+    (url) =>
+      url.includes("/automation/status")
+        ? json(status({ boardSlug: "deskrpg-main" }))
+        : json(board()),
+    { projects: [MAIN_PROJECT], canManageProjects: false },
+  );
+  try {
+    assert.ok(!f.host.querySelector("[data-project-target-date]"));
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("does not append ?board= when viewing the default board — matches the shape of the old requests", async () => {
   const f = await mount(plain, { projects: [MAIN_PROJECT, SIDE_PROJECT] });
   try {

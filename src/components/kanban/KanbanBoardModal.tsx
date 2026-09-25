@@ -6,6 +6,7 @@ import { AlertTriangle, KanbanSquare, Plus, RefreshCw, Settings, X } from "lucid
 
 import { useT } from "@/lib/i18n";
 import { ProjectPicker, useSelectedBoard, type ProjectOption } from "./ProjectPicker";
+import { ProjectTargetDate } from "./ProjectTargetDate";
 import type {
   KanbanRunsPage,
   KanbanTask,
@@ -274,6 +275,13 @@ export default function KanbanBoardModal({
     },
     [channelId, selectBoard],
   );
+  const saveTargetDate = useCallback(
+    async (projectId: string, date: string | null) => {
+      await createKanbanApi(channelId).setProjectTargetDate(projectId, date);
+      setProjectsTick((n) => n + 1);
+    },
+    [channelId],
+  );
   const reopenProject = useCallback(
     async (projectId: string) => {
       await createKanbanApi(channelId).reopenProject(projectId);
@@ -490,15 +498,16 @@ export default function KanbanBoardModal({
    * The target date of the project this board belongs to. Matched by `boardSlug` — a channel can
    * have multiple boards, and one project has one board.
    *
-   * There's no screen for creating a project yet, so **having no value is the default**. In that
-   * case the timeline draws no vertical line and just writes "target date unset" — a nonexistent
-   * deadline is never drawn in.
+   * The channel owner sets it next to the project picker; until then **having no value is the
+   * default**. In that case the timeline draws no vertical line and just writes "target date
+   * unset" — a nonexistent deadline is never drawn in.
    */
-  const targetDate = useMemo(() => {
+  const openProject = useMemo(() => {
     const slug = status?.boardSlug;
     if (!slug) return null;
-    return projects.find((project) => project.boardSlug === slug)?.targetDate ?? null;
+    return projects.find((project) => project.boardSlug === slug) ?? null;
   }, [projects, status?.boardSlug]);
+  const targetDate = openProject?.targetDate ?? null;
 
   const metrics = useMemo(
     () =>
@@ -799,6 +808,11 @@ export default function KanbanBoardModal({
               canManage={canManageProjects}
               onArchive={archiveProject}
               onReopen={reopenProject}
+            />
+            <ProjectTargetDate
+              project={openProject}
+              canManage={canManageProjects}
+              onSave={saveTargetDate}
             />
             <button
               type="button"

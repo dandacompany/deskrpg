@@ -2950,6 +2950,11 @@ const ko: Record<string, string> = {
   "kanban.project.archiveFailed": "프로젝트를 보관하지 못했어요: {error}",
   "kanban.project.reopen": "다시 열기",
   "kanban.project.reopenFailed": "프로젝트를 다시 열지 못했어요: {error}",
+  "kanban.project.targetDate": "목표일",
+  "kanban.project.targetDateClear": "목표일 지우기",
+  "kanban.project.targetDateInvalid":
+    "날짜를 다시 확인해 주세요 — 실제로 있는 날짜만 넣을 수 있어요.",
+  "kanban.project.targetDateFailed": "목표일을 저장하지 못했어요: {error}",
   "kanban.newTask": "새 카드",
   "kanban.includeArchived": "보관함 보기",
   "kanban.dispatch": "지금 배정",
