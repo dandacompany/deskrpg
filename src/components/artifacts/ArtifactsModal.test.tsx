@@ -586,6 +586,26 @@ test("on a gate failure, a button that opens the checklist shows, and clicking i
   assert.ok(queryText("DeskRPG 플러그인 설치"));
 });
 
+test("once the gate clears, the open checklist closes and a later failure does not reopen it", async () => {
+  mockFetch({
+    [LIST]: { status: 404, json: { code: "plugin_absent", message: "not installed" } },
+  });
+  await render();
+  await click(byText("무엇이 필요한가요?"));
+  assert.ok(queryText("DeskRPG 플러그인 설치"));
+
+  mockFetch({ [LIST]: { artifacts: [], cursor: "", has_more: false } });
+  await render({ refreshTick: 1 });
+  assert.equal(queryText("DeskRPG 플러그인 설치"), undefined, "the checklist closed itself");
+
+  mockFetch({
+    [LIST]: { status: 404, json: { code: "plugin_absent", message: "not installed" } },
+  });
+  await render({ refreshTick: 2 });
+  assert.ok(queryText("무엇이 필요한가요?"));
+  assert.equal(queryText("DeskRPG 플러그인 설치"), undefined, "a new failure waits for a click");
+});
+
 test("a plain error (no code) doesn't show the checklist button", async () => {
   mockFetch({
     [LIST]: { status: 500, json: { code: "internal_error", message: "boom" } },

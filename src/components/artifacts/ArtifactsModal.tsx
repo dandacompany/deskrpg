@@ -92,6 +92,10 @@ export default function ArtifactsModal({
         setCursor(page.cursor);
         setHasMore(page.has_more);
         setError(null);
+        // The gate cleared — drop the held cause and close a checklist left open for it, so a
+        // later failure waits for a click instead of popping the old checklist back up.
+        gateBlocker.clear();
+        setChecklistOpen(false);
       } catch (err) {
         if (mine !== sequence.current) return;
         const apiErr =
@@ -105,9 +109,9 @@ export default function ArtifactsModal({
       }
     },
     // useGateBlocker() gives a new object on every render, so including gateBlocker whole would
-    // recreate load every time and cause a reload loop. showFromError is stable, so only that goes in.
+    // recreate load every time and cause a reload loop. showFromError and clear are stable, so only they go in.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [api, filter, initialTaskId, gateBlocker.showFromError],
+    [api, filter, initialTaskId, gateBlocker.showFromError, gateBlocker.clear],
   );
 
   useEffect(() => {

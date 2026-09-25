@@ -287,6 +287,8 @@ export default function KanbanBoardModal({
         setBoard(data);
         setBoardChannelId(channelId);
         setBlocker(null);
+        // A checklist opened for the old failure would otherwise keep saying what is missing.
+        setChecklist(null);
         return { kind: "applied", board: data };
       } catch (err) {
         if (!current()) return { kind: "superseded" };
