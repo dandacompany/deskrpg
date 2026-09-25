@@ -24,7 +24,7 @@ import type {
   BoardMeta,
   CronDeliveryTarget,
   CronJob,
-  CronRun,
+  PluginCronRun,
   KanbanAttachment,
   KanbanBoard,
   KanbanColumn,
@@ -155,7 +155,7 @@ type BoardRecord = {
 
 type CronState = {
   jobs: Map<string, CronJob>;
-  runs: Map<string, CronRun[]>;
+  runs: Map<string, PluginCronRun[]>;
   deliveryTargets: CronDeliveryTarget[];
   blueprints: AutomationBlueprint[];
 };
@@ -1225,10 +1225,12 @@ export async function startFakePluginServer(
     // events (started/finished) on the stream at once.
     const startedAt = nowIso();
     const sessionId = nextId("sess");
-    const run: CronRun = {
+    // Like the real plugin: run times come from Hermes' session rows as REAL epoch seconds.
+    const startedEpoch = Date.parse(startedAt) / 1000;
+    const run: PluginCronRun = {
       id: nextId("crun"),
-      started_at: startedAt,
-      ended_at: startedAt,
+      started_at: startedEpoch,
+      ended_at: startedEpoch,
       status: "ok",
       summary: `ran ${job.name}`,
       result_text: "",

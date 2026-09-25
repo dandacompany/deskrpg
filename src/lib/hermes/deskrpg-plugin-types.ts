@@ -556,6 +556,15 @@ export type CronRun = {
   result_text: string;
 };
 
+/**
+ * A run row as the plugin sends it. Its times come from Hermes' session table (REAL epoch seconds)
+ * and can arrive as numbers; the DeskRPG route turns them into `CronRun` (ISO strings).
+ */
+export type PluginCronRun = Omit<CronRun, "started_at" | "ended_at"> & {
+  started_at: string | number;
+  ended_at: string | number | null;
+};
+
 export type CreateCronJobBody = {
   schedule: string;
   /** Required unless it's a script-only job. The server route requires it only when `script` is absent. */

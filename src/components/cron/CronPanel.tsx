@@ -33,6 +33,7 @@ import {
 import { CronErrorNotice, TimezoneLabel } from "./cron-notices";
 import CronEditorDialog, { type CronEditorSubmit } from "./CronEditorDialog";
 import BlueprintGallery from "./BlueprintGallery";
+import CronRunItem from "./CronRunItem";
 
 export type CronPanelNpc = { npcId: string; npcName: string; profileName?: string };
 
@@ -683,32 +684,7 @@ export default function CronPanel({
             ) : (
               <ul role="list" className="space-y-1">
                 {(runs ?? []).map((run) => (
-                  <li
-                    key={run.id}
-                    role="listitem"
-                    data-testid="cron-run"
-                    className="p-2 rounded bg-surface border border-border"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[11px]">
-                        {formatLocalDateTime(run.started_at, locale)}
-                      </span>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded ${
-                          run.status === "error"
-                            ? "bg-danger/10 text-danger"
-                            : "bg-surface-raised text-text-muted"
-                        }`}
-                      >
-                        {run.status}
-                      </span>
-                    </div>
-                    {(run.summary || run.result_text) && (
-                      <p className="mt-1 text-text-muted whitespace-pre-wrap break-words line-clamp-4">
-                        {run.summary || run.result_text}
-                      </p>
-                    )}
-                  </li>
+                  <CronRunItem key={run.id} run={run} />
                 ))}
               </ul>
             )}

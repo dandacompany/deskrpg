@@ -39,6 +39,7 @@ import type {
   UpdateCronJobBody,
 } from "@/lib/hermes/deskrpg-plugin-types";
 import type { PluginResponse } from "@/lib/hermes/plugin-client-types";
+import { normalizeCronRun } from "@/lib/cron-runs";
 import { getUserId } from "@/lib/internal-rpc";
 import { readJsonObject } from "@/lib/api-body";
 
@@ -285,7 +286,8 @@ export async function listCronJobRuns(req: NextRequest, channelId: string, jobId
       : DEFAULT_RUNS_LIMIT;
   const res = await resolved.value.npc.client.cron.listRuns(jobId, { limit });
   if (!res.ok) return pluginFailureResponse(res);
-  return NextResponse.json({ runs: res.data.runs, limit });
+  // Hermes' session rows carry epoch-second times; the screen reads ISO strings (`normalizeCronRun`).
+  return NextResponse.json({ runs: res.data.runs.map(normalizeCronRun), limit });
 }
 
 export async function createCronJob(req: NextRequest, channelId: string) {
