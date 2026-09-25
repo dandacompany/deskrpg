@@ -25,3 +25,8 @@ export function invalidJsonBody() {
     { status: 400 },
   );
 }
+
+/** A body field that may be absent or null, but is a string when given. */
+export function isOptionalString(value: unknown): value is string | null | undefined {
+  return value === undefined || value === null || typeof value === "string";
+}

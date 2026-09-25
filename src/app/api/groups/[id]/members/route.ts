@@ -19,6 +19,7 @@ import {
 } from "@/lib/rbac/group-api";
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { readJsonObject } from "@/lib/api-body";
 
 async function listGroupAdminUserIds(groupId: string) {
   const adminRows = await db
@@ -84,7 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const auth = await requireMembersManager(groupId, userId);
   if ("response" in auth) return auth.response;
 
-  const body = await req.json();
+  const body = await readJsonObject(req);
   const { targetUserId, targetLoginId, role } = body ?? {};
 
   const requestedRole = typeof role === "string" ? role : "member";
@@ -181,7 +182,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const auth = await requireMembersManager(groupId, userId);
   if ("response" in auth) return auth.response;
 
-  const body = await req.json();
+  const body = await readJsonObject(req);
   const { targetUserId } = body ?? {};
 
   if (!targetUserId || typeof targetUserId !== "string") {

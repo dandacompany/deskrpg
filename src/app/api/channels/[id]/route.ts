@@ -25,6 +25,7 @@ import {
 import { isChannelPasswordValid } from "@/lib/security-policy";
 import { seatingMapFor } from "@/lib/seat-assignment";
 import internalTransport from "@/lib/internal-transport.js";
+import { invalidJsonBody, readJsonObject } from "@/lib/api-body";
 
 const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport as {
   buildInternalAuthHeaders: () => Record<string, string>;
@@ -250,11 +251,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const previousName = rows[0].name;
-    const body = await req.json();
+    const body = await readJsonObject(req);
+    if (!body) return invalidJsonBody();
     const updates: Record<string, unknown> = {};
 
-    if (body.name !== undefined) updates.name = body.name.trim();
-    if (body.description !== undefined) updates.description = body.description?.trim() || null;
+    if (body.name !== undefined) {
+      if (typeof body.name !== "string") return invalidJsonBody();
+      updates.name = body.name.trim();
+    }
+    if (body.description !== undefined) {
+      if (body.description !== null && typeof body.description !== "string") {
+        return invalidJsonBody();
+      }
+      updates.description = body.description?.trim() || null;
+    }
     if (body.maxPlayers !== undefined) updates.maxPlayers = body.maxPlayers;
     if (body.mapData !== undefined) {
       try {

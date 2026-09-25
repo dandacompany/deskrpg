@@ -40,3 +40,19 @@ test("the list response tells whether the caller is a system admin", async () =>
   const ordinary = await seedUser("user");
   assert.equal((await (await GET(req(ordinary))).json()).isSystemAdmin, false);
 });
+
+test("creating a group with a non-JSON body is a 400, not a server error", async () => {
+  const { POST } = await import("./route");
+  const admin = await seedUser("system_admin");
+
+  const response = await POST(
+    new NextRequest("http://localhost:3102/api/groups", {
+      method: "POST",
+      headers: { host: "localhost:3102", "x-user-id": admin, "content-type": "application/json" },
+      body: "not json",
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).errorCode, "missing_required_fields");
+});
