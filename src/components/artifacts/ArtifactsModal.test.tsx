@@ -132,6 +132,9 @@ async function click(el: HTMLElement) {
   await flush();
 }
 
+// Assert on booleans, never on a DOM node: a failed assertion inspects its values with
+// `customInspect: false`, and walking a rendered node (its document, window and React fiber graph)
+// never finishes — the file hung until the runner killed it instead of reporting the failure.
 test.afterEach(async () => {
   if (root) {
     const r = root;
@@ -204,8 +207,8 @@ test("the link viewer doesn't turn javascript: into an open button", async () =>
   });
   await render();
   await click(byText("수상한 링크"));
-  assert.equal(queryText("새 탭에서 열기"), undefined);
-  assert.equal(container.querySelector('a[href^="javascript"]'), null);
+  assert.ok(!queryText("새 탭에서 열기"));
+  assert.ok(!container.querySelector('a[href^="javascript"]'));
   assert.ok(queryText("열 수 없는 주소입니다"));
 });
 
@@ -248,7 +251,7 @@ test("delete sends DELETE after confirmation and removes it from the list", asyn
   assert.ok(queryText("이 결과물의 모든 버전을 삭제할까요?"));
   await click(byText("삭제"));
   assert.ok(calls.includes("DELETE /api/channels/ch-1/artifacts/a1"));
-  assert.equal(queryText("주간 보고"), undefined);
+  assert.ok(!queryText("주간 보고"));
 });
 
 test("canceling the delete confirmation doesn't send it", async () => {
@@ -298,8 +301,8 @@ test("an artifact.deleted event removes that item and clears the selection", asy
   await render({ initialArtifactId: "a1" });
   assert.ok(container.querySelector(".markdown-chat h1"));
   await render({ lastEvent: { kind: "artifact.deleted", artifactId: "a1" } });
-  assert.equal(queryText("주간 보고"), undefined);
-  assert.equal(container.querySelector(".markdown-chat"), null);
+  assert.ok(!queryText("주간 보고"));
+  assert.ok(!container.querySelector(".markdown-chat"));
 });
 
 test("428 renders the plugin-update notice", async () => {
@@ -596,14 +599,14 @@ test("once the gate clears, the open checklist closes and a later failure does n
 
   mockFetch({ [LIST]: { artifacts: [], cursor: "", has_more: false } });
   await render({ refreshTick: 1 });
-  assert.equal(queryText("DeskRPG 플러그인 설치"), undefined, "the checklist closed itself");
+  assert.ok(!queryText("DeskRPG 플러그인 설치"), "the checklist closed itself");
 
   mockFetch({
     [LIST]: { status: 404, json: { code: "plugin_absent", message: "not installed" } },
   });
   await render({ refreshTick: 2 });
   assert.ok(queryText("무엇이 필요한가요?"));
-  assert.equal(queryText("DeskRPG 플러그인 설치"), undefined, "a new failure waits for a click");
+  assert.ok(!queryText("DeskRPG 플러그인 설치"), "a new failure waits for a click");
 });
 
 test("a plain error (no code) doesn't show the checklist button", async () => {
@@ -611,7 +614,7 @@ test("a plain error (no code) doesn't show the checklist button", async () => {
     [LIST]: { status: 500, json: { code: "internal_error", message: "boom" } },
   });
   await render();
-  assert.equal(queryText("무엇이 필요한가요?"), undefined);
+  assert.ok(!queryText("무엇이 필요한가요?"));
 });
 
 test("the media tab grid renders images as thumbnails and audio/video as icon tiles", async () => {
@@ -640,7 +643,7 @@ test("the media tab grid renders images as thumbnails and audio/video as icon ti
   await render();
   await click(byText("미디어"));
   assert.ok(container.querySelector('img[alt="그림"]'), "이미지는 썸네일이다");
-  assert.equal(container.querySelector('img[alt="오디오"]'), null, "오디오는 썸네일이 아니다");
+  assert.ok(!container.querySelector('img[alt="오디오"]'), "오디오는 썸네일이 아니다");
   assert.ok(queryText("오디오"), "오디오는 제목이 붙은 타일이다");
 });
 
@@ -732,5 +735,5 @@ test("even if the attachment lookup fails, the gallery doesn't break and shows n
   });
   await render();
   assert.ok(byText("주간 보고"));
-  assert.equal(container.querySelector('[data-testid="card-attachments-unsupported"]'), null);
+  assert.ok(!container.querySelector('[data-testid="card-attachments-unsupported"]'));
 });
