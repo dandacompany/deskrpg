@@ -14,6 +14,11 @@ import {
   killProcessTree,
   secureStdioDir,
 } from "./executor";
+
+// getSshHosts reads the registered hosts under DESKRPG_HOME. Point it at an empty directory so the
+// machine running the tests (a developer box, or a Windows host with real registrations) cannot
+// leak its own hosts into the expectations.
+process.env.DESKRPG_HOME = mkdtempSync(path.join(os.tmpdir(), "deskrpg-executor-home-"));
 function fake() {
   const child = Object.assign(new EventEmitter(), {
     stdin: new PassThrough(),
@@ -195,19 +200,23 @@ test("secureStdioDir: ACL failure is fail-closed — throws and leaves no direct
   assert.equal(existsSync(dir), false, "실패하면 디렉터리를 지운다");
 });
 
-test("secureStdioDir: posix doesn't call icacls and narrows to 0700", () => {
-  let hardened = false;
-  const dir = secureStdioDir(
-    "linux",
-    () => mkdtempSync(path.join(os.tmpdir(), "deskrpg-acl-posix-")),
-    () => {
-      hardened = true;
-    },
-  );
-  assert.equal(hardened, false);
-  assert.equal(statSync(dir).mode & 0o777, 0o700);
-  rmSync(dir, { recursive: true, force: true });
-});
+test(
+  "secureStdioDir: posix doesn't call icacls and narrows to 0700",
+  { skip: process.platform === "win32" ? "POSIX file modes" : false },
+  () => {
+    let hardened = false;
+    const dir = secureStdioDir(
+      "linux",
+      () => mkdtempSync(path.join(os.tmpdir(), "deskrpg-acl-posix-")),
+      () => {
+        hardened = true;
+      },
+    );
+    assert.equal(hardened, false);
+    assert.equal(statSync(dir).mode & 0o777, 0o700);
+    rmSync(dir, { recursive: true, force: true });
+  },
+);
 
 test("executor source: neither per-file icacls nor per-file deletion remains", () => {
   const source = readFileSync(new URL("./executor.ts", import.meta.url), "utf-8");

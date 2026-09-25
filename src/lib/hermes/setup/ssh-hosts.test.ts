@@ -78,7 +78,9 @@ test("creates the dedicated key once and returns the same public key on later ca
   assert.equal(await ssh.publicKey(), "ssh-ed25519 AAAAPUB deskrpg@test");
   assert.equal(await ssh.publicKey(), "ssh-ed25519 AAAAPUB deskrpg@test");
   assert.equal(generated, 1);
-  assert.equal(statSync(path.join(home, "ssh")).mode & 0o777, 0o700);
+  // POSIX file modes. Windows has no mode bits (Node reports 0o666); access there is by ACL.
+  if (process.platform !== "win32")
+    assert.equal(statSync(path.join(home, "ssh")).mode & 0o777, 0o700);
 });
 
 test("registers only when the confirmed and re-scanned fingerprints match, creating config and known_hosts", async () => {
@@ -110,7 +112,8 @@ test("registers only when the confirmed and re-scanned fingerprints match, creat
   assert.match(config, new RegExp(`HostKeyAlias ${host.id}`));
   const known = readFileSync(path.join(home, "ssh", "known_hosts"), "utf8");
   assert.equal(known, `${host.id} ssh-ed25519 ${ED}\n`);
-  assert.equal(statSync(ssh.configPath).mode & 0o777, 0o600);
+  // POSIX file modes. Windows has no mode bits (Node reports 0o666); access there is by ACL.
+  if (process.platform !== "win32") assert.equal(statSync(ssh.configPath).mode & 0o777, 0o600);
 });
 
 test("rejects when the host key changes between scan and registration", async () => {

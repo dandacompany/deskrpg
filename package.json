@@ -68,6 +68,7 @@
     "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
     "db:setup": "dotenv -e .env.local -- drizzle-kit migrate",
     "deploy:test": "bash deploy/test-deploy.sh",
+    "test:windows": "tsx --test src/lib/hermes/setup/windows-runtime.test.ts src/lib/windows-daemon.test.js src/lib/hermes/setup/ssh-keyscan-fallback.test.ts src/lib/hermes/setup/ssh-hosts.test.ts src/lib/hermes/setup/executor.test.ts src/lib/hermes/setup/platform.test.ts src/lib/hermes/setup/host-launcher.test.ts src/lib/hermes/setup/ssh-args.test.ts src/lib/hermes/setup/system-ssh.test.ts src/lib/child-process-casts.test.ts src/lib/startup-check.server-state.test.js src/lib/adapters/subprocess-pool.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:fixtures": "playwright test --config playwright.fixtures.config.ts",
     "capture:readme": "tsx scripts/readme-capture/session.ts",

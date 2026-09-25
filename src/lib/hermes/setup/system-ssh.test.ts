@@ -98,7 +98,9 @@ test("system host args carry only the selection without -F, and the list stays i
     assert.deepEqual(systemSshArgs(host), ["-p", "2222", "-l", "deploy"]);
     assert.deepEqual(systemSshArgs({ ...host, port: undefined, user: undefined }), []);
     assert.equal(store.get(host.id)?.target, "my-server");
-    assert.equal(statSync(path.join(home, "ssh", "system-hosts.json")).mode & 0o777, 0o600);
+    // POSIX file modes. Windows has no mode bits (Node reports 0o666); access there is by ACL.
+    if (process.platform !== "win32")
+      assert.equal(statSync(path.join(home, "ssh", "system-hosts.json")).mode & 0o777, 0o600);
     await store.remove(host.id);
     assert.equal(store.list().length, 0);
   } finally {
