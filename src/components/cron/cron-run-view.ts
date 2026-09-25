@@ -12,6 +12,15 @@ export function runStatusKey(status: string | null | undefined): string {
 }
 
 /**
+ * Whether a scheduled job's next run has come due but no result has moved it on yet. "Run now" pulls
+ * the next run to the present, so until the run finishes it would otherwise count into the past
+ * ("37s ago") and read as stale data.
+ */
+export function isRunDue(nextRunMs: number | null, nowMs: number): boolean {
+  return nextRunMs !== null && nextRunMs <= nowMs;
+}
+
+/**
  * Whether a run's summary is only Hermes' automatic session title: "<job name> · <%b %d %H:%M>"
  * (cron/scheduler.py), or "cron <job id>" when the job has no name. It repeats the job and the time
  * the row already shows — in English month names — so the row hides it. A title the model wrote is kept.

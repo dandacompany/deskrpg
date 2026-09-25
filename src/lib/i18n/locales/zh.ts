@@ -2562,6 +2562,7 @@ const zh: Record<string, string> = {
   "cron.empty": "暂无定时任务",
   "cron.deletedJob": "此定时任务已被删除。过去的执行结果仍保留在聊天通知中。",
   "cron.noNextRun": "未计划",
+  "cron.nextRun.due": "正在运行或即将运行",
   "cron.nextRun": "下次运行",
   "cron.lastRun": "上次运行",
   "cron.lastError": "上次错误",

@@ -2686,6 +2686,7 @@ const ja: Record<string, string> = {
   "cron.empty": "クーロンがありません",
   "cron.deletedJob": "このクーロンは削除されました。過去の実行結果はチャットの通知に残っています。",
   "cron.noNextRun": "予定なし",
+  "cron.nextRun.due": "実行中、またはまもなく実行されます",
   "cron.nextRun": "次回実行",
   "cron.lastRun": "前回実行",
   "cron.lastError": "前回のエラー",
