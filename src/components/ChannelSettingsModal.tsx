@@ -471,7 +471,7 @@ export default function ChannelSettingsModal({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   maxLength={100}
-                  className="w-full px-3 py-2 bg-bg border border-border rounded text-text focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 bg-bg border border-border rounded text-text focus:outline-none focus:border-primary-light"
                 />
               </div>
               <div>
@@ -483,7 +483,7 @@ export default function ChannelSettingsModal({
                   onChange={(e) => setDescription(e.target.value)}
                   maxLength={500}
                   rows={2}
-                  className="w-full px-3 py-2 bg-bg border border-border rounded text-text focus:outline-none focus:border-indigo-500 resize-none"
+                  className="w-full px-3 py-2 bg-bg border border-border rounded text-text focus:outline-none focus:border-primary-light resize-none"
                 />
               </div>
               <div>
@@ -528,7 +528,7 @@ export default function ChannelSettingsModal({
                         ? t("settings.passwordPlaceholderNew")
                         : t("settings.passwordPlaceholderKeep")
                     }
-                    className="w-full px-3 py-2 bg-bg border border-border rounded text-text placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 bg-bg border border-border rounded text-text placeholder-text-dim focus:outline-none focus:border-primary-light"
                   />
                 </div>
               )}
@@ -542,7 +542,7 @@ export default function ChannelSettingsModal({
                   </code>
                   <button
                     onClick={copyInviteCode}
-                    className="px-3 py-2 bg-surface-raised hover:bg-gray-600 rounded text-sm text-text"
+                    className="px-3 py-2 bg-surface-raised hover:bg-border rounded text-sm text-text"
                   >
                     {copied ? t("game.copied") : t("common.copy")}
                   </button>
@@ -619,11 +619,11 @@ export default function ChannelSettingsModal({
                     >
                       <div className="flex items-center gap-2">
                         <span
-                          className={`w-2 h-2 rounded-full ${m.isOnline ? "bg-green-400" : "bg-gray-600"}`}
+                          className={`w-2 h-2 rounded-full ${m.isOnline ? "bg-success" : "bg-text-muted"}`}
                         />
                         <span className="text-white text-sm">{m.nickname}</span>
                         <span
-                          className={`text-xs px-1.5 py-0.5 rounded ${m.role === "owner" ? "bg-amber-600/30 text-npc" : "bg-surface-raised text-text-muted"}`}
+                          className={`text-xs px-1.5 py-0.5 rounded ${m.role === "owner" ? "bg-npc/30 text-npc" : "bg-surface-raised text-text-muted"}`}
                         >
                           {m.role === "owner" ? t("settings.roleOwner") : t("settings.roleMember")}
                         </span>
@@ -642,20 +642,20 @@ export default function ChannelSettingsModal({
                 </div>
               )}
               {confirmKick && (
-                <div className="mt-4 p-3 bg-red-900/30 border border-red-700 rounded">
+                <div className="mt-4 p-3 bg-danger-hover/30 border border-danger rounded">
                   <p className="text-sm text-white mb-2">
                     {t("settings.kickConfirm", { name: confirmKick.nickname })}
                   </p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleKick(confirmKick)}
-                      className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm text-white"
+                      className="px-3 py-1 bg-danger hover:bg-danger-hover rounded text-sm text-white"
                     >
                       {t("common.confirm")}
                     </button>
                     <button
                       onClick={() => setConfirmKick(null)}
-                      className="px-3 py-1 bg-surface-raised hover:bg-gray-600 rounded text-sm text-text-secondary"
+                      className="px-3 py-1 bg-surface-raised hover:bg-border rounded text-sm text-text-secondary"
                     >
                       {t("common.cancel")}
                     </button>
@@ -730,7 +730,7 @@ export default function ChannelSettingsModal({
                             setGatewayConnectionState({ status: "idle" });
                             setGatewayNotice(null);
                           }}
-                          className="w-full px-3 py-2 bg-bg border border-border rounded text-text focus:outline-none focus:border-indigo-500"
+                          className="w-full px-3 py-2 bg-bg border border-border rounded text-text focus:outline-none focus:border-primary-light"
                         >
                           <option value="">{t("settings.gatewaySelect")}</option>
                           {gatewayOptions.map((option) => (
@@ -769,7 +769,7 @@ export default function ChannelSettingsModal({
                           onChange={(e) => setGatewayUrl(e.target.value)}
                           placeholder={t("settings.gatewayUrlPlaceholder")}
                           disabled={!gatewayCanEditCredentials}
-                          className="w-full px-3 py-2 bg-bg border border-border rounded text-text placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+                          className="w-full px-3 py-2 bg-bg border border-border rounded text-text placeholder-text-dim focus:outline-none focus:border-primary-light disabled:opacity-60"
                         />
                       </div>
                       <div>
@@ -787,12 +787,12 @@ export default function ChannelSettingsModal({
                                 : t("settings.gatewayTokenPlaceholder")
                             }
                             disabled={!gatewayCanEditCredentials}
-                            className="flex-1 px-3 py-2 bg-bg border border-border rounded text-text placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+                            className="flex-1 px-3 py-2 bg-bg border border-border rounded text-text placeholder-text-dim focus:outline-none focus:border-primary-light disabled:opacity-60"
                           />
                           <button
                             type="button"
                             onClick={() => setShowToken((v) => !v)}
-                            className="px-3 py-2 bg-surface-raised hover:bg-gray-600 rounded text-sm text-text-secondary"
+                            className="px-3 py-2 bg-surface-raised hover:bg-border rounded text-sm text-text-secondary"
                           >
                             {showToken ? t("common.hide") : t("common.show")}
                           </button>
@@ -831,7 +831,7 @@ export default function ChannelSettingsModal({
                         type="button"
                         onClick={() => void handleDeleteGateway()}
                         disabled={gatewaySaving}
-                        className="px-4 py-2 bg-red-700/70 hover:bg-red-700 rounded font-semibold text-white disabled:opacity-50"
+                        className="px-4 py-2 bg-danger/70 hover:bg-danger-hover rounded font-semibold text-white disabled:opacity-50"
                       >
                         {t("settings.disconnectGateway")}
                       </button>
@@ -843,7 +843,7 @@ export default function ChannelSettingsModal({
                         gatewayTesting ||
                         (gatewayMode === "resource" ? !selectedGatewayId : !gatewayUrl.trim())
                       }
-                      className="flex-1 px-4 py-2 bg-surface-raised hover:bg-gray-600 rounded font-semibold text-text disabled:opacity-50"
+                      className="flex-1 px-4 py-2 bg-surface-raised hover:bg-border rounded font-semibold text-text disabled:opacity-50"
                     >
                       {gatewayTesting ? t("common.loading") : t("settings.testConnection")}
                     </button>
