@@ -67,3 +67,25 @@ test("terminal errors remain visible and do not animate", async () => {
   assert.doesNotMatch(el.textContent ?? "", /adapter_error/);
   assert.ok(!el.querySelector(".animate-pulse"));
 });
+
+test("a failed response says why when the server sent a known reason", async () => {
+  const el = document.createElement("div");
+  document.body.appendChild(el);
+  const root = createRoot(el);
+  await act(async () =>
+    root.render(
+      <I18nProvider>
+        <ResponseProgress
+          responses={[
+            { ...responses[0], status: "failed", content: "", error: "provider_auth_expired" },
+          ]}
+        />
+      </I18nProvider>,
+    ),
+  );
+
+  const text = el.textContent ?? "";
+  assert.match(text, /Failed/);
+  assert.match(text, /sign-in has expired/);
+  assert.doesNotMatch(text, /provider_auth_expired/, "the raw code is not shown");
+});
