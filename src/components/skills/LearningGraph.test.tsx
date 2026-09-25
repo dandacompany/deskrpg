@@ -132,8 +132,8 @@ test("members have no edit/delete buttons", async () => {
   await render(view(false));
   await clickNode("weekly");
   assert.ok(container.querySelector("textarea"));
-  assert.equal(container.querySelector('[data-action="node-edit"]'), null);
-  assert.equal(container.querySelector('[data-action="node-delete"]'), null);
+  assert.ok(!container.querySelector('[data-action="node-edit"]'));
+  assert.ok(!container.querySelector('[data-action="node-delete"]'));
 });
 
 test("pulling the time slider earlier hides later nodes", async () => {
@@ -148,7 +148,7 @@ test("pulling the time slider earlier hides later nodes", async () => {
     slider.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await flush();
-  assert.equal(container.querySelector('[data-node="pdf"]'), null);
+  assert.ok(!container.querySelector('[data-node="pdf"]'));
   assert.ok(container.querySelector('[data-node="weekly"]'));
   assert.ok(container.querySelector(`[data-node="${MEM_ID}"]`));
 });

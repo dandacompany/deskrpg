@@ -108,9 +108,9 @@ test("a member sees a read-only editor with no change buttons or add tab", async
   await click('[data-skill="weekly"]');
   assert.equal(($("textarea") as HTMLTextAreaElement).readOnly, true);
   for (const a of ["save", "pin", "archive", "disable-unused", "enable-all", "disable-all"]) {
-    assert.equal(container.querySelector(`[data-action="${a}"]`), null, a);
+    assert.ok(!container.querySelector(`[data-action="${a}"]`), a);
   }
-  assert.equal(container.querySelector('[data-tab="add"]'), null);
+  assert.ok(!container.querySelector('[data-tab="add"]'));
 });
 
 test("a locked file is read-only even for the owner, with no save button", async () => {
@@ -129,7 +129,7 @@ test("a locked file is read-only even for the owner, with no save button", async
   await click('[data-file="scripts/run.py"]');
   assert.equal(($("textarea") as HTMLTextAreaElement).value, "print(1)");
   assert.equal(($("textarea") as HTMLTextAreaElement).readOnly, true);
-  assert.equal(container.querySelector('[data-action="save"]'), null);
+  assert.ok(!container.querySelector('[data-action="save"]'));
 });
 
 test("archive goes through confirmation, POSTs …/archive, then clears the selection", async () => {
@@ -145,7 +145,7 @@ test("archive goes through confirmation, POSTs …/archive, then clears the sele
   assert.ok(!log.calls.includes(`POST ${ROOT}/weekly/archive`));
   await click('[data-action="confirm-archive"]');
   assert.ok(log.calls.includes(`POST ${ROOT}/weekly/archive`));
-  assert.equal(container.querySelector("textarea"), null);
+  assert.ok(!container.querySelector("textarea"));
 });
 
 test("pin PUTs …/pinned then re-reads the detail", async () => {
@@ -260,7 +260,7 @@ test("Hub skill [delete] confirms, polls the job to completion, then clears the 
       pollIntervalMs={1}
     />,
   );
-  assert.equal(container.querySelector('[data-action="pin"]'), null);
+  assert.ok(!container.querySelector('[data-action="pin"]'));
   await click('[data-action="uninstall"]');
   await click('[data-action="confirm-uninstall"]');
   await flush();

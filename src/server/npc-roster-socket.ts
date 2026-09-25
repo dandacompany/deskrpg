@@ -36,7 +36,8 @@ export type RegisterNpcRosterHandlersArgs = {
  *
  * The authority on "is this NPC in a meeting" is **the broker's `config.participants`**. A discussion does not
  * take all of the channel's NPCs — only the subset `start-discussion` filtered with `selectedNpcIds`
- * become participants (meeting-discussion.ts:477-480). So a channel-level check
+ * become participants (the `selectedNpcIds` filter in the `meeting:start-discussion` handler,
+ * meeting-discussion.ts). So a channel-level check
  * (`activeBrokers.has(channelId)`) would also lock NPCs that weren't invited to the meeting.
  *
  * The participants in `meetingRooms` are **human socket.ids** and must not be used here.

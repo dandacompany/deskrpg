@@ -3,7 +3,7 @@
  *
  * The **only door** through which the plugin's unified events (`/deskrpg/events`) enter DeskRPG.
  * The poller (`automation-poller.ts`) calls it, and a future push route will call the same function.
- * Hard gate 5: no other path creates room notices or map state directly — everything goes through here.
+ * No other path creates room notices or map state from plugin events — everything goes through here.
  *
  * There are only three things done for an event.
  *  (a) Channel socket broadcast — an allow list. `task.*` goes to `kanban:event`, `cron.*` to `cron:event`,
@@ -45,7 +45,7 @@ import {
 } from "@/lib/hermes/deskrpg-plugin-types";
 
 // ---------------------------------------------------------------------------
-// Socket event names — hard gate 10: these four are the only new events.
+// Socket event names this sink broadcasts (`socket-event-parity.test.ts` counts every event name).
 // ---------------------------------------------------------------------------
 
 export const AUTOMATION_SOCKET_EVENTS = {

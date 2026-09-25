@@ -55,7 +55,7 @@ test("start opens the provider page in a new tab", async () => {
   assert.equal(opened.length, 1);
   assert.equal(opened[0][0], "https://canva.example/auth");
   assert.equal(opened[0][1], "_blank");
-  assert.equal(container.querySelector("[data-oauth-link]"), null);
+  assert.ok(!container.querySelector("[data-oauth-link]"));
 });
 
 test("a blocked popup shows the link instead", async () => {
@@ -182,7 +182,7 @@ test("an attempt the screen does not know about (409 oauth_in_progress) offers [
 test("after opening the tab, the paste field is highlighted as step 2 and focused", async () => {
   mockFetch({ [START]: { sessionId: "s1", authUrl: "https://canva.example/auth" } });
   await render(step());
-  assert.equal(container.querySelector("[data-oauth-step2]"), null);
+  assert.ok(!container.querySelector("[data-oauth-step2]"));
   await click('[data-action="oauth-start"]');
   assert.match($("[data-oauth-step2]").textContent ?? "", /2단계/);
   assert.equal(document.activeElement, $('[name="oauth-paste"]'));

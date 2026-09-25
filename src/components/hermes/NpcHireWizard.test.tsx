@@ -283,7 +283,7 @@ test("without a dashboard URL, says to switch profiles and log in instead of sho
     await act(async () => {
       configTab.click();
     });
-    assert.equal(el.querySelector('a[href*="/env?profile="]'), null);
+    assert.ok(!el.querySelector('a[href*="/env?profile="]'));
     assert.match(el.textContent ?? "", /oliver/);
     assert.ok(buttonByText(el, "로그인 확인"));
 
@@ -743,7 +743,7 @@ test("tells a shared user the owner needs to set it up, instead of showing key i
     const { root, el, select } = await openModelFor(false);
     const option = [...select.options].find((o) => o.value === "openai");
     assert.equal(option?.disabled, true, "누를 수 없는 인증을 고르게 한다");
-    assert.equal(el.querySelector('input[type="password"]'), null);
+    assert.ok(!el.querySelector('input[type="password"]'));
     root.unmount();
     el.remove();
   } finally {
@@ -967,7 +967,7 @@ test("no notice when the worker was applied, or on an old plugin (no workerPlugi
       };
       const { root, el } = await mount(wizardWith(routes, calls));
       await createAndOpenModel(el);
-      assert.equal(el.querySelector("[data-worker-propagation-notice]"), null);
+      assert.ok(!el.querySelector("[data-worker-propagation-notice]"));
       root.unmount();
       el.remove();
     }

@@ -198,11 +198,7 @@ test("an owner sees 'Configure' on a tool with a provider choice, and checking a
   const { host, unmount } = await mount({ canManageToolProviders: true });
   try {
     assert.ok(host.querySelector('[data-configure-tool="tts"]'), "tts 에 설정이 없다");
-    assert.equal(
-      host.querySelector('[data-configure-tool="web"]'),
-      null,
-      "web 에는 설정이 없어야 한다",
-    );
+    assert.ok(!host.querySelector('[data-configure-tool="web"]'), "web 에는 설정이 없어야 한다");
     await act(async () => {
       host.querySelector<HTMLInputElement>('input[data-toolset="tts"]')!.click();
     });
@@ -217,7 +213,7 @@ test("an owner sees 'Configure' on a tool with a provider choice, and checking a
       (b) => b.textContent?.trim() === "닫기",
     )!;
     await act(async () => close.click());
-    assert.equal(host.querySelector("[data-modal-overlay]"), null, "닫기로 팝업이 닫히지 않았다");
+    assert.ok(!host.querySelector("[data-modal-overlay]"), "닫기로 팝업이 닫히지 않았다");
   } finally {
     globalThis.fetch = original;
     await unmount();
@@ -232,7 +228,7 @@ test("a shared user has no 'Configure'", async () => {
   const f = stubFetch({ "/toolsets": withProviders, "/skills": SKILLS });
   const { host, unmount } = await mount({});
   try {
-    assert.equal(host.querySelector("[data-configure-tool]"), null);
+    assert.ok(!host.querySelector("[data-configure-tool]"));
   } finally {
     f.restore();
     await unmount();

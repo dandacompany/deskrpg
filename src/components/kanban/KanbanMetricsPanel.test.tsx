@@ -90,7 +90,7 @@ test("when there are cards needing attention, they're broken down by kind and em
 
 test("does not emphasize when there are no cards needing attention", async () => {
   const host = await mount([run()], [{ id: "a", status: "running" }]);
-  assert.equal(host.querySelector(".border-danger"), null);
+  assert.ok(!host.querySelector(".border-danger"));
 });
 
 test("lists the outcome distribution by kind", async () => {

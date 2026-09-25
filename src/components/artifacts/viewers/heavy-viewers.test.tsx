@@ -358,7 +358,7 @@ async function assertStaysPlain(text: string, language: string) {
   const pre = container.querySelector("pre");
   assert.ok(pre, "plain <pre>");
   assert.equal(pre.classList.contains("shiki"), false);
-  assert.equal(container.querySelector("pre.shiki"), null);
+  assert.ok(!container.querySelector("pre.shiki"));
 }
 
 test("CodeViewer: an unknown language stays as plain <pre>", async () => {

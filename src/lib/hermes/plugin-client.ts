@@ -89,7 +89,8 @@ const TIMEOUT: PluginFailure = {
 };
 
 // I-1: on a 2xx whose body is not a JSON object (HTML error page, `null`, parse failure, etc.)
-// do not claim success. Matches the criterion in `plugin-capability.ts:28`.
+// do not claim success. Same criterion as `classifyPluginProbe` in `plugin-capability.ts`, which
+// also refuses a body that is not an object.
 const MALFORMED_RESPONSE: PluginFailure = {
   code: "malformed_response",
   message: "",

@@ -15,8 +15,7 @@ export const DEV_PASSWORD = process.env.DESKRPG_E2E_PASSWORD ?? "deskrpg-e2e-202
 export async function enterFirstChannel(page: Page): Promise<void> {
   await login(page);
 
-  // For both character and channel cards the title (h3) is the click target. Sprites are drawn on
-  // a canvas, not as <img>, so do not target them as images.
+  // Cards are clicked by their title (h3), not by their picture.
   await page.goto("/characters");
   await page.locator("h3").first().click();
   await page.waitForURL(/\/channels/);

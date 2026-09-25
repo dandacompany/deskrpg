@@ -180,7 +180,7 @@ test("URL success with absent plugin offers installation and never claims ready"
     assert.match(f.host.textContent!, /API 연결은 저장되었지만/);
     assert.match(f.host.textContent!, /SSH로 설치하기/);
     assert.doesNotMatch(f.host.textContent!, /게이트웨이가 연결되었습니다/);
-    assert.equal(f.host.querySelector('a[href^="/profiles"]'), null);
+    assert.ok(!f.host.querySelector('a[href^="/profiles"]'));
   } finally {
     await f.cleanup();
   }
@@ -869,7 +869,7 @@ test("when the install gate is off, shows the enable command instead of an insta
     // Doesn't ask the user to hand-edit a config file — shows the exact command to paste.
     assert.match(f.host.textContent!, /deskrpg host-setup on --with-install/);
     assert.doesNotMatch(f.host.textContent!, /이 서버에 Hermes 를 설치할까요\?/);
-    assert.equal(f.host.querySelector('input[name="install-consent"]'), null);
+    assert.ok(!f.host.querySelector('input[name="install-consent"]'));
   } finally {
     await f.cleanup();
   }
@@ -1100,7 +1100,7 @@ test("profile_not_served and model_provider_required render as warnings, not fai
     assert.match(f.host.textContent!, /게이트웨이가 연결되었습니다/);
     assert.match(f.host.textContent!, /multiplex 프로필 허용 목록/);
     assert.match(f.host.textContent!, /서버에서 hermes model 을 실행/);
-    assert.equal(f.host.querySelector('[role="alert"]'), null, "경고는 실패로 그리지 않는다");
+    assert.ok(!f.host.querySelector('[role="alert"]'), "경고는 실패로 그리지 않는다");
     assert.doesNotMatch(f.host.textContent!, /profile_not_served|model_provider_required/);
     assert.doesNotMatch(f.host.textContent!, /연결을 완료하지 못했습니다/);
   } finally {

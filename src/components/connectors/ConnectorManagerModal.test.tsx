@@ -157,7 +157,7 @@ test("a revision conflict shows the message and a reload button, keeping the sel
   assert.ok($("[data-action=reload-tools]"));
   assert.equal($("[data-server=github]").getAttribute("aria-current"), "true");
   assert.equal($("[data-tool=drop_b] [role=switch]").getAttribute("aria-checked"), "true");
-  assert.equal(container.querySelector("[data-testid=connectors-reload-banner]"), null);
+  assert.ok(!container.querySelector("[data-testid=connectors-reload-banner]"));
 });
 
 test("secret inputs never echo the stored value and opt out of password managers", async () => {
@@ -216,7 +216,7 @@ test("switching NPCs while open drops the previous NPC's late response", async (
   await new Promise((r) => setTimeout(r, 150));
   await flush();
   assert.ok($("[data-server=new-srv]"));
-  assert.equal(container.querySelector("[data-server=old-srv]"), null);
+  assert.ok(!container.querySelector("[data-server=old-srv]"));
 });
 
 test("delete asks for the server name before sending DELETE", async () => {
@@ -256,7 +256,7 @@ test("members get no stale re-check and no detail fetch", async () => {
   assert.ok($("[data-server=canva]"));
   assert.equal(log.calls.filter((c) => c.startsWith("POST")).length, 0);
   assert.equal(log.calls.includes(`GET ${ROOT}/servers/canva`), false);
-  assert.equal(container.querySelector("[data-action=add]"), null);
+  assert.ok(!container.querySelector("[data-action=add]"));
 });
 
 test("initialServer preselects that server", async () => {

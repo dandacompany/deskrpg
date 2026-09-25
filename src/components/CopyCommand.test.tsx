@@ -46,7 +46,7 @@ test("does not add a copy button when the clipboard is unavailable", async () =>
   // The clipboard is blocked on a plain-HTTP instance — don't create a button that does nothing when pressed.
   const f = await mount(undefined);
   try {
-    assert.equal(f.host.querySelector("button"), null);
+    assert.ok(!f.host.querySelector("button"));
   } finally {
     await f.cleanup();
   }

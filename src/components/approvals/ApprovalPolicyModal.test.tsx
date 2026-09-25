@@ -76,7 +76,7 @@ test("switching to allow asks for confirmation first; cancelling sends nothing",
   );
   assert.ok(!log.calls.includes(PUT));
   await click('[data-action="approve-cancel"]');
-  assert.equal(container.querySelector('[data-dialog="approve-confirm"]'), null);
+  assert.ok(!container.querySelector('[data-dialog="approve-confirm"]'));
   assert.ok(!log.calls.includes(PUT));
   await click('[data-mode="single:approve"]');
   await click('[data-action="approve-confirm"]');
@@ -107,7 +107,7 @@ test("adds and removes allowlist entries", async () => {
   assert.equal(($('[name="allow-entry"]') as HTMLInputElement).value, "");
   await click('[data-remove-allow="recursive delete"]');
   assert.deepEqual(log.bodies[DEL], { entry: "recursive delete" });
-  assert.equal(container.querySelector('[data-allow="recursive delete"]'), null);
+  assert.ok(!container.querySelector('[data-allow="recursive delete"]'));
 });
 
 test("a malformed entry is refused on the spot, and a server format error shows the same text", async () => {
@@ -132,8 +132,8 @@ test("a member sees the policy read-only", async () => {
   await render(modal());
   assert.equal(btn('[data-mode="cron:approve"]').disabled, true);
   assert.equal(btn('[data-mode="single:deny"]').disabled, true);
-  assert.equal(container.querySelector('[name="allow-entry"]'), null);
-  assert.equal(container.querySelector("[data-remove-allow]"), null);
+  assert.ok(!container.querySelector('[name="allow-entry"]'));
+  assert.ok(!container.querySelector("[data-remove-allow]"));
   assert.ok(text().includes("게이트웨이 소유자만"));
 });
 

@@ -97,7 +97,7 @@ test("when blocked by a gate, shows the reason — not disguised as an empty lis
   );
   try {
     assert.ok(container.querySelector("[data-testid='cards-error']"));
-    assert.equal(container.querySelector("[data-testid='cards-empty']"), null);
+    assert.ok(!container.querySelector("[data-testid='cards-empty']"));
   } finally {
     cleanup();
   }
@@ -110,7 +110,7 @@ test("board not ready (board_unavailable) reuses Kanban's board-unavailable mess
   try {
     const notice = container.querySelector("[data-testid='cards-error']");
     assert.ok(notice);
-    assert.equal(container.querySelector("[data-testid='cards-empty']"), null);
+    assert.ok(!container.querySelector("[data-testid='cards-empty']"));
     // Same title as the Kanban board-unavailable banner — not the generic "unknown error" fallback from wizard-error-codes.
     assert.match(notice!.textContent ?? "", /보드를 확보하지 못했습니다/);
     assert.doesNotMatch(notice!.textContent ?? "", /알 수 없는 오류/);
@@ -122,8 +122,8 @@ test("board not ready (board_unavailable) reuses Kanban's board-unavailable mess
 test("renders neither empty nor error before the fetch finishes — doesn't assume the unconfirmed", () => {
   const { container, cleanup } = render(<NpcCardsTab {...props} board={null} error={null} />);
   try {
-    assert.equal(container.querySelector("[data-testid='cards-empty']"), null);
-    assert.equal(container.querySelector("[data-testid='cards-error']"), null);
+    assert.ok(!container.querySelector("[data-testid='cards-empty']"));
+    assert.ok(!container.querySelector("[data-testid='cards-error']"));
     assert.ok(container.querySelector("[data-testid='cards-loading']"), "스켈레톤이 없다");
   } finally {
     cleanup();
@@ -146,7 +146,7 @@ test("without a known profile, unassigned cards aren't attributed to this staff 
   try {
     assert.equal(container.querySelectorAll("[data-card-id]").length, 0);
     // Once the board has arrived, loading is over — it shows a settled state, not an infinite skeleton.
-    assert.equal(container.querySelector("[data-testid='cards-loading']"), null);
+    assert.ok(!container.querySelector("[data-testid='cards-loading']"));
     assert.ok(container.querySelector("[data-testid='cards-empty']"));
   } finally {
     cleanup();
@@ -190,8 +190,8 @@ function renderErrorText(code: string): string {
   try {
     const alert = container.querySelector("[data-testid='cards-error']");
     assert.ok(alert, `${code} 에 안내가 없다`);
-    assert.equal(container.querySelector("[data-testid='cards-empty']"), null);
-    assert.equal(container.querySelector("[data-testid='cards-loading']"), null);
+    assert.ok(!container.querySelector("[data-testid='cards-empty']"));
+    assert.ok(!container.querySelector("[data-testid='cards-loading']"));
     return alert.textContent ?? "";
   } finally {
     cleanup();
@@ -217,7 +217,7 @@ test("the running count is hidden when nothing is running", () => {
     <NpcCardsTab {...props} board={boardWithTwoMine} runningCards={0} />,
   );
   try {
-    assert.equal(container.querySelector('[data-testid="cards-running-count"]'), null);
+    assert.ok(!container.querySelector('[data-testid="cards-running-count"]'));
   } finally {
     cleanup();
   }

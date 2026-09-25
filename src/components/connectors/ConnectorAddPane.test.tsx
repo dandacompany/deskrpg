@@ -260,7 +260,7 @@ test("a typed URL with a secret in its query warns but still saves", async () =>
   await click('[data-tab="custom"]');
   await type('[name="name"]', "zap");
   await type('[name="url"]', "https://mcp.example.com/mcp?page=2");
-  assert.equal(container.querySelector("[data-url-secret-warning]"), null);
+  assert.ok(!container.querySelector("[data-url-secret-warning]"));
   await type('[name="url"]', "https://mcp.example.com/mcp?api_key=fake");
   assert.ok($("[data-url-secret-warning]").textContent?.includes("Hermes 로그에 그대로 남으니"));
   assert.equal(($('[data-action="save"]') as HTMLButtonElement).disabled, false);

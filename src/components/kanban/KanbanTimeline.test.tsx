@@ -224,7 +224,7 @@ test("with no target date, draws no vertical line and marks it unset", async () 
   // There's no screen for creating a project yet, so having no value is the default. A deadline that doesn't exist is never drawn in.
   const { host } = await mount({ targetDate: null });
   assert.ok(host.textContent?.includes("No target date"));
-  assert.equal(host.querySelector("line.stroke-danger"), null);
+  assert.ok(!host.querySelector("line.stroke-danger"));
 });
 
 test("draws a vertical line when the target date is inside the window", async () => {
@@ -252,7 +252,7 @@ test("draws a vertical line when the target date is inside the window", async ()
 test("with the target date outside the window, shows days remaining instead of a line", async () => {
   // Pinning the line to the window edge would make the target date look like it falls at that instant.
   const { host } = await mount({ targetDate: "2026-10-15" });
-  assert.equal(host.querySelector("line.stroke-danger"), null);
+  assert.ok(!host.querySelector("line.stroke-danger"));
   assert.ok(host.textContent?.includes("days left"));
 });
 

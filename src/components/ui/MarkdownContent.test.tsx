@@ -97,7 +97,7 @@ test("with no preview (204), the original underlined link remains as-is", async 
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));
     });
-    assert.equal(host.querySelector("[data-link-preview]"), null);
+    assert.ok(!host.querySelector("[data-link-preview]"));
     assert.equal(host.querySelectorAll('a[href="https://example.com/doc"]').length, 1);
   } finally {
     globalThis.fetch = original;
@@ -116,6 +116,6 @@ test("an inline base64 image is not stripped, renders, and can be downloaded", (
 test("an image that lost its URL says it failed to load instead of showing a blank", () => {
   // A URL that isn't allowed through, like svg·file:, is stripped to an empty string by react-markdown.
   const host = render("![차트](data:image/svg+xml;base64,AAAA)");
-  assert.equal(host.querySelector("img"), null, "빈 src 로 깨진 아이콘을 남기지 않는다");
+  assert.ok(!host.querySelector("img"), "빈 src 로 깨진 아이콘을 남기지 않는다");
   assert.match(host.textContent ?? "", /이미지를 불러오지 못했습니다/);
 });

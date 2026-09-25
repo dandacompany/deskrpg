@@ -224,7 +224,7 @@ test("R3/R5: returning to the source column clears the target and Enter does not
     await act(async () =>
       handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })),
     );
-    assert.equal(f.host.querySelector('[data-move-target="true"]'), null);
+    assert.ok(!f.host.querySelector('[data-move-target="true"]'));
     await act(async () =>
       handle.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
     );
@@ -489,11 +489,11 @@ test("R2/R5: two boards isolate keyboard targets and target cleanup", async () =
       firstRoot.current!.querySelector<HTMLElement>('[data-column="ready"]')?.dataset.moveTarget,
       "true",
     );
-    assert.equal(secondRoot.current!.querySelector('[data-move-target="true"]'), null);
+    assert.ok(!secondRoot.current!.querySelector('[data-move-target="true"]'));
     await act(async () =>
       handle.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
     );
-    assert.equal(firstRoot.current!.querySelector('[data-move-target="true"]'), null);
+    assert.ok(!firstRoot.current!.querySelector('[data-move-target="true"]'));
     assert.equal(events.at(-1)?.type, "cancel");
   } finally {
     await act(async () => root.unmount());
@@ -594,7 +594,7 @@ test("R2: a pointer drag renders a preview that tracks the pointer and clears on
     const card = f.host.querySelector<HTMLElement>('[data-task-id="task-1"]')!;
     const ready = f.host.querySelector<HTMLElement>('[data-column="ready"]')!;
     document.elementFromPoint = () => ready;
-    assert.equal(document.querySelector("[data-kanban-drag-preview]"), null);
+    assert.ok(!document.querySelector("[data-kanban-drag-preview]"));
     await act(async () =>
       card.dispatchEvent(pointerEvent("pointerdown", { clientX: 10, clientY: 10 })),
     );
@@ -616,7 +616,7 @@ test("R2: a pointer drag renders a preview that tracks the pointer and clears on
     await act(async () =>
       card.dispatchEvent(pointerEvent("pointerup", { clientX: 90, clientY: 120 })),
     );
-    assert.equal(document.querySelector("[data-kanban-drag-preview]"), null);
+    assert.ok(!document.querySelector("[data-kanban-drag-preview]"));
   } finally {
     document.elementFromPoint = original;
     await f.cleanup();
@@ -632,7 +632,7 @@ test("R3: a keyboard move shows no pointer preview", async () => {
       handle.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })),
     );
     assert.equal(f.events[0]?.type, "start");
-    assert.equal(document.querySelector("[data-kanban-drag-preview]"), null);
+    assert.ok(!document.querySelector("[data-kanban-drag-preview]"));
   } finally {
     await f.cleanup();
   }

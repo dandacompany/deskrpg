@@ -242,7 +242,7 @@ test("the owner adds the blocking rule key to the allowlist, then sees it added"
     { npcId: "n-1", entry: "recursive delete", noticeMessageId: "m1" },
   ]);
   assert.ok(host.querySelector("[data-allowlist-added]"));
-  assert.equal(host.querySelector('[data-action="allowlist-add"]'), null);
+  assert.ok(!host.querySelector('[data-action="allowlist-add"]'));
   await cleanup();
 });
 
@@ -289,7 +289,7 @@ test("an owner's block without a rule key offers the run policy instead", async 
   assert.ok(text.includes("도구 github.delete_repo"));
   assert.ok(text.includes("Clean up repos"));
   assert.ok(text.includes("모드를 바꾸는 것만 가능합니다"));
-  assert.equal(host.querySelector('[data-action="allowlist-add"]'), null);
+  assert.ok(!host.querySelector('[data-action="allowlist-add"]'));
   await act(async () =>
     (host.querySelector('[data-action="open-policy"]') as HTMLButtonElement).click(),
   );
@@ -303,7 +303,7 @@ test("a non-owner is told to ask the gateway owner", async () => {
   assert.ok(
     (host.querySelector("[data-ask-owner]")?.textContent ?? "").includes("게이트웨이 소유자"),
   );
-  assert.equal(host.querySelector('[data-action="allowlist-add"]'), null);
-  assert.equal(host.querySelector('[data-action="open-policy"]'), null);
+  assert.ok(!host.querySelector('[data-action="allowlist-add"]'));
+  assert.ok(!host.querySelector('[data-action="open-policy"]'));
   await cleanup();
 });

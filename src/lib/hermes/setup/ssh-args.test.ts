@@ -31,7 +31,7 @@ test("win32 does not use multiplexing", () => {
 test("win32 tunnels do not enable multiplexing", () => {
   // Checked with the real SSH_OPTIONS. That array contains `ControlMaster=no`·`ControlPath=none`,
   // and the POSIX branch's slice(0, -4) is exactly the device that strips those two to enable the master
-  // (executor.ts:6-21).
+  // (`SSH_OPTIONS` in executor.ts).
   // So win32 using the full options is what "mux is explicitly off" means.
   const args = tunnelArgs({ ...base, routeOptions: [...SSH_OPTIONS], platform: "win32" });
   const joined = args.join(" ");

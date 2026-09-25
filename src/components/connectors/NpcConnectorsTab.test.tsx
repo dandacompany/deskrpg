@@ -65,8 +65,8 @@ test("members get a read-only list without action buttons", async () => {
   mockFetch({ [LIST]: view({ canManage: false }) });
   await render(tab());
   assert.match(text(), /canva/);
-  assert.equal(container.querySelector("[data-testid=connectors-open-manager]"), null);
-  assert.equal(container.querySelector("[data-testid=connector-action-canva]"), null);
+  assert.ok(!container.querySelector("[data-testid=connectors-open-manager]"));
+  assert.ok(!container.querySelector("[data-testid=connector-action-canva]"));
 });
 
 test("428 shows the upgrade notice instead of an error", async () => {
@@ -84,7 +84,7 @@ test("428 shows the upgrade notice instead of an error", async () => {
 test("409 shows the gateway notice", async () => {
   mockFetch({ [LIST]: { status: 409, json: { code: "gateway_not_connected", message: "x" } } });
   await render(tab());
-  assert.equal(container.querySelector("[data-testid=npc-connectors-tab]"), null);
+  assert.ok(!container.querySelector("[data-testid=npc-connectors-tab]"));
   assert.match(text(), /게이트웨이/);
 });
 
@@ -96,7 +96,7 @@ test("the manage button opens the manager; a card action opens it on that server
   await click("[data-testid=connector-action-canva]");
   assert.deepEqual(opened, [undefined, "canva"]);
   // A connected server has no action button.
-  assert.equal(container.querySelector("[data-testid=connector-action-github]"), null);
+  assert.ok(!container.querySelector("[data-testid=connector-action-github]"));
 });
 
 test("the run policy button shows for the owner and opens the policy modal", async () => {
@@ -121,5 +121,5 @@ test("members do not get the run policy button", async () => {
   await render(
     <NpcConnectorsTab channelId="c" npcId="n" onOpenManager={() => {}} onOpenPolicy={() => {}} />,
   );
-  assert.equal(container.querySelector('[data-testid="connectors-open-policy"]'), null);
+  assert.ok(!container.querySelector('[data-testid="connectors-open-policy"]'));
 });

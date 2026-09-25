@@ -67,7 +67,8 @@ async function countActiveUnplaced(channelId: string): Promise<number> {
  * Reverts an employee sitting in the CEO seat back to unplaced — the placement step right
  * below then seats them in an empty seat.
  *
- * An employee placed back when the CEO seat was seat #1 (before 2026.920.7) is still sitting
+ * An employee placed back while the CEO seat was seat #1 (releases up to 2026.920.7; fixed in
+ * 2026.921.1 — same-day release numbering, not a typo) is still sitting
  * in the CEO chair. The CEO seat is no longer in the seat list, so the user can't move them
  * out of it via "change seat" either, so the system moves them instead.
  */

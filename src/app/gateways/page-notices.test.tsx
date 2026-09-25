@@ -193,7 +193,7 @@ test("a slow reload shows '새로 읽는 중' without erasing the notices, and r
     { "GET /api/gateways?refreshPlugin=1": (n) => (n === 0 ? 0 : 600) },
   );
   await renderPage();
-  assert.equal(host.querySelector("[data-gateways-refreshing]"), null, "첫 화면에 표시가 있다");
+  assert.ok(!host.querySelector("[data-gateways-refreshing]"), "첫 화면에 표시가 있다");
   await click(host.querySelector('[data-action="worker-propagation-enable"]'));
   await wait(450);
   const status = host.querySelector("[data-gateways-refreshing]");
@@ -206,7 +206,7 @@ test("a slow reload shows '새로 읽는 중' without erasing the notices, and r
   );
   await wait(300);
   await flush();
-  assert.equal(host.querySelector("[data-gateways-refreshing]"), null, "끝났는데 표시가 남았다");
+  assert.ok(!host.querySelector("[data-gateways-refreshing]"), "끝났는데 표시가 남았다");
   assert.ok(host.querySelector('[data-worker-propagation-result="enabled"]'));
 });
 

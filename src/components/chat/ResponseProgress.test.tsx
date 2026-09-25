@@ -65,5 +65,5 @@ test("terminal errors remain visible and do not animate", async () => {
 
   assert.match(el.textContent ?? "", /Failed/);
   assert.doesNotMatch(el.textContent ?? "", /adapter_error/);
-  assert.equal(el.querySelector(".animate-pulse"), null);
+  assert.ok(!el.querySelector(".animate-pulse"));
 });

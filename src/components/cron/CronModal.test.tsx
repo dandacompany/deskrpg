@@ -164,7 +164,7 @@ test("initialJobId of a deleted cron says it was deleted instead of an unexplain
     assert.match(notice!.textContent ?? "", /삭제/);
     // The remaining crons are still listed, none selected, and no history is requested for the missing id.
     assert.equal(host.querySelectorAll('[data-testid="cron-row"]').length, 2);
-    assert.equal(host.querySelector('[data-testid="cron-row"] button[aria-pressed="true"]'), null);
+    assert.ok(!host.querySelector('[data-testid="cron-row"] button[aria-pressed="true"]'));
     assert.ok(!calls.some((url) => /\/jobs\/gone\/runs\b/.test(url)), calls.join(", "));
   } finally {
     await cleanup();

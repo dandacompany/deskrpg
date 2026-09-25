@@ -136,7 +136,7 @@ test("with more participants than the preview it draws +N, and without a known e
   const { el, cleanup } = await render(me);
   try {
     const card = el.querySelector('[data-channel-id="big"]')!;
-    assert.equal(card.querySelector("img[data-channel-thumbnail]"), null);
+    assert.ok(!card.querySelector("img[data-channel-thumbnail]"));
     assert.ok(card.querySelector("[data-channel-thumbnail-placeholder]"));
     assert.equal(card.querySelectorAll("[data-participant-avatar]").length, 5);
     assert.match(card.textContent ?? "", /\+2/);

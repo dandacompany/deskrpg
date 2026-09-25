@@ -44,7 +44,7 @@ test("a continued bubble from the same speaker gets an empty slot of the same wi
   const slot = el.querySelector("[data-chat-avatar]");
   assert.ok(slot, "정렬용 자리가 없다");
   assert.equal(slot.getAttribute("data-chat-avatar"), "spacer");
-  assert.equal(slot.querySelector("img, span"), null, "빈 자리에는 아무것도 그리지 않는다");
+  assert.ok(!slot.querySelector("img, span"), "빈 자리에는 아무것도 그리지 않는다");
   assert.equal(el.textContent?.includes("noah"), false, "연속 말풍선은 이름도 되풀이하지 않는다");
 });
 
@@ -54,7 +54,7 @@ test("my own bubble has no avatar", async () => {
       내가 보낸 말
     </ChatBubble>,
   );
-  assert.equal(el.querySelector("[data-chat-avatar]"), null);
+  assert.ok(!el.querySelector("[data-chat-avatar]"));
 });
 
 test("not passing avatar behaves like before — no avatar slot either", async () => {
@@ -63,6 +63,6 @@ test("not passing avatar behaves like before — no avatar slot either", async (
       예전 호출부
     </ChatBubble>,
   );
-  assert.equal(el.querySelector("[data-chat-avatar]"), null);
+  assert.ok(!el.querySelector("[data-chat-avatar]"));
   assert.ok(el.textContent?.includes("noah"));
 });

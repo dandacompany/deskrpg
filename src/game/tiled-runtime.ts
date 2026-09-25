@@ -1,4 +1,4 @@
-/** Fill in a built-in tileset for tools (map editor, validation) that need at least one tileset entry even for the logical tiles of 3D official maps. A pure geometry helper module. */
+/** Fill in a built-in tileset for tools (validation) that need at least one tileset entry even for the logical tiles of 3D official maps. A pure geometry helper module. */
 export function withRuntimeTileset(map: Record<string, unknown>): Record<string, unknown> {
   if (Array.isArray(map.tilesets) && map.tilesets.length > 0) return map;
   return {
