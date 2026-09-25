@@ -27,6 +27,8 @@ interface ChatInputProps {
   mentionCandidates?: MentionCandidate[];
   /** Which conversation this input belongs to. Not shown on screen, only exposed via `data-chat-scope` (picked up by captures/e2e). */
   scope?: "room" | "npc" | "meeting";
+  /** A reply is running: the send button becomes a stop button that calls this. */
+  onStop?: () => void;
 }
 
 export default function ChatInput({
@@ -43,6 +45,7 @@ export default function ChatInput({
   accent = "npc",
   mentionCandidates,
   scope,
+  onStop,
 }: ChatInputProps) {
   const t = useT();
   const [input, setInput] = useState("");
@@ -239,14 +242,26 @@ export default function ChatInput({
           />
         )}
 
-        {/* Send button */}
-        <button
-          onClick={handleSend}
-          disabled={!canSend}
-          className={`px-3 py-2 rounded-lg font-semibold text-sm shrink-0 self-end transition-colors ${btnColor}`}
-        >
-          {t("common.send")}
-        </button>
+        {/* Send button — a stop button while a reply is running */}
+        {onStop ? (
+          <button
+            type="button"
+            data-testid="chat-stop"
+            onClick={onStop}
+            aria-label={t("chat.stopResponse")}
+            className="px-3 py-2 rounded-lg font-semibold text-sm shrink-0 self-end transition-colors bg-surface-raised text-text border border-border hover:bg-surface"
+          >
+            {t("chat.stop")}
+          </button>
+        ) : (
+          <button
+            onClick={handleSend}
+            disabled={!canSend}
+            className={`px-3 py-2 rounded-lg font-semibold text-sm shrink-0 self-end transition-colors ${btnColor}`}
+          >
+            {t("common.send")}
+          </button>
+        )}
       </div>
 
       {/* Character count */}

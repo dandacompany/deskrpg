@@ -1453,3 +1453,38 @@ test("an open chat room shows its NPC's tool approval card above the room input,
   assert.equal(cards[0].getAttribute("data-key"), "r:2");
   assert.ok((cards[0].textContent ?? "").includes("소피"));
 });
+
+test("an NPC reply in progress shows a stop button that stops that reply", async () => {
+  const stopped: string[] = [];
+  const response = (requestId: string, status: "complete" | "streaming") => ({
+    requestId,
+    sourceMessageId: `m-${requestId}`,
+    npcId: "npc-noah",
+    npcName: "noah",
+    status,
+    content: "…",
+    updatedAt: 1,
+  });
+  const el = await mount(
+    panel(listState(), {
+      dialogNpc: { npcId: "npc-noah", npcName: "noah" },
+      npcResponses: [response("done", "complete"), response("live", "streaming")],
+      onStopNpcResponse: (requestId) => stopped.push(requestId),
+    }),
+  );
+  const stop = el.querySelector('[data-testid="chat-stop"]') as HTMLButtonElement;
+  assert.ok(stop);
+  await act(async () => stop.click());
+  assert.deepEqual(stopped, ["live"]);
+});
+
+test("with no reply in progress the NPC chat keeps its send button", async () => {
+  const el = await mount(
+    panel(listState(), {
+      dialogNpc: { npcId: "npc-noah", npcName: "noah" },
+      npcResponses: [],
+      onStopNpcResponse: () => {},
+    }),
+  );
+  assert.equal(el.querySelector('[data-testid="chat-stop"]'), null);
+});

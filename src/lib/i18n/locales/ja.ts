@@ -96,7 +96,9 @@ const ja: Record<string, string> = {
   "chat.responseStatus.streaming": "回答中",
   "chat.responseStatus.complete": "完了",
   "chat.responseStatus.failed": "失敗",
-  "chat.responseStatus.cancelled": "キャンセル済み",
+  "chat.responseStatus.cancelled": "停止しました",
+  "chat.stop": "停止",
+  "chat.stopResponse": "返信を停止",
   "chat.npcQueueFull":
     "{name}のリクエスト待機列がいっぱいです。しばらくしてから再試行してください。",
   "account.password.title": "パスワード変更",

@@ -1465,6 +1465,20 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     router.push(employeesHref(gatewayId, { create: true, returnTo }));
   }, [closeRosterMenus, gatewayId, router]);
 
+  // The stop button — the server checks the reply is this user's and stops the Hermes run.
+  const handleStopNpcResponse = useCallback(
+    (requestId: string) => {
+      const npcId = dialogNpcRef.current?.npcId;
+      if (!npcId) return;
+      socketRef.current?.emit("npc:cancel-response", {
+        npcId,
+        requestId,
+        characterId: characterId ?? undefined,
+      });
+    },
+    [characterId],
+  );
+
   const handleResetNpcChatById = useCallback(
     (npcId: string) => {
       if (socketRef.current) {
@@ -2760,6 +2774,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         npcChatInputDisabled={!socketConnected}
         npcChatDisabledPlaceholder={t("chat.disconnected")}
         onSend={handleDialogSend}
+        onStopNpcResponse={handleStopNpcResponse}
         onClose={handleDialogClose}
         npcSelectList={npcSelectList}
         onSelectNpc={handleSelectNpc}

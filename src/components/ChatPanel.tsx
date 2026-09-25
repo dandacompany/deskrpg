@@ -70,6 +70,8 @@ interface ChatPanelProps {
   npcChatInputDisabled?: boolean;
   npcChatDisabledPlaceholder?: string;
   onSend: (message: string, files?: File[]) => void;
+  /** Stops the open NPC's reply in progress. Without it, no stop button is shown. */
+  onStopNpcResponse?: (requestId: string) => void;
   onClose: () => void;
   npcSelectList: { npcId: string; npcName: string }[] | null;
   onSelectNpc: (npcId: string, npcName: string) => void;
@@ -179,6 +181,7 @@ export default function ChatPanel({
   npcChatInputDisabled,
   npcChatDisabledPlaceholder,
   onSend,
+  onStopNpcResponse,
   onClose,
   npcSelectList,
   onSelectNpc,
@@ -330,6 +333,8 @@ export default function ChatPanel({
   const [sessions] = useState(() => new ConversationSessionStore());
   const [, setSessionRevision] = useState(0);
   const t = useT();
+  // The newest reply still queued, thinking or streaming — what the stop button stops.
+  const activeNpcResponse = [...npcResponses].reverse().find(isActiveChatResponse) ?? null;
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelScrollRef = useRef<HTMLDivElement>(null);
@@ -934,6 +939,11 @@ export default function ChatPanel({
                 )}
                 <ChatInput
                   onSend={onSend}
+                  onStop={
+                    onStopNpcResponse && activeNpcResponse
+                      ? () => onStopNpcResponse(activeNpcResponse.requestId)
+                      : undefined
+                  }
                   value={conversationDraft}
                   onValueChange={updateConversationDraft}
                   placeholder={t("chat.npcPlaceholder", { name: dialogNpc!.npcName })}
