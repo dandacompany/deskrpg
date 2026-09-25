@@ -34,8 +34,11 @@ export type PollReport = {
    * Hermes explicitly rejects with 429 when the concurrent-run cap is exceeded
    * (`api_server.py:7154`), and that rejection evaporated here. Only requests that still failed
    * after the client retried remain here.
+   *
+   * `error` is the adapter's own rejection, kept so the engine can report it as it is; it is
+   * not sent to clients.
    */
-  failures: Array<{ npcId: string; reason: string }>;
+  failures: Array<{ npcId: string; reason: string; error?: unknown }>;
 } | null;
 
 export type FloorDecision =
@@ -170,13 +173,13 @@ export class MeetingFloorController {
   ): Promise<{
     raises: Array<{ npcId: string; reason: string }>;
     passes: string[];
-    failures: Array<{ npcId: string; reason: string }>;
+    failures: Array<{ npcId: string; reason: string; error?: unknown }>;
   }> {
     this.onPollStart();
 
     const raises: Array<{ npcId: string; reason: string }> = [];
     const passes: string[] = [];
-    const failures: Array<{ npcId: string; reason: string }> = [];
+    const failures: Array<{ npcId: string; reason: string; error?: unknown }> = [];
 
     for (const group of chunk(candidates, this.maxConcurrentPolls)) {
       const results = await Promise.allSettled(
@@ -204,6 +207,7 @@ export class MeetingFloorController {
           failures.push({
             npcId: reason?.npcId ?? "unknown",
             reason: cause instanceof Error ? cause.message : String(cause ?? "unknown"),
+            error: cause,
           });
           continue;
         }

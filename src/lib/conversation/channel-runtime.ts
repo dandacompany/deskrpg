@@ -12,7 +12,12 @@ import type { EngineParticipant } from "./types";
 import { Transcript, USER_SPEAKER_ID, type Turn } from "./transcript";
 import type { TurnTimeoutConfig } from "./turn-timeout";
 import { FloorInbox } from "./inbox";
-import { DEFAULT_IDLE_MS, DEFAULT_MAX_MS, NpcRuntime } from "./npc-runtime";
+import {
+  DEFAULT_IDLE_MS,
+  DEFAULT_MAX_MS,
+  MAX_CONSECUTIVE_FAILURES,
+  NpcRuntime,
+} from "./npc-runtime";
 import { MeetingFloorController, type MentionSkipReason } from "./floor-controller";
 import type { ConversationMode, Participant } from "./turn-policy";
 
@@ -136,6 +141,8 @@ export class ChannelRuntime {
 
   private running = false;
   private consecutivePasses = 0;
+  /** Poll rounds in a row that reached no participant at all (see the loop). */
+  private unreachableRounds = 0;
   /**
    * NpcRuntime per npcId. Along with prompt assembly, timeouts, streaming sanitization, and
    * mention parsing, this also holds the consecutive-failure counter (owned per NPC — it used
@@ -342,6 +349,7 @@ export class ChannelRuntime {
   async run(): Promise<void> {
     this.running = true;
     this.endReason = null;
+    this.unreachableRounds = 0;
     // If the previous run() leaves its failure counters behind, the second run() starts with
     // a budget of 1 instead of 3.
     for (const r of this.runtimes.values()) r.resetFailures();
@@ -435,13 +443,34 @@ export class ChannelRuntime {
         );
       }
 
-      if (decision.kind === "all-passed") {
+      // A poll that reached nobody is not silence. Counting it as "all passed" ended the meeting
+      // after two rounds with no error at all, so a stopped gateway looked like a quiet room.
+      // Report the first failure of the streak and end as a failure once it persists.
+      const poll = decision.pollResult;
+      const reachedNobody =
+        poll !== null &&
+        poll.raises.length === 0 &&
+        poll.passes.length === 0 &&
+        poll.failures.length > 0;
+      if (reachedNobody) {
+        if (this.unreachableRounds === 0) {
+          const first = poll.failures[0];
+          this.callbacks.onError?.(first.error ?? new Error(first.reason), first.npcId);
+        }
+        this.unreachableRounds++;
+        if (this.unreachableRounds >= MAX_CONSECUTIVE_FAILURES) {
+          this.endReason = "consecutive_failures";
+          break;
+        }
+      } else if (decision.kind === "all-passed") {
+        this.unreachableRounds = 0;
         this.consecutivePasses++;
         if (this.consecutivePasses >= this.maxConsecutivePasses()) {
           this.endReason = "consecutive_passes";
           break;
         }
       } else {
+        this.unreachableRounds = 0;
         this.consecutivePasses = 0;
         const runtime = this.runtimes.get(decision.npcId);
         if (runtime) {
