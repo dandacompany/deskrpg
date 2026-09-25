@@ -313,7 +313,10 @@ export default function ConnectorManagerModal({
     markDirty();
     setSelected(name);
     const v = await load();
-    setPane(paneAfterAdd(v, name));
+    const next = paneAfterAdd(v, name);
+    setPane(next);
+    // Test right away so the card goes "checking" -> "connected" without another click.
+    if (next === "detail") await runTest(name);
   };
 
   const sections: Section[] = canManage ? ["overview", "tools", "auth"] : ["overview", "tools"];
@@ -468,9 +471,11 @@ export default function ConnectorManagerModal({
                   api={api}
                   server={selected}
                   onDone={() => {
+                    const name = selected;
                     setPane("detail");
                     markDirty();
-                    void load();
+                    // The test re-reads the list when it ends, so the card lands on its real state.
+                    void runTest(name);
                   }}
                   onCancel={() => setPane("detail")}
                 />

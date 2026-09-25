@@ -149,3 +149,32 @@ test("unmounting after approval does not cancel", async () => {
   await new Promise((r) => setTimeout(r, 0));
   assert.ok(!log.calls.some((c) => c.startsWith("DELETE")));
 });
+
+test("while a session is open, [Sign in] is disabled and [Restart] cancels it before starting anew", async () => {
+  const routes: Record<string, Record<string, unknown>> = {
+    [START]: { sessionId: "s1", authUrl: "https://canva.example/auth" },
+    [`DELETE ${ROOT}/oauth/s1`]: { ok: true },
+  };
+  const log = mockFetch(routes);
+  await render(step());
+  await click('[data-action="oauth-start"]');
+  assert.equal(($('[data-action="oauth-start"]') as HTMLButtonElement).disabled, true);
+  assert.ok($("[data-oauth-in-progress]"));
+  routes[START] = { sessionId: "s2", authUrl: "https://canva.example/auth2" };
+  await click('[data-action="oauth-restart"]');
+  const cancelAt = log.calls.indexOf(`DELETE ${ROOT}/oauth/s1`);
+  const starts = log.calls.map((c, i) => (c === START ? i : -1)).filter((i) => i >= 0);
+  assert.equal(starts.length, 2);
+  assert.ok(cancelAt > starts[0] && cancelAt < starts[1], log.calls.join("\n"));
+  assert.equal(opened.length, 2);
+  assert.equal(opened[1][0], "https://canva.example/auth2");
+});
+
+test("after opening the tab, the paste field is highlighted as step 2 and focused", async () => {
+  mockFetch({ [START]: { sessionId: "s1", authUrl: "https://canva.example/auth" } });
+  await render(step());
+  assert.equal(container.querySelector("[data-oauth-step2]"), null);
+  await click('[data-action="oauth-start"]');
+  assert.match($("[data-oauth-step2]").textContent ?? "", /2단계/);
+  assert.equal(document.activeElement, $('[name="oauth-paste"]'));
+});

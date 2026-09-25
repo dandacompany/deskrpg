@@ -3325,10 +3325,10 @@ const en: Record<string, string> = {
   "connectors.overview.enabled": "Enabled",
   "connectors.overview.lastError": "Last error: {detail}",
   "connectors.trust.label": "Trust level",
-  "connectors.trust.full": "Run every tool right away",
-  "connectors.trust.untrusted": "Approve each write-tool call",
+  "connectors.trust.full": "Allow all tools",
+  "connectors.trust.untrusted": "Block write tools",
   "connectors.trust.untrustedHelp":
-    "Hermes asks for approval each time it calls one of this server's write tools (tools marked read-only are exempt).",
+    "This server's write tools don't run in DeskRPG conversations (there is no way to approve them, so Hermes refuses). Only tools marked read-only are used.",
   "connectors.tools.search": "Search tools",
   "connectors.tools.all": "Turn all on",
   "connectors.tools.noDestructive": "Turn off destructive tools",
@@ -3373,6 +3373,8 @@ const en: Record<string, string> = {
   "connectors.error.invalid_name": "That name can't be used",
   "connectors.error.timeout": "No response, so it was stopped",
   "connectors.error.unreachable": "Couldn't reach the server",
+  "connectors.error.oauth_in_progress":
+    "Sign-in is already in progress. Use [Restart] to begin again",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   "game.camera.controls": "Camera controls",
@@ -3487,6 +3489,11 @@ const en: Record<string, string> = {
   "connectors.oauth.failed": "Could not finish the sign-in: {detail}",
   "connectors.oauth.timedOut": "The sign-in did not finish in time. Start again",
   "connectors.oauth.cancel": "Cancel",
+  "connectors.oauth.step1": "Step 1: sign in and approve in the new tab",
+  "connectors.oauth.step2": "Step 2: paste the address",
+  "connectors.oauth.inProgress":
+    "Sign-in in progress — approve in the new tab, then paste the address below",
+  "connectors.oauth.restart": "Restart",
   "connectors.copy.title": "Copy to other staff",
   "connectors.copy.intro": 'Pick who receives the "{server}" settings',
   "connectors.copy.noTargets": "No other staff in this channel to copy to",

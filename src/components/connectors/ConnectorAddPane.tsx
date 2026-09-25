@@ -149,15 +149,8 @@ export default function ConnectorAddPane({ api, onAdded, onCancel }: ConnectorAd
 
   const patch = (next: Partial<Form>) => setForm((f) => ({ ...f, ...next }));
 
-  /** Saved: run a connection test (not for OAuth — it cannot connect before sign-in) and hand over. */
-  const finish = async (server: McpServerView) => {
-    if (server.auth !== "oauth") {
-      try {
-        await api.test(server.name);
-      } catch {
-        /* the manager shows the server's check state; a failed start is not a failed add */
-      }
-    }
+  /** Saved: hand over — the manager runs the connection test (or opens sign-in) and tracks it. */
+  const finish = (server: McpServerView) => {
     if (alive.current) onAdded(server.name);
   };
 
@@ -168,7 +161,7 @@ export default function ConnectorAddPane({ api, onAdded, onCancel }: ConnectorAd
     try {
       const server = await api.catalogInstall(picked.name, catalogEnv);
       setCatalogEnv({});
-      await finish(server);
+      finish(server);
     } catch (e) {
       if (alive.current) setError(connectorErrorText(t, e));
     } finally {
@@ -211,7 +204,7 @@ export default function ConnectorAddPane({ api, onAdded, onCancel }: ConnectorAd
     } catch {
       /* the server exists; its detail view shows the missing secret and takes it again */
     }
-    await finish(server);
+    finish(server);
     if (alive.current) setBusy(false);
   };
 

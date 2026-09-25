@@ -3302,10 +3302,10 @@ const ko: Record<string, string> = {
   "connectors.overview.enabled": "사용",
   "connectors.overview.lastError": "마지막 오류: {detail}",
   "connectors.trust.label": "신뢰 단계",
-  "connectors.trust.full": "모든 도구 바로 실행",
-  "connectors.trust.untrusted": "쓰기 도구는 호출마다 승인",
+  "connectors.trust.full": "모든 도구 허용",
+  "connectors.trust.untrusted": "쓰기 도구 막기",
   "connectors.trust.untrustedHelp":
-    "Hermes 가 이 서버의 쓰기 도구를 부를 때마다 승인을 요구합니다(읽기 전용 표시가 있는 도구 제외).",
+    "이 서버의 쓰기 도구는 DeskRPG 대화에서 실행되지 않습니다(승인할 수단이 없어 Hermes 가 거부합니다). 읽기 전용 표시가 있는 도구만 씁니다.",
   "connectors.tools.search": "도구 검색",
   "connectors.tools.all": "모두 켜기",
   "connectors.tools.noDestructive": "파괴적 도구 끄기",
@@ -3350,6 +3350,8 @@ const ko: Record<string, string> = {
   "connectors.error.invalid_name": "쓸 수 없는 이름입니다",
   "connectors.error.timeout": "응답이 없어 중단했습니다",
   "connectors.error.unreachable": "서버에 연결하지 못했습니다",
+  "connectors.error.oauth_in_progress":
+    "이미 인증이 진행 중입니다. [다시 시작]으로 새로 시작하세요",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   "game.camera.controls": "카메라 조작",
@@ -3462,6 +3464,10 @@ const ko: Record<string, string> = {
   "connectors.oauth.failed": "로그인을 마치지 못했습니다: {detail}",
   "connectors.oauth.timedOut": "시간 안에 로그인이 끝나지 않았습니다. 다시 시작하세요",
   "connectors.oauth.cancel": "취소",
+  "connectors.oauth.step1": "1단계: 새 탭에서 로그인하고 승인하기",
+  "connectors.oauth.step2": "2단계: 주소 붙여넣기",
+  "connectors.oauth.inProgress": "인증 진행 중 — 새 탭에서 승인한 뒤 아래에 주소를 붙여넣으세요",
+  "connectors.oauth.restart": "다시 시작",
   "connectors.copy.title": "다른 직원에게 복사",
   "connectors.copy.intro": '"{server}" 설정을 받을 직원을 고르세요',
   "connectors.copy.noTargets": "이 채널에 복사할 수 있는 다른 직원이 없습니다",

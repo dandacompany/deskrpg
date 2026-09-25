@@ -3339,10 +3339,10 @@ const ja: Record<string, string> = {
   "connectors.overview.enabled": "有効",
   "connectors.overview.lastError": "直近のエラー: {detail}",
   "connectors.trust.label": "信頼レベル",
-  "connectors.trust.full": "すべてのツールをすぐ実行",
-  "connectors.trust.untrusted": "書き込みツールは呼び出しごとに承認",
+  "connectors.trust.full": "すべてのツールを許可",
+  "connectors.trust.untrusted": "書き込みツールをブロック",
   "connectors.trust.untrustedHelp":
-    "Hermes はこのサーバーの書き込みツールを呼び出すたびに承認を求めます(読み取り専用と表示されたツールを除く)。",
+    "このサーバーの書き込みツールは DeskRPG の会話では実行されません(承認する手段がないため Hermes が拒否します)。読み取り専用と表示されたツールだけを使います。",
   "connectors.tools.search": "ツールを検索",
   "connectors.tools.all": "すべてオン",
   "connectors.tools.noDestructive": "破壊的なツールをオフ",
@@ -3390,6 +3390,8 @@ const ja: Record<string, string> = {
   "connectors.error.invalid_name": "その名前は使えません",
   "connectors.error.timeout": "応答がないため中断しました",
   "connectors.error.unreachable": "サーバーに接続できませんでした",
+  "connectors.error.oauth_in_progress":
+    "すでに認証が進行中です。[やり直す] で最初から始めてください",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   "game.camera.controls": "カメラ操作",
@@ -3502,6 +3504,11 @@ const ja: Record<string, string> = {
   "connectors.oauth.failed": "サインインを完了できませんでした: {detail}",
   "connectors.oauth.timedOut": "時間内にサインインが完了しませんでした。やり直してください",
   "connectors.oauth.cancel": "キャンセル",
+  "connectors.oauth.step1": "ステップ 1: 新しいタブでログインして承認",
+  "connectors.oauth.step2": "ステップ 2: アドレスを貼り付け",
+  "connectors.oauth.inProgress":
+    "認証中 — 新しいタブで承認してから、下にアドレスを貼り付けてください",
+  "connectors.oauth.restart": "やり直す",
   "connectors.copy.title": "他のスタッフにコピー",
   "connectors.copy.intro": "「{server}」の設定を受け取るスタッフを選んでください",
   "connectors.copy.noTargets": "このチャンネルにコピーできる他のスタッフがいません",

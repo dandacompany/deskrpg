@@ -3188,10 +3188,10 @@ const zh: Record<string, string> = {
   "connectors.overview.enabled": "启用",
   "connectors.overview.lastError": "最近错误：{detail}",
   "connectors.trust.label": "信任级别",
-  "connectors.trust.full": "所有工具直接运行",
-  "connectors.trust.untrusted": "写入工具每次调用需审批",
+  "connectors.trust.full": "允许所有工具",
+  "connectors.trust.untrusted": "阻止写入工具",
   "connectors.trust.untrustedHelp":
-    "Hermes 每次调用此服务器的写入工具时都会要求审批（标记为只读的工具除外）。",
+    "此服务器的写入工具不会在 DeskRPG 对话中运行（没有审批途径，Hermes 会拒绝）。只使用标记为只读的工具。",
   "connectors.tools.search": "搜索工具",
   "connectors.tools.all": "全部开启",
   "connectors.tools.noDestructive": "关闭破坏性工具",
@@ -3235,6 +3235,7 @@ const zh: Record<string, string> = {
   "connectors.error.invalid_name": "不能使用该名称",
   "connectors.error.timeout": "无响应，已中止",
   "connectors.error.unreachable": "无法连接到服务器",
+  "connectors.error.oauth_in_progress": "认证已在进行中。请使用 [重新开始] 重新开始",
   // --- /content-i18n:C ---
   // --- content-i18n:D ---
   "game.camera.controls": "相机控制",
@@ -3340,6 +3341,10 @@ const zh: Record<string, string> = {
   "connectors.oauth.failed": "未能完成登录：{detail}",
   "connectors.oauth.timedOut": "登录未在规定时间内完成。请重新开始",
   "connectors.oauth.cancel": "取消",
+  "connectors.oauth.step1": "第 1 步：在新标签页中登录并批准",
+  "connectors.oauth.step2": "第 2 步：粘贴地址",
+  "connectors.oauth.inProgress": "认证进行中 — 在新标签页中批准后，将地址粘贴到下方",
+  "connectors.oauth.restart": "重新开始",
   "connectors.copy.title": "复制给其他员工",
   "connectors.copy.intro": "请选择接收“{server}”配置的员工",
   "connectors.copy.noTargets": "此频道中没有可复制的其他员工",

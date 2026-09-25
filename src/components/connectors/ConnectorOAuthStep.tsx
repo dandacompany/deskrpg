@@ -50,6 +50,12 @@ export default function ConnectorOAuthStep({
   cancel.current = api.oauthCancel;
   const done = useRef(onDone);
   done.current = onDone;
+  const pasteInput = useRef<HTMLInputElement>(null);
+
+  // Step 2 is easy to miss once the provider tab opens — move the caret straight to the paste field.
+  useEffect(() => {
+    if (session) pasteInput.current?.focus();
+  }, [session]);
 
   useEffect(
     () => () => {
@@ -92,6 +98,16 @@ export default function ConnectorOAuthStep({
     }
   };
 
+  /** Cancels the open session first — overlapping sessions race in Hermes and can wipe a fresh token. */
+  const restart = async () => {
+    const sid = openSession.current;
+    openSession.current = null;
+    setSession(null);
+    job.stop();
+    if (sid) await api.oauthCancel(sid).catch(() => {});
+    await start();
+  };
+
   const submit = async () => {
     if (!session) return;
     const sid = session.sessionId;
@@ -124,21 +140,40 @@ export default function ConnectorOAuthStep({
   const parsed = paste.trim() ? parseOAuthPaste(paste) : null;
   const waiting = job.state === "running";
   const canSubmit = !!session && parsed?.ok === true && !busy && !waiting && !approved;
+  const inProgress = !!session && !approved;
 
   return (
     <div className="flex max-w-xl flex-col gap-3 text-sm">
       <p className="text-xs text-text-muted">{t("connectors.oauth.intro")}</p>
       {!approved && (
+        <p className="text-xs font-semibold text-text">{t("connectors.oauth.step1")}</p>
+      )}
+      {!approved && (
         <button
           type="button"
           data-action="oauth-start"
-          disabled={busy || waiting}
+          disabled={busy || waiting || inProgress}
           onClick={() => void start()}
           className="flex items-center gap-1 self-start rounded bg-primary px-3 py-1 text-white disabled:opacity-50"
         >
           <ExternalLink className="h-3.5 w-3.5" />
           {t("connectors.oauth.start")}
         </button>
+      )}
+      {inProgress && (
+        <p data-oauth-in-progress className="flex items-center gap-2 text-xs text-text-muted">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>{t("connectors.oauth.inProgress")}</span>
+          <button
+            type="button"
+            data-action="oauth-restart"
+            disabled={busy}
+            onClick={() => void restart()}
+            className="text-primary disabled:opacity-50"
+          >
+            {t("connectors.oauth.restart")}
+          </button>
+        </p>
       )}
       {session && blocked && (
         <p className="text-xs text-text-muted">
@@ -156,15 +191,19 @@ export default function ConnectorOAuthStep({
       )}
       {session && !approved && (
         <form
-          className="flex flex-col gap-1"
+          className="flex flex-col gap-1 rounded border-2 border-primary p-2"
           onSubmit={(e) => {
             e.preventDefault();
             if (canSubmit) void submit();
           }}
         >
+          <p data-oauth-step2 className="text-sm font-semibold text-primary">
+            {t("connectors.oauth.step2")}
+          </p>
           <label className="flex flex-col gap-0.5 text-xs text-text-muted">
             {t("connectors.oauth.pasteLabel")}
             <input
+              ref={pasteInput}
               name="oauth-paste"
               value={paste}
               autoComplete="off"

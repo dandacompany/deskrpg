@@ -79,7 +79,7 @@ test("opens on the catalog tab; an installed entry is disabled and marked instal
   assert.equal(($('[data-entry="linear"]') as HTMLButtonElement).disabled, false);
 });
 
-test("installing a catalog entry sends the required env, clears it, runs a test, and reports the name", async () => {
+test("installing a catalog entry sends the required env, clears it, and reports the name without starting a test (the manager runs it)", async () => {
   const log = mockFetch({
     [CATALOG]: catalog,
     [`POST ${ROOT}/catalog/linear/install`]: view("linear"),
@@ -98,7 +98,7 @@ test("installing a catalog entry sends the required env, clears it, runs a test,
     env: { LINEAR_API_KEY: "lin" },
     enable: true,
   });
-  assert.ok(log.calls.includes(`POST ${ROOT}/servers/linear/test`));
+  assert.ok(!log.calls.some((c) => c.endsWith("/test")));
   assert.deepEqual(added, ["linear"]);
   assert.ok(!container.querySelector('[name="env-LINEAR_API_KEY"]') || input.value === "");
 });
@@ -196,7 +196,7 @@ test("an http Bearer server stores the token under the key the server reports", 
   assert.deepEqual(added, ["notion"]);
 });
 
-test("an OAuth server is reported without a connection test so the manager can open sign-in", async () => {
+test("an OAuth server is reported so the manager can open sign-in", async () => {
   const log = mockFetch({
     [CATALOG]: catalog,
     [`POST ${ROOT}/servers`]: view("canva", { auth: "oauth" }),
