@@ -93,3 +93,30 @@ test("the text rendered in meeting chat never becomes [object Object], even for 
     "AI 백엔드 사용 한도가 찼습니다.",
   );
 });
+
+test("a run the provider rejected names the cause and leaves the provider's text out", () => {
+  // Measured on staging (Hermes 0.21.2) with an expired openai-codex sign-in; the key is masked.
+  const expired = describeMeetingFailure(
+    hermesError(
+      "run_failed",
+      "ChatGPT or Codex Subscription rejected your sign-in, so the model can't be reached. " +
+        "Sign in again: `hermes -p sophie auth add openai-codex --type oauth`.\n\n" +
+        "Provider said: HTTP 401: Incorrect API key provided: sk-test*****.",
+      200,
+    ),
+  );
+  assert.deepEqual(expired, { error: "provider_auth_expired", detail: null });
+
+  const model = describeMeetingFailure(
+    hermesError("run_failed", "The model `gpt-9` does not exist", 200),
+  );
+  assert.deepEqual(model, { error: "model_error", detail: null });
+});
+
+test("a plain error mentioning 401 is not taken for a provider sign-in", () => {
+  // Only a run the gateway accepted can be the provider's rejection.
+  assert.equal(
+    describeMeetingFailure(new Error("HTTP 401 Unauthorized")).error,
+    "npc_response_failed",
+  );
+});

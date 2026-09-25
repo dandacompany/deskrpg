@@ -76,3 +76,30 @@ test("classification result maps to the npc:response message code", () => {
   );
   assert.equal(gatewayFailureMessageCode(new Error("boom")), "gateway_unknown_error");
 });
+
+test("a run the provider rejected says what to fix instead of unknown", () => {
+  // Measured on staging (Hermes 0.21.2) with an expired openai-codex sign-in; the key is masked.
+  const expired = new HermesError(
+    "run_failed",
+    "ChatGPT or Codex Subscription rejected your sign-in, so the model can't be reached. " +
+      "Sign in again: `hermes -p sophie auth add openai-codex --type oauth`.\n\n" +
+      "Provider said: HTTP 401: Incorrect API key provided: sk-test*****.",
+    200,
+  );
+  assert.equal(classifyGatewayFailure(expired), "provider_auth");
+  assert.equal(gatewayFailureMessageCode(expired), "provider_auth_expired");
+
+  const limit = new HermesError("run_failed", "HTTP 429: The usage limit has been reached", 200);
+  assert.equal(gatewayFailureMessageCode(limit), "provider_usage_limit");
+
+  const model = new HermesError("run_failed", "The model `gpt-9` does not exist", 200);
+  assert.equal(gatewayFailureMessageCode(model), "provider_model_error");
+});
+
+test("the gateway rejecting its own key stays a gateway key problem", () => {
+  // A 401 from the gateway is an HTTP-layer `unauthorized`, not a provider sign-in.
+  assert.equal(
+    gatewayFailureMessageCode(new HermesError("unauthorized", "HTTP 401", 401)),
+    "gateway_auth_failed",
+  );
+});

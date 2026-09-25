@@ -191,6 +191,8 @@ export class HermesClient {
     let runId: string | null = null;
     let sessionId: string | null = null;
     let failure: string | null = null;
+    // The text of a turn Hermes gave up on (`assistant.completed` with `completed: false`).
+    let failedTurn: string | null = null;
 
     if (reader) {
       outer: for (;;) {
@@ -230,6 +232,7 @@ export class HermesClient {
             typeof event.data.content === "string"
           ) {
             completed = event.data.content;
+            if (event.data.completed === false) failedTurn = event.data.content;
           } else if (
             // The meeting path (/v1/runs) doesn't emit message.completed and carries the final answer in
             // run.completed's output (final_response). Deltas aren't rolled back, so when a model call is retried,
@@ -241,8 +244,12 @@ export class HermesClient {
           ) {
             completed = event.data.output;
           } else if (event.event === "run.failed" || event.event === "error") {
+            // Measured (0.21.2, 1:1 chat stream): run.failed carries no message; the reason was
+            // the unfinished assistant.completed just before it ("rejected your sign-in …").
             failure =
-              typeof event.data.message === "string" ? event.data.message : "Hermes run failed";
+              typeof event.data.message === "string"
+                ? event.data.message
+                : (failedTurn ?? "Hermes run failed");
           }
 
           if (isTerminalEvent(event.event)) {

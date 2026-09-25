@@ -50,6 +50,10 @@ const ja: Record<string, string> = {
     "ゲートウェイの同時処理数が上限に達しています。しばらくしてから再試行してください。",
   "meeting.reason.backend_unauthorized":
     "ゲートウェイが認証を拒否しました。ゲートウェイ接続を確認してください。",
+  "meeting.reason.provider_auth_expired":
+    "モデルプロバイダーのログインが期限切れです。ゲートウェイの所有者がHermesで再ログインする必要があります。",
+  "meeting.reason.model_error":
+    "モデルプロバイダーが設定されたモデルを提供していません。スタッフ設定でモデルを確認してください。",
   "meeting.reason.npc_response_failed": "社員が応答できませんでした。",
   "meeting.reason.driver_disconnected": "移動用の接続が切れました。",
   "meeting.reason.path_unavailable": "会議室へ歩ける経路がありません。",
@@ -2067,6 +2071,12 @@ const ja: Record<string, string> = {
     "ゲートウェイが時間内に応答しませんでした。しばらくしてからもう一度送信してください。",
   "npc.gatewayUnknownError":
     "AIゲートウェイの呼び出しに失敗しました。詳細はサーバーログを確認してください。",
+  "npc.providerAuthExpired":
+    "モデルプロバイダーのログインが期限切れです。ゲートウェイの所有者がHermesでそのプロバイダーに再ログインする必要があります。",
+  "npc.providerUsageLimit":
+    "モデルプロバイダーのアカウントが利用上限に達しました。上限が解除されてから再送するか、プランを確認してください。",
+  "npc.providerModelError":
+    "モデルプロバイダーが設定されたモデルを提供していません。スタッフ設定でモデルを確認してください。",
   "npc.unsupportedAdapter": "このNPCはサポートされていないアダプターを使用しています。",
   "npc.unbound": "このNPCはまだHermesプロファイルに接続されていません。",
   "npc.hermesImageUnsupported": "このNPCはまだ画像を受け取れません。",
