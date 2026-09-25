@@ -5,7 +5,7 @@ import { getAgentProgressMeter } from "./npc-agent-progress";
 
 test("getAgentProgressMeter returns connecting presentation", () => {
   assert.deepEqual(getAgentProgressMeter("connecting"), {
-    className: "bg-indigo-500 animate-pulse",
+    className: "bg-info animate-pulse",
     width: "33%",
   });
 });

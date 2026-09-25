@@ -2674,7 +2674,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           <div className="text-xl mb-4 text-danger">{error}</div>
           <Link
             href="/characters"
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded font-semibold"
+            className="px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold text-white"
           >
             {t("common.backToCharacters")}
           </Link>

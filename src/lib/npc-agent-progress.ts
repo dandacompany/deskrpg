@@ -10,8 +10,8 @@ export function getAgentProgressMeter(phase: AgentProgressPhase): {
     case "failed":
       return { className: "bg-danger", width: "100%" };
     case "connecting":
-      return { className: "bg-indigo-500 animate-pulse", width: "33%" };
+      return { className: "bg-info animate-pulse", width: "33%" };
     default:
-      return { className: "bg-indigo-500 animate-pulse", width: "10%" };
+      return { className: "bg-info animate-pulse", width: "10%" };
   }
 }

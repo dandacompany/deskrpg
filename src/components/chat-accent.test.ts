@@ -140,30 +140,13 @@ test("doesn't use a utility class with an undefined semantic-color name", () => 
  * each one by hand. Use a token of the same hue family with opacity instead (`bg-danger/10`,
  * `border-npc/40`, `bg-info`).
  *
- * The allowlist holds the spots that could not move without changing their hue: indigo actions
- * and progress (the matching token, primary, is green) and one line in a file another change
- * owns. It may only shrink — a new literal anywhere, or one more in a listed file, fails.
+ * The allowlist holds one line in a file another change owns. It may only shrink — a new
+ * literal anywhere, or one more in a listed file, fails.
  */
 const LITERAL_PALETTE =
   /(?<![\w-])(?:[a-z-]+:)*(?:bg|border|ring|from|via|to|fill|stroke|shadow|outline|divide|decoration|caret|placeholder)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)(?:\/\d+)?(?![\w-])/g;
 const PALETTE_ALLOWED: Record<string, string[]> = {
-  "app/game/GamePageClient.tsx": ["bg-indigo-600", "hover:bg-indigo-700"],
-  "components/ChannelSettingsModal.tsx": [
-    "bg-indigo-600",
-    "bg-indigo-600",
-    "bg-indigo-600",
-    "hover:bg-indigo-700",
-    "bg-indigo-600",
-    "bg-indigo-600",
-    "bg-indigo-600",
-    "hover:bg-indigo-700",
-  ],
   "components/ChatPanel.tsx": ["bg-amber-400"],
-  "components/NpcDialog.tsx": ["bg-indigo-600"],
-  "components/WebglUnavailable.tsx": ["bg-indigo-600", "hover:bg-indigo-700"],
-  "components/hermes/ProviderAuthPanel.tsx": ["bg-indigo-600", "hover:bg-indigo-500"],
-  "lib/npc-agent-progress.test.ts": ["bg-indigo-500"],
-  "lib/npc-agent-progress.ts": ["bg-indigo-500", "bg-indigo-500"],
 };
 
 test("doesn't use palette background, border or other color utilities outside the allowlist", () => {

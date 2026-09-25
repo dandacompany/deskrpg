@@ -494,14 +494,14 @@ export default function ChannelSettingsModal({
                   <button
                     type="button"
                     onClick={() => setVisibility(true)}
-                    className={`px-3 py-1 rounded text-sm ${visibility ? "bg-indigo-600 text-text" : "bg-surface-raised text-text-muted"}`}
+                    className={`px-3 py-1 rounded text-sm ${visibility ? "bg-primary text-white" : "bg-surface-raised text-text-muted"}`}
                   >
                     {t("channels.public")}
                   </button>
                   <button
                     type="button"
                     onClick={() => setVisibility(false)}
-                    className={`px-3 py-1 rounded text-sm ${!visibility ? "bg-indigo-600 text-text" : "bg-surface-raised text-text-muted"}`}
+                    className={`px-3 py-1 rounded text-sm ${!visibility ? "bg-primary text-white" : "bg-surface-raised text-text-muted"}`}
                   >
                     {t("channels.private")}
                   </button>
@@ -593,7 +593,7 @@ export default function ChannelSettingsModal({
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded font-semibold text-white disabled:opacity-50"
+                className="w-full px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold text-white disabled:opacity-50"
               >
                 {saving ? t("common.loading") : t("common.save")}
               </button>
@@ -685,7 +685,7 @@ export default function ChannelSettingsModal({
                         }}
                         className={`px-3 py-2 rounded text-sm font-semibold ${
                           gatewayMode === "resource"
-                            ? "bg-indigo-600 text-white"
+                            ? "bg-primary text-white"
                             : "bg-surface-raised text-text-secondary"
                         }`}
                       >
@@ -701,7 +701,7 @@ export default function ChannelSettingsModal({
                         }}
                         className={`px-3 py-2 rounded text-sm font-semibold ${
                           gatewayMode === "direct"
-                            ? "bg-indigo-600 text-white"
+                            ? "bg-primary text-white"
                             : "bg-surface-raised text-text-secondary"
                         }`}
                       >
@@ -851,7 +851,7 @@ export default function ChannelSettingsModal({
                       type="button"
                       onClick={() => void handleSaveGateway()}
                       disabled={gatewaySaving || (gatewayMode === "resource" && !selectedGatewayId)}
-                      className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded font-semibold text-white disabled:opacity-50"
+                      className="flex-1 px-4 py-2 bg-primary hover:bg-primary-hover rounded font-semibold text-white disabled:opacity-50"
                     >
                       {gatewaySaving ? t("common.loading") : t("common.save")}
                     </button>
