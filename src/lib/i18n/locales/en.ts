@@ -3281,6 +3281,10 @@ const en: Record<string, string> = {
     "One employee is one Hermes profile. Name it, write its persona, then sign that employee in to a model.",
   "profiles.new.sharedGateway": "This gateway is shared with you; its owner registers employees.",
   "profiles.detail.notFound": "No such employee on this gateway.",
+  "profiles.detail.pluginRecheckHint":
+    "Re-check the plugin to unlock persona and AI model editing.",
+  "profiles.detail.pluginRecheck": "Re-check",
+  "profiles.detail.pluginRechecking": "Checking…",
   "profiles.detail.sectionTitle": "Persona, appearance & AI model",
   "character.preview.label": "Selected character",
   "character.preview.rotateLeft": "Rotate left",

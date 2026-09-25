@@ -3258,6 +3258,10 @@ const ko: Record<string, string> = {
     "직원 한 명이 Hermes 프로필 하나입니다. 이름을 정하고, 인격을 적고, 그 직원으로 모델에 로그인합니다.",
   "profiles.new.sharedGateway": "공유받은 게이트웨이입니다. 직원 등록은 소유자가 합니다.",
   "profiles.detail.notFound": "이 게이트웨이에 그 직원이 없습니다.",
+  "profiles.detail.pluginRecheckHint":
+    "플러그인 상태를 다시 확인하면 인격·AI 모델 편집이 열릴 수 있습니다.",
+  "profiles.detail.pluginRecheck": "다시 확인",
+  "profiles.detail.pluginRechecking": "확인 중…",
   "profiles.detail.sectionTitle": "인격·외형·AI 모델",
   "character.preview.label": "선택한 캐릭터",
   "character.preview.rotateLeft": "왼쪽으로 회전",
