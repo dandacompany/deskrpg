@@ -2670,6 +2670,7 @@ const ja: Record<string, string> = {
   "cron.filter.allNpcs": "すべての NPC",
   "cron.search.placeholder": "名前・プロンプトを検索",
   "cron.empty": "クーロンがありません",
+  "cron.deletedJob": "このクーロンは削除されました。過去の実行結果はチャットの通知に残っています。",
   "cron.noNextRun": "予定なし",
   "cron.nextRun": "次回実行",
   "cron.lastRun": "前回実行",

@@ -2548,6 +2548,7 @@ const zh: Record<string, string> = {
   "cron.filter.allNpcs": "所有 NPC",
   "cron.search.placeholder": "搜索名称或提示词",
   "cron.empty": "暂无定时任务",
+  "cron.deletedJob": "此定时任务已被删除。过去的执行结果仍保留在聊天通知中。",
   "cron.noNextRun": "未计划",
   "cron.nextRun": "下次运行",
   "cron.lastRun": "上次运行",

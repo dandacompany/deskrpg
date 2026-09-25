@@ -2654,6 +2654,7 @@ const en: Record<string, string> = {
   "cron.filter.allNpcs": "All NPCs",
   "cron.search.placeholder": "Search name or prompt",
   "cron.empty": "No cron jobs",
+  "cron.deletedJob": "This cron was deleted. Its past results remain in the chat notices.",
   "cron.noNextRun": "Not scheduled",
   "cron.nextRun": "Next run",
   "cron.lastRun": "Last run",

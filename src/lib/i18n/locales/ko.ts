@@ -2639,6 +2639,7 @@ const ko: Record<string, string> = {
   "cron.filter.allNpcs": "모든 NPC",
   "cron.search.placeholder": "이름·프롬프트 검색",
   "cron.empty": "크론이 없습니다",
+  "cron.deletedJob": "이 크론은 삭제됐습니다. 지난 실행 결과는 채팅 알림에 남아 있습니다.",
   "cron.noNextRun": "예정 없음",
   "cron.nextRun": "다음 실행",
   "cron.lastRun": "마지막 실행",

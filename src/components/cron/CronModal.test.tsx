@@ -145,6 +145,27 @@ test("initialJobId — opens on the run-history tab with that job selected (R30 
       `이력 탭이 아니라서 runs 를 읽지 않았다 — ${calls.join(", ")}`,
     );
     assert.ok(q(host, '[data-testid="cron-run"]'), "이력 행이 그려지지 않았다");
+    assert.equal(q(host, '[data-testid="cron-deleted-notice"]'), null);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("initialJobId of a deleted cron says it was deleted instead of an unexplained list", async () => {
+  const { host, calls, cleanup } = await mount(
+    <CronModal channelId="ch1" npcs={NPCS} initialJobId="gone" onClose={() => {}} />,
+  );
+  try {
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const notice = q(host, '[data-testid="cron-deleted-notice"]');
+    assert.ok(notice, "no deleted notice");
+    assert.match(notice!.textContent ?? "", /삭제/);
+    // The remaining crons are still listed, none selected, and no history is requested for the missing id.
+    assert.equal(host.querySelectorAll('[data-testid="cron-row"]').length, 2);
+    assert.equal(host.querySelector('[data-testid="cron-row"] button[aria-pressed="true"]'), null);
+    assert.ok(!calls.some((url) => /\/jobs\/gone\/runs\b/.test(url)), calls.join(", "));
   } finally {
     await cleanup();
   }
