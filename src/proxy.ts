@@ -3,15 +3,24 @@ import { verifyJWT } from "@/lib/jwt";
 
 const PUBLIC_PATHS = ["/", "/auth", "/api/auth", "/api/health", "/robots.txt", "/sitemap.xml"];
 
+/** Set only by this proxy from a verified token — never trusted from the client. */
+const IDENTITY_HEADERS = ["x-user-id", "x-user-nickname"];
+
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
+function withoutIdentityHeaders(req: NextRequest): Headers {
+  const headers = new Headers(req.headers);
+  for (const name of IDENTITY_HEADERS) headers.delete(name);
+  return headers;
 }
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (isPublic(pathname) || pathname.startsWith("/_next") || pathname.startsWith("/assets")) {
-    return NextResponse.next();
+    return NextResponse.next({ request: { headers: withoutIdentityHeaders(req) } });
   }
 
   const token = req.cookies.get("token")?.value;
@@ -26,7 +35,7 @@ export async function proxy(req: NextRequest) {
     return response;
   }
 
-  const requestHeaders = new Headers(req.headers);
+  const requestHeaders = withoutIdentityHeaders(req);
   requestHeaders.set("x-user-id", payload.userId);
   requestHeaders.set("x-user-nickname", encodeURIComponent(payload.nickname));
 
