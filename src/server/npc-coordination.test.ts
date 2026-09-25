@@ -1895,3 +1895,229 @@ test("a meeting gathering whose walk notices stopped is confirmed as seat arriva
     await h.close();
   }
 });
+
+/**
+ * A one-tile-wide meeting corridor: entry at tile (1,1), spots at tiles (2,1)…(4,1), the NPCs waiting outside.
+ * Whoever stands nearer the entry blocks everyone behind them.
+ */
+const corridor: CoordinationChannel = {
+  npcs: [
+    { id: "n1", x: 48, y: 112 },
+    { id: "n2", x: 80, y: 112 },
+    { id: "n3", x: 112, y: 112 },
+  ],
+  seats: [{ id: "80:48", x: 80, y: 48 }],
+  bounds: { width: 512, height: 512 },
+  isWalkable: (x, y) =>
+    (y === 1 && x >= 1 && x <= 4) || (y === 3 && x >= 1 && x <= 4) || (x === 1 && y === 2),
+  meetingSpace: {
+    id: "meeting",
+    version: 1,
+    bounds: { x: 1, y: 1, width: 4, height: 1 },
+    entry: { x: 1.5, y: 1.5 },
+    seatIds: ["80:48"],
+    standingPositions: [
+      { x: 112, y: 48, direction: "up" },
+      { x: 144, y: 48, direction: "up" },
+    ],
+    wallObjectIds: [],
+    wallTileKeys: [],
+  },
+};
+
+test("meeting spots are handed out seats first, each group from the far end of the room toward the entry", async () => {
+  // The map file lists the spots entry-first; the far end of each group must come first.
+  const h = await harness({
+    load: async () => ({
+      ...corridor,
+      seats: [
+        { id: "80:48", x: 80, y: 48 },
+        { id: "144:48", x: 144, y: 48 },
+      ],
+      meetingSpace: {
+        ...corridor.meetingSpace!,
+        seatIds: ["80:48", "144:48"],
+        standingPositions: [
+          { x: 48, y: 80, direction: "up" },
+          { x: 112, y: 48, direction: "up" },
+        ],
+      },
+    }),
+  });
+  try {
+    await h.connect();
+    const { targets } = await h.coord.spatial.layout("a");
+    assert.deepEqual(
+      targets.map((t) => `${t.x}:${t.y}`),
+      ["144:48", "80:48", "112:48", "48:80"],
+    );
+  } finally {
+    await h.close();
+  }
+});
+
+test("a meeting spot that others' reserved spots wall off from the entry is not reserved", async () => {
+  const h = await harness({ load: async () => corridor });
+  try {
+    await h.connect();
+    assert.equal(await h.coord.spatial.reserve("a", "n1", { x: 112, y: 48, seatId: null }), true);
+    assert.equal(
+      await h.coord.spatial.reserve("a", "n2", { x: 144, y: 48, seatId: null }),
+      false,
+      "reserved a spot behind someone else's",
+    );
+    // Your own reservation does not wall you off — moving further in is fine.
+    assert.equal(await h.coord.spatial.reserve("a", "n1", { x: 144, y: 48, seatId: null }), true);
+    assert.equal(await h.coord.spatial.reserve("a", "n2", { x: 80, y: 48, seatId: "80:48" }), true);
+  } finally {
+    await h.close();
+  }
+});
+
+test("another socket of the same person does not stand in the way of their own meeting spot", async () => {
+  const h = await harness();
+  try {
+    const identity = { userId: "u1", characterId: "c1" };
+    await h.connect("a", identity);
+    const second = await h.connect("a", identity);
+    // Both avatars stand on the spot.
+    const spot = { x: 300, y: 350, seatId: null };
+    assert.equal(await h.coord.spatial.reserve("a", second.socket.id!, spot), true);
+    await h.coord.spatial.release("a", second.socket.id!);
+    const stranger = await h.connect("a", { userId: "u2", characterId: "c2" });
+    assert.equal(
+      await h.coord.spatial.reserve("a", stranger.socket.id!, spot),
+      false,
+      "someone else standing there no longer counts",
+    );
+  } finally {
+    await h.close();
+  }
+});
+
+test("a meeting walk that keeps reporting without getting closer is settled at its spot after the deadline", async () => {
+  let t = 1_000_000;
+  const arrivals: string[] = [];
+  const h = await harness({
+    now: () => t,
+    onSpatialArrival: (_channelId, actorId) => arrivals.push(actorId),
+  });
+  try {
+    const a = await h.connect();
+    const meeting = { x: 128, y: 128, seatId: "128:128" };
+    assert.equal(await h.coord.spatial.reserve("a", "n1", meeting), true);
+    assert.equal(await h.coord.spatial.move("a", "n1", 3, meeting, false), true);
+    // Jammed behind others: it shuffles back and forth and reports every half second, never getting closer.
+    for (let i = 0; i < 2 * (STALLED_MOTION_MS / 1000) + 1; i++) {
+      t += 500;
+      const x = i % 2 ? 32 : 40;
+      assert.equal(
+        (await ack(a, "npc:position-update", { npcId: "n1", x, y: 32, direction: "down" })).ok,
+        true,
+      );
+      await h.coord.sweepStalled();
+    }
+    assert.deepEqual(arrivals, ["n1"]);
+    const npc = (await h.connect()).latest.npcs.find((n) => n.npcId === "n1")!;
+    assert.deepEqual([npc.x, npc.y, npc.moving], [meeting.x, meeting.y, false]);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a meeting walk that is getting closer is not settled early", async () => {
+  let t = 1_000_000;
+  const arrivals: string[] = [];
+  const h = await harness({
+    now: () => t,
+    onSpatialArrival: (_channelId, actorId) => arrivals.push(actorId),
+  });
+  try {
+    const a = await h.connect();
+    const meeting = { x: 128, y: 128, seatId: "128:128" };
+    assert.equal(await h.coord.spatial.reserve("a", "n1", meeting), true);
+    assert.equal(await h.coord.spatial.move("a", "n1", 3, meeting, false), true);
+    for (let i = 1; i <= 2 * (STALLED_MOTION_MS / 1000); i++) {
+      t += 500;
+      assert.equal(
+        (
+          await ack(a, "npc:position-update", {
+            npcId: "n1",
+            x: 32 + i * 4,
+            y: 32 + i * 4,
+            direction: "down",
+          })
+        ).ok,
+        true,
+      );
+      await h.coord.sweepStalled();
+    }
+    assert.deepEqual(arrivals, []);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a meeting walk the driving browser gives up on is placed at its spot instead of failing the gathering", async () => {
+  const arrivals: string[] = [];
+  const blocked: string[] = [];
+  const h = await harness({
+    onSpatialArrival: (_channelId, actorId) => arrivals.push(actorId),
+    onSpatialBlocked: (_channelId, actorId, reason) => blocked.push(`${actorId}:${reason}`),
+  });
+  try {
+    const a = await h.connect();
+    const meeting = { x: 128, y: 128, seatId: "128:128" };
+    assert.equal(await h.coord.spatial.reserve("a", "n1", meeting), true);
+    assert.equal(await h.coord.spatial.move("a", "n1", 3, meeting, false), true);
+    const settled = stateEvent(a, (s) => s.npcs.find((n) => n.npcId === "n1")!.x === meeting.x);
+    await ack(a, "npc:spatial-failed", { npcId: "n1", generation: 3 });
+    const npc = (await settled).npcs.find((n) => n.npcId === "n1")!;
+    assert.deepEqual([npc.x, npc.y, npc.moving], [meeting.x, meeting.y, false]);
+    assert.deepEqual(arrivals, ["n1"]);
+    assert.deepEqual(blocked, []);
+  } finally {
+    await h.close();
+  }
+});
+
+test("the meeting coordinator can read where a socket's avatar stands", async () => {
+  const h = await harness();
+  try {
+    const a = await h.connect();
+    assert.deepEqual(await h.coord.spatial.position("a", a.socket.id!), { x: 300, y: 350 });
+    assert.equal(await h.coord.spatial.position("a", "nobody"), null);
+  } finally {
+    await h.close();
+  }
+});
+
+test("route notes alone do not keep a meeting walk that makes no progress from being settled", async () => {
+  let t = 1_000_000;
+  const arrivals: string[] = [];
+  const h = await harness({
+    now: () => t,
+    onSpatialArrival: (_channelId, actorId) => arrivals.push(actorId),
+  });
+  try {
+    const a = await h.connect();
+    const meeting = { x: 128, y: 128, seatId: "128:128" };
+    assert.equal(await h.coord.spatial.reserve("a", "n1", meeting), true);
+    assert.equal(await h.coord.spatial.move("a", "n1", 3, meeting, false), true);
+    const continuation = {
+      ambientSchedule: { phase: "roam", elapsed: 1200, duration: 25000, pause: 800 },
+      path: [{ x: 3, y: 3 }],
+    };
+    for (let i = 0; i < 2 * (STALLED_MOTION_MS / 1000) + 1; i++) {
+      t += 500;
+      assert.equal(
+        (await ack(a, "npc:continuation-update", { npcId: "n1", continuation })).ok,
+        true,
+      );
+      await h.coord.sweepStalled();
+    }
+    assert.deepEqual(arrivals, ["n1"]);
+  } finally {
+    await h.close();
+  }
+});
