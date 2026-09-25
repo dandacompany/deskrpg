@@ -200,6 +200,92 @@ describe("ConversationEngine — consecutive-failure budget", () => {
   }
 
   test(
+    "in meeting mode, a poll that reaches nobody is a failure, not a round of silence",
+    { timeout: 5000 },
+    async () => {
+      // Live on staging: with the gateway stopped every poll rejected, the round counted as
+      // "all passed", and the meeting ended after two rounds as consecutive_passes with no
+      // error on screen. The user could not tell a dead gateway from a quiet room.
+      const down = Object.assign(new Error("fetch failed"), { code: "unreachable" });
+      const unreachable = (npcId: string): EngineParticipant => ({
+        ...alwaysThrows(npcId),
+        adapter: {
+          type: "mock",
+          async execute() {
+            throw down;
+          },
+          async testConnection() {
+            return { status: "ok" as const };
+          },
+        },
+      });
+      const errors: unknown[] = [];
+      let endReason: string | null = null;
+      const engine = new ChannelRuntime(
+        {
+          mode: "meeting",
+          topic: "T",
+          participants: [unreachable("a"), unreachable("b")],
+          quota: {
+            maxConsecutivePasses: 2,
+            cooldownMs: 0,
+            maxTotalTurns: 50,
+            maxTurnsPerAgent: 20,
+          },
+        },
+        {
+          onError: (err: unknown) => {
+            errors.push(err);
+            if (errors.length > 10) engine.stop(); // hard guard
+          },
+          onEnd: (_turns: unknown, reason: string) => {
+            endReason = reason;
+          },
+        },
+      );
+      await engine.run();
+      assert.equal(endReason, "consecutive_failures");
+      assert.equal(
+        errors.length,
+        1,
+        "one report per unreachable streak, not one per NPC per round",
+      );
+      assert.equal(errors[0] === down, true, "the adapter's own error is reported");
+    },
+  );
+
+  test(
+    "in meeting mode, a poll where someone answers is still a round of silence",
+    { timeout: 5000 },
+    async () => {
+      const errors: unknown[] = [];
+      let endReason: string | null = null;
+      const engine = new ChannelRuntime(
+        {
+          mode: "meeting",
+          topic: "T",
+          participants: [alwaysThrows("a"), participant("b", ["PASS"])],
+          quota: {
+            maxConsecutivePasses: 2,
+            cooldownMs: 0,
+            maxTotalTurns: 50,
+            maxTurnsPerAgent: 20,
+          },
+        },
+        {
+          onError: (err: unknown) => errors.push(err),
+          onEnd: (_turns: unknown, reason: string) => {
+            endReason = reason;
+          },
+        },
+      );
+      await engine.run();
+      assert.equal(endReason, "consecutive_passes");
+      assert.equal(errors.length, 0);
+    },
+  );
+
+  test(
     "in peer mode, if every turn fails, everyone exhausts their budget and it ends instead of looping forever",
     { timeout: 5000 },
     async () => {
