@@ -702,3 +702,7 @@ export type ArtifactEventPayload = {
 /** 0.15.0 — NPC skill management (`/p/{profile}/deskrpg/skills|curator|learning/**`). */
 export const SKILL_ADMIN_MIN_VERSION = "0.15.0";
 export const SKILL_ADMIN_CAPABILITY = "profile_skill_admin";
+
+/** 0.17.0 — NPC MCP connector management (`/p/{profile}/deskrpg/mcp/**`). */
+export const MCP_ADMIN_MIN_VERSION = "0.17.0";
+export const MCP_ADMIN_CAPABILITY = "profile_mcp_admin";

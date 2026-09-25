@@ -588,9 +588,152 @@ export type CronApi = {
   instantiateBlueprint(body: InstantiateBlueprintBody): Promise<PluginResponse<{ job: CronJob }>>;
 };
 
+// ---------------------------------------------------------------------------
+// 0.17.0 — NPC MCP connectors (`/p/{profile}/deskrpg/mcp/**`, capability `profile_mcp_admin`)
+// ---------------------------------------------------------------------------
+
+export type McpTransport = "http" | "stdio";
+
+/** One server row. Carries no secret values, URL query strings, or command arguments. */
+export type McpServerView = {
+  name: string;
+  kind: "catalog" | "custom" | "plugin";
+  transport: McpTransport;
+  endpointSummary: string;
+  enabled: boolean;
+  trust: "full" | "untrusted";
+  auth: "none" | "bearer" | "oauth" | "env";
+  secrets: { key: string; hasValue: boolean }[];
+  oauthTokenPresent: boolean;
+  tools: { total: number; enabled: number } | null;
+  lastCheck: { at: string; ok: boolean; error?: string } | null;
+  revision: string;
+};
+
+/** Owner-only detail — adds the command, arguments, and env/header *names* (never values). */
+export type McpServerDetail = McpServerView & {
+  url: string | null;
+  command: string | null;
+  args: string[];
+  cwd: string | null;
+  envKeys: string[];
+  headerKeys: string[];
+  toolFilter: { include?: string[]; exclude?: string[] };
+};
+
+export type McpTool = {
+  name: string;
+  description: string;
+  readOnlyHint: boolean | null;
+  destructiveHint: boolean | null;
+  on: boolean;
+};
+
+export type McpJob = {
+  jobId: string;
+  state: "running" | "succeeded" | "failed";
+  ok?: boolean;
+  tools?: McpTool[];
+  error?: string;
+};
+
+export type McpCatalogEntry = {
+  name: string;
+  description: string;
+  transport: McpTransport;
+  installed: boolean;
+  requiredEnv: { name: string; prompt: string; required: boolean; secret: boolean }[];
+};
+
+export type McpServerInput = {
+  name?: string;
+  transport?: McpTransport;
+  url?: string;
+  headers?: Record<string, string>;
+  command?: string;
+  args?: string[];
+  /** Only the keys matter — the plugin stores each as a `${KEY}` reference and ignores values. */
+  env?: Record<string, string>;
+  passthroughEnv?: string[];
+  cwd?: string;
+  auth?: "none" | "bearer" | "oauth" | "env";
+  trust?: "full" | "untrusted";
+  /** Required (= name) for a new stdio server or a change to its command. */
+  confirmName?: string;
+  baseRevision?: string;
+};
+
+export type McpExport = {
+  name: string;
+  entry: Record<string, unknown>;
+  secretKeys: string[];
+  oauth: boolean;
+};
+
+export type McpOAuthStart = { sessionId: string; authUrl: string } | { status: "approved" };
+export type McpOAuthPoll = {
+  status: "pending" | "approved" | "error";
+  error?: string;
+  tools?: string[];
+};
+export type McpReload = { reloaded: true; servers: string[]; agentsRefreshed: boolean };
+
+export type McpAdminApi = {
+  list(): Promise<PluginResponse<{ servers: McpServerView[] }>>;
+  detail(name: string): Promise<PluginResponse<McpServerDetail>>;
+  create(body: McpServerInput, actor: string): Promise<PluginResponse<McpServerView>>;
+  update(name: string, body: McpServerInput, actor: string): Promise<PluginResponse<McpServerView>>;
+  remove(name: string, actor: string): Promise<PluginResponse<{ ok: true }>>;
+  setEnabled(name: string, enabled: boolean, actor: string): Promise<PluginResponse<McpServerView>>;
+  setTrust(
+    name: string,
+    trust: "full" | "untrusted",
+    actor: string,
+  ): Promise<PluginResponse<McpServerView>>;
+  setTools(
+    name: string,
+    body: { include?: string[]; exclude?: string[]; baseRevision: string },
+    actor: string,
+  ): Promise<PluginResponse<McpServerView>>;
+  putSecret(
+    name: string,
+    key: string,
+    value: string,
+    actor: string,
+  ): Promise<PluginResponse<{ key: string; hasValue: boolean }>>;
+  deleteSecret(
+    name: string,
+    key: string,
+    actor: string,
+  ): Promise<PluginResponse<{ key: string; hasValue: boolean }>>;
+  test(name: string, actor: string): Promise<PluginResponse<{ jobId: string }>>;
+  job(jobId: string): Promise<PluginResponse<McpJob>>;
+  tools(
+    name: string,
+  ): Promise<PluginResponse<{ tools: McpTool[]; checkedAt: string; revision: string }>>;
+  oauthStart(name: string, actor: string): Promise<PluginResponse<McpOAuthStart>>;
+  oauthCallback(
+    sessionId: string,
+    body: { code: string; state: string; iss?: string },
+    actor: string,
+  ): Promise<PluginResponse<{ ok: true }>>;
+  oauthPoll(sessionId: string): Promise<PluginResponse<McpOAuthPoll>>;
+  oauthCancel(sessionId: string, actor: string): Promise<PluginResponse<{ ok: boolean }>>;
+  catalog(): Promise<PluginResponse<{ entries: McpCatalogEntry[] }>>;
+  catalogInstall(
+    entry: string,
+    body: { env: Record<string, string>; enable?: boolean },
+    actor: string,
+  ): Promise<PluginResponse<McpServerView>>;
+  reload(actor: string): Promise<PluginResponse<McpReload>>;
+  exportServer(name: string): Promise<PluginResponse<McpExport>>;
+};
+
 export type ProfilePluginClient = {
   profileName: string;
   cron: CronApi;
   /** 0.15.0 `profile_skill_admin` — with an old plugin the call comes back 404. */
   skills: SkillAdminApi;
+  /** 0.17.0 `profile_mcp_admin` — with an old plugin the call comes back 404. */
+  mcp: McpAdminApi;
 };

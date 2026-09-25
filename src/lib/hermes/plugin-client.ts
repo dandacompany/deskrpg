@@ -32,6 +32,7 @@ import type {
   CronApi,
   EventsApi,
   KanbanApi,
+  McpAdminApi,
   OwnerPluginClient,
   PluginClient,
   PluginResponse,
@@ -493,7 +494,7 @@ export function createOwnerPluginClient(
   };
 }
 
-/** The surface called only with one profile's key — `/p/{profile}/deskrpg/cron/*` and skill management (`skills|curator|learning/*`). */
+/** The surface called only with one profile's key — `/p/{profile}/deskrpg/cron/*`, skill management (`skills|curator|learning/*`), and MCP connectors (`mcp/*`). */
 export function createProfilePluginClient(
   input: TransportInput & { profileName: string; profileToken: string },
 ): ProfilePluginClient {
@@ -590,5 +591,55 @@ export function createProfilePluginClient(
       call(`${prof}/learning/node`, token, { method: "DELETE", body, ...as(actor) }),
   };
 
-  return { profileName: input.profileName, cron, skills };
+  const mcpRoot = `${prof}/mcp`;
+  const server = (name: string, suffix = "") => `${mcpRoot}/servers/${seg(name)}${suffix}`;
+
+  const mcp: McpAdminApi = {
+    list: () => call(`${mcpRoot}/servers`, token),
+    detail: (name) => call(server(name), token),
+    create: (body, actor) =>
+      call(`${mcpRoot}/servers`, token, { method: "POST", body, ...as(actor) }),
+    update: (name, body, actor) => call(server(name), token, { method: "PUT", body, ...as(actor) }),
+    remove: (name, actor) => call(server(name), token, { method: "DELETE", ...as(actor) }),
+    setEnabled: (name, enabled, actor) =>
+      call(server(name, "/enabled"), token, { method: "PUT", body: { enabled }, ...as(actor) }),
+    setTrust: (name, trust, actor) =>
+      call(server(name, "/trust"), token, { method: "PUT", body: { trust }, ...as(actor) }),
+    setTools: (name, body, actor) =>
+      call(server(name, "/tools"), token, { method: "PUT", body, ...as(actor) }),
+    putSecret: (name, key, value, actor) =>
+      call(server(name, `/secrets/${seg(key)}`), token, {
+        method: "PUT",
+        body: { value },
+        ...as(actor),
+      }),
+    deleteSecret: (name, key, actor) =>
+      call(server(name, `/secrets/${seg(key)}`), token, { method: "DELETE", ...as(actor) }),
+    test: (name, actor) =>
+      call(server(name, "/test"), token, { method: "POST", body: {}, ...as(actor) }),
+    job: (jobId) => call(`${mcpRoot}/jobs/${seg(jobId)}`, token),
+    tools: (name) => call(server(name, "/tools"), token),
+    oauthStart: (name, actor) =>
+      call(server(name, "/oauth"), token, { method: "POST", body: {}, ...as(actor) }),
+    oauthCallback: (sessionId, body, actor) =>
+      call(`${mcpRoot}/oauth/${seg(sessionId)}/callback`, token, {
+        method: "POST",
+        body,
+        ...as(actor),
+      }),
+    oauthPoll: (sessionId) => call(`${mcpRoot}/oauth/${seg(sessionId)}`, token),
+    oauthCancel: (sessionId, actor) =>
+      call(`${mcpRoot}/oauth/${seg(sessionId)}`, token, { method: "DELETE", ...as(actor) }),
+    catalog: () => call(`${mcpRoot}/catalog`, token),
+    catalogInstall: (entry, body, actor) =>
+      call(`${mcpRoot}/catalog/${seg(entry)}/install`, token, {
+        method: "POST",
+        body,
+        ...as(actor),
+      }),
+    reload: (actor) => call(`${mcpRoot}/reload`, token, { method: "POST", body: {}, ...as(actor) }),
+    exportServer: (name) => call(`${mcpRoot}/export/${seg(name)}`, token),
+  };
+
+  return { profileName: input.profileName, cron, skills, mcp };
 }
