@@ -322,8 +322,12 @@ export default function CronPanel({
     );
   };
 
-  const iconBtn =
-    "inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-surface hover:bg-surface-raised text-text disabled:opacity-40 disabled:cursor-not-allowed";
+  const btnShape =
+    "inline-flex items-center gap-1 px-2 py-1 text-xs rounded disabled:opacity-40 disabled:cursor-not-allowed";
+  const iconBtn = `${btnShape} bg-surface hover:bg-surface-raised text-text`;
+  // A separate class, not iconBtn plus overrides: two bg-* on one element resolve by CSS
+  // order, and bg-surface won — the button went white on white.
+  const primaryBtn = `${btnShape} bg-primary hover:bg-primary-hover text-white`;
 
   return (
     <div
@@ -359,7 +363,7 @@ export default function CronPanel({
           <button
             type="button"
             data-testid="cron-new"
-            className={`${iconBtn} bg-primary text-white hover:bg-primary`}
+            className={primaryBtn}
             onClick={() => setEditor({ job: null })}
             disabled={npcCandidates.length === 0}
           >
@@ -580,7 +584,7 @@ export default function CronPanel({
               <button
                 type="button"
                 data-testid="cron-action-delete"
-                className={`${iconBtn} ${confirmDeleteId === selected.id ? "bg-danger/70 text-white" : "text-danger"}`}
+                className={`${btnShape} ${confirmDeleteId === selected.id ? "bg-danger/70 hover:bg-danger-hover text-white" : "bg-surface hover:bg-surface-raised text-danger"}`}
                 disabled={!selected.editable || busy === selected.id}
                 title={readOnlyText(selected) ?? t("common.delete")}
                 onClick={() => {

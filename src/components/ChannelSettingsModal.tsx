@@ -428,7 +428,7 @@ export default function ChannelSettingsModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-surface rounded-xl w-full max-w-lg border border-border max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-          <h2 className="text-lg font-bold text-white">{t("settings.title")}</h2>
+          <h2 className="text-lg font-bold text-text">{t("settings.title")}</h2>
           <button
             onClick={onClose}
             className="text-text-muted hover:text-text text-xl"
@@ -621,7 +621,7 @@ export default function ChannelSettingsModal({
                         <span
                           className={`w-2 h-2 rounded-full ${m.isOnline ? "bg-success" : "bg-text-muted"}`}
                         />
-                        <span className="text-white text-sm">{m.nickname}</span>
+                        <span className="text-text text-sm">{m.nickname}</span>
                         <span
                           className={`text-xs px-1.5 py-0.5 rounded ${m.role === "owner" ? "bg-npc/30 text-npc" : "bg-surface-raised text-text-muted"}`}
                         >
@@ -643,7 +643,7 @@ export default function ChannelSettingsModal({
               )}
               {confirmKick && (
                 <div className="mt-4 p-3 bg-danger-hover/30 border border-danger rounded">
-                  <p className="text-sm text-white mb-2">
+                  <p className="text-sm text-text mb-2">
                     {t("settings.kickConfirm", { name: confirmKick.nickname })}
                   </p>
                   <div className="flex gap-2">
