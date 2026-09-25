@@ -34,6 +34,7 @@ import { CronErrorNotice, TimezoneLabel } from "./cron-notices";
 import CronEditorDialog, { type CronEditorSubmit } from "./CronEditorDialog";
 import BlueprintGallery from "./BlueprintGallery";
 import CronRunItem from "./CronRunItem";
+import { runStatusKey } from "./cron-run-view";
 
 export type CronPanelNpc = { npcId: string; npcName: string; profileName?: string };
 
@@ -652,7 +653,9 @@ export default function CronPanel({
                 <dd>
                   {formatLocalDateTime(selected.last_run_at, locale)}
                   {selected.last_status && (
-                    <span className="ml-1 text-text-dim">({selected.last_status})</span>
+                    <span className="ml-1 text-text-dim" data-testid="cron-last-status">
+                      ({t(runStatusKey(selected.last_status))})
+                    </span>
                   )}
                 </dd>
                 {selected.last_error && (
