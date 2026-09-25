@@ -3,7 +3,7 @@ import { meetingMinutes, channelMembers, channels } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and, desc } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
-import { resolveMeetingMinutesAccess } from "./meeting-access";
+import { resolveChannelMemberAccess } from "@/lib/channel-membership";
 import { normalizeMeetingMinutesRecord } from "@/lib/meeting-minutes";
 
 export async function GET(req: NextRequest) {
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const access = await resolveMeetingMinutesAccess({
+  const access = await resolveChannelMemberAccess({
     userId,
     channelId,
     deps: {

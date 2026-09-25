@@ -12,7 +12,7 @@ import { getGatewayRuntimeStateForChannel } from "@/lib/gateway-resources";
 import { selectChannelNpcs } from "@/lib/npc-projection";
 import { channelSeats } from "@/lib/npc-seating";
 import { seatNumberAt } from "@/lib/seat-assignment";
-import { resolveMeetingMinutesAccess } from "../meetings/meeting-access";
+import { resolveChannelMemberAccess } from "@/lib/channel-membership";
 
 export async function GET(req: NextRequest) {
   try {
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const access = await resolveMeetingMinutesAccess({
+    const access = await resolveChannelMemberAccess({
       userId,
       channelId,
       deps: {

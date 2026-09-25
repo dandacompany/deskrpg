@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { getUserId } from "@/lib/internal-rpc";
 import { normalizeLocale, translateServer } from "@/lib/i18n/server";
-import { resolveMeetingMinutesAccess } from "../../meeting-access";
+import { resolveChannelMemberAccess } from "@/lib/channel-membership";
 
 function formatMinutesMarkdown(
   m: {
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ errorCode: "not_found", error: "Not found" }, { status: 404 });
     }
 
-    const access = await resolveMeetingMinutesAccess({
+    const access = await resolveChannelMemberAccess({
       userId,
       channelId: row.channelId,
       deps: {
