@@ -905,3 +905,57 @@ test("npc:working counts running cards on every board of the channel, even when 
     "finishing a card on one board leaves the same-id card on the other board running",
   );
 });
+
+test("a cron run clears working even when its session only shows up at the finish (the real plugin's events)", async () => {
+  // The plugin names both halves of one execution `c:<profile>:<execution>:<phase>` and sends no run_id. The start is
+  // read while the run is still going, before the session row exists — so only the finish carries a session_id.
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  await ingest(
+    CHANNEL,
+    [
+      ev({
+        id: "c:sophie:exec-7:started",
+        kind: "cron.run.started",
+        board: undefined,
+        profile: "sophie",
+        job_id: "job-1",
+        payload: { job_id: "job-1", profile: "sophie", session_id: null },
+      }),
+    ],
+    h.deps,
+  );
+  await ingest(
+    CHANNEL,
+    [
+      ev({
+        id: "c:sophie:exec-7:finished",
+        kind: "cron.run.finished",
+        board: undefined,
+        profile: "sophie",
+        job_id: "job-1",
+        payload: { job_id: "job-1", profile: "sophie", session_id: "sess-9", status: "ok" },
+      }),
+    ],
+    h.deps,
+  );
+  assert.deepEqual(workingEvents(h.emitted).at(-1), {
+    npcId: "npc-sophie",
+    working: false,
+    sources: { runningCards: 0, cronRuns: 0 },
+  });
+});
+
+test("two runs of the same cron job are counted apart", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  const started = (exec: string) =>
+    ev({
+      id: `c:sophie:${exec}:started`,
+      kind: "cron.run.started",
+      board: undefined,
+      profile: "sophie",
+      job_id: "job-1",
+      payload: { job_id: "job-1", profile: "sophie", session_id: null },
+    });
+  await ingest(CHANNEL, [started("exec-1"), started("exec-2")], h.deps);
+  assert.equal((workingEvents(h.emitted).at(-1) as NpcWorkingPayload).sources.cronRuns, 2);
+});

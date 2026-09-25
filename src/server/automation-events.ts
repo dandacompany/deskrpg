@@ -340,8 +340,18 @@ function profileOf(event: PluginEvent): string | null {
   return null;
 }
 
+/**
+ * One execution's key, the same for its start and its finish.
+ *
+ * The plugin sends no `run_id` for cron. It names both halves `c:<profile>:<execution>:<phase>`, and reads the start
+ * while the run is still going — before the session row exists — so only the finish carries a `session_id`. Keying
+ * on the session made the finish miss the start: the NPC stayed "working" after the result arrived, and a result
+ * report call then showed "still handling 1 item" (observed on staging).
+ */
 function cronRunKey(event: PluginEvent): string | null {
   if (typeof event.run_id === "string" && event.run_id) return event.run_id;
+  const execution = /^c:(.+):(?:started|finished)$/.exec(event.id)?.[1];
+  if (execution) return `exec:${execution}`;
   const p = event.payload as Partial<CronRunStartedPayload>;
   if (typeof p.session_id === "string" && p.session_id) return `session:${p.session_id}`;
   if (typeof event.job_id === "string" && event.job_id) return `job:${event.job_id}`;

@@ -305,8 +305,14 @@ export async function startFakePluginServer(
 
   // ---- Events ----------------------------------------------------------
 
-  function pushEvent(input: Omit<PluginEvent, "id" | "ts"> & { ts?: number }): PluginEvent {
-    const event: PluginEvent = { ...input, id: nextId("ev"), ts: input.ts ?? Date.now() };
+  function pushEvent(
+    input: Omit<PluginEvent, "id" | "ts"> & { ts?: number; id?: string },
+  ): PluginEvent {
+    const event: PluginEvent = {
+      ...input,
+      id: input.id ?? nextId("ev"),
+      ts: input.ts ?? Date.now(),
+    };
     events.push(event);
     return event;
   }
@@ -1239,12 +1245,20 @@ export async function startFakePluginServer(
       session_id: sessionId,
       started_at: startedAt,
     };
-    pushEvent({ kind: "cron.run.started", profile, job_id: job.id, run_id: run.id, payload: base });
+    // Same shape as the real plugin (`events.py` `_cron_event`): no run_id, one execution named in both ids, and the
+    // start read before the session exists.
     pushEvent({
+      id: `c:${profile}:${run.id}:started`,
+      kind: "cron.run.started",
+      profile,
+      job_id: job.id,
+      payload: { ...base, session_id: null },
+    });
+    pushEvent({
+      id: `c:${profile}:${run.id}:finished`,
       kind: "cron.run.finished",
       profile,
       job_id: job.id,
-      run_id: run.id,
       payload: { ...base, status: "ok", ended_at: startedAt, result_text: run.result_text },
     });
     return { status: 202, body: { accepted: true } };
