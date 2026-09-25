@@ -3585,6 +3585,7 @@ const en: Record<string, string> = {
   "approvals.status.expired": "Timed out — Hermes denied it",
   "approvals.status.failed": "Couldn't deliver the decision",
   "approvals.pending": "{npc} is waiting for {approver}'s approval",
+  "approvals.roomBadge": "{n} awaiting approval",
 };
 
 export default en;

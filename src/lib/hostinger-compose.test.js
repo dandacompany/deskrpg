@@ -48,6 +48,25 @@ test("the plugin-install service receives the same API_SERVER_KEY as hermes — 
   assert.match(block, /HERMES_UID: \$\{HERMES_UID:-10000\}/);
 });
 
+test("the plugin step writes non-empty provider keys into /opt/data/.env — Hermes ignores a key passed only as env and answers Provider authentication failed", () => {
+  const block = compose.slice(compose.indexOf("  hermes-plugins:"), compose.indexOf("\n  hermes:"));
+  for (const key of ["OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"]) {
+    assert.match(
+      block,
+      new RegExp(`${key}: \\$\\{${key}:-\\}`),
+      `${key} is not passed to hermes-plugins`,
+    );
+  }
+  assert.match(block, /touch \/opt\/data\/\.env/);
+  assert.match(block, /for v in OPENROUTER_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY; do/);
+  // Only non-empty values are written: an empty variable must not erase a key set in the dashboard.
+  assert.match(block, /\[ -n "\$\$val" \] \|\| continue/);
+  // Upsert: drop the old line for that key, then append the new one.
+  assert.match(block, /grep -v "\^\$\$v=" \/opt\/data\/\.env/);
+  // The keys are written before the plugin install, whose `set -e` would otherwise stop first.
+  assert.ok(block.indexOf("/opt/data/.env") < block.indexOf("hermes plugins"));
+});
+
 test("the Hermes dashboard turns on only when a password is set — empty and the auth gate blocks it, so s6 keeps restarting", () => {
   assert.match(compose, /HERMES_DASHBOARD: \$\{HERMES_DASHBOARD_PASSWORD:\+true\}/);
   assert.match(compose, /HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: \$\{HERMES_DASHBOARD_PASSWORD:-\}/);
