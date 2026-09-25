@@ -64,6 +64,7 @@ export async function gateAutomationPlugin(
   const cached = resolvePluginStatusFromCache({
     pluginStatus: resource.pluginStatus,
     pluginCheckedAt: resource.pluginCheckedAt,
+    pluginVersion: resource.pluginVersion,
     now,
   });
 

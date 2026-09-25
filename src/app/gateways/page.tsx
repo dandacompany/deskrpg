@@ -265,7 +265,9 @@ function GatewayManagementPageInner() {
       // their own progress indicator (saving, deleting, …).
       setError("");
       try {
-        const res = await fetch("/api/gateways");
+        // `refreshPlugin` re-probes a cache that no longer describes the install (a host upgraded by
+        // git pull), so the version line and the worker-plugin warning are not an hour behind.
+        const res = await fetch("/api/gateways?refreshPlugin=1");
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           throw data;

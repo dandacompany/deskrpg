@@ -13,7 +13,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ errorCode: "unauthorized", error: "unauthorized" }, { status: 401 });
   }
 
-  const gateways = await listAccessibleGatewayResources(userId);
+  // Screens that judge plugin capabilities ask for a re-probe of caches that no longer describe the install.
+  const refreshPlugin = req.nextUrl.searchParams.get("refreshPlugin") === "1";
+  const gateways = await listAccessibleGatewayResources(userId, { refreshPlugin });
   return NextResponse.json({ gateways });
 }
 

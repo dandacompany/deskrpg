@@ -217,6 +217,7 @@ test("below plugin 0.6.0 it does not try to secure and records plugin_upgrade_re
     "initial_status",
     "kanban_review_policy_v1",
     "event_cursor_handoff",
+    "card_proposals",
   ]);
 });
 

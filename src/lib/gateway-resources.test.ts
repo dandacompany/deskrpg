@@ -171,3 +171,82 @@ describe("listAccessibleGatewayResources — Hermes dashboard URL", () => {
     assert.equal(rows[0].dashboardUrl, null);
   });
 });
+
+// A plugin upgraded on the host (git pull + restart) kept reporting its old capabilities from the
+// cache for up to an hour — the hire wizard's clone checkbox stayed hidden. Screens that judge
+// capabilities ask the list to re-probe owned gateways whose cache no longer describes the install.
+describe("listAccessibleGatewayResources — refreshPlugin", () => {
+  async function startInfoServer(body: Record<string, unknown>) {
+    const http = await import("node:http");
+    let hits = 0;
+    const server = http.createServer((req, res) => {
+      if (req.url === "/deskrpg/info") hits += 1;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(body));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as { port: number };
+    return {
+      baseUrl: `http://127.0.0.1:${port}`,
+      hits: () => hits,
+      close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    };
+  }
+
+  // Only owned rows carry the field; the union type does not know which one a row is.
+  const cloneOf = (row: object) => (row as { supportsProfileClone?: boolean }).supportsProfileClone;
+
+  const cachedInfo = (version: string, capabilities: string[]) =>
+    JSON.stringify({ plugin: "deskrpg", version, capabilities });
+
+  async function seedCached(ownerId: string, baseUrl: string, version: string, minutesAgo: number) {
+    const { db, gatewayResources } = await loadDb();
+    await db.insert(gatewayResources).values({
+      ownerUserId: ownerId,
+      displayName: "Upgraded Gateway",
+      baseUrl,
+      tokenEncrypted: encryptGatewayToken("gateway-key-refresh-1234567890"),
+      pluginStatus: "plugin_ready",
+      pluginVersion: version,
+      pluginCheckedAt: await dbTimestamp(new Date(Date.now() - minutesAgo * 60_000)),
+      pluginInfoJson: cachedInfo(version, ["kanban"]),
+    });
+  }
+
+  test("re-probes an owned gateway whose cached version is behind the pin", async () => {
+    const { PLUGIN_VERSION } = await import("@/lib/hermes/setup/pin");
+    const stub = await startInfoServer({
+      plugin: "deskrpg",
+      version: PLUGIN_VERSION,
+      capabilities: ["kanban", "profile_clone"],
+    });
+    try {
+      const owner = await seedUser("refresh");
+      await seedCached(owner.id, stub.baseUrl, "0.10.0", 10);
+
+      const plain = await listAccessibleGatewayResources(owner.id);
+      assert.equal(stub.hits(), 0, "the plain list never probes");
+      assert.equal(cloneOf(plain[0]), false);
+
+      const rows = await listAccessibleGatewayResources(owner.id, { refreshPlugin: true });
+      assert.equal(stub.hits(), 1);
+      assert.equal(rows[0].pluginVersion, PLUGIN_VERSION);
+      assert.equal(cloneOf(rows[0]), true);
+    } finally {
+      await stub.close();
+    }
+  });
+
+  test("leaves a fresh cache of the pinned version alone", async () => {
+    const { PLUGIN_VERSION } = await import("@/lib/hermes/setup/pin");
+    const stub = await startInfoServer({ plugin: "deskrpg", version: PLUGIN_VERSION });
+    try {
+      const owner = await seedUser("fresh");
+      await seedCached(owner.id, stub.baseUrl, PLUGIN_VERSION, 10);
+      await listAccessibleGatewayResources(owner.id, { refreshPlugin: true });
+      assert.equal(stub.hits(), 0);
+    } finally {
+      await stub.close();
+    }
+  });
+});

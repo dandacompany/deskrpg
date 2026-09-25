@@ -970,6 +970,7 @@ test("automation status — a summary of plugin, board, polling and in-progress 
     "initial_status",
     "kanban_review_policy_v1",
     "event_cursor_handoff",
+    "card_proposals",
   ]);
   assert.equal(body.timezone, "Asia/Seoul");
   assert.equal(body.boardSlug, seed.boardSlug);
@@ -1373,6 +1374,31 @@ test("resolving a proposal — non-member 403, no login 401, invalid choice 400"
   assert.equal((await bad.json()).code, "invalid_field");
 
   // No branch touched the plugin's proposal.
+  assert.equal(server.cardProposal(proposal.proposalId)?.resolvedChoice, null);
+  const untouched = await readNotice(proposal.messageId);
+  assert.equal(untouched?.kind === "card_proposal" ? untouched.resolved : "gone", undefined);
+});
+
+// A proposal can outlive the plugin that raised it (a downgrade or a swapped gateway). Resolving
+// it then must say "upgrade the plugin", not pass the old plugin's bare route 404 through.
+test("resolving a proposal — a plugin without card_proposals answers 428 plugin_upgrade_required", async () => {
+  server.reset();
+  server.setInfo({ capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"] });
+  const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
+  const seed = await seedKanbanChannel();
+  const proposal = await seedProposal(seed);
+
+  for (const choice of ["card", "inline"]) {
+    const res = await route.POST(
+      resolveReq(seed.ownerId, seed.channelId, proposal.proposalId, { choice }),
+      proposalCtx(seed.channelId, proposal.proposalId),
+    );
+    assert.equal(res.status, 428, choice);
+    const body = await res.json();
+    assert.equal(body.code, "plugin_upgrade_required");
+    assert.equal(body.minVersion, "0.11.0");
+    assert.deepEqual(body.missing, ["card_proposals"]);
+  }
   assert.equal(server.cardProposal(proposal.proposalId)?.resolvedChoice, null);
   const untouched = await readNotice(proposal.messageId);
   assert.equal(untouched?.kind === "card_proposal" ? untouched.resolved : "gone", undefined);

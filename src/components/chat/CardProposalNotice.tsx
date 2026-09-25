@@ -87,7 +87,9 @@ export default function CardProposalNotice({
                   user unsure what to do. */}
               {error === "already_resolved"
                 ? t("notice.cardProposal.alreadyResolved")
-                : t("notice.cardProposal.failed", { reason: error })}
+                : error === "plugin_upgrade_required"
+                  ? t("notice.cardProposal.upgradeRequired")
+                  : t("notice.cardProposal.failed", { reason: error })}
             </div>
           )}
           {unavailable && (

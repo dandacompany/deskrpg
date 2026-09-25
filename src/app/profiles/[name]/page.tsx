@@ -7,11 +7,12 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import NpcHireWizard from "@/components/hermes/NpcHireWizard";
 import { profileStatusLabel } from "@/components/hermes/profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "@/components/hermes/profile-status-style";
-import { resolvePluginStatusFromCache, type PluginStatus } from "@/lib/hermes/plugin-capability";
+import type { PluginStatus } from "@/lib/hermes/plugin-capability";
 import type { CharacterAppearance } from "@/game/three/office-appearance";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import { useT } from "@/lib/i18n";
 import { deleteConfirmParams, deletedNoticeFrom, visibleSections } from "../employee-detail-view";
+import { loadGatewayPluginState, type GatewayPluginState } from "../plugin-state";
 
 type ProfileRow = {
   id: string;
@@ -89,44 +90,37 @@ function EmployeeDetailContent() {
     void loadProfile();
   }, [loadProfile]);
 
+  const [recheckingPlugin, setRecheckingPlugin] = useState(false);
+  const [pluginChecked, setPluginChecked] = useState(false);
+
+  const applyPluginState = useCallback((state: GatewayPluginState) => {
+    setCanEdit(state.row?.isOwner === true);
+    setDashboardUrl(typeof state.row?.dashboardUrl === "string" ? state.row.dashboardUrl : null);
+    setPluginStatus(state.pluginStatus);
+    setPluginChecked(true);
+  }, []);
+
+  // Same path as the hiring page: a cache older than the hour (or behind the pinned version) is
+  // re-checked here, so persona and model editing does not lock itself an hour after the last probe.
   useEffect(() => {
     if (!gatewayId) return;
     let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/gateways");
-        const data = await res.json().catch(() => ({}));
-        const rows = Array.isArray((data as { gateways?: unknown }).gateways)
-          ? (data as { gateways: unknown[] }).gateways
-          : [];
-        const mine = rows.find(
-          (
-            row,
-          ): row is {
-            id: string;
-            isOwner?: boolean;
-            pluginStatus: string | null;
-            pluginCheckedAt: string | Date | null;
-            dashboardUrl?: string | null;
-          } => !!row && typeof row === "object" && (row as { id?: unknown }).id === gatewayId,
-        );
-        if (cancelled) return;
-        setCanEdit(mine?.isOwner === true);
-        setDashboardUrl(typeof mine?.dashboardUrl === "string" ? mine.dashboardUrl : null);
-        const cached = resolvePluginStatusFromCache({
-          pluginStatus: mine?.pluginStatus ?? null,
-          pluginCheckedAt: mine?.pluginCheckedAt ?? null,
-          now: new Date(),
-        });
-        setPluginStatus(cached.status);
-      } catch {
-        // The screen shows even if the status cannot be read — only persona and model editing are locked.
-      }
-    })();
+    void loadGatewayPluginState(gatewayId).then((state) => {
+      if (!cancelled) applyPluginState(state);
+    });
     return () => {
       cancelled = true;
     };
-  }, [gatewayId]);
+  }, [gatewayId, applyPluginState]);
+
+  async function recheckPlugin() {
+    setRecheckingPlugin(true);
+    try {
+      applyPluginState(await loadGatewayPluginState(gatewayId, { force: true }));
+    } finally {
+      setRecheckingPlugin(false);
+    }
+  }
 
   async function handleTest() {
     if (!profile) return;
@@ -264,6 +258,24 @@ function EmployeeDetailContent() {
         {profile && (
           <>
             {/* Persona, model, login — steps ②③ of the hiring wizard are that employee's editor. */}
+            {sections.includes("persona") && pluginChecked && pluginStatus !== "plugin_ready" && (
+              <div
+                data-plugin-recheck
+                className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface p-3 text-sm text-text-muted"
+              >
+                <span className="flex-1">{t("profiles.detail.pluginRecheckHint")}</span>
+                <button
+                  type="button"
+                  onClick={() => void recheckPlugin()}
+                  disabled={recheckingPlugin}
+                  className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold hover:bg-surface-raised/80 disabled:opacity-60"
+                >
+                  {recheckingPlugin
+                    ? t("profiles.detail.pluginRechecking")
+                    : t("profiles.detail.pluginRecheck")}
+                </button>
+              </div>
+            )}
             {sections.includes("persona") && (
               <section className="rounded-xl border border-border bg-surface p-5">
                 <NpcHireWizard

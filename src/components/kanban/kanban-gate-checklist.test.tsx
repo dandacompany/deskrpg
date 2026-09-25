@@ -155,6 +155,80 @@ test("an ordinary failure (403 not_a_member) from the board blocker banner does 
   }
 });
 
+test("once the board recovers, the open checklist closes itself", async () => {
+  let bound = false;
+  const status = {
+    pluginStatus: "ready",
+    pluginVersion: "0.6.0",
+    capabilities: ["kanban"],
+    timezone: "Asia/Seoul",
+    boardSlug: "deskrpg-ch-1",
+    dispatcherPresent: true,
+    attachments: true,
+    lastPolledAt: null,
+    lastError: null,
+    minVersion: "0.6.0",
+    working: [],
+  };
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (url.includes("/automation/status")) {
+      return bound
+        ? json(status)
+        : json({ code: "gateway_not_bound", message: "게이트웨이 미연결" }, { status: 409 });
+    }
+    if (url.includes("/kanban/board")) {
+      return json({ board: { slug: "deskrpg-ch-1", name: "보드" }, columns: [], tasks: [] });
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  }) as typeof fetch;
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root: Root = createRoot(host);
+  const mount = (refreshTick: number) =>
+    act(async () =>
+      root.render(
+        <I18nProvider initialLocale="ko">
+          <KanbanBoardModal
+            channelId={CHANNEL}
+            onClose={() => {}}
+            onConnectGateway={() => {}}
+            refreshTick={refreshTick}
+            debounceMs={0}
+          />
+        </I18nProvider>,
+      ),
+    );
+  const settle = () =>
+    act(async () => {
+      for (let i = 0; i < 5; i += 1) await new Promise((r) => setTimeout(r, 0));
+    });
+  try {
+    await mount(0);
+    await settle();
+    const open = Array.from(host.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "무엇이 필요한가요?",
+    );
+    assert.ok(open);
+    await act(async () => open.click());
+    assert.ok(document.body.textContent?.includes("이 동작에는 준비가 필요합니다"));
+
+    bound = true;
+    await mount(1);
+    await settle();
+    assert.equal(host.querySelector("[data-blocker]"), null, "the board recovered");
+    assert.ok(
+      !document.body.textContent?.includes("이 동작에는 준비가 필요합니다"),
+      "the checklist closed itself",
+    );
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+    globalThis.fetch = original;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // TaskDrawer artifacts section
 // ---------------------------------------------------------------------------

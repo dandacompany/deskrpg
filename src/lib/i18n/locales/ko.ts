@@ -2758,6 +2758,8 @@ const ko: Record<string, string> = {
   "notice.cardProposal.unavailable":
     "이 화면에서는 제안을 처리할 수 없습니다 · 오피스 맵에서 열어 주세요",
   "notice.cardProposal.alreadyResolved": "이 제안은 이미 처리됐습니다 · 칸반에서 확인해 주세요",
+  "notice.cardProposal.upgradeRequired":
+    "이 제안을 처리하려면 게이트웨이의 DeskRPG 플러그인을 업데이트해야 합니다",
   "notice.cardProposal.assigneeDropped": "담당 직원 없이 카드를 만들었습니다",
   "notice.cardProposal.inlineFollowUp": "이 건은 카드로 만들지 않고 여기서 바로 진행해 주세요.",
   // Kanban (T8)
@@ -3253,6 +3255,10 @@ const ko: Record<string, string> = {
     "직원 한 명이 Hermes 프로필 하나입니다. 이름을 정하고, 인격을 적고, 그 직원으로 모델에 로그인합니다.",
   "profiles.new.sharedGateway": "공유받은 게이트웨이입니다. 직원 등록은 소유자가 합니다.",
   "profiles.detail.notFound": "이 게이트웨이에 그 직원이 없습니다.",
+  "profiles.detail.pluginRecheckHint":
+    "플러그인 상태를 다시 확인하면 인격·AI 모델 편집이 열릴 수 있습니다.",
+  "profiles.detail.pluginRecheck": "다시 확인",
+  "profiles.detail.pluginRechecking": "확인 중…",
   "profiles.detail.sectionTitle": "인격·외형·AI 모델",
   "character.preview.label": "선택한 캐릭터",
   "character.preview.rotateLeft": "왼쪽으로 회전",

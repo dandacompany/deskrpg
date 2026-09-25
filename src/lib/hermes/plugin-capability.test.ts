@@ -18,6 +18,7 @@ import {
   supportsProviderKeys,
 } from "./plugin-capability";
 import type { PluginInfo } from "./deskrpg-plugin-types";
+import { PLUGIN_VERSION } from "./setup/pin";
 
 describe("classifyPluginProbe", () => {
   // Lumping 401 and 404 together leaves the user nothing to do — the former means replacing the key,
@@ -154,6 +155,29 @@ describe("shouldReprobePlugin", () => {
   it("probes again if stale even when given a Date object (PG dialect)", () => {
     assert.equal(shouldReprobePlugin({ checkedAt: new Date("2026-08-30T00:00:00Z"), now }), true);
   });
+
+  // A host upgraded outside the app (git pull) keeps its old cached version until the next probe.
+  // A cached version below the pinned one is a sign the cache may not describe the install.
+  it("probes again after a few minutes when the cached version is below the pinned one", () => {
+    const tenMinutesAgo = "2026-08-31T23:50:00Z";
+    assert.equal(shouldReprobePlugin({ checkedAt: tenMinutesAgo, now, version: "0.10.0" }), true);
+    assert.equal(
+      shouldReprobePlugin({ checkedAt: "2026-08-31T23:58:00Z", now, version: "0.10.0" }),
+      false,
+      "a just-checked old install is not probed on every call",
+    );
+  });
+
+  it("keeps the hourly rule when the cached version is current, ahead or unreadable", () => {
+    const tenMinutesAgo = "2026-08-31T23:50:00Z";
+    for (const version of [PLUGIN_VERSION, "99.0.0", "garbage", null]) {
+      assert.equal(
+        shouldReprobePlugin({ checkedAt: tenMinutesAgo, now, version }),
+        false,
+        String(version),
+      );
+    }
+  });
 });
 
 // Final review I-1: shouldReprobePlugin was defined but had no consumer, so all Task 4·9 output
@@ -207,6 +231,16 @@ describe("resolvePluginStatusFromCache", () => {
       now,
     });
     assert.deepEqual(result, { status: "plugin_absent", needsReprobe: false });
+  });
+
+  it("keeps the cached status but asks for a reprobe when the cached version is behind the pin", () => {
+    const result = resolvePluginStatusFromCache({
+      pluginStatus: "plugin_ready",
+      pluginCheckedAt: "2026-08-31T23:50:00Z",
+      pluginVersion: "0.10.0",
+      now,
+    });
+    assert.deepEqual(result, { status: "plugin_ready", needsReprobe: true });
   });
 });
 

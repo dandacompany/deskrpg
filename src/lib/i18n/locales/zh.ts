@@ -2664,6 +2664,7 @@ const zh: Record<string, string> = {
   "notice.cardProposal.acceptanceLabel": "完成条件",
   "notice.cardProposal.unavailable": "此界面无法处理提案 · 请从办公室地图打开",
   "notice.cardProposal.alreadyResolved": "该建议已处理 · 请在看板中查看",
+  "notice.cardProposal.upgradeRequired": "请更新网关上的 DeskRPG 插件后再处理此建议",
   "notice.cardProposal.assigneeDropped": "已在无负责人的情况下创建卡片",
   "notice.cardProposal.inlineFollowUp": "这件事不做成卡片，请在这里直接处理。",
   // Kanban (T8)
@@ -3139,6 +3140,9 @@ const zh: Record<string, string> = {
     "一名员工就是一个 Hermes 配置文件。设定名字，写下人格，然后以该员工身份登录模型。",
   "profiles.new.sharedGateway": "这是与你共享的网关，员工由所有者登记。",
   "profiles.detail.notFound": "此网关上没有该员工。",
+  "profiles.detail.pluginRecheckHint": "重新检查插件状态后，可能会解锁人格和 AI 模型编辑。",
+  "profiles.detail.pluginRecheck": "重新检查",
+  "profiles.detail.pluginRechecking": "检查中…",
   "profiles.detail.sectionTitle": "人格、外观与 AI 模型",
   "character.preview.label": "已选角色",
   "character.preview.rotateLeft": "向左旋转",

@@ -2791,6 +2791,8 @@ const ja: Record<string, string> = {
     "この画面では提案を処理できません · オフィスマップから開いてください",
   "notice.cardProposal.alreadyResolved":
     "この提案はすでに処理されました · かんばんで確認してください",
+  "notice.cardProposal.upgradeRequired":
+    "この提案を処理するには、ゲートウェイの DeskRPG プラグインを更新してください",
   "notice.cardProposal.assigneeDropped": "担当者なしでカードを作成しました",
   "notice.cardProposal.inlineFollowUp": "この件はカードにせず、ここで進めてください。",
   // Kanban (T8)
@@ -3289,6 +3291,10 @@ const ja: Record<string, string> = {
     "社員1人がHermesプロフィール1つです。名前を決め、人格を書き、その社員としてモデルにログインします。",
   "profiles.new.sharedGateway": "共有されたゲートウェイです。社員の登録は所有者が行います。",
   "profiles.detail.notFound": "このゲートウェイにその社員はいません。",
+  "profiles.detail.pluginRecheckHint":
+    "プラグインの状態を再確認すると、人格・AIモデルの編集が開く場合があります。",
+  "profiles.detail.pluginRecheck": "再確認",
+  "profiles.detail.pluginRechecking": "確認中…",
   "profiles.detail.sectionTitle": "人格・外見・AIモデル",
   "character.preview.label": "選択したキャラクター",
   "character.preview.rotateLeft": "左に回転",

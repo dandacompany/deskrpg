@@ -117,7 +117,7 @@ test.afterEach(async () => {
 
 test("after a plugin update inherits worker propagation, '계속 켭니다 [끄기]' stays even after the list reloads, and [끄기] sends {enabled:false}", async () => {
   const log = mockFetch({
-    "GET /api/gateways": (n) => ({
+    "GET /api/gateways?refreshPlugin=1": (n) => ({
       gateways: [gateway({ pluginVersion: n === 0 ? "0.1.0" : "0.16.0" })],
     }),
     "POST /api/gateways/gw-1/plugin/update": { jobId: "job-1" },
@@ -135,7 +135,7 @@ test("after a plugin update inherits worker propagation, '계속 켭니다 [끄�
   await flush();
 
   assert.ok(
-    log.calls.filter((c) => c === "GET /api/gateways").length >= 2,
+    log.calls.filter((c) => c === "GET /api/gateways?refreshPlugin=1").length >= 2,
     "갱신 뒤 목록을 다시 읽지 않았다",
   );
   const notice = host.querySelector("[data-worker-propagation-inherited]");
@@ -155,7 +155,7 @@ test("after a plugin update inherits worker propagation, '계속 켭니다 [끄�
 
 test("the [설정에서 켜기] success text stays even after the list reloads", async () => {
   const log = mockFetch({
-    "GET /api/gateways": (n) => ({
+    "GET /api/gateways?refreshPlugin=1": (n) => ({
       gateways: [gateway({ workerPropagation: n === 0 ? "disabled" : "enabled" })],
     }),
     "POST /api/gateways/gw-1/plugin/worker-propagation": { propagation: "enabled", results: [] },
@@ -165,7 +165,7 @@ test("the [설정에서 켜기] success text stays even after the list reloads",
   await flush();
 
   assert.ok(
-    log.calls.filter((c) => c === "GET /api/gateways").length >= 2,
+    log.calls.filter((c) => c === "GET /api/gateways?refreshPlugin=1").length >= 2,
     "켠 뒤 목록을 다시 읽지 않았다",
   );
   assert.deepEqual(log.bodies["POST /api/gateways/gw-1/plugin/worker-propagation"], [
@@ -185,12 +185,12 @@ const wait = (ms: number) =>
 test("a slow reload shows '새로 읽는 중' without erasing the notices, and removes it when done", async () => {
   mockFetch(
     {
-      "GET /api/gateways": (n) => ({
+      "GET /api/gateways?refreshPlugin=1": (n) => ({
         gateways: [gateway({ workerPropagation: n === 0 ? "disabled" : "enabled" })],
       }),
       "POST /api/gateways/gw-1/plugin/worker-propagation": { propagation: "enabled", results: [] },
     },
-    { "GET /api/gateways": (n) => (n === 0 ? 0 : 600) },
+    { "GET /api/gateways?refreshPlugin=1": (n) => (n === 0 ? 0 : 600) },
   );
   await renderPage();
   assert.equal(host.querySelector("[data-gateways-refreshing]"), null, "첫 화면에 표시가 있다");
@@ -213,7 +213,7 @@ test("a slow reload shows '새로 읽는 중' without erasing the notices, and r
 test("a fast reload does not flash '새로 읽는 중'", async () => {
   const seen: boolean[] = [];
   mockFetch({
-    "GET /api/gateways": (n) => ({
+    "GET /api/gateways?refreshPlugin=1": (n) => ({
       gateways: [gateway({ workerPropagation: n === 0 ? "disabled" : "enabled" })],
     }),
     "POST /api/gateways/gw-1/plugin/worker-propagation": { propagation: "enabled", results: [] },
