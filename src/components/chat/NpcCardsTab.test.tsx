@@ -197,3 +197,28 @@ function renderErrorText(code: string): string {
     cleanup();
   }
 }
+
+test("the running count comes from the working signal, not from recounting the list", () => {
+  // The list has one running card on this board; the signal counts every board of the channel.
+  const { container, cleanup } = render(
+    <NpcCardsTab {...props} board={boardWithTwoMine} runningCards={3} />,
+  );
+  try {
+    const count = container.querySelector('[data-testid="cards-running-count"]');
+    assert.ok(count, "the count is shown while cards are running");
+    assert.match(count.textContent ?? "", /3/);
+  } finally {
+    cleanup();
+  }
+});
+
+test("the running count is hidden when nothing is running", () => {
+  const { container, cleanup } = render(
+    <NpcCardsTab {...props} board={boardWithTwoMine} runningCards={0} />,
+  );
+  try {
+    assert.equal(container.querySelector('[data-testid="cards-running-count"]'), null);
+  } finally {
+    cleanup();
+  }
+});

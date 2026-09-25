@@ -2646,6 +2646,7 @@ const en: Record<string, string> = {
   "cron.tab.cards": "Cards",
   "cron.tab.skills": "Skills",
   "cards.empty": "No assigned cards",
+  "cards.runningCount": "{count} running now",
   "cron.tzLabel": "{tz} time",
   "cron.tzUnknown": "Gateway timezone unknown",
   "cron.refresh": "Refresh",

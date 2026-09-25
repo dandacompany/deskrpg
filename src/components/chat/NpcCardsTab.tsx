@@ -34,6 +34,12 @@ export interface NpcCardsTabProps {
   /** Reason the board couldn't be fetched (plugin gate code, etc.). If present, it takes priority over `board` and renders the error. */
   error?: string | null;
   onOpenCard: (taskId: string) => void;
+  /**
+   * Cards this NPC is running right now, across every board of the channel — `sources.runningCards`
+   * of `npc:working`, the same number the map badge shows. Never recounted from `board`, which
+   * holds a single board. Hidden when 0 or unknown.
+   */
+  runningCards?: number;
 }
 
 export default function NpcCardsTab({
@@ -41,6 +47,7 @@ export default function NpcCardsTab({
   board,
   error = null,
   onOpenCard,
+  runningCards = 0,
 }: NpcCardsTabProps) {
   const t = useT();
   // Don't pick anything at all when the profile is unknown — if a card with
@@ -55,6 +62,11 @@ export default function NpcCardsTab({
 
   return (
     <div data-testid="npc-cards-tab" className="flex flex-col min-h-0 h-full bg-bg text-text">
+      {runningCards > 0 && (
+        <p data-testid="cards-running-count" className="px-3 pt-2 text-xs font-medium text-primary">
+          {t("cards.runningCount", { count: runningCards })}
+        </p>
+      )}
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-2">
         {error !== null ? (
           <CardsErrorNotice code={error} />
