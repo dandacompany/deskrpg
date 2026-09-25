@@ -29,8 +29,9 @@ export type OrderedColumn = { name: KanbanTaskStatus; tasks: KanbanTask[] };
 
 /**
  * Sorts the response's columns into the fixed order. Columns missing from the response are filled
- * in empty, and columns with unknown names are dropped (never invent a status). The `archived`
- * column is kept only when `includeArchived` is set.
+ * in empty, and columns with unknown names are dropped (never invent a status) — `hiddenCards`
+ * counts what was dropped so the board can say so. The `archived` column is kept only when
+ * `includeArchived` is set.
  */
 export function orderColumns(
   columns: KanbanBoard["columns"] | undefined,
@@ -41,6 +42,27 @@ export function orderColumns(
   return KANBAN_COLUMN_ORDER.filter((name) => includeArchived || name !== "archived").map(
     (name) => ({ name, tasks: byName.get(name) ?? [] }),
   );
+}
+
+export type HiddenCards = { count: number; statuses: string[] };
+
+/**
+ * Cards that `orderColumns` drops because their column is a status this board does not know (a
+ * newer Hermes, a hand-edited board). They are not placed in any column — the board only says how
+ * many there are and under which statuses, in response order. `archived` is a known status, so
+ * hiding it behind the archive toggle does not count here.
+ */
+export function hiddenCards(columns: KanbanBoard["columns"] | undefined): HiddenCards {
+  const known = new Set<string>(KANBAN_COLUMN_ORDER);
+  const statuses: string[] = [];
+  let count = 0;
+  for (const column of columns ?? []) {
+    const size = column.tasks?.length ?? 0;
+    if (known.has(column.name) || size === 0) continue;
+    count += size;
+    if (!statuses.includes(column.name)) statuses.push(column.name);
+  }
+  return { count, statuses };
 }
 
 // ---------------------------------------------------------------------------

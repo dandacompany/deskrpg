@@ -12,6 +12,7 @@ import {
   EMPTY_TASK_FORM,
   failureLine,
   formatElapsed,
+  hiddenCards,
   KANBAN_COLUMN_ORDER,
   npcIdForAssignee,
   orderColumns,
@@ -56,6 +57,26 @@ test("R6: columns come out in the fixed order, missing ones filled, unknown ones
     ["d"],
   );
   assert.ok(ordered.every((c) => c.name !== ("made_up" as string)));
+});
+
+test("hidden cards: counts cards in columns the board does not know, with their statuses", () => {
+  const hidden = hiddenCards([
+    { name: "todo", tasks: [task("t", "todo")] },
+    { name: "made_up", tasks: [task("x1", "todo"), task("x2", "todo")] },
+    { name: "empty_unknown", tasks: [] },
+    { name: "archived", tasks: [task("a", "archived")] },
+    { name: "later", tasks: [task("l", "todo")] },
+  ]);
+  assert.deepEqual(hidden, { count: 3, statuses: ["made_up", "later"] });
+});
+
+test("hidden cards: nothing hidden for known columns, missing columns, or no response", () => {
+  assert.deepEqual(hiddenCards([{ name: "done", tasks: [task("d", "done")] }]), {
+    count: 0,
+    statuses: [],
+  });
+  assert.deepEqual(hiddenCards(undefined), { count: 0, statuses: [] });
+  assert.deepEqual(hiddenCards([{ name: "odd" } as never]), { count: 0, statuses: [] });
 });
 
 test("R6: archived column appears only with include_archived", () => {

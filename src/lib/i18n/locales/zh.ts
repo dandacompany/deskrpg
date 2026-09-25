@@ -2941,6 +2941,8 @@ const zh: Record<string, string> = {
   "kanban.warning.noDispatcher":
     "没有运行中的调度器，卡片不会自动执行。请在网关主机上启用 Hermes 看板调度器。",
   "kanban.warning.lastError": "最近一次同步错误：{error}",
+  "kanban.warning.hiddenCards":
+    "有 {count} 张卡片因状态无法识别而未显示：{statuses}。它们在 Hermes 中保持不变。",
   "kanban.blocker.upgradeTitle": "需要更新插件",
   "kanban.blocker.upgradeBody":
     "需要 deskrpg-hermes-plugin {minVersion} 或更高版本。请在网关主机上运行以下命令，然后重启网关。",
