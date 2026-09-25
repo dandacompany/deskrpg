@@ -2732,7 +2732,7 @@ const ja: Record<string, string> = {
   "cron.toast.deleted": "「{name}」を削除しました",
   "cron.toast.paused": "「{name}」を停止しました",
   "cron.toast.resumed": "「{name}」を再開しました",
-  "cron.toast.runQueued": "「{name}」の実行を要求しました — 結果はオフィスルームに投稿されます",
+  "cron.toast.runQueued": "「{name}」の実行を要求しました — 結果は「{room}」ルームに投稿されます",
   "cron.error.upgradeRequired":
     "プラグインの更新が必要です (deskrpg-hermes-plugin {minVersion} 以上)",
   "cron.error.upgradeHint": "ゲートウェイホストで次のコマンドを実行してから再試行してください:",
@@ -2741,6 +2741,12 @@ const ja: Record<string, string> = {
   "cron.error.partial": "{count} 件の NPC のクーロンを読み込めませんでした",
   // Automation notices / cron entry (T10)
   "cron.open": "クーロン",
+  "cron.every.daily": "毎日 {time}",
+  "cron.every.weekdays": "平日 {time}",
+  "cron.every.weekly": "毎週{day} {time}",
+  "cron.every.monthly": "毎月{date}日 {time}",
+  "cron.every.hourly": "毎時{minute}分",
+  "cron.every.minutes": "{n}分ごと",
   "notice.cardDone": "カードを完了しました: {title}",
   "notice.cardBlocked": "カードがブロックされました: {title}",
   "notice.cardReview": "確認が必要です: {title}",

@@ -21,8 +21,10 @@ import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gat
 
 import { cronApi, classifyCronError, isCronApiError, type CronJobView } from "./cron-api";
 import {
+  describeSchedule,
   formatLocalDateTime,
   jobScheduleDisplay,
+  jobScheduleExpr,
   parseIsoMs,
   readOnlyReason,
   relativeTime,
@@ -106,12 +108,11 @@ export default function CronPanel({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [checklistBlocker, setChecklistBlocker] = useState<GateBlocker | null>(null);
 
+  // The panel always says it itself: the page toast renders under the cron modal (z-50), so a
+  // "run now" there looked like nothing happened. The page still gets it for its notice list.
   const toast = useCallback(
     (message: string) => {
-      if (onToast) {
-        onToast(message);
-        return;
-      }
+      onToast?.(message);
       setInlineToast(message);
       if (toastTimer.current) clearTimeout(toastTimer.current);
       toastTimer.current = setTimeout(() => setInlineToast(null), TOAST_MS);
@@ -240,7 +241,7 @@ export default function CronPanel({
           case "run":
             // R19: just gets the 202 and stops. The result is observed via cron:event -> refetch.
             await cronApi.runJob(channelId, job.id, job.npcId);
-            toast(t("cron.toast.runQueued", { name: job.name }));
+            toast(t("cron.toast.runQueued", { name: job.name, room: t("room.office") }));
             break;
           case "delete":
             await cronApi.deleteJob(channelId, job.id, job.npcId);
@@ -495,7 +496,10 @@ export default function CronPanel({
                       )}
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-0.5 text-[11px] text-text-muted">
-                      <span className="truncate">{jobScheduleDisplay(job)}</span>
+                      <span className="truncate" title={jobScheduleDisplay(job)}>
+                        {describeSchedule(jobScheduleExpr(job), locale, t) ??
+                          jobScheduleDisplay(job)}
+                      </span>
                       <span data-testid="cron-countdown" className="flex-shrink-0">
                         {job.state === "paused" ||
                         job.state === "disabled" ||
@@ -625,7 +629,11 @@ export default function CronPanel({
                 <dd className="text-npc">{selected.npcName}</dd>
                 <dt className="text-text-muted">{t("cron.field.schedule")}</dt>
                 <dd>
-                  {jobScheduleDisplay(selected)}{" "}
+                  {describeSchedule(jobScheduleExpr(selected), locale, t) ??
+                    jobScheduleDisplay(selected)}{" "}
+                  {describeSchedule(jobScheduleExpr(selected), locale, t) && (
+                    <code className="text-text-dim">{jobScheduleDisplay(selected)}</code>
+                  )}{" "}
                   <span className="text-text-dim">
                     <TimezoneLabel timezone={timezone} />
                   </span>
