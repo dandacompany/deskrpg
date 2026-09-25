@@ -4,12 +4,14 @@ import { verifyPassword } from "@/lib/password";
 import { signJWT, isSecureCookie } from "@/lib/jwt";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
+import { invalidJsonBody, readJsonObject } from "@/lib/api-body";
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const body = await readJsonObject(req);
+  if (!body) return invalidJsonBody();
   const { loginId, password } = body;
 
-  if (!loginId || !password) {
+  if (typeof loginId !== "string" || typeof password !== "string" || !loginId || !password) {
     return NextResponse.json(
       { errorCode: "login_id_password_required", error: "loginId and password are required" },
       { status: 400 },

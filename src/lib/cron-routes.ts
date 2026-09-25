@@ -40,6 +40,7 @@ import type {
 } from "@/lib/hermes/deskrpg-plugin-types";
 import type { PluginResponse } from "@/lib/hermes/plugin-client-types";
 import { getUserId } from "@/lib/internal-rpc";
+import { readJsonObject } from "@/lib/api-body";
 
 export type RouteParams = { params: Promise<{ id: string; jobId?: string }> };
 
@@ -48,18 +49,6 @@ export type RouteParams = { params: Promise<{ id: string; jobId?: string }> };
 // ---------------------------------------------------------------------------
 
 type JsonBody = Record<string, unknown>;
-
-/** JSON body. null if empty or malformed — the caller returns a 400. */
-export async function readJsonBody(req: NextRequest): Promise<JsonBody | null> {
-  try {
-    const parsed: unknown = await req.json();
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as JsonBody)
-      : null;
-  } catch {
-    return null;
-  }
-}
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -300,7 +289,7 @@ export async function listCronJobRuns(req: NextRequest, channelId: string, jobId
 }
 
 export async function createCronJob(req: NextRequest, channelId: string) {
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return invalidBody("JSON body required");
   const parsed = parseCreateBody(body);
   if (!parsed.ok) return parsed.response;
@@ -313,7 +302,7 @@ export async function createCronJob(req: NextRequest, channelId: string) {
 }
 
 export async function instantiateCronBlueprint(req: NextRequest, channelId: string) {
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return invalidBody("JSON body required");
   const parsed = parseInstantiateBody(body);
   if (!parsed.ok) return parsed.response;
@@ -418,7 +407,7 @@ export async function mutateFromBody(
   jobId: string,
   mutation: CronMutation,
 ) {
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   const npcId = body ? requiredString(body.npcId) : null;
   return mutateCronJob(req, channelId, jobId, npcId, mutation);
 }

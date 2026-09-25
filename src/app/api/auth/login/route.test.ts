@@ -54,3 +54,35 @@ test("a normal login does not require a change", async () => {
   const payload = await response.json();
   assert.equal(payload.user.mustChangePassword, false);
 });
+
+const rawReq = (body?: string) =>
+  new NextRequest("http://localhost:3102/api/auth/login", {
+    method: "POST",
+    headers: { host: "localhost:3102", "content-type": "application/json" },
+    body,
+  });
+
+for (const [name, body] of [
+  ["an empty body", undefined],
+  ["a non-JSON body", "loginId=a"],
+  ["a JSON array", "[]"],
+] as const) {
+  test(`logging in with ${name} is a 400, not a server error`, async () => {
+    const { POST } = await import("./route");
+
+    const response = await POST(rawReq(body));
+
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).errorCode, "invalid_request_body");
+  });
+}
+
+test("logging in with a non-string password gets the missing-field answer", async () => {
+  const { POST } = await import("./route");
+  const user = await seedUser(false);
+
+  const response = await POST(req({ loginId: user.loginId, password: 12345678 }));
+
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).errorCode, "login_id_password_required");
+});

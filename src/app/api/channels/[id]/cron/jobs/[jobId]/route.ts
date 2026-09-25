@@ -3,14 +3,9 @@
 // DELETE /api/channels/:id/cron/jobs/:jobId?npcId=  — delete + remove origin (origin channel members only)
 import type { NextRequest } from "next/server";
 
-import {
-  getCronJob,
-  mutateCronJob,
-  parseUpdateBody,
-  readJsonBody,
-  readNpcIdParam,
-} from "@/lib/cron-routes";
+import { getCronJob, mutateCronJob, parseUpdateBody, readNpcIdParam } from "@/lib/cron-routes";
 import { cronError } from "@/lib/cron-access";
+import { readJsonObject } from "@/lib/api-body";
 
 type JobParams = { params: Promise<{ id: string; jobId: string }> };
 
@@ -21,7 +16,7 @@ export async function GET(req: NextRequest, { params }: JobParams) {
 
 export async function PUT(req: NextRequest, { params }: JobParams) {
   const { id, jobId } = await params;
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return cronError(400, "invalid_body", "JSON body required");
   const parsed = parseUpdateBody(body);
   if (!parsed.ok) return parsed.response;

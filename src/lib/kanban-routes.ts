@@ -60,6 +60,7 @@ import { channelBoardSlug, getChannelBoard } from "@/lib/kanban-boards";
 import { getMyCharacter } from "@/lib/my-character";
 import { readLocaleCookie } from "@/lib/i18n/server";
 import { appendRequesterLine } from "@/lib/user-context";
+import { readJsonObject } from "@/lib/api-body";
 
 export type ChannelParams = { params: Promise<{ id: string }> };
 export type TaskParams = { params: Promise<{ id: string; taskId: string }> };
@@ -71,21 +72,9 @@ export type AttachmentParams = { params: Promise<{ id: string; attachmentId: str
 
 type JsonBody = Record<string, unknown>;
 
-/** JSON body. null if empty or malformed — the caller returns a 400. */
-async function readJsonBody(req: NextRequest): Promise<JsonBody | null> {
-  try {
-    const parsed: unknown = await req.json();
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as JsonBody)
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 /** For actions that don't require a body (approve, reclaim, etc.) — an empty object if empty. */
 async function readOptionalJsonBody(req: NextRequest): Promise<JsonBody> {
-  return (await readJsonBody(req)) ?? {};
+  return (await readJsonObject(req)) ?? {};
 }
 
 function invalidBody(message: string) {
@@ -288,7 +277,7 @@ export async function getTask(req: NextRequest, channelId: string, taskId: strin
 }
 
 export async function createTask(req: NextRequest, channelId: string) {
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return invalidBody("JSON body required");
   const title = typeof body.title === "string" ? body.title.trim() : "";
   if (!title) return invalidBody("title is required");
@@ -328,7 +317,7 @@ export async function createTask(req: NextRequest, channelId: string) {
 }
 
 export async function updateTask(req: NextRequest, channelId: string, taskId: string) {
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return invalidBody("JSON body required");
 
   const resolved = await resolve(req, channelId);
@@ -380,7 +369,7 @@ export async function deleteTask(req: NextRequest, channelId: string, taskId: st
 }
 
 export async function addComment(req: NextRequest, channelId: string, taskId: string) {
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return invalidBody("JSON body required");
   const text = typeof body.body === "string" ? body.body : "";
   if (!text.trim()) return invalidBody("body is required");
@@ -590,7 +579,7 @@ export async function deleteAttachment(req: NextRequest, channelId: string, atta
 // ---------------------------------------------------------------------------
 
 export async function mutateLink(req: NextRequest, channelId: string, op: "add" | "remove") {
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return invalidBody("JSON body required");
   const parentId = typeof body.parent_id === "string" ? body.parent_id : "";
   const childId = typeof body.child_id === "string" ? body.child_id : "";
@@ -728,7 +717,7 @@ function parseOrchestrationPatch(raw: JsonBody): UpdateOrchestrationBody {
 
 /** PATCH `{board?:{default_workdir}, orchestration?:{...}}`. If any part lacks permission, 403. */
 export async function patchSettings(req: NextRequest, channelId: string) {
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return invalidBody("JSON body required");
   const boardPatch =
     typeof body.board === "object" && body.board !== null ? (body.board as JsonBody) : null;
@@ -824,7 +813,7 @@ export type ProposalParams = { params: Promise<{ id: string; proposalId: string 
  * one dispatch + immediate polling (R9, R24).
  */
 export async function resolveCardProposal(req: NextRequest, channelId: string, proposalId: string) {
-  const body = await readJsonBody(req);
+  const body = await readJsonObject(req);
   if (!body) return invalidBody("JSON body required");
   const choice = body.choice;
   if (choice !== "card" && choice !== "inline") {
