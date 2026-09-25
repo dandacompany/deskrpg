@@ -3777,7 +3777,13 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
 
           {/* Bottom toast */}
           {toastMessage && !interactSelectList && (
-            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 text-text text-body bg-surface/90 backdrop-blur px-5 py-2 rounded-full shadow-lg border border-border/50">
+            // Above every modal (z-50, nested dialogs z-[60]) and below the connection notice
+            // (z-[100]); it never takes clicks meant for the dialog underneath.
+            <div
+              data-testid="game-toast"
+              role="status"
+              className="pointer-events-none fixed bottom-4 left-1/2 -translate-x-1/2 z-[90] text-text text-body bg-surface/90 backdrop-blur px-5 py-2 rounded-full shadow-lg border border-border/50"
+            >
               {toastMessage}
             </div>
           )}

@@ -139,3 +139,37 @@ test("white text always comes with its own background", () => {
     `배경 없는 text-white 는 크림 표면에서 보이지 않는다:\n${offenders.join("\n")}`,
   );
 });
+
+/** `z-50` → 50, `z-[60]` → 60. */
+function zOf(classes: string): number | null {
+  const m = /(?:^|\s)z-(?:\[(\d+)\]|(\d+))(?=\s|$)/.exec(classes);
+  return m ? Number(m[1] ?? m[2]) : null;
+}
+
+test("the game page toast stays above every full-screen overlay", () => {
+  // It sat at z-10, under every modal (z-50, nested dialogs z-[60]), so a "run now" from the
+  // cron modal toasted where nobody could see it (2026-09-26 staging).
+  const page = readFileSync(path.join(SRC, "app/game/GamePageClient.tsx"), "utf8");
+  const toast = /data-testid="game-toast"[\s\S]*?className="([^"]*)"/.exec(page);
+  assert.ok(toast, "game toast not found");
+  const toastZ = zOf(toast[1]);
+  assert.ok(toastZ !== null, "game toast has no z-index");
+  assert.match(
+    toast[1],
+    /\bpointer-events-none\b/,
+    "the toast must not catch clicks meant for a modal",
+  );
+  const overlays: string[] = [];
+  for (const file of walk(SRC)) {
+    for (const classes of classStrings(readFileSync(file, "utf8"))) {
+      if (!/\bfixed\b/.test(classes) || !/\binset-0\b/.test(classes)) continue;
+      const z = zOf(classes);
+      if (z !== null && z >= toastZ!) overlays.push(`${path.relative(SRC, file)}: z-${z}`);
+    }
+  }
+  assert.deepEqual(
+    overlays,
+    [],
+    `토스트(z-${toastZ})보다 높은 전체 화면 레이어가 있다:\n${overlays.join("\n")}`,
+  );
+});
