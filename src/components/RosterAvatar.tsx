@@ -6,8 +6,7 @@ import { lookLabel } from "@/game/three/office-look-labels";
 import { useLocale } from "@/lib/i18n";
 
 /**
- * A small round avatar used in rosters (players, NPCs). Pulled out of `GamePageClient`
- * so it could be shared with `NpcRoster`.
+ * A small round avatar used in rosters (players, NPCs).
  *
  * When there's a look, a 3D thumbnail; when the thumbnail isn't ready yet, the first
  * letter of the look name in the viewer's language; when there's no appearance, "?".

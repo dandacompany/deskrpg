@@ -32,6 +32,7 @@ import {
   sanitizeClientStreamingSpeech,
 } from "./meeting-room/stream-text";
 import MeetingSidebar from "./meeting-room/MeetingSidebar";
+import { useMeetingStop } from "./meeting-room/use-meeting-stop";
 import RosterAvatar from "./RosterAvatar";
 import { createAvatarLookup } from "@/app/game/avatar-lookup";
 import { CHAT_AVATAR_SIZE } from "./ui/ChatBubble";
@@ -80,9 +81,10 @@ interface MeetingRoomProps {
 // MeetingControlBar — mode toggle, next turn, direct speak, stop
 // ---------------------------------------------------------------------------
 
-function MeetingControlBar({
+export function MeetingControlBar({
   mode,
   isWaiting,
+  stopping = false,
   currentSpeaker,
   npcs,
   lastSpokeTimes,
@@ -95,6 +97,8 @@ function MeetingControlBar({
 }: {
   mode: "auto" | "manual" | "directed";
   isWaiting: boolean;
+  /** `meeting:stop` was sent and the meeting has not ended yet — the controls are locked. */
+  stopping?: boolean;
   currentSpeaker: { npcId: string; npcName: string } | null;
   npcs: { id: string; name: string }[];
   lastSpokeTimes: Record<string, number>;
@@ -148,16 +152,17 @@ function MeetingControlBar({
       <div className="px-3 py-2 flex items-center gap-2">
         <button
           onClick={() => onSetMode(mode === "auto" ? "manual" : "auto")}
-          className="px-2 py-1.5 rounded bg-surface-raised hover:bg-surface-raised text-text text-body"
+          disabled={stopping}
+          className="px-2 py-1.5 rounded bg-surface-raised hover:bg-surface-raised text-text text-body disabled:opacity-50"
           title={mode === "auto" ? t("meeting.pauseManual") : t("meeting.playAuto")}
         >
           {mode === "auto" ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
         </button>
         <button
           onClick={onNextTurn}
-          disabled={mode === "auto" || !isWaiting}
+          disabled={stopping || mode === "auto" || !isWaiting}
           className={`px-2 py-1.5 rounded text-body ${
-            mode !== "auto" && isWaiting
+            !stopping && mode !== "auto" && isWaiting
               ? "bg-surface-raised hover:bg-surface-raised text-text"
               : "bg-surface text-text-dim cursor-not-allowed"
           }`}
@@ -166,20 +171,27 @@ function MeetingControlBar({
           ⏭
         </button>
         <button
+          data-meeting-stop
           onClick={onStop}
-          className="px-2 py-1.5 rounded bg-danger-bg hover:bg-danger-hover text-text text-body"
+          disabled={stopping}
+          className="px-2 py-1.5 rounded bg-danger-bg hover:bg-danger-hover text-text text-body disabled:opacity-50 disabled:cursor-not-allowed"
           title={t("meeting.stopMeeting")}
         >
           ⏹
         </button>
         <span className="ml-auto text-caption text-text-muted">
-          {mode === "auto" && !isWaiting && (
+          {stopping && (
+            <span data-meeting-stopping className="text-danger animate-pulse">
+              {t("meeting.stopping")}
+            </span>
+          )}
+          {!stopping && mode === "auto" && !isWaiting && (
             <span className="text-success animate-pulse">{t("meeting.autoProgress")}</span>
           )}
-          {mode !== "auto" && isWaiting && (
+          {!stopping && mode !== "auto" && isWaiting && (
             <span className="text-npc">{t("meeting.nextTurn")}</span>
           )}
-          {!isWaiting && mode !== "auto" && currentSpeaker && (
+          {!stopping && !isWaiting && mode !== "auto" && currentSpeaker && (
             <span className="text-npc">
               {t("meeting.isSpeaking", { name: currentSpeaker.npcName })}
             </span>
@@ -814,10 +826,7 @@ export default function MeetingRoom({
     t,
   ]);
 
-  const handleEndMeeting = useCallback(() => {
-    if (!socket) return;
-    socket.emit("meeting:stop", { channelId });
-  }, [socket, channelId]);
+  const { stopping, stop: handleEndMeeting } = useMeetingStop(socket, channelId);
 
   const handleSetMode = useCallback(
     (mode: "auto" | "manual") => {
@@ -1130,6 +1139,7 @@ export default function MeetingRoom({
           <MeetingControlBar
             mode={meetingMode}
             isWaiting={isWaitingInput}
+            stopping={stopping}
             currentSpeaker={currentSpeaker}
             npcs={displayedNpcs}
             lastSpokeTimes={lastSpokeTimes}
@@ -1156,7 +1166,8 @@ export default function MeetingRoom({
               {meetingActive && isInitiator && (
                 <button
                   onClick={handleResetDiscussion}
-                  className="px-2.5 py-1 rounded-lg border border-border bg-surface-raised hover:bg-surface-raised text-text text-caption"
+                  disabled={stopping}
+                  className="px-2.5 py-1 rounded-lg border border-border bg-surface-raised hover:bg-surface-raised text-text text-caption disabled:opacity-50"
                 >
                   {t("meeting.restart")}
                 </button>

@@ -103,9 +103,11 @@ import { isNpcCallRejected, npcCallErrorKey } from "@/lib/npc-call-errors";
 import WorkspaceNavigator, {
   type NavigatorNpc,
   type NpcNavigatorAction,
+  type RosterNpc,
 } from "@/components/conversation/WorkspaceNavigator";
-import type { RosterNpc } from "@/components/NpcRoster";
 import { createAvatarLookup } from "./avatar-lookup";
+import { pushNotification, type GameNotification } from "./notification-list";
+import { autoOpenDialogOnArrival, isRoomViewActive } from "./arrival-dialog";
 import type { NpcChatMessage } from "@/components/NpcDialog";
 import PasswordModal from "@/components/PasswordModal";
 import ChannelSettingsModal from "@/components/ChannelSettingsModal";
@@ -187,13 +189,6 @@ interface Character {
   id: string;
   name: string;
   appearance: CharacterAppearanceData;
-}
-
-interface GameNotification {
-  id: string;
-  message: string;
-  timestamp: number;
-  read: boolean;
 }
 
 interface ChannelInfo {
@@ -444,6 +439,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // Channel chat state — split per room. The server only speaks `room:*`.
   const [roomState, dispatchRoom] = useReducer(reduceRoomState, initialRoomState);
   const currentRoomId = roomState.currentRoomId;
+  const roomViewActive = isRoomViewActive({ dialogOpen: Boolean(dialogNpc), view: roomState.view });
+  // The arrival handler is registered once at mount, so it reads through a ref.
+  const roomViewActiveRef = useRef(roomViewActive);
+  useEffect(() => {
+    roomViewActiveRef.current = roomViewActive;
+  }, [roomViewActive]);
   /**
    * The room we currently hold `room:open` on. Needed to close the previous room when moving rooms,
    * and after reconnecting the server's `openRooms` is empty, so reset to null to reopen.
@@ -475,6 +476,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
    * A different event from calling them via the context menu (the existing behavior that auto-opens the dialog).
    */
   const mapChatWalkersRef = useRef<MapChatWalkers>(new MapChatWalkers());
+  // Employees the viewer called over with [Call] — they came to talk, so their dialog opens on
+  // arrival even while a room is on screen.
+  const calledToTalkRef = useRef(new Set<string>());
   const mapChatParticipantsRef = useRef<MapChatParticipants>(new MapChatParticipants());
   /** Whether the channel chat panel is visible now (ChatPanel reports it) — passed to the scene. */
   const [channelChatVisible, setChannelChatVisible] = useState(false);
@@ -629,7 +633,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToastMessage(null), 4000);
     setNotifications((prev) =>
-      [{ id, message, timestamp: Date.now(), read: false }, ...prev].slice(0, 20),
+      pushNotification(prev, { id, message, timestamp: Date.now(), read: false }),
     );
   }, []);
   // Toasts for the cron screen and tab (R19). A new id per message — so they do not stack in the notice list.
@@ -1323,8 +1327,15 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       // NPCs called via map chat answer in map chat — opening the 1:1 dialog here would cover
       // the panel where that answer shows.
       const fromMapChat = mapChatWalkersRef.current.takeOnArrival(data.npcId);
+      const calledToTalk = calledToTalkRef.current.delete(data.npcId);
       // Auto-open dialog when NPC arrives — preserve existing messages (don't resetDialog)
-      if (data.npcName && !fromMapChat) {
+      const open = autoOpenDialogOnArrival({
+        hasName: Boolean(data.npcName),
+        fromMapChat,
+        calledToTalk,
+        roomViewActive: roomViewActiveRef.current,
+      });
+      if (data.npcName && open) {
         const nextDialogNpc = { npcId: data.npcId, npcName: data.npcName };
         // If the employee came to report, show that report at the top of the dialog.
         const report = reportingItemRef.current;
@@ -1342,6 +1353,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
     const handleMovementReturned = (data: { npcId: string }) => {
       mapChatWalkersRef.current.forget(data.npcId);
+      calledToTalkRef.current.delete(data.npcId);
       setNpcMoveStates((prev) => ({ ...prev, [data.npcId]: "idle" }));
       setNpcCallers((prev) => {
         const next = { ...prev };
@@ -1394,10 +1406,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const handleCallNpcById = useCallback(
     (npcId: string) => {
       if (!socket) return;
+      calledToTalkRef.current.add(npcId);
       // The server can refuse the call (in a meeting, occupied by another user, list mismatch). The ack used to be
       // ignored, so it looked **as if the click did nothing**, and the user had no way to know why.
       socket.emit("npc:call", { channelId, npcId }, (result: unknown) => {
         if (!isNpcCallRejected(result)) return;
+        calledToTalkRef.current.delete(npcId);
         showToastNotification(
           `npc-call-${npcId}`,
           t(npcCallErrorKey((result as { error?: unknown })?.error)),
@@ -2268,12 +2282,13 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       inMeeting: mode === "meeting",
     });
     // If an employee who missed the arrival signal is waiting beside me, open the dialog instead (same as the arrival handler).
+    // Not while a room is on screen — the report waits until the viewer leaves the room.
     const missed = missedReportArrival({
       queue: reportQueue,
       activeMessageId: reportingMessageId,
       attempts: reportAttemptsRef.current,
       signatures: reportSignatures,
-      blocked,
+      blocked: blocked || roomViewActive,
     });
     if (missed) {
       reportAttemptsRef.current = reportAttemptsRef.current.map((a) =>
@@ -2335,6 +2350,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     showKanban,
     showCron,
     mode,
+    roomViewActive,
   ]);
 
   const reportingItem = useMemo(
