@@ -2712,7 +2712,11 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   // NPC candidates for the cron screen — only active ones from the roster, names are profile display names (the roster already has them).
   const cronNpcs = rosterNpcs
     .filter((npc) => npc.active)
-    .map((npc) => ({ npcId: npc.id, npcName: npc.name }));
+    .map((npc) => ({
+      npcId: npc.id,
+      npcName: npc.name,
+      profileName: npc.profile?.profileName ?? undefined,
+    }));
   // The NPC filter for the artifacts modal — the same roster as cron but sleeping NPCs are included too (matches the server list scope).
   const artifactNpcs = rosterNpcs.flatMap((npc) =>
     npc.profile?.profileName

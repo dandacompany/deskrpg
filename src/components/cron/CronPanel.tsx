@@ -32,7 +32,7 @@ import { CronErrorNotice, TimezoneLabel } from "./cron-notices";
 import CronEditorDialog, { type CronEditorSubmit } from "./CronEditorDialog";
 import BlueprintGallery from "./BlueprintGallery";
 
-export type CronPanelNpc = { npcId: string; npcName: string };
+export type CronPanelNpc = { npcId: string; npcName: string; profileName?: string };
 
 /** Only what's needed from the channel socket — `on`/`off`. socket.io's `Socket` fits this as-is. */
 export type CronEventSource = {
