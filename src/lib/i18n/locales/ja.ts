@@ -1938,15 +1938,12 @@ const ja: Record<string, string> = {
     "接続が切れました。画面の情報が古い可能性があります。自動的に再接続します。",
   "game.socketReconnecting": "オフィスに接続しています…",
   "game.socketRetry": "再接続",
-  "game.socketDisconnected": "リアルタイム接続が切断されました: {reason}",
-  "game.socketConnectFailed":
-    "リアルタイム接続に失敗しました。再読み込みしてもう一度お試しください。",
   "game.npcGreetingBubble": "こんにちは！今日もよろしくお願いします。",
   "game.npcGreeting": "{name} が挨拶しました！",
   "game.npcChatDisconnected":
-    "リアルタイム接続が切れているためNPCにメッセージを送れません。再読み込みしてもう一度お試しください。",
+    "リアルタイム接続が切れているためNPCにメッセージを送れません。接続が戻ったらもう一度送ってください。",
   "game.channelChatDisconnected":
-    "リアルタイム接続が切れているためチャットを送れません。再読み込みしてもう一度お試しください。",
+    "リアルタイム接続が切れているためチャットを送れません。接続が戻ったらもう一度送ってください。",
   "game.channelChatNotJoined":
     "接続が復旧しオフィスに再入場しました。メッセージをもう一度送ってください。",
   // Room error codes (RoomErrorCode in src/server/room-socket.ts), 7 of them.

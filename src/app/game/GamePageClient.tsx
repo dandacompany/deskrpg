@@ -690,7 +690,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       socketInstance.on("npc:dm-threads", ({ threads }: { threads: DmThread[] }) => {
         setDmThreads(Array.isArray(threads) ? threads : []);
       });
-      socketInstance.on("disconnect", (reason: string) => {
+      // The outage itself is shown by SocketConnectionNotice until the socket is back — no toast here.
+      socketInstance.on("disconnect", () => {
         npcMotionSnapshotRef.current = null;
         setSocketConnected(false);
         setIsNpcStreaming(false);
@@ -705,7 +706,6 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         setNpcMessages((previous) => previous.filter((message) => !message.responseTransient));
         // The server's openRooms is per-socket state — it empties on disconnect, so rooms must be reopened.
         openedRoomRef.current = null;
-        showToastNotification("socket-disconnected", t("game.socketDisconnected", { reason }));
       });
       socketInstance.on("room:error", (payload: unknown) => {
         const { toastKey, rejoin, backToList } = decideChatError(payload);
@@ -730,7 +730,6 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             "context" in error ? (error as Error & { context?: unknown }).context : undefined,
           type: "type" in error ? (error as Error & { type?: unknown }).type : undefined,
         });
-        showToastNotification("socket-connect-error", t("game.socketConnectFailed"));
       });
 
       socketInstance.on("players:state", (data: { players: unknown[] }) => {

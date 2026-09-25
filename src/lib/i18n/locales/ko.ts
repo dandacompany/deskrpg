@@ -1919,14 +1919,12 @@ const ko: Record<string, string> = {
     "연결이 끊어졌습니다. 화면의 상태가 최신이 아닐 수 있습니다. 자동으로 재연결을 시도합니다.",
   "game.socketReconnecting": "오피스에 연결하는 중입니다…",
   "game.socketRetry": "다시 연결",
-  "game.socketDisconnected": "실시간 연결이 끊겼습니다: {reason}",
-  "game.socketConnectFailed": "실시간 연결에 실패했습니다. 새로고침 후 다시 시도하세요.",
   "game.npcGreetingBubble": "안녕하세요! 오늘도 반가워요.",
   "game.npcGreeting": "{name} 님이 인사했습니다!",
   "game.npcChatDisconnected":
-    "실시간 연결이 끊겨 NPC 메시지를 보낼 수 없습니다. 새로고침 후 다시 시도하세요.",
+    "실시간 연결이 끊겨 NPC 메시지를 보낼 수 없습니다. 연결이 돌아오면 다시 보내 주세요.",
   "game.channelChatDisconnected":
-    "실시간 연결이 끊겨 채팅을 보낼 수 없습니다. 새로고침 후 다시 시도하세요.",
+    "실시간 연결이 끊겨 채팅을 보낼 수 없습니다. 연결이 돌아오면 다시 보내 주세요.",
   "game.channelChatNotJoined": "연결이 복구돼 다시 입장했습니다. 메시지를 한 번 더 보내 주세요.",
   // 방 에러 코드(src/server/room-socket.ts 의 RoomErrorCode) 7종.
   "game.room.error.forbidden": "이 방에 들어갈 권한이 없습니다.",
