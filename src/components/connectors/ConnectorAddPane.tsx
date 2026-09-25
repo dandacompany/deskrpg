@@ -13,6 +13,7 @@ import { useT } from "@/lib/i18n";
 
 import { parseMcpJson } from "./connector-json-import";
 import { connectorErrorText } from "./connector-error-text";
+import { hasSecretQuery } from "./url-secret-hint";
 import type { ConnectorsApi } from "./connectors-api";
 
 export type ConnectorAddPaneProps = {
@@ -516,6 +517,12 @@ export default function ConnectorAddPane({ api, onAdded, onCancel }: ConnectorAd
               onChange={(e) => patch({ url: e.target.value })}
               className={inputCls}
             />
+            {hasSecretQuery(form.url) && (
+              <span data-url-secret-warning className="flex items-start gap-1 text-danger">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {t("connectors.add.urlSecretWarning")}
+              </span>
+            )}
           </label>
           <div className="flex flex-col gap-0.5 text-xs text-text-muted">
             {t("connectors.add.headers")}

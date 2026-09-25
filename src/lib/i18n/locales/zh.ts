@@ -3304,6 +3304,8 @@ const zh: Record<string, string> = {
   "connectors.add.transport.http": "HTTP",
   "connectors.add.transport.stdio": "命令执行 (stdio)",
   "connectors.add.url": "URL",
+  "connectors.add.urlSecretWarning":
+    "此地址的查询参数中含有密钥。Hermes 日志会原样记录它，请尽量改用 [Bearer 令牌]。",
   "connectors.add.headers": "请求头",
   "connectors.add.headerKey": "请求头名称",
   "connectors.add.headerValue": "值",
