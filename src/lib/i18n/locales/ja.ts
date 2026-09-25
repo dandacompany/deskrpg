@@ -3341,6 +3341,8 @@ const ja: Record<string, string> = {
   "connectors.trust.label": "信頼レベル",
   "connectors.trust.full": "すべてのツールを許可",
   "connectors.trust.untrusted": "書き込みツールをブロック",
+  "connectors.trust.fullHelp":
+    "このサーバーの書き込みツールを含むすべてのツールが確認なしで実行されます。[書き込みツールをブロック] をオンにすると読み取り専用のツールだけを使います。",
   "connectors.trust.untrustedHelp":
     "このサーバーの書き込みツールは DeskRPG の会話では実行されません(承認する手段がないため Hermes が拒否します)。読み取り専用と表示されたツールだけを使います。",
   "connectors.tools.search": "ツールを検索",

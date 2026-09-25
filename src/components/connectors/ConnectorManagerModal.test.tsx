@@ -280,8 +280,22 @@ test("the trust switch says write tools are blocked, not approved", async () => 
   await render(modal());
   assert.match(text(), /모든 도구 허용/);
   assert.equal($("[data-action=trust]").getAttribute("aria-label"), "쓰기 도구 막기");
-  assert.match(text(), /DeskRPG 대화에서 실행되지 않습니다/);
+  // A fully trusted server describes its own state — not the blocked one.
+  assert.match(text(), /묻지 않고 실행됩니다/);
+  assert.doesNotMatch(text(), /DeskRPG 대화에서 실행되지 않습니다/);
   assert.doesNotMatch(text(), /호출마다 승인/);
+});
+
+test("an untrusted server explains that write tools do not run in DeskRPG chat", async () => {
+  const untrusted = server("github", { trust: "untrusted" });
+  mockFetch({
+    [LIST]: listBody([untrusted]),
+    [`GET ${ROOT}/servers/github`]: detail("github", { trust: "untrusted" }),
+  });
+  await render(modal());
+  assert.match(text(), /쓰기 도구 막기/);
+  assert.match(text(), /DeskRPG 대화에서 실행되지 않습니다/);
+  assert.doesNotMatch(text(), /묻지 않고 실행됩니다/);
 });
 
 test("after adding a non-OAuth server, the manager runs its connection test and re-reads the list", async () => {

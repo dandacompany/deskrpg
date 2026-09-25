@@ -3327,6 +3327,8 @@ const en: Record<string, string> = {
   "connectors.trust.label": "Trust level",
   "connectors.trust.full": "Allow all tools",
   "connectors.trust.untrusted": "Block write tools",
+  "connectors.trust.fullHelp":
+    "Every tool of this server, including write tools, runs without asking. Turn on [Block write tools] to allow only tools marked read-only.",
   "connectors.trust.untrustedHelp":
     "This server's write tools don't run in DeskRPG conversations (there is no way to approve them, so Hermes refuses). Only tools marked read-only are used.",
   "connectors.tools.search": "Search tools",

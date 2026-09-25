@@ -584,7 +584,11 @@ export default function ConnectorManagerModal({
                               </span>
                             </label>
                             <p className="mt-1 text-[11px] text-text-dim">
-                              {t("connectors.trust.untrustedHelp")}
+                              {t(
+                                row.trust === "untrusted"
+                                  ? "connectors.trust.untrustedHelp"
+                                  : "connectors.trust.fullHelp",
+                              )}
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-2">

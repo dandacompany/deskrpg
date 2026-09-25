@@ -3304,6 +3304,8 @@ const ko: Record<string, string> = {
   "connectors.trust.label": "신뢰 단계",
   "connectors.trust.full": "모든 도구 허용",
   "connectors.trust.untrusted": "쓰기 도구 막기",
+  "connectors.trust.fullHelp":
+    "이 서버의 쓰기 도구까지 모든 도구가 묻지 않고 실행됩니다. [쓰기 도구 막기]를 켜면 읽기 전용 표시가 있는 도구만 씁니다.",
   "connectors.trust.untrustedHelp":
     "이 서버의 쓰기 도구는 DeskRPG 대화에서 실행되지 않습니다(승인할 수단이 없어 Hermes 가 거부합니다). 읽기 전용 표시가 있는 도구만 씁니다.",
   "connectors.tools.search": "도구 검색",

@@ -3190,6 +3190,8 @@ const zh: Record<string, string> = {
   "connectors.trust.label": "信任级别",
   "connectors.trust.full": "允许所有工具",
   "connectors.trust.untrusted": "阻止写入工具",
+  "connectors.trust.fullHelp":
+    "此服务器的所有工具（包括写入工具）都会直接运行。开启 [阻止写入工具] 后只使用标记为只读的工具。",
   "connectors.trust.untrustedHelp":
     "此服务器的写入工具不会在 DeskRPG 对话中运行（没有审批途径，Hermes 会拒绝）。只使用标记为只读的工具。",
   "connectors.tools.search": "搜索工具",
