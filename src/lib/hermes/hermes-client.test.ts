@@ -643,3 +643,43 @@ describe("drain — a stream whose cancel never finishes after the terminal even
     assert.equal(result.text, "사과");
   });
 });
+
+describe("streamRunEvents — a failed run keeps its reason", () => {
+  test("run.failed on /v1/runs carries the reason in `error`, not `message`", async () => {
+    // Hermes 0.21.2 api_server_runs: a non-retryable client error (401/400) ends the run with
+    // `_finish("failed", error=<redacted provider text>)`. Shape of the provider text measured on
+    // staging with an expired openai-codex sign-in; the key is masked.
+    const failed = JSON.stringify({
+      event: "run.failed",
+      run_id: "run_1",
+      completed: false,
+      partial: false,
+      interrupted: false,
+      error:
+        "Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-test*****.'}}",
+    });
+    const client = new HermesClient({
+      baseUrl: "http://gw:8642",
+      profileName: "sophie",
+      token: "t",
+      fetchImpl: (async () =>
+        new Response(
+          new ReadableStream({
+            start(c) {
+              c.enqueue(new TextEncoder().encode(`data: ${failed}\n\n`));
+              c.close();
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "text/event-stream" } },
+        )) as unknown as typeof fetch,
+    });
+    await assert.rejects(
+      () => client.streamRunEvents("run_1", () => {}),
+      (err: unknown) => {
+        assert.equal((err as { code?: string }).code, "run_failed");
+        assert.match((err as Error).message, /Incorrect API key/);
+        return true;
+      },
+    );
+  });
+});
