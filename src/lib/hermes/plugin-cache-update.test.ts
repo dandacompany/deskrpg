@@ -74,9 +74,8 @@ describe("buildPluginCacheUpdate", () => {
 });
 
 // The automation contract block (capabilities·timezone·kanban of `/deskrpg/info`) is stored
-// as a JSON string in `gateway_resources.plugin_info_json` (text column, added by a parallel task).
-// The column does not exist in this worktree yet, so the helper only exchanges strings — once the column
-// exists the route just merges `{ pluginInfoJson }` into `.set()`.
+// as a JSON string in `gateway_resources.plugin_info_json` (a text column). The helper only exchanges
+// strings; callers merge `{ pluginInfoJson }` into `.set()`.
 describe("plugin_info_json serialization", () => {
   it("puts a JSON string in pluginInfoJson when info exists, null otherwise", async () => {
     const { buildPluginInfoCacheUpdate, restorePluginInfo } = await import("./plugin-cache-update");

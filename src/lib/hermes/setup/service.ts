@@ -605,7 +605,7 @@ export async function setGatewayWorkerPropagation(
  * Upgrades **only the plugin** of an already registered, in-use gateway to the pinned version.
  *
  * The wizard (`startSetup`) cannot be reused as-is: that flow upserts the gateway at the end,
- * overwriting the display name with `Hermes · <host>` (`gateway-resources.ts:133`) and re-importing
+ * overwriting the display name with `Hermes · <host>` (`upsertOwnedGatewayResource` in gateway-resources.ts) and re-importing
  * the profiles. Not touching the user-given name and sharing settings is this path's contract.
  *
  * So it reuses the pipeline (`prepareHost`), closes the steps an update does not need with `skipStep`,

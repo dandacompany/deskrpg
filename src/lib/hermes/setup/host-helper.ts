@@ -5,7 +5,7 @@ import { isWindows } from "./platform";
  * The Python that runs first on the host. **ASCII only** — this string alone is passed not via stdin but as
  * argv of `python3 -c <code>`, and Python decodes argv with the locale encoding.
  * A single Korean comment line keeps it from even starting on a C/POSIX-locale host (`host.test.ts` guards this).
- * If explanation is needed, write it in Korean in this TS comment, and keep comments inside the Python in English.
+ * Put longer explanations in this TS comment; comments inside the Python stay short, English and ASCII.
  */
 export const HOST_BOOTSTRAP = String.raw`
 import json, os, pathlib, signal, subprocess, sys
@@ -256,7 +256,7 @@ try:
         import msvcrt
         fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
         # os.open follows reparse points (symlinks/junctions) and opens a handle to the target file — that handle's fstat
-        # doesn't report the reparse bit, so if the path was swapped between the line-227 check and this open, this
+        # doesn't report the reparse bit, so if the path was swapped between the reparse-point check above and this open, this
         # recheck can't catch it. It doesn't close the TOCTOU window; it only defends the rare remaining case (where the
         # handle still points at the reparse point itself).
         if getattr(os.fstat(fd), 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:

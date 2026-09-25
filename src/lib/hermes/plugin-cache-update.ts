@@ -4,8 +4,8 @@
  * Split out of `plugin-capability.ts` — that file is imported directly by `HermesProfileList.tsx` (a client
  * component) to use `resolvePluginStatusFromCache`, so it must not contain `@/db`
  * (or the `pg`/`better-sqlite3` it pulls in). This function is server-only logic that builds values to write
- * to the DB, so it stays here — its only caller is
- * `src/app/api/gateways/[id]/test/route.ts` (a route handler).
+ * to the DB, so it stays here. Its callers are all server-side: the gateway test route, the automation
+ * gate (`automation-gate.ts`) and the setup service (`setup/service.ts`).
  */
 
 import { nowForDb } from "@/db";
@@ -34,11 +34,10 @@ export function buildPluginCacheUpdate(plugin: PluginCapability) {
  * Payload that puts the automation contract block (capabilities/timezone/kanban from `/deskrpg/info`)
  * into `gateway_resources.plugin_info_json` (a text column).
  *
- * Why it is kept separate from `buildPluginCacheUpdate`: that column is being added by a parallel task
- * and is not yet in this worktree's drizzle schema. Emitting both payloads as one object
- * would make `.set()` receive a key with no column and fail type checking. Once the column exists,
- * the route can merge them as `{ ...buildPluginCacheUpdate(p), ...buildPluginInfoCacheUpdate(p) }`
- * — this function only emits a string (or null).
+ * Kept separate from `buildPluginCacheUpdate` because callers need it on its own: a probe that
+ * fails leaves `info` null while the status still changes. Callers merge the two as
+ * `{ ...buildPluginCacheUpdate(p), ...buildPluginInfoCacheUpdate(info) }` — this function only
+ * emits a string (or null).
  */
 export function buildPluginInfoCacheUpdate(info: PluginInfo | null): {
   pluginInfoJson: string | null;

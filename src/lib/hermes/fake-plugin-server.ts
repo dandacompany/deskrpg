@@ -1,7 +1,7 @@
 /**
  * A **test-only** in-memory HTTP server mimicking the `deskrpg-hermes-plugin` automation contract (v0.6.0+).
  *
- * Since the plugin doesn't exist yet, this file reproduces spec A.1 (owner key — kanban/events),
+ * Tests run without a real gateway, so this file reproduces spec A.1 (owner key — kanban/events),
  * A.2 (profile key — cron), and A.3 (auth). The real client (`plugin-client.ts`) round-trips against this
  * server to pin down "paths, keys, bodies, response shapes". State transitions here follow **only what the
  * spec defines**, and the rest (state after terminate, etc.) is the minimum the tests need — this is not

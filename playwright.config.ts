@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 // DeskRPG E2E — for local/manual runs only.
 //
 // Not part of the default CI pipeline. This suite needs a live Hermes gateway (local 8642)
-// and a seeded development DB, and CI has neither. `npm run test` (616 node:test tests) stays
+// and a seeded development DB, and CI has neither. `npm run test` (node:test) stays
 // pure unit tests, and this one runs only when a person calls `npm run test:e2e`.
 //
 // Uses the installed Chrome instead of downloading a browser (channel: "chrome"). Downloading bundled Chromium
@@ -29,7 +29,7 @@ export default defineConfig({
     channel: "chrome",
     // Runs headless. This decision is based on measurement: in headed mode, the moment the window is
     // covered by another window Chrome throttles requestAnimationFrame to 1 frame per second, and
-    // the Phaser game loop effectively stops so the character does not move. document.visibilityState
+    // the 3D render loop effectively stops so the character does not move. document.visibilityState
     // is still "visible" then, so code cannot detect it. Headless has no window to cover.
     headless: true,
     viewport: { width: 1440, height: 900 },

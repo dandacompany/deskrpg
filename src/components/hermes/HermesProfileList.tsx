@@ -66,7 +66,7 @@ export default function HermesProfileList({
   const [selected, setSelected] = useState<string[]>([]);
   const [probeStatus, setProbeStatus] = useState<ProbeStatus>("idle");
   const [registering, setRegistering] = useState(false);
-  /** The profile the "Personality" button pointed at — opens the wizard straight to that profile's step 2. */
+  /** Profiles the last bulk registration could not add, with the error code for each. */
   const [registerFailures, setRegisterFailures] = useState<{ name: string; errorCode: string }[]>(
     [],
   );

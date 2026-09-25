@@ -9,7 +9,7 @@ import type { HermesErrorCode } from "./hermes-client";
  *
  * The order of checks is the rule:
  *   1. **Abort/timeout first.** `HermesClient.request` wraps everything `fetch` throws as
- *      `HermesError("unreachable")` (hermes-client.ts:93-97), so cancellations and timeouts also
+ *      `HermesError("unreachable")` (the `catch` around `fetch` in `HermesClient.request`), so cancellations and timeouts also
  *      arrive as "couldn't reach". Looking only at the code would always misdiagnose a timeout as unreachable.
  *   2. **Structured code** (`HermesError.code`). Always takes precedence over string matching.
  *   3. Message/`cause.code` heuristics only last — needed because there are paths where the adapter throws

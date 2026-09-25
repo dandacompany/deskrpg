@@ -1910,8 +1910,8 @@ export class OfficeSimulation {
     this.socketListenerCleanup = dispose;
     this.eventScope.addCleanup(dispose);
 
-    // Reconnect = a new socket.id. It is not in the server's players map, so join again.
-    // (docs/BACKLOG.md "소켓이 재연결되면 채널 채팅·NPC 지명이 조용히 죽는다")
+    // Reconnect = a new socket.id. It is not in the server's players map, so join again — without
+    // it, channel chat and NPC mentions went silently dead after a reconnect.
     //
     // setupSocketListeners() is called twice in the normal flow — first from boot's request-socket →
     // socket-ready, second when createPlayer()'s player-spawned → ThreeGame re-emits socket-ready with the
