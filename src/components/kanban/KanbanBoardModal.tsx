@@ -829,9 +829,7 @@ export default function KanbanBoardModal({
                 key={banner.key}
                 data-banner={banner.key}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 ${
-                  banner.tone === "error"
-                    ? "bg-danger-bg text-danger"
-                    : "bg-amber-500/10 text-amber-700"
+                  banner.tone === "error" ? "bg-danger-bg text-danger" : "bg-npc/10 text-npc-dark"
                 }`}
               >
                 <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
@@ -990,7 +988,7 @@ export default function KanbanBoardModal({
       </div>
 
       {currentBoard && !reviewSupported && (
-        <p role="status" className="px-5 py-2 text-xs text-amber-700">
+        <p role="status" className="px-5 py-2 text-xs text-npc-dark">
           {t("kanban.review.unsupported")}
         </p>
       )}
