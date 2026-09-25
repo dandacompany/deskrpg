@@ -246,10 +246,13 @@ export class HermesClient {
           } else if (event.event === "run.failed" || event.event === "error") {
             // Measured (0.21.2, 1:1 chat stream): run.failed carries no message; the reason was
             // the unfinished assistant.completed just before it ("rejected your sign-in …").
+            // The /v1/runs dialect (api_server_runs, 0.21.2) puts the provider's reason in `error`.
             failure =
               typeof event.data.message === "string"
                 ? event.data.message
-                : (failedTurn ?? "Hermes run failed");
+                : typeof event.data.error === "string" && event.data.error
+                  ? event.data.error
+                  : (failedTurn ?? "Hermes run failed");
           }
 
           if (isTerminalEvent(event.event)) {
