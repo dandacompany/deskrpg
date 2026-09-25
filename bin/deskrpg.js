@@ -459,8 +459,13 @@ async function runDoctor() {
   // From here on we check "can it actually work", not whether files exist.
   loadEnvFile(envPath);
 
-  const { checkDatabaseReachable, checkPortAvailable, inspectEnvironment } =
-    loadStartupCheckModule();
+  const {
+    checkDatabaseReachable,
+    checkPortAvailable,
+    checkServerState,
+    inspectEnvironment,
+    probeHttp,
+  } = loadStartupCheckModule();
   const inspection = inspectEnvironment(process.env);
 
   const environmentLabel = msg("doctor.environment");
@@ -502,8 +507,20 @@ async function runDoctor() {
   );
 
   const port = parseDoctorPort();
+  const pid = readPidFile();
+  const server = checkServerState({
+    pid,
+    alive: pid ? isProcessRunning(pid) : false,
+    responding: await probeHttp(port),
+    port,
+  });
+  reportCheck(server.status, msg("doctor.server"), server.message);
   const portProbe = await checkPortAvailable(port);
-  reportCheck(portProbe.free ? "ok" : "warn", msg("doctor.port", { port }), portProbe.message);
+  if (!portProbe.free && server.portInUseIsOurs) {
+    reportCheck("ok", msg("doctor.port", { port }), msg("doctor.portOurs"));
+  } else {
+    reportCheck(portProbe.free ? "ok" : "warn", msg("doctor.port", { port }), portProbe.message);
+  }
 
   if (inspection.errors.length > 0 || !dbProbe.ok) {
     console.error(msg("doctor.problemsFound"));

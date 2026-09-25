@@ -82,6 +82,14 @@ const CLI_MESSAGES = {
     "doctor.hostSetupOff": "운영자가 꺼 둠 — 다시 켜려면 deskrpg host-setup on --with-install",
     "doctor.database": "데이터베이스({target})",
     "doctor.port": "포트 {port}",
+    "doctor.server": "DeskRPG 서버",
+    "doctor.portOurs": "이 DeskRPG 서버가 쓰는 중입니다.",
+    "server.running": "실행 중 (PID {pid}) — 포트 {port} 에서 응답합니다.",
+    "server.notAnswering":
+      "PID {pid} 는 살아 있지만 포트 {port} 에서 응답하지 않습니다 — 아직 켜지는 중이거나 다른 포트로 떴습니다.",
+    "server.stalePid":
+      "PID 파일(PID {pid})이 남아 있지만 서버가 꺼져 있습니다 — 띄운 셸과 함께 끝났을 수 있습니다. deskrpg start 로 다시 띄우세요.",
+    "server.notRunning": "실행 중이 아닙니다.",
     "doctor.problemsFound":
       "DeskRPG 진단에서 문제를 찾았습니다. 위의 [실패] 항목을 먼저 해결하세요.",
 
@@ -176,6 +184,14 @@ const CLI_MESSAGES = {
       "turned off by the operator — to turn it back on, run deskrpg host-setup on --with-install",
     "doctor.database": "Database ({target})",
     "doctor.port": "Port {port}",
+    "doctor.server": "DeskRPG server",
+    "doctor.portOurs": "In use by this DeskRPG server.",
+    "server.running": "Running (PID {pid}) — answering on port {port}.",
+    "server.notAnswering":
+      "PID {pid} is alive but port {port} does not answer — it may still be starting, or it runs on another port.",
+    "server.stalePid":
+      "A PID file (PID {pid}) is left but the server is not running — it may have ended with the shell that started it. Start it again with deskrpg start.",
+    "server.notRunning": "Not running.",
     "doctor.problemsFound": "DeskRPG doctor found problems. Fix the [FAIL] items above first.",
 
     "hostSetup.on": "on",

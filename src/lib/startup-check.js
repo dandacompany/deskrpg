@@ -274,6 +274,52 @@ function checkPortAvailable(port, host = "0.0.0.0", env = process.env) {
   });
 }
 
+/** Whether anything answers HTTP on the local port — any status counts as an answer. */
+function probeHttp(port, timeoutMs = 2000) {
+  const http = require("node:http");
+  return new Promise((resolve) => {
+    const req = http.get({ host: "127.0.0.1", port, path: "/", timeout: timeoutMs }, (res) => {
+      res.resume();
+      resolve(true);
+    });
+    req.once("timeout", () => req.destroy());
+    req.once("error", () => resolve(false));
+  });
+}
+
+/**
+ * The DeskRPG server's own state for doctor, from the PID file and a request to the port.
+ * `portInUseIsOurs` lets the port check stop calling DeskRPG's own server a conflict.
+ */
+function checkServerState({ pid, alive, responding, port }, env = process.env) {
+  if (pid && alive && responding) {
+    return {
+      status: "ok",
+      message: cliMessage("server.running", { pid, port }, env),
+      portInUseIsOurs: true,
+    };
+  }
+  if (pid && alive) {
+    return {
+      status: "warn",
+      message: cliMessage("server.notAnswering", { pid, port }, env),
+      portInUseIsOurs: false,
+    };
+  }
+  if (pid) {
+    return {
+      status: "warn",
+      message: cliMessage("server.stalePid", { pid }, env),
+      portInUseIsOurs: false,
+    };
+  }
+  return {
+    status: "ok",
+    message: cliMessage("server.notRunning", {}, env),
+    portInUseIsOurs: false,
+  };
+}
+
 /**
  * Prints the inspectEnvironment result as human-readable lines.
  *
@@ -293,7 +339,9 @@ module.exports = {
   DEFAULT_DB_PROBE_TIMEOUT_MS,
   checkDatabaseReachable,
   checkPortAvailable,
+  checkServerState,
   hostSetupHint,
   inspectEnvironment,
+  probeHttp,
   reportEnvironmentInspection,
 };
