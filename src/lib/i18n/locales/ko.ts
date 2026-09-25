@@ -2104,6 +2104,7 @@ const ko: Record<string, string> = {
   "meeting.playAuto": "재생 (자동 모드)",
   "meeting.nextTurnBtn": "다음 턴",
   "meeting.stopMeeting": "회의 종료",
+  "meeting.stopping": "회의를 끝내는 중…",
   "meeting.npcParticipants": "참여 NPC",
   "meeting.startMode": "시작 모드:",
   "meeting.hybridModeDesc": "하이브리드 모드 (수동 개입 시 자동 일시정지)",

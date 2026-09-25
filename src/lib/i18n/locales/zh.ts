@@ -2035,6 +2035,7 @@ const zh: Record<string, string> = {
   "meeting.playAuto": "播放 (自动模式)",
   "meeting.nextTurnBtn": "下一轮",
   "meeting.stopMeeting": "结束会议",
+  "meeting.stopping": "正在结束会议…",
   "meeting.npcParticipants": "参与NPC",
   "meeting.startMode": "开始模式:",
   "meeting.hybridModeDesc": "混合模式 (手动干预时自动暂停)",

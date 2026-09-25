@@ -2110,6 +2110,7 @@ const en: Record<string, string> = {
   "meeting.playAuto": "Play (auto mode)",
   "meeting.nextTurnBtn": "Next turn",
   "meeting.stopMeeting": "Stop meeting",
+  "meeting.stopping": "Ending the meeting…",
   "meeting.npcParticipants": "Participating NPCs",
   "meeting.startMode": "Start mode:",
   "meeting.hybridModeDesc": "Hybrid Mode (auto-pause on manual intervention)",

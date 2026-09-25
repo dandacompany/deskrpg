@@ -2128,6 +2128,7 @@ const ja: Record<string, string> = {
   "meeting.playAuto": "再生 (自動モード)",
   "meeting.nextTurnBtn": "次のターン",
   "meeting.stopMeeting": "会議終了",
+  "meeting.stopping": "会議を終了しています…",
   "meeting.npcParticipants": "参加NPC",
   "meeting.startMode": "開始モード:",
   "meeting.hybridModeDesc": "ハイブリッドモード (手動介入時に自動一時停止)",
