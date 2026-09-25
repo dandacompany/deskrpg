@@ -41,6 +41,7 @@ import type {
   WorkerLog,
 } from "./deskrpg-plugin-types";
 import { KANBAN_TASK_STATUSES } from "./deskrpg-plugin-types";
+import { createFakeMcpState, routeMcp, type FakeMcpState } from "./fake-mcp-routes";
 import { createFakeSkillState, routeSkills, type FakeSkillState } from "./fake-skill-routes";
 import { BLACKBOARD_PREFIX } from "@/components/kanban/kanban-view-model";
 
@@ -121,6 +122,8 @@ export type FakePluginServer = {
   }): { id: string };
   /** That profile's 0.15.0 skill management state (`fake-skill-routes.ts`). Creates an empty state if absent. */
   skills(profile: string): FakeSkillState;
+  /** That profile's 0.17.0 MCP connector state (`fake-mcp-routes.ts`). Creates an empty state if absent. */
+  mcp(profile: string): FakeMcpState;
 };
 
 // ---------------------------------------------------------------------------
@@ -233,6 +236,7 @@ export async function startFakePluginServer(
   let artifacts = new Map<string, ArtifactRecord>();
   let cardProposals = new Map<string, CardProposalRecord>();
   let skillStates = new Map<string, FakeSkillState>();
+  let mcpStates = new Map<string, FakeMcpState>();
   let seq = 0;
 
   const nextId = (prefix: string) => `${prefix}_${(seq += 1).toString(36).padStart(4, "0")}`;
@@ -249,6 +253,7 @@ export async function startFakePluginServer(
     faults.length = 0;
     cardProposals = new Map();
     skillStates = new Map();
+    mcpStates = new Map();
     seq = 0;
   }
 
@@ -257,6 +262,15 @@ export async function startFakePluginServer(
     if (!state) {
       state = createFakeSkillState();
       skillStates.set(profile, state);
+    }
+    return state;
+  }
+
+  function mcpFor(profile: string): FakeMcpState {
+    let state = mcpStates.get(profile);
+    if (!state) {
+      state = createFakeMcpState();
+      mcpStates.set(profile, state);
     }
     return state;
   }
@@ -1630,6 +1644,8 @@ export async function startFakePluginServer(
   function routeProfile(profile: string, req: ParsedRequest): Reply {
     const skillReply = routeSkills(skillsFor(profile), req);
     if (skillReply) return skillReply;
+    const mcpReply = routeMcp(mcpFor(profile), req);
+    if (mcpReply) return mcpReply;
     const { method, pathname, params, json } = req;
     const state = cronFor(profile);
     const rest = pathname.replace(/^\/deskrpg\/cron/, "");
@@ -1820,6 +1836,7 @@ export async function startFakePluginServer(
     seedArtifact,
     seedAttachment,
     skills: skillsFor,
+    mcp: mcpFor,
     seedCardProposal: (proposalId) => {
       cardProposals.set(proposalId, {
         resolvedAt: null,
