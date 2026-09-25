@@ -3053,6 +3053,8 @@ const en: Record<string, string> = {
   "kanban.warning.noDispatcher":
     "No dispatcher is running, so cards will not start automatically. Enable the Hermes kanban dispatcher on the gateway host.",
   "kanban.warning.lastError": "Last sync error: {error}",
+  "kanban.warning.hiddenCards":
+    "{count} card(s) are not shown because this board does not know their status: {statuses}. They are unchanged in Hermes.",
   "kanban.blocker.upgradeTitle": "Plugin update required",
   "kanban.blocker.upgradeBody":
     "deskrpg-hermes-plugin {minVersion} or newer is required. Run the command below on the gateway host, then restart the gateway.",

@@ -3084,6 +3084,8 @@ const ja: Record<string, string> = {
   "kanban.warning.noDispatcher":
     "ディスパッチャーがないため、カードは自動的に実行されません。ゲートウェイホストで Hermes カンバンディスパッチャーを有効にしてください。",
   "kanban.warning.lastError": "最後の同期エラー: {error}",
+  "kanban.warning.hiddenCards":
+    "このボードが認識できない状態のカード {count} 件は表示されません: {statuses}。Hermes 側ではそのまま残っています。",
   "kanban.blocker.upgradeTitle": "プラグインの更新が必要です",
   "kanban.blocker.upgradeBody":
     "deskrpg-hermes-plugin {minVersion} 以上が必要です。ゲートウェイホストで以下のコマンドを実行し、ゲートウェイを再起動してください。",

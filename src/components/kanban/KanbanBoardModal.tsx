@@ -42,6 +42,7 @@ import {
   flattenTasks,
   isRunning,
   npcIdForAssignee,
+  hiddenCards,
   orderColumns,
   type BoardBlocker,
   type TaskFormValues,
@@ -337,6 +338,7 @@ export default function KanbanBoardModal({
     () => orderColumns(currentBoard?.columns, includeArchived),
     [currentBoard, includeArchived],
   );
+  const hidden = useMemo(() => hiddenCards(currentBoard?.columns), [currentBoard]);
   const allTasks = useMemo(() => flattenTasks(columns), [columns]);
   const listGroups = useTaskGroups(allTasks, viewState, {
     tenants: currentBoard?.tenants,
@@ -733,6 +735,16 @@ export default function KanbanBoardModal({
       key: "lastError",
       text: t("kanban.warning.lastError", { error: getLocalizedMessage(t, status.lastError) }),
       tone: "error",
+    });
+  }
+  if (hidden.count > 0) {
+    banners.push({
+      key: "hiddenCards",
+      text: t("kanban.warning.hiddenCards", {
+        count: hidden.count,
+        statuses: hidden.statuses.join(", "),
+      }),
+      tone: "warn",
     });
   }
   if (boardWarning) banners.push({ key: "board", text: boardWarning, tone: "warn" });

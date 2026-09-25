@@ -3052,6 +3052,8 @@ const ko: Record<string, string> = {
   "kanban.warning.noDispatcher":
     "디스패처가 없어 카드가 자동으로 실행되지 않습니다. 게이트웨이 호스트에서 Hermes 칸반 디스패처를 켜세요.",
   "kanban.warning.lastError": "마지막 동기화 오류: {error}",
+  "kanban.warning.hiddenCards":
+    "이 보드가 모르는 상태의 카드 {count}개가 표시되지 않습니다: {statuses}. Hermes 에서는 그대로 있습니다.",
   "kanban.blocker.upgradeTitle": "플러그인 업데이트 필요",
   "kanban.blocker.upgradeBody":
     "deskrpg-hermes-plugin {minVersion} 이상이 필요합니다. 게이트웨이 호스트에서 아래 명령을 실행한 뒤 게이트웨이를 재시작하세요.",

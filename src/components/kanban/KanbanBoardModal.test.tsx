@@ -724,6 +724,35 @@ test("R9/E6: dispatcherPresent=false and lastError show as banners above the boa
   }
 });
 
+test("cards under a status the board does not know stay out of the columns and are counted in a banner", async () => {
+  const f = await mount(() =>
+    json(
+      board({
+        columns: [
+          ...board().columns,
+          {
+            name: "made_up",
+            tasks: [
+              { id: "t-x1", title: "모르는 상태 카드1", status: "made_up" },
+              { id: "t-x2", title: "모르는 상태 카드2", status: "made_up" },
+            ],
+          },
+        ],
+      }),
+    ),
+  );
+  try {
+    const banner = f.host.querySelector<HTMLElement>('[data-banner="hiddenCards"]');
+    assert.ok(banner);
+    assert.match(banner.textContent ?? "", /2/);
+    assert.match(banner.textContent ?? "", /made_up/);
+    assert.doesNotMatch(f.host.textContent ?? "", /모르는 상태 카드/);
+    assert.ok(f.host.querySelector("[data-column]"));
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("R7: the create form lists only active NPCs as assignee options", async () => {
   const f = await mount(happy);
   try {
