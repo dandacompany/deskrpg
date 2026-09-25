@@ -163,13 +163,13 @@ export default function ArtifactEditor({
       {confirmingCancel && (
         <div
           role="alertdialog"
-          className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-md bg-red-500/10"
+          className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-md bg-danger/10"
         >
           <span className="mr-auto text-text">{t("common.unsavedChangesContinue")}</span>
           <button
             type="button"
             onClick={confirmDiscard}
-            className="px-2.5 py-1 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold"
+            className="px-2.5 py-1 rounded-md bg-danger hover:bg-danger-hover text-white font-semibold"
           >
             {t("common.confirm")}
           </button>

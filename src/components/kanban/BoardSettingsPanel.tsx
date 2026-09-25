@@ -227,7 +227,7 @@ export default function BoardSettingsPanel({ api, onClose }: BoardSettingsPanelP
                       onChange={(e) => setDraft({ ...draft, default_assignee: e.target.value })}
                     />
                     {settings.hints.default_assignee_recommend_empty && (
-                      <div className="mt-1 text-[10px] text-amber-700">
+                      <div className="mt-1 text-[10px] text-npc-dark">
                         {t("kanban.settings.defaultAssigneeHint")}
                       </div>
                     )}

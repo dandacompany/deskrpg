@@ -825,7 +825,7 @@ export default function NpcHireWizard({
         ))}
       </div>
       {showCloseConfirm && created && (
-        <div className="mb-4 space-y-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3">
+        <div className="mb-4 space-y-2 rounded-lg border border-npc/40 bg-npc/10 p-3">
           <p className="text-sm font-semibold text-npc-dark">
             {t("hermes.wizard.closeConfirmTitle")}
           </p>
@@ -871,7 +871,7 @@ export default function NpcHireWizard({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t("hermes.wizard.profile.namePlaceholder")}
-                className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+                className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-primary-light"
               />
               <p className="text-xs text-text-muted">{t("hermes.wizard.profile.nameHint")}</p>
               {existingProfiles.length > 0 && (
@@ -950,7 +950,7 @@ export default function NpcHireWizard({
               )}
 
               {!created.keyIssued && (
-                <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3">
+                <div className="space-y-2 rounded-lg border border-npc/40 bg-npc/10 p-3">
                   <p className="text-sm font-semibold text-npc-dark">
                     {t("hermes.wizard.profile.keyIssuedFalseTitle")}
                   </p>
@@ -1091,7 +1091,7 @@ export default function NpcHireWizard({
                 // draft. The `identityBody` in the textarea below stays exactly as-is,
                 // independent of this block — it's only replaced when the user explicitly
                 // clicks "Replace with this."
-                <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3">
+                <div className="space-y-2 rounded-lg border border-npc/40 bg-npc/10 p-3">
                   <p className="text-sm font-semibold text-npc-dark">
                     {t("hermes.wizard.identity.conflict")}
                   </p>
@@ -1130,7 +1130,7 @@ export default function NpcHireWizard({
                 }}
                 placeholder={t("hermes.wizard.identity.placeholder")}
                 rows={8}
-                className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+                className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-primary-light"
               />
               {identitySaved && (
                 <p className="text-xs text-success">{t("hermes.wizard.identity.saved")}</p>
@@ -1245,7 +1245,7 @@ export default function NpcHireWizard({
                       // it. Leaving it in place would only fail at save time.
                       setModel("");
                     }}
-                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-primary-light"
                   >
                     <option value="">{t("hermes.wizard.config.provider")}</option>
                     {catalog.providers.map((p) => (
@@ -1265,7 +1265,7 @@ export default function NpcHireWizard({
                     value={provider}
                     onChange={(e) => setProvider(e.target.value)}
                     placeholder={t("hermes.wizard.config.provider")}
-                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-primary-light"
                   />
                 )}
 
@@ -1288,7 +1288,7 @@ export default function NpcHireWizard({
                   <select
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
-                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-primary-light"
                   >
                     <option value="">{t("hermes.wizard.config.model")}</option>
                     {modelOptions.map((m) => (
@@ -1303,7 +1303,7 @@ export default function NpcHireWizard({
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
                     placeholder={t("hermes.wizard.config.model")}
-                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+                    className="rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-primary-light"
                   />
                 )}
               </div>
@@ -1328,7 +1328,7 @@ export default function NpcHireWizard({
                 <select
                   value={effort}
                   onChange={(e) => setEffort(e.target.value)}
-                  className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-primary-light"
                 >
                   <option value="">{t("hermes.wizard.config.effort")}</option>
                   {catalog.reasoningEfforts.map((e2) => (
@@ -1373,7 +1373,7 @@ export default function NpcHireWizard({
                         value={toolsetsText}
                         onChange={(e) => setToolsetsText(e.target.value)}
                         placeholder={t("hermes.wizard.config.toolsets")}
-                        className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+                        className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-primary-light"
                       />
                       <p className="text-xs text-text-muted">
                         {t("hermes.wizard.config.toolsetsHint")}
@@ -1402,7 +1402,7 @@ export default function NpcHireWizard({
                 "skipped" in created.workerPlugin &&
                 created.workerPlugin.skipped === "propagation_disabled" && (
                   <div
-                    className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs"
+                    className="space-y-1 rounded-lg border border-npc/40 bg-npc/10 p-3 text-xs"
                     data-worker-propagation-notice="disabled"
                   >
                     <p className="font-semibold text-text">
@@ -1430,7 +1430,7 @@ export default function NpcHireWizard({
               {/* The warning stays outside the button row — in the same flex row it squeezes the buttons and wraps their text vertically. */}
               {baseUrl && provider.trim() !== "custom" && (
                 <div
-                  className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs"
+                  className="space-y-1 rounded-lg border border-npc/40 bg-npc/10 p-3 text-xs"
                   data-base-url-warning={baseUrl}
                 >
                   <p className="text-text">

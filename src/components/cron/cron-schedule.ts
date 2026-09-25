@@ -207,16 +207,16 @@ export function formatLocalDateTime(iso: string | null | undefined, locale?: str
 // ---------------------------------------------------------------------------
 
 export const STATE_DOT_CLASS: Record<CronJobState, string> = {
-  scheduled: "bg-emerald-400",
-  running: "bg-sky-400 animate-pulse",
-  paused: "bg-amber-400",
-  error: "bg-red-500",
-  completed: "bg-slate-400",
-  disabled: "bg-slate-600",
+  scheduled: "bg-success",
+  running: "bg-info animate-pulse",
+  paused: "bg-npc",
+  error: "bg-danger",
+  completed: "bg-text-dim/50",
+  disabled: "bg-text-muted",
 };
 
 export function stateDotClass(state: string): string {
-  return (STATE_DOT_CLASS as Record<string, string>)[state] ?? "bg-slate-500";
+  return (STATE_DOT_CLASS as Record<string, string>)[state] ?? "bg-text-dim";
 }
 
 // ---------------------------------------------------------------------------

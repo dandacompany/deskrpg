@@ -74,14 +74,13 @@ test("an unknown accent color falls back to the default", () => {
  * The same goes for a badge with its own pale background — text-amber-700 on bg-amber-500/15 is 4.38:1.
  * Use the semantic-color tokens (text-danger/text-success/text-info/text-npc-dark) instead.
  *
- * 700 and above pass on contrast (4.55-8.77:1), so this check doesn't block them. They still
- * violate the one-product-brand-color rule (docs/standards.md) though — 10 spots remain, tracked
- * in a separate card.
+ * 700 and above pass on contrast (4.55-8.77:1) but still break the one-product-color rule
+ * (docs/standards.md) and would not follow a theme change, so every shade is blocked.
  */
 const PALE_PALETTE_TEXT =
-  /\btext-(amber|indigo|emerald|sky|rose|violet|teal|red|blue|green|yellow|slate|gray|zinc|stone|neutral|orange|lime|cyan|fuchsia|pink|purple)-(50|100|200|300|400|500|600)\b/;
+  /\btext-(amber|indigo|emerald|sky|rose|violet|teal|red|blue|green|yellow|slate|gray|zinc|stone|neutral|orange|lime|cyan|fuchsia|pink|purple)-(50|[1-9]00|950)\b/;
 
-test("doesn't use pale palette text colors — uses semantic-color tokens instead", () => {
+test("doesn't use palette text colors — uses semantic-color tokens instead", () => {
   const offenders: string[] = [];
   for (const file of walk(SRC)) {
     if (file.endsWith("chat-accent.test.ts")) continue;
@@ -132,5 +131,66 @@ test("doesn't use a utility class with an undefined semantic-color name", () => 
     offenders,
     [],
     `정의되지 않은 색 이름이라 아무 색도 나지 않는다. 토큰을 정의하거나 있는 토큰을 써라(경고는 text-npc-dark):\n${offenders.join("\n")}`,
+  );
+});
+
+/**
+ * Backgrounds, borders and the other color utilities follow the same rule: a literal palette
+ * class ignores the theme tokens (tokens.css), so a theme change or dark mode would have to fix
+ * each one by hand. Use a token of the same hue family with opacity instead (`bg-danger/10`,
+ * `border-npc/40`, `bg-info`).
+ *
+ * The allowlist holds the spots that could not move without changing their hue: indigo actions
+ * and progress (the matching token, primary, is green) and one line in a file another change
+ * owns. It may only shrink — a new literal anywhere, or one more in a listed file, fails.
+ */
+const LITERAL_PALETTE =
+  /(?<![\w-])(?:[a-z-]+:)*(?:bg|border|ring|from|via|to|fill|stroke|shadow|outline|divide|decoration|caret|placeholder)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)(?:\/\d+)?(?![\w-])/g;
+const PALETTE_ALLOWED: Record<string, string[]> = {
+  "app/game/GamePageClient.tsx": ["bg-indigo-600", "hover:bg-indigo-700"],
+  "components/ChannelSettingsModal.tsx": [
+    "bg-indigo-600",
+    "bg-indigo-600",
+    "bg-indigo-600",
+    "hover:bg-indigo-700",
+    "bg-indigo-600",
+    "bg-indigo-600",
+    "bg-indigo-600",
+    "hover:bg-indigo-700",
+  ],
+  "components/ChatPanel.tsx": ["bg-amber-400"],
+  "components/NpcDialog.tsx": ["bg-indigo-600"],
+  "components/WebglUnavailable.tsx": ["bg-indigo-600", "hover:bg-indigo-700"],
+  "components/hermes/ProviderAuthPanel.tsx": ["bg-indigo-600", "hover:bg-indigo-500"],
+  "lib/npc-agent-progress.test.ts": ["bg-indigo-500"],
+  "lib/npc-agent-progress.ts": ["bg-indigo-500", "bg-indigo-500"],
+};
+
+test("doesn't use palette background, border or other color utilities outside the allowlist", () => {
+  const found: Record<string, string[]> = {};
+  for (const file of walk(SRC)) {
+    if (file.endsWith("chat-accent.test.ts")) continue;
+    readFileSync(file, "utf8")
+      .split("\n")
+      .forEach((line) => {
+        const bare = line.trim();
+        if (bare.startsWith("*") || bare.startsWith("//") || bare.startsWith("/*")) return;
+        for (const match of line.matchAll(LITERAL_PALETTE))
+          (found[path.relative(SRC, file)] ??= []).push(match[0]);
+      });
+  }
+  const offenders: string[] = [];
+  for (const [file, classes] of Object.entries(found)) {
+    const allowed = [...(PALETTE_ALLOWED[file] ?? [])];
+    for (const cls of classes) {
+      const i = allowed.indexOf(cls);
+      if (i === -1) offenders.push(`${file} ${cls}`);
+      else allowed.splice(i, 1);
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `리터럴 팔레트 대신 같은 색 계열 토큰과 불투명도를 써라(bg-danger/10, border-npc/40, bg-info):\n${offenders.join("\n")}`,
   );
 });

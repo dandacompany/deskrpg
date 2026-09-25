@@ -342,7 +342,7 @@ export default function GroupAccessPanel({
         </div>
         {flashMessage && <p className="mt-3 text-sm text-danger">{flashMessage}</p>}
         {issuedPassword && (
-          <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <div className="mt-3 rounded-lg border border-npc/40 bg-npc/10 px-3 py-2 text-sm text-npc-dark">
             <p className="font-medium">
               {issuedPassword.nickname} · {t("admin.users.temporaryPassword")}
             </p>

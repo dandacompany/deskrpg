@@ -425,7 +425,7 @@ export default function CronPanel({
         {partialErrors.length > 0 && (
           <div
             data-testid="cron-partial-errors"
-            className="p-2 rounded border border-amber-600/50 bg-amber-900/10 text-[11px] text-text-muted"
+            className="p-2 rounded border border-npc/50 bg-npc-dark/10 text-[11px] text-text-muted"
           >
             <p>{t("cron.error.partial", { count: partialErrors.length })}</p>
             <ul className="mt-1 font-mono">
@@ -580,7 +580,7 @@ export default function CronPanel({
               <button
                 type="button"
                 data-testid="cron-action-delete"
-                className={`${iconBtn} ${confirmDeleteId === selected.id ? "bg-red-700/70 text-white" : "text-danger"}`}
+                className={`${iconBtn} ${confirmDeleteId === selected.id ? "bg-danger/70 text-white" : "text-danger"}`}
                 disabled={!selected.editable || busy === selected.id}
                 title={readOnlyText(selected) ?? t("common.delete")}
                 onClick={() => {

@@ -273,7 +273,7 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("hermes.picker.searchSkills")}
-          className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-indigo-500"
+          className="w-full rounded border border-border bg-bg px-3 py-2 text-sm text-text focus:outline-none focus:border-primary-light"
         />
         <div className="max-h-64 space-y-2 overflow-y-auto">
           {groups.length === 0 ? (

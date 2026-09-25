@@ -25,7 +25,7 @@ export function CronErrorNotice({ notice }: { notice: CronErrorNoticeValue }) {
       <div
         role="alert"
         data-testid="cron-error-upgrade"
-        className="p-3 rounded border border-amber-600/60 bg-amber-900/20 text-xs text-text space-y-1.5"
+        className="p-3 rounded border border-npc/60 bg-npc-dark/20 text-xs text-text space-y-1.5"
       >
         <p className="font-semibold">
           {t("cron.error.upgradeRequired", { minVersion: notice.minVersion })}
@@ -52,7 +52,7 @@ export function CronErrorNotice({ notice }: { notice: CronErrorNoticeValue }) {
     <div
       role="alert"
       data-testid="cron-error-other"
-      className="p-3 rounded border border-red-700/60 bg-red-900/20 text-xs text-text space-y-1"
+      className="p-3 rounded border border-danger/60 bg-danger-hover/20 text-xs text-text space-y-1"
     >
       {isWizardErrorCode(notice.code) && <p>{getWizardErrorMessage(t, notice.code)}</p>}
       <p className="font-mono text-[11px] text-text-muted break-all">

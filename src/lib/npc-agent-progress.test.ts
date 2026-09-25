@@ -12,14 +12,14 @@ test("getAgentProgressMeter returns connecting presentation", () => {
 
 test("getAgentProgressMeter returns done presentation", () => {
   assert.deepEqual(getAgentProgressMeter("done"), {
-    className: "bg-green-500",
+    className: "bg-success",
     width: "100%",
   });
 });
 
 test("getAgentProgressMeter returns failed presentation", () => {
   assert.deepEqual(getAgentProgressMeter("failed"), {
-    className: "bg-red-500",
+    className: "bg-danger",
     width: "100%",
   });
 });

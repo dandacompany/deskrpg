@@ -132,7 +132,7 @@ describe("state dot / not-editable reason (R16)", () => {
     for (const state of ["scheduled", "paused", "running", "error", "completed", "disabled"]) {
       assert.ok(stateDotClass(state).startsWith("bg-"), state);
     }
-    assert.equal(stateDotClass("weird"), "bg-slate-500");
+    assert.equal(stateDotClass("weird"), "bg-text-dim");
   });
 
   it("reason for editable=false: otherChannel when origin exists, otherwise outside DeskRPG", () => {

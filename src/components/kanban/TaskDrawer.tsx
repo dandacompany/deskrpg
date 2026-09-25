@@ -336,7 +336,7 @@ export default function TaskDrawer({
 
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
         {creationWarning && (
-          <div className="rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-amber-700">
+          <div className="rounded-md border border-npc/40 bg-npc/10 px-3 py-2 text-npc-dark">
             {creationWarning}
           </div>
         )}
