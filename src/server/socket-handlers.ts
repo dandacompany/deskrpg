@@ -125,6 +125,8 @@ import {
   registerHermesRun,
 } from "./hermes-dispatch";
 import { isUuid } from "@/lib/uuid";
+import { registerNpcsPlacedNotifier } from "@/lib/npc-roster-registry";
+import { broadcastPlacedNpcs } from "./npc-placement-broadcast";
 
 export const adapterRegistry = new AdapterRegistry();
 
@@ -1163,6 +1165,15 @@ export function setupSocketHandlers(io: Server) {
       spatial.playerArrived(channelId, userId, socketId),
     onSpatialPlayerBlocked: (channelId, userId) =>
       spatial.block(channelId, userId, "participant_left"),
+  });
+  // Employees the server seats on its own (hiring, quick start) appear on maps already open.
+  registerNpcsPlacedNotifier((channelId, npcIds) => {
+    void broadcastPlacedNpcs(io, channelId, npcIds, {
+      invalidate: (id) => {
+        invalidateRoomRuntimesForChannel(id);
+        void coordination.invalidate(id);
+      },
+    }).catch((err) => console.error("[roster] placement broadcast failed", { channelId, err }));
   });
   const spatial: MeetingSpatialCoordinator = createMeetingSpatialCoordinator({
     ...coordination.spatial,

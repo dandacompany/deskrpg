@@ -1,6 +1,7 @@
 import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { db, channels, npcs, nowForDb } from "@/db";
 import { isUniqueViolation } from "./db-unique-violation";
+import { notifyNpcsPlaced } from "./npc-roster-registry";
 import { planPlacements, seatingMapFor, type DeskSeat, type SeatingMap } from "./seat-assignment";
 
 export type PlacementResult = { seated: number; standing: number; failed: number };
@@ -32,8 +33,9 @@ export async function channelSeats(channelId: string): Promise<DeskSeat[] | null
  */
 export async function placeUnplacedNpcs(channelId: string): Promise<PlacementResult> {
   let result: PlacementResult;
+  const placed: string[] = [];
   try {
-    result = await placeUnplacedNpcsInternal(channelId);
+    result = await placeUnplacedNpcsInternal(channelId, placed);
   } catch (err) {
     console.error("[seating] placement failed", { channelId, err });
     const failed = await countActiveUnplaced(channelId).catch(() => 0);
@@ -42,6 +44,8 @@ export async function placeUnplacedNpcs(channelId: string): Promise<PlacementRes
   if (result.failed > 0) {
     console.warn("[seating] active NPCs left without a spot", { channelId, failed: result.failed });
   }
+  // Maps already open in other browsers learn about the new employees without a reload.
+  notifyNpcsPlaced(channelId, placed);
   return result;
 }
 
@@ -82,7 +86,10 @@ async function vacateReservedSeats(channelId: string, map: SeatingMap): Promise<
   }
 }
 
-async function placeUnplacedNpcsInternal(channelId: string): Promise<PlacementResult> {
+async function placeUnplacedNpcsInternal(
+  channelId: string,
+  placed: string[],
+): Promise<PlacementResult> {
   const result: PlacementResult = { seated: 0, standing: 0, failed: 0 };
   const map = await loadSeatingMap(channelId);
   if (map) await vacateReservedSeats(channelId, map);
@@ -114,6 +121,7 @@ async function placeUnplacedNpcsInternal(channelId: string): Promise<PlacementRe
           .where(and(eq(npcs.id, step.npcId), or(isNull(npcs.positionX), isNull(npcs.positionY))))
           .returning({ id: npcs.id });
         if (updated.length === 0) continue;
+        placed.push(step.npcId);
         if (step.seated) result.seated += 1;
         else result.standing += 1;
       } catch (err) {
