@@ -1157,6 +1157,14 @@ export function setupSocketHandlers(io: Server) {
         : undefined;
     },
     loadChannel: loadMotionLayout,
+    loadMotionConfig: async (channelId) =>
+      (
+        await db
+          .select({ motionConfig: channels.motionConfig })
+          .from(channels)
+          .where(eq(channels.id, channelId))
+          .limit(1)
+      )[0]?.motionConfig,
     onSpatialArrival: (channelId, actorId, generation) =>
       spatial.arrived(channelId, actorId, generation),
     onSpatialBlocked: (channelId, actorId, reason, generation) =>

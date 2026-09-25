@@ -135,6 +135,7 @@ async function harness(
       reason: string,
       generation: number,
     ) => void;
+    loadMotionConfig?: (channelId: string) => Promise<unknown>;
   } = {},
 ) {
   const http = createServer();
@@ -160,6 +161,7 @@ async function harness(
     onSpatialPlayerArrival: options.onSpatialPlayerArrival,
     onSpatialArrival: options.onSpatialArrival,
     onSpatialBlocked: options.onSpatialBlocked,
+    loadMotionConfig: options.loadMotionConfig,
   });
   io.on("connection", (socket) => {
     servers.set(socket.id, socket);
@@ -2117,6 +2119,93 @@ test("route notes alone do not keep a meeting walk that makes no progress from b
       await h.coord.sweepStalled();
     }
     assert.deepEqual(arrivals, ["n1"]);
+  } finally {
+    await h.close();
+  }
+});
+
+/** A meeting walk from n1's home (32,32) straight down, `px` pixels one second after it starts. */
+async function reportAfterOneSecond(
+  h: Awaited<ReturnType<typeof harness>>,
+  client: Client,
+  advance: () => void,
+  px: number,
+) {
+  const meeting = { x: 32, y: 480, seatId: null };
+  assert.equal(await h.coord.spatial.reserve("a", "n1", meeting), true);
+  assert.equal(await h.coord.spatial.move("a", "n1", 1, meeting, false), true);
+  advance();
+  return ack(client, "npc:position-update", { npcId: "n1", x: 32, y: 32 + px, direction: "down" });
+}
+const slow = { walk: 55, stroll: 55, summon: 55, meetingSummon: 55 };
+
+test("a channel whose NPCs all walk at 55px/s refuses a 150px/s report", async () => {
+  let t = 1_000_000;
+  const h = await harness({ now: () => t, loadMotionConfig: async () => slow });
+  try {
+    const a = await h.connect();
+    const res = await reportAfterOneSecond(h, a, () => (t += 1000), 150);
+    assert.equal(res.error, "invalid_motion");
+  } finally {
+    await h.close();
+  }
+});
+
+test("a channel whose meeting call runs at 300px/s still accepts a 150px/s report", async () => {
+  let t = 1_000_000;
+  const h = await harness({
+    now: () => t,
+    loadMotionConfig: async () => ({ ...slow, meetingSummon: 300 }),
+  });
+  try {
+    const a = await h.connect();
+    const res = await reportAfterOneSecond(h, a, () => (t += 1000), 150);
+    assert.equal(res.ok, true, res.error);
+  } finally {
+    await h.close();
+  }
+});
+
+test("raising a channel's speeds applies without restarting the socket server", async () => {
+  let t = 1_000_000;
+  let config: unknown = slow;
+  const h = await harness({ now: () => t, loadMotionConfig: async () => config });
+  try {
+    const a = await h.connect();
+    assert.equal(
+      (await reportAfterOneSecond(h, a, () => (t += 1000), 150)).error,
+      "invalid_motion",
+    );
+    config = { ...slow, meetingSummon: 300 };
+    t += 60_000;
+    // The first report after the settings change prompts a fresh read; the new cap applies from the next report.
+    await ack(a, "npc:position-update", { npcId: "n1", x: 32, y: 40, direction: "down" });
+    await new Promise((resolve) => setImmediate(resolve));
+    t += 1000;
+    const res = await ack(a, "npc:position-update", {
+      npcId: "n1",
+      x: 32,
+      y: 190,
+      direction: "down",
+    });
+    assert.equal(res.ok, true, res.error);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a channel whose settings cannot be read keeps the widest cap rather than freezing walks", async () => {
+  let t = 1_000_000;
+  const h = await harness({
+    now: () => t,
+    loadMotionConfig: async () => {
+      throw new Error("db down");
+    },
+  });
+  try {
+    const a = await h.connect();
+    const res = await reportAfterOneSecond(h, a, () => (t += 1000), 400);
+    assert.equal(res.ok, true, res.error);
   } finally {
     await h.close();
   }
