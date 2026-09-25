@@ -1479,6 +1479,10 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     [characterId],
   );
 
+  const handleStopRoomResponse = useCallback((roomId: string, requestId: string) => {
+    socketRef.current?.emit("room:cancel-response", { roomId, requestId });
+  }, []);
+
   const handleResetNpcChatById = useCallback(
     (npcId: string) => {
       if (socketRef.current) {
@@ -2775,6 +2779,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         npcChatDisabledPlaceholder={t("chat.disconnected")}
         onSend={handleDialogSend}
         onStopNpcResponse={handleStopNpcResponse}
+        onStopRoomResponse={handleStopRoomResponse}
         onClose={handleDialogClose}
         npcSelectList={npcSelectList}
         onSelectNpc={handleSelectNpc}
