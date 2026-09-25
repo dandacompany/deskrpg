@@ -28,6 +28,7 @@ const ko: Record<string, string> = {
   "meeting.join": "회의 참여",
   "meeting.cancelPreparation": "집결 취소",
   "meeting.returnBeforeRetry": "참가자를 변경하려면 먼저 복귀를 완료한 뒤 다시 시작하세요.",
+  "meeting.overflowNotice": "회의 자리보다 {count}명 많아요 — 남는 참가자는 제자리에서 참석합니다.",
   "meeting.spatial.assembling": "참가자 집결 중",
   "meeting.spatial.ready": "참가자 준비 완료",
   "meeting.spatial.returning": "원래 위치로 복귀 중",

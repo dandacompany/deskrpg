@@ -784,6 +784,15 @@ export class OfficeSimulation {
     });
 
     // React asks for the position so it can save it on leave
+    // The meeting screen tells the opener, before starting, when more participants are picked than the room has spots.
+    this.eventScope.on("meeting:capacity-request", () => {
+      if (this.meetingSpace)
+        EventBus.emit("meeting:capacity", {
+          seats: this.meetingSpace.seatIds.length,
+          standing: this.meetingSpace.standingPositions.length,
+        });
+    });
+
     this.eventScope.on("request-player-position", () => {
       if (this.player) {
         EventBus.emit("player-position-response", { x: this.player.x, y: this.player.y });

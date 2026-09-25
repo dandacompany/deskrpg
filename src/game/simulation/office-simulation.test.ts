@@ -672,3 +672,25 @@ test("smalltalk follows the viewer locale given at creation and after setDisplay
   sim.setDisplayLocale("zh");
   assert.equal(lineSet(sim), SMALLTALK_LINES.zh);
 });
+
+test("the meeting screen can ask how many seats and standing spots the meeting room has", async () => {
+  setPendingChannelData({ channelId: "ch", mapData: legacyMap });
+  const sim = new OfficeSimulation() as Runtime;
+  const answers: unknown[] = [];
+  const onCapacity = (capacity: unknown) => answers.push(capacity);
+  EventBus.on("meeting:capacity", onCapacity);
+  try {
+    await withFetch({ npcs: [] }, async () => {
+      sim["boot"](pendingChannelData!);
+      await settle();
+    });
+    EventBus.emit("meeting:capacity-request");
+    const space = sim.officeBridge.map().meetingSpace!;
+    assert.deepEqual(answers, [
+      { seats: space.seatIds.length, standing: space.standingPositions.length },
+    ]);
+  } finally {
+    EventBus.off("meeting:capacity", onCapacity);
+    sim.dispose();
+  }
+});

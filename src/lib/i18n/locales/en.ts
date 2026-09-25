@@ -28,6 +28,8 @@ const en: Record<string, string> = {
   "meeting.join": "Join meeting",
   "meeting.cancelPreparation": "Cancel assembly",
   "meeting.returnBeforeRetry": "Finish returning before starting with changed participants.",
+  "meeting.overflowNotice":
+    "{count} more than the meeting room has spots for — they will attend from where they stand.",
   "meeting.spatial.assembling": "Participants assembling",
   "meeting.spatial.ready": "Participants ready",
   "meeting.spatial.returning": "Returning to original positions",

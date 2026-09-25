@@ -28,6 +28,8 @@ const ja: Record<string, string> = {
   "meeting.join": "会議に参加",
   "meeting.cancelPreparation": "集合をキャンセル",
   "meeting.returnBeforeRetry": "参加者を変更するには、帰還が完了してから再開してください。",
+  "meeting.overflowNotice":
+    "会議の席より {count} 人多いです — あふれた参加者はその場から参加します。",
   "meeting.spatial.assembling": "参加者が集合中",
   "meeting.spatial.ready": "参加者の準備完了",
   "meeting.spatial.returning": "元の位置へ帰還中",
