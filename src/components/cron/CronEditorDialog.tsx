@@ -27,9 +27,11 @@ import {
   scheduleOptionForExpr,
   type SchedulePresetValue,
 } from "./cron-schedule";
+import { deliverRows } from "./deliver-targets";
 import { CronErrorNotice, TimezoneLabel } from "./cron-notices";
 
-export type CronEditorNpc = { npcId: string; npcName: string };
+/** `profileName` lets the delivery list offer only this channel's employees' bot chats. */
+export type CronEditorNpc = { npcId: string; npcName: string; profileName?: string };
 
 /** The save body — `npcId` is only carried on create (editing can't change the assigned NPC). */
 export type CronEditorSubmit = {
@@ -123,11 +125,13 @@ export default function CronEditorDialog({
   }, [channelId, npcId]);
 
   // Keep ids not in the server list (a stored value, local) as checkboxes too — they must not disappear mid-edit.
+  // Bot chats are narrowed to this channel's employees (see deliver-targets.ts).
   const targetRows = useMemo(() => {
-    const known = new Map(targets.map((target) => [target.id, target]));
-    const ids = new Set<string>(["local", ...known.keys(), ...deliverIds]);
-    return Array.from(ids).map((id) => ({ id, target: known.get(id) ?? null }));
-  }, [targets, deliverIds]);
+    const profiles = npcs.flatMap((npc) =>
+      npc.profileName ? [{ profileName: npc.profileName, npcName: npc.npcName }] : [],
+    );
+    return deliverRows(targets, deliverIds, profiles.length > 0 ? profiles : undefined);
+  }, [targets, deliverIds, npcs]);
 
   const schedule = preset === "custom" ? customExpr.trim() : (exprForPreset(preset) ?? "");
   const canSubmit = !!npcId && prompt.trim().length > 0 && schedule.length > 0 && !saving;
@@ -263,7 +267,7 @@ export default function CronEditorDialog({
           <fieldset className="text-xs text-text-muted">
             <legend>{t("cron.field.deliver")}</legend>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-              {targetRows.map(({ id, target }) => (
+              {targetRows.map(({ id, kind, target, profileName, npcName }) => (
                 <label key={id} className="inline-flex items-center gap-1.5 text-text">
                   <input
                     type="checkbox"
@@ -272,14 +276,21 @@ export default function CronEditorDialog({
                     onChange={() => toggleDeliver(id)}
                   />
                   <span>
-                    {id === "local" ? t("cron.deliver.local") : (target?.name ?? id)}
-                    {target && id !== "local" && !target.home_target_set && (
+                    {kind === "local"
+                      ? t("cron.deliver.local")
+                      : kind === "botChat"
+                        ? t("cron.deliver.botChat", { name: npcName ?? profileName ?? id })
+                        : (target?.name ?? id)}
+                    {target && kind === "platform" && !target.home_target_set && (
                       <span className="ml-1 text-text-dim">({t("cron.deliver.needsHome")})</span>
                     )}
                   </span>
                 </label>
               ))}
             </div>
+            <p data-testid="cron-deliver-hint" className="mt-1 text-[11px] text-text-dim">
+              {t("cron.deliver.localHint")}
+            </p>
             {targetsBlocker && (
               <button
                 type="button"

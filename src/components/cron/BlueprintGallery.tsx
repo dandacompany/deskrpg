@@ -5,20 +5,22 @@
  * not set, enum/weekdays also allow free input (datalist). The `deliver` slot renders as the same
  * delivery-target checkboxes as the cron form.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 
 import { useT } from "@/lib/i18n";
-import type {
-  AutomationBlueprint,
-  BlueprintField,
-  CronDeliveryTarget,
-} from "@/lib/hermes/deskrpg-plugin-types";
+import type { AutomationBlueprint, CronDeliveryTarget } from "@/lib/hermes/deskrpg-plugin-types";
 import GateChecklistModal from "@/components/gateway/GateChecklistModal";
 import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
 import { cronApi, classifyCronError, isCronApiError, type CronJobView } from "./cron-api";
 import { composeDeliver, parseDeliver } from "./cron-schedule";
+import {
+  localizeBlueprint,
+  type LocalizedBlueprint,
+  type LocalizedBlueprintField,
+} from "./blueprint-l10n";
+import { deliverRows as buildDeliverRows } from "./deliver-targets";
 import { CronErrorNotice } from "./cron-notices";
 import type { CronEditorNpc } from "./CronEditorDialog";
 
@@ -70,7 +72,7 @@ function FieldControl({
   onChange,
   inputClass,
 }: {
-  field: BlueprintField;
+  field: LocalizedBlueprintField;
   value: string;
   onChange: (next: string) => void;
   inputClass: string;
@@ -92,7 +94,7 @@ function FieldControl({
           {field.optional && <option value="">—</option>}
           {field.options.map((option) => (
             <option key={option} value={option}>
-              {option}
+              {field.optionLabels[option] ?? option}
             </option>
           ))}
         </select>
@@ -109,7 +111,7 @@ function FieldControl({
         />
         <datalist id={listId}>
           {field.options.map((option) => (
-            <option key={option} value={option} />
+            <option key={option} value={option} label={field.optionLabels[option] ?? option} />
           ))}
         </datalist>
       </>
@@ -134,11 +136,11 @@ export default function BlueprintGallery({
 }: BlueprintGalleryProps) {
   const t = useT();
   const [npcId, setNpcId] = useState<string>(defaultNpcId ?? npcs[0]?.npcId ?? "");
-  const [blueprints, setBlueprints] = useState<AutomationBlueprint[] | null>(null);
+  const [catalog, setCatalog] = useState<AutomationBlueprint[] | null>(null);
   const [targets, setTargets] = useState<CronDeliveryTarget[]>([]);
   const [targetsBlocker, setTargetsBlocker] = useState<GateBlocker | null>(null);
   const [checklistBlocker, setChecklistBlocker] = useState<GateBlocker | null>(null);
-  const [selected, setSelected] = useState<AutomationBlueprint | null>(null);
+  const [selected, setSelected] = useState<LocalizedBlueprint | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<unknown>(null);
   const [submitError, setSubmitError] = useState<unknown>(null);
@@ -153,11 +155,11 @@ export default function BlueprintGallery({
     cronApi
       .listBlueprints(channelId, npcId)
       .then((res) => {
-        if (!cancelled) setBlueprints(res.blueprints);
+        if (!cancelled) setCatalog(res.blueprints);
       })
       .catch((err) => {
         if (!cancelled) {
-          setBlueprints([]);
+          setCatalog([]);
           setLoadError(err);
         }
       });
@@ -181,21 +183,45 @@ export default function BlueprintGallery({
     };
   }, [channelId, npcId]);
 
+  // Hermes serves the catalog in English; the locale files overlay what the user reads.
+  const tr = useCallback(
+    (key: string) => {
+      const text = t(key);
+      return text && text !== key ? text : null;
+    },
+    [t],
+  );
+  const blueprints = useMemo(
+    () => catalog?.map((blueprint) => localizeBlueprint(blueprint, tr)) ?? null,
+    [catalog, tr],
+  );
+  const channelProfiles = useMemo(
+    () =>
+      npcs.flatMap((npc) =>
+        npc.profileName ? [{ profileName: npc.profileName, npcName: npc.npcName }] : [],
+      ),
+    [npcs],
+  );
+
   const loadBlocker = useMemo(() => blockerFromCronError(loadError), [loadError]);
   const submitBlocker = useMemo(() => blockerFromCronError(submitError), [submitError]);
 
-  const select = (blueprint: AutomationBlueprint) => {
+  const select = (blueprint: LocalizedBlueprint) => {
     setSelected(blueprint);
     setValues(initialBlueprintValues(blueprint));
     setSubmitError(null);
   };
 
-  const deliverRows = useMemo(() => {
-    const known = new Map(targets.map((target) => [target.id, target]));
-    const chosen = parseDeliver(values[DELIVER_FIELD]);
-    const ids = new Set<string>(["local", ...known.keys(), ...chosen]);
-    return Array.from(ids).map((id) => ({ id, target: known.get(id) ?? null, chosen }));
-  }, [targets, values]);
+  const chosenDeliver = useMemo(() => parseDeliver(values[DELIVER_FIELD]), [values]);
+  const deliverRows = useMemo(
+    () =>
+      buildDeliverRows(
+        targets,
+        chosenDeliver,
+        channelProfiles.length > 0 ? channelProfiles : undefined,
+      ),
+    [targets, chosenDeliver, channelProfiles],
+  );
 
   const missing = selected ? missingRequiredFields(selected, values) : [];
   const canSubmit = !!selected && !!npcId && missing.length === 0 && !saving;
@@ -293,18 +319,18 @@ export default function BlueprintGallery({
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-semibold text-text">{blueprint.title}</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-raised text-text-muted">
-                          {blueprint.category}
+                          {blueprint.categoryLabel}
                         </span>
                       </div>
                       <p className="text-xs text-text-muted mt-1">{blueprint.description}</p>
                       {blueprint.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">
-                          {blueprint.tags.map((tag) => (
+                          {blueprint.tags.map((tag, i) => (
                             <span
                               key={tag}
                               className="text-[10px] px-1.5 py-0.5 rounded-full bg-bg border border-border text-text-dim"
                             >
-                              #{tag}
+                              #{blueprint.tagLabels[i] ?? tag}
                             </span>
                           ))}
                         </div>
@@ -327,20 +353,24 @@ export default function BlueprintGallery({
                   </span>
                   {field.name === DELIVER_FIELD ? (
                     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                      {deliverRows.map(({ id, target, chosen }) => (
+                      {deliverRows.map(({ id, kind, target, profileName, npcName }) => (
                         <label key={id} className="inline-flex items-center gap-1.5 text-text">
                           <input
                             type="checkbox"
-                            checked={chosen.includes(id)}
+                            checked={chosenDeliver.includes(id)}
                             onChange={() => {
-                              const next = chosen.includes(id)
-                                ? chosen.filter((x) => x !== id)
-                                : [...chosen, id];
+                              const next = chosenDeliver.includes(id)
+                                ? chosenDeliver.filter((x) => x !== id)
+                                : [...chosenDeliver, id];
                               setValues((v) => ({ ...v, [DELIVER_FIELD]: composeDeliver(next) }));
                             }}
                           />
                           <span>
-                            {id === "local" ? t("cron.deliver.local") : (target?.name ?? id)}
+                            {kind === "local"
+                              ? t("cron.deliver.local")
+                              : kind === "botChat"
+                                ? t("cron.deliver.botChat", { name: npcName ?? profileName ?? id })
+                                : (target?.name ?? id)}
                           </span>
                         </label>
                       ))}
@@ -353,6 +383,12 @@ export default function BlueprintGallery({
                           {t("gateChecklist.whatIsNeeded")}
                         </button>
                       )}
+                      <p
+                        data-testid="bp-deliver-hint"
+                        className="basis-full text-[11px] text-text-dim"
+                      >
+                        {t("cron.deliver.localHint")}
+                      </p>
                     </div>
                   ) : (
                     <FieldControl
