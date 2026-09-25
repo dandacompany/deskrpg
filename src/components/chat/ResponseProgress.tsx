@@ -56,7 +56,7 @@ export default function ResponseProgress({
                   role="status"
                 >
                   {active && (
-                    <span className="inline-block size-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="inline-block size-1.5 rounded-full bg-npc animate-pulse" />
                   )}
                   <span>
                     {response.npcName}: {detail}

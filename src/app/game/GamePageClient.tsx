@@ -3033,9 +3033,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
               onClick={() => openChannelSettings("gateway")}
               title={t(channel?.hasGateway ? "game.aiGateway" : "game.gatewayConnect")}
               aria-label={t(channel?.hasGateway ? "game.aiGateway" : "game.gatewayConnect")}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-sky-500/10 border border-sky-400/20 text-caption text-sky-700 hover:bg-sky-500/20"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-info/10 border border-info/20 text-caption text-info hover:bg-info/20"
             >
-              <span className="w-2 h-2 rounded-full bg-sky-300" />
+              <span className="w-2 h-2 rounded-full bg-info" />
               <span className="header-full-label">{t("game.aiGateway")}</span>
               <span className="header-mobile-label" aria-hidden="true">
                 AI
@@ -3046,9 +3046,9 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
               onClick={() => openChannelSettings("gateway")}
               title={t(channel?.hasGateway ? "game.aiGateway" : "game.gatewayConnect")}
               aria-label={t(channel?.hasGateway ? "game.aiGateway" : "game.gatewayConnect")}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-400/20 text-caption text-amber-700 hover:bg-amber-500/20"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-npc/10 border border-npc/20 text-caption text-npc-dark hover:bg-npc/20"
             >
-              <span className="w-2 h-2 rounded-full bg-amber-300" />
+              <span className="w-2 h-2 rounded-full bg-npc" />
               <span className="header-full-label">{t("game.gatewayConnect")}</span>
               <span className="header-mobile-label" aria-hidden="true">
                 AI +
@@ -3062,7 +3062,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             aria-label={t("workspace.people")}
           >
             <span className="flex items-center gap-1.5 rounded-md border border-border bg-surface-raised px-2.5 py-1 text-caption text-text-secondary">
-              <span className="h-2 w-2 rounded-full bg-sky-400" />
+              <span className="h-2 w-2 rounded-full bg-info" />
               <span className="header-full-label">
                 {t("game.playersOnlineCount", { count: channelPlayers.length })}
               </span>
@@ -3071,7 +3071,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
               </span>
             </span>
             <span className="flex items-center gap-1.5 rounded-md border border-border bg-surface-raised px-2.5 py-1 text-caption text-text-secondary">
-              <span className="h-2 w-2 rounded-full bg-violet-400" />
+              <span className="h-2 w-2 rounded-full bg-meeting" />
               <span className="header-full-label">
                 {t("game.npcsAtWorkCount", {
                   count: rosterNpcs.filter((npc) => npc.active).length,

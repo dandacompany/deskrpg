@@ -70,11 +70,11 @@ export default function NpcDialog({
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 flex justify-center pointer-events-none">
       <div className="w-full max-w-[800px] pointer-events-auto">
-        <div className="bg-bg border-t-2 border-x-2 border-amber-500 rounded-t-lg shadow-2xl">
+        <div className="bg-bg border-t-2 border-x-2 border-npc rounded-t-lg shadow-2xl">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-surface rounded-t-lg">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-amber-700 flex items-center justify-center text-white font-bold text-lg">
+              <div className="w-10 h-10 rounded-full bg-npc-dark flex items-center justify-center text-white font-bold text-lg">
                 {npcName[0]}
               </div>
               <span className="text-npc font-bold text-lg">{npcName}</span>
@@ -110,7 +110,7 @@ export default function NpcDialog({
                     >
                       {msg.role === "npc" ? <MarkdownContent content={msg.content} /> : msg.content}
                       {msg.role === "npc" && isStreaming && i === messages.length - 1 && (
-                        <span className="inline-block w-1.5 h-4 bg-amber-400 ml-0.5 animate-pulse" />
+                        <span className="inline-block w-1.5 h-4 bg-npc ml-0.5 animate-pulse" />
                       )}
                     </div>
                   </div>
