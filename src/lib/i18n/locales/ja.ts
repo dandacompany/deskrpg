@@ -2796,6 +2796,8 @@ const ja: Record<string, string> = {
     "この画面では提案を処理できません · オフィスマップから開いてください",
   "notice.cardProposal.alreadyResolved":
     "この提案はすでに処理されました · かんばんで確認してください",
+  "notice.cardProposal.upgradeRequired":
+    "この提案を処理するには、ゲートウェイの DeskRPG プラグインを更新してください",
   "notice.cardProposal.assigneeDropped": "担当者なしでカードを作成しました",
   "notice.cardProposal.inlineFollowUp": "この件はカードにせず、ここで進めてください。",
   // Kanban (T8)

@@ -2763,6 +2763,8 @@ const ko: Record<string, string> = {
   "notice.cardProposal.unavailable":
     "이 화면에서는 제안을 처리할 수 없습니다 · 오피스 맵에서 열어 주세요",
   "notice.cardProposal.alreadyResolved": "이 제안은 이미 처리됐습니다 · 칸반에서 확인해 주세요",
+  "notice.cardProposal.upgradeRequired":
+    "이 제안을 처리하려면 게이트웨이의 DeskRPG 플러그인을 업데이트해야 합니다",
   "notice.cardProposal.assigneeDropped": "담당 직원 없이 카드를 만들었습니다",
   "notice.cardProposal.inlineFollowUp": "이 건은 카드로 만들지 않고 여기서 바로 진행해 주세요.",
   // Kanban (T8)

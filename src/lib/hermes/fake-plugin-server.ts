@@ -222,6 +222,7 @@ export async function startFakePluginServer(
       "initial_status",
       "kanban_review_policy_v1",
       "event_cursor_handoff",
+      "card_proposals",
     ],
     timezone: "Asia/Seoul",
     kanban: { dispatcher_present: true, attachments: true },

@@ -2781,6 +2781,8 @@ const en: Record<string, string> = {
     "This view cannot act on proposals — open it from the office map.",
   "notice.cardProposal.alreadyResolved":
     "This proposal was already handled · check the kanban board",
+  "notice.cardProposal.upgradeRequired":
+    "Update the DeskRPG plugin on the gateway to handle this proposal",
   "notice.cardProposal.assigneeDropped": "Card created without an assignee",
   "notice.cardProposal.inlineFollowUp": "Let's handle this here instead of making a card.",
   // Kanban (T8)

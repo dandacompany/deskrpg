@@ -22,7 +22,9 @@ import {
   type ResolveDeps,
 } from "@/lib/card-proposals";
 import { parseRoomNotice } from "@/lib/chat-rooms-policy";
-import { cronError } from "@/lib/cron-access";
+import { cronError, hasPluginCapability } from "@/lib/cron-access";
+import { cardProposalsGate } from "@/lib/hermes/plugin-capability";
+import { pluginUpgradeRequired } from "@/lib/hermes/plugin-errors";
 import type { PluginResponse } from "@/lib/hermes/plugin-client-types";
 import {
   resolveAssignee,
@@ -101,6 +103,18 @@ export function liveResolveDeps(): {
     gate: async ({ userId, channelId, choice }) => {
       const gate = await resolveKanbanChannelContext({ userId, channelId });
       if (gate.ok) {
+        // Checked for every choice — both resolve the proposal on the plugin. The cached info is
+        // re-probed once before answering 428, so a just-upgraded gateway is not refused.
+        const upgrade = cardProposalsGate(gate.ctx.info);
+        if (!upgrade.ok && !(await hasPluginCapability(gate.ctx, "card_proposals"))) {
+          const failure = pluginUpgradeRequired(upgrade);
+          return {
+            ok: false,
+            status: 428,
+            code: failure.code,
+            response: cronError(428, failure.code, failure.message, failure.details),
+          };
+        }
         const failure = choice === "card" ? reviewPolicyFailure(gate.ctx) : null;
         if (failure)
           return { ok: false, status: 428, code: "review_policy_required", response: failure };

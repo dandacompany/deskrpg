@@ -163,6 +163,25 @@ test("an already-resolved proposal (409) explains what to do instead of the raw 
   }
 });
 
+test("a plugin too old for proposals says to upgrade instead of showing the code", async () => {
+  for (const locale of LOCALES) {
+    const { host, cleanup } = await render(
+      <CardProposalNotice
+        notice={base}
+        onResolve={() => {}}
+        pending={false}
+        error="plugin_upgrade_required"
+      />,
+      locale,
+    );
+    const line = host.querySelector("[data-testid='card-proposal-error']");
+    assert.ok(line);
+    assert.doesNotMatch(line.textContent!, /plugin_upgrade_required/);
+    assert.doesNotMatch(line.textContent!, /notice\.cardProposal/);
+    await cleanup();
+  }
+});
+
 test("the acceptance condition shows with a label, kept separate from the body", async () => {
   const notice: Proposal = { ...base, body: "청구서를 모은다", acceptance: "표로 정리" };
   for (const locale of LOCALES) {

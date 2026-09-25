@@ -278,6 +278,33 @@ export function swarmGate(
 }
 
 // ---------------------------------------------------------------------------
+// Card proposal gate (plugin 0.11.0)
+// ---------------------------------------------------------------------------
+
+/** Plugin version that added card proposals. For hint text — the verdict uses the capability. */
+export const CARD_PROPOSALS_MIN_VERSION = "0.11.0";
+
+export function supportsCardProposals(info: PluginInfo | null): boolean {
+  return Boolean(info?.capabilities?.includes("card_proposals"));
+}
+
+/**
+ * A proposal can outlive the plugin that raised it (a downgrade, a swapped gateway). Resolving it
+ * then must be a 428 the screen can turn into "upgrade the plugin", not the old plugin's bare 404.
+ */
+export function cardProposalsGate(
+  info: PluginInfo | null,
+): { ok: true } | { ok: false; minVersion: string; reason: string; missing: string[] } {
+  if (supportsCardProposals(info)) return { ok: true };
+  return {
+    ok: false,
+    minVersion: CARD_PROPOSALS_MIN_VERSION,
+    reason: info ? "missing_capability" : "no_info",
+    missing: ["card_proposals"],
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Staff settings picker·clone gate (plugin 0.9.0)
 // ---------------------------------------------------------------------------
 

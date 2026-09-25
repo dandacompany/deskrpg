@@ -2669,6 +2669,7 @@ const zh: Record<string, string> = {
   "notice.cardProposal.acceptanceLabel": "完成条件",
   "notice.cardProposal.unavailable": "此界面无法处理提案 · 请从办公室地图打开",
   "notice.cardProposal.alreadyResolved": "该建议已处理 · 请在看板中查看",
+  "notice.cardProposal.upgradeRequired": "请更新网关上的 DeskRPG 插件后再处理此建议",
   "notice.cardProposal.assigneeDropped": "已在无负责人的情况下创建卡片",
   "notice.cardProposal.inlineFollowUp": "这件事不做成卡片，请在这里直接处理。",
   // Kanban (T8)
