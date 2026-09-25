@@ -121,6 +121,7 @@ import MinutesModal from "@/components/MinutesModal";
 import CronModal from "@/components/cron/CronModal";
 import ArtifactsModal from "@/components/artifacts/ArtifactsModal";
 import ConnectorManagerModal from "@/components/connectors/ConnectorManagerModal";
+import ApprovalPolicyModal from "@/components/approvals/ApprovalPolicyModal";
 import SkillManagerModal from "@/components/skills/SkillManagerModal";
 import type { SourceTarget } from "@/components/artifacts/artifact-view-model";
 import { createArtifactsApi } from "@/components/artifacts/artifacts-api";
@@ -373,6 +374,11 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     npcId: string;
     npcName: string;
     server?: string;
+  } | null>(null);
+  /** The employee whose unattended run policy modal is open — opened from the [Connectors] tab. */
+  const [approvalPolicyNpc, setApprovalPolicyNpc] = useState<{
+    npcId: string;
+    npcName: string;
   } | null>(null);
   // The report queue — derived from office notices. Only acknowledgment points are kept in the browser (`reportAckKey`).
   const [reportAck, setReportAck] = useState<ReportAck>(EMPTY_REPORT_ACK);
@@ -2790,6 +2796,14 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
               (dialogNpc?.npcId === npcId ? dialogNpc.npcName : ""),
           })
         }
+        onOpenApprovalPolicy={(npcId) =>
+          setApprovalPolicyNpc({
+            npcId,
+            npcName:
+              rosterNpcs.find((npc) => npc.id === npcId)?.name ??
+              (dialogNpc?.npcId === npcId ? dialogNpc.npcName : ""),
+          })
+        }
         onCreateTaskFromChat={(draft) => {
           if (!channelId) return;
           setChatTaskDraft({ ...draft, channelId, seq: Date.now() });
@@ -3596,6 +3610,15 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
             .filter((npc) => npc.active && npc.id !== connectorManagerNpc.npcId)
             .map((npc) => ({ npcId: npc.id, name: npc.name }))}
           onClose={() => setConnectorManagerNpc(null)}
+        />
+      )}
+
+      {approvalPolicyNpc && channelId && (
+        <ApprovalPolicyModal
+          channelId={channelId}
+          npcId={approvalPolicyNpc.npcId}
+          npcName={approvalPolicyNpc.npcName}
+          onClose={() => setApprovalPolicyNpc(null)}
         />
       )}
 

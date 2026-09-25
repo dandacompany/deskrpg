@@ -3363,6 +3363,40 @@ const zh: Record<string, string> = {
     "此服务器会运行命令：{command}。接收员工的 Hermes 主机上也会运行同样的命令。",
   "connectors.copy.stdioConfirm": "我已了解此命令也会在接收员工的主机上运行",
   // --- /connectors: add · oauth · copy ---
+  // --- approval-policy ---
+  "approvalPolicy.title": "{name} · 无人值守运行策略",
+  "approvalPolicy.open": "运行策略",
+  "approvalPolicy.intro":
+    "定时任务和看板卡片会在无人值守时运行。请在此决定遇到危险命令时是阻止还是允许。",
+  "approvalPolicy.readOnly": "只有网关所有者可以更改",
+  "approvalPolicy.sharedWarning": "也会应用到雇用了该员工的其他 {n} 个频道",
+  "approvalPolicy.workerPropagationOff":
+    "阻止通知需要开启工作进程传播。目前命令被阻止时不会发送通知。",
+  "approvalPolicy.cron.title": "定时任务中的危险命令",
+  "approvalPolicy.cron.hint": "当定时任务尝试运行危险命令时",
+  "approvalPolicy.single.title": "看板与单次运行中的危险命令",
+  "approvalPolicy.single.hint": "当看板卡片或单次运行尝试运行危险命令时",
+  "approvalPolicy.mode.deny": "阻止",
+  "approvalPolicy.mode.approve": "允许",
+  "approvalPolicy.approveConfirm":
+    "所有危险命令都将在未经批准的情况下运行。只通过允许列表放行需要的命令更安全。",
+  "approvalPolicy.approveConfirmSubmit": "切换为允许",
+  "approvalPolicy.cancel": "取消",
+  "approvalPolicy.allowlist.title": "允许列表",
+  "approvalPolicy.allowlist.hint": "即使处于阻止状态，这里的规则或命令模式也会运行",
+  "approvalPolicy.allowlist.empty": "允许列表为空",
+  "approvalPolicy.allowlist.placeholder": "规则名称或命令模式",
+  "approvalPolicy.allowlist.add": "添加",
+  "approvalPolicy.allowlist.remove": "从允许列表移除",
+  "approvalPolicy.appliesNext": "从下次运行开始生效。对话中的实时审批会等待 {seconds} 秒。",
+  "approvalPolicy.loading": "加载中…",
+  "approvalPolicy.upgradeRequired": "运行策略需要插件 {version} 或更高版本",
+  "approvalPolicy.gatewayDisconnected": "网关已断开连接。请重新连接后再打开",
+  "approvalPolicy.error.load": "无法加载运行策略",
+  "approvalPolicy.error.action": "未能应用更改。请稍后重试",
+  "approvalPolicy.error.forbidden": "只有网关所有者可以更改",
+  "approvalPolicy.error.invalidEntry": "必须是 1–200 个字符的单行文本",
+  // --- /approval-policy ---
 };
 
 export default zh;

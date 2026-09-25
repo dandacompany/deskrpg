@@ -3514,6 +3514,44 @@ const en: Record<string, string> = {
     "This server runs a command: {command}. The same command will run on each recipient's Hermes host.",
   "connectors.copy.stdioConfirm": "I understand this command will run on the recipients' hosts",
   // --- /connectors: add · oauth · copy ---
+  // --- approval-policy ---
+  "approvalPolicy.title": "{name} · Unattended run policy",
+  "approvalPolicy.open": "Run policy",
+  "approvalPolicy.intro":
+    "Cron jobs and kanban cards run while nobody is watching. Decide here whether dangerous commands are blocked or allowed.",
+  "approvalPolicy.readOnly": "Only the gateway owner can change this",
+  "approvalPolicy.sharedWarning":
+    "Also applies in {n} other channel(s) that hired this staff member",
+  "approvalPolicy.workerPropagationOff":
+    "Blocked-run notices need worker propagation. Right now a blocked command sends no notice.",
+  "approvalPolicy.cron.title": "Dangerous commands in cron jobs",
+  "approvalPolicy.cron.hint": "When a scheduled job tries to run a dangerous command",
+  "approvalPolicy.single.title": "Dangerous commands in kanban and one-shot runs",
+  "approvalPolicy.single.hint":
+    "When a kanban card or one-shot run tries to run a dangerous command",
+  "approvalPolicy.mode.deny": "Block",
+  "approvalPolicy.mode.approve": "Allow",
+  "approvalPolicy.approveConfirm":
+    "All dangerous commands will run without approval. Opening only the commands you need via the allowlist is safer.",
+  "approvalPolicy.approveConfirmSubmit": "Switch to allow",
+  "approvalPolicy.cancel": "Cancel",
+  "approvalPolicy.allowlist.title": "Allowlist",
+  "approvalPolicy.allowlist.hint": "Rules or command patterns listed here run even when blocking",
+  "approvalPolicy.allowlist.empty": "The allowlist is empty",
+  "approvalPolicy.allowlist.placeholder": "Rule name or command pattern",
+  "approvalPolicy.allowlist.add": "Add",
+  "approvalPolicy.allowlist.remove": "Remove from allowlist",
+  "approvalPolicy.appliesNext":
+    "Applies from the next run. Live approvals in conversations wait {seconds} seconds.",
+  "approvalPolicy.loading": "Loading…",
+  "approvalPolicy.upgradeRequired": "The run policy needs plugin {version} or later",
+  "approvalPolicy.gatewayDisconnected":
+    "The gateway is disconnected. Reconnect it and open this again",
+  "approvalPolicy.error.load": "Could not load the run policy",
+  "approvalPolicy.error.action": "Could not apply the change. Try again shortly",
+  "approvalPolicy.error.forbidden": "Only the gateway owner can change this",
+  "approvalPolicy.error.invalidEntry": "Must be a single line of 1–200 characters",
+  // --- /approval-policy ---
 };
 
 export default en;

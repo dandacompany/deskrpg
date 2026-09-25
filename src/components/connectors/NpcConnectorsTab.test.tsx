@@ -98,3 +98,28 @@ test("the manage button opens the manager; a card action opens it on that server
   // A connected server has no action button.
   assert.equal(container.querySelector("[data-testid=connector-action-github]"), null);
 });
+
+test("the run policy button shows for the owner and opens the policy modal", async () => {
+  mockFetch({ [LIST]: view() });
+  let opened = 0;
+  await render(
+    <NpcConnectorsTab
+      channelId="c"
+      npcId="n"
+      onOpenManager={() => {}}
+      onOpenPolicy={() => {
+        opened += 1;
+      }}
+    />,
+  );
+  await click('[data-testid="connectors-open-policy"]');
+  assert.equal(opened, 1);
+});
+
+test("members do not get the run policy button", async () => {
+  mockFetch({ [LIST]: view({ canManage: false }) });
+  await render(
+    <NpcConnectorsTab channelId="c" npcId="n" onOpenManager={() => {}} onOpenPolicy={() => {}} />,
+  );
+  assert.equal(container.querySelector('[data-testid="connectors-open-policy"]'), null);
+});
