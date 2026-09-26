@@ -6,7 +6,7 @@
  * whenever the plugin was bumped and only one side was updated, the screen lied — now both places read
  * the same constant, and `pin.test.ts` checks it against the Python-side literal to prevent drift.
  */
-export const PLUGIN_PIN = "c08f4098895ff0b8401fba584002458498d04afc";
-export const PLUGIN_VERSION = "0.24.2";
+export const PLUGIN_PIN = "893fdaf34396613ca703c2cb6cc2091550b5bfd9";
+export const PLUGIN_VERSION = "0.24.3";
 /** Short form for the screen. There is no room to show the full commit. */
 export const PLUGIN_PIN_SHORT = PLUGIN_PIN.slice(0, 12);
