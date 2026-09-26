@@ -797,6 +797,30 @@ export type ApprovalPolicyApi = {
   removeAllowlist(entry: string, actor: string): Promise<PluginResponse<ApprovalPolicy>>;
 };
 
+/** A question a `deskrpg_ask_user` tool call is waiting on (plugin `ask_user`). */
+export type NpcQuestion = {
+  id: string;
+  /** The Hermes session the asking run belongs to — `GET /v1/runs/{id}` reports the same id. */
+  session_id: string;
+  question: string;
+  choices: string[];
+  allow_other: boolean;
+  created_at: string;
+  /** Whatever DeskRPG registered with the session, echoed back untouched. */
+  context: Record<string, unknown>;
+};
+
+export type AskUserApi = {
+  /** Marks a chat session as having someone to answer. Without it the tool answers "no user" at once. */
+  registerSession(
+    sessionId: string,
+    context: Record<string, unknown>,
+  ): Promise<PluginResponse<{ registered: true }>>;
+  listQuestions(sessionId?: string): Promise<PluginResponse<{ questions: NpcQuestion[] }>>;
+  /** 404 `question_not_found` once answered or gone; 400 `invalid_response` off the list. */
+  answer(questionId: string, response: string): Promise<PluginResponse<{ answered: true }>>;
+};
+
 export type ProfilePluginClient = {
   profileName: string;
   cron: CronApi;
@@ -808,6 +832,8 @@ export type ProfilePluginClient = {
   approvals: ApprovalPolicyApi;
   /** `session_sources` — with an old plugin the call comes back 404 (not `session_not_found`). */
   sessions: SessionApi;
+  /** `ask_user` — with an old plugin the call comes back 404. */
+  askUser: AskUserApi;
 };
 
 export type SessionApi = {

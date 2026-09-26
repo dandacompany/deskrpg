@@ -340,6 +340,16 @@ export class HermesClient {
     return { text: drained.text };
   }
 
+  /**
+   * The Hermes session a run belongs to. It is not the run id: a session key keeps one session across
+   * runs, and plugin tools (`deskrpg_ask_user`) report this id. null when the run is unknown.
+   */
+  async getRunSessionId(runId: string): Promise<string | null> {
+    const res = await this.request(`/v1/runs/${encodeURIComponent(runId)}`, { method: "GET" });
+    const json = (await res.json().catch(() => null)) as { session_id?: unknown } | null;
+    return typeof json?.session_id === "string" && json.session_id ? json.session_id : null;
+  }
+
   async stopRun(runId: string): Promise<void> {
     await this.request(`/v1/runs/${encodeURIComponent(runId)}/stop`, {
       method: "POST",

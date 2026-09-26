@@ -10,6 +10,7 @@ import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
 
 import { db, gatewayResources, hermesProfiles, npcs } from "@/db";
+import { replaceExecute } from "@/lib/adapters/replace-execute";
 import type { AdapterExecuteOptions, NpcAdapter } from "@/lib/adapters/types";
 import { decryptGatewayToken } from "@/lib/gateway-resources";
 import { HermesError } from "@/lib/hermes/hermes-client";
@@ -369,19 +370,7 @@ export function withToolApprovals(
     }
   };
 
-  const wrapped: NpcAdapter = {
-    type: adapter.type,
-    execute,
-    testConnection: (config) => adapter.testConnection(config),
-  };
-  if (adapter.abort) wrapped.abort = (sessionKey) => adapter.abort!(sessionKey);
-  if (adapter.steer) wrapped.steer = (text) => adapter.steer!(text);
-  if (adapter.getSessionSummary)
-    wrapped.getSessionSummary = (sessionKey) => adapter.getSessionSummary!(sessionKey);
-  if (adapter.resetSession)
-    wrapped.resetSession = (sessionKey) => adapter.resetSession!(sessionKey);
-  if (adapter.getConfigSchema) wrapped.getConfigSchema = () => adapter.getConfigSchema!();
-  return wrapped;
+  return replaceExecute(adapter, execute);
 }
 
 /**

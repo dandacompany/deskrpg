@@ -49,6 +49,11 @@ import {
   type FakeApprovalPolicyState,
 } from "./fake-approval-policy-routes";
 import { createFakeMcpState, routeMcp, type FakeMcpState } from "./fake-mcp-routes";
+import {
+  createFakeAskUserState,
+  routeAskUser,
+  type FakeAskUserState,
+} from "./fake-ask-user-routes";
 import { createFakeSkillState, routeSkills, type FakeSkillState } from "./fake-skill-routes";
 import { BLACKBOARD_PREFIX } from "@/components/kanban/kanban-view-model";
 
@@ -143,6 +148,8 @@ export type FakePluginServer = {
   /** What a profile's session read (`session_sources`). `null` removes it — the route then answers
    * 404 `session_not_found`, like a session Hermes has deleted. */
   setSessionSources(profile: string, sessionId: string, body: SessionSources | null): void;
+  /** That profile's `ask_user` state (`fake-ask-user-routes.ts`) — seed questions with `seedQuestion`. */
+  askUser(profile: string): FakeAskUserState;
 };
 
 // ---------------------------------------------------------------------------
@@ -260,6 +267,7 @@ export async function startFakePluginServer(
   let mcpStates = new Map<string, FakeMcpState>();
   let approvalPolicyStates = new Map<string, FakeApprovalPolicyState>();
   let sessionSources = new Map<string, SessionSources>();
+  let askUserStates = new Map<string, FakeAskUserState>();
   let seq = 0;
 
   const nextId = (prefix: string) => `${prefix}_${(seq += 1).toString(36).padStart(4, "0")}`;
@@ -279,6 +287,7 @@ export async function startFakePluginServer(
     mcpStates = new Map();
     approvalPolicyStates = new Map();
     sessionSources = new Map();
+    askUserStates = new Map();
     seq = 0;
   }
 
@@ -296,6 +305,15 @@ export async function startFakePluginServer(
     if (!state) {
       state = createFakeApprovalPolicyState();
       approvalPolicyStates.set(profile, state);
+    }
+    return state;
+  }
+
+  function askUserFor(profile: string): FakeAskUserState {
+    let state = askUserStates.get(profile);
+    if (!state) {
+      state = createFakeAskUserState();
+      askUserStates.set(profile, state);
     }
     return state;
   }
@@ -1787,6 +1805,10 @@ export async function startFakePluginServer(
       if (!body) throw new HttpError(404, { error: "session_not_found" });
       return { status: 200, body };
     }
+    if (info.capabilities?.includes("ask_user")) {
+      const askReply = routeAskUser(askUserFor(profile), req);
+      if (askReply) return askReply;
+    }
     const { method, pathname, params, json } = req;
     const state = cronFor(profile);
     const rest = pathname.replace(/^\/deskrpg\/cron/, "");
@@ -1991,6 +2013,7 @@ export async function startFakePluginServer(
       if (body) sessionSources.set(`${profile}|${sessionId}`, body);
       else sessionSources.delete(`${profile}|${sessionId}`);
     },
+    askUser: askUserFor,
     seedCardProposal: (proposalId) => {
       cardProposals.set(proposalId, {
         resolvedAt: null,

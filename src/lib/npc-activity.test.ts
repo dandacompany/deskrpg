@@ -59,3 +59,10 @@ test("every activity key has text in all four locales", () => {
   }
   assert.deepEqual(missing, []);
 });
+
+test("a question for the user reads as asking you, not a teammate", () => {
+  for (const tool of ["clarify", "deskrpg_ask_user"])
+    assert.deepEqual(describeActivity(tool), { key: "npc.activity.askingYou" }, tool);
+  assert.deepEqual(describeActivity("delegate_task"), { key: "npc.activity.askingAround" });
+  assert.deepEqual(describeActivity("a2a_send"), { key: "npc.activity.askingAround" });
+});

@@ -33,6 +33,7 @@ import type {
   EventsApi,
   ApprovalPolicyApi,
   SessionApi,
+  AskUserApi,
   KanbanApi,
   McpAdminApi,
   OwnerPluginClient,
@@ -686,5 +687,20 @@ export function createProfilePluginClient(
     sources: (sessionId) => call(`${prof}/sessions/${seg(sessionId)}/sources`, token),
   };
 
-  return { profileName: input.profileName, cron, skills, mcp, approvals, sessions };
+  const askUser: AskUserApi = {
+    registerSession: (sessionId, context) =>
+      call(`${prof}/ask-user/sessions`, token, {
+        method: "POST",
+        body: { session_id: sessionId, context },
+      }),
+    listQuestions: (sessionId) =>
+      call(`${prof}/questions${query({ session_id: sessionId })}`, token),
+    answer: (questionId, response) =>
+      call(`${prof}/questions/${seg(questionId)}/answer`, token, {
+        method: "POST",
+        body: { response },
+      }),
+  };
+
+  return { profileName: input.profileName, cron, skills, mcp, approvals, sessions, askUser };
 }

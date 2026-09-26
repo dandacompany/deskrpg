@@ -234,3 +234,32 @@ test("a shared user has no 'Configure'", async () => {
     await unmount();
   }
 });
+
+test("clarify is hidden and left out of the enabled list — NPCs ask with question cards instead", async () => {
+  const f = stubFetch({
+    "/toolsets": {
+      ...TOOLSETS,
+      toolsets: [
+        ...TOOLSETS.toolsets,
+        {
+          name: "clarify",
+          label: "❓ Clarifying Questions",
+          description: "",
+          enabled: true,
+          configured: true,
+        },
+      ],
+    },
+    "/skills": SKILLS,
+  });
+  const loaded: unknown[] = [];
+  const { host, unmount } = await mount({ onLoaded: (v) => loaded.push(v) });
+  try {
+    assert.ok(!host.querySelector('input[data-toolset="clarify"]'));
+    assert.deepEqual(loaded, [{ enabledToolsets: ["web"], disabledSkills: ["pdf"] }]);
+    assert.ok(host.querySelector("[data-clarify-note]"));
+  } finally {
+    await unmount();
+    f.restore();
+  }
+});

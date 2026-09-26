@@ -29,6 +29,7 @@ import CronPanel, { type CronEventSource } from "./cron/CronPanel";
 import RoomNoticeMessage from "./chat/RoomNoticeMessage";
 import NpcCardsTab from "./chat/NpcCardsTab";
 import ToolApprovalStack from "./approvals/ToolApprovalCard";
+import NpcQuestionStack from "./npc-question/NpcQuestionStack";
 import type { ToolApprovalSocket } from "./approvals/use-tool-approvals";
 import NpcConnectorsTab from "./connectors/NpcConnectorsTab";
 import NpcSkillsTab from "./skills/NpcSkillsTab";
@@ -944,6 +945,7 @@ export default function ChatPanel({
                     npcNames={{ [dialogNpc.npcId]: dialogNpc.npcName }}
                   />
                 )}
+                {dialogNpc && <NpcQuestionStack socket={approvalSocket} npcId={dialogNpc.npcId} />}
                 {npcActivityKey && !npcResponses.some(isActiveChatResponse) && (
                   <div
                     className="flex items-center gap-2 px-3 pb-1 text-xs text-text-dim"
