@@ -44,12 +44,49 @@ function stripCommandRuns(text: string, command: string): string {
   return out;
 }
 
-export function redactApprovalSummary(raw: string, command: string): string | null {
+/** Hermes' fixed wording for an untrusted MCP write (`tools/mcp_tool_handlers.py` `_trust_gate_check`). */
+const MCP_REQUEST = /MCP tool '([^']{1,64})' on (?:UNTRUSTED )?server '([^']{1,64})'/i;
+const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+function looksSecret(value: string): boolean {
+  return SECRET_PATTERNS.some((pattern) => new RegExp(pattern.source, pattern.flags).test(value));
+}
+
+/**
+ * The tool and server names of an MCP approval. The approval event carries no structured field
+ * for them, so they come from Hermes' wording. A name that is not a plain identifier or looks like
+ * a secret is left out, so it is redacted like the rest of the command.
+ */
+export function mcpApprovalNames(command: string): string[] {
+  const match = MCP_REQUEST.exec(command);
+  if (!match) return [];
+  return [match[1], match[2]].filter((name) => SAFE_NAME.test(name) && !looksSecret(name));
+}
+
+export function redactApprovalSummary(
+  raw: string,
+  command: string,
+  /** Names that stay even though they appear in the command (an MCP request's tool and server). */
+  allowed: readonly string[] = [],
+): string | null {
   let text = raw.split(/\r?\n/).find((line) => line.trim()) ?? "";
   text = text.replace(/`[^`]*`/g, " … ").replace(/https?:\/\/\S+/gi, " … ");
   // Secrets first: stripping part of the command first could cut a key in half and leave its prefix.
   for (const pattern of SECRET_PATTERNS) text = text.replace(pattern, " … ");
-  text = stripCommandRuns(text, command);
+  // Allowed names are taken out of both texts before the command runs are stripped, then put back.
+  const kept = [...allowed].sort((a, b) => b.length - a.length);
+  const slot = (i: number) => `\u0000${i}\u0000`;
+  let source = command;
+  kept.forEach((name, i) => {
+    text = text.split(name).join(slot(i));
+    source = source.split(name).join(slot(i));
+  });
+  text = stripCommandRuns(text, source);
+  kept.forEach((name, i) => {
+    text = text.split(slot(i)).join(name);
+  });
+  // A stripped run can cut a placeholder in half; never leave its pieces behind.
+  text = text.replace(/\u0000\d*/g, " … ");
   text = text
     .replace(/(?:\s*…\s*)+/g, " … ")
     .replace(/\s+/g, " ")
@@ -112,7 +149,8 @@ export function createApprovalSummarizer(deps: {
         }),
         timedOut,
       ]);
-      return reply ? redactApprovalSummary(reply, req.command) : null;
+      const allowed = req.kind === "mcp" ? mcpApprovalNames(req.command) : [];
+      return reply ? redactApprovalSummary(reply, req.command, allowed) : null;
     } catch {
       return null;
     } finally {
