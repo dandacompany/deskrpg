@@ -3000,6 +3000,7 @@ const zh: Record<string, string> = {
   "kanban.move.success": "已按服务器状态将 {title} 移动到{column}。",
   "kanban.move.reconciled": "已保存 {title} 的移动并与最新看板同步。",
   "kanban.move.failed": "无法移动 {title}：{error}",
+  "kanban.move.invalidTransition": "{title} 无法从当前状态移动到 {column}。",
   "kanban.move.unconfirmed": "{title} 的移动已保存，但无法确认最新状态。",
   "kanban.move.retryRead": "重新确认",
   "kanban.review.reason.human_review_required": "人工确认结果后即可完成。",

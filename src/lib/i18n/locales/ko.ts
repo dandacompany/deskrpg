@@ -3117,6 +3117,7 @@ const ko: Record<string, string> = {
   "kanban.move.success": "{title} 카드가 서버 상태에 따라 {column}(으)로 이동했습니다.",
   "kanban.move.reconciled": "{title} 카드 이동을 저장했고 최신 보드와 동기화했습니다.",
   "kanban.move.failed": "{title} 카드 이동 실패: {error}",
+  "kanban.move.invalidTransition": "{title} 카드는 지금 상태에서 {column}(으)로 옮길 수 없습니다.",
   "kanban.move.unconfirmed": "{title} 카드 이동은 저장됐지만 최신 상태를 확인하지 못했습니다.",
   "kanban.move.retryRead": "다시 확인",
   "kanban.review.reason.human_review_required": "사람이 결과를 확인하면 완료할 수 있습니다.",
