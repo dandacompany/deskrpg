@@ -55,6 +55,8 @@ type LoadResult = {
   errorBody: Body | null;
 };
 
+const HIDDEN_TOOLSETS: ReadonlySet<string> = new Set(["clarify"]);
+
 const EMPTY = { toolsets: [] as ToolsetRow[], skills: [] as SkillRow[], errorBody: null };
 
 /** Flows as an error when the body isn't a JSON object (an HTML error page, empty body,
@@ -130,9 +132,12 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
         return;
       }
       const [toolsetBody, skillBody] = bodies;
-      const toolsets = Array.isArray(toolsetBody.toolsets)
+      const listed = Array.isArray(toolsetBody.toolsets)
         ? (toolsetBody.toolsets as ToolsetRow[])
         : [];
+      // clarify can't work in chat: Hermes' api_server has no way to deliver its question. NPCs ask
+      // with deskrpg_ask_user instead, so the switch is hidden — and dropped from the saved list.
+      const toolsets = listed.filter((ts) => !HIDDEN_TOOLSETS.has(ts.name));
       const skills = Array.isArray(skillBody.skills) ? (skillBody.skills as SkillRow[]) : [];
       setResult({ key: loadKey, phase: "ok", toolsets, skills, errorBody: null });
       callbacks.current.onLoaded?.(initialSelection(toolsets, skills));
@@ -182,6 +187,9 @@ export default function ToolsetSkillPicker(props: ToolsetSkillPickerProps): JSX.
         <legend className="px-1 text-xs font-semibold text-text">
           {t("hermes.picker.toolsets")}
         </legend>
+        <p className="text-xs text-text-dim" data-clarify-note>
+          {t("hermes.picker.clarifyNote")}
+        </p>
         {toolsets.map((ts) => {
           const configurable = Boolean(props.canManageToolProviders && ts.hasProviders);
           const configured = configuredNow[ts.name] ?? ts.configured;

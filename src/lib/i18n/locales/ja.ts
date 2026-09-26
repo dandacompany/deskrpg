@@ -365,6 +365,8 @@ const ja: Record<string, string> = {
   "hermes.plugin.locked.unknown":
     "プラグインの状態を確認できません。ゲートウェイ接続を再テストしてください。",
   "hermes.picker.toolsets": "使用するツール",
+  "hermes.picker.clarifyNote":
+    "NPC が確認を必要とするときは、会話に選択肢カードで尋ねます（Hermes の clarify ツールは会話で動かないため非表示です）。",
   "hermes.picker.skills": "使用するスキル",
   "hermes.picker.loading": "読み込み中…",
   "hermes.picker.loadFailed": "一覧を読み込めませんでした。",

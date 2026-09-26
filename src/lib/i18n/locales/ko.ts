@@ -357,6 +357,8 @@ const ko: Record<string, string> = {
   "hermes.plugin.locked.unknown":
     "플러그인 상태를 확인할 수 없습니다. 게이트웨이 연결을 다시 테스트하세요.",
   "hermes.picker.toolsets": "사용할 도구",
+  "hermes.picker.clarifyNote":
+    "NPC 가 확인이 필요하면 대화창에 선택지 카드로 묻습니다(Hermes 의 clarify 도구는 대화에서 작동하지 않아 숨겼습니다).",
   "hermes.picker.skills": "사용할 스킬",
   "hermes.picker.loading": "목록을 불러오는 중…",
   "hermes.picker.loadFailed": "목록을 불러오지 못했습니다.",

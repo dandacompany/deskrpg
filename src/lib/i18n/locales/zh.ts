@@ -333,6 +333,8 @@ const zh: Record<string, string> = {
   "hermes.plugin.locked.absent": "此网关主机上未安装 deskrpg 插件。",
   "hermes.plugin.locked.unknown": "无法确认插件状态，请重新测试网关连接。",
   "hermes.picker.toolsets": "可用工具",
+  "hermes.picker.clarifyNote":
+    "NPC 需要确认时，会在对话中用选项卡片提问（Hermes 的 clarify 工具在对话中无法工作，因此已隐藏）。",
   "hermes.picker.skills": "可用技能",
   "hermes.picker.loading": "加载中…",
   "hermes.picker.loadFailed": "无法加载列表。",

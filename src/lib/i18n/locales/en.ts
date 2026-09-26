@@ -359,6 +359,8 @@ const en: Record<string, string> = {
   "hermes.plugin.locked.unknown":
     "Couldn't determine plugin status. Re-test the gateway connection.",
   "hermes.picker.toolsets": "Tools",
+  "hermes.picker.clarifyNote":
+    "When an NPC needs to check something, it asks with a choice card in the chat (Hermes' clarify tool doesn't work in chat, so it's hidden).",
   "hermes.picker.skills": "Skills",
   "hermes.picker.loading": "Loading…",
   "hermes.picker.loadFailed": "Could not load the lists.",
