@@ -108,6 +108,8 @@ export async function installGameFixture(
           rows: [],
           counts: { awaiting_approval: 0, blocked: 0, review: 0, total: 0 },
         });
+      // Report acknowledgments live on the server; an empty record means nothing acknowledged and nothing to import.
+      if (path === `${root}/report-acks`) return json(route, { ack: { through: null, ids: [] } });
       if (path === `${root}/automation/status`)
         return json(route, {
           pluginStatus: "ready",
