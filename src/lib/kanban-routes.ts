@@ -330,11 +330,19 @@ export async function createTask(req: NextRequest, channelId: string) {
   const assignee = await resolveAssigneeField(ctx, body);
   if (!assignee.ok) return assignee.response;
 
-  if (!supportsReviewPolicy(ctx.info)) return reviewPolicyRequired();
-  const review = await resolveReviewPolicy(ctx, body, assignee.assignee);
-  if (!review.ok) return review.response;
+  // Upstream Hermes enforces no completion policy (decision 0017): create the card the way Hermes' own
+  // dashboard does, without one. Only a request that explicitly asks for a policy is refused — dropping
+  // it silently would make the caller believe the card needs approval.
+  let reviewPolicy: KanbanReviewPolicy | undefined;
+  if (supportsReviewPolicy(ctx.info)) {
+    const review = await resolveReviewPolicy(ctx, body, assignee.assignee);
+    if (!review.ok) return review.response;
+    reviewPolicy = review.policy;
+  } else if (body.reviewPolicy !== undefined) {
+    return reviewPolicyRequired();
+  }
   const task: CreateTaskBody = {
-    review_policy: review.policy,
+    ...(reviewPolicy ? { review_policy: reviewPolicy } : {}),
     title,
     ...pickTaskFields(body),
     ...(typeof assignee.assignee === "string" ? { assignee: assignee.assignee } : {}),
@@ -700,9 +708,9 @@ async function resolveSwarmWorkerPolicy(
 }
 
 /**
- * Swarm — the plugin assembles it so every result card (workers, verifier, synthesizer) carries an approval
- * policy and the structure root carries none. Without `swarm_review_policy` new swarms stay refused (428):
- * Hermes' own `create_swarm` would leave the result cards unapproved. Existing swarm reads are kept.
+ * Swarm — on a policy-aware gateway the plugin assembles it so every result card (workers, verifier,
+ * synthesizer) carries an approval policy and the structure root carries none. Without those contracts it
+ * goes through Hermes' own `create_swarm`, whose result cards complete without approval — the board says so.
  */
 export async function createSwarm(req: NextRequest, channelId: string) {
   const resolved = await resolve(req, channelId);
@@ -715,18 +723,20 @@ export async function createSwarm(req: NextRequest, channelId: string) {
     const failure = pluginUpgradeRequired(gate);
     return cronError(428, failure.code, failure.message, failure.details);
   }
-  if (!supportsReviewPolicy(ctx.info)) return reviewPolicyRequired();
-  if (!supportsSwarmReviewPolicy(ctx.info)) {
+  const body = await readJsonObject(req);
+  if (!body) return invalidBody("body must be a JSON object");
+  // Without the policy contracts the swarm goes through Hermes' public create_swarm with no policy
+  // (decision 0017) — unless the request explicitly asks for one, which is refused rather than dropped.
+  const policyAware = supportsReviewPolicy(ctx.info) && supportsSwarmReviewPolicy(ctx.info);
+  if (!policyAware && body.reviewPolicy !== undefined) {
+    if (!supportsReviewPolicy(ctx.info)) return reviewPolicyRequired();
     return cronError(
       428,
       "swarm_review_policy_unsupported",
-      "New team tasks require a policy-aware Hermes swarm contract",
+      "Approval policies for team tasks require a policy-aware Hermes swarm contract",
       { minVersion: SWARM_REVIEW_POLICY_MIN_VERSION, missing: [SWARM_REVIEW_POLICY_CAPABILITY] },
     );
   }
-
-  const body = await readJsonObject(req);
-  if (!body) return invalidBody("body must be a JSON object");
   const goal = typeof body.goal === "string" ? body.goal.trim() : "";
   if (!goal) return invalidBody("goal is required");
   const workers = parseSwarmWorkers(body.workers);
@@ -750,8 +760,12 @@ export async function createSwarm(req: NextRequest, channelId: string) {
   if (!verifier.ok) return verifier.response;
   const synthesizer = await resolveAssignee(ctx, body.synthesizerNpcId);
   if (!synthesizer.ok) return synthesizer.response;
-  const policy = await resolveSwarmWorkerPolicy(ctx, body.reviewPolicy, workerProfiles);
-  if (!policy.ok) return policy.response;
+  let workerPolicy: KanbanReviewPolicy | undefined;
+  if (policyAware) {
+    const policy = await resolveSwarmWorkerPolicy(ctx, body.reviewPolicy, workerProfiles);
+    if (!policy.ok) return policy.response;
+    workerPolicy = policy.policy;
+  }
 
   const res = await ctx.client.kanban.createSwarm(ctx.boardSlug, {
     goal,
@@ -763,7 +777,7 @@ export async function createSwarm(req: NextRequest, channelId: string) {
     })),
     verifier: verifier.profileName,
     synthesizer: synthesizer.profileName,
-    review_policy: policy.policy,
+    ...(workerPolicy ? { review_policy: workerPolicy } : {}),
     ...(typeof body.idempotencyKey === "string" ? { idempotency_key: body.idempotencyKey } : {}),
   });
   if (!res.ok) return pluginFailureResponse(res);

@@ -1,4 +1,4 @@
-import { reviewPolicyFailure } from "@/lib/kanban-access";
+import { defaultReviewPolicy } from "@/lib/kanban-access";
 /**
  * The **real wiring** for card proposal resolution. Judgment lives in `card-proposals.ts`;
  * this file fills its `ResolveDeps` holes with the DB and the plugin client.
@@ -100,7 +100,7 @@ export function liveResolveDeps(): {
 } {
   let gated: KanbanChannelContext | null = null;
   const deps: ResolveDeps<KanbanChannelContext> = {
-    gate: async ({ userId, channelId, choice }) => {
+    gate: async ({ userId, channelId }) => {
       const gate = await resolveKanbanChannelContext({ userId, channelId });
       if (gate.ok) {
         // Checked for every choice — both resolve the proposal on the plugin. The cached info is
@@ -115,9 +115,6 @@ export function liveResolveDeps(): {
             response: cronError(428, failure.code, failure.message, failure.details),
           };
         }
-        const failure = choice === "card" ? reviewPolicyFailure(gate.ctx) : null;
-        if (failure)
-          return { ok: false, status: 428, code: "review_policy_required", response: failure };
         gated = gate.ctx;
         return { ok: true, ctx: gate.ctx };
       }
@@ -160,7 +157,7 @@ export function liveResolveDeps(): {
         ctx.boardSlug,
         {
           title: task.title,
-          review_policy: { version: 1, mode: "human", reviewer_profile: null },
+          ...(defaultReviewPolicy(ctx) ? { review_policy: defaultReviewPolicy(ctx) } : {}),
           ...(body ? { body } : {}),
           ...(task.assignee ? { assignee: task.assignee } : {}),
         },
