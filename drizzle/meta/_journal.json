@@ -155,6 +155,13 @@
       "when": 1790060254326,
       "tag": "0021_event_carrier_handoff",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790423350178,
+      "tag": "0022_conversation_reads",
+      "breakpoints": true
     }
   ]
 }

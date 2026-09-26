@@ -727,3 +727,21 @@ export const npcPanelReads = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.npcId, t.tab] })],
 );
+
+// How far a user has read each conversation (room · 1:1 DM) and which reports they acknowledged.
+// DeskRPG owns these messages, so this is not a Hermes copy. `targetId` is a room id, an NPC id or
+// (for `report`) a channel id — polymorphic, hence no FK on it. `readAt` only moves forward.
+export const conversationReads = pgTable(
+  "conversation_reads",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 8 }).notNull(), // "room" | "dm" | "report"
+    targetId: uuid("target_id").notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }).notNull(),
+    // For `report`: ids acknowledged one by one after `readAt` (JSON array). NULL otherwise.
+    seenIds: text("seen_ids"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.kind, t.targetId] })],
+);

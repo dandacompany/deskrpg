@@ -767,6 +767,21 @@ const npcPanelReads = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.npcId, t.tab] })],
 );
 
+// How far a user has read each conversation. Must have the same column set as conversationReads on the PG side.
+const conversationReads = sqliteTable(
+  "conversation_reads",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // "room" | "dm" | "report"
+    targetId: text("target_id").notNull(),
+    readAt: text("read_at").notNull(),
+    seenIds: text("seen_ids"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.kind, t.targetId] })],
+);
+
 module.exports = {
   users,
   characters,
@@ -798,4 +813,5 @@ module.exports = {
   approvals,
   approvalTargets,
   npcPanelReads,
+  conversationReads,
 };

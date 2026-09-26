@@ -36,6 +36,10 @@ const { ensureNpcPanelReads } = require("./sqlite-npc-panel-reads.js") as {
   ensureNpcPanelReads: (sqlite: BetterSqlite3.Database) => void;
 };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
+const { ensureConversationReads } = require("./sqlite-conversation-reads.js") as {
+  ensureConversationReads: (sqlite: BetterSqlite3.Database) => void;
+};
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { dropLegacyTaskTables } = require("./sqlite-legacy-tasks-drop.js") as {
   dropLegacyTaskTables: (sqlite: BetterSqlite3.Database) => void;
 };
@@ -107,6 +111,7 @@ export const chatRoomMembers = activeSchema.chatRoomMembers;
 export const chatRoomMessages = activeSchema.chatRoomMessages;
 // Per-tab read state for the staff panel (read/written by src/lib/npc-panel-reads.ts).
 export const npcPanelReads = activeSchema.npcPanelReads;
+export const conversationReads = activeSchema.conversationReads;
 // Origin ledger for Hermes cron jobs created by DeskRPG (read/written by src/lib/cron-origins.ts).
 export const cronJobOrigins = activeSchema.cronJobOrigins;
 
@@ -474,6 +479,8 @@ export function ensureSqliteCompatibility(sqlite: BetterSqlite3.Database) {
   ensureKanbanCronBookkeeping(sqlite);
   // Must come after npcs is set up so the FK can attach. Same order as server-db.js.
   ensureNpcPanelReads(sqlite);
+  // users must exist first for the FK. Same order as server-db.js.
+  ensureConversationReads(sqlite);
   // Moves the board table's PK to a surrogate key (existing DBs only) and creates the
   // project/subproject metadata tables. Must come after the board table, since the
   // rebuild has to happen first for the metadata tables' FKs to have a target.

@@ -15,6 +15,7 @@ const { ensureChatRoomTables } = require("./sqlite-chat-rooms.js");
 const { ensureKanbanCronBookkeeping } = require("./sqlite-kanban-cron-bookkeeping.js");
 const { ensureProjectRegistry } = require("./sqlite-project-registry.js");
 const { ensureNpcPanelReads } = require("./sqlite-npc-panel-reads.js");
+const { ensureConversationReads } = require("./sqlite-conversation-reads.js");
 const { dropLegacyTaskTables } = require("./sqlite-legacy-tasks-drop.js");
 const { retireMapEditor } = require("./sqlite-map-editor-drop.js");
 
@@ -378,6 +379,8 @@ function ensureSqliteCompatibility(sqlite) {
   ensureKanbanCronBookkeeping(sqlite);
   // Must come after npcs is set up so the FK can attach. Same order as index.ts.
   ensureNpcPanelReads(sqlite);
+  // users must exist first for the FK. Same order as index.ts.
+  ensureConversationReads(sqlite);
   // Moves the board table's PK to a surrogate key (existing DBs only) and creates the
   // project/subproject metadata tables. Must come after the board table, since the
   // rebuild has to happen first for the metadata tables' FKs to have a target.

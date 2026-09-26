@@ -19,6 +19,9 @@ export type DmThread = {
   /** The last message used for the list preview. Also shows who said it. */
   lastMessage: { role: "player" | "npc"; content: string };
   lastAt: number;
+  /** The viewer's employee replies after their read point (`conversation_reads`). */
+  unread?: number;
+  readAt?: string | null;
 };
 
 /**

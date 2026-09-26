@@ -17,7 +17,7 @@ import type * as chatRooms from "@/lib/chat-rooms";
 import type { PlayerState } from "./socket-handlers";
 import type { getOrCreateRoomRuntime, invalidateRoomRuntime } from "./room-runtime";
 import { cancelRoomResponse } from "./room-runtime";
-import { broadcastRoomMessage, roomSocketRoom } from "./room-broadcast";
+import { broadcastRoomActivity, broadcastRoomMessage, roomSocketRoom } from "./room-broadcast";
 
 export type RoomErrorCode =
   "forbidden" | "not_found" | "not_open" | "empty" | "cooldown" | "not_joined" | "invalid";
@@ -60,6 +60,8 @@ export type RegisterRoomHandlersArgs = {
     rooms: typeof chatRooms;
     getRuntime: typeof getOrCreateRoomRuntime;
     invalidateRuntime: typeof invalidateRoomRuntime;
+    /** Adds the viewer's unread count and read point to their list. Omitted: the list goes as is. */
+    attachReads?: (userId: string, rooms: RoomSummary[]) => Promise<RoomSummary[]>;
     /** Stops a room reply as this user. Defaults to the live room runtimes. */
     cancelResponse?: typeof cancelRoomResponse;
     now?: () => number;
@@ -113,8 +115,32 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
     cancelResponse = cancelRoomResponse,
     invalidateRuntime,
     now = () => Date.now(),
+    attachReads,
   } = deps;
   const roomIo = io as unknown as RoomIo;
+
+  /** A read-state failure must not take the list down — it goes without badges instead. */
+  async function withReads(list: RoomSummary[]): Promise<RoomSummary[]> {
+    if (!attachReads) return list;
+    try {
+      return await attachReads(user.userId, list);
+    } catch (err) {
+      console.error("[rooms] failed to attach read state", { userId: user.userId }, err);
+      return list;
+    }
+  }
+
+  /** Tells a group room's members about a new line while they have another room open. Best effort. */
+  async function announceActivity(
+    roomId: string,
+    message: Parameters<typeof broadcastRoomMessage>[2],
+  ) {
+    try {
+      broadcastRoomActivity(roomIo, await rooms.roomUserMemberIds(roomId), roomId, message);
+    } catch (err) {
+      console.error("[rooms] failed to announce room activity", { roomId }, err);
+    }
+  }
 
   /** Rooms this socket is currently viewing. `room:send` rejects rooms not in here. */
   const openRooms = new Set<string>();
@@ -207,7 +233,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
         // The client has no way to know its own user id (there's no viewer identity endpoint).
         // This value is needed to tell whether it created the room.
         viewerUserId: user.userId,
-        rooms: await rooms.listRoomsForUser(id, user.userId),
+        rooms: await withReads(await rooms.listRoomsForUser(id, user.userId)),
       });
       // Recent lines are sent along so notices piled up before connecting count in the badge. The client's report
       // queue is derived only from received messages, so without this it stays empty until the room is opened.
@@ -275,6 +301,7 @@ export function registerRoomHandlers({ io, socket, deps }: RegisterRoomHandlersA
         content,
       });
       broadcastRoomMessage(roomIo, id, saved);
+      if (access.room.kind === "group") await announceActivity(id, saved);
 
       // Runtime assembly (DB + adapter resolution) is awaited, but **the NPC's turn is not.**
       // A turn takes tens of seconds, so awaiting here would block the next message.

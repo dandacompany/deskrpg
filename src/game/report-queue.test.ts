@@ -8,6 +8,7 @@ import {
   EMPTY_REPORT_ACK,
   parseReportAck,
   pendingReports,
+  planReportAckLoad,
   serializeReportAck,
 } from "./report-queue";
 
@@ -185,4 +186,19 @@ test("acknowledgments accumulate per report and are saved and restored", () => {
   );
   assert.deepEqual(ack.ids, ["b"], "같은 건을 두 번 넣지 않는다");
   assert.deepEqual(parseReportAck(serializeReportAck(ack)), ack);
+});
+
+test("loading acks: the server record wins, and a browser leftover is imported once", () => {
+  const server = { through: "2026-09-21T00:00:00.000Z", ids: ["a"] };
+  const local = { through: null, ids: ["b"] };
+  assert.deepEqual(planReportAckLoad(server, EMPTY_REPORT_ACK), { use: server, importLocal: null });
+  assert.deepEqual(planReportAckLoad(server, local), {
+    use: { through: server.through, ids: ["a", "b"] },
+    importLocal: local,
+  });
+  assert.deepEqual(planReportAckLoad(null, local), { use: local, importLocal: local });
+  assert.deepEqual(planReportAckLoad(null, EMPTY_REPORT_ACK), {
+    use: EMPTY_REPORT_ACK,
+    importLocal: null,
+  });
 });

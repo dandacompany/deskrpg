@@ -121,6 +121,33 @@ test("a group room's participants are only that room's NPC members, not every on
   assert.deepEqual(spoke.sort(), ["소피", "하늘"]);
 });
 
+test("an NPC's line in a group room is announced to the room's user members", async () => {
+  const seeded = await seedChannelWithProfiles({ placedActive: 1 });
+  const room = await rooms.createRoom({
+    channelId: seeded.channelId,
+    name: "기획",
+    createdBy: seeded.userId,
+    npcIds: [seeded.npcIds[0]],
+    userIds: [],
+  });
+  const emitted: Emitted[] = [];
+  const deps = injected(seeded.channelId, [
+    { id: seeded.npcIds[0], name: "소피", adapter: mockAdapter("네") },
+  ]);
+  invalidateRoomRuntime(room.id);
+  const runtime = await getOrCreateRoomRuntime(fakeIo(emitted) as never, room, seeded.userId, deps);
+  assert.ok(runtime);
+
+  await runtime.handleHumanMessage("단테", "소식 있어?", "s1");
+  await settle();
+  const [activity] = ev(emitted, `room:activity@user:${seeded.userId}`) as {
+    roomId: string;
+    message: { senderName: string };
+  }[];
+  assert.equal(activity?.roomId, room.id);
+  assert.equal(activity?.message.senderName, "소피");
+});
+
 test("the mention policy (office) wakes only the mentioned NPC", async () => {
   const seeded = await seedChannelWithProfiles({ placedActive: 2 });
   const office = await rooms.ensureOfficeRoom(seeded.channelId, seeded.userId);

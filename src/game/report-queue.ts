@@ -63,6 +63,32 @@ export function serializeReportAck(ack: ReportAck): string {
   return JSON.stringify({ through: ack.through, ids: ack.ids });
 }
 
+function isEmptyAck(ack: ReportAck): boolean {
+  return ack.through === null && ack.ids.length === 0;
+}
+
+/**
+ * First load of a channel's acknowledgments. The server record is the source now; what an older
+ * version left in this browser is imported once (the server merges it) and shown merged right away,
+ * so nothing already dealt with comes back while the import is in flight.
+ */
+export function planReportAckLoad(
+  server: ReportAck | null,
+  local: ReportAck,
+): { use: ReportAck; importLocal: ReportAck | null } {
+  const importLocal = isEmptyAck(local) ? null : local;
+  if (!server) return { use: local, importLocal };
+  if (!importLocal) return { use: server, importLocal: null };
+  const through =
+    server.through && local.through
+      ? server.through >= local.through
+        ? server.through
+        : local.through
+      : (server.through ?? local.through);
+  const ids = [...server.ids, ...local.ids.filter((id) => !server.ids.includes(id))];
+  return { use: { through, ids: ids.slice(-MAX_ACK_IDS) }, importLocal };
+}
+
 /** Acknowledge only this one report. Other reports are not touched. */
 export function acknowledgeReport(ack: ReportAck, messageId: string): ReportAck {
   if (ack.ids.includes(messageId)) return ack;

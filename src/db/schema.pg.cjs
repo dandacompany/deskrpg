@@ -715,6 +715,22 @@ const npcPanelReads = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.npcId, t.tab] })],
 );
 
+// How far a user has read each conversation and which reports they acknowledged. `target_id` is
+// polymorphic (room · NPC · channel), hence no FK on it.
+const conversationReads = pgTable(
+  "conversation_reads",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 8 }).notNull(), // "room" | "dm" | "report"
+    targetId: uuid("target_id").notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }).notNull(),
+    seenIds: text("seen_ids"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.kind, t.targetId] })],
+);
+
 module.exports = {
   users,
   characters,
@@ -746,4 +762,5 @@ module.exports = {
   approvals,
   approvalTargets,
   npcPanelReads,
+  conversationReads,
 };

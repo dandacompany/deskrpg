@@ -1989,6 +1989,7 @@ const ja: Record<string, string> = {
   "workspace.spaces": "スペース",
   "workspace.conversations": "会話",
   "workspace.dmLabel": "{name} との会話",
+  "workspace.unread": "未読 {n}件",
   "workspace.people": "一緒に働く人",
   "workspace.status.available": "会話できます",
   "workspace.state.unknown": "状態を確認できません",

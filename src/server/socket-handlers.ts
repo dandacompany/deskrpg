@@ -109,6 +109,8 @@ import {
   invalidateRoomRuntimesForChannel,
 } from "./room-runtime";
 import * as chatRooms from "@/lib/chat-rooms";
+import { attachDmReads, attachRoomReads, markConversationRead } from "@/lib/conversation-reads";
+import { CONVERSATION_READ_EVENT, parseReadMark } from "@/lib/read-mark";
 import {
   buildMeetingSummaryPrompt,
   parseMeetingOutcome,
@@ -1838,7 +1840,12 @@ export function setupSocketHandlers(io: Server) {
       }
       try {
         const threads = await loadDmThreads(db, { chatMessages }, { characterId });
-        socket.emit("npc:dm-threads", { threads });
+        // The list is still worth drawing without badges if the read state can't be read.
+        const withReads = await attachDmReads(user.userId, characterId, threads).catch((err) => {
+          console.error("[reads] failed to attach dm read state", { characterId }, err);
+          return threads;
+        });
+        socket.emit("npc:dm-threads", { threads: withReads });
       } catch (err) {
         // Failing to draw the list doesn't mean the conversation is gone — don't skip silently; record it.
         console.error("[chat-history] failed to load dm threads", { characterId }, err);
@@ -1862,6 +1869,28 @@ export function setupSocketHandlers(io: Server) {
       );
       if (!tracker?.isActive(requestId)) return;
       tracker.update(requestId, { status: "cancelled" });
+    });
+
+    // "I have seen this room / DM up to here." Only the viewer's own row moves, and only forward;
+    // the viewer's other tabs hear the new point so their badges clear too.
+    socket.on("conversation:read", async (payload: unknown) => {
+      const mark = parseReadMark(payload);
+      if (!mark) return;
+      try {
+        const readAt = await markConversationRead({
+          userId: user.userId,
+          kind: mark.kind,
+          targetId: mark.id,
+          at: mark.at,
+        });
+        io.to(userRoom(user.userId)).emit(CONVERSATION_READ_EVENT, {
+          kind: mark.kind,
+          id: mark.id,
+          readAt,
+        });
+      } catch (err) {
+        console.error("[reads] failed to mark read", { userId: user.userId, kind: mark.kind }, err);
+      }
     });
 
     socket.on("npc:reset-chat", async ({ npcId }: { npcId: string }) => {
@@ -2019,6 +2048,7 @@ export function setupSocketHandlers(io: Server) {
         cooldownMs: CHAT_COOLDOWN_MS,
         getParticipationAccess: getSocketChannelParticipationAccess,
         rooms: chatRooms,
+        attachReads: attachRoomReads,
         // Room runtimes are cached per room — the protocol language belongs to whoever first created the runtime.
         getRuntime: (io, room, userId) =>
           getOrCreateRoomRuntime(io, room, userId, { locale: socketLocale(socket) }),
