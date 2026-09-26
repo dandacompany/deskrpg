@@ -3110,6 +3110,11 @@ const en: Record<string, string> = {
   "kanban.run.end.lost": "Worker stopped responding — reclaimed",
   "kanban.run.end.moved": "Stopped because the card was moved",
   "kanban.run.details": "Details",
+  "kanban.run.made.changedFiles": "Changed files",
+  "kanban.run.made.artifacts": "Result files",
+  "kanban.run.made.checks": "Checks",
+  "kanban.run.made.limitations": "Limitations",
+  "kanban.run.made.other": "Other notes from the worker: {count}",
   "kanban.run.order": "Attempts are ordered by start time.",
   "kanban.run.state.retrying": "Failed {count} times in a row — it will be retried automatically.",
   "kanban.run.state.gaveUp":

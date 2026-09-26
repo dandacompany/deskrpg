@@ -3108,6 +3108,11 @@ const ko: Record<string, string> = {
   "kanban.run.end.lost": "워커 응답이 끊겨 회수됨",
   "kanban.run.end.moved": "카드를 옮겨 멈춤",
   "kanban.run.details": "자세히",
+  "kanban.run.made.changedFiles": "바꾼 파일",
+  "kanban.run.made.artifacts": "결과 파일",
+  "kanban.run.made.checks": "확인한 것",
+  "kanban.run.made.limitations": "한계",
+  "kanban.run.made.other": "작업자가 남긴 기록 {count}개 더",
   "kanban.run.order": "시도 순서는 시작 시각 기준입니다.",
   "kanban.run.state.retrying": "{count}번 연속 실패 · 자동으로 다시 시도합니다.",
   "kanban.run.state.gaveUp":

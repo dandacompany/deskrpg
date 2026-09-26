@@ -191,3 +191,52 @@ test("stopping a running card warns that it will run again", async () => {
     await f.cleanup();
   }
 });
+
+test("an attempt shows what the worker reported about how it made the result", async () => {
+  const ws = "/srv/hermes/kanban/boards/b/workspaces/t1";
+  const f = await renderDrawer(
+    detail({
+      task: { id: "t1", title: "card", status: "done", workspace_path: ws },
+      runs: [
+        {
+          id: "1",
+          status: "done",
+          outcome: "completed",
+          started_at: 100,
+          ended_at: 110,
+          metadata: {
+            changed_files: [`${ws}/draft.md`, "/etc/app.conf"],
+            verification: { file_read_back: true, source_count: 12 },
+            limitations: ["No live prices"],
+            worker_session_id: "s1",
+            included_sections: ["a", "b"],
+          },
+        },
+        { id: "2", status: "done", outcome: "completed", started_at: 200, ended_at: 210 },
+      ],
+    }),
+  );
+  try {
+    const [newest, oldest] = [...f.host.querySelectorAll("[data-attempt]")];
+    assert.equal(newest.querySelector('[data-run-provenance=""]') === null, true);
+    const made = oldest.querySelector('[data-run-provenance=""]');
+    assert.equal(made !== null, true);
+    const files = made!.querySelector('[data-run-provenance="changedFiles"]')?.textContent ?? "";
+    assert.equal(files.includes("draft.md, app.conf"), true);
+    assert.equal(files.includes("/etc"), false);
+    const checks = made!.querySelector('[data-run-provenance="checks"]')?.textContent ?? "";
+    assert.equal(checks.includes("file_read_back ✓ · source_count 12"), true);
+    assert.equal(
+      (made!.querySelector('[data-run-provenance="limitations"]')?.textContent ?? "").includes(
+        "No live prices",
+      ),
+      true,
+    );
+    assert.equal(
+      made!.querySelector('[data-run-provenance="other"]')?.textContent,
+      "Other notes from the worker: 1",
+    );
+  } finally {
+    await f.cleanup();
+  }
+});

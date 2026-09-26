@@ -3139,6 +3139,11 @@ const ja: Record<string, string> = {
   "kanban.run.end.lost": "ワーカーの応答が途絶えて回収",
   "kanban.run.end.moved": "カードの移動で停止",
   "kanban.run.details": "詳細",
+  "kanban.run.made.changedFiles": "変更したファイル",
+  "kanban.run.made.artifacts": "成果ファイル",
+  "kanban.run.made.checks": "確認したこと",
+  "kanban.run.made.limitations": "制約",
+  "kanban.run.made.other": "作業者の記録がほかに {count} 件",
   "kanban.run.order": "試行の順序は開始時刻順です。",
   "kanban.run.state.retrying": "{count} 回連続で失敗 · 自動で再試行します。",
   "kanban.run.state.gaveUp":
