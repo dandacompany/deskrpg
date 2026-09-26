@@ -13,10 +13,15 @@ import type { EngineParticipant } from "@/lib/conversation/types";
 import type { ChatLine } from "@/lib/open-chat-formatter";
 import type { UserContext } from "@/lib/user-context";
 import { decideResponders } from "@/lib/chat-rooms-policy";
-import { appendRoomMessage, recentRoomMessages, roomNpcMemberIds } from "@/lib/chat-rooms";
+import {
+  appendRoomMessage,
+  recentRoomMessages,
+  roomNpcMemberIds,
+  roomUserMemberIds,
+} from "@/lib/chat-rooms";
 import type { RoomRow } from "@/lib/chat-rooms";
 import { resolveNpcAdapter } from "./meeting-discussion";
-import { broadcastRoomMessage } from "./room-broadcast";
+import { broadcastRoomActivity, broadcastRoomMessage } from "./room-broadcast";
 import { getOrCreateCached } from "./promise-cache";
 import {
   adapterRegistry,
@@ -365,6 +370,11 @@ async function createRoomRuntime(
             messageId: message.id,
           });
           broadcastRoomMessage(io, room.id, message);
+          // Members with another room open only hear about it this way. Best effort.
+          if (room.kind === "group")
+            void roomUserMemberIds(room.id)
+              .then((userIds) => broadcastRoomActivity(io, userIds, room.id, message))
+              .catch((err) => console.error("[rooms] failed to announce room activity", err));
           return message.id;
         } catch (error) {
           tracker.update(context.requestId, { status: "failed", error: "persistence_error" });

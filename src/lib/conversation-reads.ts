@@ -13,6 +13,8 @@
 import { and, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
 
 import { chatMessages, chatRoomMessages, conversationReads, db, isPostgres } from "@/db";
+import type { RoomSummary } from "@/lib/chat-rooms-policy";
+import type { DmThread } from "@/lib/dm-threads";
 import { visibleToSql } from "@/lib/room-audience";
 
 export type ReadKind = "room" | "dm";
@@ -163,6 +165,43 @@ export async function dmUnreadCounts(
     )
     .groupBy(chatMessages.npcId);
   return toCounts(rows);
+}
+
+/** The viewer's unread count and read point on each room of their list. First sight sets a baseline. */
+export async function attachRoomReads(
+  userId: string,
+  rooms: RoomSummary[],
+): Promise<RoomSummary[]> {
+  const ids = rooms.map((room) => room.id);
+  await ensureReadBaselines(userId, "room", ids);
+  const [counts, marks] = await Promise.all([
+    roomUnreadCounts(userId, ids),
+    readMarks(userId, "room", ids),
+  ]);
+  return rooms.map((room) => ({
+    ...room,
+    unread: counts.get(room.id) ?? 0,
+    readAt: marks.get(room.id) ?? null,
+  }));
+}
+
+/** The same for the viewer's DM lines. */
+export async function attachDmReads(
+  userId: string,
+  characterId: string,
+  threads: DmThread[],
+): Promise<DmThread[]> {
+  const ids = threads.map((thread) => thread.npcId);
+  await ensureReadBaselines(userId, "dm", ids);
+  const [counts, marks] = await Promise.all([
+    dmUnreadCounts(userId, characterId, ids),
+    readMarks(userId, "dm", ids),
+  ]);
+  return threads.map((thread) => ({
+    ...thread,
+    unread: counts.get(thread.npcId) ?? 0,
+    readAt: marks.get(thread.npcId) ?? null,
+  }));
 }
 
 // ---------------------------------------------------------------------------

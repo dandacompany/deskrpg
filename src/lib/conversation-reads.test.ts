@@ -185,3 +185,19 @@ test("an acknowledgment with no watermark round-trips as null", async () => {
   await acknowledgeReportFor(me.id, channel.id, "m1");
   assert.deepEqual(await loadReportAck(me.id, channel.id), { through: null, ids: ["m1"] });
 });
+
+test("attaching reads to a list sets a baseline on first sight, so old history is not unread", async () => {
+  const { attachRoomReads } = await import("./conversation-reads");
+  const { listRoomsForUser } = await import("./chat-rooms");
+  const { me, channel, room } = await seedRoom();
+  await addRoomMessage({ roomId: room.id, at: T(1) });
+
+  const [first] = await attachRoomReads(me.id, await listRoomsForUser(channel.id, me.id));
+  assert.equal(first.unread, 0);
+  assert.ok(first.readAt);
+
+  await addRoomMessage({ roomId: room.id, at: new Date(Date.now() + 1000).toISOString() });
+  const [second] = await attachRoomReads(me.id, await listRoomsForUser(channel.id, me.id));
+  assert.equal(second.unread, 1);
+  assert.equal(second.readAt, first.readAt);
+});

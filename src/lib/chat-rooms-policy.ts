@@ -170,6 +170,10 @@ export type RoomSummary = {
   lastMessageAt: string | null;
   members: { kind: "user" | "npc"; id: string; name: string }[];
   lastMessage?: RoomPreview;
+  /** The viewer's own read state. Only the list response to that viewer carries it — shared
+   * update notices (`room:updated`) don't, so one member's count never reaches another. */
+  unread?: number;
+  readAt?: string | null;
 };
 
 /** Room policy × mentions → which NPCs answer this message. office(mention) is mentions only; group(members) is everyone, or the mentioned subset if any. */

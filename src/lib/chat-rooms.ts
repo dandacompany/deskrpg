@@ -385,6 +385,15 @@ export async function deleteRoom(roomId: string): Promise<void> {
   await db.delete(chatRooms).where(eq(chatRooms.id, roomId));
 }
 
+/** User members of a group room — who hears about its new lines while another room is open. */
+export async function roomUserMemberIds(roomId: string): Promise<string[]> {
+  const rows = await db
+    .select({ memberId: chatRoomMembers.memberId })
+    .from(chatRoomMembers)
+    .where(and(eq(chatRoomMembers.roomId, roomId), eq(chatRoomMembers.memberKind, "user")));
+  return rows.map((r) => r.memberId);
+}
+
 export async function roomNpcMemberIds(roomId: string): Promise<string[]> {
   const rows = await db
     .select({ memberId: chatRoomMembers.memberId })

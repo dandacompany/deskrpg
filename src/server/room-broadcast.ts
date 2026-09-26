@@ -20,6 +20,23 @@ export function userSocketRoom(userId: string): string {
   return `user:${userId}`;
 }
 
+/**
+ * A group room's new line, for members who have **another** room open. A socket joins only the room
+ * it has open (and the office), so without this the list's preview and unread badge of a group
+ * room stay stale until the list is asked for again. The office never needs it — every socket
+ * listens to it.
+ */
+export function broadcastRoomActivity(
+  io: RoomIo,
+  userIds: readonly string[],
+  roomId: string,
+  message: RoomMessage,
+): void {
+  if (noticeAudience(message.notice)) return;
+  for (const userId of userIds)
+    io.to(userSocketRoom(userId)).emit("room:activity", { roomId, message });
+}
+
 export function broadcastRoomMessage(io: RoomIo, roomId: string, message: RoomMessage): void {
   const audience = noticeAudience(message.notice);
   io.to(audience ? userSocketRoom(audience) : roomSocketRoom(roomId)).emit("room:message", {
