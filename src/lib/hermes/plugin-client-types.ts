@@ -406,6 +406,7 @@ import type {
   KanbanLinksPage,
   KanbanProfileSummary,
   KanbanRunsPage,
+  KanbanStatusTransitionsPage,
   KanbanTask,
   KanbanTaskAction,
   KanbanTaskDetail,
@@ -447,6 +448,11 @@ export type KanbanApi = {
     board: string,
     opts?: { from?: number; to?: number; limit?: number },
   ): Promise<PluginResponse<KanbanRunsPage>>;
+  /** Status transitions in a window — requires capability `kanban_task_events` (404 otherwise). */
+  listStatusTransitions(
+    board: string,
+    opts?: { from?: number; to?: number; limit?: number },
+  ): Promise<PluginResponse<KanbanStatusTransitionsPage>>;
   /**
    * `actor` (a DeskRPG user id) is sent as `X-DeskRPG-Actor`; plugin 0.18.0 records it as the
    * card's `created_by` (`deskrpg:<userId>`) — the person told when an unattended run is blocked.

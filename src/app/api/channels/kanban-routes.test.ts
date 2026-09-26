@@ -62,6 +62,7 @@ after(async () => {
 type Routes = {
   board: typeof import("./[id]/kanban/board/route");
   runs: typeof import("./[id]/kanban/runs/route");
+  events: typeof import("./[id]/kanban/events/route");
   boardAttachments: typeof import("./[id]/kanban/attachments/route");
   tasks: typeof import("./[id]/kanban/tasks/route");
   task: typeof import("./[id]/kanban/tasks/[taskId]/route");
@@ -102,6 +103,7 @@ async function loadRoutes(): Promise<Routes> {
     attachment: await import("./[id]/kanban/attachments/[attachmentId]/route"),
     links: await import("./[id]/kanban/links/route"),
     runs: await import("./[id]/kanban/runs/route"),
+    events: await import("./[id]/kanban/events/route"),
     boardAttachments: await import("./[id]/kanban/attachments/route"),
     dispatch: await import("./[id]/kanban/dispatch/route"),
     settings: await import("./[id]/kanban/settings/route"),
@@ -967,6 +969,7 @@ test("automation status — a summary of plugin, board, polling and in-progress 
     "events",
     "swarm",
     "kanban_views",
+    "kanban_task_events",
     "initial_status",
     "kanban_review_policy_v1",
     "event_cursor_handoff",
@@ -1261,6 +1264,49 @@ test("invalid GET /kanban/runs queries pass the plugin's verdict through", async
   assert.equal(res.status, 400);
 });
 
+test("GET /kanban/events returns status transitions in the window with where each card came from", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const created = await createTask(routes, seed.ownerId, seed.channelId);
+  const taskId = created.body.task.id;
+  for (const status of ["review", "todo"]) {
+    const patched = await routes.task.PATCH(
+      req(seed.ownerId, "PATCH", `${base(seed.channelId)}/tasks/${taskId}`, { status }),
+      ctx(seed.channelId, taskId),
+    );
+    assert.equal(patched.status, 200, JSON.stringify(await patched.clone().json()));
+  }
+
+  const res = await routes.events.GET(
+    req(seed.ownerId, "GET", `${base(seed.channelId)}/events?from=0&to=9999999999`),
+    ctx(seed.channelId),
+  );
+  assert.equal(res.status, 200, JSON.stringify(await res.clone().json()));
+  const body = await res.json();
+  assert.deepEqual(body.window, { from: 0, to: 9999999999 });
+  assert.equal(body.truncated, false);
+  const mine = body.events
+    .filter((e: { task_id: string }) => e.task_id === taskId)
+    .map((e: { from: string | null; to: string }) => [e.from, e.to]);
+  assert.deepEqual(mine.slice(-2), [
+    [created.body.task.status, "review"],
+    ["review", "todo"],
+  ]);
+});
+
+test("invalid GET /kanban/events queries pass the plugin's verdict through", async () => {
+  server.reset();
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+
+  const res = await routes.events.GET(
+    req(seed.ownerId, "GET", `${base(seed.channelId)}/events?from=2000&to=1000`),
+    ctx(seed.channelId),
+  );
+  assert.equal(res.status, 400);
+});
+
 test("bulk reads are 403 for non-members too", async () => {
   server.reset();
   const routes = await loadRoutes();
@@ -1275,6 +1321,11 @@ test("bulk reads are 403 for non-members too", async () => {
       ),
     () =>
       routes.runs.GET(req(stranger.id, "GET", `${base(seed.channelId)}/runs`), ctx(seed.channelId)),
+    () =>
+      routes.events.GET(
+        req(stranger.id, "GET", `${base(seed.channelId)}/events`),
+        ctx(seed.channelId),
+      ),
   ]) {
     assert.equal((await call()).status, 403);
   }

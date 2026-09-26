@@ -357,6 +357,17 @@ export function createOwnerPluginClient(
         })}`,
         token,
       ),
+    listStatusTransitions: (board, opts) =>
+      call(
+        `/deskrpg/kanban/events${query({
+          board,
+          kind: "status",
+          from: opts?.from,
+          to: opts?.to,
+          limit: opts?.limit,
+        })}`,
+        token,
+      ),
     createTask: (board, body, actor) =>
       call(`/deskrpg/kanban/tasks${query({ board })}`, token, {
         method: "POST",

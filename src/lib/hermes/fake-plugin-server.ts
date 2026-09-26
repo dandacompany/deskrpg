@@ -32,6 +32,7 @@ import type {
   KanbanEvent,
   KanbanRun,
   KanbanTimelineRun,
+  KanbanStatusTransition,
   KanbanTaskDetail,
   KanbanTaskFull,
   KanbanTaskStatus,
@@ -219,6 +220,7 @@ export async function startFakePluginServer(
       "events",
       "swarm",
       "kanban_views",
+      "kanban_task_events",
       "initial_status",
       "kanban_review_policy_v1",
       "event_cursor_handoff",
@@ -594,6 +596,58 @@ export async function startFakePluginServer(
     // On hitting the cap, keep the most recent — drop the front.
     const kept = truncated ? rows.slice(rows.length - limit) : rows;
     return { status: 200, body: { runs: kept, board: slug, window: { from, to }, truncated } };
+  }
+
+  /**
+   * `GET /kanban/events?kind=status` — status transitions that happened inside the window (inclusive), oldest
+   * first; on hitting the cap keep the most recent and set `truncated:true`. Same rules as the real plugin.
+   */
+  function listStatusTransitions(board: BoardRecord, params: URLSearchParams): Reply {
+    const slug = params.get("board") ?? "carrier";
+    const kind = params.get("kind") || "status";
+    if (kind !== "status") throw badRequest("invalid_query", "kind");
+    const num = (key: string): number | null => {
+      const raw = params.get(key);
+      if (raw === null || raw === "") return null;
+      const value = Number(raw);
+      if (!Number.isInteger(value)) throw badRequest("invalid_query", key);
+      return value;
+    };
+    const now = Math.floor(Date.now() / 1000);
+    const to = num("to") ?? now;
+    const from = num("from") ?? to - 7 * 24 * 3600;
+    if (from > to) throw badRequest("invalid_query", "from > to");
+    const limitRaw = num("limit");
+    if (limitRaw !== null && limitRaw < 1) throw badRequest("invalid_query", "limit");
+    const limit = Math.min(limitRaw ?? 1000, 5000);
+
+    const rows: KanbanStatusTransition[] = [];
+    let seq = 0;
+    for (const record of board.tasks.values()) {
+      for (const event of record.events) {
+        if (event.kind !== "task.status") continue;
+        const at = Number(event.created_at);
+        if (at < from || at > to) continue;
+        const payload = event.payload as { from?: string | null; to?: string };
+        if (typeof payload.to !== "string") continue;
+        rows.push({
+          id: ++seq,
+          task_id: record.task.id,
+          board: slug,
+          from: payload.from ?? null,
+          to: payload.to,
+          created_at: at,
+          tenant: record.task.tenant ?? null,
+        });
+      }
+    }
+    rows.sort((a, b) => Number(a.created_at) - Number(b.created_at) || a.id - b.id);
+    const truncated = rows.length > limit;
+    const kept = truncated ? rows.slice(rows.length - limit) : rows;
+    return {
+      status: 200,
+      body: { events: kept, board: slug, kind: "status", window: { from, to }, truncated },
+    };
   }
 
   function renderBoard(board: BoardRecord, includeArchived: boolean): KanbanBoard {
@@ -1655,6 +1709,9 @@ export async function startFakePluginServer(
     }
     if (pathname === "/deskrpg/kanban/runs" && method === "GET") {
       return listRuns(boardOf(params), params);
+    }
+    if (pathname === "/deskrpg/kanban/events" && method === "GET") {
+      return listStatusTransitions(boardOf(params), params);
     }
     if (pathname === "/deskrpg/kanban/swarm" && method === "POST") {
       return createSwarm(boardOf(params), body);

@@ -286,6 +286,34 @@ export type KanbanRunsPage = {
   truncated: boolean;
 };
 
+/**
+ * One status transition (`GET /kanban/events?kind=status`, capability `kanban_task_events`).
+ *
+ * `from` is the status the card left — it may come from a transition before the window, and is null when no
+ * earlier status is known. `created_at` is when the transition happened (epoch seconds). `tenant` is absent
+ * for a card that has since been deleted.
+ */
+export type KanbanStatusTransition = {
+  id: number;
+  task_id: string;
+  board: string;
+  /** Hermes status names, passed through — a status DeskRPG has no column for still counts as a transition. */
+  from: string | null;
+  to: string;
+  created_at: PluginTime;
+  tenant?: string | null;
+};
+
+/** Body of `GET /kanban/events?kind=status`. `window` is in epoch seconds, inclusive. */
+export type KanbanStatusTransitionsPage = {
+  events: KanbanStatusTransition[];
+  board: string;
+  kind: "status";
+  window: { from: number; to: number };
+  /** Whether the cap was hit and **only the most recent** remain. */
+  truncated: boolean;
+};
+
 /** Body of `GET /kanban/links`. Only pairs come — the source of truth for card bodies is the board response. */
 export type KanbanLinksPage = {
   links: Array<{ parent_id: string; child_id: string }>;
