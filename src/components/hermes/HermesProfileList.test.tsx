@@ -12,6 +12,9 @@ const routes = {
     ],
   },
   [`GET /api/gateways/${GW}/local-discovery`]: { available: false },
+  [`GET /api/gateways/${GW}/plugin/profiles/importable`]: {
+    profiles: [{ name: "vps-sam", description: "" }],
+  },
 };
 
 test.afterEach(cleanup);
@@ -22,6 +25,7 @@ test("a gateway shared with you shows its employees but no way to add one", asyn
   assert.match(text(), /소피/);
   assert.doesNotMatch(text(), /새 직원 고용/);
   assert.doesNotMatch(text(), /이미 있는 프로필 등록/);
+  assert.doesNotMatch(text(), /Hermes 에 있는 직원 가져오기/);
 });
 
 test("the gateway owner sees the hire link and the register form", async () => {
@@ -29,4 +33,5 @@ test("the gateway owner sees the hire link and the register form", async () => {
   await render(<HermesProfileList gatewayId={GW} canRegister />);
   assert.match(text(), /새 직원 고용/);
   assert.match(text(), /이미 있는 프로필 등록/);
+  assert.match(text(), /Hermes 에 있는 직원 가져오기/);
 });

@@ -335,6 +335,14 @@ const ja: Record<string, string> = {
   "gateway.profile.status.unreachable": "接続不可",
   "gateway.profile.status.error": "エラー",
   "gateway.profile.status.unknown": "未テスト",
+  "gateway.profile.import.title": "Hermes にいる社員を取り込む",
+  "gateway.profile.import.hint":
+    "このゲートウェイの Hermes にはあるが、まだ社員ではないプロファイルです。取り込むと新しいキーを発行して保存し、接続されたオフィスに出勤します。",
+  "gateway.profile.import.button": "取り込む",
+  "gateway.profile.import.importing": "取り込み中…",
+  "gateway.profile.import.rotate": "新しいキーに替えて取り込む",
+  "gateway.profile.import.done": "「{name}」を取り込みました。外見と表示名を設定してください。",
+  "gateway.profile.import.setup": "設定する",
   "hermes.discovery.optIn": "このマシンのHermesプロフィールを読み込む",
   "hermes.discovery.registerSelected": "選択したプロフィールを登録",
   "hermes.discovery.listTitle": "このマシンで見つかったプロファイル",
@@ -2667,6 +2675,16 @@ const ja: Record<string, string> = {
   "errors.unsupportedConfigKey": "サポートされていない設定項目です",
   "errors.malformedResponse": "サーバーの応答を解釈できませんでした",
   "errors.noProfile": "このプロファイルは登録されていません",
+  "errors.defaultProfile":
+    "デフォルトプロファイルは社員として取り込めません（ゲートウェイ所有者のキーです）",
+  "errors.keyExists":
+    "このプロファイルには既にAPIキーがあります。新しいキーに替えると、既存のキーを使う接続が切れます",
+  "errors.externalSecretProvider":
+    "このプロファイルは外部シークレットストアのキーを使います。Hermes ホストで直接登録してください",
+  "errors.keyStoreFailed":
+    "キーは発行されましたが保存できませんでした。もう一度試すと新しいキーに替えて取り込めます",
+  "errors.pluginUpdateRequired":
+    "ゲートウェイの DeskRPG プラグインを更新する必要があります。今は下の手動登録を使ってください",
   "errors.templateDeleteConfirm": "「{name}」を削除しますか? この操作は元に戻せません。",
 
   // Cron screen (T9)

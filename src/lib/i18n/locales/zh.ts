@@ -307,6 +307,14 @@ const zh: Record<string, string> = {
   "gateway.profile.status.unreachable": "无法连接",
   "gateway.profile.status.error": "错误",
   "gateway.profile.status.unknown": "尚未测试",
+  "gateway.profile.import.title": "导入 Hermes 中已有的员工",
+  "gateway.profile.import.hint":
+    "这些配置文件在此网关的 Hermes 中，但还不是员工。导入时会签发并保存新密钥，员工随即到已连接的办公室上班。",
+  "gateway.profile.import.button": "导入",
+  "gateway.profile.import.importing": "正在导入…",
+  "gateway.profile.import.rotate": "更换密钥并导入",
+  "gateway.profile.import.done": "已导入“{name}”。请设置外观和显示名称。",
+  "gateway.profile.import.setup": "去设置",
   "hermes.discovery.optIn": "读取此设备上的 Hermes 配置文件",
   "hermes.discovery.registerSelected": "注册所选配置文件",
   "hermes.discovery.listTitle": "在此机器上找到的配置文件",
@@ -2541,6 +2549,11 @@ const zh: Record<string, string> = {
   "errors.unsupportedConfigKey": "不支持的配置项",
   "errors.malformedResponse": "无法解析服务器响应",
   "errors.noProfile": "该配置文件尚未注册",
+  "errors.defaultProfile": "默认配置文件不能作为员工导入（它的密钥就是网关所有者密钥）",
+  "errors.keyExists": "该配置文件已有 API 密钥。换成新密钥后，使用旧密钥的连接会断开",
+  "errors.externalSecretProvider": "该配置文件使用外部密钥库中的密钥，请在 Hermes 主机上直接注册",
+  "errors.keyStoreFailed": "密钥已签发但未能保存。再试一次即可换成新密钥并导入",
+  "errors.pluginUpdateRequired": "网关的 DeskRPG 插件需要更新。暂时请使用下方的手动注册",
   "errors.templateDeleteConfirm": "要删除“{name}”吗？此操作无法撤销。",
 
   // Cron screen (T9)

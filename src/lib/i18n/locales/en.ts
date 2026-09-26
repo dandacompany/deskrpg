@@ -332,6 +332,14 @@ const en: Record<string, string> = {
   "gateway.profile.status.unreachable": "Unreachable",
   "gateway.profile.status.error": "Error",
   "gateway.profile.status.unknown": "Not tested",
+  "gateway.profile.import.title": "Import employees already in Hermes",
+  "gateway.profile.import.hint":
+    "Profiles in this gateway's Hermes that are not employees yet. Importing issues and stores a new key, and the employee clocks into the connected offices.",
+  "gateway.profile.import.button": "Import",
+  "gateway.profile.import.importing": "Importing…",
+  "gateway.profile.import.rotate": "Replace the key and import",
+  "gateway.profile.import.done": "Imported '{name}'. Set its appearance and display name.",
+  "gateway.profile.import.setup": "Set up",
   "hermes.discovery.optIn": "Read this machine's Hermes profiles",
   "hermes.discovery.registerSelected": "Register selected",
   "hermes.discovery.listTitle": "Profiles found on this machine",
@@ -2651,6 +2659,16 @@ const en: Record<string, string> = {
   "errors.unsupportedConfigKey": "Unsupported config key",
   "errors.malformedResponse": "Could not parse the server response",
   "errors.noProfile": "This profile is not registered",
+  "errors.defaultProfile":
+    "The default profile cannot be imported as an employee (its key is the gateway owner key)",
+  "errors.keyExists":
+    "This profile already has an API key. Replacing it cuts off anything that used the old key",
+  "errors.externalSecretProvider":
+    "This profile takes its key from an external secret store. Register it on the Hermes host",
+  "errors.keyStoreFailed":
+    "The key was issued but could not be stored. Try again to replace it and import",
+  "errors.pluginUpdateRequired":
+    "The gateway needs a newer DeskRPG plugin. Use manual registration below for now",
   "errors.templateDeleteConfirm": 'Delete "{name}"? This cannot be undone.',
 
   // Cron screen (T9)

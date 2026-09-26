@@ -218,6 +218,29 @@ describe("plugin client — staff settings pickers (0.9.0)", () => {
     assert.equal(calls[1].url, "http://gw:8642/p/noah/deskrpg/skills");
   });
 
+  it("issues a key for an existing profile on the owner key, sending rotate only when asked", async () => {
+    const { calls, fetchImpl } = recorder([
+      {
+        status: 201,
+        json: { name: "no ah", apiKey: "k".repeat(43), issued: true, rotated: false },
+      },
+      { status: 201, json: { name: "noah", apiKey: "r".repeat(43), issued: true, rotated: true } },
+    ]);
+    const client = createPluginClient({
+      baseUrl: "http://gw:8642",
+      defaultToken: "default-key-1234567890",
+      fetchImpl,
+    });
+    const first = await client.issueProfileKey("no ah");
+    await client.issueProfileKey("noah", { rotate: true });
+    assert.equal(calls[0].url, "http://gw:8642/deskrpg/profiles/no%20ah/key");
+    assert.equal(calls[0].method, "POST");
+    assert.deepEqual(JSON.parse(calls[0].body!), {});
+    assert.deepEqual(JSON.parse(calls[1].body!), { rotate: true });
+    assert.ok(calls.every((c) => c.auth === "Bearer default-key-1234567890"));
+    assert.ok(first.ok && first.data.issued === true);
+  });
+
   it("puts cloneFrom in the body only when present", async () => {
     const { calls, fetchImpl } = recorder([
       { status: 201, json: { name: "noah", keyIssued: false } },

@@ -330,6 +330,14 @@ const ko: Record<string, string> = {
   "gateway.profile.status.unreachable": "연결 불가",
   "gateway.profile.status.error": "오류",
   "gateway.profile.status.unknown": "테스트 안 함",
+  "gateway.profile.import.title": "Hermes 에 있는 직원 가져오기",
+  "gateway.profile.import.hint":
+    "이 게이트웨이의 Hermes 에는 있지만 아직 직원이 아닌 프로필입니다. 가져오면 새 키를 발급해 저장하고, 연결된 오피스에 출근합니다.",
+  "gateway.profile.import.button": "가져오기",
+  "gateway.profile.import.importing": "가져오는 중…",
+  "gateway.profile.import.rotate": "새 키로 바꾸고 가져오기",
+  "gateway.profile.import.done": "'{name}' 을(를) 가져왔습니다. 외형과 표시 이름을 정해 주세요.",
+  "gateway.profile.import.setup": "설정하기",
   "hermes.discovery.optIn": "이 머신의 Hermes 프로필 읽기",
   "hermes.discovery.registerSelected": "선택한 프로필 등록",
   "hermes.discovery.listTitle": "이 머신에서 찾은 프로필",
@@ -2636,6 +2644,15 @@ const ko: Record<string, string> = {
   "errors.unsupportedConfigKey": "지원하지 않는 설정 항목입니다",
   "errors.malformedResponse": "서버 응답을 해석할 수 없습니다",
   "errors.noProfile": "이 프로필이 등록되지 않았습니다",
+  "errors.defaultProfile": "기본 프로필은 직원으로 가져올 수 없습니다(게이트웨이 소유자 키입니다)",
+  "errors.keyExists":
+    "이 프로필에는 이미 API 키가 있습니다. 새 키로 바꾸면 기존 키를 쓰던 연결이 끊깁니다",
+  "errors.externalSecretProvider":
+    "이 프로필은 외부 비밀 저장소의 키를 씁니다. Hermes 호스트에서 직접 등록해 주세요",
+  "errors.keyStoreFailed":
+    "키는 발급됐지만 저장하지 못했습니다. 다시 시도하면 새 키로 바꿔 가져올 수 있습니다",
+  "errors.pluginUpdateRequired":
+    "게이트웨이의 DeskRPG 플러그인을 업데이트해야 합니다. 지금은 아래 수동 등록을 쓰세요",
   "errors.templateDeleteConfirm": '"{name}"을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.',
 
   // 크론 화면 (T9)

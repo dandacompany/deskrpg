@@ -46,6 +46,7 @@ export type {
   RawPluginResponse,
   IdentityPayload,
   CreateProfilePayload,
+  IssueProfileKeyPayload,
   CreateProfileOptions,
   DeleteProfilePayload,
   CatalogPayload,
@@ -248,6 +249,12 @@ export function createPluginClient(input: TransportInput & { defaultToken: strin
           ...(options?.cloneFrom ? { cloneFrom: options.cloneFrom } : {}),
           ...(options?.cloneKeys ? { cloneKeys: options.cloneKeys } : {}),
         },
+      }),
+
+    issueProfileKey: (name, options) =>
+      call(`/deskrpg/profiles/${seg(name)}/key`, input.defaultToken, {
+        method: "POST",
+        body: options?.rotate ? { rotate: true } : {},
       }),
 
     // The plugin deletes only if `confirm` exactly matches the name in the path (400 guard).

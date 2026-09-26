@@ -202,6 +202,11 @@ export type ErrorCode =
   | "unsupported_config_key"
   | "malformed_response"
   | "no_profile"
+  | "default_profile"
+  | "key_exists"
+  | "external_secret_provider"
+  | "key_store_failed"
+  | "plugin_update_required"
   | "oauth_denied"
   | "oauth_expired"
   | "oauth_error"
@@ -430,6 +435,12 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   unsupported_config_key: "errors.unsupportedConfigKey",
   malformed_response: "errors.malformedResponse",
   no_profile: "errors.noProfile",
+  // Importing an existing Hermes profile (plugin profile_key_issue).
+  default_profile: "errors.defaultProfile",
+  key_exists: "errors.keyExists",
+  external_secret_provider: "errors.externalSecretProvider",
+  key_store_failed: "errors.keyStoreFailed",
+  plugin_update_required: "errors.pluginUpdateRequired",
   // Provider auth (plugin profile_oauth · profile_provider_keys). The proxy loads the
   // upstream code dynamically, and oauth_denied·oauth_expired·oauth_error are produced by
   // ProviderAuthPanel from poll state. Messages live in the hermes.providerAuth.* block.
