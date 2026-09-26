@@ -769,6 +769,7 @@ const ko: Record<string, string> = {
   "npc.activity.lookingAtImage": "이미지를 보는 중…",
   "npc.activity.organizing": "할 일을 정리하는 중…",
   "npc.activity.askingAround": "동료에게 묻는 중…",
+  "npc.activity.askingYou": "당신에게 확인하는 중…",
   "npc.activity.working": "작업하는 중…",
   "npc.hermesProfile": "Hermes 프로필",
   "npc.hermesProfileInUse": "사용 중",

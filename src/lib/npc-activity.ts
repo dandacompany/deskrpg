@@ -43,7 +43,9 @@ const TOOL_PREFIXES: [string, string][] = [
   ["skill", "npc.activity.organizing"],
   ["a2a_", "npc.activity.askingAround"],
   ["delegate_task", "npc.activity.askingAround"],
-  ["clarify", "npc.activity.askingAround"],
+  // Both put a question to the user — not to a teammate.
+  ["clarify", "npc.activity.askingYou"],
+  ["deskrpg_ask_user", "npc.activity.askingYou"],
   ["text_to_speech", "npc.activity.speaking"],
   ["_thinking", "npc.activity.thinking"],
 ];

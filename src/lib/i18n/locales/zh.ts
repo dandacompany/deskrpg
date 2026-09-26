@@ -717,6 +717,7 @@ const zh: Record<string, string> = {
   "npc.activity.lookingAtImage": "查看图片中…",
   "npc.activity.organizing": "整理任务中…",
   "npc.activity.askingAround": "询问同事中…",
+  "npc.activity.askingYou": "正在向你确认…",
   "npc.activity.working": "处理中…",
   "npc.hermesProfile": "Hermes 配置文件",
   "npc.hermesProfileInUse": "使用中",

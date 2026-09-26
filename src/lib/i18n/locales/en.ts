@@ -776,6 +776,7 @@ const en: Record<string, string> = {
   "npc.activity.lookingAtImage": "Looking at an image…",
   "npc.activity.organizing": "Organizing tasks…",
   "npc.activity.askingAround": "Asking a teammate…",
+  "npc.activity.askingYou": "Checking with you…",
   "npc.activity.working": "Working…",
   "npc.hermesProfile": "Hermes profile",
   "npc.hermesProfileInUse": "in use",

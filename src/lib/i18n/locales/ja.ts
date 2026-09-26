@@ -788,6 +788,7 @@ const ja: Record<string, string> = {
   "npc.activity.lookingAtImage": "画像を見ています…",
   "npc.activity.organizing": "タスクを整理中…",
   "npc.activity.askingAround": "仲間に聞いています…",
+  "npc.activity.askingYou": "あなたに確認しています…",
   "npc.activity.working": "作業中…",
   "npc.hermesProfile": "Hermesプロファイル",
   "npc.hermesProfileInUse": "使用中",
