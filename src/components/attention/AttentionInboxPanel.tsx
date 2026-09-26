@@ -331,6 +331,11 @@ function DecisionRowView({
         )}
       </div>
       <div className="mt-0.5 break-words text-body text-text">{row.title}</div>
+      {row.kind === "blocked" && row.failures ? (
+        <div data-repeated-failure className="mt-0.5 text-caption text-danger">
+          {t("attention.repeatedFailure", { count: row.failures })}
+        </div>
+      ) : null}
 
       {row.kind === "approval" ? (
         <div className="mt-2 flex flex-col gap-2">

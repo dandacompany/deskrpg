@@ -307,3 +307,29 @@ test("a non-owner is told to ask the gateway owner", async () => {
   assert.ok(!host.querySelector('[data-action="open-policy"]'));
   await cleanup();
 });
+
+test("a blocked row after repeated failures says so; a plain blocked row does not", async () => {
+  const api = fakeApi([
+    {
+      rows: [
+        {
+          kind: "blocked",
+          id: "t1",
+          title: "a",
+          at: null,
+          requestedBy: null,
+          count: 1,
+          failures: 3,
+        },
+        { kind: "blocked", id: "t2", title: "b", at: null, requestedBy: null, count: 1 },
+      ],
+      counts: { ...EMPTY_COUNTS, blocked: 2, total: 2 },
+    },
+  ]);
+  const { host, cleanup } = await render(<AttentionInboxPanel channelId="c1" api={api.client} />);
+  const failing = host.querySelector('[data-row-id="t1"] [data-repeated-failure]');
+  assert.equal(failing !== null, true);
+  assert.equal(failing?.textContent?.includes("3번 연속 실패"), true);
+  assert.equal(host.querySelector('[data-row-id="t2"] [data-repeated-failure]') !== null, false);
+  await cleanup();
+});

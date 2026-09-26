@@ -154,7 +154,7 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
     const slug = approvalBoardSlug(a.payloadJson);
     if (slug) slugs.add(slug);
   }
-  const cardsBySlug: { id: string; status: string; title: string; at: string | null }[] = [];
+  const cardsBySlug: AttentionInboxInput["cards"][number][] = [];
   let anyBoardOk = false;
   for (const slug of slugs) {
     const board = await ctx.client.kanban.getBoard(slug, {});
@@ -172,6 +172,7 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
           status: task.status,
           title: task.title,
           at: ms === null ? null : new Date(ms).toISOString(),
+          failures: task.consecutive_failures,
         });
       }
   }

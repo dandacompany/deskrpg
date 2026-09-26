@@ -48,6 +48,11 @@ type AttentionRowBase = {
   requestedBy: string | null;
   /** The number of bundled cards for an approval, 1 for everything else. */
   count: number;
+  /**
+   * On a blocked card: failures in a row. Present when > 0 — the card was blocked after repeated
+   * failed runs and only runs again once someone fixes the cause and unblocks it.
+   */
+  failures?: number;
 };
 
 export type AttentionRow =
@@ -56,7 +61,14 @@ export type AttentionRow =
 
 export type AttentionInboxInput = {
   /** `at` is the value the caller read with `taskTimeMs` and converted to ISO. Null if it couldn't be read. */
-  cards: readonly { id: string; status: string; title: string; at?: string | null }[];
+  cards: readonly {
+    id: string;
+    status: string;
+    title: string;
+    at?: string | null;
+    /** `consecutive_failures` from the board (plugin 0.21.0+); absent on older plugins. */
+    failures?: number;
+  }[];
   approvals: readonly {
     id: string;
     title: string;
@@ -103,6 +115,7 @@ export function buildAttentionInbox(input: AttentionInboxInput): AttentionRow[] 
         at: card.at ?? null,
         requestedBy: null,
         count: 1,
+        ...(card.failures && card.failures > 0 ? { failures: card.failures } : {}),
       });
     else if (card.status === "review")
       rows.push({
