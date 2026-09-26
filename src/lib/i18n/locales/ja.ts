@@ -3088,6 +3088,8 @@ const ja: Record<string, string> = {
   "kanban.metrics.attention.blocked": "ブロック {count}",
   "kanban.metrics.throughput": "完了したカード",
   "kanban.metrics.handedOff": "レビューに回したカード",
+  "kanban.metrics.rework": "差し戻し",
+  "kanban.metrics.rework.cards": "カード {count} 件",
   "kanban.metrics.successRate": "成功率",
   "kanban.metrics.median": "所要時間の中央値",
   "kanban.metrics.openRuns": "進行中",

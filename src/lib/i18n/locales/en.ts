@@ -3059,6 +3059,8 @@ const en: Record<string, string> = {
   "kanban.metrics.attention.blocked": "{count} blocked",
   "kanban.metrics.throughput": "Cards completed",
   "kanban.metrics.handedOff": "Handed to review",
+  "kanban.metrics.rework": "Rework",
+  "kanban.metrics.rework.cards": "{count} cards",
   "kanban.metrics.successRate": "Success rate",
   "kanban.metrics.median": "Median duration",
   "kanban.metrics.openRuns": "Still running",

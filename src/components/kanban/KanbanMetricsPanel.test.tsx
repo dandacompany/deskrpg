@@ -6,7 +6,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 
 import { I18nProvider } from "@/lib/i18n/context";
-import type { KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
+import type { KanbanStatusTransition, KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
 import { computeOperationalMetrics, MIN_RATE_SAMPLES } from "@/lib/kanban-metrics";
 
 import KanbanMetricsPanel from "./KanbanMetricsPanel";
@@ -34,11 +34,12 @@ async function mount(
   runs: KanbanTimelineRun[],
   cards: { id: string; status: string }[] = [],
   pending: ReadonlySet<string> = new Set(),
+  transitions: KanbanStatusTransition[] | null = null,
 ) {
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
-  const metrics = computeOperationalMetrics(runs, cards, pending, WIN);
+  const metrics = computeOperationalMetrics(runs, cards, pending, WIN, transitions);
   await act(async () => {
     root.render(
       <I18nProvider>
@@ -134,4 +135,29 @@ test("the hand-off cell stays hidden when nothing is waiting for review", async 
 test("does not show that cell when there are no runs in progress", async () => {
   const host = await mount([run()]);
   assert.equal(host.textContent?.includes("Still running"), false);
+});
+
+function sentBack(taskId: string, id: number): KanbanStatusTransition {
+  return { id, task_id: taskId, board: "default", from: "review", to: "todo", created_at: 1_500 };
+}
+
+test("rework shows how many times results were sent back and to how many cards", async () => {
+  const host = await mount([run()], [], new Set(), [
+    sentBack("a", 1),
+    sentBack("a", 2),
+    sentBack("b", 3),
+  ]);
+  const cell = host.querySelector('[data-metric="rework"]');
+  assert.equal(cell !== null, true);
+  assert.equal(cell?.textContent, "Rework32 cards");
+});
+
+test("rework shows 0 when transitions are known and none were returns", async () => {
+  const host = await mount([run()], [], new Set(), []);
+  assert.equal(host.querySelector('[data-metric="rework"]')?.textContent, "Rework0");
+});
+
+test("the rework cell stays hidden when transitions can't be asked for", async () => {
+  const host = await mount([run()]);
+  assert.equal(host.querySelector('[data-metric="rework"]') !== null, false);
 });

@@ -1466,6 +1466,92 @@ test("the timeline is enabled only with the capability, and fetches run history 
   }
 });
 
+async function openTimelineWith(capabilities: string[]) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const f = await mount((url) => {
+    if (url.includes("/automation/status")) return json(status({ capabilities }));
+    if (url.includes("/kanban/runs"))
+      return json({
+        runs: [],
+        board: "deskrpg-ch-1",
+        window: { from: 0, to: 1 },
+        truncated: false,
+      });
+    if (url.includes("/kanban/events"))
+      return json({
+        events: [
+          {
+            id: 1,
+            task_id: "t1",
+            board: "deskrpg-ch-1",
+            from: "running",
+            to: "review",
+            created_at: nowSec,
+          },
+          {
+            id: 2,
+            task_id: "t1",
+            board: "deskrpg-ch-1",
+            from: "review",
+            to: "todo",
+            created_at: nowSec,
+          },
+        ],
+        board: "deskrpg-ch-1",
+        kind: "status",
+        window: { from: 0, to: nowSec },
+        truncated: false,
+      });
+    if (url.includes("/kanban/board")) return json(board());
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  const button = Array.from(f.host.querySelectorAll<HTMLButtonElement>("button")).find(
+    (el) => el.getAttribute("aria-label") === "타임라인",
+  );
+  assert.ok(button, "no timeline button");
+  await act(async () => {
+    button.click();
+  });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  return f;
+}
+
+test("with kanban_task_events the metrics show how many results were sent back from review", async () => {
+  const f = await openTimelineWith([
+    "kanban",
+    "cron",
+    "events",
+    "kanban_views",
+    "kanban_task_events",
+  ]);
+  try {
+    assert.equal(
+      f.calls.some((c) => c.includes("/kanban/events")),
+      true,
+    );
+    const cell = f.host.querySelector('[data-metric="rework"]');
+    assert.equal(cell !== null, true);
+    assert.equal(cell?.textContent?.startsWith("재작업1"), true);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("without kanban_task_events the rework metric is hidden and never asked for", async () => {
+  const f = await openTimelineWith(["kanban", "cron", "events", "kanban_views"]);
+  try {
+    assert.equal(
+      f.calls.some((c) => c.includes("/kanban/events")),
+      false,
+    );
+    assert.equal(f.host.querySelector('[data-metric="rework"]') !== null, false);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("does not show the timeline button when the capability is absent", async () => {
   // A button that does nothing when pressed reads as broken. Kanban itself must keep working.
   const f = await mount(happy);

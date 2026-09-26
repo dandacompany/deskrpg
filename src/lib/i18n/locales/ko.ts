@@ -3058,6 +3058,8 @@ const ko: Record<string, string> = {
   "kanban.metrics.attention.blocked": "막힘 {count}",
   "kanban.metrics.throughput": "완료한 카드",
   "kanban.metrics.handedOff": "검토로 넘긴 카드",
+  "kanban.metrics.rework": "재작업",
+  "kanban.metrics.rework.cards": "카드 {count}개",
   "kanban.metrics.successRate": "성공률",
   "kanban.metrics.median": "소요 중앙값",
   "kanban.metrics.openRuns": "진행 중",

@@ -9,6 +9,7 @@ import { ProjectPicker, useSelectedBoard, type ProjectOption } from "./ProjectPi
 import { ProjectTargetDate } from "./ProjectTargetDate";
 import type {
   KanbanRunsPage,
+  KanbanStatusTransitionsPage,
   KanbanTask,
   KanbanTaskStatus,
 } from "@/lib/hermes/deskrpg-plugin-types";
@@ -189,6 +190,8 @@ export default function KanbanBoardModal({
    * swarm gate in `plugin-capability.ts`).
    */
   const viewsSupported = status?.capabilities?.includes("kanban_views") ?? false;
+  /** Whether the plugin lists status transitions in bulk. Without it the rework metric is hidden. */
+  const taskEventsSupported = status?.capabilities?.includes("kanban_task_events") ?? false;
   const [expandedTasks, setExpandedTasks] = useState<ReadonlySet<string>>(() => new Set());
   const [loadingChildren, setLoadingChildren] = useState<ReadonlySet<string>>(() => new Set());
   /** Links for expanded cards. Holds only ids — the board response is always the source of truth for card content. */
@@ -199,6 +202,7 @@ export default function KanbanBoardModal({
   const [runsPage, setRunsPage] = useState<KanbanRunsPage | null>(null);
   const [runsLoading, setRunsLoading] = useState(false);
   const [runsError, setRunsError] = useState<string | null>(null);
+  const [transitionsPage, setTransitionsPage] = useState<KanbanStatusTransitionsPage | null>(null);
   const [boardLinks, setBoardLinks] = useState<readonly { parent_id: string; child_id: string }[]>(
     [],
   );
@@ -471,6 +475,28 @@ export default function KanbanBoardModal({
     };
   }, [api, blocker, timelineWindow, viewState.viewMode, viewsSupported, detailTick]);
 
+  // Status transitions for the rework metric, over the same window as the runs. A failure leaves the
+  // page null so the metric is hidden — it never reads as "nothing was sent back".
+  useEffect(() => {
+    if (viewState.viewMode !== "timeline" || !taskEventsSupported || blocker) return;
+    let alive = true;
+    setTransitionsPage(null);
+    void api
+      .statusTransitions({
+        from: Math.floor(timelineWindow.fromMs / 1000),
+        to: Math.ceil(timelineWindow.toMs / 1000),
+      })
+      .then((page) => {
+        if (alive) setTransitionsPage(page);
+      })
+      .catch(() => {
+        if (alive) setTransitionsPage(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [api, blocker, timelineWindow, viewState.viewMode, taskEventsSupported, detailTick]);
+
   /**
    * The run history the timeline and metrics see. When a filter is active, keeps **only the ones
    * for visible cards** — a filter that applies to the board/list but not the timeline is a silent
@@ -485,6 +511,14 @@ export default function KanbanBoardModal({
     const ids = new Set(applyFilter(allTasks, viewState.filter).map((task) => task.id));
     return filterRunsByVisibleTasks(runs, ids);
   }, [runsPage, allTasks, viewState.filter]);
+
+  /** Transitions for the rework metric, narrowed by the same filter as the runs. null = unknown. */
+  const visibleTransitions = useMemo(() => {
+    if (!taskEventsSupported || !transitionsPage) return null;
+    if (!hasActiveFilter(viewState.filter)) return transitionsPage.events;
+    const ids = new Set(applyFilter(allTasks, viewState.filter).map((task) => task.id));
+    return filterRunsByVisibleTasks(transitionsPage.events, ids);
+  }, [taskEventsSupported, transitionsPage, allTasks, viewState.filter]);
 
   /**
    * Operational metrics. Computed from **the same run history and the same window** as the
@@ -518,8 +552,9 @@ export default function KanbanBoardModal({
         allTasks,
         PENDING_APPROVALS_UNAVAILABLE,
         timelineWindow,
+        visibleTransitions,
       ),
-    [visibleRuns, allTasks, timelineWindow],
+    [visibleRuns, allTasks, timelineWindow, visibleTransitions],
   );
 
   useEffect(() => {

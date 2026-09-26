@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
+import type { KanbanStatusTransition, KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
 import { countNeedsAttention } from "@/lib/needs-attention";
-import { computeOperationalMetrics, hasEnoughSamples, MIN_RATE_SAMPLES } from "./kanban-metrics";
+import {
+  computeOperationalMetrics,
+  countRework,
+  hasEnoughSamples,
+  MIN_RATE_SAMPLES,
+} from "./kanban-metrics";
 
 const WIN = { fromMs: 1_000_000, toMs: 2_000_000 };
 const NO_APPROVALS: ReadonlySet<string> = new Set();
@@ -237,4 +242,71 @@ test("does not show a rate as a number when the sample size is too small", () =>
   assert.equal(hasEnoughSamples(MIN_RATE_SAMPLES - 1), false);
   assert.equal(hasEnoughSamples(MIN_RATE_SAMPLES), true);
   assert.equal(hasEnoughSamples(0), false);
+});
+
+// ---------------------------------------------------------------------------
+// Rework — review → todo/ready transitions that happened inside the window
+// ---------------------------------------------------------------------------
+
+let transitionSeq = 0;
+function transition(over: Partial<KanbanStatusTransition> = {}): KanbanStatusTransition {
+  transitionSeq += 1;
+  return {
+    id: transitionSeq,
+    task_id: "t1",
+    board: "default",
+    from: "review",
+    to: "todo",
+    created_at: 1_500,
+    ...over,
+  };
+}
+
+test("rework counts returns from review to todo or ready, and the cards they happened to", () => {
+  const stats = countRework(
+    [
+      transition({ task_id: "a", to: "todo" }),
+      transition({ task_id: "a", to: "ready" }),
+      transition({ task_id: "b", to: "ready" }),
+    ],
+    WIN,
+  );
+  assert.deepEqual(stats, { returns: 3, cards: 2 });
+});
+
+test("rework does not count a return that happened outside the window", () => {
+  // Same rule as finished runs: a return belongs to the window it happened in, not to every
+  // window in which the card is still being reworked.
+  const stats = countRework(
+    [
+      transition({ task_id: "before", created_at: 999 }),
+      transition({ task_id: "inside", created_at: 1_000 }),
+      transition({ task_id: "inside-end", created_at: 2_000 }),
+      transition({ task_id: "after", created_at: 2_001 }),
+    ],
+    WIN,
+  );
+  assert.deepEqual(stats, { returns: 2, cards: 2 });
+});
+
+test("other transitions are not rework", () => {
+  const stats = countRework(
+    [
+      transition({ from: "running", to: "review" }),
+      transition({ from: "review", to: "done" }),
+      transition({ from: "review", to: "blocked" }),
+      transition({ from: null, to: "todo" }),
+      transition({ from: "blocked", to: "ready" }),
+    ],
+    WIN,
+  );
+  assert.deepEqual(stats, { returns: 0, cards: 0 });
+});
+
+test("without transitions the rework metric is unknown, not zero", () => {
+  assert.equal(metrics([]).rework, null);
+  assert.deepEqual(computeOperationalMetrics([], [], NO_APPROVALS, WIN, []).rework, {
+    returns: 0,
+    cards: 0,
+  });
 });

@@ -8,7 +8,7 @@ import { formatElapsed } from "./kanban-view-model";
 /**
  * Operational metrics — a summary line layered on top of the performance timeline.
  *
- * Of the five cells, **only "cards needing attention" calls for action right now.** The rest are
+ * Of the cells, **only "cards needing attention" calls for action right now.** The rest are
  * after-the-fact stats, so this stays first to keep the reading order from running backwards.
  *
  * These values aren't stored, so a mistake only needs a calculation fix. Never showing a ratio as
@@ -26,6 +26,7 @@ export default function KanbanMetricsPanel({ metrics }: { metrics: OperationalMe
     terminalRuns,
     throughput,
     openRuns,
+    rework,
   } = metrics;
 
   return (
@@ -62,6 +63,18 @@ export default function KanbanMetricsPanel({ metrics }: { metrics: OperationalMe
 
       {handedOff > 0 && (
         <Cell metric="handedOff" label={t("kanban.metrics.handedOff")} value={String(handedOff)} />
+      )}
+
+      {/* Hidden, not 0, when the plugin can't list transitions — 0 would claim nothing was sent back. */}
+      {rework !== null && (
+        <Cell
+          metric="rework"
+          label={t("kanban.metrics.rework")}
+          value={String(rework.returns)}
+          detail={
+            rework.returns > 0 ? t("kanban.metrics.rework.cards", { count: rework.cards }) : null
+          }
+        />
       )}
 
       <Cell
