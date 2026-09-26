@@ -35,6 +35,10 @@ function msg(key, params) {
   return loadCliMessagesModule().cliMessage(key, params);
 }
 
+function loadCliBackupTablesModule() {
+  return require(path.join(getPackageRoot(), "src", "lib", "cli-backup-tables.js"));
+}
+
 function loadCliResetPasswordModule() {
   return require(path.join(getPackageRoot(), "src", "lib", "cli-reset-password.js"));
 }
@@ -228,6 +232,7 @@ function printHelp() {
   console.log("  update                Update to the latest version");
   console.log("  host-setup <on|off|status>  Toggle the connection wizard's host setup");
   console.log("  doctor                Check runtime health");
+  console.log("  db backups            List or prune tables data migrations backed up");
   console.log("  remove                Remove runtime data (~/.deskrpg)");
   console.log("  uninstall             Remove runtime data and uninstall the package");
   console.log("  version, -v           Show current version");
@@ -243,6 +248,13 @@ function printHelp() {
   console.log("  --password PW         Password (8+ chars). Beware: stays in shell history");
   console.log("  --password-stdin      Read the password from stdin instead");
   console.log("  --role ROLE           User role: admin or user (default: user)");
+  console.log("");
+  console.log("db backups:");
+  console.log("  deskrpg db backups                          # list, with row counts and age");
+  console.log(
+    "  deskrpg db backups --prune                  # dry run: what 90+ days old would go",
+  );
+  console.log("  deskrpg db backups --prune --older-than 30d --yes   # drop — cannot be undone");
   console.log("");
   console.log("reset-password:");
   console.log("  deskrpg reset-password alice   # prints a one-time temporary password");
@@ -264,7 +276,7 @@ function printHelp() {
 
 function printUsage() {
   console.error(
-    "Usage: deskrpg <init|start|stop|create-user|reset-password|update|host-setup|doctor|remove|uninstall|version|help>",
+    "Usage: deskrpg <init|start|stop|create-user|reset-password|update|host-setup|doctor|db|remove|uninstall|version|help>",
   );
 }
 
@@ -1012,6 +1024,62 @@ async function runCreateUser() {
  * The last-resort recovery path when the admin is locked out — opens the DB directly on the host
  * and issues a temporary password. The plaintext appears on screen once and is never stored.
  */
+/** `deskrpg db backups [...]` — the only subcommand of `db` for now. */
+async function runDbBackups() {
+  if (process.argv[3] !== "backups") {
+    console.error("Usage: deskrpg db backups [--prune [--older-than 90d] [--yes]]");
+    return 1;
+  }
+  const runtimePaths = loadRuntimePathsModule();
+  const envPath = runtimePaths.getDeskRpgEnvPath();
+  if (fs.existsSync(envPath)) loadEnvFile(envPath);
+
+  const { runBackupsCommand, sqliteBackupStore, pgBackupStore } = loadCliBackupTablesModule();
+  const argv = process.argv.slice(4);
+  const ledgerPath = path.join(runtimePaths.getDeskRpgDataDir(), "backup-tables.json");
+  const common = { argv, ledgerPath, now: Date.now(), log: (line) => console.log(line) };
+  const dbUrl = process.env.DATABASE_URL;
+  const sqlitePath = process.env.SQLITE_PATH;
+
+  if (process.env.DB_TYPE === "sqlite" || (!dbUrl && sqlitePath)) {
+    const resolvedPath = sqlitePath || path.join(runtimePaths.getDeskRpgDataDir(), "deskrpg.db");
+    if (!fs.existsSync(resolvedPath)) {
+      console.error(
+        `Error: SQLite database not found at ${resolvedPath}. Run "deskrpg init" first.`,
+      );
+      return 1;
+    }
+    const Database = require("better-sqlite3");
+    const db = new Database(resolvedPath);
+    try {
+      return await runBackupsCommand({
+        ...common,
+        store: sqliteBackupStore(db),
+        databaseKey: `sqlite:${path.resolve(resolvedPath)}`,
+      });
+    } finally {
+      db.close();
+    }
+  }
+  if (dbUrl) {
+    const { Pool } = require("pg");
+    const pool = new Pool({ connectionString: dbUrl });
+    // The ledger key names the database without its credentials.
+    const url = new URL(dbUrl);
+    try {
+      return await runBackupsCommand({
+        ...common,
+        store: pgBackupStore(pool),
+        databaseKey: `postgres:${url.hostname}:${url.port || "5432"}${url.pathname}`,
+      });
+    } finally {
+      await pool.end();
+    }
+  }
+  console.error('Error: no database configured. Run "deskrpg init" first.');
+  return 1;
+}
+
 async function runResetPassword() {
   const loginId = process.argv[3];
   if (!loginId || loginId.startsWith("-")) {
@@ -1108,6 +1176,7 @@ async function main() {
       "update",
       "host-setup",
       "doctor",
+      "db",
       "remove",
       "uninstall",
     ].includes(command)
@@ -1148,6 +1217,10 @@ async function main() {
   if (command === "doctor") {
     await runDoctor();
     return;
+  }
+
+  if (command === "db") {
+    process.exit(await runDbBackups());
   }
 
   if (command === "remove") {
