@@ -8,7 +8,15 @@
  * same list. Counting is `needs-attention.ts`'s job; this file **builds the rows.**
  */
 export type AttentionRowKind =
-  "approval" | "blocked" | "review" | "cron_failed" | "approval_blocked";
+  "approval" | "blocked" | "review" | "cron_failed" | "approval_blocked" | "question";
+
+/** An NPC waiting on its user's answer in 1:1 chat (`deskrpg_ask_user`). Only that user gets the row. */
+export type QuestionDetail = {
+  npcId: string;
+  choices: string[];
+  /** The user may type an answer outside the choices. */
+  allowOther: boolean;
+};
 
 /**
  * What an unattended run hit — flattened onto `approval_blocked` rows, which only their audience receives. The
@@ -56,8 +64,9 @@ type AttentionRowBase = {
 };
 
 export type AttentionRow =
-  | (AttentionRowBase & { kind: Exclude<AttentionRowKind, "approval_blocked"> })
-  | (AttentionRowBase & { kind: "approval_blocked" } & BlockedRunDetail);
+  | (AttentionRowBase & { kind: Exclude<AttentionRowKind, "approval_blocked" | "question"> })
+  | (AttentionRowBase & { kind: "approval_blocked" } & BlockedRunDetail)
+  | (AttentionRowBase & { kind: "question" } & QuestionDetail);
 
 export type AttentionInboxInput = {
   /** `at` is the value the caller read with `taskTimeMs` and converted to ISO. Null if it couldn't be read. */
@@ -87,6 +96,16 @@ export type AttentionInboxInput = {
     title: string;
     createdAt: string;
     detail: BlockedRunDetail;
+  }[];
+  /** NPC questions waiting on the viewer (already filtered to the viewer and channel). */
+  questions?: readonly {
+    id: string;
+    npcId: string;
+    npcName: string | null;
+    question: string;
+    choices: readonly string[];
+    allowOther: boolean;
+    createdAt: string;
   }[];
 };
 
@@ -146,6 +165,19 @@ export function buildAttentionInbox(input: AttentionInboxInput): AttentionRow[] 
       requestedBy: null,
       count: 1,
       ...run.detail,
+    });
+
+  for (const q of input.questions ?? [])
+    rows.push({
+      kind: "question",
+      id: q.id,
+      title: q.question,
+      at: q.createdAt,
+      requestedBy: q.npcName,
+      count: 1,
+      npcId: q.npcId,
+      choices: [...q.choices],
+      allowOther: q.allowOther,
     });
 
   // Oldest goes to the top — surfacing neglect is this screen's job. Only rows whose time

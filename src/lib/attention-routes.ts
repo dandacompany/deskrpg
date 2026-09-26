@@ -9,7 +9,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { approvals, chatRoomMessages, chatRooms, db } from "@/db";
+import { approvals, chatRoomMessages, chatRooms, db, npcs } from "@/db";
 import { buildAttentionInbox, type AttentionInboxInput } from "@/lib/attention-inbox";
 import { approvalBoardSlug, approvalTargetsByApproval } from "@/lib/approvals";
 import { parseRoomNotice } from "@/lib/chat-rooms-policy";
@@ -17,6 +17,9 @@ import { visibleToSql } from "@/lib/room-audience";
 import { pluginFailureResponse } from "@/lib/cron-access";
 import { getUserId } from "@/lib/internal-rpc";
 import { countNeedsAttention } from "@/lib/needs-attention";
+import { answerNpcQuestion, listUserQuestions } from "@/lib/npc-questions";
+import { readJsonObject } from "@/lib/api-body";
+import { cronError } from "@/lib/cron-access";
 import { taskTimeMs } from "@/lib/plugin-time";
 import { resolveKanbanChannelContext } from "@/lib/kanban-access";
 
@@ -194,6 +197,8 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
     })),
     cronFailures: await recentCronFailures(channelId),
     blockedRuns: await recentBlockedRuns(channelId, ctx.userId, ctx.isGatewayOwner),
+    // A gateway that can't be read only drops its questions — never the whole inbox.
+    questions: await listUserQuestions(channelId, ctx.userId).catch(() => []),
   };
 
   const pendingTaskIds = new Set<string>();
@@ -203,4 +208,36 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
     rows: buildAttentionInbox(input),
     counts: countNeedsAttention(cards, pendingTaskIds),
   });
+}
+
+/**
+ * POST — answers an NPC's question from the inbox. Only the user it was put to may; for anyone else,
+ * and for an NPC outside this channel, it reads as not found.
+ */
+export async function postQuestionAnswer(req: NextRequest, channelId: string, questionId: string) {
+  const resolved = await resolveKanbanChannelContext({ userId: getUserId(req), channelId });
+  if (!resolved.ok) return resolved.response;
+  const body = await readJsonObject(req);
+  const npcId = body?.npcId;
+  const response = body?.response;
+  if (typeof npcId !== "string" || typeof response !== "string" || !response.trim())
+    return cronError(400, "invalid_body", "npcId and response are required");
+
+  const [npc] = await db
+    .select({ id: npcs.id })
+    .from(npcs)
+    .where(and(eq(npcs.id, npcId), eq(npcs.channelId, channelId)))
+    .limit(1);
+  if (!npc) return cronError(404, "question_not_found", "question not found");
+
+  const outcome = await answerNpcQuestion({
+    userId: resolved.ctx.userId,
+    npcId,
+    questionId,
+    response,
+  }).catch(() => "failed" as const);
+  if (outcome === "answered") return NextResponse.json({ answered: true });
+  if (outcome === "invalid") return cronError(400, "invalid_response", "not one of the choices");
+  if (outcome === "not_found") return cronError(404, "question_not_found", "question not found");
+  return cronError(502, "question_answer_failed", "the gateway did not take the answer");
 }
