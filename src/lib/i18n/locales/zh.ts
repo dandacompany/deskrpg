@@ -690,6 +690,8 @@ const zh: Record<string, string> = {
   "hermes.wizard.error.unauthorized": "需要身份验证。",
   "hermes.wizard.error.upstreamError": "网关报告了一个错误。",
   "hermes.wizard.error.gatewayAuthFailed": "网关密钥被拒绝，请检查密钥是否正确。",
+  "hermes.wizard.error.profileNotServed":
+    "Hermes 没有提供此员工（配置文件）。请检查配置文件名称和网关的服务列表。",
   "hermes.wizard.error.keyMissingAfterIssue": "插件报告已签发密钥，但未收到密钥值。",
   "hermes.wizard.error.keyStoreForbidden": "不是网关所有者，因此无法保存已签发的密钥。",
   "hermes.wizard.error.unknown": "发生未知错误。",

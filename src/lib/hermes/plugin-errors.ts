@@ -139,6 +139,21 @@ function extractCodeAndMessage(record: Record<string, unknown>): { code: string;
   return { code: "plugin_error", message: reason };
 }
 
+/** Hermes' answer for `/p/<name>/…` when it does not serve that profile (live, 2026-09-26). */
+const UNKNOWN_PROFILE_RE = /unknown or unconfigured profile/i;
+
+/**
+ * A generic code (the body was a plain sentence or empty) still says something through its status:
+ * 401/403 is the gateway refusing the key, and Hermes' 404 sentence for an unserved profile names
+ * the profile as the cause — the same `profile_not_found` the profile proxy routes use. The employee editor shows these instead of "the gateway reported an error".
+ */
+function refineGenericCode(code: string, status: number, message: string): string {
+  if (code !== "upstream_error" && code !== "plugin_error") return code;
+  if (status === 401 || status === 403) return "gateway_auth_failed";
+  if (status === 404 && UNKNOWN_PROFILE_RE.test(message)) return "profile_not_found";
+  return code;
+}
+
 export function mapPluginFailure(input: { status: number; body: unknown }): PluginFailure | null {
   const record = asRecord(input.body);
 
@@ -156,7 +171,8 @@ export function mapPluginFailure(input: { status: number; body: unknown }): Plug
     return null;
   }
 
-  const { code, message } = extractCodeAndMessage(record);
+  const { code: extracted, message } = extractCodeAndMessage(record);
+  const code = refineGenericCode(extracted, input.status, message);
   const showsShellCommand =
     message && SHELL_COMMAND_CODES.has(code) ? extractShellCommand(message) : null;
 

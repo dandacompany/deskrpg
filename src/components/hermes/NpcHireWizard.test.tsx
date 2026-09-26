@@ -1030,3 +1030,60 @@ test("a failed persona load is not retried in a loop", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("a failed persona load says why — refused key, unserved profile, unreachable or slow gateway", async () => {
+  const cases = [
+    ["gateway_auth_failed", /키가 거부되었습니다/],
+    ["profile_not_found", /서빙하지 않습니다/],
+    ["unreachable", /연결할 수 없습니다/],
+    ["timeout", /응답하지 않습니다/],
+  ] as const;
+  for (const [code, message] of cases) {
+    const calls: FetchCall[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = stubFetch(calls, {
+      "/identity": { errorCode: code, error: "raw upstream text" },
+      "/config": {
+        model: "gpt-5",
+        provider: "openai-codex",
+        toolsets: null,
+        reasoning_effort: null,
+      },
+      "/catalog": { providers: [], models: {}, reasoningEfforts: [] },
+    }) as typeof fetch;
+    try {
+      const { root, el } = await mount(
+        <I18nProvider initialLocale="ko">
+          <NpcHireWizard
+            gatewayId="gw-1"
+            pluginStatus="plugin_ready"
+            localDiscovery={false}
+            existingProfiles={["oliver"]}
+            initialProfile="oliver"
+            onDone={() => {}}
+          />
+        </I18nProvider>,
+      );
+      const personaTab = [...el.querySelectorAll("button")].find((b) =>
+        b.textContent?.includes("②"),
+      );
+      assert.ok(personaTab);
+      await act(async () => {
+        personaTab.click();
+      });
+      for (let i = 0; i < 5; i += 1) {
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+      }
+      const text = el.textContent ?? "";
+      assert.match(text, message, code);
+      assert.doesNotMatch(text, /게이트웨이가 오류를 보고했습니다/, code);
+      assert.doesNotMatch(text, /raw upstream text/, `${code}: the upstream text stays off screen`);
+      root.unmount();
+      el.remove();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  }
+});
