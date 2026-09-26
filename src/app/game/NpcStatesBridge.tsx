@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef } from "react";
 
 import { useNpcApprovalCounts } from "@/components/approvals/ToolApprovalsProvider";
+import { EventBus } from "@/game/EventBus";
+import { useT } from "@/lib/i18n";
 import type { AttentionRow } from "@/lib/attention-inbox";
 import { npcAttentionById } from "@/lib/npc-attention";
 import { npcStates, type NpcConnection, type NpcStateKind } from "@/lib/npc-state-map";
@@ -24,6 +26,7 @@ export default function NpcStatesBridge(props: {
   reporting: ReadonlySet<string>;
   onStates: (states: NpcStatesById) => void;
 }) {
+  const t = useT();
   const toolApprovals = useNpcApprovalCounts();
   const { npcs, connection, attentionRows, workingCounts, responding, responseFailed, reporting } =
     props;
@@ -54,6 +57,17 @@ export default function NpcStatesBridge(props: {
     reporting,
   ]);
 
+  // The leading state in words for the name tag's tooltip — the renderer has no translator.
+  const labels = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const [npcId, list] of Object.entries(states)) {
+      const first = list[0];
+      if (first && first !== "responding")
+        out[npcId] = t(`workspace.state.${first}`, { count: workingCounts[npcId] ?? 1 });
+    }
+    return out;
+  }, [states, t, workingCounts]);
+
   // Hand up only real changes — the parent re-renders the whole page on every state set.
   const last = useRef("");
   const onStates = props.onStates;
@@ -63,6 +77,16 @@ export default function NpcStatesBridge(props: {
     last.current = serialized;
     onStates(states);
   }, [states, onStates]);
+
+  // The map gets the same lists; resent when the scene comes up late, like `npc:working-state`.
+  useEffect(() => {
+    const publish = () => EventBus.emit("npc:states", { states, labels });
+    publish();
+    EventBus.on("scene-ready", publish);
+    return () => {
+      EventBus.off("scene-ready", publish);
+    };
+  }, [states, labels]);
 
   return null;
 }

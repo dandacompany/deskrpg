@@ -33,6 +33,7 @@ import {
 } from "../motion-snapshot";
 import { NpcMovementOwnership, publishNpcArrival } from "../npc-movement-ownership";
 import { findPath, clearMovementSegment, type NavigationPoint } from "../navigation";
+import type { NpcStateKind } from "../../lib/npc-state-map";
 import { TrafficCoordinator, clearActors, findTrafficPath, type TrafficActor } from "../traffic";
 import { peerMovementUncertainty, type PeerMotionSample } from "../peer-motion-envelope";
 import {
@@ -181,6 +182,9 @@ export class OfficeSimulation {
   private workingNpcs = new Set<string>();
   /** npcId → number of items in progress. One employee can run several, so the count is received too. */
   private workingCounts: Record<string, number> = {};
+  /** D08 state lists and their leading label, replaced wholesale by `npc:states`. */
+  private npcStateLists: Record<string, NpcStateKind[]> = {};
+  private npcStateLabels: Record<string, string> = {};
 
   // ---------------------------------------------------------------------------
   // Player
@@ -442,6 +446,8 @@ export class OfficeSimulation {
         phase: this.responsePhases[npc.id],
         working: this.workingNpcs.has(npc.id),
         workingCount: this.workingCounts[npc.id] ?? 0,
+        states: this.npcStateLists[npc.id],
+        stateLabel: this.npcStateLabels[npc.id],
       };
     });
     if (this.playerReady && this.player)
@@ -752,6 +758,16 @@ export class OfficeSimulation {
         for (const npcId of this.workingNpcs) {
           if (!previous.has(npcId)) this.seatNpcForWork(npcId);
         }
+      },
+    );
+    // D08 state map — GamePageClient's `NpcStatesBridge` computes it (the approvals it needs live in a React context).
+    this.npcStateLists = {};
+    this.npcStateLabels = {};
+    this.eventScope.on(
+      "npc:states",
+      (payload: { states: Record<string, NpcStateKind[]>; labels?: Record<string, string> }) => {
+        this.npcStateLists = payload.states;
+        this.npcStateLabels = payload.labels ?? {};
       },
     );
     // Conversation previews are independent of activity and greeting lifetimes.

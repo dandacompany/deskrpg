@@ -185,6 +185,11 @@
 .office-actor-label[hidden] {
   display: none;
 }
+/* D08: nothing about this employee can be known right now — dim the tag so its last pose and bubble aren't read as current. */
+.office-actor-label[data-unknown="true"] {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
 .office-seat-badge {
   position: absolute;
   left: 0;

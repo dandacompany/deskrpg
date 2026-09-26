@@ -129,3 +129,46 @@ test("for an employee running several cards, the response indicator wins while r
   assert.equal(kind, "thinking");
   assert.equal(indicatorCountLabel(kind, actor), "");
 });
+
+test("with a state list, the name tag shows its first state", async () => {
+  const { actorIndicator: indicator } = await import("./bridge");
+  const base = { phase: undefined, active: false, working: true };
+  assert.equal(indicator({ ...base, states: ["unknown", "awaiting_approval"] }), "unknown");
+  assert.equal(
+    indicator({ ...base, states: ["awaiting_approval", "working"] }),
+    "awaiting_approval",
+  );
+  assert.equal(
+    indicator({ ...base, states: ["stopped_after_failures"] }),
+    "stopped_after_failures",
+  );
+  assert.equal(indicator({ ...base, states: ["response_failed"] }), "response_failed");
+  assert.equal(indicator({ ...base, states: ["working"] }), "working");
+  // Responding keeps the phase glyph it already had.
+  assert.equal(
+    indicator({ ...base, phase: "streaming", states: ["responding", "working"] }),
+    "streaming",
+  );
+  // A report walk already has its own bubble; an idle employee has nothing.
+  assert.equal(indicator({ ...base, states: ["reporting"] }), null);
+  assert.equal(indicator({ ...base, states: [] }), null);
+});
+
+test("an unknown state hides the frozen working badge instead of stacking on it", async () => {
+  const {
+    actorIndicator: indicator,
+    actorStateUnknown,
+    indicatorCountLabel: count,
+  } = await import("./bridge");
+  const actor = { active: false, working: true, workingCount: 3, states: ["unknown"] as const };
+  const kind = indicator(actor);
+  assert.equal(kind, "unknown");
+  assert.equal(count(kind, actor), "");
+  assert.equal(actorStateUnknown(actor), true);
+  assert.equal(actorStateUnknown({ states: ["working"] }), false);
+  assert.equal(actorStateUnknown({}), false);
+});
+
+test("without a state list the old phase/working rule still applies", () => {
+  assert.equal(actorIndicator({ phase: undefined, active: false, working: true }), "working");
+});
