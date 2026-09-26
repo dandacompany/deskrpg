@@ -222,6 +222,8 @@ export type KanbanEvent = {
   kind: string;
   payload: Record<string, unknown>;
   created_at: PluginTime;
+  /** The run this event came from; null for card-level events. Capability `kanban_run_events` (plugin 0.21.0). */
+  run_id?: number | string | null;
 };
 
 export type KanbanAttachment = {
