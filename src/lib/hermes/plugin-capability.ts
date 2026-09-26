@@ -540,6 +540,11 @@ export function supportsReviewPolicy(info: PluginInfo | null): boolean {
   return reviewSupport(info?.capabilities).policies;
 }
 
+/** The plugin enforces approvals through hooks and keeps board defaults (upstream Hermes). */
+export function supportsReviewHooks(info: PluginInfo | null): boolean {
+  return info?.capabilities.includes(REVIEW_HOOKS_CAPABILITY) ?? false;
+}
+
 /** "AI review, then a person" can be enforced. */
 export function supportsMixedReview(info: PluginInfo | null): boolean {
   return reviewSupport(info?.capabilities).mixed;

@@ -376,3 +376,39 @@ test("if the board name sync fails, the channel rename is still 200 and synced_a
 function channelBoardSlugOf(channelId: string) {
   return `deskrpg-${channelId.replace(/-/g, "").toLowerCase()}`;
 }
+
+test("on a review-hooks gateway the first binding defaults the board to human approval, once", async () => {
+  const plugin = await startPlugin({
+    capabilities: ["kanban", "cron", "events", "review_hooks_v1"],
+  });
+  const user = await seedUser("board-owner");
+  const gateway = await seedGateway(user.id, plugin.baseUrl);
+  const channel = await seedChannel(user.id, "훅 채널");
+
+  assert.equal((await bind(channel.id, user.id, gateway.id)).status, 200);
+  const { ensureChannelBoard, channelBoardSlug } = await import("@/lib/kanban-boards");
+  assert.equal((await ensureChannelBoard(channel.id)).ok, true);
+
+  const defaults = boardRequests(plugin).filter((r) => r.method === "PUT");
+  assert.deepEqual(
+    defaults.map((r) => [r.path, r.json]),
+    [
+      [
+        `/deskrpg/kanban/boards/${channelBoardSlug(channel.id)}/default-policy`,
+        { mode: "human", reviewer_profile: null },
+      ],
+    ],
+    "set when the board is first bound, not on every ensure",
+  );
+});
+
+test("without review hooks no board default is sent", async () => {
+  const plugin = await startPlugin({
+    capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"],
+  });
+  const user = await seedUser("board-owner");
+  const gateway = await seedGateway(user.id, plugin.baseUrl);
+  const channel = await seedChannel(user.id, "패치 채널");
+  assert.equal((await bind(channel.id, user.id, gateway.id)).status, 200);
+  assert.equal(boardRequests(plugin).filter((r) => r.method === "PUT").length, 0);
+});

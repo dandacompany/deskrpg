@@ -2073,3 +2073,36 @@ test("a review-hooks gateway counts as enforcing approvals — no no-approval no
     await f.cleanup();
   }
 });
+
+test("a card finished outside DeskRPG says so in its detail", async () => {
+  const f = await mount(
+    (url) => {
+      if (url.includes("/automation/status"))
+        return json(status({ capabilities: ["kanban", "review_hooks_v1"] }));
+      if (url.includes("/kanban/board")) return json(board());
+      return json(
+        detail({
+          id: "t-todo",
+          title: "밖에서 끝난 카드",
+          status: "done",
+          review: {
+            policy: { version: 1, mode: "human", reviewer_profile: null },
+            policy_revision: 1,
+            submission: null,
+            review_round: 0,
+            state: "approved",
+            reason: "external_done",
+            approval: null,
+          },
+        }),
+      );
+    },
+    { initialTaskId: "t-todo" },
+  );
+  try {
+    const state = f.host.querySelector('[data-review-state="externalDone"]');
+    assert.match(state?.textContent ?? "", /DeskRPG 밖에서 완료/);
+  } finally {
+    await f.cleanup();
+  }
+});

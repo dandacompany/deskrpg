@@ -1701,6 +1701,20 @@ export async function startFakePluginServer(
       if (method === "POST") return createBoard(body);
       throw notFound();
     }
+    const defaultPolicy = /^\/deskrpg\/kanban\/boards\/([^/]+)\/default-policy$/.exec(pathname);
+    if (defaultPolicy && method === "PUT") {
+      if (!info.capabilities?.includes("review_hooks_v1")) throw notFound();
+      const slug = decodeURIComponent(defaultPolicy[1]);
+      return {
+        status: 200,
+        body: {
+          board: slug,
+          default: body.mode
+            ? { mode: body.mode, reviewer_profile: body.reviewer_profile ?? null }
+            : null,
+        },
+      };
+    }
     let m = /^\/deskrpg\/kanban\/boards\/([^/]+)$/.exec(pathname);
     if (m && method === "PATCH") {
       const record = boards.get(decodeURIComponent(m[1]));

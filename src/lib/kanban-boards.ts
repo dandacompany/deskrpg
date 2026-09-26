@@ -49,6 +49,7 @@ import { decryptGatewayToken, getChannelGatewayBinding } from "@/lib/gateway-res
 import type { BoardMeta } from "@/lib/hermes/deskrpg-plugin-types";
 import { createOwnerPluginClient, type OwnerPluginClient } from "@/lib/hermes/plugin-client";
 import { transportFetch } from "@/lib/hermes/setup/transport";
+import { supportsReviewHooks } from "@/lib/hermes/plugin-capability";
 
 export type { PluginGate } from "@/lib/automation-gate";
 
@@ -358,6 +359,10 @@ async function ensureChannelBoardUnlocked(
       return { ok: false, code: resolved.pluginGate.code, reason: resolved.pluginGate.reason, row };
     }
 
+    // Never bound successfully before: this is the board's first binding.
+    const previous = await getChannelBoardBySlug(channelId, boardSlug);
+    const firstBinding = !previous?.boardNameSyncedAt;
+
     const created = await resolved.ownerClient.kanban.createBoard({ slug: boardSlug, name });
     if (!created.ok) {
       const row = await upsertBoardRow({
@@ -372,6 +377,20 @@ async function ensureChannelBoardUnlocked(
         reason: created.failure.message || created.failure.code,
         row,
       };
+    }
+
+    // New cards need a person's approval — upstream Hermes keeps that product default through the
+    // board default, which also covers cards made outside DeskRPG. Set once, so a changed default
+    // survives later ensures. Best effort: the board works without it.
+    if (firstBinding && supportsReviewHooks(resolved.pluginGate.info)) {
+      const set = await resolved.ownerClient.kanban.setBoardDefaultPolicy(boardSlug, {
+        mode: "human",
+        reviewer_profile: null,
+      });
+      if (!set.ok)
+        console.warn(
+          `[kanban-boards] could not default board ${boardSlug} to human approval: ${set.failure.code}`,
+        );
     }
 
     const row = await upsertBoardRow({

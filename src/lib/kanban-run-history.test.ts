@@ -126,3 +126,20 @@ test("a card blocked for another reason, or with no failures, has nothing to say
   assert.equal(cardRunState({ status: "ready", consecutive_failures: 0 }, ok), null);
   assert.equal(cardRunState({ status: "done" }, ok), null);
 });
+
+test("a card finished outside DeskRPG says so in its run history", () => {
+  const task = {
+    status: "done",
+    review: {
+      policy: { version: 1, mode: "human", reviewer_profile: null },
+      policy_revision: 1,
+      submission: null,
+      review_round: 0,
+      state: "approved",
+      reason: "external_done",
+      approval: null,
+    },
+  } as Parameters<typeof cardRunState>[0];
+  assert.deepEqual(cardRunState(task, []), { kind: "external_done" });
+  assert.equal(cardRunState({ status: "done" }, []), null);
+});

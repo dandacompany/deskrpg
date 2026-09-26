@@ -20,6 +20,7 @@ import {
   PLUGIN_INSTALL_COMMAND,
   progressLabel,
   splitBlackboardComments,
+  reviewView,
   taskFormToBody,
   warningBadge,
   type BoardNpc,
@@ -298,4 +299,66 @@ test("a mixed review sends its AI reviewer like agent review", () => {
     reviewerNpcId: "n2",
   });
   assert.deepEqual(body.reviewPolicy, { mode: "mixed", reviewerNpcId: "n2" });
+});
+
+const reviewOf = (over: Record<string, unknown>) =>
+  ({
+    policy: { version: 1, mode: "human", reviewer_profile: null },
+    policy_revision: 1,
+    submission: null,
+    review_round: 1,
+    state: "approved",
+    reason: null,
+    approval: null,
+    ...over,
+  }) as unknown as NonNullable<KanbanTask["review"]>;
+
+test("done without an approval decision shows as completed outside DeskRPG", () => {
+  const view = reviewView(reviewOf({ state: "approved", reason: "external_done", approval: null }));
+  assert.equal(view.label, "externalDone");
+  assert.equal(view.reasonKey, null, "the label already says it");
+});
+
+test("a submitted card waits for a person or for the AI by its policy", () => {
+  assert.equal(reviewView(reviewOf({ state: "submitted" })).label, "humanWaiting");
+  const mixed = reviewOf({
+    state: "submitted",
+    policy: { version: 1, mode: "mixed", reviewer_profile: "rev" },
+  });
+  assert.equal(reviewView(mixed).label, "agentWaiting");
+  assert.equal(reviewView(reviewOf({ state: "human_required" })).label, "human_required");
+});
+
+test("approvals from the patched core and from the hooks read the same", () => {
+  const patch = reviewView(
+    reviewOf({
+      approval: {
+        actor_kind: "human",
+        actor_id: "u1",
+        actor_name: "단테",
+        submission_id: "s1",
+        approved_at: 1_790_000_000,
+      },
+    }),
+  );
+  assert.deepEqual(patch.approval, { who: "단테", atMs: 1_790_000_000_000, submission: "s1" });
+  const hooks = reviewView(
+    reviewOf({ approval: { actor_kind: "human", actor_id: "deskrpg:u1", at: 1_790_000_000 } }),
+  );
+  assert.deepEqual(hooks.approval, {
+    who: "deskrpg:u1",
+    atMs: 1_790_000_000_000,
+    submission: null,
+  });
+});
+
+test("an unknown reason reads as unknown instead of a missing translation", () => {
+  assert.equal(
+    reviewView(reviewOf({ state: "reviewing", reason: "brand_new" })).reasonKey,
+    "unknown",
+  );
+  assert.equal(
+    reviewView(reviewOf({ state: "reviewing", reason: "reviewer_unavailable" })).reasonKey,
+    "reviewer_unavailable",
+  );
 });

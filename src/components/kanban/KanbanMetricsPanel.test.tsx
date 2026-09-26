@@ -32,7 +32,7 @@ function run(over: Partial<KanbanTimelineRun> = {}): KanbanTimelineRun {
 
 async function mount(
   runs: KanbanTimelineRun[],
-  cards: { id: string; status: string }[] = [],
+  cards: Parameters<typeof computeOperationalMetrics>[1] = [],
   pending: ReadonlySet<string> = new Set(),
   transitions: KanbanStatusTransition[] | null = null,
 ) {
@@ -160,4 +160,28 @@ test("rework shows 0 when transitions are known and none were returns", async ()
 test("the rework cell stays hidden when transitions can't be asked for", async () => {
   const host = await mount([run()]);
   assert.equal(host.querySelector('[data-metric="rework"]') !== null, false);
+});
+
+test("approved and outside-DeskRPG completions are shown apart", async () => {
+  const review = (reason: string | null) =>
+    ({
+      policy: { version: 1, mode: "human", reviewer_profile: null },
+      policy_revision: 1,
+      submission: null,
+      review_round: 1,
+      state: "approved",
+      reason,
+      approval: null,
+    }) as never;
+  const host = await mount(
+    [run({ task_id: "a" }), run({ task_id: "b" })],
+    [
+      { id: "a", status: "done", review: review(null) },
+      { id: "b", status: "done", review: review("external_done") },
+    ],
+  );
+  const cell = host.querySelector('[data-metric="approvals"]');
+  assert.equal(Boolean(cell), true);
+  assert.match(cell?.textContent ?? "", /1/);
+  assert.match(cell?.textContent ?? "", /outside DeskRPG/);
 });
