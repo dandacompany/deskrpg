@@ -17,16 +17,8 @@ import type { NpcQuestion, ProfilePluginClient } from "@/lib/hermes/plugin-clien
 
 export type AskUserContext = { userId: string; npcId: string; channelId: string };
 
-export type UserQuestion = {
-  id: string;
-  npcId: string;
-  /** From `hermes_profiles`, never `npcs.name`. null when the profile has no display name. */
-  npcName: string | null;
-  question: string;
-  choices: string[];
-  allowOther: boolean;
-  createdAt: string;
-};
+export type { UserQuestion } from "./npc-question-types";
+import type { UserQuestion } from "./npc-question-types";
 
 export type AnswerOutcome = "answered" | "not_found" | "invalid" | "failed";
 
