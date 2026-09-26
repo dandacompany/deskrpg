@@ -2343,6 +2343,7 @@ const ko: Record<string, string> = {
   "gateways.shareTitle": "공유 관리",
   "gateways.shareHelp": "다른 사용자의 로그인 ID를 입력해 이 게이트웨이 사용 권한을 공유합니다.",
   "gateways.selectGatewayFirst": "먼저 게이트웨이를 선택하세요.",
+  "gateways.backToGateways": "연결로 돌아가기",
   "gateways.shareOwnerOnly": "공유 관리는 게이트웨이 소유자만 사용할 수 있습니다.",
   "gateways.shareLoginId": "공유할 사용자 로그인 ID",
   "gateways.shareAdd": "공유 추가",

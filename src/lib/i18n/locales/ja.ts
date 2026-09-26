@@ -2371,6 +2371,7 @@ const ja: Record<string, string> = {
   "gateways.shareHelp":
     "他のユーザーのログイン ID を入力すると、このゲートウェイの利用権限を共有できます。",
   "gateways.selectGatewayFirst": "先にゲートウェイを選択してください。",
+  "gateways.backToGateways": "接続に戻る",
   "gateways.shareOwnerOnly": "共有管理はゲートウェイ所有者のみ利用できます。",
   "gateways.shareLoginId": "共有するユーザーのログイン ID",
   "gateways.shareAdd": "共有を追加",
