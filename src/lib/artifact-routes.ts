@@ -23,6 +23,7 @@ import { rawFailureResponse, streamProxyResponse } from "@/lib/hermes/stream-pro
 import { compareSemver } from "@/lib/hermes/plugin-capability";
 import { getUserId } from "@/lib/internal-rpc";
 import { taskTimeMs } from "@/lib/plugin-time";
+import { readSessionSources } from "@/lib/session-sources";
 import {
   buildArtifactProvenance,
   PROVENANCE_PARENTS_MAX,
@@ -138,6 +139,28 @@ export async function getArtifact(
     sourceInChannel: artifact.source_kind !== "kanban" || artifact.board === resolved.ctx.boardSlug,
     ...(provenance ? { provenance } : {}),
   });
+}
+
+/** What the session that made the artifact read. Expected states (expired, unavailable) are 200 values. */
+export async function getArtifactSources(
+  req: NextRequest,
+  channelId: string,
+  artifactId: string,
+): Promise<Response> {
+  const resolved = await resolve(req, channelId);
+  if (!resolved.ok) return resolved.response;
+  if (!isValidArtifactId(artifactId)) return artifactNotFound();
+  const loaded = await loadScopedArtifact(resolved.ctx, artifactId);
+  if (!loaded.ok) return loaded.response;
+  const { ctx } = resolved;
+  const { artifact } = loaded.detail;
+  const read = await readSessionSources({
+    gateway: { id: ctx.gatewayId, baseUrl: ctx.gatewayBaseUrl },
+    capabilities: ctx.capabilities,
+    profileName: artifact.profile,
+    sessionId: artifact.session_id,
+  });
+  return read.ok ? NextResponse.json(read.view) : read.response;
 }
 
 export async function getArtifactContent(
