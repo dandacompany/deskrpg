@@ -89,7 +89,12 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
   const t = useT();
   const { locale } = useLocale();
   const [busyStep, setBusyStep] = useState<string | null>(null);
-  const [updateError, setUpdateError] = useState("");
+  // The error remembers which installed version it was about. Once a recheck (connection test,
+  // reload) shows another version or no longer an outdated one, it no longer applies — a user
+  // who upgraded on the host by hand must not keep seeing "the app cannot run commands here".
+  const [updateError, setUpdateError] = useState<{ text: string; version: string | null } | null>(
+    null,
+  );
   // If the update inherited worker propagation turned on, say so once (the job's workerPropagationInherited).
   const [inherited, setInherited] = useState(false);
   const view = describePluginVersion({
@@ -99,7 +104,7 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
 
   // Updating runs commands on the host and takes long, so it runs as a job — using the same job query as the wizard.
   const runUpdate = async () => {
-    setUpdateError("");
+    setUpdateError(null);
     setBusyStep("inspecting");
     try {
       const started = await fetch(`/api/gateways/${gateway.id}/plugin/update`, { method: "POST" });
@@ -121,7 +126,10 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
       }
       onUpdated();
     } catch (code) {
-      setUpdateError(setupHostError(locale, code) ?? setupError(setupCopy[locale], code));
+      setUpdateError({
+        text: setupHostError(locale, code) ?? setupError(setupCopy[locale], code),
+        version: gateway.pluginVersion ?? null,
+      });
     } finally {
       setBusyStep(null);
     }
@@ -161,7 +169,11 @@ function PluginVersionLine({ gateway, onUpdated }: { gateway: GatewayRow; onUpda
               : t("gateways.pluginVersionUpdateNow")}
           </button>
         )}
-        {updateError && <span className="text-danger">{updateError}</span>}
+        {updateError &&
+          view.state === "outdated" &&
+          updateError.version === (gateway.pluginVersion ?? null) && (
+            <span className="text-danger">{updateError.text}</span>
+          )}
       </p>
       {inherited && (
         <WorkerPropagationInheritedNotice
