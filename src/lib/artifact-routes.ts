@@ -24,8 +24,12 @@ import { compareSemver } from "@/lib/hermes/plugin-capability";
 import { getUserId } from "@/lib/internal-rpc";
 import { taskTimeMs } from "@/lib/plugin-time";
 import { readSessionSources } from "@/lib/session-sources";
+import { and, eq } from "drizzle-orm";
+
+import { db, hermesProfiles } from "@/db";
 import {
   buildArtifactProvenance,
+  provenanceProfile,
   PROVENANCE_PARENTS_MAX,
   type ArtifactProvenance,
 } from "@/lib/artifact-provenance";
@@ -114,7 +118,19 @@ async function loadProvenance(
       return { id, title, status };
     }),
   );
-  return buildArtifactProvenance(res.data, taskTimeMs(artifact.created_at), parents);
+  const createdAt = taskTimeMs(artifact.created_at);
+  const profile = provenanceProfile(res.data, createdAt);
+  const [named] = profile
+    ? await db
+        .select({ displayName: hermesProfiles.displayName })
+        .from(hermesProfiles)
+        .where(
+          and(eq(hermesProfiles.gatewayId, ctx.gatewayId), eq(hermesProfiles.profileName, profile)),
+        )
+        .limit(1)
+    : [];
+  const displayName = named?.displayName?.trim() || null;
+  return buildArtifactProvenance(res.data, createdAt, parents, () => displayName);
 }
 
 export async function getArtifact(

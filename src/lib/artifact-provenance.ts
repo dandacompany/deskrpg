@@ -26,6 +26,8 @@ export type ArtifactProvenance = {
     ended_at: PluginTime | null;
   } | null;
   parents: ArtifactProvenanceCard[];
+  /** Who made it, as the employee's display name (`hermes_profiles`); the profile name when unknown. */
+  workerName: string | null;
   /** Parents beyond `PROVENANCE_PARENTS_MAX`, or whose card could not be read. */
   moreParents: number;
 };
@@ -47,12 +49,22 @@ export function pickRun(runs: readonly KanbanRun[], createdAtMs: number | null):
   return timed[timed.length - 1].run;
 }
 
+/** The profile that made the artifact: the run's, else the card's assignee. */
+export function provenanceProfile(
+  detail: KanbanTaskDetail,
+  createdAtMs: number | null,
+): string | null {
+  return pickRun(detail.runs ?? [], createdAtMs)?.profile ?? detail.task.assignee ?? null;
+}
+
 export function buildArtifactProvenance(
   detail: KanbanTaskDetail,
   createdAtMs: number | null,
   parents: ReadonlyArray<ArtifactProvenanceCard | null>,
+  displayName: (profile: string) => string | null = () => null,
 ): ArtifactProvenance {
   const run = pickRun(detail.runs ?? [], createdAtMs);
+  const profile = provenanceProfile(detail, createdAtMs);
   const known = parents.filter((p): p is ArtifactProvenanceCard => p !== null);
   return {
     task: {
@@ -70,6 +82,7 @@ export function buildArtifactProvenance(
         }
       : null,
     parents: known,
+    workerName: profile ? (displayName(profile) ?? profile) : null,
     moreParents: (detail.links?.parents?.length ?? 0) - known.length,
   };
 }
