@@ -77,5 +77,5 @@ test("an older plugin points at manual registration instead", async () => {
   await render(<HermesProfileImport gatewayId={GW} onImported={() => {}} />);
   await click("[data-import-profile=vps-sam]");
   assert.match(text(), /플러그인을 업데이트해야 합니다/);
-  assert.equal(container.querySelector("[data-import-rotate]"), null);
+  assert.ok(!container.querySelector("[data-import-rotate]"));
 });
