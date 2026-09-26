@@ -261,6 +261,42 @@ test("a past target date is marked overdue", async () => {
   assert.ok(host.textContent?.includes("overdue"));
 });
 
+// A local clock and a window that ends before today, so the chip states the day count.
+const LOCAL_NOW = Date.parse("2026-09-26T10:00:00");
+const EARLIER_WINDOW = {
+  fromMs: LOCAL_NOW - 3 * 24 * 3600_000,
+  toMs: LOCAL_NOW - 2 * 24 * 3600_000,
+};
+
+test("yesterday's target reads one day overdue, not zero days left", async () => {
+  const { host } = await mount({
+    targetDate: "2026-09-25",
+    now: LOCAL_NOW,
+    window: EARLIER_WINDOW,
+  });
+  assert.match(host.textContent ?? "", /\(1 days overdue\)/);
+  assert.ok(!/days left/.test(host.textContent ?? ""));
+});
+
+test("today's target reads today, not one day left", async () => {
+  const { host } = await mount({
+    targetDate: "2026-09-26",
+    now: LOCAL_NOW,
+    window: EARLIER_WINDOW,
+  });
+  assert.match(host.textContent ?? "", /\(today\)/);
+  assert.ok(!/days left/.test(host.textContent ?? ""));
+});
+
+test("tomorrow's target reads one day left", async () => {
+  const { host } = await mount({
+    targetDate: "2026-09-27",
+    now: LOCAL_NOW,
+    window: EARLIER_WINDOW,
+  });
+  assert.match(host.textContent ?? "", /\(1 days left\)/);
+});
+
 test("only a link where both cards are visible becomes an arrow", async () => {
   const parent = run({ task_id: "p", profile: "a" });
   const child = run({

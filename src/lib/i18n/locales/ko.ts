@@ -3081,6 +3081,7 @@ const ko: Record<string, string> = {
   "kanban.timeline.noTarget": "목표일 미정",
   "kanban.timeline.target": "목표일 {date}",
   "kanban.timeline.targetLine": "프로젝트 목표일 {date}",
+  "kanban.timeline.targetToday": "목표일 {date} (오늘)",
   "kanban.timeline.targetAhead": "목표일 {date} ({days}일 남음)",
   "kanban.timeline.targetPast": "목표일 {date} ({days}일 지남)",
   "kanban.warning.noDispatcher":

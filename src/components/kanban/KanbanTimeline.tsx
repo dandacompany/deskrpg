@@ -343,12 +343,15 @@ function TargetChip({ target }: { target: ReturnType<typeof targetMarker> }) {
   if (target.kind === "inWindow") {
     return <span className="text-danger">{t("kanban.timeline.target", { date })}</span>;
   }
-  const overdue = target.daysFromNow < 0;
+  // Calendar days: 0 is due today (still open), negative is overdue.
+  const days = target.daysFromNow;
   return (
-    <span className={overdue ? "text-danger" : "text-text-secondary"}>
-      {overdue
-        ? t("kanban.timeline.targetPast", { date, days: Math.abs(target.daysFromNow) })
-        : t("kanban.timeline.targetAhead", { date, days: target.daysFromNow })}
+    <span className={days <= 0 ? "text-danger" : "text-text-secondary"}>
+      {days < 0
+        ? t("kanban.timeline.targetPast", { date, days: -days })
+        : days === 0
+          ? t("kanban.timeline.targetToday", { date })
+          : t("kanban.timeline.targetAhead", { date, days })}
     </span>
   );
 }
