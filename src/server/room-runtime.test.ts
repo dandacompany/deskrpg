@@ -387,6 +387,7 @@ function approvalAdapter(reply: string, runId: string): NpcAdapter {
         command: "rm -r /tmp/probe",
         description: "recursive delete",
         kind: "command",
+        patternKey: null,
         choices: ["once", "session", "deny"],
       });
       // Let the card be registered while the run is still going.

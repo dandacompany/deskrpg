@@ -87,6 +87,7 @@ const approvalEvent: ParsedApprovalEvent = {
   command: "mcp_probe_write_note",
   description: "write-capable MCP tool",
   kind: "mcp",
+  patternKey: null,
   choices: ["once", "session", "deny"],
 };
 

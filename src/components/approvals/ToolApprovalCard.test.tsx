@@ -54,6 +54,9 @@ const request = (over: Partial<ToolApprovalRequest> = {}): ToolApprovalRequest =
   description: "recursive delete",
   choices: ["once", "session", "deny"],
   expiresAt: Date.now() + 120_000,
+  groupKey: "g-1",
+  repeat: { count: 1, lastStatus: null },
+  summary: { state: "unavailable" },
   ...over,
 });
 

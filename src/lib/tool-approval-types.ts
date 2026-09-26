@@ -4,7 +4,8 @@
  * only ever sees these shapes and answers with `tool-approval:decide`.
  *
  * Socket events (registered in socket-event-parity.test.ts):
- * - server → approver sockets `tool-approval:request`  ToolApprovalRequest
+ * - server → approver sockets `tool-approval:request`  ToolApprovalRequest — sent again with the same
+ *   key when a repeat joins the card or its summary arrives; the client updates the card in place
  * - server → approver sockets `tool-approval:resolved` ToolApprovalResolved
  * - server → meeting / chat room `tool-approval:pending` ToolApprovalPending
  * - client → server            `tool-approval:decide`   ToolApprovalDecide
@@ -31,7 +32,19 @@ export type ToolApprovalRequest = {
   choices: ToolApprovalChoice[];
   /** Epoch ms after which Hermes has denied it on its own. */
   expiresAt: number;
+  /**
+   * Same conversation, approver, NPC and request (pattern and command) — the client keeps one card
+   * per group. Opaque; carries no command text.
+   */
+  groupKey: string;
+  /** How many times this group was requested in the conversation (this one included), and how the previous one ended. */
+  repeat: { count: number; lastStatus: ToolApprovalStatus | null };
+  /** A plain-language line in the approver's language; the Hermes text stays in `command`/`description`. */
+  summary: ToolApprovalSummary;
 };
+
+export type ToolApprovalSummary =
+  { state: "pending" } | { state: "ready"; text: string } | { state: "unavailable" };
 
 export type ToolApprovalStatus =
   "pending" | "approved_once" | "approved_session" | "denied" | "expired" | "failed";

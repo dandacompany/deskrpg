@@ -143,13 +143,83 @@ test("a second decision on the same card is refused", async () => {
 test("two requests in one run are independent cards", async () => {
   const h = harness();
   h.registry.add(req({ requestId: "req_1" }));
-  h.registry.add(req({ requestId: "req_2" }));
+  h.registry.add(req({ requestId: "req_2", command: "rm -rf build" }));
   assert.equal(await h.registry.decide("user-dante", "run_1:req_1", "deny"), "ok");
   const left = h.registry.pendingFor("user-dante");
   assert.deepEqual(
     left.map((r) => r.key),
     ["run_1:req_2"],
   );
+});
+
+test("a repeat of a request already answered in this conversation carries the count and the last decision", async () => {
+  const h = harness();
+  h.registry.add(req({ runId: "run_1" }));
+  const first = h.userEmits[0].payload as { repeat: unknown; groupKey: string };
+  assert.deepEqual(first.repeat, { count: 1, lastStatus: null });
+  await h.registry.decide("user-dante", "run_1:req_1", "deny");
+  // The next turn is a new Hermes run: its request must be answered on its own.
+  h.registry.add(req({ runId: "run_2" }));
+  const second = h.userEmits.at(-1)?.payload as { key: string; repeat: unknown; groupKey: string };
+  assert.equal(second.key, "run_2:req_1");
+  assert.equal(second.groupKey, first.groupKey);
+  assert.deepEqual(second.repeat, { count: 2, lastStatus: "denied" });
+});
+
+test("a different NPC, command or conversation is a different group", () => {
+  const h = harness();
+  h.registry.add(req({ runId: "r1" }));
+  h.registry.add(req({ runId: "r2", npcId: "npc-other" }));
+  h.registry.add(req({ runId: "r3", command: "another tool" }));
+  h.registry.add(req({ runId: "r4", channelId: "ch-2" }));
+  const keys = h.userEmits.map((e) => (e.payload as { groupKey: string }).groupKey);
+  assert.equal(new Set(keys).size, 4);
+  for (const e of h.userEmits)
+    assert.deepEqual((e.payload as { repeat: unknown }).repeat, { count: 1, lastStatus: null });
+});
+
+test("the same request pending twice is one card, and one decision answers each Hermes request", async () => {
+  const h = harness();
+  h.registry.add(req({ runId: "run_1", requestId: "a" }));
+  h.registry.add(req({ runId: "run_2", requestId: "b" }));
+  assert.deepEqual(
+    h.registry.pendingFor("user-dante").map((r) => [r.key, r.repeat.count]),
+    [["run_1:a", 2]],
+  );
+  const cardKeys = new Set(h.userEmits.map((e) => (e.payload as { key: string }).key));
+  assert.deepEqual([...cardKeys], ["run_1:a"], "the second request updates the first card");
+  assert.equal(await h.registry.decide("user-dante", "run_1:a", "deny"), "ok");
+  assert.deepEqual(h.calls, [
+    { npcId: "npc-sophie", runId: "run_1", body: { choice: "deny", request_id: "a" } },
+    { npcId: "npc-sophie", runId: "run_2", body: { choice: "deny", request_id: "b" } },
+  ]);
+  assert.deepEqual(h.userEmits.at(-1)?.payload, { key: "run_1:a", status: "denied" });
+});
+
+test("a merged card stays open while another of its requests is still waiting", () => {
+  const h = harness();
+  h.registry.add(req({ runId: "run_1", requestId: "a" }));
+  h.registry.add(req({ runId: "run_2", requestId: "b" }));
+  h.registry.expireRun("run_1");
+  assert.deepEqual(
+    h.registry.pendingFor("user-dante").map((r) => r.key),
+    ["run_1:a"],
+  );
+  h.registry.expireRun("run_2");
+  assert.deepEqual(h.registry.pendingFor("user-dante"), []);
+  assert.deepEqual(h.userEmits.at(-1)?.payload, { key: "run_1:a", status: "expired" });
+});
+
+test("repeats older than the conversation window start a fresh count", async () => {
+  const h = harness();
+  h.registry.add(req({ runId: "run_1" }));
+  await h.registry.decide("user-dante", "run_1:req_1", "deny");
+  h.tick(61 * 60 * 1000);
+  h.registry.add(req({ runId: "run_2", expiresAt: 10_000_000 }));
+  assert.deepEqual((h.userEmits.at(-1)?.payload as { repeat: unknown }).repeat, {
+    count: 1,
+    lastStatus: null,
+  });
 });
 
 test("the approval times out on its own timer", () => {
@@ -162,9 +232,9 @@ test("the approval times out on its own timer", () => {
 
 test("expireRun closes every card of that run and nothing else", () => {
   const h = harness();
-  h.registry.add(req({ runId: "run_1", requestId: "a" }));
-  h.registry.add(req({ runId: "run_1", requestId: "b" }));
-  h.registry.add(req({ runId: "run_2", requestId: "a" }));
+  h.registry.add(req({ runId: "run_1", requestId: "a", command: "one" }));
+  h.registry.add(req({ runId: "run_1", requestId: "b", command: "two" }));
+  h.registry.add(req({ runId: "run_2", requestId: "a", command: "three" }));
   h.registry.expireRun("run_1");
   assert.deepEqual(
     h.registry.pendingFor("user-dante").map((r) => r.key),
@@ -249,6 +319,7 @@ const EVENT: ParsedApprovalEvent = {
   command: "rm -r /tmp/probe",
   description: "recursive delete",
   kind: "command",
+  patternKey: null,
   choices: ["once", "session", "deny"],
 };
 

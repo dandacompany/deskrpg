@@ -23,6 +23,7 @@ test("parses the measured MCP approval and drops always", () => {
     command: MEASURED.command,
     description: MEASURED.description,
     kind: "mcp",
+    patternKey: "mcp_elicitation",
     choices: ["once", "session", "deny"],
   });
 });
@@ -35,6 +36,7 @@ test("a dangerous command without session choice keeps what Hermes offered", () 
     choices: ["once", "deny"],
   });
   assert.equal(parsed?.kind, "command");
+  assert.equal(parsed?.patternKey, "recursive delete");
   assert.deepEqual(parsed?.choices, ["once", "deny"]);
   assert.equal(parsed?.requestId, null);
 });
