@@ -211,3 +211,89 @@ test("a blocked unattended run is a row only for its audience; the allowlist act
   assert.equal(memberBlocked[0].patternKey, null);
   assert.equal(memberBlocked[0].canAllowlist, false);
 });
+
+async function postCronResults(
+  channelId: string,
+  ownerId: string,
+  results: Array<{ jobId: string; jobName: string; status: "ok" | "error" }>,
+) {
+  const { ensureOfficeRoom, appendRoomMessage } = await import("@/lib/chat-rooms");
+  const office = await ensureOfficeRoom(channelId, ownerId);
+  const ids: string[] = [];
+  for (const r of results) {
+    const message = await appendRoomMessage({
+      roomId: office.id,
+      senderKind: "system",
+      senderId: null,
+      senderName: "Sophie",
+      content: r.jobName,
+      notice: {
+        kind: "cron_result",
+        jobId: r.jobId,
+        jobName: r.jobName,
+        npcName: "Sophie",
+        status: r.status,
+      },
+    });
+    ids.push(message.id);
+    // Results arrive runs apart; keep their timestamps distinct so "newest" is well defined.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  return ids;
+}
+
+async function cronRows(ownerId: string, channelId: string) {
+  const { getAttentionInbox } = await import("@/lib/attention-routes");
+  const body = await (await getAttentionInbox(get(ownerId, channelId), channelId)).json();
+  return {
+    rows: (body.rows as Array<Record<string, unknown>>).filter((r) => r.kind === "cron_failed"),
+  };
+}
+
+test("a cron that failed twice is one row, dated at its latest failure", async () => {
+  const { ownerId, channelId } = await seedCtx();
+  const [, latest] = await postCronResults(channelId, ownerId, [
+    { jobId: "job-a", jobName: "Nightly report", status: "error" },
+    { jobId: "job-a", jobName: "Nightly report", status: "error" },
+  ]);
+  const { rows } = await cronRows(ownerId, channelId);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, "job-a");
+  const { db, chatRoomMessages } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const [message] = await db
+    .select({ createdAt: chatRoomMessages.createdAt })
+    .from(chatRoomMessages)
+    .where(eq(chatRoomMessages.id, latest));
+  assert.equal(rows[0].at, String(message.createdAt));
+});
+
+test("a cron that succeeded after failing leaves the inbox", async () => {
+  const { ownerId, channelId } = await seedCtx();
+  await postCronResults(channelId, ownerId, [
+    { jobId: "job-a", jobName: "Nightly report", status: "error" },
+    { jobId: "job-a", jobName: "Nightly report", status: "ok" },
+    { jobId: "job-b", jobName: "Invoice sync", status: "ok" },
+    { jobId: "job-b", jobName: "Invoice sync", status: "error" },
+  ]);
+  const { rows } = await cronRows(ownerId, channelId);
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    ["job-b"],
+    "only the cron whose latest run failed is left",
+  );
+});
+
+test("every inbox row has a distinct kind:id key", async () => {
+  const { ownerId, channelId } = await seedCtx();
+  await postCronResults(channelId, ownerId, [
+    { jobId: "job-a", jobName: "A", status: "error" },
+    { jobId: "job-b", jobName: "B", status: "error" },
+    { jobId: "job-a", jobName: "A", status: "error" },
+    { jobId: "job-b", jobName: "B", status: "error" },
+  ]);
+  const { getAttentionInbox } = await import("@/lib/attention-routes");
+  const body = await (await getAttentionInbox(get(ownerId, channelId), channelId)).json();
+  const keys = (body.rows as Array<{ kind: string; id: string }>).map((r) => `${r.kind}:${r.id}`);
+  assert.equal(new Set(keys).size, keys.length, keys.join(" | "));
+});

@@ -22,7 +22,11 @@ import { resolveKanbanChannelContext } from "@/lib/kanban-access";
 
 export type ChannelParams = { params: Promise<{ id: string }> };
 
-/** **Failed** cron notices left in the office room. A successful run has nothing for a human to do. */
+/**
+ * Crons whose **latest** result in the office room is a failure — one row per job. A later success
+ * clears it, and repeated failures don't stack: each run posts its own notice, and listing them all
+ * duplicated the row (and its `cron_failed:<jobId>` key) with every failure.
+ */
 const CRON_SCAN_LIMIT = 200;
 
 async function recentCronFailures(channelId: string) {
@@ -43,9 +47,13 @@ async function recentCronFailures(channelId: string) {
     .orderBy(desc(chatRoomMessages.createdAt))
     .limit(CRON_SCAN_LIMIT);
   const out: AttentionInboxInput["cronFailures"][number][] = [];
+  // Newest first, so the first result seen for a job is its latest one.
+  const settled = new Set<string>();
   for (const row of rows) {
     const notice = parseRoomNotice(row.noticeJson);
-    if (!notice || notice.kind !== "cron_result" || notice.status !== "error") continue;
+    if (!notice || notice.kind !== "cron_result" || settled.has(notice.jobId)) continue;
+    settled.add(notice.jobId);
+    if (notice.status !== "error") continue;
     out.push({
       messageId: row.id,
       jobId: notice.jobId,
