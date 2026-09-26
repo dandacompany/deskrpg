@@ -3230,6 +3230,8 @@ const ja: Record<string, string> = {
   "kanban.review.selectReviewer": "別のスタッフを選択",
   "kanban.review.reviewerRequired": "実行担当とは別の出勤中スタッフを選択してください。",
   "kanban.review.help": "結果提出後、選択した承認者が確認すると完了します。",
+  "kanban.review.noApproval":
+    "このゲートウェイでは承認なしで完了します。従業員が結果を提出するとすぐ完了になります（Hermesの既定動作）。",
   "kanban.review.unsupported":
     "新しい業務の登録には承認ポリシー対応のHermesとプラグインが必要です。",
   "kanban.review.swarmUnsupported":

@@ -3071,6 +3071,8 @@ const zh: Record<string, string> = {
   "kanban.review.selectReviewer": "选择其他员工",
   "kanban.review.reviewerRequired": "请选择与执行员工不同的在岗审核员工。",
   "kanban.review.help": "提交结果后，须经所选审批人确认才能完成。",
+  "kanban.review.noApproval":
+    "此网关无需审批即完成：员工提交结果后立即标记为完成（Hermes 默认行为）。",
   "kanban.review.unsupported": "请将 Hermes 和插件更新至支持审批策略的版本后再创建任务。",
   "kanban.review.swarmUnsupported": "团队任务创建尚待支持审批策略，请逐项创建任务。",
   "kanban.review.legacy": "原审批方式",

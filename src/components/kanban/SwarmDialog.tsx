@@ -33,6 +33,8 @@ interface SwarmDialogProps {
   error?: string | null;
   onSubmit: (values: SwarmSubmit) => void;
   onClose: () => void;
+  /** The gateway can't attach approval policies — the result cards complete without approval. */
+  withoutApproval?: boolean;
 }
 
 /** Swarm-launch dialog. Workers are chosen only from channel NPCs (the server rejects sleeping NPCs with 400). */
@@ -42,6 +44,7 @@ export default function SwarmDialog({
   error: submitError,
   onSubmit,
   onClose,
+  withoutApproval = false,
 }: SwarmDialogProps) {
   const t = useT();
   const first = npcs[0]?.npcId ?? "";
@@ -199,6 +202,11 @@ export default function SwarmDialog({
             </div>
           </div>
 
+          {withoutApproval && (
+            <p data-no-approval-notice role="status" className="text-xs text-npc-dark">
+              {t("kanban.review.noApproval")}
+            </p>
+          )}
           {error && (
             <div
               role="alert"

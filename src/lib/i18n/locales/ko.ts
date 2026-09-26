@@ -3199,6 +3199,8 @@ const ko: Record<string, string> = {
   "kanban.review.selectReviewer": "다른 직원을 선택하세요",
   "kanban.review.reviewerRequired": "담당자와 다른 출근 직원을 검토자로 선택하세요.",
   "kanban.review.help": "결과를 제출한 뒤 선택한 승인자가 확인해야 완료됩니다.",
+  "kanban.review.noApproval":
+    "이 게이트웨이는 승인 없이 완료됩니다. 직원이 결과를 제출하면 바로 완료로 처리돼요(Hermes 기본 동작).",
   "kanban.review.unsupported":
     "승인 정책을 지원하는 Hermes와 플러그인으로 업데이트해야 새 업무를 등록할 수 있습니다.",
   "kanban.review.swarmUnsupported":

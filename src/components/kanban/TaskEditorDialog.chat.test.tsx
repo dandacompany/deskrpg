@@ -62,6 +62,61 @@ test("registering from a conversation preserves the original text and submits af
   }
 });
 
+test("upstream Hermes: a new card has no approval picker, says it completes without approval, and sends no policy", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const bodies: Record<string, unknown>[] = [];
+  try {
+    await act(async () =>
+      root.render(
+        <I18nProvider initialLocale="ko">
+          <TaskEditorDialog
+            mode="create"
+            reviewSupported={false}
+            initial={{
+              ...EMPTY_TASK_FORM,
+              reviewMode: undefined,
+              title: "업무",
+              assigneeNpcId: "n1",
+            }}
+            npcs={[{ npcId: "n1", npcName: "실행", profileName: "worker", active: true }]}
+            candidates={[]}
+            serverError={null}
+            submitting={false}
+            onSubmit={(body) => bodies.push(body)}
+            onClose={() => {}}
+          />
+        </I18nProvider>,
+      ),
+    );
+    assert.equal(Boolean(host.querySelector("#kanban-review-mode")), false);
+    assert.match(
+      host.querySelector("[data-no-approval-notice]")?.textContent ?? "",
+      /승인 없이 완료/,
+    );
+    const criteria = host.querySelector<HTMLTextAreaElement>("#kanban-completion-criteria");
+    if (criteria)
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!.call(
+          criteria,
+          "검증한 세 문장",
+        );
+        criteria.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    await act(async () =>
+      host
+        .querySelector("form")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+    );
+    assert.equal(bodies.length, 1);
+    assert.equal("reviewPolicy" in bodies[0], false);
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+  }
+});
+
 test("a new card's approval defaults to human, and the same profile is excluded from the AI reviewer list", async () => {
   const host = document.createElement("div");
   document.body.append(host);
