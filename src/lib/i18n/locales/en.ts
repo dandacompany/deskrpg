@@ -3203,6 +3203,8 @@ const en: Record<string, string> = {
   "kanban.review.selectReviewer": "Select another employee",
   "kanban.review.reviewerRequired": "Choose an active reviewer different from the assignee.",
   "kanban.review.help": "After submission, the selected reviewer must approve before completion.",
+  "kanban.review.noApproval":
+    "This gateway completes tasks without approval: results are marked done as soon as an employee submits them (Hermes default).",
   "kanban.review.unsupported":
     "Update Hermes and its plugin to support approval policies before creating tasks.",
   "kanban.review.swarmUnsupported":

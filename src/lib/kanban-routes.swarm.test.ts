@@ -146,27 +146,40 @@ function swarmBody(ctx: SwarmCtx, extra: Record<string, unknown> = {}) {
   };
 }
 
-test("without swarm_review_policy a new swarm creates no card and returns 428", async () => {
+test("without swarm_review_policy a new swarm goes through the public path without a policy", async () => {
   const { createSwarm } = await import("@/lib/kanban-routes");
   const ctx = await seedChannelWithNpcs(["nova", "luna", "sophie", "dante"], {
     capabilities: ["kanban", "cron", "events", "swarm", "kanban_review_policy_v1"],
   });
   const res = await createSwarm(postRequest(ctx, swarmBody(ctx)), ctx.channelId);
-  assert.equal(res.status, 428);
-  const body = await res.json();
-  assert.equal(body.code, "swarm_review_policy_unsupported");
-  assert.deepEqual(body.missing, ["swarm_review_policy"]);
-  assert.equal(ctx.fakePlugin.swarmCallCount(), 0);
+  assert.equal(res.status, 200);
+  assert.equal(ctx.fakePlugin.swarmCallCount(), 1);
+  assert.equal("review_policy" in ctx.fakePlugin.lastSwarmBody()!, false);
 });
 
-test("without the approval-policy contract a new swarm is refused like a new card", async () => {
+test("upstream Hermes (no approval-policy contract): a new swarm is created without a policy", async () => {
   const { createSwarm } = await import("@/lib/kanban-routes");
   const ctx = await seedChannelWithNpcs(["nova", "luna", "sophie", "dante"], {
     capabilities: ["kanban", "cron", "events", "swarm"],
   });
   const res = await createSwarm(postRequest(ctx, swarmBody(ctx)), ctx.channelId);
+  assert.equal(res.status, 200);
+  assert.equal(ctx.fakePlugin.swarmCallCount(), 1);
+  assert.equal("review_policy" in ctx.fakePlugin.lastSwarmBody()!, false);
+});
+
+test("upstream Hermes: a swarm that explicitly asks for a policy is refused, not silently dropped", async () => {
+  const { createSwarm } = await import("@/lib/kanban-routes");
+  const ctx = await seedChannelWithNpcs(["nova", "luna", "sophie", "dante"], {
+    capabilities: ["kanban", "cron", "events", "swarm"],
+  });
+  const res = await createSwarm(
+    postRequest(ctx, swarmBody(ctx, { reviewPolicy: { mode: "human" } })),
+    ctx.channelId,
+  );
   assert.equal(res.status, 428);
   assert.equal((await res.json()).code, "review_policy_required");
+  assert.equal(ctx.fakePlugin.swarmCallCount(), 0);
   assert.equal(ctx.fakePlugin.swarmCallCount(), 0);
 });
 

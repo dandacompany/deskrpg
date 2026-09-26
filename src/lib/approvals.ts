@@ -19,7 +19,7 @@ import { approvalTargets, approvals, db } from "@/db";
 import type { CreateTaskBody } from "@/lib/hermes/deskrpg-plugin-types";
 import { orderApprovalBatch } from "@/lib/approval-batch-order";
 import type { KanbanChannelContext } from "@/lib/kanban-access";
-import { resolveAssignee, reviewPolicyFailure } from "@/lib/kanban-access";
+import { defaultReviewPolicy, resolveAssignee } from "@/lib/kanban-access";
 import { requestEmitRoomMessage } from "@/lib/automation-registry";
 import { appendRoomMessage, ensureOfficeRoom } from "@/lib/chat-rooms";
 import { getChannelOwnerId } from "@/lib/chat-rooms";
@@ -84,7 +84,9 @@ export async function createApprovalBatch(
   ctx: KanbanChannelContext,
   input: ApprovalBatchInput,
 ): Promise<ApprovalBatchResult> {
-  if (reviewPolicyFailure(ctx)) return { ok: false, errorCode: "review_policy_required" };
+  // Upstream Hermes has no completion policy: the cards are still created blocked (the start gate is
+  // this approval), just without one.
+  const reviewPolicy = defaultReviewPolicy(ctx);
   const ordered = orderApprovalBatch(input.items);
   if (!ordered.ok) return { ok: false, errorCode: ordered.error, index: ordered.index };
 
@@ -117,7 +119,7 @@ export async function createApprovalBatch(
 
     const body: CreateTaskBody = {
       title: item.title,
-      review_policy: { version: 1, mode: "human", reviewer_profile: null },
+      ...(reviewPolicy ? { review_policy: reviewPolicy } : {}),
       // The heart of the gate — set from the start. Changing status after creation lets a dispatch slip through in between.
       initial_status: "blocked",
       ...(item.body ? { body: item.body } : {}),

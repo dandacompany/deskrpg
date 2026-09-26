@@ -6,7 +6,7 @@ import { formatRequester } from "@/lib/approval-requester";
 import { createApprovalBatch } from "@/lib/approvals";
 import { readLocaleCookie } from "@/lib/i18n/server";
 import { getUserId } from "@/lib/internal-rpc";
-import { resolveKanbanChannelContext, reviewPolicyFailure } from "@/lib/kanban-access";
+import { resolveKanbanChannelContext } from "@/lib/kanban-access";
 import { markMeetingOutcomeNoticeRegistered } from "@/lib/meeting-outcome-notice";
 import { normalizeMeetingMinutesRecord } from "@/lib/meeting-minutes";
 import { registerMeetingOutcome } from "@/lib/meeting-register";
@@ -50,12 +50,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             .limit(1);
           return channel?.ownerId ?? null;
         },
-        resolveContext: async (input) => {
-          const resolved = await resolveKanbanChannelContext(input);
-          if (!resolved.ok) return resolved;
-          const failure = reviewPolicyFailure(resolved.ctx);
-          return failure ? { ok: false as const, response: failure } : resolved;
-        },
+        // Upstream Hermes (no completion policy) registers too — the cards just carry none (decision 0017).
+        resolveContext: (input) => resolveKanbanChannelContext(input),
         ensureSubproject: async (ctx, tenant, minutesId) => {
           const project = await ensureProjectRow(ctx.boardRow);
           try {

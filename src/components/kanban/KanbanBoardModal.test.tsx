@@ -1945,17 +1945,41 @@ for (const sample of [
   });
 }
 
-test("mixed approval: the legacy swarm capability does not enable the new creation button", async () => {
+test("upstream Hermes: new cards and swarms stay available and the board says they complete without approval", async () => {
   const f = await mount((url) =>
     url.includes("/automation/status")
       ? json(status({ capabilities: ["kanban", "swarm"] }))
       : json(board()),
   );
   try {
+    const buttons = [...f.host.querySelectorAll("button")];
+    const create = buttons.find((b) => b.textContent?.includes("새 카드"));
+    assert.equal(Boolean(create), true);
+    assert.equal(create?.disabled, false);
     assert.equal(
-      [...f.host.querySelectorAll("button")].some((b) => b.textContent?.trim() === "스웜"),
-      false,
+      buttons.some((b) => b.textContent?.trim() === "스웜"),
+      true,
     );
+    const notice = f.host.querySelector("[data-no-approval-notice]");
+    assert.equal(Boolean(notice), true);
+    assert.match(notice?.textContent ?? "", /승인 없이 완료/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("a policy-aware gateway shows no no-approval notice", async () => {
+  const f = await mount((url) =>
+    url.includes("/automation/status")
+      ? json(
+          status({
+            capabilities: ["kanban", "swarm", "kanban_review_policy_v1", "swarm_review_policy"],
+          }),
+        )
+      : json(board()),
+  );
+  try {
+    assert.equal(Boolean(f.host.querySelector("[data-no-approval-notice]")), false);
   } finally {
     await f.cleanup();
   }

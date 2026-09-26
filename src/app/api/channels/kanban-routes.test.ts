@@ -1457,6 +1457,27 @@ test("resolving a proposal — a plugin without card_proposals answers 428 plugi
   assert.equal(untouched?.kind === "card_proposal" ? untouched.resolved : "gone", undefined);
 });
 
+test("resolving a proposal on upstream Hermes (no approval-policy contract) creates the card without a policy", async () => {
+  server.reset();
+  server.setInfo({ capabilities: ["kanban", "cron", "events", "card_proposals"] });
+  const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
+  const seed = await seedKanbanChannel();
+  const proposal = await seedProposal(seed);
+
+  const before = server.requests().length;
+  const ok = await route.POST(
+    resolveReq(seed.ownerId, seed.channelId, proposal.proposalId, { choice: "card" }),
+    proposalCtx(seed.channelId, proposal.proposalId),
+  );
+  assert.equal(ok.status, 200, JSON.stringify(await ok.clone().json()));
+  const sent = server
+    .requests()
+    .slice(before)
+    .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks?"));
+  assert.equal(sent.length, 1);
+  assert.equal("review_policy" in (sent[0].json as Record<string, unknown>), false);
+});
+
 test("resolving a proposal — the card branch creates the card and writes the decision into the notice; a second call is 409", async () => {
   server.reset();
   const route = await import("./[id]/kanban/proposals/[proposalId]/resolve/route");
@@ -1734,13 +1755,31 @@ test("mixed approval: new cards default to the human policy and a null policy ca
   assert.equal(invalid.status, 400);
 });
 
-test("mixed approval: an unsupported core blocks writing new cards", async () => {
+test("upstream Hermes (no approval-policy contract): a new card is created without a policy", async () => {
   server.reset();
   server.setInfo({ capabilities: ["kanban", "cron", "events"] });
   const routes = await loadRoutes();
   const seed = await seedKanbanChannel();
   const before = server.requests().length;
   const created = await createTask(routes, seed.ownerId, seed.channelId);
+  assert.equal(created.status, 201);
+  const sent = server
+    .requests()
+    .slice(before)
+    .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks?"));
+  assert.equal(sent.length, 1);
+  assert.equal("review_policy" in (sent[0].json as Record<string, unknown>), false);
+});
+
+test("upstream Hermes: asking for an approval policy explicitly is refused, not silently dropped", async () => {
+  server.reset();
+  server.setInfo({ capabilities: ["kanban", "cron", "events"] });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const before = server.requests().length;
+  const created = await createTask(routes, seed.ownerId, seed.channelId, {
+    reviewPolicy: { mode: "human" },
+  });
   assert.equal(created.status, 428);
   assert.equal(
     server

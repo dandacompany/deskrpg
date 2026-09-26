@@ -616,12 +616,11 @@ export default function KanbanBoardModal({
   const npcOptions = useMemo(() => activeAssigneeOptions(npcs), [npcs]);
   // If the plugin can't do swarm, the button is hidden entirely — better than clicking it and seeing a 428.
   const reviewSupported = status?.capabilities?.includes("kanban_review_policy_v1") ?? false;
-  // New swarms need the policy-aware contract: the plugin gives every result card an approval policy. The legacy
-  // `swarm` capability alone would create result cards nobody has to approve.
-  const swarmSupported =
-    reviewSupported &&
-    (status?.capabilities?.includes("swarm") ?? false) &&
-    (status?.capabilities?.includes("swarm_review_policy") ?? false);
+  // Upstream Hermes has no approval-policy contract: cards and swarms are still created (Hermes' own
+  // behaviour, decision 0017), and the board says their results complete without approval.
+  const swarmSupported = status?.capabilities?.includes("swarm") ?? false;
+  const swarmApproval =
+    reviewSupported && (status?.capabilities?.includes("swarm_review_policy") ?? false);
   const anyRunning = allTasks.some(isRunning);
   const movePending = move.phase === "pending";
   const moveBlocked =
@@ -903,8 +902,7 @@ export default function KanbanBoardModal({
             <button
               type="button"
               onClick={() => openEditor({ mode: "create" })}
-              disabled={!currentBoard || !reviewSupported}
-              title={!reviewSupported ? t("kanban.review.unsupported") : undefined}
+              disabled={!currentBoard}
               className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary hover:bg-primary-hover text-white font-semibold disabled:opacity-50"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -1128,8 +1126,8 @@ export default function KanbanBoardModal({
       </div>
 
       {currentBoard && !reviewSupported && (
-        <p role="status" className="px-5 py-2 text-xs text-npc-dark">
-          {t("kanban.review.unsupported")}
+        <p data-no-approval-notice role="status" className="px-5 py-2 text-xs text-npc-dark">
+          {t("kanban.review.noApproval")}
         </p>
       )}
       {editor && currentBoard && !blocker && (
@@ -1145,6 +1143,8 @@ export default function KanbanBoardModal({
               ? formFromTask(editor.task as KanbanTask & Record<string, unknown>, npcs)
               : {
                   ...EMPTY_TASK_FORM,
+                  // No approval picker where the gateway can't enforce one — sending a policy would be refused.
+                  ...(reviewSupported ? {} : { reviewMode: undefined }),
                   ...editor.draft,
                   assigneeNpcId: npcs.some(
                     (npc) => npc.active && npc.npcId === editor.draft?.assigneeNpcId,
@@ -1171,6 +1171,7 @@ export default function KanbanBoardModal({
       {showSwarm ? (
         <SwarmDialog
           npcs={npcOptions}
+          withoutApproval={!swarmApproval}
           submitting={swarmSubmitting}
           error={swarmError}
           onSubmit={(values) => void handleSwarm(values)}

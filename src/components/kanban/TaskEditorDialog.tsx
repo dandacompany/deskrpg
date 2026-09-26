@@ -65,7 +65,6 @@ export default function TaskEditorDialog({
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (mode === "create" && !reviewSupported) return;
     if (
       values.reviewMode === "agent" &&
       (!implementer || !reviewers.some((npc) => npc.npcId === values.reviewerNpcId))
@@ -218,8 +217,8 @@ export default function TaskEditorDialog({
           </div>
 
           {mode === "create" && !reviewSupported && (
-            <p role="alert" className="text-xs text-danger">
-              {t("kanban.review.unsupported")}
+            <p data-no-approval-notice role="status" className="text-xs text-npc-dark">
+              {t("kanban.review.noApproval")}
             </p>
           )}
           {values.reviewMode && (
@@ -435,7 +434,7 @@ export default function TaskEditorDialog({
           </button>
           <button
             type="submit"
-            disabled={submitting || (mode === "create" && !reviewSupported)}
+            disabled={submitting}
             className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white text-xs font-semibold disabled:opacity-60"
           >
             {submitting
