@@ -93,6 +93,7 @@ import { createResummarizer } from "./meeting-resummarize";
 import { registerRoomHandlers } from "./room-socket";
 import { normalizeOfficeAppearance } from "@/game/three/office-appearance";
 import { AUTOMATION_SOCKET_EVENTS, getWorkingSnapshot } from "./automation-events";
+import { GATEWAY_HEALTH_EVENT, getGatewayHealth } from "./gateway-health";
 import { setChannelActive, startAutomationPollers } from "./automation-poller";
 import {
   getOrCreateRoomRuntime,
@@ -1511,6 +1512,9 @@ export function setupSocketHandlers(io: Server) {
         for (const snapshot of getWorkingSnapshot(data.mapId)) {
           socket.emit(AUTOMATION_SOCKET_EVENTS.working, snapshot);
         }
+        // Whether the gateway answered the poller's last tick — absent until the first tick after a restart.
+        const health = getGatewayHealth(data.mapId);
+        if (health) socket.emit(GATEWAY_HEALTH_EVENT, health);
         notifyChannelActivity(io, data.mapId);
 
         // Send current players on this map to the joining player
