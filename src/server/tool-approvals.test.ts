@@ -15,7 +15,13 @@ import {
 
 type Emit = { to: string; event: string; payload: unknown };
 
-function harness(opts: { resolved?: number; throws?: unknown } = {}) {
+function harness(
+  opts: {
+    resolved?: number;
+    throws?: unknown;
+    summarize?: (req: PendingApproval) => Promise<string | null>;
+  } = {},
+) {
   const userEmits: Emit[] = [];
   const meetingEmits: Emit[] = [];
   const calls: { npcId: string; runId: string; body: unknown }[] = [];
@@ -40,6 +46,7 @@ function harness(opts: { resolved?: number; throws?: unknown } = {}) {
         return { resolved: opts.resolved ?? 1 };
       },
     }),
+    ...(opts.summarize ? { summarize: opts.summarize } : {}),
   });
   return {
     registry,
@@ -220,6 +227,72 @@ test("repeats older than the conversation window start a fresh count", async () 
     count: 1,
     lastStatus: null,
   });
+});
+
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test("without a summarizer the card says so and shows Hermes' text", () => {
+  const h = harness();
+  h.registry.add(req());
+  assert.deepEqual((h.userEmits[0].payload as { summary: unknown }).summary, {
+    state: "unavailable",
+  });
+});
+
+test("the summary arrives on the same card: pending first, then the text", async () => {
+  const h = harness({ summarize: async () => "Sophie wants to save a note on the probe server." });
+  h.registry.add(req());
+  const cards = () => h.userEmits.filter((e) => e.event === "tool-approval:request");
+  assert.deepEqual((cards()[0].payload as { summary: unknown }).summary, { state: "pending" });
+  await flush();
+  const last = cards().at(-1)?.payload as { key: string; summary: unknown };
+  assert.equal(last.key, "run_1:req_1");
+  assert.deepEqual(last.summary, {
+    state: "ready",
+    text: "Sophie wants to save a note on the probe server.",
+  });
+});
+
+test("a failed or empty summary falls back to Hermes' text", async () => {
+  for (const summarize of [async () => null, async () => Promise.reject(new Error("x"))]) {
+    const h = harness({ summarize });
+    h.registry.add(req());
+    await flush();
+    assert.deepEqual((h.userEmits.at(-1)?.payload as { summary: unknown }).summary, {
+      state: "unavailable",
+    });
+  }
+});
+
+test("a repeat reuses the group's summary instead of asking again", async () => {
+  let asked = 0;
+  const h = harness({
+    summarize: async () => {
+      asked += 1;
+      return "Save a note.";
+    },
+  });
+  h.registry.add(req({ runId: "run_1" }));
+  await flush();
+  await h.registry.decide("user-dante", "run_1:req_1", "deny");
+  h.registry.add(req({ runId: "run_2" }));
+  await flush();
+  assert.equal(asked, 1);
+  assert.deepEqual((h.userEmits.at(-1)?.payload as { summary: unknown }).summary, {
+    state: "ready",
+    text: "Save a note.",
+  });
+});
+
+test("a summary that arrives after the card closed is dropped", async () => {
+  let finish: (text: string) => void = () => {};
+  const h = harness({ summarize: () => new Promise((resolve) => (finish = resolve)) });
+  h.registry.add(req());
+  await h.registry.decide("user-dante", "run_1:req_1", "deny");
+  const before = h.userEmits.length;
+  finish("late");
+  await flush();
+  assert.equal(h.userEmits.length, before);
 });
 
 test("the approval times out on its own timer", () => {
