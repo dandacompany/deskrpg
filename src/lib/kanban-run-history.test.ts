@@ -46,6 +46,18 @@ test("a reclaimed run says whether someone stopped it, the worker went silent, o
   );
 });
 
+test("a drag out of running reclaimed through Hermes reads as moved, not stopped", () => {
+  const [attempt] = runAttempts([
+    run({
+      id: "m",
+      started_at: 1,
+      outcome: "reclaimed",
+      error: "manual_reclaim: status changed to todo (deskrpg/direct)",
+    }),
+  ]);
+  assert.equal(attempt.end, "moved");
+});
+
 test("a run without an end is still running", () => {
   const [attempt] = runAttempts([run({ id: "r", status: "running", ended_at: undefined })]);
   assert.equal(attempt.end, "running");
