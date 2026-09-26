@@ -49,9 +49,13 @@ function attemptEnd(run: KanbanRun): AttemptEnd {
   const outcome = run.outcome ?? "unrecorded";
   if (outcome !== "reclaimed") return outcome;
   const error = run.error ?? "";
+  // A drag out of running: plugin 0.26.0+ reclaims through Hermes (`manual_reclaim: … (deskrpg/direct)` in the
+  // error); older plugins closed the run themselves with the marker in the summary. Checked before
+  // `manual_reclaim` so a move is not shown as a stop.
+  if (error.includes("(deskrpg/direct)") || (run.summary ?? "").includes("(deskrpg/direct)"))
+    return "moved";
   if (error.startsWith("manual_reclaim")) return "stopped";
   if (error.includes("stale_lock")) return "lost";
-  if ((run.summary ?? "").includes("(deskrpg/direct)")) return "moved";
   return "reclaimed";
 }
 
