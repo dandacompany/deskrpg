@@ -60,6 +60,18 @@ export type CreateProfilePayload = {
   workerPlugin?: WorkerPluginCreateResult;
 };
 
+/**
+ * `POST /deskrpg/profiles/{name}/key` (capability `profile_key_issue`) — a key for a profile that
+ * already exists. `apiKey` is sent once and must be stored and stripped before anything leaves the server.
+ */
+export type IssueProfileKeyPayload = {
+  name: string;
+  apiKey: string;
+  issued: boolean;
+  /** An existing key was replaced (only when `rotate: true` was sent). */
+  rotated: boolean;
+};
+
 // ---------------------------------------------------------------------------
 // Staff settings picker (plugin 0.9.0) — toolset and skill lists, cloning when creating a profile.
 // ---------------------------------------------------------------------------
@@ -315,6 +327,11 @@ export type PluginClient = {
     options?: CreateProfileOptions,
   ): Promise<PluginResponse<CreateProfilePayload>>;
   deleteProfile(name: string): Promise<PluginResponse<DeleteProfilePayload>>;
+  /** Owner key. 409 `key_exists` unless `rotate`; the existing key is never read back. */
+  issueProfileKey(
+    name: string,
+    options?: { rotate?: boolean },
+  ): Promise<PluginResponse<IssueProfileKeyPayload>>;
   getIdentity(name: string, profileToken: string): Promise<PluginResponse<IdentityPayload>>;
   putIdentity(
     name: string,
