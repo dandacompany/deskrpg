@@ -257,6 +257,14 @@ export function supportsBoardArchive(info: PluginInfo | null): boolean {
   return Boolean(info?.capabilities?.includes("board_archive"));
 }
 
+/**
+ * Can an NPC ask its user a multiple-choice question mid-chat (`deskrpg_ask_user`). Without it DeskRPG
+ * registers nothing, and NPCs ask in plain text as before.
+ */
+export function supportsAskUser(info: PluginInfo | null): boolean {
+  return Boolean(info?.capabilities?.includes("ask_user"));
+}
+
 export function supportsInitialStatus(info: PluginInfo | null): boolean {
   return Boolean(info?.capabilities?.includes("initial_status"));
 }

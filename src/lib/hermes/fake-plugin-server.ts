@@ -48,6 +48,11 @@ import {
   type FakeApprovalPolicyState,
 } from "./fake-approval-policy-routes";
 import { createFakeMcpState, routeMcp, type FakeMcpState } from "./fake-mcp-routes";
+import {
+  createFakeAskUserState,
+  routeAskUser,
+  type FakeAskUserState,
+} from "./fake-ask-user-routes";
 import { createFakeSkillState, routeSkills, type FakeSkillState } from "./fake-skill-routes";
 import { BLACKBOARD_PREFIX } from "@/components/kanban/kanban-view-model";
 
@@ -132,6 +137,8 @@ export type FakePluginServer = {
   mcp(profile: string): FakeMcpState;
   /** That profile's 0.18.0 approval policy state (`fake-approval-policy-routes.ts`). Creates a default if absent. */
   approvalPolicy(profile: string): FakeApprovalPolicyState;
+  /** That profile's `ask_user` state (`fake-ask-user-routes.ts`) — seed questions with `seedQuestion`. */
+  askUser(profile: string): FakeAskUserState;
 };
 
 // ---------------------------------------------------------------------------
@@ -248,6 +255,7 @@ export async function startFakePluginServer(
   let skillStates = new Map<string, FakeSkillState>();
   let mcpStates = new Map<string, FakeMcpState>();
   let approvalPolicyStates = new Map<string, FakeApprovalPolicyState>();
+  let askUserStates = new Map<string, FakeAskUserState>();
   let seq = 0;
 
   const nextId = (prefix: string) => `${prefix}_${(seq += 1).toString(36).padStart(4, "0")}`;
@@ -266,6 +274,7 @@ export async function startFakePluginServer(
     skillStates = new Map();
     mcpStates = new Map();
     approvalPolicyStates = new Map();
+    askUserStates = new Map();
     seq = 0;
   }
 
@@ -283,6 +292,15 @@ export async function startFakePluginServer(
     if (!state) {
       state = createFakeApprovalPolicyState();
       approvalPolicyStates.set(profile, state);
+    }
+    return state;
+  }
+
+  function askUserFor(profile: string): FakeAskUserState {
+    let state = askUserStates.get(profile);
+    if (!state) {
+      state = createFakeAskUserState();
+      askUserStates.set(profile, state);
     }
     return state;
   }
@@ -1768,6 +1786,10 @@ export async function startFakePluginServer(
     if (mcpReply) return mcpReply;
     const policyReply = routeApprovalPolicy(approvalPolicyFor(profile), req);
     if (policyReply) return policyReply;
+    if (info.capabilities?.includes("ask_user")) {
+      const askReply = routeAskUser(askUserFor(profile), req);
+      if (askReply) return askReply;
+    }
     const { method, pathname, params, json } = req;
     const state = cronFor(profile);
     const rest = pathname.replace(/^\/deskrpg\/cron/, "");
@@ -1960,6 +1982,7 @@ export async function startFakePluginServer(
     skills: skillsFor,
     mcp: mcpFor,
     approvalPolicy: approvalPolicyFor,
+    askUser: askUserFor,
     seedCardProposal: (proposalId) => {
       cardProposals.set(proposalId, {
         resolvedAt: null,
