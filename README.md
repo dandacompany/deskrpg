@@ -24,7 +24,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.926.1` — Give each employee MCP connectors (add, test, OAuth, copy between employees) and decide what unattended runs may do: approval cards in chat and meetings, a run policy, and blocked runs collected under Needs you. Stop an NPC's reply mid-way. Cron templates, schedules and run history read in your language. Archive a project's board and set its target date. Failed replies say why (expired provider sign-in, usage limit, model), and Windows hosts are sturdier. Requires plugin 0.19.0 and the policy-aware Hermes core described below.
+- Version: `v2026.926.2` — Security fix: only a gateway's owner can change or delete its employees (a user the gateway was shared with could edit their token or name, or delete them from every office). Also: sharing and diagnostics get their own pages, the kanban metrics count rework, meeting minutes use your Hermes timezone, the Needs you inbox shows one row per failing cron, and `deskrpg db backups` lists and prunes old migration backup tables. Requires plugin 0.20.0 and the policy-aware Hermes core described below.
 
 ## What You Can Do
 
