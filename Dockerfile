@@ -134,6 +134,13 @@ COPY --from=builder /app/node_modules/esbuild ./node_modules/esbuild
 COPY --from=builder /app/node_modules/get-tsconfig ./node_modules/get-tsconfig
 COPY --from=builder /app/node_modules/resolve-pkg-maps ./node_modules/resolve-pkg-maps
 
+# The `deskrpg` CLI (bin/deskrpg.js) requires these at run time for create-user and reset-password.
+# The app bundles bcryptjs into its server chunks, so standalone tracing never places it in
+# node_modules — without this line both commands died with MODULE_NOT_FOUND inside the image.
+# better-sqlite3 and pg are already here (traced by the app and copied above). The docker CI job
+# runs both commands in the built image to keep this true.
+COPY --from=builder /app/node_modules/bcryptjs ./node_modules/bcryptjs
+
 # Migration runner + SQL files
 COPY --from=builder /app/migrate.js ./migrate.js
 COPY --from=builder /app/drizzle ./drizzle
