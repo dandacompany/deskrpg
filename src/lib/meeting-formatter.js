@@ -142,15 +142,49 @@ ${agent.displayName}님, 의견을 말씀해 주세요.
 }
 
 /**
+ * The zone to write minutes in: the given IANA zone when this runtime knows it, otherwise UTC —
+ * named in the date line either way, so a reader can tell.
+ * @param {string|null|undefined} timeZone
+ * @returns {string}
+ */
+function usableTimeZone(timeZone) {
+  if (!timeZone) return "UTC";
+  try {
+    new Intl.DateTimeFormat("en", { timeZone });
+    return timeZone;
+  } catch {
+    return "UTC";
+  }
+}
+
+/**
+ * `YYYY-MM-DD` of that instant in the zone.
+ * @param {number} ms
+ * @param {string} timeZone
+ * @returns {string}
+ */
+function dayIn(ms, timeZone) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(ms));
+}
+
+/**
  * Generates meeting minutes as markdown
  * @param {string} topic
  * @param {Array<{seq: number, displayName: string, content: string, timestamp: number}>} turns
  * @param {Array<{displayName: string, role: string}>} participants
  * @param {string|null} [locale]
+ * @param {string|null} [timeZone] IANA zone of the channel's Hermes. The transcript is stored as
+ *   text, so times are fixed here — the server's own clock (UTC in containers) must not decide them.
  * @returns {string}
  */
-function generateTranscript(topic, turns, participants, locale) {
-  const date = new Date().toISOString().split("T")[0];
+function generateTranscript(topic, turns, participants, locale, timeZone) {
+  const zone = usableTimeZone(timeZone);
+  const date = `${dayIn(turns[0] ? turns[0].timestamp : Date.now(), zone)} (${zone})`;
   if (!isKorean(locale)) {
     const english = [
       `# Meeting minutes: ${topic}`,
@@ -165,7 +199,7 @@ function generateTranscript(topic, turns, participants, locale) {
       "",
     ];
     for (const turn of turns) {
-      const time = new Date(turn.timestamp).toLocaleTimeString(locale || "en");
+      const time = new Date(turn.timestamp).toLocaleTimeString(locale || "en", { timeZone: zone });
       english.push(`### [${turn.seq}] ${turn.displayName} (${time})`);
       english.push("");
       english.push(turn.content);
@@ -187,7 +221,7 @@ function generateTranscript(topic, turns, participants, locale) {
   ];
 
   for (const turn of turns) {
-    const time = new Date(turn.timestamp).toLocaleTimeString("ko-KR");
+    const time = new Date(turn.timestamp).toLocaleTimeString("ko-KR", { timeZone: zone });
     lines.push(`### [${turn.seq}] ${turn.displayName} (${time})`);
     lines.push("");
     lines.push(turn.content);
