@@ -57,7 +57,9 @@ async function mount() {
 const OWNER = { gateway: { id: "gw-1", displayName: "사무실", isOwner: true } };
 
 test("the owner sees who the gateway is shared with, and adds a login id", async () => {
-  let shares = [{ userId: "u2", loginId: "mina", nickname: "미나", role: "use" }];
+  let shares: Array<{ userId: string; loginId: string; nickname: string | null; role: string }> = [
+    { userId: "u2", loginId: "mina", nickname: "미나", role: "use" },
+  ];
   const calls = mockFetch({
     "GET /api/gateways/gw-1": OWNER,
     "GET /api/gateways/gw-1/shares": () => ({ shares }),
