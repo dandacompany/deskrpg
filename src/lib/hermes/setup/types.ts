@@ -114,4 +114,13 @@ export type HostExecutor = ((
 ) => Promise<CommandResult>) & {
   /** Largest stdout (bytes) this transport delivers reliably, when smaller than the helper's own cap. */
   stdoutLimit?: number;
+  /**
+   * Copies one file from the host to a local path (scp). Offered where stdout is capped, so a larger
+   * reply can be spilled to a private file on the host and fetched instead (`receiveSpill`).
+   */
+  fetchFile?: (
+    remotePath: string,
+    localPath: string,
+    options?: { timeoutMs?: number; signal?: AbortSignal },
+  ) => Promise<void>;
 };

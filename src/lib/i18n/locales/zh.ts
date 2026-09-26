@@ -437,6 +437,8 @@ const zh: Record<string, string> = {
     "此 Windows 主机上没有网关的计划任务，只在启动文件夹中注册了。在这种状态下 DeskRPG 无法停止或重启网关，因此插件更新和设置更改会被阻止。请在任务计划程序中确认是否有 Hermes 网关任务；如果没有，请在该主机上重新运行 hermes gateway install 将其注册为计划任务，然后再检查。",
   "hermes.wizard.error.hostOutputTooLarge":
     "主机的响应超过了 Windows 自带 SSH 客户端一次能接收的大小(64KiB)。员工(配置文件)较多的主机会出现这种情况。请直接在该主机上运行 DeskRPG，或从非 Windows 电脑通过 SSH 连接。",
+  "hermes.wizard.error.hostSpillCleanupFailed":
+    "已收到主机的响应，但无法删除留在主机上的临时文件。该文件可能包含令牌。DeskRPG 下次在该主机上操作时会自动删除超过 15 分钟的此类临时文件；如需尽快删除，请手动删除主机临时文件夹中以 deskrpg-spill- 开头的文件夹。",
   "hermes.wizard.error.timezoneInvalid":
     "时区名称不符合IANA格式。请使用Asia/Shanghai这样的正确名称，或关闭时区设置后继续。",
   "hermes.wizard.error.timezoneWriteFailed":

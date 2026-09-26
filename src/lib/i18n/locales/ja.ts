@@ -479,6 +479,8 @@ const ja: Record<string, string> = {
     "この Windows ホストにはゲートウェイのスケジュールタスクがなく、スタートアップフォルダーにだけ登録されています。この状態では DeskRPG がゲートウェイを停止・再起動できないため、プラグインの更新と設定変更ができません。タスクスケジューラで Hermes ゲートウェイのタスクがあるか確認し、なければそのホストで hermes gateway install を再実行してスケジュールタスクとして登録してから、もう一度確認してください。",
   "hermes.wizard.error.hostOutputTooLarge":
     "ホストの応答が Windows 標準の SSH クライアントが一度に受け取れるサイズ(64KiB)を超えました。社員(プロファイル)が多いホストで起こります。DeskRPG をそのホスト上で直接実行するか、Windows 以外のコンピューターから SSH で接続してください。",
+  "hermes.wizard.error.hostSpillCleanupFailed":
+    "ホストの応答は受け取りましたが、ホストに残した一時ファイルを削除できませんでした。そのファイルにはトークンが含まれている可能性があります。DeskRPG が次にこのホストで作業するとき、15 分以上経った一時ファイルを自動的に削除します。急ぐ場合はホストの一時フォルダーで deskrpg-spill- で始まるフォルダーを手動で削除してください。",
   "hermes.wizard.error.timezoneInvalid":
     "タイムゾーン名がIANA形式ではありません。Asia/Tokyoのような正しい名前を使うか、タイムゾーン設定をオフにして進めてください。",
   "hermes.wizard.error.timezoneWriteFailed":

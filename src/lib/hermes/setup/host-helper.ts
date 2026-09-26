@@ -8,9 +8,76 @@ import { isWindows } from "./platform";
  * Put longer explanations in this TS comment; comments inside the Python stay short, English and ASCII.
  */
 export const HOST_BOOTSTRAP = String.raw`
-import json, os, pathlib, signal, subprocess, sys
+import hashlib, json, os, pathlib, re, secrets, shutil, signal, subprocess, sys, tempfile, time
 WINDOWS = sys.platform == 'win32'
 child = None
+# A reply too big for the client's transport is spilled to a private directory and fetched with scp.
+SPILL_PREFIX = 'deskrpg-spill-'
+SPILL_NAME = re.compile(r'^[0-9a-f]{32}$')
+# Windows: a protected DACL with one rule for the current user's SID, then read back by SID.
+SET_ACL = "; ".join([
+    "$ErrorActionPreference = 'Stop'",
+    "$item = Get-Item -LiteralPath $env:DESKRPG_ACL_DIR",
+    "$acl = New-Object System.Security.AccessControl.DirectorySecurity",
+    "$acl.SetAccessRuleProtection($true, $false)",
+    "$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User",
+    "$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($user, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')",
+    "$acl.AddAccessRule($rule)",
+    "$item.SetAccessControl($acl)"])
+CHECK_ACL = "; ".join([
+    "$ErrorActionPreference = 'Stop'",
+    "$acl = Get-Acl -LiteralPath $env:DESKRPG_ACL_DIR",
+    "$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value",
+    "$rules = @($acl.Access)",
+    "$sid = if ($rules.Count -eq 1) { $rules[0].IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value } else { '' }",
+    "if ($acl.AreAccessRulesProtected -and $rules.Count -eq 1 -and -not $rules[0].IsInherited -and $rules[0].AccessControlType -eq 'Allow' -and $sid -eq $me) { 'owner-only' } else { 'open' }"])
+# scp before OpenSSH 9.0 hands the remote path to a shell, so only plain characters are spilled to.
+SAFE_PATH = re.compile(r'^[A-Za-z0-9_./:\\-]+$')
+def powershell(script, path):
+    try:
+        return subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', script], capture_output=True, text=True,
+                              errors='replace', timeout=60, env=dict(os.environ, DESKRPG_ACL_DIR=path)).stdout.strip()
+    except Exception: return ''
+def owner_only(path):
+    if WINDOWS: return powershell(CHECK_ACL, path) == 'owner-only'
+    st = os.stat(path)
+    return st.st_uid == os.getuid() and (st.st_mode & 0o077) == 0
+def harden(path):
+    # POSIX: mkdtemp already made it 0700; confirm. Windows: set the DACL, then confirm by SID.
+    if WINDOWS: powershell(SET_ACL, path)
+    return owner_only(path)
+def spill_dir(file):
+    # The spill directory for a file path, only if it is one: <tempdir>/deskrpg-spill-*/<32 hex>.
+    p = pathlib.Path(file)
+    if not p.is_absolute() or not SPILL_NAME.match(p.name) or not p.parent.name.startswith(SPILL_PREFIX): return None
+    if os.path.realpath(str(p.parent.parent)) != os.path.realpath(tempfile.gettempdir()): return None
+    if os.path.islink(str(p.parent)) or not os.path.isdir(str(p.parent)): return None
+    if not WINDOWS and os.stat(str(p.parent)).st_uid != os.getuid(): return None
+    return str(p.parent)
+def sweep():
+    # Spills an earlier client never cleaned up (it died mid-fetch) go after 15 minutes.
+    base = tempfile.gettempdir()
+    try: entries = list(os.scandir(base))
+    except Exception: return
+    for entry in entries:
+        try:
+            if not entry.name.startswith(SPILL_PREFIX) or not entry.is_dir(follow_symlinks=False): continue
+            st = entry.stat(follow_symlinks=False)
+            if time.time() - st.st_mtime < 900 or (not WINDOWS and st.st_uid != os.getuid()): continue
+            shutil.rmtree(entry.path, ignore_errors=True)
+        except Exception: pass
+def spill(data, cap):
+    if len(data) > cap or not SAFE_PATH.match(tempfile.gettempdir()): return {'error': 'host_output_too_large'}
+    folder = tempfile.mkdtemp(prefix=SPILL_PREFIX)
+    try:
+        if not harden(folder): raise RuntimeError('unsafe')
+        path = os.path.join(folder, secrets.token_hex(16))
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_BINARY', 0), 0o600)
+        with os.fdopen(fd, 'wb') as handle: handle.write(data)
+        return {'spill': path, 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+    except Exception:
+        shutil.rmtree(folder, ignore_errors=True)
+        return {'error': 'host_output_too_large'}
 def terminate_owned(signum=None, frame=None):
     if child is not None:
         try:
@@ -34,6 +101,13 @@ try:
     # On Windows stdin defaults to the ANSI code page (e.g. cp949), which mangles a
     # UTF-8 payload. Read raw bytes from sys.stdin.buffer and decode as UTF-8 ourselves.
     payload = json.loads(sys.stdin.buffer.read().decode('utf-8'))
+    # Every run clears spills a client never removed (it died, or lost the pointer), not only the next spill.
+    sweep()
+    if 'cleanup_spill' in payload:
+        folder = spill_dir(str(payload['cleanup_spill']))
+        if folder is not None: shutil.rmtree(folder, ignore_errors=True)
+        print(json.dumps({'cleaned': True} if folder is not None and not os.path.exists(folder) else {'error': 'host_spill_cleanup_failed'}))
+        sys.exit(0)
     # Same rule as upstream hermes_constants.py:51-57. Windows uses %LOCALAPPDATA%\hermes.
     root = (pathlib.Path(os.environ.get('LOCALAPPDATA') or (pathlib.Path.home() / 'AppData' / 'Local')) / 'hermes') if WINDOWS else (pathlib.Path.home() / '.hermes')
     root = root / 'hermes-agent'
@@ -55,7 +129,7 @@ try:
         if child.returncode:
             print(json.dumps({'error': 'host_operation_failed'}))
         elif len(data) > limit:
-            print(json.dumps({'error': 'host_output_too_large'}))
+            print(json.dumps(spill(data, payload.get('max_spill', 262144)) if payload.get('spill') else {'error': 'host_output_too_large'}))
         else:
             sys.stdout.buffer.write(data)
             sys.stdout.buffer.flush()

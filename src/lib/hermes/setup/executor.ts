@@ -437,9 +437,33 @@ export function sshStdoutLimit(platform: string): number | undefined {
   return isWindows(platform) ? WINDOWS_SSH_STDOUT_LIMIT : undefined;
 }
 
-export function sshExecutor(hostId: string, execute: HostExecutor = localExecutor): HostExecutor {
+/** The ssh route's leading args in scp's spelling: scp takes the port as `-P` and has no `-l`. */
+export function scpArgs(args: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === "-p") out.push("-P", args[++i]);
+    else if (args[i] === "-l") out.push("-o", `User=${args[++i]}`);
+    else out.push(args[i]);
+  }
+  return out;
+}
+
+/** `host:path` for scp. A Windows path is given as `/C:/...`, the form Win32-OpenSSH's sftp server expects. */
+export function scpSource(dest: string, remotePath: string): string {
+  const windows = /^[A-Za-z]:\\/.test(remotePath);
+  // An IPv6 literal is bracketed, or scp reads its first colon as the end of the host.
+  const host = dest.includes(":") && !dest.startsWith("[") ? `[${dest}]` : dest;
+  return `${host}:${windows ? "/" + remotePath.replace(/\\/g, "/") : remotePath}`;
+}
+
+export function sshExecutor(
+  hostId: string,
+  execute: HostExecutor = localExecutor,
+  /** Where DeskRPG itself runs — only a Windows client has the stdout cap and fetches files. */
+  clientPlatform: string = process.platform,
+): HostExecutor {
   assertSshHost(hostId);
-  const limit = sshStdoutLimit(process.platform);
+  const limit = sshStdoutLimit(clientPlatform);
   const run: HostExecutor = async (command, args, options) => {
     assertSshHost(hostId);
     if (!/^[A-Za-z0-9_./-]+$/.test(command) || command.startsWith("-"))
@@ -461,7 +485,28 @@ export function sshExecutor(hostId: string, execute: HostExecutor = localExecuto
     if (result.code === 255) throw new Error(sshFailureCode(result.stderr));
     return result;
   };
-  if (limit !== undefined) run.stdoutLimit = limit;
+  if (limit !== undefined) {
+    run.stdoutLimit = limit;
+    // scp.exe delivers what ssh.exe cannot (measured: the same reply arrives whole through scp).
+    run.fetchFile = async (remotePath, localPath, options) => {
+      assertSshHost(hostId);
+      const route = sshRoute(hostId);
+      const result = await execute(
+        "scp",
+        [
+          ...scpArgs(route.args),
+          ...route.options,
+          "-q",
+          "--",
+          scpSource(route.dest, remotePath),
+          localPath,
+        ],
+        options,
+      );
+      // Like ssh, scp's stderr is never passed on.
+      if (result.code !== 0) throw new Error("host_operation_failed");
+    };
+  }
   return run;
 }
 
