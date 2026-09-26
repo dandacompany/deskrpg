@@ -297,3 +297,56 @@ test("every inbox row has a distinct kind:id key", async () => {
   const keys = (body.rows as Array<{ kind: string; id: string }>).map((r) => `${r.kind}:${r.id}`);
   assert.equal(new Set(keys).size, keys.length, keys.join(" | "));
 });
+
+test("attention times are ISO 8601 whether the database hands back a Date (PG) or text (SQLite)", async () => {
+  const { attentionTime } = await import("@/lib/attention-routes");
+  const at = new Date("2026-09-20T16:45:47.123Z");
+  assert.equal(attentionTime(at), "2026-09-20T16:45:47.123Z");
+  assert.equal(attentionTime("2026-09-20T16:45:47.123Z"), "2026-09-20T16:45:47.123Z");
+  // PG's String(Date) form, the one that leaked before.
+  assert.equal(attentionTime(String(at)), "2026-09-20T16:45:47.000Z");
+});
+
+test("cron, blocked-run and approval rows carry ISO times", async () => {
+  const { ctx, ownerId, channelId } = await seedCtx();
+  await postCronResults(channelId, ownerId, [{ jobId: "job-a", jobName: "A", status: "error" }]);
+  const { createApprovalBatch } = await import("@/lib/approvals");
+  const batch = await createApprovalBatch(ctx, {
+    type: "task_execution",
+    title: "Run it?",
+    requestedBy: "sophie",
+    source: { kind: "meeting", id: "m1" },
+    items: [{ title: "one" }],
+  });
+  assert.ok(batch.ok);
+  const { ensureOfficeRoom, appendRoomMessage } = await import("@/lib/chat-rooms");
+  const office = await ensureOfficeRoom(channelId, ownerId);
+  await appendRoomMessage({
+    roomId: office.id,
+    senderKind: "system",
+    senderId: null,
+    senderName: "Sophie",
+    content: "terminal",
+    notice: {
+      kind: "approval_blocked",
+      audience: ownerId,
+      npcId: "npc-1",
+      npcName: "Sophie",
+      source: "cron",
+      blockKind: "command",
+      tool: "terminal",
+      jobId: "job-a",
+      jobName: "A",
+    },
+  });
+  const { getAttentionInbox } = await import("@/lib/attention-routes");
+  const body = await (await getAttentionInbox(get(ownerId, channelId), channelId)).json();
+  const rows = body.rows as Array<{ kind: string; at: string | null }>;
+  for (const kind of ["cron_failed", "approval", "approval_blocked"])
+    assert.ok(
+      rows.some((r) => r.kind === kind),
+      kind,
+    );
+  for (const row of rows)
+    assert.match(String(row.at), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, row.kind);
+});
