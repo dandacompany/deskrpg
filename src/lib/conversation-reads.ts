@@ -97,9 +97,16 @@ export async function ensureReadBaselines(
     .onConflictDoNothing();
 }
 
-function toCounts(rows: { id: string; n: unknown }[]): Map<string, number> {
-  return new Map(rows.map((row) => [row.id, Number(row.n)]));
+/** Keeps only the rooms/employees that have something unread. */
+function nonZero(entries: [string, number][]): Map<string, number> {
+  return new Map(entries.filter(([, n]) => n > 0));
 }
+
+// One count per conversation, each bounded by a **literal** read point. Joining the read point in
+// instead makes PostgreSQL scan every message of every room (measured: a seq scan of all 60k rows),
+// while a literal bound turns into a range scan on `(room_id, created_at)` /
+// `(character_id, npc_id, created_at)`. A viewer has a handful of rooms and employees, so the extra
+// round trips are cheap next to scanning the whole history on every list.
 
 /** Per room: messages after my read point, not sent by me, that I may see. Rooms with none are absent. */
 export async function roomUnreadCounts(
@@ -107,34 +114,29 @@ export async function roomUnreadCounts(
   roomIds: string[],
 ): Promise<Map<string, number>> {
   if (roomIds.length === 0) return new Map();
-  const rows = await db
-    .select({ id: chatRoomMessages.roomId, n: sql`count(*)` })
-    .from(chatRoomMessages)
-    .leftJoin(
-      conversationReads,
-      and(
-        eq(conversationReads.userId, userId),
-        eq(conversationReads.kind, "room"),
-        eq(conversationReads.targetId, chatRoomMessages.roomId),
-      ),
-    )
-    .where(
-      and(
-        inArray(chatRoomMessages.roomId, roomIds),
-        visibleToSql(userId),
-        or(
-          ne(chatRoomMessages.senderKind, "user"),
-          isNull(chatRoomMessages.senderId),
-          ne(chatRoomMessages.senderId, userId),
-        ),
-        or(
-          isNull(conversationReads.readAt),
-          gt(chatRoomMessages.createdAt, conversationReads.readAt),
-        ),
-      ),
-    )
-    .groupBy(chatRoomMessages.roomId);
-  return toCounts(rows);
+  const marks = await readMarks(userId, "room", roomIds);
+  const entries = await Promise.all(
+    roomIds.map(async (roomId): Promise<[string, number]> => {
+      const mark = marks.get(roomId);
+      const [row] = await db
+        .select({ n: sql`count(*)` })
+        .from(chatRoomMessages)
+        .where(
+          and(
+            eq(chatRoomMessages.roomId, roomId),
+            ...(mark ? [gt(chatRoomMessages.createdAt, toDb(new Date(mark)))] : []),
+            visibleToSql(userId),
+            or(
+              ne(chatRoomMessages.senderKind, "user"),
+              isNull(chatRoomMessages.senderId),
+              ne(chatRoomMessages.senderId, userId),
+            ),
+          ),
+        );
+      return [roomId, Number(row?.n ?? 0)];
+    }),
+  );
+  return nonZero(entries);
 }
 
 /** Per employee: their replies to this character after my read point. Employees with none are absent. */
@@ -144,27 +146,25 @@ export async function dmUnreadCounts(
   npcIds: string[],
 ): Promise<Map<string, number>> {
   if (npcIds.length === 0) return new Map();
-  const rows = await db
-    .select({ id: chatMessages.npcId, n: sql`count(*)` })
-    .from(chatMessages)
-    .leftJoin(
-      conversationReads,
-      and(
-        eq(conversationReads.userId, userId),
-        eq(conversationReads.kind, "dm"),
-        eq(conversationReads.targetId, chatMessages.npcId),
-      ),
-    )
-    .where(
-      and(
-        eq(chatMessages.characterId, characterId),
-        inArray(chatMessages.npcId, npcIds),
-        eq(chatMessages.role, "npc"),
-        or(isNull(conversationReads.readAt), gt(chatMessages.createdAt, conversationReads.readAt)),
-      ),
-    )
-    .groupBy(chatMessages.npcId);
-  return toCounts(rows);
+  const marks = await readMarks(userId, "dm", npcIds);
+  const entries = await Promise.all(
+    npcIds.map(async (npcId): Promise<[string, number]> => {
+      const mark = marks.get(npcId);
+      const [row] = await db
+        .select({ n: sql`count(*)` })
+        .from(chatMessages)
+        .where(
+          and(
+            eq(chatMessages.characterId, characterId),
+            eq(chatMessages.npcId, npcId),
+            ...(mark ? [gt(chatMessages.createdAt, toDb(new Date(mark)))] : []),
+            eq(chatMessages.role, "npc"),
+          ),
+        );
+      return [npcId, Number(row?.n ?? 0)];
+    }),
+  );
+  return nonZero(entries);
 }
 
 /** The viewer's unread count and read point on each room of their list. First sight sets a baseline. */
