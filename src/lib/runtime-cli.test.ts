@@ -133,3 +133,51 @@ for (const dbType of [undefined, "", "sqlite", "postgresql"]) {
     }
   });
 }
+
+test("deskrpg db backups is a dry run until --yes, then drops only the backup table", () => {
+  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "deskrpg-cli-home-"));
+  const dbPath = path.join(homeDir, "data", "deskrpg.db");
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  spawnSync(
+    process.execPath,
+    [
+      "-e",
+      'const D=require("better-sqlite3");const d=new D(process.argv[1]);' +
+        'd.exec("CREATE TABLE npcs(id TEXT);CREATE TABLE npcs_openclaw_backup AS SELECT 1 AS id;");d.close()',
+      dbPath,
+    ],
+    { cwd: repoRoot },
+  );
+  const run = (...args: string[]) =>
+    spawnSync(process.execPath, [cliPath, "db", "backups", ...args], {
+      env: {
+        ...process.env,
+        DESKRPG_HOME: homeDir,
+        DB_TYPE: "sqlite",
+        SQLITE_PATH: dbPath,
+        DATABASE_URL: "",
+      },
+      encoding: "utf8",
+    });
+  const tables = () =>
+    spawnSync(
+      process.execPath,
+      [
+        "-e",
+        'const D=require("better-sqlite3");const d=new D(process.argv[1]);' +
+          'console.log(d.prepare("SELECT name FROM sqlite_master WHERE type=\'table\' ORDER BY name").all().map(r=>r.name).join(","))',
+        dbPath,
+      ],
+      { cwd: repoRoot, encoding: "utf8" },
+    ).stdout.trim();
+
+  const dry = run("--prune", "--older-than", "0d");
+  assert.equal(dry.status, 0, dry.stderr);
+  assert.match(dry.stdout, /Dry run/);
+  assert.equal(tables(), "npcs,npcs_openclaw_backup");
+
+  const real = run("--prune", "--older-than", "0d", "--yes");
+  assert.equal(real.status, 0, real.stderr);
+  assert.match(real.stdout, /Dropped npcs_openclaw_backup/);
+  assert.equal(tables(), "npcs");
+});
