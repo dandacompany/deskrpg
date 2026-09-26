@@ -46,3 +46,21 @@ test("parents that could not be read are counted, not shown", () => {
   assert.equal(p.run, null);
   assert.equal(p.task.assignee, null);
 });
+
+test("the maker is named by display name, falling back to the profile name", () => {
+  const detail = {
+    task: { id: "t", title: "T", status: "done", assignee: "oliver" },
+    comments: [],
+    events: [],
+    attachments: null,
+    links: { parents: [], children: [] },
+    runs: [{ id: "1", status: "done", profile: "sophie", started_at: 100, ended_at: 200 }],
+  } satisfies KanbanTaskDetail;
+  const named = buildArtifactProvenance(detail, 150_000, [], (p) =>
+    p === "sophie" ? "소피" : null,
+  );
+  assert.equal(named.workerName, "소피");
+  assert.equal(buildArtifactProvenance(detail, 150_000, []).workerName, "sophie");
+  const noRun = { ...detail, runs: [] };
+  assert.equal(buildArtifactProvenance(noRun, null, []).workerName, "oliver");
+});

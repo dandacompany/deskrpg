@@ -370,6 +370,7 @@ test("a board artifact shows the card it was made in and the cards it built on, 
         task: { id: "t-7", title: "뉴스레터 초안", status: "done", assignee: "sophie" },
         run: { profile: "sophie", outcome: "completed", started_at: 100, ended_at: 200 },
         parents: [{ id: "t-3", title: "자료 조사", status: "done" }],
+        workerName: "소피",
         moreParents: 2,
       },
     },
@@ -380,7 +381,8 @@ test("a board artifact shows the card it was made in and the cards it built on, 
   await click(byText("주간 보고"));
   const block = container.querySelector("[data-artifact-provenance]");
   assert.equal(block !== null, true);
-  assert.equal((block?.textContent ?? "").includes("sophie"), true);
+  assert.equal((block?.textContent ?? "").includes("소피"), true);
+  assert.equal((block?.textContent ?? "").includes("sophie"), false);
   assert.equal((block?.textContent ?? "").includes("외 2장"), true);
   await click(byText("자료 조사"));
   await click(byText("뉴스레터 초안"));

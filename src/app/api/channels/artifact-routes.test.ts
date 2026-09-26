@@ -501,6 +501,8 @@ test("a board artifact's detail carries the card it came from and that card's pa
   assert.equal(body.provenance.task.id, child.id);
   assert.equal(body.provenance.task.title, "Newsletter draft");
   assert.equal(body.provenance.task.assignee, "sophie");
+  // The employee's display name, not the Hermes profile name.
+  assert.equal(body.provenance.workerName, "소피");
   assert.deepEqual(
     body.provenance.parents.map((p: { id: string; title: string }) => [p.id, p.title]),
     [[parent.id, "Research"]],

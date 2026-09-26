@@ -37,7 +37,7 @@ export default function ArtifactProvenance({
       <div className="flex flex-wrap items-center gap-x-1.5">
         <span className="text-text-dim">{t("artifacts.made.card")}</span>
         {card(task.id, task.title, "task")}
-        {(run?.profile ?? task.assignee) && <span>· {run?.profile ?? task.assignee}</span>}
+        {provenance.workerName && <span>· {provenance.workerName}</span>}
         {at !== null && <span>· {new Date(at).toLocaleString(locale)}</span>}
       </div>
       {(parents.length > 0 || moreParents > 0) && (
