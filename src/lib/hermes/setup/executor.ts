@@ -120,6 +120,16 @@ export function killProcessTree(
 }
 
 /**
+ * Whether `icacls <dir>` output shows exactly one access entry and it is not inherited — the state
+ * `/grant:r <user>` plus `/inheritance:r` must leave. Only the entry shape is read, not the name:
+ * icacls prints names in the console code page, and the grant target is ours anyway.
+ */
+export function isOwnerOnlyAcl(icaclsOutput: string): boolean {
+  const entries = icaclsOutput.split(/\r?\n/).filter((line) => line.includes(":("));
+  return entries.length === 1 && !entries[0].includes("(I)");
+}
+
+/**
  * Creates a **dedicated directory** for the temporary stdin/stdout files used by the Windows ssh branch, and
  * narrows its permissions while it is still empty. The files hold gateway/profile tokens in plaintext, so narrowing
  * after the files exist would expose them in the meantime via ACLs inherited from `%TEMP%` (including group Modify).
@@ -137,16 +147,6 @@ export function killProcessTree(
  * %TEMP% entries in place, so files inside inherited SYSTEM·Administrators — a success code alone
  * does not prove the directory was narrowed.
  */
-/**
- * Whether `icacls <dir>` output shows exactly one access entry and it is not inherited — the state
- * `/grant:r <user>` plus `/inheritance:r` must leave. Only the entry shape is read, not the name:
- * icacls prints names in the console code page, and the grant target is ours anyway.
- */
-export function isOwnerOnlyAcl(icaclsOutput: string): boolean {
-  const entries = icaclsOutput.split(/\r?\n/).filter((line) => line.includes(":("));
-  return entries.length === 1 && !entries[0].includes("(I)");
-}
-
 export function secureStdioDir(
   platform: string,
   make: () => string = () => mkdtempSync(path.join(tmpdir(), "deskrpg-ssh-")),
