@@ -81,7 +81,7 @@ import {
   acknowledgeReport,
   EMPTY_REPORT_ACK,
   parseReportAck,
-  serializeReportAck,
+  planReportAckLoad,
   type ReportAck,
   type ReportItem,
 } from "@/game/report-queue";
@@ -2227,29 +2227,63 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
     };
   }, [socket, channelId]);
 
-  // Reread the acknowledgment record from the browser. If none, an empty record — on a first visit report everything accumulated.
-  // Old string watermarks are read too (`parseReportAck`).
+  // The acknowledgment record lives on the server (so every device shows the same count). What an older
+  // version left in this browser is imported once and then removed. If the server can't be reached the
+  // browser's record is used as before — the badge still works, it just won't follow to other devices.
   useEffect(() => {
     if (!channelId) return;
+    let cancelled = false;
+    const storageKey = reportAckKey(channelId);
+    let local = EMPTY_REPORT_ACK;
     try {
-      setReportAck(parseReportAck(window.localStorage.getItem(reportAckKey(channelId))));
+      local = parseReportAck(window.localStorage.getItem(storageKey));
     } catch {
-      setReportAck(EMPTY_REPORT_ACK);
+      // Blocked storage — nothing to import.
     }
+    setReportAck(local);
+    const url = `/api/channels/${encodeURIComponent(channelId)}/report-acks`;
+    void (async () => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const { ack } = (await res.json()) as { ack: ReportAck | null };
+        const plan = planReportAckLoad(ack, local);
+        if (cancelled) return;
+        setReportAck(plan.use);
+        if (!plan.importLocal) return;
+        const imported = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ import: plan.importLocal }),
+        });
+        if (!imported.ok) return;
+        try {
+          window.localStorage.removeItem(storageKey);
+        } catch {
+          // Harmless — the next import merges the same ids again.
+        }
+      } catch {
+        // Offline or the server is older — keep the browser's record.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [channelId]);
 
   /** Acknowledge **only this one** report — other employees' reports ahead of it stay. */
   const acknowledgeReports = useCallback(
     (item: ReportItem) => {
+      // Saved on the server; if that fails it still holds in this session's state.
+      if (channelId)
+        void fetch(`/api/channels/${encodeURIComponent(channelId)}/report-acks`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ messageId: item.messageId }),
+        }).catch(() => undefined);
       setReportAck((prev) => {
         const next = acknowledgeReport(prev, item.messageId);
         lastReportAckAtRef.current = Date.now();
-        if (channelId)
-          try {
-            window.localStorage.setItem(reportAckKey(channelId), serializeReportAck(next));
-          } catch {
-            // Even if blocked by privacy mode etc., it stays in state for this session.
-          }
         return next;
       });
     },
