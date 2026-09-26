@@ -2915,6 +2915,8 @@ const en: Record<string, string> = {
   "attention.blockedRun.askOwner": "Ask the gateway owner to allow it",
   "attention.requestedByProfile": "Requested by {name}",
   "attention.requestedByUser": "Registered by a person",
+  "attention.repeatedFailure":
+    "Stopped after {count} failures in a row — fix the cause, then unblock it.",
   "attention.taskCount": "{count} task(s)",
   "attention.openCard": "Open card",
   "attention.openHistory": "Open history",

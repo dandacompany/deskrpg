@@ -2946,6 +2946,8 @@ const ja: Record<string, string> = {
   "attention.blockedRun.askOwner": "許可するにはゲートウェイの所有者に依頼してください",
   "attention.requestedByProfile": "{name} が依頼",
   "attention.requestedByUser": "人が登録",
+  "attention.repeatedFailure":
+    "{count} 回連続の失敗で停止しました — 原因を直してからブロックを解除してください。",
   "attention.taskCount": "タスク {count}件",
   "attention.openCard": "カードを開く",
   "attention.openHistory": "履歴を開く",

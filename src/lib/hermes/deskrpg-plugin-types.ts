@@ -178,6 +178,8 @@ export type KanbanTask = {
   started_at?: PluginTime;
   worker_pid?: number;
   last_heartbeat_at?: PluginTime;
+  /** Failures in a row. On board cards since plugin 0.21.0 (`kanban_run_events`); always on card detail. */
+  consecutive_failures?: number;
 };
 
 /** Full shape including fields that only come from card detail (`GET /kanban/tasks/{id}`). */
@@ -192,7 +194,6 @@ export type KanbanTaskFull = KanbanTask & {
   workspace_kind?: string;
   workspace_path?: string;
   branch_name?: string;
-  consecutive_failures?: number;
   diagnostics?: Diagnostic[];
 };
 

@@ -2806,6 +2806,7 @@ const zh: Record<string, string> = {
   "attention.blockedRun.askOwner": "如需允许，请联系网关所有者",
   "attention.requestedByProfile": "{name} 请求",
   "attention.requestedByUser": "由人登记",
+  "attention.repeatedFailure": "连续失败 {count} 次后已停止 — 请修复原因后解除阻塞。",
   "attention.taskCount": "{count} 项任务",
   "attention.openCard": "打开卡片",
   "attention.openHistory": "打开历史",

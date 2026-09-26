@@ -2916,6 +2916,8 @@ const ko: Record<string, string> = {
   "attention.blockedRun.askOwner": "허용하려면 게이트웨이 소유자에게 요청하세요",
   "attention.requestedByProfile": "{name} 요청",
   "attention.requestedByUser": "사람이 등록",
+  "attention.repeatedFailure":
+    "{count}번 연속 실패로 멈췄습니다 — 원인을 고친 뒤 막힘을 풀어 주세요.",
   "attention.taskCount": "과업 {count}건",
   "attention.openCard": "카드 열기",
   "attention.openHistory": "이력 열기",
