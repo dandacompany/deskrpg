@@ -2966,6 +2966,7 @@ const zh: Record<string, string> = {
   "kanban.timeline.noTarget": "未设目标日",
   "kanban.timeline.target": "目标日 {date}",
   "kanban.timeline.targetLine": "项目目标日 {date}",
+  "kanban.timeline.targetToday": "目标日 {date}（今天）",
   "kanban.timeline.targetAhead": "目标日 {date}（剩余 {days} 天）",
   "kanban.timeline.targetPast": "目标日 {date}（已超期 {days} 天）",
   "kanban.warning.noDispatcher":

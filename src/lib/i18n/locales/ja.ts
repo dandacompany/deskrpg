@@ -3111,6 +3111,7 @@ const ja: Record<string, string> = {
   "kanban.timeline.noTarget": "目標日 未設定",
   "kanban.timeline.target": "目標日 {date}",
   "kanban.timeline.targetLine": "プロジェクト目標日 {date}",
+  "kanban.timeline.targetToday": "目標日 {date}（今日）",
   "kanban.timeline.targetAhead": "目標日 {date}（残り {days} 日）",
   "kanban.timeline.targetPast": "目標日 {date}（{days} 日超過）",
   "kanban.warning.noDispatcher":

@@ -322,6 +322,13 @@ export type TargetMarker =
    */
   | { kind: "outside"; atMs: number; side: "before" | "after"; daysFromNow: number };
 
+/** Local midnight of the day containing `ms`. */
+function localMidnight(ms: number): number {
+  const day = new Date(ms);
+  day.setHours(0, 0, 0, 0);
+  return day.getTime();
+}
+
 /**
  * Resolves a project target date relative to the window.
  *
@@ -346,8 +353,10 @@ export function targetMarker(
     kind: "outside",
     atMs,
     side: atMs < win.fromMs ? "before" : "after",
-    // A past target date comes out negative — the screen needs to be able to say "past due."
-    daysFromNow: Math.ceil((atMs - nowMs) / (24 * 3600_000)),
+    // Local calendar days from today: 0 is today, negative is overdue. Counting the hours left
+    // until 23:59 and rounding up turned yesterday into -0 ("0 days left") and today into 1.
+    // Rounding the midnight-to-midnight gap absorbs a 23- or 25-hour DST day.
+    daysFromNow: Math.round((dayStart - localMidnight(nowMs)) / (24 * 3600_000)),
   };
 }
 

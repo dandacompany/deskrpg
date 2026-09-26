@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -397,7 +398,54 @@ test("a target date outside the window doesn't clamp the line to the edge — it
   assert.equal(marker.kind, "outside");
   if (marker.kind !== "outside") return;
   assert.equal(marker.side, "after");
-  assert.equal(marker.daysFromNow, 10, "9월 30일 밤까지면 10일 뒤로 올림된다");
+  assert.equal(marker.daysFromNow, 9, "counted in calendar days: 9/21 to 9/30 is nine days");
+});
+
+/** A window that never contains the target, so the marker always reports a day count. */
+const EMPTY_WINDOW = { fromMs: 0, toMs: 1 };
+
+function daysFromNow(targetDate: string, nowIso: string): number {
+  const marker = targetMarker(targetDate, EMPTY_WINDOW, Date.parse(nowIso));
+  assert.equal(marker.kind, "outside");
+  return marker.kind === "outside" ? marker.daysFromNow : NaN;
+}
+
+test("yesterday's target is one day overdue even a few hours after midnight — not a rounded -0", () => {
+  assert.equal(daysFromNow("2026-09-25", "2026-09-26T00:00:00.000"), -1);
+  assert.equal(daysFromNow("2026-09-25", "2026-09-26T10:00:00"), -1);
+  assert.equal(daysFromNow("2026-09-25", "2026-09-26T23:59:59.999"), -1);
+});
+
+test("today's target counts zero days from the first to the last instant of the day", () => {
+  assert.equal(daysFromNow("2026-09-26", "2026-09-26T00:00:00.000"), 0);
+  assert.equal(daysFromNow("2026-09-26", "2026-09-26T12:00:00"), 0);
+  assert.equal(daysFromNow("2026-09-26", "2026-09-26T23:59:59.999"), 0);
+});
+
+test("tomorrow's target is one day ahead right up to midnight", () => {
+  assert.equal(daysFromNow("2026-09-27", "2026-09-26T00:00:00.000"), 1);
+  assert.equal(daysFromNow("2026-09-27", "2026-09-26T23:59:59.999"), 1);
+});
+
+test("the day count is the same in other time zones, across a DST change", () => {
+  // Runs the same function in child processes with a fixed TZ: local midnight differs per zone,
+  // and America/New_York's 1 Nov 2026 has 25 hours.
+  const script = [
+    'import { targetMarker } from "./src/lib/timeline-layout.ts";',
+    "const w = { fromMs: 0, toMs: 1 };",
+    "const d = (t, n) => targetMarker(t, w, Date.parse(n)).daysFromNow;",
+    'console.log(JSON.stringify([d("2026-10-31", "2026-11-02T12:00:00"), d("2026-11-03", "2026-11-01T23:30:00"), d("2026-11-01", "2026-11-01T00:30:00")]));',
+  ].join("\n");
+  for (const tz of ["Asia/Seoul", "America/New_York", "UTC"]) {
+    const env: NodeJS.ProcessEnv = { ...process.env, TZ: tz };
+    delete env.DATABASE_URL;
+    const out = execFileSync(
+      process.execPath,
+      ["--import", "tsx", "--input-type=module", "-e", script],
+      { cwd: process.cwd(), env, encoding: "utf8" },
+    );
+    assert.deepEqual(JSON.parse(out.trim()), [-2, 2, 0], `TZ=${tz}`);
+  }
 });
 
 test("a past target date comes out as a negative day count — the screen must be able to say it's overdue", () => {
