@@ -2356,6 +2356,7 @@ const en: Record<string, string> = {
   "gateways.shareTitle": "Share Access",
   "gateways.shareHelp": "Enter another user's login ID to let them use this gateway.",
   "gateways.selectGatewayFirst": "Select a gateway first.",
+  "gateways.backToGateways": "Back to connections",
   "gateways.shareOwnerOnly": "Only the gateway owner can manage sharing.",
   "gateways.shareLoginId": "User login ID",
   "gateways.shareAdd": "Add share",

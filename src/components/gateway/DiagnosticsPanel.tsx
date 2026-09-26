@@ -5,11 +5,9 @@ import { useEffect, useState } from "react";
 import { useT } from "@/lib/i18n";
 
 /**
- * The diagnostics area on `/gateways`. Since 2026-09-20 it opens via the top "Diagnostics"
- * button instead of sitting at the bottom of the screen — leaving it always expanded just
- * makes the screen longer. This component stays mounted (it resolves permission only once),
- * and `open` decides visibility. Without permission it reports `onAvailable(false)` so even
- * the button never appears. It shows the same thing `deskrpg doctor` shows on the CLI.
+ * The admin diagnostics report. It is shown on `/gateways/diagnostics`; `/gateways` mounts it
+ * closed (`open={false}`) only to learn through `onAvailable` whether to link there. It shows
+ * the same thing `deskrpg doctor` shows on the CLI.
  *
  * For a non-admin user the server returns 404, and at that point this component **renders
  * nothing at all** — it doesn't even leave a trace on screen that the admin feature exists.
@@ -33,9 +31,12 @@ const mark = (value: boolean) => (value ? "✓" : "✗");
 
 export default function DiagnosticsPanel({
   open = true,
+  expanded = false,
   onAvailable,
 }: {
   open?: boolean;
+  /** Start with the report unfolded — `/gateways/diagnostics` has nothing else to show. */
+  expanded?: boolean;
   onAvailable?: (available: boolean) => void;
 } = {}) {
   const t = useT();
@@ -70,6 +71,7 @@ export default function DiagnosticsPanel({
 
   return (
     <details
+      open={expanded}
       data-testid="diagnostics-panel"
       className="rounded-xl border border-border bg-surface p-5"
     >

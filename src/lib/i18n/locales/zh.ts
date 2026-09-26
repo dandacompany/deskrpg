@@ -2258,6 +2258,7 @@ const zh: Record<string, string> = {
   "gateways.shareTitle": "共享管理",
   "gateways.shareHelp": "输入其他用户的登录 ID，即可共享此网关的使用权限。",
   "gateways.selectGatewayFirst": "请先选择一个网关。",
+  "gateways.backToGateways": "返回连接",
   "gateways.shareOwnerOnly": "只有网关所有者可以管理共享。",
   "gateways.shareLoginId": "要共享的用户登录 ID",
   "gateways.shareAdd": "添加共享",
