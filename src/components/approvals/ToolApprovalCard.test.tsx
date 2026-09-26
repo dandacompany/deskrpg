@@ -54,7 +54,7 @@ const request = (over: Partial<ToolApprovalRequest> = {}): ToolApprovalRequest =
   description: "recursive delete",
   choices: ["once", "session", "deny"],
   expiresAt: Date.now() + 120_000,
-  groupKey: "g-1",
+  groupKey: `g-${over.key ?? "run-1:req-1"}`,
   repeat: { count: 1, lastStatus: null },
   summary: { state: "unavailable" },
   ...over,
@@ -311,4 +311,76 @@ test("a meeting stack ignores a chat room's waiting line", async () => {
     roomId: "room-a",
   });
   assert.ok(!container.querySelector("[data-approval-pending]"));
+});
+
+test("a ready summary leads the card and Hermes' text is folded under it", async () => {
+  const socket = new FakeSocket();
+  await render(dm(socket));
+  await socket.fire(
+    TOOL_APPROVAL_EVENTS.request,
+    request({ summary: { state: "ready", text: "임시 폴더를 지우려고 합니다." } }),
+  );
+  assert.equal($("[data-approval-summary]").textContent, "임시 폴더를 지우려고 합니다.");
+  const original = container.querySelector("details[data-approval-original]") as HTMLDetailsElement;
+  assert.ok(original !== null);
+  assert.equal(original.open, false);
+  assert.ok(original.textContent?.includes("rm -r /tmp/probe"));
+  assert.match(text(), /Hermes 원문 보기/);
+});
+
+test("while the summary is being written the card says so, then updates in place", async () => {
+  const socket = new FakeSocket();
+  await render(dm(socket));
+  await socket.fire(TOOL_APPROVAL_EVENTS.request, request({ summary: { state: "pending" } }));
+  assert.match($("[data-approval-summary]").textContent ?? "", /요약하는 중/);
+  await socket.fire(
+    TOOL_APPROVAL_EVENTS.request,
+    request({ summary: { state: "ready", text: "폴더를 지웁니다." } }),
+  );
+  assert.equal(container.querySelectorAll("[data-testid=tool-approval-card]").length, 1);
+  assert.equal($("[data-approval-summary]").textContent, "폴더를 지웁니다.");
+});
+
+test("with no summary the Hermes text is shown directly, not folded", async () => {
+  const socket = new FakeSocket();
+  await render(dm(socket));
+  await socket.fire(TOOL_APPROVAL_EVENTS.request, request());
+  assert.equal(container.querySelector("[data-approval-summary]") !== null, false);
+  assert.equal(container.querySelector("details[data-approval-original]") !== null, false);
+  assert.equal($("[data-approval-command]").textContent, "rm -r /tmp/probe");
+});
+
+test("a repeat shows its count and the last decision, and replaces the closed card of its group", async () => {
+  const socket = new FakeSocket();
+  await render(dm(socket, { collapseMs: 10_000 }));
+  await socket.fire(TOOL_APPROVAL_EVENTS.request, request({ key: "r1:q", groupKey: "same" }));
+  await socket.fire(TOOL_APPROVAL_EVENTS.resolved, { key: "r1:q", status: "denied" });
+  await socket.fire(
+    TOOL_APPROVAL_EVENTS.request,
+    request({ key: "r2:q", groupKey: "same", repeat: { count: 2, lastStatus: "denied" } }),
+  );
+  const cards = container.querySelectorAll("[data-testid=tool-approval-card]");
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].getAttribute("data-key"), "r2:q");
+  assert.match($("[data-approval-repeat]").textContent ?? "", /2번째/);
+  assert.match($("[data-approval-repeat]").textContent ?? "", /거절했습니다/);
+});
+
+test("a first request has no repeat line", async () => {
+  const socket = new FakeSocket();
+  await render(dm(socket));
+  await socket.fire(TOOL_APPROVAL_EVENTS.request, request());
+  assert.equal(container.querySelector("[data-approval-repeat]") !== null, false);
+});
+
+test("an update to a card being decided keeps it locked", async () => {
+  const socket = new FakeSocket();
+  await render(dm(socket));
+  await socket.fire(TOOL_APPROVAL_EVENTS.request, request({ summary: { state: "pending" } }));
+  await click("[data-choice=deny]");
+  await socket.fire(
+    TOOL_APPROVAL_EVENTS.request,
+    request({ summary: { state: "ready", text: "요약" } }),
+  );
+  assert.equal(($("[data-choice=once]") as HTMLButtonElement).disabled, true);
 });

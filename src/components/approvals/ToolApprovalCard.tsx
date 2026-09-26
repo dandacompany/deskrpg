@@ -35,8 +35,9 @@ export type ToolApprovalCardProps = {
 };
 
 /**
- * One Hermes approval, shown only to the person who asked for the work. The command text is
- * what Hermes already redacted. Buttons follow the request's choices (never `always`); once the
+ * One Hermes approval, shown only to the person who asked for the work. A plain-language summary
+ * leads when there is one, with Hermes' own (already redacted) text folded under it; without one
+ * the Hermes text is shown as is. Buttons follow the request's choices (never `always`); once the
  * countdown hits zero Hermes has denied it on its own, so the card just says it timed out.
  */
 export function ToolApprovalCard({ card, npcName, onDecide }: ToolApprovalCardProps) {
@@ -65,14 +66,29 @@ export function ToolApprovalCard({ card, npcName, onDecide }: ToolApprovalCardPr
           </span>
         )}
       </div>
-      <code
-        data-approval-command
-        className="mt-1.5 block max-h-24 overflow-y-auto whitespace-pre-wrap break-all rounded bg-bg px-2 py-1 text-[11px] text-text"
-      >
-        {request.command}
-      </code>
-      {request.description && request.description !== request.command && (
-        <p className="mt-1 text-text-muted">{request.description}</p>
+      {request.repeat.count > 1 && (
+        <p data-approval-repeat className="mt-1 text-text-muted">
+          {t("approvals.repeat", { count: request.repeat.count })}
+          {request.repeat.lastStatus &&
+            ` · ${t("approvals.repeat.last", { status: t(`approvals.status.${request.repeat.lastStatus}`) })}`}
+        </p>
+      )}
+      {request.summary.state === "unavailable" ? (
+        <HermesText command={request.command} description={request.description} />
+      ) : (
+        <>
+          <p data-approval-summary className="mt-1.5 text-text">
+            {request.summary.state === "ready"
+              ? request.summary.text
+              : t("approvals.summary.pending")}
+          </p>
+          <details data-approval-original className="mt-1">
+            <summary className="cursor-pointer text-text-muted">
+              {t("approvals.original.show")}
+            </summary>
+            <HermesText command={request.command} description={request.description} />
+          </details>
+        </>
       )}
       {shown === "pending" ? (
         <div className="mt-2 flex flex-wrap gap-2">
@@ -104,6 +120,23 @@ export function ToolApprovalCard({ card, npcName, onDecide }: ToolApprovalCardPr
         </p>
       )}
     </div>
+  );
+}
+
+/** Hermes' own (already redacted) text: the command and, when it says more, the description. */
+function HermesText({ command, description }: { command: string; description: string }) {
+  return (
+    <>
+      <code
+        data-approval-command
+        className="mt-1.5 block max-h-24 overflow-y-auto whitespace-pre-wrap break-all rounded bg-bg px-2 py-1 text-[11px] text-text"
+      >
+        {command}
+      </code>
+      {description && description !== command && (
+        <p className="mt-1 text-text-muted">{description}</p>
+      )}
+    </>
   );
 }
 
