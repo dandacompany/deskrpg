@@ -130,9 +130,12 @@ export type Diagnostic = {
 export type PluginTime = string | number;
 
 /** Card summary carried in a board column. */
+/** Approval policies enforced by plugin hooks on upstream Hermes (no core patch). */
+export const REVIEW_HOOKS_CAPABILITY = "review_hooks_v1";
+
 export type KanbanReviewPolicy = {
   version: 1;
-  mode: "human" | "agent";
+  mode: "human" | "agent" | "mixed";
   reviewer_profile: string | null;
 };
 

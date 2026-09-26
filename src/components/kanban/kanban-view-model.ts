@@ -227,7 +227,7 @@ export function failureLine(failure: Pick<KanbanFailure, "code" | "message">): s
 // ---------------------------------------------------------------------------
 
 export type TaskFormValues = {
-  reviewMode?: "human" | "agent";
+  reviewMode?: "human" | "agent" | "mixed";
   reviewerNpcId?: string;
   reviewRevision?: number;
   title: string;
