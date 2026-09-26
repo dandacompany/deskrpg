@@ -451,15 +451,23 @@ export type KanbanTaskActionInput<A extends KanbanTaskAction> = A extends "appro
         ? { comment?: string }
         : Record<string, never>;
 
+export type BoardDefaultPolicy = {
+  mode: KanbanReviewPolicy["mode"];
+  reviewer_profile: string | null;
+};
+
 export type KanbanApi = {
   listBoards(): Promise<PluginResponse<{ boards: BoardMeta[]; current: string | null }>>;
   createBoard(body: CreateBoardBody): Promise<PluginResponse<{ board: BoardMeta }>>;
   updateBoard(slug: string, body: UpdateBoardBody): Promise<PluginResponse<{ board: BoardMeta }>>;
   /** The approval policy a board's cards fall back to when they carry none (`review_hooks_v1`). */
+  getBoardDefaultPolicy(
+    slug: string,
+  ): Promise<PluginResponse<{ board: string; default: BoardDefaultPolicy | null }>>;
   setBoardDefaultPolicy(
     slug: string,
     body: { mode: KanbanReviewPolicy["mode"] | null; reviewer_profile: string | null },
-  ): Promise<PluginResponse<{ board: string; default: unknown }>>;
+  ): Promise<PluginResponse<{ board: string; default: BoardDefaultPolicy | null }>>;
 
   getBoard(
     board: string,

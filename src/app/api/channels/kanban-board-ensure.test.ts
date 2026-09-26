@@ -377,7 +377,7 @@ function channelBoardSlugOf(channelId: string) {
   return `deskrpg-${channelId.replace(/-/g, "").toLowerCase()}`;
 }
 
-test("on a review-hooks gateway the first binding defaults the board to human approval, once", async () => {
+test("on a review-hooks gateway a board without a default gets human approval, once per process", async () => {
   const plugin = await startPlugin({
     capabilities: ["kanban", "cron", "events", "review_hooks_v1"],
   });
@@ -388,17 +388,38 @@ test("on a review-hooks gateway the first binding defaults the board to human ap
   assert.equal((await bind(channel.id, user.id, gateway.id)).status, 200);
   const { ensureChannelBoard, channelBoardSlug } = await import("@/lib/kanban-boards");
   assert.equal((await ensureChannelBoard(channel.id)).ok, true);
+  assert.equal((await ensureChannelBoard(channel.id)).ok, true);
 
-  const defaults = boardRequests(plugin).filter((r) => r.method === "PUT");
+  const path = `/deskrpg/kanban/boards/${channelBoardSlug(channel.id)}/default-policy`;
+  const calls = boardRequests(plugin).filter((r) => r.path === path);
   assert.deepEqual(
-    defaults.map((r) => [r.path, r.json]),
+    calls.map((r) => [r.method, r.json ?? null]),
     [
-      [
-        `/deskrpg/kanban/boards/${channelBoardSlug(channel.id)}/default-policy`,
-        { mode: "human", reviewer_profile: null },
-      ],
+      ["GET", null],
+      ["PUT", { mode: "human", reviewer_profile: null }],
     ],
-    "set when the board is first bound, not on every ensure",
+    "read, then set when unset — and not again on later ensures",
+  );
+});
+
+test("a board default that is already set is respected", async () => {
+  const plugin = await startPlugin({
+    capabilities: ["kanban", "cron", "events", "review_hooks_v1"],
+  });
+  const user = await seedUser("board-owner");
+  const gateway = await seedGateway(user.id, plugin.baseUrl);
+  const channel = await seedChannel(user.id, "기본값 채널");
+  const { channelBoardSlug } = await import("@/lib/kanban-boards");
+  plugin.setBoardDefault(channelBoardSlug(channel.id), {
+    mode: "agent",
+    reviewer_profile: "sophie",
+  });
+
+  assert.equal((await bind(channel.id, user.id, gateway.id)).status, 200);
+  assert.equal(
+    boardRequests(plugin).filter((r) => r.method === "PUT").length,
+    0,
+    "an existing default is never overwritten",
   );
 });
 

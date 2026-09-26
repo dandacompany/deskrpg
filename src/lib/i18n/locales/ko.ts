@@ -3198,6 +3198,7 @@ const ko: Record<string, string> = {
   "kanban.review.human": "사람 승인",
   "kanban.review.agent": "AI 직원 승인",
   "kanban.review.mixed": "AI 검토 후 사람 승인",
+  "kanban.review.aiOpinion": "AI 의견",
   "kanban.review.reviewer": "검토 직원",
   "kanban.review.selectReviewer": "다른 직원을 선택하세요",
   "kanban.review.reviewerRequired": "담당자와 다른 출근 직원을 검토자로 선택하세요.",

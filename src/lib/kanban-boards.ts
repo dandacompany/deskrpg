@@ -322,6 +322,46 @@ export async function ensureChannelBoard(
   });
 }
 
+/** Boards whose default policy this process has already seen set — the poller ensures boards often. */
+const defaultPolicyChecked: Set<string> = ((
+  globalThis as { __deskrpgBoardDefaultChecked?: Set<string> }
+).__deskrpgBoardDefaultChecked ??= new Set());
+
+/**
+ * New cards need a person's approval. On upstream Hermes that product default lives in the board's
+ * default policy, which also covers cards made outside DeskRPG. A board without one gets human
+ * approval; one already set (by a person or an earlier run) is left alone. Best effort: the board
+ * works without it, and a failed attempt is retried on a later ensure.
+ */
+async function ensureBoardDefaultPolicy(
+  client: OwnerPluginClient,
+  gatewayId: string,
+  boardSlug: string,
+): Promise<void> {
+  const key = `${gatewayId}|${boardSlug}`;
+  if (defaultPolicyChecked.has(key)) return;
+  const current = await client.kanban.getBoardDefaultPolicy(boardSlug);
+  if (!current.ok) {
+    console.warn(
+      `[kanban-boards] could not read board ${boardSlug} default policy: ${current.failure.code}`,
+    );
+    return;
+  }
+  if (current.data.default === null) {
+    const set = await client.kanban.setBoardDefaultPolicy(boardSlug, {
+      mode: "human",
+      reviewer_profile: null,
+    });
+    if (!set.ok) {
+      console.warn(
+        `[kanban-boards] could not default board ${boardSlug} to human approval: ${set.failure.code}`,
+      );
+      return;
+    }
+  }
+  defaultPolicyChecked.add(key);
+}
+
 async function ensureChannelBoardUnlocked(
   channelId: string,
   resolved?: ResolvedChannelBoard,
@@ -359,10 +399,6 @@ async function ensureChannelBoardUnlocked(
       return { ok: false, code: resolved.pluginGate.code, reason: resolved.pluginGate.reason, row };
     }
 
-    // Never bound successfully before: this is the board's first binding.
-    const previous = await getChannelBoardBySlug(channelId, boardSlug);
-    const firstBinding = !previous?.boardNameSyncedAt;
-
     const created = await resolved.ownerClient.kanban.createBoard({ slug: boardSlug, name });
     if (!created.ok) {
       const row = await upsertBoardRow({
@@ -379,19 +415,8 @@ async function ensureChannelBoardUnlocked(
       };
     }
 
-    // New cards need a person's approval — upstream Hermes keeps that product default through the
-    // board default, which also covers cards made outside DeskRPG. Set once, so a changed default
-    // survives later ensures. Best effort: the board works without it.
-    if (firstBinding && supportsReviewHooks(resolved.pluginGate.info)) {
-      const set = await resolved.ownerClient.kanban.setBoardDefaultPolicy(boardSlug, {
-        mode: "human",
-        reviewer_profile: null,
-      });
-      if (!set.ok)
-        console.warn(
-          `[kanban-boards] could not default board ${boardSlug} to human approval: ${set.failure.code}`,
-        );
-    }
+    if (supportsReviewHooks(resolved.pluginGate.info))
+      await ensureBoardDefaultPolicy(resolved.ownerClient, gatewayId, boardSlug);
 
     const row = await upsertBoardRow({
       channelId,

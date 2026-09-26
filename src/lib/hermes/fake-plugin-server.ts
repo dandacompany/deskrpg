@@ -88,6 +88,11 @@ export type FakePluginServer = {
   /** Clears all board, card, event, and cron state (info settings are kept). */
   reset(): void;
   setInfo(patch: Partial<Omit<PluginInfo, "plugin">>): void;
+  /** Plants a board's default approval policy (`review_hooks_v1`). null clears it. */
+  setBoardDefault(
+    board: string,
+    policy: { mode: string; reviewer_profile: string | null } | null,
+  ): void;
   lastRequest(): RecordedRequest | null;
   requests(): RecordedRequest[];
   /** Pushes an event into the unified event stream (the server fills id and ts). */
@@ -263,6 +268,7 @@ export async function startFakePluginServer(
   let cron = new Map<string, CronState>();
   let artifacts = new Map<string, ArtifactRecord>();
   let cardProposals = new Map<string, CardProposalRecord>();
+  let boardDefaults = new Map<string, { mode: string; reviewer_profile: string | null }>();
   let skillStates = new Map<string, FakeSkillState>();
   let mcpStates = new Map<string, FakeMcpState>();
   let approvalPolicyStates = new Map<string, FakeApprovalPolicyState>();
@@ -283,6 +289,7 @@ export async function startFakePluginServer(
     artifacts = new Map();
     faults.length = 0;
     cardProposals = new Map();
+    boardDefaults = new Map();
     skillStates = new Map();
     mcpStates = new Map();
     approvalPolicyStates = new Map();
@@ -1702,18 +1709,20 @@ export async function startFakePluginServer(
       throw notFound();
     }
     const defaultPolicy = /^\/deskrpg\/kanban\/boards\/([^/]+)\/default-policy$/.exec(pathname);
-    if (defaultPolicy && method === "PUT") {
-      if (!info.capabilities?.includes("review_hooks_v1")) throw notFound();
+    if (defaultPolicy && (method === "GET" || method === "PUT")) {
+      if (!info.capabilities?.includes("review_hooks_v1")) {
+        return { status: 428, body: { error: "review_hooks_unavailable" } };
+      }
       const slug = decodeURIComponent(defaultPolicy[1]);
-      return {
-        status: 200,
-        body: {
-          board: slug,
-          default: body.mode
-            ? { mode: body.mode, reviewer_profile: body.reviewer_profile ?? null }
-            : null,
-        },
-      };
+      if (method === "PUT") {
+        if (body.mode) {
+          boardDefaults.set(slug, {
+            mode: String(body.mode),
+            reviewer_profile: (body.reviewer_profile as string | null) ?? null,
+          });
+        } else boardDefaults.delete(slug);
+      }
+      return { status: 200, body: { board: slug, default: boardDefaults.get(slug) ?? null } };
     }
     let m = /^\/deskrpg\/kanban\/boards\/([^/]+)$/.exec(pathname);
     if (m && method === "PATCH") {
@@ -2025,6 +2034,10 @@ export async function startFakePluginServer(
     },
     seedArtifact,
     seedAttachment,
+    setBoardDefault: (board, policy) => {
+      if (policy) boardDefaults.set(board, policy);
+      else boardDefaults.delete(board);
+    },
     skills: skillsFor,
     mcp: mcpFor,
     approvalPolicy: approvalPolicyFor,

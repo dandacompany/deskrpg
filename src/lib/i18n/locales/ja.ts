@@ -3229,6 +3229,7 @@ const ja: Record<string, string> = {
   "kanban.review.human": "人による承認",
   "kanban.review.agent": "AIスタッフの承認",
   "kanban.review.mixed": "AIレビュー後に人が承認",
+  "kanban.review.aiOpinion": "AIの意見",
   "kanban.review.reviewer": "レビュー担当",
   "kanban.review.selectReviewer": "別のスタッフを選択",
   "kanban.review.reviewerRequired": "実行担当とは別の出勤中スタッフを選択してください。",

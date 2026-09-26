@@ -14,7 +14,12 @@ import {
   type PluginTime,
 } from "@/lib/hermes/deskrpg-plugin-types";
 import { taskTimeMs } from "@/lib/plugin-time";
-import { cardRunState, runAttempts, type RunAttempt } from "@/lib/kanban-run-history";
+import {
+  cardRunState,
+  runAttempts,
+  type RunAttempt,
+  mixedAiOpinion,
+} from "@/lib/kanban-run-history";
 import { hasRunProvenance, runProvenance } from "@/lib/kanban-run-provenance";
 import type { SessionSourcesView } from "@/lib/session-sources-types";
 import type { RunFailureCause } from "@/lib/run-failure-cause";
@@ -254,6 +259,7 @@ export default function TaskDrawer({
     [detail?.runs, detail?.events],
   );
   const runState = task ? cardRunState(task, attempts) : null;
+  const aiOpinion = mixedAiOpinion(task?.review, detail?.runs ?? []);
   const linkCandidates = boardTasks.filter(
     (candidate) => candidate.id !== taskId && !(detail?.links.parents ?? []).includes(candidate.id),
   );
@@ -385,6 +391,12 @@ export default function TaskDrawer({
                       <div>
                         {t("kanban.review.round")}: {task.review.review_round}
                       </div>
+                      {aiOpinion && (
+                        <div data-ai-opinion className="rounded bg-surface-raised px-2 py-1">
+                          <span className="font-semibold">{t("kanban.review.aiOpinion")}</span>
+                          <p className="whitespace-pre-wrap break-words">{aiOpinion}</p>
+                        </div>
+                      )}
                       {view.reasonKey && (
                         <div className="text-text-secondary">
                           {t(`kanban.review.reason.${view.reasonKey}`)}
