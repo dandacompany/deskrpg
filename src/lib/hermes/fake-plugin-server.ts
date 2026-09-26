@@ -1037,13 +1037,18 @@ export async function startFakePluginServer(
       record.runs.push(run);
       record.task.worker_pid = run.worker_pid;
       setStatus(board, record, "running");
+      // Same shape as the real plugin (0.24.1+): no top-level profile on kanban events — the card's assignee
+      // rides in the payload. The old fake sent a top-level profile the real stream never had, which hid the
+      // "working never turns on live" defect.
       pushEvent({
         kind: "task.run.started",
         board: board.meta.slug,
         task_id: record.task.id,
-        profile,
         run_id: run.id,
-        payload: { profile: profile ?? null },
+        payload: {
+          started_at: nowEpochSeconds(),
+          ...(profile ? { assignee: profile } : {}),
+        },
       });
       spawned.push({ task_id: record.task.id, profile, run_id: run.id });
     }

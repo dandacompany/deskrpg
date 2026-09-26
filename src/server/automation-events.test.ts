@@ -959,3 +959,35 @@ test("two runs of the same cron job are counted apart", async () => {
   await ingest(CHANNEL, [started("exec-1"), started("exec-2")], h.deps);
   assert.equal((workingEvents(h.emitted).at(-1) as NpcWorkingPayload).sources.cronRuns, 2);
 });
+
+// The real kanban stream carries no top-level profile. Plugin 0.24.1+ names the card's assignee in the payload of
+// `task.run.started`; older plugins send only pid/started_at, and the working state then comes from the restart
+// resync alone.
+test("npc:working turns on from the real run-start shape — the assignee in the payload", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  await ingest(
+    CHANNEL,
+    [
+      ev({
+        kind: "task.run.started",
+        task_id: "t-live",
+        run_id: "r-live",
+        payload: { pid: 9, started_at: 100, assignee: "sophie" },
+      }),
+    ],
+    h.deps,
+  );
+  const working = h.emitted.filter((e) => e.event === "npc:working");
+  assert.equal(working.length, 1);
+  assert.deepEqual((working[0].payload as { npcId: string; working: boolean }).working, true);
+});
+
+test("an old plugin's run start without an assignee matches nobody", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  await ingest(
+    CHANNEL,
+    [ev({ kind: "task.run.started", task_id: "t-old", run_id: "r-old", payload: { pid: 9 } })],
+    h.deps,
+  );
+  assert.equal(h.emitted.filter((e) => e.event === "npc:working").length, 0);
+});

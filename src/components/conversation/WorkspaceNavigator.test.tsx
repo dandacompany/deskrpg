@@ -274,3 +274,30 @@ test("an employee row lists every state that applies, and an idle one still read
   assert.match(text, /노아[\s\S]*4번 자리 · 대화 가능/);
   assert.match(text, /미나[\s\S]*5번 자리 · 상태 확인 불가/);
 });
+
+test("a moving or waiting employee still shows every state after where they are", async () => {
+  const waiting: NavigatorNpc = {
+    id: "sophie",
+    name: "소피",
+    active: true,
+    placed: true,
+    motion: "waiting",
+    calledByViewer: true,
+    seatNumber: null,
+    states: ["stopped_after_failures"],
+  };
+  const moving: NavigatorNpc = {
+    id: "oliver",
+    name: "올리버",
+    active: true,
+    placed: true,
+    motion: "moving",
+    calledByViewer: false,
+    seatNumber: null,
+    states: ["unknown"],
+  };
+  const { element } = await mount(true, [waiting, moving]);
+  const text = element.textContent ?? "";
+  assert.match(text, /소피[\s\S]*서 있음 · 내 호출에 대기 · 반복 실패로 멈춤/);
+  assert.match(text, /올리버[\s\S]*서 있음 · 이동 중 · 상태 확인 불가/);
+});
