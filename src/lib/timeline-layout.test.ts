@@ -437,7 +437,7 @@ test("the day count is the same in other time zones, across a DST change", () =>
     'console.log(JSON.stringify([d("2026-10-31", "2026-11-02T12:00:00"), d("2026-11-03", "2026-11-01T23:30:00"), d("2026-11-01", "2026-11-01T00:30:00")]));',
   ].join("\n");
   for (const tz of ["Asia/Seoul", "America/New_York", "UTC"]) {
-    const env = { ...process.env, TZ: tz };
+    const env: NodeJS.ProcessEnv = { ...process.env, TZ: tz };
     delete env.DATABASE_URL;
     const out = execFileSync(
       process.execPath,
