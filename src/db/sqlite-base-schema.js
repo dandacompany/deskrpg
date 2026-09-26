@@ -361,6 +361,15 @@ const SQLITE_BASE_SCHEMA = `
       PRIMARY KEY (user_id, npc_id, tab)
     );
 
+    CREATE TABLE IF NOT EXISTS conversation_reads (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      read_at TEXT NOT NULL,
+      seen_ids TEXT,
+      PRIMARY KEY (user_id, kind, target_id)
+    );
+
     CREATE TABLE IF NOT EXISTS meeting_minutes (
       id TEXT PRIMARY KEY NOT NULL,
       channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,

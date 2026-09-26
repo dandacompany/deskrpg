@@ -31,7 +31,7 @@ const pgCjs = require("./schema.pg.cjs") as Record<string, unknown>;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sqliteCjs = require("./schema.sqlite.cjs") as Record<string, unknown>;
 
-const EXPECTED_TABLE_COUNT = 30;
+const EXPECTED_TABLE_COUNT = 31;
 
 type AnyTable = Record<string, unknown>;
 type GetTableConfig = (table: unknown) => {
@@ -263,7 +263,7 @@ test("schema-sqlite.ts and schema.sqlite.cjs are structurally identical (SQLite)
   );
 });
 
-test("each dialect exports exactly the expected 30 tables", () => {
+test("each dialect exports exactly the expected 31 tables", () => {
   assert.equal(Object.keys(pgCjs).length, EXPECTED_TABLE_COUNT, "schema.pg.cjs table count");
   assert.equal(
     Object.keys(sqliteCjs).length,
