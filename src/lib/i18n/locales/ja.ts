@@ -3147,6 +3147,7 @@ const ja: Record<string, string> = {
   "kanban.move.success": "サーバーの状態により {title} を {column} に移動しました。",
   "kanban.move.reconciled": "{title} の移動を保存し、最新のボードと同期しました。",
   "kanban.move.failed": "{title} を移動できませんでした: {error}",
+  "kanban.move.invalidTransition": "{title} は現在の状態から {column} へ移動できません。",
   "kanban.move.unconfirmed": "{title} の移動は保存されましたが、最新状態を確認できませんでした。",
   "kanban.move.retryRead": "再確認",
   "kanban.review.reason.human_review_required": "人が結果を確認すると完了できます。",

@@ -498,6 +498,66 @@ test("R1/R5: stale source and server failure cancel/fail without false success",
   }
 });
 
+test("a refused move names the target column instead of the raw invalid_transition code", async () => {
+  const f = await mount((url, init) => {
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) return json(board());
+    if (url.endsWith("/kanban/tasks/t-todo") && init?.method === "PATCH") {
+      return json(
+        {
+          code: "invalid_transition",
+          message: "cannot move to 'scheduled' from the current status",
+        },
+        { status: 409 },
+      );
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    await submitKeyboardMove(f.host);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const text = f.host.querySelector('[data-move-status="error"]')?.textContent ?? "";
+    assert.match(text, /예약됨/);
+    assert.equal(text.includes("invalid_transition"), false);
+    assert.equal(text.includes("cannot move"), false);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("a move failure notice clears once the board is read again afterwards", async () => {
+  // Observed on staging: the card was later changed from its detail pane and the board refreshed
+  // several times, yet the old "move failed" line stayed on top of the board.
+  let boardReads = 0;
+  const f = await mount((url, init) => {
+    if (url.includes("/automation/status")) return json(status());
+    if (url.includes("/kanban/board")) {
+      boardReads += 1;
+      return json(board());
+    }
+    if (url.endsWith("/kanban/tasks/t-todo") && init?.method === "PATCH") {
+      return json({ code: "forbidden", message: "권한 없음" }, { status: 403 });
+    }
+    return json({ code: "not_found", message: "no route" }, { status: 404 });
+  });
+  try {
+    await submitKeyboardMove(f.host);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    assert.equal(f.host.querySelector('[data-move-status="error"]') !== null, true);
+    const readsAtFailure = boardReads;
+
+    await act(async () =>
+      f.host.querySelector<HTMLButtonElement>('button[aria-label="새로고침"]')?.click(),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+    assert.equal(boardReads > readsAtFailure, true);
+    assert.equal(f.host.querySelector('[data-move-status="error"]') !== null, false);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("R4: completion refreshes detail only when the moved card is currently selected", async () => {
   let patchResolve!: (response: Response) => void;
   const patch = new Promise<Response>((resolve) => (patchResolve = resolve));

@@ -89,7 +89,38 @@ type MoveState =
   | { phase: "pending"; taskId: string; title: string; target: KanbanTaskStatus }
   | { phase: "success"; taskId: string; title: string; status?: KanbanTaskStatus }
   | { phase: "unconfirmed"; taskId: string; title: string; target: KanbanTaskStatus }
-  | { phase: "error"; taskId: string; title: string; target: KanbanTaskStatus; message: string };
+  | {
+      phase: "error";
+      taskId: string;
+      title: string;
+      target: KanbanTaskStatus;
+      code: string;
+      message: string;
+      /**
+       * The board reload sequence current when the failure was shown. Any **later** applied reload
+       * clears the banner — by then the board shows the server's truth, and a failure notice left
+       * over from an earlier attempt reads as if the latest change failed.
+       */
+      shownAt: number;
+    };
+/**
+ * `invalid_transition` is Hermes refusing the move for the card's current status — the raw code and
+ * its English reason mean nothing to the person who dragged the card, so name the column instead.
+ * Other failures keep the server's reason, which is usually the specific cause (e.g. permission).
+ */
+function moveFailureText(
+  t: ReturnType<typeof useT>,
+  move: { title: string; target: KanbanTaskStatus; code: string; message: string },
+): string {
+  if (move.code === "invalid_transition") {
+    return t("kanban.move.invalidTransition", {
+      title: move.title,
+      column: t(`kanban.column.${move.target}`),
+    });
+  }
+  return t("kanban.move.failed", { title: move.title, error: move.message });
+}
+
 type ReloadResult =
   { kind: "applied"; board: BoardResponse } | { kind: "superseded" } | { kind: "failed" };
 
@@ -319,6 +350,9 @@ export default function KanbanBoardModal({
         const data = await api.board(includeArchived);
         if (!current()) return { kind: "superseded" };
         setBoard(data);
+        setMove((move) =>
+          move.phase === "error" && sequence > move.shownAt ? { phase: "idle" } : move,
+        );
         setBoardChannelId(channelId);
         setBlocker(null);
         // A checklist opened for the old failure would otherwise keep saying what is missing.
@@ -664,8 +698,18 @@ export default function KanbanBoardModal({
         } catch (err) {
           moveRequestPending.current = false;
           if (!mounted.current || currentApi.current !== api) return;
-          setMove({ phase: "error", ...request, message: failureLine(toFailure(err)) });
-          await reload();
+          const failure = toFailure(err);
+          // Reload first, then show the failure: the reload that belongs to this failure must not
+          // be the one that clears it.
+          await reconcileReload(await reload());
+          if (!mounted.current || currentApi.current !== api) return;
+          setMove({
+            phase: "error",
+            ...request,
+            code: failure.code,
+            message: failureLine(failure),
+            shownAt: reloadSequence.current,
+          });
           return;
         }
         if (!mounted.current || currentApi.current !== api) return;
@@ -965,7 +1009,7 @@ export default function KanbanBoardModal({
                   ? t("kanban.move.reconciled", { title: move.title })
                   : move.phase === "unconfirmed"
                     ? t("kanban.move.unconfirmed", { title: move.title })
-                    : t("kanban.move.failed", { title: move.title, error: move.message })}
+                    : moveFailureText(t, move)}
             {move.phase === "unconfirmed" ? (
               <button type="button" className="ml-2 underline" onClick={() => void retryMoveRead()}>
                 {t("kanban.move.retryRead")}
