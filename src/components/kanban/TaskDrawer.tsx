@@ -14,7 +14,12 @@ import {
   type PluginTime,
 } from "@/lib/hermes/deskrpg-plugin-types";
 import { taskTimeMs } from "@/lib/plugin-time";
-import { cardRunState, runAttempts, type RunAttempt } from "@/lib/kanban-run-history";
+import {
+  cardRunState,
+  runAttempts,
+  type RunAttempt,
+  mixedAiOpinion,
+} from "@/lib/kanban-run-history";
 import { hasRunProvenance, runProvenance } from "@/lib/kanban-run-provenance";
 import type { SessionSourcesView } from "@/lib/session-sources-types";
 import type { RunFailureCause } from "@/lib/run-failure-cause";
@@ -34,6 +39,7 @@ import {
   splitBlackboardComments,
   taskTitleById,
   type BoardNpc,
+  reviewView,
 } from "./kanban-view-model";
 
 /** What the card's artifacts section uses. Wired up (by GamePageClient) from the channel artifacts API. */
@@ -253,6 +259,7 @@ export default function TaskDrawer({
     [detail?.runs, detail?.events],
   );
   const runState = task ? cardRunState(task, attempts) : null;
+  const aiOpinion = mixedAiOpinion(task?.review, detail?.runs ?? []);
   const linkCandidates = boardTasks.filter(
     (candidate) => candidate.id !== taskId && !(detail?.links.parents ?? []).includes(candidate.id),
   );
@@ -365,41 +372,52 @@ export default function TaskDrawer({
                   ? t(`kanban.review.${task.review.policy.mode}`)
                   : t("kanban.review.legacy")}
               </div>
-              {task.review && (
-                <>
-                  <div>
-                    {t(
-                      `kanban.review.state.${task.review.state === "submitted" ? (task.review.policy.mode === "human" ? "humanWaiting" : "agentWaiting") : task.review.state}`,
-                    )}
-                  </div>
-                  {task.review.policy.reviewer_profile && (
-                    <div>
-                      {t("kanban.review.reviewer")}:{" "}
-                      {npcs.find((npc) => npc.profileName === task.review?.policy.reviewer_profile)
-                        ?.npcName ?? task.review.policy.reviewer_profile}
-                    </div>
-                  )}
-                  <div>
-                    {t("kanban.review.round")}: {task.review.review_round}
-                  </div>
-                  {task.review.reason && (
-                    <div className="text-text-secondary">
-                      {t(
-                        `kanban.review.reason.${["human_review_required", "new_submission_required", "review_dispatch_disabled", "reviewer_unavailable", "independent_reviewer_required", "reviewer_assignment_mismatch", "review_round_limit", "reviewer_needs_input"].includes(task.review.reason) ? task.review.reason : "unknown"}`,
+              {task.review &&
+                (() => {
+                  const view = reviewView(task.review);
+                  return (
+                    <>
+                      <div data-review-state={view.label}>
+                        {t(`kanban.review.state.${view.label}`)}
+                      </div>
+                      {task.review.policy.reviewer_profile && (
+                        <div>
+                          {t("kanban.review.reviewer")}:{" "}
+                          {npcs.find(
+                            (npc) => npc.profileName === task.review?.policy.reviewer_profile,
+                          )?.npcName ?? task.review.policy.reviewer_profile}
+                        </div>
                       )}
-                    </div>
-                  )}
-                  {task.review.approval && (
-                    <div>
-                      {t("kanban.review.approvedBy")}:{" "}
-                      {task.review.approval.actor_name || task.review.approval.actor_id} ·{" "}
-                      {new Date(task.review.approval.approved_at * 1000).toLocaleString()}
-                      <br />
-                      {t("kanban.review.submission")}: {task.review.approval.submission_id}
-                    </div>
-                  )}
-                </>
-              )}
+                      <div>
+                        {t("kanban.review.round")}: {task.review.review_round}
+                      </div>
+                      {aiOpinion && (
+                        <div data-ai-opinion className="rounded bg-surface-raised px-2 py-1">
+                          <span className="font-semibold">{t("kanban.review.aiOpinion")}</span>
+                          <p className="whitespace-pre-wrap break-words">{aiOpinion}</p>
+                        </div>
+                      )}
+                      {view.reasonKey && (
+                        <div className="text-text-secondary">
+                          {t(`kanban.review.reason.${view.reasonKey}`)}
+                        </div>
+                      )}
+                      {view.approval && (
+                        <div>
+                          {t("kanban.review.approvedBy")}: {view.approval.who}
+                          {view.approval.atMs !== null &&
+                            ` · ${new Date(view.approval.atMs).toLocaleString()}`}
+                          {view.approval.submission && (
+                            <>
+                              <br />
+                              {t("kanban.review.submission")}: {view.approval.submission}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
             </section>
             {/* Status + actions (R10·R13) */}
             <section className="space-y-2">
@@ -814,12 +832,14 @@ export default function TaskDrawer({
                       : "bg-surface-raised text-text-secondary"
                   }`}
                 >
-                  {t(
-                    runState.kind === "gave_up"
-                      ? "kanban.run.state.gaveUp"
-                      : "kanban.run.state.retrying",
-                    { count: runState.failures },
-                  )}
+                  {runState.kind === "external_done"
+                    ? t("kanban.review.state.externalDone")
+                    : t(
+                        runState.kind === "gave_up"
+                          ? "kanban.run.state.gaveUp"
+                          : "kanban.run.state.retrying",
+                        { count: runState.failures },
+                      )}
                 </div>
               )}
               {attempts.length === 0 ? (

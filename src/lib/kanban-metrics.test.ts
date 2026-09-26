@@ -30,7 +30,7 @@ function run(over: Partial<KanbanTimelineRun> = {}): KanbanTimelineRun {
 
 function metrics(
   runs: KanbanTimelineRun[],
-  cards: { id: string; status: string }[] = [],
+  cards: Parameters<typeof computeOperationalMetrics>[1] = [],
   pending: ReadonlySet<string> = NO_APPROVALS,
 ) {
   return computeOperationalMetrics(runs, cards, pending, WIN);
@@ -325,4 +325,36 @@ test("a swarm root's instant completion is structure, not throughput or success"
   );
   assert.equal(metrics.throughput, 1);
   assert.equal(metrics.terminalRuns, 1);
+});
+
+const reviewed = (reason: string | null, approval: unknown) =>
+  ({
+    policy: { version: 1, mode: "human", reviewer_profile: null },
+    policy_revision: 1,
+    submission: null,
+    review_round: 1,
+    state: "approved",
+    reason,
+    approval,
+  }) as never;
+
+test("external completions are counted apart from approvals", () => {
+  const m = metrics(
+    [run({ task_id: "outside" }), run({ task_id: "approved" }), run({ task_id: "plain" })],
+    [
+      { id: "outside", status: "done", review: reviewed("external_done", null) },
+      {
+        id: "approved",
+        status: "done",
+        review: reviewed(null, { actor_kind: "human", actor_id: "u" }),
+      },
+      { id: "plain", status: "done" },
+    ],
+  );
+  assert.deepEqual(m.approvals, { approved: 1, externalDone: 1 });
+});
+
+test("a board without approval policies has no approval split", () => {
+  const m = metrics([run({ task_id: "plain" })], [{ id: "plain", status: "done" }]);
+  assert.equal(m.approvals, null);
 });

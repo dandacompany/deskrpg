@@ -50,6 +50,7 @@ import {
   type TaskFormValues,
 } from "./kanban-view-model";
 import { CopyCommand } from "../CopyCommand";
+import { reviewSupport } from "@/lib/hermes/plugin-capability";
 
 interface KanbanBoardModalProps {
   channelId: string;
@@ -615,12 +616,12 @@ export default function KanbanBoardModal({
   // Swarm workers are chosen only from NPCs who are active (checked in) — the server rejects sleeping NPCs with 400.
   const npcOptions = useMemo(() => activeAssigneeOptions(npcs), [npcs]);
   // If the plugin can't do swarm, the button is hidden entirely — better than clicking it and seeing a 428.
-  const reviewSupported = status?.capabilities?.includes("kanban_review_policy_v1") ?? false;
+  const review = reviewSupport(status?.capabilities);
+  const reviewSupported = review.policies;
   // Upstream Hermes has no approval-policy contract: cards and swarms are still created (Hermes' own
   // behaviour), and the board says their results complete without approval.
   const swarmSupported = status?.capabilities?.includes("swarm") ?? false;
-  const swarmApproval =
-    reviewSupported && (status?.capabilities?.includes("swarm_review_policy") ?? false);
+  const swarmApproval = review.swarmPolicies;
   const anyRunning = allTasks.some(isRunning);
   const movePending = move.phase === "pending";
   const moveBlocked =
@@ -1134,6 +1135,7 @@ export default function KanbanBoardModal({
         <TaskEditorDialog
           mode={editor.mode}
           reviewSupported={reviewSupported}
+          mixedSupported={review.mixed}
           assigneeLocked={
             editor.mode === "edit" && !!editor.task.review && !!editor.task.started_at
           }
@@ -1172,6 +1174,9 @@ export default function KanbanBoardModal({
         <SwarmDialog
           npcs={npcOptions}
           withoutApproval={!swarmApproval}
+          policyModes={
+            swarmApproval ? (review.mixed ? ["human", "agent", "mixed"] : ["human", "agent"]) : []
+          }
           submitting={swarmSubmitting}
           error={swarmError}
           onSubmit={(values) => void handleSwarm(values)}

@@ -15,6 +15,7 @@ import {
   type KanbanBoard,
   type KanbanComment,
   type KanbanTask,
+  type PluginTime,
   type KanbanTaskStatus,
 } from "@/lib/hermes/deskrpg-plugin-types";
 
@@ -284,9 +285,9 @@ export function taskFormToBody(values: TaskFormValues): Record<string, unknown> 
   const body: Record<string, unknown> = { title: values.title.trim() };
   if (values.reviewMode) {
     body.reviewPolicy =
-      values.reviewMode === "agent"
-        ? { mode: "agent", reviewerNpcId: values.reviewerNpcId }
-        : { mode: "human" };
+      values.reviewMode === "human"
+        ? { mode: "human" }
+        : { mode: values.reviewMode, reviewerNpcId: values.reviewerNpcId };
     if (values.reviewRevision !== undefined) body.expected_revision = values.reviewRevision;
   }
   if (values.body.trim()) body.body = values.body;
@@ -358,4 +359,56 @@ export function splitBlackboardComments(comments: KanbanComment[]): {
     authors[key] = comment.author;
   }
   return { comments: rest, blackboard, authors };
+}
+
+/** Reasons the review state can carry that have their own sentence; anything else reads as unknown. */
+const KNOWN_REVIEW_REASONS: ReadonlySet<string> = new Set([
+  "human_review_required",
+  "new_submission_required",
+  "review_dispatch_disabled",
+  "reviewer_unavailable",
+  "independent_reviewer_required",
+  "reviewer_assignment_mismatch",
+  "review_round_limit",
+  "reviewer_needs_input",
+]);
+
+export type ReviewView = {
+  /** Suffix of `kanban.review.state.*`. */
+  label: string;
+  /** Suffix of `kanban.review.reason.*`, or null when there's nothing to add. */
+  reasonKey: string | null;
+  approval: { who: string; atMs: number | null; submission: string | null } | null;
+};
+
+/**
+ * How a card's approval state reads, the same whether the patched core or the plugin hooks
+ * report it. A card finished without anyone approving it here (`external_done`) is said so plainly.
+ * The hooks report the approval time as `at`; the patched core as `approved_at`.
+ */
+export function reviewView(review: NonNullable<KanbanTask["review"]>): ReviewView {
+  const externalDone = review.state === "approved" && review.reason === "external_done";
+  const label = externalDone
+    ? "externalDone"
+    : review.state === "submitted"
+      ? review.policy.mode === "human"
+        ? "humanWaiting"
+        : "agentWaiting"
+      : review.state;
+  const reasonKey =
+    !review.reason || externalDone
+      ? null
+      : KNOWN_REVIEW_REASONS.has(review.reason)
+        ? review.reason
+        : "unknown";
+  const raw = review.approval as
+    (Partial<NonNullable<typeof review.approval>> & { at?: PluginTime }) | null;
+  const approval = raw
+    ? {
+        who: raw.actor_name || raw.actor_id || "",
+        atMs: taskTimeMs(raw.approved_at ?? raw.at),
+        submission: raw.submission_id ?? null,
+      }
+    : null;
+  return { label, reasonKey, approval };
 }

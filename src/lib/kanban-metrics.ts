@@ -10,7 +10,11 @@
  * **did it finish · why did it fail · does it need attention right now.**
  */
 
-import type { KanbanStatusTransition, KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
+import type {
+  KanbanStatusTransition,
+  KanbanTask,
+  KanbanTimelineRun,
+} from "@/lib/hermes/deskrpg-plugin-types";
 import { countNeedsAttention, type AttentionCounts } from "@/lib/needs-attention";
 import { taskTimeMs } from "@/lib/plugin-time";
 import { isSwarmStructureRun } from "@/lib/swarm-structure";
@@ -85,6 +89,12 @@ export type OperationalMetrics = {
    * request failed). The screen then hides the cell — writing 0 would claim nothing was sent back.
    */
   rework: ReworkStats | null;
+  /**
+   * Of the cards completed in this window that carried an approval policy: how many a reviewer
+   * approved, and how many were finished outside DeskRPG with no approval on record. null when no
+   * such card finished — a board without policies has nothing to split.
+   */
+  approvals: { approved: number; externalDone: number } | null;
 };
 
 /** Has the run finished? If `ended_at` is missing, it's still running. */
@@ -122,7 +132,7 @@ export function countRework(
 
 export function computeOperationalMetrics(
   runs: readonly KanbanTimelineRun[],
-  cards: readonly { id: string; status: string }[],
+  cards: readonly { id: string; status: string; review?: KanbanTask["review"] }[],
   pendingApprovalTaskIds: ReadonlySet<string>,
   window: { fromMs: number; toMs: number },
   transitions: readonly KanbanStatusTransition[] | null = null,
@@ -159,6 +169,14 @@ export function computeOperationalMetrics(
     }
   }
 
+  let approved = 0;
+  let externalDone = 0;
+  for (const card of cards) {
+    if (!card.review || card.status !== "done" || !completedTasks.has(card.id)) continue;
+    if (card.review.reason === "external_done") externalDone += 1;
+    else approved += 1;
+  }
+
   return {
     window,
     throughput: completedTasks.size,
@@ -172,6 +190,7 @@ export function computeOperationalMetrics(
     duration: median(durations),
     attention: countNeedsAttention(cards, pendingApprovalTaskIds),
     rework: transitions === null ? null : countRework(transitions, window),
+    approvals: approved + externalDone > 0 ? { approved, externalDone } : null,
   };
 }
 

@@ -2060,3 +2060,93 @@ test("the handoff-recovery error banner shows an explanation instead of the erro
     await f.cleanup();
   }
 });
+
+test("a review-hooks gateway counts as enforcing approvals — no no-approval notice", async () => {
+  const f = await mount((url) =>
+    url.includes("/automation/status")
+      ? json(status({ capabilities: ["kanban", "swarm", "review_hooks_v1"] }))
+      : json(board()),
+  );
+  try {
+    assert.equal(Boolean(f.host.querySelector("[data-no-approval-notice]")), false);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("a card finished outside DeskRPG says so in its detail", async () => {
+  const f = await mount(
+    (url) => {
+      if (url.includes("/automation/status"))
+        return json(status({ capabilities: ["kanban", "review_hooks_v1"] }));
+      if (url.includes("/kanban/board")) return json(board());
+      return json(
+        detail({
+          id: "t-todo",
+          title: "밖에서 끝난 카드",
+          status: "done",
+          review: {
+            policy: { version: 1, mode: "human", reviewer_profile: null },
+            policy_revision: 1,
+            submission: null,
+            review_round: 0,
+            state: "approved",
+            reason: "external_done",
+            approval: null,
+          },
+        }),
+      );
+    },
+    { initialTaskId: "t-todo" },
+  );
+  try {
+    const state = f.host.querySelector('[data-review-state="externalDone"]');
+    assert.match(state?.textContent ?? "", /DeskRPG 밖에서 완료/);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("a mixed card waiting for a person shows the AI reviewer's opinion", async () => {
+  const f = await mount(
+    (url) => {
+      if (url.includes("/automation/status"))
+        return json(status({ capabilities: ["kanban", "review_hooks_v1"] }));
+      if (url.includes("/kanban/board")) return json(board());
+      return json({
+        ...detail({
+          id: "t-todo",
+          title: "혼합 검토 카드",
+          status: "review",
+          review: {
+            policy: { version: 1, mode: "mixed", reviewer_profile: "noah" },
+            policy_revision: 1,
+            submission: { id: "run:7", run_id: 7, hash: "", policy_revision: 1 },
+            review_round: 1,
+            state: "human_required",
+            reason: null,
+            approval: null,
+          },
+        }),
+        runs: [
+          {
+            id: 7,
+            profile: "noah",
+            outcome: "review_requested",
+            summary: "통과: 근거가 맞다",
+            started_at: 10,
+            ended_at: 20,
+          },
+        ],
+      });
+    },
+    { initialTaskId: "t-todo" },
+  );
+  try {
+    const opinion = f.host.querySelector("[data-ai-opinion]");
+    assert.match(opinion?.textContent ?? "", /AI 의견/);
+    assert.match(opinion?.textContent ?? "", /통과: 근거가 맞다/);
+  } finally {
+    await f.cleanup();
+  }
+});

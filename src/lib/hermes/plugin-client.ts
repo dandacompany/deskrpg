@@ -345,6 +345,10 @@ export function createOwnerPluginClient(
     createBoard: (body) => call("/deskrpg/kanban/boards", token, { method: "POST", body }),
     updateBoard: (slug, body) =>
       call(`/deskrpg/kanban/boards/${seg(slug)}`, token, { method: "PATCH", body }),
+    getBoardDefaultPolicy: (slug) =>
+      call(`/deskrpg/kanban/boards/${seg(slug)}/default-policy`, token),
+    setBoardDefaultPolicy: (slug, body) =>
+      call(`/deskrpg/kanban/boards/${seg(slug)}/default-policy`, token, { method: "PUT", body }),
 
     getBoard: (board, opts) =>
       call(

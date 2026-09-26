@@ -1,5 +1,5 @@
 /**
- * Guards decision 0016: Korean text lives in translation tables, not in code or comments.
+ * Korean text lives in translation tables, not in code or comments.
  *
  * A Hangul string literal, JSX text or comment is reported unless
  * - the file is on the path allowlist (the Korean locale file, tests, fixtures, source data kept in Korean), or

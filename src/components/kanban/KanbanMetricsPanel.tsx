@@ -21,6 +21,7 @@ export default function KanbanMetricsPanel({ metrics }: { metrics: OperationalMe
     attention,
     duration,
     handedOff,
+    approvals,
     outcomes,
     successRate,
     terminalRuns,
@@ -63,6 +64,20 @@ export default function KanbanMetricsPanel({ metrics }: { metrics: OperationalMe
 
       {handedOff > 0 && (
         <Cell metric="handedOff" label={t("kanban.metrics.handedOff")} value={String(handedOff)} />
+      )}
+
+      {/* Finished without an approval on record is told apart — it would read as approved otherwise. */}
+      {approvals !== null && (
+        <Cell
+          metric="approvals"
+          label={t("kanban.metrics.approved")}
+          value={String(approvals.approved)}
+          detail={
+            approvals.externalDone > 0
+              ? t("kanban.metrics.externalDone", { count: approvals.externalDone })
+              : null
+          }
+        />
       )}
 
       {/* Hidden, not 0, when the plugin can't list transitions — 0 would claim nothing was sent back. */}

@@ -9,7 +9,7 @@
  * Pure and dependency-free (besides the shared cause reader) — safe for the client bundle.
  */
 
-import type { KanbanEvent, KanbanRun } from "@/lib/hermes/deskrpg-plugin-types";
+import type { KanbanEvent, KanbanRun, KanbanTask } from "@/lib/hermes/deskrpg-plugin-types";
 import { taskTimeMs } from "@/lib/plugin-time";
 import { runFailureCause, type RunFailureCause } from "@/lib/run-failure-cause";
 
@@ -105,14 +105,19 @@ export function runAttempts(
  * - `gave_up`: Hermes stopped retrying after repeated failures and blocked the card — it runs
  *   again only once a person unblocks it.
  * - `retrying`: it failed and is back in the queue — the dispatcher will try again by itself.
+ * - `external_done`: the card needed approval but was finished outside DeskRPG with none on record.
  */
 export type CardRunState =
-  { kind: "gave_up"; failures: number } | { kind: "retrying"; failures: number };
+  | { kind: "gave_up"; failures: number }
+  | { kind: "retrying"; failures: number }
+  | { kind: "external_done" };
 
 export function cardRunState(
-  task: { status: string; consecutive_failures?: number },
+  task: { status: string; consecutive_failures?: number; review?: KanbanTask["review"] },
   attempts: readonly RunAttempt[],
 ): CardRunState | null {
+  if (task.review?.state === "approved" && task.review.reason === "external_done")
+    return { kind: "external_done" };
   const failures = task.consecutive_failures ?? 0;
   const last = attempts[attempts.length - 1];
   // Hermes ends the run itself as `gave_up` only on the spawn path; after a timeout or crash the
@@ -125,4 +130,30 @@ export function cardRunState(
     return { kind: "retrying", failures };
   }
   return null;
+}
+
+/**
+ * On a mixed card waiting for a person, what the AI reviewer concluded: the summary of its latest
+ * `review_requested` run (the hooks make the reviewer hand its verdict over that way instead of
+ * completing the card). null anywhere else — the person decides only in that state.
+ */
+export function mixedAiOpinion(
+  review: KanbanTask["review"] | undefined,
+  runs: readonly KanbanRun[],
+): string | null {
+  if (!review || review.policy.mode !== "mixed" || review.state !== "human_required") return null;
+  const reviewer = review.policy.reviewer_profile?.trim().toLowerCase();
+  if (!reviewer) return null;
+  let latest: KanbanRun | null = null;
+  for (const run of runs) {
+    if (run.outcome !== "review_requested") continue;
+    if (run.profile?.trim().toLowerCase() !== reviewer) continue;
+    if (!latest || endedOrStartedMs(run) >= endedOrStartedMs(latest)) latest = run;
+  }
+  const summary = latest?.summary?.trim();
+  return summary ? summary : null;
+}
+
+function endedOrStartedMs(run: KanbanRun): number {
+  return taskTimeMs(run.ended_at) ?? taskTimeMs(run.started_at) ?? 0;
 }

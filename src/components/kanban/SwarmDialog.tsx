@@ -13,7 +13,11 @@ export type SwarmSubmit = {
   verifierNpcId: string;
   synthesizerNpcId: string;
   idempotencyKey: string;
+  /** Omitted for human approval — the server's default. */
+  reviewPolicy?: { mode: "agent" | "mixed"; reviewerNpcId: string };
 };
+
+export type SwarmReviewMode = "human" | "agent" | "mixed";
 
 const FIELD = "w-full rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-text";
 const LABEL = "block text-[11px] font-semibold text-text-secondary mb-1";
@@ -35,6 +39,8 @@ interface SwarmDialogProps {
   onClose: () => void;
   /** The gateway can't attach approval policies — the result cards complete without approval. */
   withoutApproval?: boolean;
+  /** Approval modes the gateway can enforce on the workers' cards. Empty: no picker. */
+  policyModes?: readonly SwarmReviewMode[];
 }
 
 /** Swarm-launch dialog. Workers are chosen only from channel NPCs (the server rejects sleeping NPCs with 400). */
@@ -45,6 +51,7 @@ export default function SwarmDialog({
   onSubmit,
   onClose,
   withoutApproval = false,
+  policyModes = [],
 }: SwarmDialogProps) {
   const t = useT();
   const first = npcs[0]?.npcId ?? "";
@@ -53,6 +60,10 @@ export default function SwarmDialog({
   const [verifier, setVerifier] = useState(npcs[1]?.npcId ?? first);
   const [synthesizer, setSynthesizer] = useState(npcs[2]?.npcId ?? first);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [reviewMode, setReviewMode] = useState<SwarmReviewMode>("human");
+  const [reviewer, setReviewer] = useState("");
+  // The reviewer judges the workers' results, so it can't be one of them (the server refuses it too).
+  const reviewerOptions = npcs.filter((npc) => !rows.some((r) => r.npcId === npc.npcId));
 
   // Creating a new one on every submit would make a retry create a new swarm. Use one for the dialog's lifetime.
   const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
@@ -66,6 +77,9 @@ export default function SwarmDialog({
     if (rows.length === 0) return setValidationError(t("kanban.swarm.error.workers"));
     if (rows.some((r) => !r.title.trim()))
       return setValidationError(t("kanban.swarm.error.workerTitle"));
+    const aiReview = reviewMode === "agent" || reviewMode === "mixed";
+    if (aiReview && !reviewerOptions.some((npc) => npc.npcId === reviewer))
+      return setValidationError(t("kanban.review.reviewerRequired"));
     setValidationError(null);
     onSubmit({
       goal: goal.trim(),
@@ -73,6 +87,9 @@ export default function SwarmDialog({
       verifierNpcId: verifier,
       synthesizerNpcId: synthesizer,
       idempotencyKey,
+      ...(aiReview && (reviewMode === "agent" || reviewMode === "mixed")
+        ? { reviewPolicy: { mode: reviewMode, reviewerNpcId: reviewer } }
+        : {}),
     });
   };
 
@@ -202,6 +219,47 @@ export default function SwarmDialog({
             </div>
           </div>
 
+          {policyModes.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className={LABEL} htmlFor="swarm-review-mode">
+                  {t("kanban.review.label")}
+                </label>
+                <select
+                  id="swarm-review-mode"
+                  className={FIELD}
+                  value={reviewMode}
+                  onChange={(e) => setReviewMode(e.target.value as SwarmReviewMode)}
+                >
+                  {policyModes.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {t(`kanban.review.${mode}`)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {reviewMode !== "human" && (
+                <div>
+                  <label className={LABEL} htmlFor="swarm-reviewer">
+                    {t("kanban.review.reviewer")}
+                  </label>
+                  <select
+                    id="swarm-reviewer"
+                    className={FIELD}
+                    value={reviewer}
+                    onChange={(e) => setReviewer(e.target.value)}
+                  >
+                    <option value="">{t("kanban.review.selectReviewer")}</option>
+                    {reviewerOptions.map((npc) => (
+                      <option key={npc.npcId} value={npc.npcId}>
+                        {npc.npcName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
           {withoutApproval && (
             <p data-no-approval-notice role="status" className="text-xs text-npc-dark">
               {t("kanban.review.noApproval")}

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { KanbanEvent, KanbanRun } from "@/lib/hermes/deskrpg-plugin-types";
 
-import { cardRunState, runAttempts } from "./kanban-run-history";
+import { cardRunState, mixedAiOpinion, runAttempts } from "./kanban-run-history";
 
 function run(over: Partial<KanbanRun> & { id: string }): KanbanRun {
   return { status: "done", started_at: 100, ended_at: 110, ...over };
@@ -125,4 +125,73 @@ test("a card blocked for another reason, or with no failures, has nothing to say
   assert.equal(cardRunState({ status: "blocked", consecutive_failures: 1 }, ok), null);
   assert.equal(cardRunState({ status: "ready", consecutive_failures: 0 }, ok), null);
   assert.equal(cardRunState({ status: "done" }, ok), null);
+});
+
+test("a card finished outside DeskRPG says so in its run history", () => {
+  const task = {
+    status: "done",
+    review: {
+      policy: { version: 1, mode: "human", reviewer_profile: null },
+      policy_revision: 1,
+      submission: null,
+      review_round: 0,
+      state: "approved",
+      reason: "external_done",
+      approval: null,
+    },
+  } as Parameters<typeof cardRunState>[0];
+  assert.deepEqual(cardRunState(task, []), { kind: "external_done" });
+  assert.equal(cardRunState({ status: "done" }, []), null);
+});
+
+const mixedReview = (state: string) =>
+  ({
+    policy: { version: 1, mode: "mixed", reviewer_profile: "Rev" },
+    policy_revision: 1,
+    submission: null,
+    review_round: 2,
+    state,
+    reason: null,
+    approval: null,
+  }) as never;
+
+test("a mixed card waiting for a person shows the AI reviewer's latest verdict", () => {
+  const runs = [
+    {
+      id: 1,
+      profile: "impl",
+      outcome: "review_requested",
+      summary: "done",
+      started_at: 10,
+      ended_at: 20,
+    },
+    {
+      id: 2,
+      profile: "rev",
+      outcome: "review_requested",
+      summary: "old verdict",
+      started_at: 30,
+      ended_at: 40,
+    },
+    {
+      id: 3,
+      profile: "impl",
+      outcome: "review_requested",
+      summary: "fixed",
+      started_at: 50,
+      ended_at: 60,
+    },
+    {
+      id: 4,
+      profile: "rev",
+      outcome: "review_requested",
+      summary: "  pass: looks right  ",
+      started_at: 70,
+      ended_at: 80,
+    },
+    { id: 5, profile: "rev", outcome: "crashed", summary: "boom", started_at: 90, ended_at: 95 },
+  ] as never[];
+  assert.equal(mixedAiOpinion(mixedReview("human_required"), runs), "pass: looks right");
+  assert.equal(mixedAiOpinion(mixedReview("reviewing"), runs), null, "only while a person decides");
+  assert.equal(mixedAiOpinion(mixedReview("human_required"), []), null);
 });

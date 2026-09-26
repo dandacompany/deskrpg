@@ -424,3 +424,27 @@ test("upstream Hermes (no approval-policy contract): the batch's cards are creat
     "the start gate still holds without a completion policy",
   );
 });
+
+test("review hooks: the batch's cards carry the human policy like on the patched core", async () => {
+  const { ctx } = await seedCtx();
+  const { createApprovalBatch } = await import("@/lib/approvals");
+  ctx.info = { ...ctx.info!, capabilities: ["kanban", "cron", "events", "review_hooks_v1"] };
+  const before = server.requests().length;
+  const result = await createApprovalBatch(ctx, {
+    type: "task_execution",
+    title: "새 업무",
+    requestedBy: "sophie",
+    source,
+    items: [{ title: "훅 정책" }],
+  });
+  assert.equal(result.ok, true);
+  const [sent] = server
+    .requests()
+    .slice(before)
+    .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks?"));
+  assert.deepEqual((sent.json as Record<string, unknown>).review_policy, {
+    version: 1,
+    mode: "human",
+    reviewer_profile: null,
+  });
+});

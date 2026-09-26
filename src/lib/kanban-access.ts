@@ -34,6 +34,7 @@ import {
 } from "@/lib/cron-access";
 import type { OwnerPluginClient } from "@/lib/hermes/plugin-client-types";
 import type { KanbanReviewPolicy } from "@/lib/hermes/deskrpg-plugin-types";
+import { supportsReviewPolicy } from "@/lib/hermes/plugin-capability";
 import {
   ensureChannelBoard,
   getChannelBoard,
@@ -321,7 +322,7 @@ export function supportsAttachments(ctx: Pick<KanbanChannelContext, "info">): bo
 export function defaultReviewPolicy(
   ctx: Pick<KanbanChannelContext, "info">,
 ): KanbanReviewPolicy | undefined {
-  return ctx.info?.capabilities.includes("kanban_review_policy_v1")
+  return supportsReviewPolicy(ctx.info)
     ? { version: 1, mode: "human", reviewer_profile: null }
     : undefined;
 }

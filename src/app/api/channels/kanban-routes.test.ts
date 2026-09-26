@@ -1816,6 +1816,59 @@ test("mixed approval: only other active employees can be set as AI reviewers", a
   });
 });
 
+const lastCreatedPolicy = () =>
+  (
+    server
+      .requests()
+      .filter((r) => r.method === "POST" && r.path.startsWith("/deskrpg/kanban/tasks?"))
+      .at(-1)!.json as Record<string, unknown>
+  ).review_policy;
+
+test("review hooks: a new card defaults to the human policy like the patched core", async () => {
+  server.reset();
+  server.setInfo({ capabilities: ["kanban", "cron", "events", "review_hooks_v1"] });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const created = await createTask(routes, seed.ownerId, seed.channelId);
+  assert.equal(created.status, 201);
+  assert.deepEqual(lastCreatedPolicy(), { version: 1, mode: "human", reviewer_profile: null });
+});
+
+test("review hooks: mixed review carries its AI reviewer, and needs one that is not the assignee", async () => {
+  server.reset();
+  server.setInfo({ capabilities: ["kanban", "cron", "events", "review_hooks_v1"] });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel({ extraProfiles: ["noah"] });
+  const missing = await createTask(routes, seed.ownerId, seed.channelId, {
+    assignee: seed.npcId,
+    reviewPolicy: { mode: "mixed" },
+  });
+  assert.equal(missing.status, 400);
+  const same = await createTask(routes, seed.ownerId, seed.channelId, {
+    assignee: seed.npcId,
+    reviewPolicy: { mode: "mixed", reviewerNpcId: seed.npcId },
+  });
+  assert.equal(same.status, 400);
+  const valid = await createTask(routes, seed.ownerId, seed.channelId, {
+    assignee: seed.npcId,
+    reviewPolicy: { mode: "mixed", reviewerNpcId: seed.extras[0].npcId },
+  });
+  assert.equal(valid.status, 201);
+  assert.deepEqual(lastCreatedPolicy(), { version: 1, mode: "mixed", reviewer_profile: "noah" });
+});
+
+test("the patched core knows only human and agent review, so mixed is refused there", async () => {
+  server.reset();
+  server.setInfo({ capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"] });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel({ extraProfiles: ["noah"] });
+  const res = await createTask(routes, seed.ownerId, seed.channelId, {
+    assignee: seed.npcId,
+    reviewPolicy: { mode: "mixed", reviewerNpcId: seed.extras[0].npcId },
+  });
+  assert.equal(res.status, 400);
+});
+
 test("mixed approval: the approving user and the submission come only from server auth and the stated snapshot", async () => {
   server.reset();
   server.setInfo({ capabilities: ["kanban", "cron", "events", "kanban_review_policy_v1"] });

@@ -19,7 +19,7 @@
 
 import { parseWorkerPluginReport } from "./worker-plugin";
 import type { PluginInfo } from "./deskrpg-plugin-types";
-import { SWARM_REVIEW_POLICY_CAPABILITY } from "./deskrpg-plugin-types";
+import { REVIEW_HOOKS_CAPABILITY, SWARM_REVIEW_POLICY_CAPABILITY } from "./deskrpg-plugin-types";
 import { PLUGIN_VERSION } from "./setup/pin";
 
 export type PluginStatus = "plugin_ready" | "plugin_unauthorized" | "plugin_absent" | "unknown";
@@ -502,12 +502,50 @@ export async function probeDeskrpgPluginWithInfo(input: ProbeInput): Promise<Plu
     : classifyPluginProbeWithInfo(raw);
 }
 
-/** New swarms whose result cards carry approval policies (the plugin assembles them in one transaction). */
-export function supportsSwarmReviewPolicy(info: PluginInfo | null): boolean {
-  return info?.capabilities.includes(SWARM_REVIEW_POLICY_CAPABILITY) ?? false;
+/** The patched-core contract that enforces the completion policy for new tasks. */
+const PATCH_REVIEW_POLICY_CAPABILITY = "kanban_review_policy_v1";
+
+export type ReviewSupport = {
+  /** New cards can carry an approval policy (human by default). */
+  policies: boolean;
+  /** "AI review, then a person" — only the plugin hooks enforce it; the patched core knows human/agent. */
+  mixed: boolean;
+  /** New swarms can carry a policy on their result cards. */
+  swarmPolicies: boolean;
+};
+
+/**
+ * What approval policies this gateway can enforce. The plugin hooks on upstream Hermes and the patched
+ * core both count as policy support while installs move from one to the other. Neither: cards complete
+ * without approval, as upstream Hermes does. Client-safe — the board reads the same answer.
+ */
+export function reviewSupport(capabilities: readonly string[] | null | undefined): ReviewSupport {
+  const caps = capabilities ?? [];
+  const hooks = caps.includes(REVIEW_HOOKS_CAPABILITY);
+  const patch = caps.includes(PATCH_REVIEW_POLICY_CAPABILITY);
+  return {
+    policies: hooks || patch,
+    mixed: hooks,
+    swarmPolicies: hooks || (patch && caps.includes(SWARM_REVIEW_POLICY_CAPABILITY)),
+  };
 }
 
-/** The contract that enforces the completion policy for new tasks in core. */
+/** New swarms whose result cards carry approval policies. */
+export function supportsSwarmReviewPolicy(info: PluginInfo | null): boolean {
+  return reviewSupport(info?.capabilities).swarmPolicies;
+}
+
+/** New cards can carry an approval policy that the gateway enforces. */
 export function supportsReviewPolicy(info: PluginInfo | null): boolean {
-  return info?.capabilities.includes("kanban_review_policy_v1") ?? false;
+  return reviewSupport(info?.capabilities).policies;
+}
+
+/** The plugin enforces approvals through hooks and keeps board defaults (upstream Hermes). */
+export function supportsReviewHooks(info: PluginInfo | null): boolean {
+  return info?.capabilities.includes(REVIEW_HOOKS_CAPABILITY) ?? false;
+}
+
+/** "AI review, then a person" can be enforced. */
+export function supportsMixedReview(info: PluginInfo | null): boolean {
+  return reviewSupport(info?.capabilities).mixed;
 }
