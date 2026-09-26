@@ -3199,6 +3199,7 @@ const en: Record<string, string> = {
   "kanban.review.label": "Completion approval",
   "kanban.review.human": "Human approval",
   "kanban.review.agent": "AI employee approval",
+  "kanban.review.mixed": "AI review, then a person",
   "kanban.review.reviewer": "Reviewer",
   "kanban.review.selectReviewer": "Select another employee",
   "kanban.review.reviewerRequired": "Choose an active reviewer different from the assignee.",

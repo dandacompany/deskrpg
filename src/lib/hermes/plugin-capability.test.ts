@@ -16,6 +16,7 @@ import {
   supportsProfileOauth,
   supportsProfilePicker,
   supportsProviderKeys,
+  reviewSupport,
 } from "./plugin-capability";
 import type { PluginInfo } from "./deskrpg-plugin-types";
 import { PLUGIN_VERSION } from "./setup/pin";
@@ -455,4 +456,18 @@ describe("provider auth gate", () => {
       false,
     );
   });
+});
+
+it("review hooks count as policy support; mixed review needs the hooks", () => {
+  const hooks = reviewSupport(["kanban", "review_hooks_v1"]);
+  const patch = reviewSupport(["kanban", "kanban_review_policy_v1"]);
+  const none = reviewSupport(["kanban", "swarm"]);
+  assert.deepEqual(hooks, { policies: true, mixed: true, swarmPolicies: true });
+  assert.deepEqual(patch, { policies: true, mixed: false, swarmPolicies: false });
+  assert.deepEqual(none, { policies: false, mixed: false, swarmPolicies: false });
+  assert.deepEqual(
+    reviewSupport(["kanban_review_policy_v1", "swarm_review_policy"]).swarmPolicies,
+    true,
+  );
+  assert.equal(reviewSupport(undefined).policies, false);
 });

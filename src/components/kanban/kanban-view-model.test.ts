@@ -289,3 +289,13 @@ test("run elapsed time is also computed from an ISO string — both shapes are a
   const startedMs = Date.parse("2025-09-21T00:00:00.000Z");
   assert.equal(elapsedSeconds({ started_at: "2025-09-21T00:00:00.000Z" }, startedMs + 90_000), 90);
 });
+
+test("a mixed review sends its AI reviewer like agent review", () => {
+  const body = taskFormToBody({
+    ...EMPTY_TASK_FORM,
+    title: "t",
+    reviewMode: "mixed",
+    reviewerNpcId: "n2",
+  });
+  assert.deepEqual(body.reviewPolicy, { mode: "mixed", reviewerNpcId: "n2" });
+});

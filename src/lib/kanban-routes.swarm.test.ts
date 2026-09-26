@@ -288,3 +288,23 @@ test("returns the blackboard as-is", async () => {
   const body = await res.json();
   assert.equal(typeof body.blackboard.topology, "object");
 });
+
+test("review hooks: a new swarm carries the policy on its result cards", async () => {
+  const { createSwarm } = await import("@/lib/kanban-routes");
+  const ctx = await seedChannelWithNpcs(["nova", "luna", "sophie", "dante"], {
+    capabilities: ["kanban", "cron", "events", "swarm", "review_hooks_v1"],
+  });
+  const res = await createSwarm(
+    postRequest(
+      ctx,
+      swarmBody(ctx, { reviewPolicy: { mode: "mixed", reviewerNpcId: ctx.npcIds.sophie } }),
+    ),
+    ctx.channelId,
+  );
+  assert.equal(res.status, 200);
+  assert.deepEqual(ctx.fakePlugin.lastSwarmBody()!.review_policy, {
+    version: 1,
+    mode: "mixed",
+    reviewer_profile: "sophie",
+  });
+});

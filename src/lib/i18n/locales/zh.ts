@@ -3067,6 +3067,7 @@ const zh: Record<string, string> = {
   "kanban.review.label": "完成审批",
   "kanban.review.human": "人工审批",
   "kanban.review.agent": "AI 员工审批",
+  "kanban.review.mixed": "AI 审核后由人批准",
   "kanban.review.reviewer": "审核员工",
   "kanban.review.selectReviewer": "选择其他员工",
   "kanban.review.reviewerRequired": "请选择与执行员工不同的在岗审核员工。",

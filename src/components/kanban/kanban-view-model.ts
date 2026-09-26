@@ -284,9 +284,9 @@ export function taskFormToBody(values: TaskFormValues): Record<string, unknown> 
   const body: Record<string, unknown> = { title: values.title.trim() };
   if (values.reviewMode) {
     body.reviewPolicy =
-      values.reviewMode === "agent"
-        ? { mode: "agent", reviewerNpcId: values.reviewerNpcId }
-        : { mode: "human" };
+      values.reviewMode === "human"
+        ? { mode: "human" }
+        : { mode: values.reviewMode, reviewerNpcId: values.reviewerNpcId };
     if (values.reviewRevision !== undefined) body.expected_revision = values.reviewRevision;
   }
   if (values.body.trim()) body.body = values.body;

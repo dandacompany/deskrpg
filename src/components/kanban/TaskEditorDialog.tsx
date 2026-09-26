@@ -23,6 +23,8 @@ interface TaskEditorDialogProps {
   submitting: boolean;
   confirmChatDraft?: boolean;
   reviewSupported?: boolean;
+  /** The gateway enforces "AI review, then a person" (plugin hooks). */
+  mixedSupported?: boolean;
   assigneeLocked?: boolean;
   onSubmit: (body: Record<string, unknown>) => void;
   onClose: () => void;
@@ -44,6 +46,7 @@ export default function TaskEditorDialog({
   submitting,
   confirmChatDraft = false,
   reviewSupported = true,
+  mixedSupported = false,
   assigneeLocked = false,
   onSubmit,
   onClose,
@@ -66,7 +69,7 @@ export default function TaskEditorDialog({
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (
-      values.reviewMode === "agent" &&
+      (values.reviewMode === "agent" || values.reviewMode === "mixed") &&
       (!implementer || !reviewers.some((npc) => npc.npcId === values.reviewerNpcId))
     ) {
       setReviewError(true);
@@ -230,12 +233,15 @@ export default function TaskEditorDialog({
                 id="kanban-review-mode"
                 className={FIELD}
                 value={values.reviewMode}
-                onChange={(e) => set("reviewMode", e.target.value as "human" | "agent")}
+                onChange={(e) => set("reviewMode", e.target.value as "human" | "agent" | "mixed")}
               >
                 <option value="human">{t("kanban.review.human")}</option>
                 <option value="agent">{t("kanban.review.agent")}</option>
+                {(mixedSupported || values.reviewMode === "mixed") && (
+                  <option value="mixed">{t("kanban.review.mixed")}</option>
+                )}
               </select>
-              {values.reviewMode === "agent" && (
+              {(values.reviewMode === "agent" || values.reviewMode === "mixed") && (
                 <>
                   <label className={LABEL} htmlFor="kanban-reviewer">
                     {t("kanban.review.reviewer")}

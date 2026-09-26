@@ -2060,3 +2060,16 @@ test("the handoff-recovery error banner shows an explanation instead of the erro
     await f.cleanup();
   }
 });
+
+test("a review-hooks gateway counts as enforcing approvals — no no-approval notice", async () => {
+  const f = await mount((url) =>
+    url.includes("/automation/status")
+      ? json(status({ capabilities: ["kanban", "swarm", "review_hooks_v1"] }))
+      : json(board()),
+  );
+  try {
+    assert.equal(Boolean(f.host.querySelector("[data-no-approval-notice]")), false);
+  } finally {
+    await f.cleanup();
+  }
+});

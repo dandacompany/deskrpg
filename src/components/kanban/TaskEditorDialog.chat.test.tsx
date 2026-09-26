@@ -188,3 +188,69 @@ test("a new card's approval defaults to human, and the same profile is excluded 
     host.remove();
   }
 });
+
+async function renderEditor(props: Partial<Parameters<typeof TaskEditorDialog>[0]>) {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <I18nProvider initialLocale="ko">
+        <TaskEditorDialog
+          mode="create"
+          initial={{ ...EMPTY_TASK_FORM, title: "업무", assigneeNpcId: "n1" }}
+          npcs={[
+            { npcId: "n1", npcName: "실행", profileName: "worker", active: true },
+            { npcId: "n2", npcName: "검토", profileName: "reviewer", active: true },
+          ]}
+          candidates={[]}
+          serverError={null}
+          submitting={false}
+          onSubmit={() => {}}
+          onClose={() => {}}
+          {...props}
+        />
+      </I18nProvider>,
+    ),
+  );
+  return {
+    host,
+    cleanup: async () => {
+      await act(async () => root.unmount());
+      host.remove();
+    },
+  };
+}
+
+test("mixed review is offered only where the gateway can enforce it", async () => {
+  const hooks = await renderEditor({ mixedSupported: true });
+  try {
+    const options = [
+      ...hooks.host.querySelector<HTMLSelectElement>("#kanban-review-mode")!.options,
+    ].map((o) => o.value);
+    assert.deepEqual(options, ["human", "agent", "mixed"]);
+  } finally {
+    await hooks.cleanup();
+  }
+  const patch = await renderEditor({ mixedSupported: false });
+  try {
+    const options = [
+      ...patch.host.querySelector<HTMLSelectElement>("#kanban-review-mode")!.options,
+    ].map((o) => o.value);
+    assert.deepEqual(options, ["human", "agent"]);
+  } finally {
+    await patch.cleanup();
+  }
+});
+
+test("mixed review asks for an AI reviewer like agent review", async () => {
+  const view = await renderEditor({
+    mixedSupported: true,
+    initial: { ...EMPTY_TASK_FORM, title: "업무", assigneeNpcId: "n1", reviewMode: "mixed" },
+  });
+  try {
+    assert.equal(Boolean(view.host.querySelector("#kanban-reviewer")), true);
+  } finally {
+    await view.cleanup();
+  }
+});

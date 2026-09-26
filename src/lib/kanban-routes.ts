@@ -44,6 +44,7 @@ import {
 import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
 import {
   supportsBoardAttachmentList,
+  supportsMixedReview,
   supportsReviewPolicy,
   supportsSwarmReviewPolicy,
   swarmGate,
@@ -179,7 +180,19 @@ async function resolveReviewPolicy(
     return { ok: false, response: invalidBody("Unknown approval policy field") };
   if (policy.mode === "human" && !policy.reviewerNpcId)
     return { ok: true, policy: { version: 1, mode: "human", reviewer_profile: null } };
-  if (policy.mode !== "agent" || typeof policy.reviewerNpcId !== "string" || !assignee)
+  // "AI review, then a person" exists only where the plugin hooks enforce it — the patched core knows
+  // human and agent review.
+  if (policy.mode === "mixed" && !supportsMixedReview(ctx.info))
+    return {
+      ok: false,
+      response: invalidBody("This gateway can't enforce AI review before a person"),
+    };
+  const mode = policy.mode;
+  if (
+    (mode !== "agent" && mode !== "mixed") ||
+    typeof policy.reviewerNpcId !== "string" ||
+    !assignee
+  )
     return { ok: false, response: invalidBody("AI approval requires an assignee and reviewer") };
   const reviewer = await resolveAssignee(ctx, policy.reviewerNpcId);
   if (!reviewer.ok) return reviewer;
@@ -187,7 +200,7 @@ async function resolveReviewPolicy(
     return { ok: false, response: invalidBody("Reviewer must be a different employee") };
   return {
     ok: true,
-    policy: { version: 1, mode: "agent", reviewer_profile: reviewer.profileName },
+    policy: { version: 1, mode, reviewer_profile: reviewer.profileName },
   };
 }
 
