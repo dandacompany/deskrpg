@@ -3,7 +3,11 @@ import test from "node:test";
 
 import type { ToolApprovalRequest } from "@/lib/tool-approval-types";
 
-import { pendingApprovalsByRoom, type ApprovalCardState } from "./use-tool-approvals";
+import {
+  pendingApprovalsByNpc,
+  pendingApprovalsByRoom,
+  type ApprovalCardState,
+} from "./use-tool-approvals";
 
 const NOW = 1_000_000;
 
@@ -64,4 +68,22 @@ test("a waiting line that has its own card is counted once", () => {
     NOW,
   );
   assert.deepEqual(counts, { r1: 1 });
+});
+
+test("counts pending approvals per employee across DMs, meetings and rooms", () => {
+  const counts = pendingApprovalsByNpc(
+    [
+      card("a", { context: "dm", roomId: undefined }),
+      card("b", { context: "meeting", roomId: undefined }),
+      card("c", { npcId: "n2" }),
+      card("d", {}, "approved_once"),
+      card("e", { expiresAt: NOW - 1 }),
+    ],
+    [
+      { key: "w", npcId: "n2", approverName: "someone" },
+      { key: "a", npcId: "n1", approverName: "someone" },
+    ],
+    NOW,
+  );
+  assert.deepEqual(counts, { n1: 2, n2: 2 });
 });

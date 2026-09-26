@@ -7,6 +7,7 @@ import type { DmThreadEntry } from "@/lib/dm-threads";
 import { useT } from "@/lib/i18n";
 import { useRoomApprovalCounts } from "@/components/approvals/ToolApprovalsProvider";
 import ParticipantRow from "./ParticipantRow";
+import type { NpcStateKind } from "@/lib/npc-state-map";
 
 /**
  * A clocked-in employee as the game screen tracks it. A clocked-in employee always has a
@@ -27,6 +28,13 @@ export type NavigatorNpc = RosterNpc & {
   motion: "idle" | "moving" | "waiting" | "resting" | "unplaced";
   response?: "queued" | "thinking" | "streaming" | "failed";
   calledByViewer: boolean;
+  /**
+   * Every state that applies, in priority order (D08 `npcStates`). When present the row lists all of them —
+   * the 3D tag shows only the first, so the list is where the rest stays visible.
+   */
+  states?: readonly NpcStateKind[];
+  /** Cards and cron runs in progress, for the "working N" label. */
+  workingCount?: number;
 };
 
 export type NavigatorPlayer = {
@@ -69,6 +77,15 @@ type Props = {
   addNpcDisabled?: boolean;
 };
 
+function stateLabel(npc: NavigatorNpc, state: NpcStateKind, t: ReturnType<typeof useT>): string {
+  if (state === "responding") {
+    const phase = npc.response && npc.response !== "failed" ? npc.response : "thinking";
+    return t(`workspace.status.${phase}`);
+  }
+  if (state === "working") return t("workspace.state.working", { count: npc.workingCount ?? 1 });
+  return t(`workspace.state.${state}`);
+}
+
 function npcDetail(npc: NavigatorNpc, t: ReturnType<typeof useT>): string {
   if (!npc.active || npc.motion === "resting") return t("workspace.status.resting");
   const prefix = npc.seatNumber
@@ -80,6 +97,14 @@ function npcDetail(npc: NavigatorNpc, t: ReturnType<typeof useT>): string {
       npc.calledByViewer ? "workspace.status.waitingForMe" : "workspace.status.waitingForOther",
     )}`;
   if (npc.motion === "moving") return `${prefix} · ${t("workspace.status.moving")}`;
+  if (npc.states) {
+    const labels = npc.states.map((state) => stateLabel(npc, state, t));
+    return labels.length > 0
+      ? [prefix, ...labels].join(" · ")
+      : npc.role
+        ? `${prefix} · ${npc.role} · ${t("workspace.status.available")}`
+        : `${prefix} · ${t("workspace.status.available")}`;
+  }
   if (npc.response === "queued") return `${prefix} · ${t("workspace.status.queued")}`;
   if (npc.response === "thinking") return `${prefix} · ${t("workspace.status.thinking")}`;
   if (npc.response === "streaming") return `${prefix} · ${t("workspace.status.streaming")}`;

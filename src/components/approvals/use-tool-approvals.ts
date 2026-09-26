@@ -131,6 +131,30 @@ export function pendingApprovalsByRoom(
   return counts;
 }
 
+/**
+ * Pending approvals per NPC across every context (DM, meeting, room) — the office shows an employee waiting on a
+ * person whichever chat the approval belongs to. Counted the same way as `pendingApprovalsByRoom`.
+ */
+export function pendingApprovalsByNpc(
+  cards: readonly ApprovalCardState[],
+  waiting: readonly ApprovalWaiting[],
+  now?: number,
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const seen = new Set<string>();
+  for (const { request, status } of cards) {
+    if (status !== "pending") continue;
+    if (now !== undefined && request.expiresAt <= now) continue;
+    seen.add(request.key);
+    counts[request.npcId] = (counts[request.npcId] ?? 0) + 1;
+  }
+  for (const line of waiting) {
+    if (!line.npcId || seen.has(line.key)) continue;
+    counts[line.npcId] = (counts[line.npcId] ?? 0) + 1;
+  }
+  return counts;
+}
+
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object";
 
 /**
