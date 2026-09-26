@@ -14,6 +14,8 @@ import { SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.s
 
 import { I18nProvider } from "@/lib/i18n/context";
 
+import { PLUGIN_VERSION } from "@/lib/hermes/setup/pin";
+
 import GatewayManagementPage from "./page";
 
 type Json = Record<string, unknown>;
@@ -57,9 +59,9 @@ function mockFetch(
     // the loading screen is never drawn, and the unmount defect does not show in the test.
     await new Promise((r) => setTimeout(r, 5));
     if (!route) return new Response(JSON.stringify({}), { status: 404 });
-    const body = typeof route === "function" ? route(n) : route;
+    const { __status, ...body } = typeof route === "function" ? route(n) : route;
     return new Response(JSON.stringify(body), {
-      status: 200,
+      status: typeof __status === "number" ? __status : 200,
       headers: { "Content-Type": "application/json" },
     });
   }) as typeof fetch;
@@ -228,4 +230,35 @@ test("a fast reload does not flash '새로 읽는 중'", async () => {
   await wait(400);
   observer.disconnect();
   assert.equal(seen.includes(true), false, "짧은 재조회에 표시가 깜빡였다");
+});
+
+test("a refused update's error goes away once the connection test finds the plugin current", async () => {
+  mockFetch({
+    "GET /api/gateways?refreshPlugin=1": (n) => ({
+      gateways: [gateway({ pluginVersion: n === 0 ? "0.1.0" : PLUGIN_VERSION })],
+    }),
+    // Staging: the app runs in a container and cannot run commands on the gateway's host.
+    "POST /api/gateways/gw-1/plugin/update": {
+      __status: 400,
+      errorCode: "plugin_update_unsupported_host",
+    },
+    "POST /api/gateways/gw-1/test": { ok: true },
+  });
+  await renderPage();
+  await click(buttonByText("지금 갱신"));
+  await flush();
+  assert.match(host.textContent ?? "", /앱이 명령을 돌릴 수 없습니다/, "거절 문구가 안 떴다");
+
+  // The user upgrades the plugin on the host by hand, then presses the connection test.
+  await click(buttonByText("연결 테스트"));
+  await flush();
+  assert.equal(
+    host.querySelector("[data-plugin-version]")?.getAttribute("data-plugin-version"),
+    "current",
+  );
+  assert.doesNotMatch(
+    host.textContent ?? "",
+    /앱이 명령을 돌릴 수 없습니다/,
+    "최신이 됐는데 거절 문구가 남았다",
+  );
 });
