@@ -503,10 +503,12 @@ export default function KanbanBoardModal({
    * unset" — a nonexistent deadline is never drawn in.
    */
   const openProject = useMemo(() => {
-    const slug = status?.boardSlug;
+    // The picker's choice wins. `status` is channel-wide and always names the default
+    // (event-carrier) board, so it is only the fallback when nothing is chosen.
+    const slug = selectedBoard ?? status?.boardSlug;
     if (!slug) return null;
     return projects.find((project) => project.boardSlug === slug) ?? null;
-  }, [projects, status?.boardSlug]);
+  }, [projects, selectedBoard, status?.boardSlug]);
   const targetDate = openProject?.targetDate ?? null;
 
   const metrics = useMemo(
