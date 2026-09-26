@@ -11,7 +11,8 @@ import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 import { validateConfigPatch } from "../../../validation";
 
 /**
- * Like the persona, config is profile-scoped, so gateway access is enough.
+ * Like the persona, the model config shows in every office the gateway is bound to: a shared user
+ * reads it, only the gateway owner changes it (PUT 403 otherwise, 404 with no access).
  * `resolve` copies the identity route's shape as is — better that the two routes
  * read independently (brief's call).
  */
@@ -22,13 +23,16 @@ const proxyInit = (errorCode: string) => ({
 
 type Ctx = { params: Promise<{ id: string; name: string }> };
 
-async function resolve(req: NextRequest, ctx: Ctx) {
+async function resolve(req: NextRequest, ctx: Ctx, { write = false } = {}) {
   const userId = getUserId(req);
   if (!userId) return { error: NextResponse.json({ errorCode: "unauthorized" }, { status: 401 }) };
   const { id, name } = await ctx.params;
 
   const accessible = await getAccessibleGatewayResource(userId, id);
   if (!accessible) return { error: NextResponse.json({ errorCode: "not_found" }, { status: 404 }) };
+  if (write && !accessible.isOwner) {
+    return { error: NextResponse.json({ errorCode: "forbidden" }, { status: 403 }) };
+  }
 
   const rows = await db
     .select({
@@ -64,7 +68,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 }
 
 export async function PUT(req: NextRequest, ctx: Ctx) {
-  const r = await resolve(req, ctx);
+  const r = await resolve(req, ctx, { write: true });
   if ("error" in r) return r.error;
 
   let payload: unknown;

@@ -11,9 +11,10 @@ import { ERROR_CODE_HEADER } from "@/lib/i18n/error-codes";
 import { validateIdentityPutBody } from "../../../validation";
 
 /**
- * The persona is profile-scoped, so gateway access is enough (unlike create/delete it does not
- * require `system_admin`). Uses **only the profile token** — no fallback
- * to default (see `plugin-profile-access.ts`).
+ * The persona shows in every office the gateway is bound to, so **changing** it is the gateway
+ * owner's call (2026-09-26 decision): a shared user can read it (GET) but a PUT is 403, and someone
+ * with no access gets 404. Unlike create/delete it does not require `system_admin`. Uses **only the
+ * profile token** — no fallback to default (see `plugin-profile-access.ts`).
  */
 const proxyInit = (errorCode: string) => ({
   status: 200,
@@ -22,13 +23,16 @@ const proxyInit = (errorCode: string) => ({
 
 type Ctx = { params: Promise<{ id: string; name: string }> };
 
-async function resolve(req: NextRequest, ctx: Ctx) {
+async function resolve(req: NextRequest, ctx: Ctx, { write = false } = {}) {
   const userId = getUserId(req);
   if (!userId) return { error: NextResponse.json({ errorCode: "unauthorized" }, { status: 401 }) };
   const { id, name } = await ctx.params;
 
   const accessible = await getAccessibleGatewayResource(userId, id);
   if (!accessible) return { error: NextResponse.json({ errorCode: "not_found" }, { status: 404 }) };
+  if (write && !accessible.isOwner) {
+    return { error: NextResponse.json({ errorCode: "forbidden" }, { status: 403 }) };
+  }
 
   const rows = await db
     .select({
@@ -69,7 +73,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 }
 
 export async function PUT(req: NextRequest, ctx: Ctx) {
-  const r = await resolve(req, ctx);
+  const r = await resolve(req, ctx, { write: true });
   if ("error" in r) return r.error;
 
   let payload: unknown;
