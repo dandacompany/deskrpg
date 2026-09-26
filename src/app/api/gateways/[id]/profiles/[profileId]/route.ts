@@ -83,7 +83,7 @@ export async function PATCH(
     // The token changes only when sent — the convention is that the screen never sends an empty field.
     token: typeof body.token === "string" ? body.token : undefined,
     displayName: typeof body.displayName === "string" ? body.displayName : undefined,
-    // Appearance also changes only when sent. Only the owner can write it (updateHermesProfile decides).
+    // Appearance also changes only when sent. Any edit is the gateway owner's (updateHermesProfile decides).
     appearance: Object.hasOwn(body, "appearance")
       ? normalizeOfficeAppearance(body.appearance)
       : undefined,

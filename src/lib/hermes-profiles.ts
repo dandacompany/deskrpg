@@ -206,18 +206,18 @@ export async function updateHermesProfile(
     .limit(1);
   if (!row) return { ok: false, errorCode: "profile_not_found" };
 
+  // Editing a profile is the gateway owner's (docs/security.md). A shared user sees the profile,
+  // so it is refused (403); someone with no access does not learn it exists (404).
   const access = await getAccessibleGatewayResource(userId, row.gatewayId);
-  if (!access) return { ok: false, errorCode: "forbidden" };
+  if (!access) return { ok: false, errorCode: "profile_not_found" };
+  if (!access.isOwner) return { ok: false, errorCode: "forbidden" };
 
   const patch: Record<string, unknown> = { updatedAt: nowForDb() };
   if (typeof input.displayName === "string") patch.displayName = input.displayName;
   // The profile is the source of truth for appearance, and changes it for the NPC in **every**
   // channel that profile appears in, all at once. A user with shared access can't overwrite
   // the face of someone else's gateway persona — only the owner can write it.
-  if (input.appearance !== undefined) {
-    if (!access.isOwner) return { ok: false, errorCode: "forbidden" };
-    patch.appearance = jsonForDb(input.appearance);
-  }
+  if (input.appearance !== undefined) patch.appearance = jsonForDb(input.appearance);
   if (typeof input.token === "string" && input.token.trim()) {
     patch.tokenEncrypted = encryptGatewayToken(input.token.trim());
     // The credential changed, so the old validation result no longer applies to this token.
@@ -264,8 +264,11 @@ export async function deleteHermesProfile(
     .limit(1);
   if (!row) return { ok: false, errorCode: "profile_not_found" };
 
+  // Deleting cascades to this profile's NPCs in every office the gateway is bound to — the
+  // gateway owner's call alone. Shared users are refused (403); no access at all reads as 404.
   const access = await getAccessibleGatewayResource(userId, row.gatewayId);
-  if (!access) return { ok: false, errorCode: "forbidden" };
+  if (!access) return { ok: false, errorCode: "profile_not_found" };
+  if (!access.isOwner) return { ok: false, errorCode: "forbidden" };
 
   const usage = await profileUsage(profileId);
 
