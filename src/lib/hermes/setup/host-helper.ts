@@ -14,6 +14,7 @@ child = None
 # A reply too big for the client's transport is spilled to a private directory and fetched with scp.
 SPILL_PREFIX = 'deskrpg-spill-'
 SPILL_NAME = re.compile(r'^[0-9a-f]{32}$')
+# Windows: a protected DACL with one rule for the current user's SID, then read back by SID.
 SET_ACL = "; ".join([
     "$ErrorActionPreference = 'Stop'",
     "$item = Get-Item -LiteralPath $env:DESKRPG_ACL_DIR",
@@ -23,25 +24,27 @@ SET_ACL = "; ".join([
     "$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($user, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')",
     "$acl.AddAccessRule($rule)",
     "$item.SetAccessControl($acl)"])
-def quiet(command, **extra):
-    try: subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30, **extra)
-    except Exception: pass
+CHECK_ACL = "; ".join([
+    "$ErrorActionPreference = 'Stop'",
+    "$acl = Get-Acl -LiteralPath $env:DESKRPG_ACL_DIR",
+    "$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value",
+    "$rules = @($acl.Access)",
+    "$sid = if ($rules.Count -eq 1) { $rules[0].IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value } else { '' }",
+    "if ($acl.AreAccessRulesProtected -and $rules.Count -eq 1 -and -not $rules[0].IsInherited -and $rules[0].AccessControlType -eq 'Allow' -and $sid -eq $me) { 'owner-only' } else { 'open' }"])
+# scp before OpenSSH 9.0 hands the remote path to a shell, so only plain characters are spilled to.
+SAFE_PATH = re.compile(r'^[A-Za-z0-9_./:\\-]+$')
+def powershell(script, path):
+    try:
+        return subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', script], capture_output=True, text=True,
+                              errors='replace', timeout=60, env=dict(os.environ, DESKRPG_ACL_DIR=path)).stdout.strip()
+    except Exception: return ''
 def owner_only(path):
-    # POSIX: mkdtemp made it 0700 for us; confirm. Windows: exactly one explicit access entry.
-    if not WINDOWS:
-        st = os.stat(path)
-        return st.st_uid == os.getuid() and (st.st_mode & 0o077) == 0
-    try: out = subprocess.run(['icacls', path], capture_output=True, text=True, errors='replace', timeout=30).stdout
-    except Exception: return False
-    entries = [l for l in out.splitlines() if ':(' in l and not re.search(r'Mandatory Label\\|\((NW|NR|NX)\)', l, re.I)]
-    return len(entries) == 1 and '(I)' not in entries[0]
+    if WINDOWS: return powershell(CHECK_ACL, path) == 'owner-only'
+    st = os.stat(path)
+    return st.st_uid == os.getuid() and (st.st_mode & 0o077) == 0
 def harden(path):
-    if not WINDOWS: return owner_only(path)
-    user = os.environ.get('USERNAME', '')
-    quiet(['icacls', path, '/grant:r', user + ':(OI)(CI)F'])
-    quiet(['icacls', path, '/inheritance:r'])
-    if owner_only(path): return True
-    quiet(['powershell', '-NoProfile', '-NonInteractive', '-Command', SET_ACL], env=dict(os.environ, DESKRPG_ACL_DIR=path))
+    # POSIX: mkdtemp already made it 0700; confirm. Windows: set the DACL, then confirm by SID.
+    if WINDOWS: powershell(SET_ACL, path)
     return owner_only(path)
 def spill_dir(file):
     # The spill directory for a file path, only if it is one: <tempdir>/deskrpg-spill-*/<32 hex>.
@@ -63,8 +66,8 @@ def sweep():
             if time.time() - st.st_mtime < 900 or (not WINDOWS and st.st_uid != os.getuid()): continue
             shutil.rmtree(entry.path, ignore_errors=True)
         except Exception: pass
-def spill(data):
-    sweep()
+def spill(data, cap):
+    if len(data) > cap or not SAFE_PATH.match(tempfile.gettempdir()): return {'error': 'host_output_too_large'}
     folder = tempfile.mkdtemp(prefix=SPILL_PREFIX)
     try:
         if not harden(folder): raise RuntimeError('unsafe')
@@ -98,6 +101,8 @@ try:
     # On Windows stdin defaults to the ANSI code page (e.g. cp949), which mangles a
     # UTF-8 payload. Read raw bytes from sys.stdin.buffer and decode as UTF-8 ourselves.
     payload = json.loads(sys.stdin.buffer.read().decode('utf-8'))
+    # Every run clears spills a client never removed (it died, or lost the pointer), not only the next spill.
+    sweep()
     if 'cleanup_spill' in payload:
         folder = spill_dir(str(payload['cleanup_spill']))
         if folder is not None: shutil.rmtree(folder, ignore_errors=True)
@@ -124,7 +129,7 @@ try:
         if child.returncode:
             print(json.dumps({'error': 'host_operation_failed'}))
         elif len(data) > limit:
-            print(json.dumps(spill(data) if payload.get('spill') else {'error': 'host_output_too_large'}))
+            print(json.dumps(spill(data, payload.get('max_spill', 262144)) if payload.get('spill') else {'error': 'host_output_too_large'}))
         else:
             sys.stdout.buffer.write(data)
             sys.stdout.buffer.flush()

@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -22,10 +23,10 @@ import { HOST_BOOTSTRAP } from "./host-helper";
 
 const POSIX = process.platform !== "win32";
 
-function sandbox() {
+function sandbox(tempName = "tmp") {
   const root = mkdtempSync(join(tmpdir(), "deskrpg-spill-test-"));
   const home = join(root, "home");
-  const temp = join(root, "tmp");
+  const temp = join(root, tempName);
   mkdirSync(temp, { recursive: true });
   const venv = spawnSync(
     "python3",
@@ -132,6 +133,53 @@ test("a new spill sweeps this user's spill directories older than 15 minutes", (
     assert.equal(existsSync(stale), false);
     assert.ok(existsSync(fresh));
     assert.ok(existsSync(other));
+  } finally {
+    box.dispose();
+  }
+});
+
+const spillDirs = (temp: string) =>
+  readdirSync(temp).filter((name) => name.startsWith("deskrpg-spill-"));
+
+test("a reply over the spill cap is refused instead of spilled", () => {
+  const box = sandbox();
+  try {
+    assert.deepEqual(box.run({ ...bigReply(500), spill: true, max_spill: 200 }), {
+      error: "host_output_too_large",
+    });
+    assert.deepEqual(spillDirs(box.temp), []);
+  } finally {
+    box.dispose();
+  }
+});
+
+test("no spill is made under a temp path an old scp would hand to a shell", () => {
+  // scp before OpenSSH 9.0 passes the remote path through the remote shell.
+  const box = sandbox("tmp with space");
+  try {
+    assert.deepEqual(box.run({ ...bigReply(500), spill: true }), {
+      error: "host_output_too_large",
+    });
+    assert.deepEqual(spillDirs(box.temp), []);
+  } finally {
+    box.dispose();
+  }
+});
+
+test("every run sweeps stale spills, not only the next spill", () => {
+  const box = sandbox();
+  try {
+    const old = new Date(Date.now() - 20 * 60 * 1000);
+    const stale = join(box.temp, "deskrpg-spill-stale");
+    mkdirSync(stale);
+    utimesSync(stale, old, old);
+    box.run({ action: "run", timeout: 20, max_output: 1000, script: "print('{}')" });
+    assert.equal(existsSync(stale), false, "a plain run sweeps");
+
+    mkdirSync(stale);
+    utimesSync(stale, old, old);
+    box.run({ cleanup_spill: join(box.temp, "deskrpg-spill-gone", "a".repeat(32)) });
+    assert.equal(existsSync(stale), false, "a cleanup call sweeps");
   } finally {
     box.dispose();
   }
