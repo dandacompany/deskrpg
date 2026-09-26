@@ -14,6 +14,8 @@ import {
   killProcessTree,
   secureStdioDir,
   isOwnerOnlyAcl,
+  scpArgs,
+  scpSource,
 } from "./executor";
 
 // getSshHosts reads the registered hosts under DESKRPG_HOME. Point it at an empty directory so the
@@ -343,4 +345,52 @@ test("secureStdioDir: when icacls does not narrow, the .NET way is tried and rea
   assert.equal(result, dir);
   assert.deepEqual(order, ["icacls", "set-acl"]);
   rmSync(dir, { recursive: true, force: true });
+});
+
+// --- Fetching a spilled reply with scp ---
+
+test("scpArgs turns the ssh route into scp's spelling of the same options", () => {
+  assert.deepEqual(scpArgs(["-p", "2222", "-l", "bob", "-i", "/k/id", "-F", "/cfg"]), [
+    "-P",
+    "2222",
+    "-o",
+    "User=bob",
+    "-i",
+    "/k/id",
+    "-F",
+    "/cfg",
+  ]);
+});
+
+test("scpSource names a POSIX path as is and a Windows path in the form sftp expects", () => {
+  assert.equal(scpSource("host", "/tmp/deskrpg-spill-a/f"), "host:/tmp/deskrpg-spill-a/f");
+  assert.equal(
+    scpSource("host", "C:\\Users\\U\\AppData\\Local\\Temp\\deskrpg-spill-a\\f"),
+    "host:/C:/Users/U/AppData/Local/Temp/deskrpg-spill-a/f",
+  );
+});
+
+test("only a Windows client's ssh executor fetches files, and it goes through scp quietly", async () => {
+  process.env.DESKRPG_SETUP_SSH_HOSTS = "test-host";
+  const calls: { command: string; args: string[] }[] = [];
+  const fake = async (command: string, args: string[]) => {
+    calls.push({ command, args });
+    return { stdout: "", stderr: "SECRET banner", code: calls.length === 1 ? 0 : 1 };
+  };
+  assert.equal(sshExecutor("test-host", fake, "linux").fetchFile, undefined);
+  const windows = sshExecutor("test-host", fake, "win32");
+  assert.ok(windows.fetchFile);
+  await windows.fetchFile("/tmp/deskrpg-spill-a/f", "/local/reply.json");
+  assert.equal(calls[0].command, "scp");
+  assert.ok(calls[0].args.includes("BatchMode=yes"));
+  assert.ok(calls[0].args.includes("StrictHostKeyChecking=yes"));
+  assert.deepEqual(calls[0].args.slice(-3), [
+    "--",
+    "test-host:/tmp/deskrpg-spill-a/f",
+    "/local/reply.json",
+  ]);
+  await assert.rejects(
+    windows.fetchFile("/tmp/deskrpg-spill-a/f", "/local/reply.json"),
+    /^Error: host_operation_failed$/,
+  );
 });
