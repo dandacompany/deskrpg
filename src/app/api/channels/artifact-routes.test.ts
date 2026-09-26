@@ -643,3 +643,39 @@ test("sources of an artifact outside the channel scope are 404", async () => {
     assert.equal(body.code, "artifact_not_found");
   });
 });
+
+test("an artifact's sources stop at the time it was saved, even if its session read more later", async () => {
+  await withSessionSources(async () => {
+    const { owner, channel } = await seedArtifactChannel();
+    const artifact = server.seedArtifact({ id: "early", title: "t", profile: "sophie", body: "x" });
+    const iso = (offsetSec: number) =>
+      new Date((artifact.created_at + offsetSec) * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
+    server.setSessionSources("sophie", artifact.session_id, {
+      session_id: artifact.session_id,
+      sources: [
+        {
+          kind: "web",
+          ref: "https://en.wikipedia.org/x",
+          title: null,
+          via: "web_extract",
+          at: iso(-60),
+        },
+        {
+          kind: "web",
+          ref: "https://python.org/later",
+          title: null,
+          via: "web_extract",
+          at: iso(3600),
+        },
+        { kind: "file", ref: "undated.md", title: null, via: "read_file", at: null },
+      ],
+      outside_workdir_files: 0,
+      truncated: false,
+    });
+    const { body } = await sourcesOf(owner.id, channel.id, "early");
+    assert.deepEqual(
+      body.sources.map((s: { ref: string }) => s.ref),
+      ["https://en.wikipedia.org/x", "undated.md"],
+    );
+  });
+});

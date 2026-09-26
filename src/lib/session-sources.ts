@@ -15,6 +15,7 @@ import {
 } from "@/lib/hermes/deskrpg-plugin-types";
 import { createProfilePluginClient } from "@/lib/hermes/plugin-client";
 import type { SessionSourcesView } from "@/lib/session-sources-types";
+import { sourcesWithin, type SourcesWindow } from "@/lib/session-sources-window";
 
 const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/;
 
@@ -23,6 +24,8 @@ export async function readSessionSources(input: {
   capabilities: readonly string[];
   profileName: string | null | undefined;
   sessionId: string | null | undefined;
+  /** Only sources first read inside this window belong to the work being shown. */
+  window?: SourcesWindow;
 }): Promise<{ ok: true; view: SessionSourcesView } | { ok: false; response: NextResponse }> {
   const { sessionId, profileName } = input;
   if (!sessionId || !profileName || !SESSION_ID_RE.test(sessionId)) {
@@ -62,7 +65,10 @@ export async function readSessionSources(input: {
       ok: true,
       view: {
         status: "ok",
-        sources: Array.isArray(res.data.sources) ? res.data.sources : [],
+        sources: sourcesWithin(
+          Array.isArray(res.data.sources) ? res.data.sources : [],
+          input.window,
+        ),
         outsideWorkdirFiles: Number(res.data.outside_workdir_files) || 0,
         truncated: res.data.truncated === true,
       },
