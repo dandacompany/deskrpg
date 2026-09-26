@@ -131,23 +131,39 @@ export function killProcessTree(
  * `:F` gives files SYSTEM·Administrators·S-1-5-5-*, `:(OI)(CI)F` gives the user alone with inherited=True).
  * Node's `chmodSync` only touches the read-only attribute on Windows and is ineffective, so it is not used.
  * On failure it throws and aborts the operation (fail-closed) — tokens are never written without narrowed permissions.
+ *
+ * The grant and the inheritance removal are two icacls calls, and the result is read back. On the
+ * windows-latest runner (CI 2026-09-26) the single combined call exited 0 yet left the inherited
+ * %TEMP% entries in place, so files inside inherited SYSTEM·Administrators — a success code alone
+ * does not prove the directory was narrowed.
  */
+/**
+ * Whether `icacls <dir>` output shows exactly one access entry and it is not inherited — the state
+ * `/grant:r <user>` plus `/inheritance:r` must leave. Only the entry shape is read, not the name:
+ * icacls prints names in the console code page, and the grant target is ours anyway.
+ */
+export function isOwnerOnlyAcl(icaclsOutput: string): boolean {
+  const entries = icaclsOutput.split(/\r?\n/).filter((line) => line.includes(":("));
+  return entries.length === 1 && !entries[0].includes("(I)");
+}
+
 export function secureStdioDir(
   platform: string,
   make: () => string = () => mkdtempSync(path.join(tmpdir(), "deskrpg-ssh-")),
-  harden: (dir: string) => void = (dir) =>
-    execFileSync(
-      "icacls",
-      [dir, "/inheritance:r", "/grant:r", `${userInfo().username}:(OI)(CI)F`],
-      {
-        stdio: "ignore",
-      },
-    ),
+  harden: (dir: string) => void = (dir) => {
+    execFileSync("icacls", [dir, "/grant:r", `${userInfo().username}:(OI)(CI)F`], {
+      stdio: "ignore",
+    });
+    execFileSync("icacls", [dir, "/inheritance:r"], { stdio: "ignore" });
+  },
+  readAcl: (dir: string) => string = (dir) => execFileSync("icacls", [dir], { encoding: "utf8" }),
 ): string {
   const dir = make();
   try {
-    if (isWindows(platform)) harden(dir);
-    else chmodSync(dir, 0o700);
+    if (isWindows(platform)) {
+      harden(dir);
+      if (!isOwnerOnlyAcl(readAcl(dir))) throw new Error("acl_not_narrowed");
+    } else chmodSync(dir, 0o700);
   } catch (error) {
     try {
       rmSync(dir, { recursive: true, force: true });
