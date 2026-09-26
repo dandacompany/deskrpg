@@ -3073,6 +3073,7 @@ const zh: Record<string, string> = {
   "kanban.review.unsupported": "请将 Hermes 和插件更新至支持审批策略的版本后再创建任务。",
   "kanban.review.swarmUnsupported": "团队任务创建尚待支持审批策略，请逐项创建任务。",
   "kanban.review.legacy": "原审批方式",
+  "kanban.card.swarmRoot": "分工汇总 — 团队任务已开始（不是结果）",
   "kanban.review.round": "AI 审核轮次",
   "kanban.review.approvedBy": "审批人",
   "kanban.review.submission": "已审批提交",

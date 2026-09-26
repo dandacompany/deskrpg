@@ -37,10 +37,15 @@ import type {
   WorkspaceKind,
   KanbanReviewPolicy,
 } from "@/lib/hermes/deskrpg-plugin-types";
+import {
+  SWARM_REVIEW_POLICY_CAPABILITY,
+  SWARM_REVIEW_POLICY_MIN_VERSION,
+} from "@/lib/hermes/deskrpg-plugin-types";
 import { restorePluginInfo } from "@/lib/hermes/plugin-cache-update";
 import {
   supportsBoardAttachmentList,
   supportsReviewPolicy,
+  supportsSwarmReviewPolicy,
   swarmGate,
 } from "@/lib/hermes/plugin-capability";
 import type { KanbanTaskActionInput } from "@/lib/hermes/plugin-client-types";
@@ -146,6 +151,12 @@ async function resolveAssigneeField(
   return { ok: true, assignee: resolved.profileName };
 }
 
+const HUMAN_REVIEW_POLICY: KanbanReviewPolicy = {
+  version: 1,
+  mode: "human",
+  reviewer_profile: null,
+};
+
 function reviewPolicyRequired() {
   return cronError(
     428,
@@ -160,8 +171,7 @@ async function resolveReviewPolicy(
   assignee?: string | null,
 ): Promise<{ ok: true; policy: KanbanReviewPolicy } | { ok: false; response: NextResponse }> {
   const raw = body.reviewPolicy;
-  if (raw === undefined)
-    return { ok: true, policy: { version: 1, mode: "human", reviewer_profile: null } };
+  if (raw === undefined) return { ok: true, policy: HUMAN_REVIEW_POLICY };
   if (!raw || typeof raw !== "object" || Array.isArray(raw))
     return { ok: false, response: invalidBody("reviewPolicy must be an object") };
   const policy = raw as JsonBody;
@@ -648,15 +658,120 @@ export async function dispatchBoard(req: NextRequest, channelId: string) {
 // Swarm — the path into Hermes's `create_swarm`. Hermes builds the topology.
 // ---------------------------------------------------------------------------
 
+type SwarmWorkerInput = { npcId: string; title: string; body?: string; skills?: string[] };
+
+function parseSwarmWorkers(raw: unknown): SwarmWorkerInput[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const out: SwarmWorkerInput[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "object" || entry === null) return null;
+    const record = entry as Record<string, unknown>;
+    if (typeof record.npcId !== "string" || !record.npcId) return null;
+    if (typeof record.title !== "string" || !record.title.trim()) return null;
+    out.push({
+      npcId: record.npcId,
+      title: record.title.trim(),
+      body: typeof record.body === "string" ? record.body : undefined,
+      skills: stringList(record.skills),
+    });
+  }
+  return out;
+}
+
+/**
+ * The workers' approval policy. Absent means the board default (human), like a new card. AI approval needs a
+ * reviewer who is none of the workers — Hermes refuses reviewer == implementer.
+ */
+async function resolveSwarmWorkerPolicy(
+  ctx: KanbanChannelContext,
+  raw: unknown,
+  workerProfiles: string[],
+): Promise<{ ok: true; policy: KanbanReviewPolicy } | { ok: false; response: NextResponse }> {
+  if (raw === undefined) return { ok: true, policy: HUMAN_REVIEW_POLICY };
+  const workersBody = { reviewPolicy: raw } as JsonBody;
+  // Resolve against the first worker, then check the reviewer against every worker.
+  const review = await resolveReviewPolicy(ctx, workersBody, workerProfiles[0]);
+  if (!review.ok) return review;
+  const reviewer = review.policy.reviewer_profile?.trim().toLowerCase();
+  if (reviewer && workerProfiles.some((p) => p.trim().toLowerCase() === reviewer)) {
+    return { ok: false, response: invalidBody("Reviewer must be a different employee") };
+  }
+  return review;
+}
+
+/**
+ * Swarm — the plugin assembles it so every result card (workers, verifier, synthesizer) carries an approval
+ * policy and the structure root carries none. Without `swarm_review_policy` new swarms stay refused (428):
+ * Hermes' own `create_swarm` would leave the result cards unapproved. Existing swarm reads are kept.
+ */
 export async function createSwarm(req: NextRequest, channelId: string) {
   const resolved = await resolve(req, channelId);
   if (!resolved.ok) return resolved.response;
-  // Native swarm's instant-complete route can't guarantee per-card approval. Existing swarm reads are kept.
-  return cronError(
-    428,
-    "swarm_review_policy_unsupported",
-    "New team tasks require a policy-aware Hermes swarm contract",
-  );
+  const ctx = resolved.ctx;
+
+  // Capabilities first — resolving every NPC and then getting a 428 hides the cause.
+  const gate = swarmGate(ctx.info);
+  if (!gate.ok) {
+    const failure = pluginUpgradeRequired(gate);
+    return cronError(428, failure.code, failure.message, failure.details);
+  }
+  if (!supportsReviewPolicy(ctx.info)) return reviewPolicyRequired();
+  if (!supportsSwarmReviewPolicy(ctx.info)) {
+    return cronError(
+      428,
+      "swarm_review_policy_unsupported",
+      "New team tasks require a policy-aware Hermes swarm contract",
+      { minVersion: SWARM_REVIEW_POLICY_MIN_VERSION, missing: [SWARM_REVIEW_POLICY_CAPABILITY] },
+    );
+  }
+
+  const body = await readJsonObject(req);
+  if (!body) return invalidBody("body must be a JSON object");
+  const goal = typeof body.goal === "string" ? body.goal.trim() : "";
+  if (!goal) return invalidBody("goal is required");
+  const workers = parseSwarmWorkers(body.workers);
+  if (!workers) return invalidBody("workers must be a non-empty array of {npcId, title}");
+  if (typeof body.verifierNpcId !== "string" || !body.verifierNpcId) {
+    return invalidBody("verifierNpcId must be an npcId");
+  }
+  if (typeof body.synthesizerNpcId !== "string" || !body.synthesizerNpcId) {
+    return invalidBody("synthesizerNpcId must be an npcId");
+  }
+
+  // Resolve everything before sending. If one fails nothing is created — a partial graph is what the
+  // dispatcher would then see.
+  const workerProfiles: string[] = [];
+  for (const worker of workers) {
+    const r = await resolveAssignee(ctx, worker.npcId);
+    if (!r.ok) return r.response;
+    workerProfiles.push(r.profileName);
+  }
+  const verifier = await resolveAssignee(ctx, body.verifierNpcId);
+  if (!verifier.ok) return verifier.response;
+  const synthesizer = await resolveAssignee(ctx, body.synthesizerNpcId);
+  if (!synthesizer.ok) return synthesizer.response;
+  const policy = await resolveSwarmWorkerPolicy(ctx, body.reviewPolicy, workerProfiles);
+  if (!policy.ok) return policy.response;
+
+  const res = await ctx.client.kanban.createSwarm(ctx.boardSlug, {
+    goal,
+    workers: workers.map((worker, index) => ({
+      profile: workerProfiles[index],
+      title: worker.title,
+      ...(worker.body ? { body: worker.body } : {}),
+      ...(worker.skills ? { skills: worker.skills } : {}),
+    })),
+    verifier: verifier.profileName,
+    synthesizer: synthesizer.profileName,
+    review_policy: policy.policy,
+    ...(typeof body.idempotencyKey === "string" ? { idempotency_key: body.idempotencyKey } : {}),
+  });
+  if (!res.ok) return pluginFailureResponse(res);
+
+  // Like a new card: run one tick so the workers don't wait for the next poll.
+  await dispatchOnce(ctx);
+  schedulePollNow(ctx.channelId);
+  return NextResponse.json(res.data);
 }
 
 export async function getBlackboard(req: NextRequest, channelId: string, taskId: string) {

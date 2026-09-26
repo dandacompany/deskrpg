@@ -616,7 +616,12 @@ export default function KanbanBoardModal({
   const npcOptions = useMemo(() => activeAssigneeOptions(npcs), [npcs]);
   // If the plugin can't do swarm, the button is hidden entirely — better than clicking it and seeing a 428.
   const reviewSupported = status?.capabilities?.includes("kanban_review_policy_v1") ?? false;
-  const swarmSupported = false; // There's no native swarm-creation contract yet that guarantees the policy.
+  // New swarms need the policy-aware contract: the plugin gives every result card an approval policy. The legacy
+  // `swarm` capability alone would create result cards nobody has to approve.
+  const swarmSupported =
+    reviewSupported &&
+    (status?.capabilities?.includes("swarm") ?? false) &&
+    (status?.capabilities?.includes("swarm_review_policy") ?? false);
   const anyRunning = allTasks.some(isRunning);
   const movePending = move.phase === "pending";
   const moveBlocked =

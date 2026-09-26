@@ -3207,6 +3207,7 @@ const en: Record<string, string> = {
   "kanban.review.swarmUnsupported":
     "Team task creation is awaiting approval policy support. Create individual tasks instead.",
   "kanban.review.legacy": "Legacy approval behavior",
+  "kanban.card.swarmRoot": "Work split — started the team task, not a result",
   "kanban.review.round": "AI review round",
   "kanban.review.approvedBy": "Approved by",
   "kanban.review.submission": "Approved submission",

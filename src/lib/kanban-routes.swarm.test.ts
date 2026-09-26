@@ -78,6 +78,7 @@ async function seedChannelWithNpcs(names: string[], opts: { capabilities?: strin
     server.setInfo({ capabilities: ["kanban", "cron", "events", "swarm"] });
   }
 
+  const swarmCallsBefore = swarmRequests().length;
   const owner = await seedUser("swarm-owner");
   const gateway = await seedGateway(owner.id, server.baseUrl);
   const channel = await seedChannel(owner.id, "스웜 채널");
@@ -107,7 +108,8 @@ async function seedChannelWithNpcs(names: string[], opts: { capabilities?: strin
     npcIds,
     fakePlugin: {
       lastSwarmBody: () => swarmRequests().at(-1)?.json as Record<string, unknown> | undefined,
-      swarmCallCount: () => swarmRequests().length,
+      // `server.reset()` keeps the request log, so count only this test's calls.
+      swarmCallCount: () => swarmRequests().length - swarmCallsBefore,
     },
   };
 }
@@ -122,20 +124,112 @@ function getRequest(ctx: SwarmCtx, taskId: string) {
   return req(ctx.ownerId, "GET", `${base(ctx.channelId)}/tasks/${taskId}/blackboard`);
 }
 
-test("a new swarm creates no card and returns 428 when there is no policy contract", async () => {
+const POLICY_CAPS = [
+  "kanban",
+  "cron",
+  "events",
+  "swarm",
+  "kanban_review_policy_v1",
+  "swarm_review_policy",
+];
+
+function swarmBody(ctx: SwarmCtx, extra: Record<string, unknown> = {}) {
+  return {
+    goal: "목표",
+    workers: [
+      { npcId: ctx.npcIds.nova, title: "조사" },
+      { npcId: ctx.npcIds.luna, title: "정리" },
+    ],
+    verifierNpcId: ctx.npcIds.sophie,
+    synthesizerNpcId: ctx.npcIds.dante,
+    ...extra,
+  };
+}
+
+test("without swarm_review_policy a new swarm creates no card and returns 428", async () => {
   const { createSwarm } = await import("@/lib/kanban-routes");
-  const ctx = await seedChannelWithNpcs(["nova", "sophie", "dante"]);
+  const ctx = await seedChannelWithNpcs(["nova", "luna", "sophie", "dante"], {
+    capabilities: ["kanban", "cron", "events", "swarm", "kanban_review_policy_v1"],
+  });
+  const res = await createSwarm(postRequest(ctx, swarmBody(ctx)), ctx.channelId);
+  assert.equal(res.status, 428);
+  const body = await res.json();
+  assert.equal(body.code, "swarm_review_policy_unsupported");
+  assert.deepEqual(body.missing, ["swarm_review_policy"]);
+  assert.equal(ctx.fakePlugin.swarmCallCount(), 0);
+});
+
+test("without the approval-policy contract a new swarm is refused like a new card", async () => {
+  const { createSwarm } = await import("@/lib/kanban-routes");
+  const ctx = await seedChannelWithNpcs(["nova", "luna", "sophie", "dante"], {
+    capabilities: ["kanban", "cron", "events", "swarm"],
+  });
+  const res = await createSwarm(postRequest(ctx, swarmBody(ctx)), ctx.channelId);
+  assert.equal(res.status, 428);
+  assert.equal((await res.json()).code, "review_policy_required");
+  assert.equal(ctx.fakePlugin.swarmCallCount(), 0);
+});
+
+test("a policy-aware swarm sends the workers' board-default policy and NPC profiles", async () => {
+  const { createSwarm } = await import("@/lib/kanban-routes");
+  const ctx = await seedChannelWithNpcs(["nova", "luna", "sophie", "dante"], {
+    capabilities: POLICY_CAPS,
+  });
+  const res = await createSwarm(postRequest(ctx, swarmBody(ctx)), ctx.channelId);
+  assert.equal(res.status, 200, await res.clone().text());
+  const sent = ctx.fakePlugin.lastSwarmBody()!;
+  assert.deepEqual(sent.review_policy, { version: 1, mode: "human", reviewer_profile: null });
+  assert.deepEqual(
+    (sent.workers as Array<{ profile: string }>).map((w) => w.profile),
+    ["nova", "luna"],
+  );
+  assert.equal(sent.verifier, "sophie");
+  assert.equal(sent.synthesizer, "dante");
+});
+
+test("AI approval for the workers needs a reviewer who is none of them", async () => {
+  const { createSwarm } = await import("@/lib/kanban-routes");
+  const ctx = await seedChannelWithNpcs(["nova", "luna", "sophie", "dante"], {
+    capabilities: POLICY_CAPS,
+  });
+  const bad = await createSwarm(
+    postRequest(
+      ctx,
+      swarmBody(ctx, { reviewPolicy: { mode: "agent", reviewerNpcId: ctx.npcIds.luna } }),
+    ),
+    ctx.channelId,
+  );
+  assert.equal(bad.status, 400);
+  assert.equal(ctx.fakePlugin.swarmCallCount(), 0);
+
+  const ok = await createSwarm(
+    postRequest(
+      ctx,
+      swarmBody(ctx, { reviewPolicy: { mode: "agent", reviewerNpcId: ctx.npcIds.sophie } }),
+    ),
+    ctx.channelId,
+  );
+  assert.equal(ok.status, 200);
+  assert.deepEqual(ctx.fakePlugin.lastSwarmBody()!.review_policy, {
+    version: 1,
+    mode: "agent",
+    reviewer_profile: "sophie",
+  });
+});
+
+test("a worker outside the channel creates nothing", async () => {
+  const { createSwarm } = await import("@/lib/kanban-routes");
+  const ctx = await seedChannelWithNpcs(["nova", "luna", "sophie", "dante"], {
+    capabilities: POLICY_CAPS,
+  });
   const res = await createSwarm(
     postRequest(ctx, {
-      goal: "목표",
-      workers: [{ npcId: ctx.npcIds.nova, title: "조사" }],
-      verifierNpcId: ctx.npcIds.sophie,
-      synthesizerNpcId: ctx.npcIds.dante,
+      ...swarmBody(ctx),
+      workers: [{ npcId: "not-an-npc", title: "조사" }],
     }),
     ctx.channelId,
   );
-  assert.equal(res.status, 428);
-  assert.equal((await res.json()).code, "swarm_review_policy_unsupported");
+  assert.equal(res.status >= 400 && res.status < 500, true);
   assert.equal(ctx.fakePlugin.swarmCallCount(), 0);
 });
 

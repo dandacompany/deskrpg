@@ -13,6 +13,7 @@
 import type { KanbanStatusTransition, KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
 import { countNeedsAttention, type AttentionCounts } from "@/lib/needs-attention";
 import { taskTimeMs } from "@/lib/plugin-time";
+import { isSwarmStructureRun } from "@/lib/swarm-structure";
 
 /**
  * The outcome vocabulary for finished runs (Hermes `task_runs.outcome`).
@@ -135,6 +136,8 @@ export function computeOperationalMetrics(
   let successes = 0;
 
   for (const run of runs) {
+    // A swarm root's instant completion is structure, not finished work.
+    if (isSwarmStructureRun(run)) continue;
     if (!isTerminal(run)) {
       openRuns += 1;
       continue;

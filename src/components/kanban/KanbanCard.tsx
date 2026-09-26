@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, GitBranch, GripVertical, MessageSquare, Play } from "lucide-react";
 
+import { isSwarmStructureCard } from "@/lib/swarm-structure";
 import { useT } from "@/lib/i18n";
 import type { KanbanTask, KanbanTaskStatus } from "@/lib/hermes/deskrpg-plugin-types";
 
@@ -402,8 +403,15 @@ export default function KanbanCard({
         className="w-full p-2.5 pr-9 text-left"
       >
         <div className="font-semibold text-text leading-snug break-words">{task.title}</div>
-        <div className="text-[10px] text-text-secondary">
-          {task.review ? t(`kanban.review.${task.review.policy.mode}`) : t("kanban.review.legacy")}
+        <div
+          className="text-[10px] text-text-secondary"
+          data-card-structure={isSwarmStructureCard(task) ? "swarm-root" : undefined}
+        >
+          {isSwarmStructureCard(task)
+            ? t("kanban.card.swarmRoot")
+            : task.review
+              ? t(`kanban.review.${task.review.policy.mode}`)
+              : t("kanban.review.legacy")}
         </div>
         <div className="mt-1 text-[11px] text-text-muted truncate">
           {assignee ?? t("kanban.card.unassigned")}
