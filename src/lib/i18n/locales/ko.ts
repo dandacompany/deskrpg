@@ -2634,6 +2634,15 @@ const ko: Record<string, string> = {
   "errors.unsupportedConfigKey": "지원하지 않는 설정 항목입니다",
   "errors.malformedResponse": "서버 응답을 해석할 수 없습니다",
   "errors.noProfile": "이 프로필이 등록되지 않았습니다",
+  "errors.defaultProfile": "기본 프로필은 직원으로 가져올 수 없습니다(게이트웨이 소유자 키입니다)",
+  "errors.keyExists":
+    "이 프로필에는 이미 API 키가 있습니다. 새 키로 바꾸면 기존 키를 쓰던 연결이 끊깁니다",
+  "errors.externalSecretProvider":
+    "이 프로필은 외부 비밀 저장소의 키를 씁니다. Hermes 호스트에서 직접 등록해 주세요",
+  "errors.keyStoreFailed":
+    "키는 발급됐지만 저장하지 못했습니다. 다시 시도하면 새 키로 바꿔 가져올 수 있습니다",
+  "errors.pluginUpdateRequired":
+    "게이트웨이의 DeskRPG 플러그인을 업데이트해야 합니다. 지금은 아래 수동 등록을 쓰세요",
   "errors.templateDeleteConfirm": '"{name}"을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.',
 
   // 크론 화면 (T9)

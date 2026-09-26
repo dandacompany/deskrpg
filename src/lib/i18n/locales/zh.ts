@@ -2539,6 +2539,11 @@ const zh: Record<string, string> = {
   "errors.unsupportedConfigKey": "不支持的配置项",
   "errors.malformedResponse": "无法解析服务器响应",
   "errors.noProfile": "该配置文件尚未注册",
+  "errors.defaultProfile": "默认配置文件不能作为员工导入（它的密钥就是网关所有者密钥）",
+  "errors.keyExists": "该配置文件已有 API 密钥。换成新密钥后，使用旧密钥的连接会断开",
+  "errors.externalSecretProvider": "该配置文件使用外部密钥库中的密钥，请在 Hermes 主机上直接注册",
+  "errors.keyStoreFailed": "密钥已签发但未能保存。再试一次即可换成新密钥并导入",
+  "errors.pluginUpdateRequired": "网关的 DeskRPG 插件需要更新。暂时请使用下方的手动注册",
   "errors.templateDeleteConfirm": "要删除“{name}”吗？此操作无法撤销。",
 
   // Cron screen (T9)

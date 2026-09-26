@@ -2649,6 +2649,16 @@ const en: Record<string, string> = {
   "errors.unsupportedConfigKey": "Unsupported config key",
   "errors.malformedResponse": "Could not parse the server response",
   "errors.noProfile": "This profile is not registered",
+  "errors.defaultProfile":
+    "The default profile cannot be imported as an employee (its key is the gateway owner key)",
+  "errors.keyExists":
+    "This profile already has an API key. Replacing it cuts off anything that used the old key",
+  "errors.externalSecretProvider":
+    "This profile takes its key from an external secret store. Register it on the Hermes host",
+  "errors.keyStoreFailed":
+    "The key was issued but could not be stored. Try again to replace it and import",
+  "errors.pluginUpdateRequired":
+    "The gateway needs a newer DeskRPG plugin. Use manual registration below for now",
   "errors.templateDeleteConfirm": 'Delete "{name}"? This cannot be undone.',
 
   // Cron screen (T9)

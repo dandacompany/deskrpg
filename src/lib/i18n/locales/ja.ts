@@ -2665,6 +2665,16 @@ const ja: Record<string, string> = {
   "errors.unsupportedConfigKey": "サポートされていない設定項目です",
   "errors.malformedResponse": "サーバーの応答を解釈できませんでした",
   "errors.noProfile": "このプロファイルは登録されていません",
+  "errors.defaultProfile":
+    "デフォルトプロファイルは社員として取り込めません（ゲートウェイ所有者のキーです）",
+  "errors.keyExists":
+    "このプロファイルには既にAPIキーがあります。新しいキーに替えると、既存のキーを使う接続が切れます",
+  "errors.externalSecretProvider":
+    "このプロファイルは外部シークレットストアのキーを使います。Hermes ホストで直接登録してください",
+  "errors.keyStoreFailed":
+    "キーは発行されましたが保存できませんでした。もう一度試すと新しいキーに替えて取り込めます",
+  "errors.pluginUpdateRequired":
+    "ゲートウェイの DeskRPG プラグインを更新する必要があります。今は下の手動登録を使ってください",
   "errors.templateDeleteConfirm": "「{name}」を削除しますか? この操作は元に戻せません。",
 
   // Cron screen (T9)
