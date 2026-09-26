@@ -470,6 +470,8 @@ const en: Record<string, string> = {
     "This Windows host has no scheduled task for the gateway; it is registered only in the Startup folder. DeskRPG cannot stop or restart it that way, so plugin updates and setting changes are blocked. Check Task Scheduler for the Hermes gateway task. If it is missing, run hermes gateway install on that host again to register it as a scheduled task, then check again.",
   "hermes.wizard.error.hostOutputTooLarge":
     "The host's reply is larger than Windows' built-in SSH client can receive at once (64 KiB). This happens on hosts with many employees (profiles). Run DeskRPG on that host itself, or connect over SSH from a computer that is not running Windows.",
+  "hermes.wizard.error.hostSpillCleanupFailed":
+    "The host's reply was received, but the temporary file left on the host could not be removed. It may contain tokens. Trying again removes such files once they are older than 15 minutes; if this keeps happening, delete folders starting with deskrpg-spill- in the host's temp folder yourself.",
   "hermes.wizard.error.timezoneInvalid":
     "That time zone is not an IANA name. Use a valid name such as Asia/Seoul, or turn the time zone step off and continue.",
   "hermes.wizard.error.timezoneWriteFailed":
