@@ -330,7 +330,7 @@ export async function createTask(req: NextRequest, channelId: string) {
   const assignee = await resolveAssigneeField(ctx, body);
   if (!assignee.ok) return assignee.response;
 
-  // Upstream Hermes enforces no completion policy (decision 0017): create the card the way Hermes' own
+  // Upstream Hermes enforces no completion policy: create the card the way Hermes' own
   // dashboard does, without one. Only a request that explicitly asks for a policy is refused — dropping
   // it silently would make the caller believe the card needs approval.
   let reviewPolicy: KanbanReviewPolicy | undefined;
@@ -725,8 +725,8 @@ export async function createSwarm(req: NextRequest, channelId: string) {
   }
   const body = await readJsonObject(req);
   if (!body) return invalidBody("body must be a JSON object");
-  // Without the policy contracts the swarm goes through Hermes' public create_swarm with no policy
-  // (decision 0017) — unless the request explicitly asks for one, which is refused rather than dropped.
+  // Without the policy contracts the swarm goes through Hermes' public create_swarm with no policy,
+  // unless the request explicitly asks for one — that is refused rather than dropped.
   const policyAware = supportsReviewPolicy(ctx.info) && supportsSwarmReviewPolicy(ctx.info);
   if (!policyAware && body.reviewPolicy !== undefined) {
     if (!supportsReviewPolicy(ctx.info)) return reviewPolicyRequired();

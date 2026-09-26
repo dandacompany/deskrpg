@@ -617,7 +617,7 @@ export default function KanbanBoardModal({
   // If the plugin can't do swarm, the button is hidden entirely — better than clicking it and seeing a 428.
   const reviewSupported = status?.capabilities?.includes("kanban_review_policy_v1") ?? false;
   // Upstream Hermes has no approval-policy contract: cards and swarms are still created (Hermes' own
-  // behaviour, decision 0017), and the board says their results complete without approval.
+  // behaviour), and the board says their results complete without approval.
   const swarmSupported = status?.capabilities?.includes("swarm") ?? false;
   const swarmApproval =
     reviewSupported && (status?.capabilities?.includes("swarm_review_policy") ?? false);

@@ -50,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             .limit(1);
           return channel?.ownerId ?? null;
         },
-        // Upstream Hermes (no completion policy) registers too — the cards just carry none (decision 0017).
+        // Upstream Hermes (no completion policy) registers too — the cards just carry none.
         resolveContext: (input) => resolveKanbanChannelContext(input),
         ensureSubproject: async (ctx, tenant, minutesId) => {
           const project = await ensureProjectRow(ctx.boardRow);

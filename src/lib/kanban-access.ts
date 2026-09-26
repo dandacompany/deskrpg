@@ -316,7 +316,7 @@ export function supportsAttachments(ctx: Pick<KanbanChannelContext, "info">): bo
 /**
  * The completion policy new work gets when nobody chose one: human approval — but only on a gateway
  * that enforces policies. Upstream Hermes has no such contract, so there the card is created without
- * one (Hermes' own behaviour) and the board says it completes without approval (decision 0017).
+ * one (Hermes' own behaviour) and the board says it completes without approval.
  */
 export function defaultReviewPolicy(
   ctx: Pick<KanbanChannelContext, "info">,
