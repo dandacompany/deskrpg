@@ -27,10 +27,12 @@ export type ArtifactChannelContext = {
   channelId: string;
   /** The gateway currently bound to the channel (`gateway_resources.id`). */
   gatewayId: string;
+  gatewayBaseUrl: string;
   client: OwnerPluginClient;
   boardSlug: string;
   profiles: string[];
   pluginVersion: string;
+  capabilities: string[];
 };
 
 type Result<T> = ({ ok: true } & T) | { ok: false; response: NextResponse };
@@ -75,10 +77,12 @@ export async function resolveArtifactChannelContext(input: {
       userId: input.userId,
       channelId: input.channelId,
       gatewayId: resolved.binding.resource.id,
+      gatewayBaseUrl: resolved.binding.resource.baseUrl,
       client: resolved.ownerClient,
       boardSlug: resolved.boardSlug,
       profiles: [...new Set(roster.map((r) => r.profileName))],
       pluginVersion: info.version,
+      capabilities: info.capabilities,
     },
   };
 }

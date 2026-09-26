@@ -15,11 +15,14 @@ import {
 } from "@/lib/hermes/deskrpg-plugin-types";
 import { taskTimeMs } from "@/lib/plugin-time";
 import { cardRunState, runAttempts, type RunAttempt } from "@/lib/kanban-run-history";
+import { hasRunProvenance, runProvenance } from "@/lib/kanban-run-provenance";
+import type { SessionSourcesView } from "@/lib/session-sources-types";
 import type { RunFailureCause } from "@/lib/run-failure-cause";
 import GateChecklistModal from "@/components/gateway/GateChecklistModal";
 import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
 import { KindIcon } from "../artifacts/ArtifactList";
+import SessionSourcesList from "../artifacts/SessionSourcesList";
 import { ArtifactsApiError } from "../artifacts/artifacts-api";
 
 import { toFailure, type KanbanApi } from "./kanban-api";
@@ -825,7 +828,13 @@ export default function TaskDrawer({
                 <>
                   <ul className="space-y-1">
                     {[...attempts].reverse().map((attempt) => (
-                      <AttemptItem key={attempt.run.id} attempt={attempt} formatDate={formatDate} />
+                      <AttemptItem
+                        key={attempt.run.id}
+                        attempt={attempt}
+                        workspace={task?.workspace_path ?? null}
+                        loadSources={() => api.runSources(taskId, String(attempt.run.id))}
+                        formatDate={formatDate}
+                      />
                     ))}
                   </ul>
                   {attempts.length > 1 && (
@@ -1020,13 +1029,18 @@ function endLabel(t: ReturnType<typeof useT>, end: string): string {
 
 function AttemptItem({
   attempt,
+  workspace,
+  loadSources,
   formatDate,
 }: {
   attempt: RunAttempt;
+  workspace: string | null;
+  loadSources: () => Promise<SessionSourcesView>;
   formatDate: (value?: PluginTime) => string;
 }) {
   const t = useT();
   const { run, ordinal, end, cause, events } = attempt;
+  const made = runProvenance(run.metadata, workspace);
   const hasDetails = Boolean(run.error) || events.length > 0;
   return (
     <li data-attempt={ordinal} data-attempt-end={end} className="rounded-md bg-surface p-2">
@@ -1045,6 +1059,12 @@ function AttemptItem({
         </div>
       )}
       {run.summary && <div className="mt-1 text-text-secondary break-words">{run.summary}</div>}
+      {hasRunProvenance(made) && <RunProvenanceList made={made} />}
+      {made.workerSessionId && (
+        <div className="mt-1">
+          <SessionSourcesList load={loadSources} />
+        </div>
+      )}
       {hasDetails && (
         <details className="mt-1">
           <summary className="cursor-pointer text-[10px] text-text-dim">
@@ -1064,6 +1084,47 @@ function AttemptItem({
         </details>
       )}
     </li>
+  );
+}
+
+/** What the worker reported about how it made the result (run `metadata`), in words a person can check. */
+function RunProvenanceList({ made }: { made: ReturnType<typeof runProvenance> }) {
+  const t = useT();
+  const files = (key: string, list: string[], attr: string) =>
+    list.length > 0 && (
+      <div data-run-provenance={attr}>
+        <span className="text-text-dim">{t(key)}</span>{" "}
+        <span className="break-all text-text-secondary">{list.join(", ")}</span>
+      </div>
+    );
+  return (
+    <div data-run-provenance="" className="mt-1 space-y-0.5 text-[10px]">
+      {files("kanban.run.made.changedFiles", made.changedFiles, "changedFiles")}
+      {files("kanban.run.made.artifacts", made.artifacts, "artifacts")}
+      {made.checks.length > 0 && (
+        <div data-run-provenance="checks">
+          <span className="text-text-dim">{t("kanban.run.made.checks")}</span>{" "}
+          <span className="text-text-secondary break-words">
+            {made.checks.map((c) => `${c.key} ${c.value}`).join(" · ")}
+          </span>
+        </div>
+      )}
+      {made.limitations.length > 0 && (
+        <div data-run-provenance="limitations">
+          <span className="text-text-dim">{t("kanban.run.made.limitations")}</span>
+          <ul className="list-disc pl-4 text-text-secondary break-words">
+            {made.limitations.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {made.otherKeys > 0 && (
+        <div data-run-provenance="other" className="text-text-dim">
+          {t("kanban.run.made.other", { count: made.otherKeys })}
+        </div>
+      )}
+    </div>
   );
 }
 

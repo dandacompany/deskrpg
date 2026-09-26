@@ -32,6 +32,7 @@ import type {
   CronApi,
   EventsApi,
   ApprovalPolicyApi,
+  SessionApi,
   KanbanApi,
   McpAdminApi,
   OwnerPluginClient,
@@ -681,5 +682,9 @@ export function createProfilePluginClient(
       call(`${policy}/allowlist`, token, { method: "DELETE", body: { entry }, ...as(actor) }),
   };
 
-  return { profileName: input.profileName, cron, skills, mcp, approvals };
+  const sessions: SessionApi = {
+    sources: (sessionId) => call(`${prof}/sessions/${seg(sessionId)}/sources`, token),
+  };
+
+  return { profileName: input.profileName, cron, skills, mcp, approvals, sessions };
 }

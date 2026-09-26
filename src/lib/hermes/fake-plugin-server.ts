@@ -39,6 +39,7 @@ import type {
   OrchestrationSettings,
   PluginEvent,
   PluginInfo,
+  SessionSources,
   WorkerLog,
 } from "./deskrpg-plugin-types";
 import { KANBAN_TASK_STATUSES } from "./deskrpg-plugin-types";
@@ -87,6 +88,13 @@ export type FakePluginServer = {
   /** Pushes an event into the unified event stream (the server fills id and ts). */
   pushEvent(event: Omit<PluginEvent, "id" | "ts"> & { ts?: number }): PluginEvent;
   setTaskLog(board: string, taskId: string, content: string): void;
+  /** Replaces one run's `metadata` (what a worker leaves on `kanban_complete`). */
+  setRunMetadata(
+    board: string,
+    taskId: string,
+    runId: string,
+    metadata: Record<string, unknown>,
+  ): void;
   setDeliveryTargets(profile: string, targets: CronDeliveryTarget[]): void;
   setBlueprints(profile: string, blueprints: AutomationBlueprint[]): void;
   /** Seeds one artifact into state (version 1). Defaults: kind `document`, mime `text/markdown`,
@@ -132,6 +140,9 @@ export type FakePluginServer = {
   mcp(profile: string): FakeMcpState;
   /** That profile's 0.18.0 approval policy state (`fake-approval-policy-routes.ts`). Creates a default if absent. */
   approvalPolicy(profile: string): FakeApprovalPolicyState;
+  /** What a profile's session read (`session_sources`). `null` removes it — the route then answers
+   * 404 `session_not_found`, like a session Hermes has deleted. */
+  setSessionSources(profile: string, sessionId: string, body: SessionSources | null): void;
 };
 
 // ---------------------------------------------------------------------------
@@ -248,6 +259,7 @@ export async function startFakePluginServer(
   let skillStates = new Map<string, FakeSkillState>();
   let mcpStates = new Map<string, FakeMcpState>();
   let approvalPolicyStates = new Map<string, FakeApprovalPolicyState>();
+  let sessionSources = new Map<string, SessionSources>();
   let seq = 0;
 
   const nextId = (prefix: string) => `${prefix}_${(seq += 1).toString(36).padStart(4, "0")}`;
@@ -266,6 +278,7 @@ export async function startFakePluginServer(
     skillStates = new Map();
     mcpStates = new Map();
     approvalPolicyStates = new Map();
+    sessionSources = new Map();
     seq = 0;
   }
 
@@ -1768,6 +1781,12 @@ export async function startFakePluginServer(
     if (mcpReply) return mcpReply;
     const policyReply = routeApprovalPolicy(approvalPolicyFor(profile), req);
     if (policyReply) return policyReply;
+    const sourcesMatch = /^\/deskrpg\/sessions\/([^/]+)\/sources$/.exec(req.pathname);
+    if (sourcesMatch && req.method === "GET" && info.capabilities.includes("session_sources")) {
+      const body = sessionSources.get(`${profile}|${decodeURIComponent(sourcesMatch[1])}`);
+      if (!body) throw new HttpError(404, { error: "session_not_found" });
+      return { status: 200, body };
+    }
     const { method, pathname, params, json } = req;
     const state = cronFor(profile);
     const rest = pathname.replace(/^\/deskrpg\/cron/, "");
@@ -1949,6 +1968,14 @@ export async function startFakePluginServer(
       if (!board) throw new Error(`unknown board: ${slug}`);
       board.logs.set(taskId, content);
     },
+    setRunMetadata: (slug, taskId, runId, metadata) => {
+      const run = boards
+        .get(slug)
+        ?.tasks.get(taskId)
+        ?.runs.find((r) => String(r.id) === runId);
+      if (!run) throw new Error(`unknown run: ${slug}/${taskId}/${runId}`);
+      run.metadata = metadata;
+    },
     setDeliveryTargets: (profile, targets) => {
       cronFor(profile).deliveryTargets = targets;
     },
@@ -1960,6 +1987,10 @@ export async function startFakePluginServer(
     skills: skillsFor,
     mcp: mcpFor,
     approvalPolicy: approvalPolicyFor,
+    setSessionSources: (profile, sessionId, body) => {
+      if (body) sessionSources.set(`${profile}|${sessionId}`, body);
+      else sessionSources.delete(`${profile}|${sessionId}`);
+    },
     seedCardProposal: (proposalId) => {
       cardProposals.set(proposalId, {
         resolvedAt: null,

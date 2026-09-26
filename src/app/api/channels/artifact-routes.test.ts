@@ -27,6 +27,7 @@ type Routes = {
   item: typeof import("./[id]/artifacts/[artifactId]/route");
   versions: typeof import("./[id]/artifacts/[artifactId]/versions/route");
   content: typeof import("./[id]/artifacts/[artifactId]/versions/[v]/content/route");
+  sources: typeof import("./[id]/artifacts/[artifactId]/sources/route");
 };
 
 let routes: Routes;
@@ -42,6 +43,7 @@ before(async () => {
     item: await import("./[id]/artifacts/[artifactId]/route"),
     versions: await import("./[id]/artifacts/[artifactId]/versions/route"),
     content: await import("./[id]/artifacts/[artifactId]/versions/[v]/content/route"),
+    sources: await import("./[id]/artifacts/[artifactId]/sources/route"),
   };
 });
 
@@ -450,4 +452,192 @@ test("F4: a plugin detail response without artifact is treated as 404", async ()
     assert.equal(loaded.response.status, 404);
     assert.equal((await loaded.response.json()).code, "artifact_not_found");
   }
+});
+
+async function ownerPost(path: string, body: unknown): Promise<Record<string, unknown>> {
+  const res = await fetch(`${server.baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      authorization: "Bearer gateway-owner-key-1234567890",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  assert.equal(res.ok, true, `${path} → ${res.status}`);
+  return (await res.json()) as Record<string, unknown>;
+}
+
+test("a board artifact's detail carries the card it came from and that card's parents", async () => {
+  const { owner, channel, boardSlug } = await seedArtifactChannel();
+  await ownerPost("/deskrpg/kanban/boards", { slug: boardSlug, name: "b" });
+  const q = `?board=${encodeURIComponent(boardSlug)}`;
+  const parent = (await ownerPost(`/deskrpg/kanban/tasks${q}`, { title: "Research" })).task as {
+    id: string;
+  };
+  const child = (
+    await ownerPost(`/deskrpg/kanban/tasks${q}`, {
+      title: "Newsletter draft",
+      assignee: "sophie",
+      parents: [parent.id],
+    })
+  ).task as { id: string };
+  server.seedArtifact({
+    id: "made",
+    title: "draft",
+    profile: "sophie",
+    board: boardSlug,
+    task_id: child.id,
+    source_kind: "kanban",
+    body: "x",
+  });
+  server.seedArtifact({ id: "chatty", title: "chat", profile: "sophie", body: "x" });
+
+  const res = await routes.item.GET(
+    req(owner.id, "GET", `${base(channel.id)}/made`),
+    ctx(channel.id, "made"),
+  );
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.provenance.task.id, child.id);
+  assert.equal(body.provenance.task.title, "Newsletter draft");
+  assert.equal(body.provenance.task.assignee, "sophie");
+  assert.deepEqual(
+    body.provenance.parents.map((p: { id: string; title: string }) => [p.id, p.title]),
+    [[parent.id, "Research"]],
+  );
+  assert.equal(body.provenance.moreParents, 0);
+
+  const chat = await routes.item.GET(
+    req(owner.id, "GET", `${base(channel.id)}/chatty`),
+    ctx(channel.id, "chatty"),
+  );
+  assert.equal("provenance" in (await chat.json()), false);
+});
+
+test("an unreadable source card leaves the provenance out but the detail still opens", async () => {
+  const { owner, channel, boardSlug } = await seedArtifactChannel();
+  server.seedArtifact({
+    id: "orphan",
+    title: "orphan",
+    profile: "sophie",
+    board: boardSlug,
+    task_id: "t_gone",
+    source_kind: "kanban",
+    body: "x",
+  });
+  const res = await routes.item.GET(
+    req(owner.id, "GET", `${base(channel.id)}/orphan`),
+    ctx(channel.id, "orphan"),
+  );
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.artifact.id, "orphan");
+  assert.equal("provenance" in body, false);
+});
+
+async function withSessionSources<T>(fn: () => Promise<T>): Promise<T> {
+  server.setInfo({
+    capabilities: ["kanban", "cron", "events", "artifacts", "session_sources"],
+    version: "0.23.0",
+  });
+  try {
+    return await fn();
+  } finally {
+    server.setInfo({ capabilities: ["kanban", "cron", "events", "artifacts"], version: "0.8.4" });
+  }
+}
+
+const sourcesOf = async (userId: string, channelId: string, artifactId: string) => {
+  const res = await routes.sources.GET(
+    req(userId, "GET", `${base(channelId)}/${artifactId}/sources`),
+    ctx(channelId, artifactId),
+  );
+  return { status: res.status, body: await res.json() };
+};
+
+test("sources are read with the artifact profile's own key and come back as a view", async () => {
+  await withSessionSources(async () => {
+    const { owner, channel } = await seedArtifactChannel();
+    const artifact = server.seedArtifact({ id: "src1", title: "t", profile: "sophie", body: "x" });
+    server.setSessionSources("sophie", artifact.session_id, {
+      session_id: artifact.session_id,
+      sources: [
+        { kind: "web", ref: "https://a.example", title: "A", via: "web_extract", at: null },
+        { kind: "file", ref: "notes.md", title: null, via: "read_file", at: null },
+      ],
+      outside_workdir_files: 2,
+      truncated: false,
+    });
+    const { status, body } = await sourcesOf(owner.id, channel.id, "src1");
+    assert.equal(status, 200);
+    assert.equal(body.status, "ok");
+    assert.deepEqual(
+      body.sources.map((s: { ref: string }) => s.ref),
+      ["https://a.example", "notes.md"],
+    );
+    assert.equal(body.outsideWorkdirFiles, 2);
+    const last = server.lastRequest()!;
+    assert.match(last.path, /^\/p\/sophie\/deskrpg\/sessions\/[^/]+\/sources$/);
+    assert.equal(last.auth, "Bearer profile-key-1234567890");
+  });
+});
+
+test("a session Hermes has deleted reads as expired", async () => {
+  await withSessionSources(async () => {
+    const { owner, channel } = await seedArtifactChannel();
+    server.seedArtifact({ id: "old", title: "t", profile: "sophie", body: "x" });
+    const { status, body } = await sourcesOf(owner.id, channel.id, "old");
+    assert.equal(status, 200);
+    assert.deepEqual(body, { status: "expired" });
+  });
+});
+
+test("without the session_sources capability the view asks for a plugin update", async () => {
+  const { owner, channel } = await seedArtifactChannel();
+  server.seedArtifact({ id: "nocap", title: "t", profile: "sophie", body: "x" });
+  const before = server.requests().length;
+  const { body } = await sourcesOf(owner.id, channel.id, "nocap");
+  assert.equal(body.status, "unavailable");
+  assert.equal(body.reason, "plugin_upgrade_required");
+  assert.equal(
+    server
+      .requests()
+      .slice(before)
+      .some((r) => r.path.includes("/sessions/")),
+    false,
+  );
+});
+
+test("a profile without a key on this gateway is unavailable, never read with the owner key", async () => {
+  await withSessionSources(async () => {
+    const { owner, channel, boardSlug } = await seedArtifactChannel();
+    server.seedArtifact({
+      id: "foreign-profile",
+      title: "t",
+      profile: "other",
+      board: boardSlug,
+      body: "x",
+    });
+    const before = server.requests().length;
+    const { status, body } = await sourcesOf(owner.id, channel.id, "foreign-profile");
+    assert.equal(status, 200);
+    assert.deepEqual(body, { status: "unavailable", reason: "no_profile_key" });
+    assert.equal(
+      server
+        .requests()
+        .slice(before)
+        .some((r) => r.path.includes("/sessions/")),
+      false,
+    );
+  });
+});
+
+test("sources of an artifact outside the channel scope are 404", async () => {
+  await withSessionSources(async () => {
+    const { owner, channel } = await seedArtifactChannel();
+    server.seedArtifact({ id: "far", title: "t", profile: "stranger", board: "x", body: "x" });
+    const { status, body } = await sourcesOf(owner.id, channel.id, "far");
+    assert.equal(status, 404);
+    assert.equal(body.code, "artifact_not_found");
+  });
 });

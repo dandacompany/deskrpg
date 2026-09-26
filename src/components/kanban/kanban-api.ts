@@ -27,6 +27,8 @@ import type {
   WorkerLog,
 } from "@/lib/hermes/deskrpg-plugin-types";
 
+import type { SessionSourcesView } from "@/lib/session-sources-types";
+
 import type { BoardNpc, KanbanFailure } from "./kanban-view-model";
 
 export class KanbanApiError extends Error implements KanbanFailure {
@@ -255,6 +257,9 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
         `${task(taskId)}/${action}`,
         json("POST", body ?? {}),
       ),
+    /** What one run's worker session read (`status` says when it cannot be shown). */
+    runSources: (taskId: string, runId: string) =>
+      request<SessionSourcesView>(f, `${task(taskId)}/runs/${encodeURIComponent(runId)}/sources`),
     log: (taskId: string, tail = 16384) =>
       request<WorkerLog>(f, `${task(taskId)}/log?tail=${tail}`),
     attachments: (taskId: string) =>

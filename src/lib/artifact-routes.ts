@@ -22,6 +22,15 @@ import {
 import { rawFailureResponse, streamProxyResponse } from "@/lib/hermes/stream-proxy";
 import { compareSemver } from "@/lib/hermes/plugin-capability";
 import { getUserId } from "@/lib/internal-rpc";
+import { taskTimeMs } from "@/lib/plugin-time";
+import { readSessionSources } from "@/lib/session-sources";
+import {
+  buildArtifactProvenance,
+  PROVENANCE_PARENTS_MAX,
+  type ArtifactProvenance,
+} from "@/lib/artifact-provenance";
+import type { ArtifactChannelContext } from "@/lib/artifact-access";
+import type { ArtifactSummary } from "@/lib/hermes/deskrpg-plugin-types";
 
 export type ArtifactParams = { params: Promise<{ id: string; artifactId?: string; v?: string }> };
 
@@ -82,6 +91,32 @@ export async function listArtifacts(req: NextRequest, channelId: string): Promis
   return NextResponse.json(res.data);
 }
 
+/**
+ * The card an artifact came from, its run and its parent cards — only for an artifact of this
+ * channel's board. Failing to read the card leaves the provenance out; the detail still opens.
+ */
+async function loadProvenance(
+  ctx: ArtifactChannelContext,
+  artifact: ArtifactSummary,
+): Promise<ArtifactProvenance | null> {
+  if (artifact.source_kind !== "kanban" || !artifact.task_id || artifact.board !== ctx.boardSlug) {
+    return null;
+  }
+  const board = ctx.boardSlug;
+  const res = await ctx.client.kanban.getTask(board, artifact.task_id);
+  if (!res.ok || !res.data?.task) return null;
+  const parentIds = (res.data.links?.parents ?? []).slice(0, PROVENANCE_PARENTS_MAX);
+  const parents = await Promise.all(
+    parentIds.map(async (id) => {
+      const parent = await ctx.client.kanban.getTask(board, id);
+      if (!parent.ok || !parent.data?.task) return null;
+      const { title, status } = parent.data.task;
+      return { id, title, status };
+    }),
+  );
+  return buildArtifactProvenance(res.data, taskTimeMs(artifact.created_at), parents);
+}
+
 export async function getArtifact(
   req: NextRequest,
   channelId: string,
@@ -93,12 +128,39 @@ export async function getArtifact(
   const loaded = await loadScopedArtifact(resolved.ctx, artifactId);
   if (!loaded.ok) return loaded.response;
   const { artifact } = loaded.detail;
+  const [modifiable, provenance] = await Promise.all([
+    canModifyArtifact(resolved.ctx, artifact),
+    loadProvenance(resolved.ctx, artifact),
+  ]);
   // A signal the screen uses to decide whether to hide edit·delete·move-source. Permission itself is re-checked by the mutation route.
   return NextResponse.json({
     ...loaded.detail,
-    modifiable: await canModifyArtifact(resolved.ctx, artifact),
+    modifiable,
     sourceInChannel: artifact.source_kind !== "kanban" || artifact.board === resolved.ctx.boardSlug,
+    ...(provenance ? { provenance } : {}),
   });
+}
+
+/** What the session that made the artifact read. Expected states (expired, unavailable) are 200 values. */
+export async function getArtifactSources(
+  req: NextRequest,
+  channelId: string,
+  artifactId: string,
+): Promise<Response> {
+  const resolved = await resolve(req, channelId);
+  if (!resolved.ok) return resolved.response;
+  if (!isValidArtifactId(artifactId)) return artifactNotFound();
+  const loaded = await loadScopedArtifact(resolved.ctx, artifactId);
+  if (!loaded.ok) return loaded.response;
+  const { ctx } = resolved;
+  const { artifact } = loaded.detail;
+  const read = await readSessionSources({
+    gateway: { id: ctx.gatewayId, baseUrl: ctx.gatewayBaseUrl },
+    capabilities: ctx.capabilities,
+    profileName: artifact.profile,
+    sessionId: artifact.session_id,
+  });
+  return read.ok ? NextResponse.json(read.view) : read.response;
 }
 
 export async function getArtifactContent(

@@ -14,6 +14,8 @@ import type {
   ArtifactSource,
   ArtifactVersion,
 } from "@/lib/hermes/deskrpg-plugin-types";
+import type { ArtifactProvenance } from "@/lib/artifact-provenance";
+import type { SessionSourcesView } from "@/lib/session-sources-types";
 
 export class ArtifactsApiError extends Error {
   readonly status: number;
@@ -37,6 +39,8 @@ export class ArtifactsApiError extends Error {
 export type ArtifactDetailView = ArtifactDetail & {
   modifiable?: boolean;
   sourceInChannel?: boolean;
+  /** The card, run and parent cards a board artifact of this channel came from. */
+  provenance?: ArtifactProvenance;
 };
 
 export type ArtifactListFilter = {
@@ -122,6 +126,8 @@ export function createArtifactsApi(channelId: string, fetchImpl?: FetchLike) {
       return request<ArtifactPage>(f, `${root}${suffix}`);
     },
     get: (id: string) => request<ArtifactDetailView>(f, artifact(id)),
+    /** What the session that made the artifact read. */
+    sources: (id: string) => request<SessionSourcesView>(f, `${artifact(id)}/sources`),
     contentUrl: (id: string, version: number, download?: boolean): string => {
       const suffix = download ? "?download=1" : "";
       return `${artifact(id)}/versions/${version}/content${suffix}`;

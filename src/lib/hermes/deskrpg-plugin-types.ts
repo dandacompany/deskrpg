@@ -777,3 +777,28 @@ export const MCP_ADMIN_CAPABILITY = "profile_mcp_admin";
 /** 0.18.0 — unattended run approval policy (`/p/{profile}/deskrpg/approval-policy`) and `approval.blocked` events. */
 export const APPROVAL_POLICY_MIN_VERSION = "0.18.0";
 export const APPROVAL_POLICY_CAPABILITY = "profile_approval_policy";
+
+/**
+ * What a session read (`GET /p/{profile}/deskrpg/sessions/{id}/sources`), derived by the plugin
+ * from the profile's Hermes session — nothing is stored. Web pages come with a cleaned URL and
+ * title, files with a path relative to the session's working folder; files outside it are only
+ * counted. A session Hermes has already deleted answers 404 `session_not_found`.
+ */
+export const SESSION_SOURCES_MIN_VERSION = "0.23.0";
+export const SESSION_SOURCES_CAPABILITY = "session_sources";
+export type SessionSource = {
+  kind: "web" | "file";
+  /** URL for `web`, working-folder-relative path for `file`. */
+  ref: string;
+  title: string | null;
+  /** The Hermes tool that read it (`web_extract`, `browser_navigate`, `read_file`, `delegate_task`). */
+  via: string;
+  /** ISO time of the first read, when known. */
+  at: string | null;
+};
+export type SessionSources = {
+  session_id: string;
+  sources: SessionSource[];
+  outside_workdir_files: number;
+  truncated: boolean;
+};
