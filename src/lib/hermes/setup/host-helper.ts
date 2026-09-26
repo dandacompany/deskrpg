@@ -15,22 +15,22 @@ child = None
 SPILL_PREFIX = 'deskrpg-spill-'
 SPILL_NAME = re.compile(r'^[0-9a-f]{32}$')
 # Windows: a protected DACL with one rule for the current user's SID, then read back by SID.
-SET_ACL = "; ".join([
-    "$ErrorActionPreference = 'Stop'",
-    "$item = Get-Item -LiteralPath $env:DESKRPG_ACL_DIR",
-    "$acl = New-Object System.Security.AccessControl.DirectorySecurity",
-    "$acl.SetAccessRuleProtection($true, $false)",
-    "$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User",
-    "$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($user, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')",
-    "$acl.AddAccessRule($rule)",
-    "$item.SetAccessControl($acl)"])
-CHECK_ACL = "; ".join([
-    "$ErrorActionPreference = 'Stop'",
-    "$acl = Get-Acl -LiteralPath $env:DESKRPG_ACL_DIR",
-    "$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value",
-    "$rules = @($acl.Access)",
-    "$sid = if ($rules.Count -eq 1) { $rules[0].IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value } else { '' }",
-    "if ($acl.AreAccessRulesProtected -and $rules.Count -eq 1 -and -not $rules[0].IsInherited -and $rules[0].AccessControlType -eq 'Allow' -and $sid -eq $me) { 'owner-only' } else { 'open' }"])
+SET_ACL = '; '.join([
+    '$ErrorActionPreference = \x27Stop\x27',
+    '$item = Get-Item -LiteralPath $env:DESKRPG_ACL_DIR',
+    '$acl = New-Object System.Security.AccessControl.DirectorySecurity',
+    '$acl.SetAccessRuleProtection($true, $false)',
+    '$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User',
+    '$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($user, \x27FullControl\x27, \x27ContainerInherit,ObjectInherit\x27, \x27None\x27, \x27Allow\x27)',
+    '$acl.AddAccessRule($rule)',
+    '$item.SetAccessControl($acl)'])
+CHECK_ACL = '; '.join([
+    '$ErrorActionPreference = \x27Stop\x27',
+    '$acl = Get-Acl -LiteralPath $env:DESKRPG_ACL_DIR',
+    '$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value',
+    '$rules = @($acl.Access)',
+    '$sid = if ($rules.Count -eq 1) { $rules[0].IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value } else { \x27\x27 }',
+    'if ($acl.AreAccessRulesProtected -and $rules.Count -eq 1 -and -not $rules[0].IsInherited -and $rules[0].AccessControlType -eq \x27Allow\x27 -and $sid -eq $me) { \x27owner-only\x27 } else { \x27open\x27 }'])
 # scp before OpenSSH 9.0 hands the remote path to a shell, so only plain characters are spilled to.
 SAFE_PATH = re.compile(r'^[A-Za-z0-9_./:\\-]+$')
 def powershell(script, path):
