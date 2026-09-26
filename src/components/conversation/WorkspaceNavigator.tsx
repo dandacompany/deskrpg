@@ -92,19 +92,23 @@ function npcDetail(npc: NavigatorNpc, t: ReturnType<typeof useT>): string {
     ? t("game.roster.seatNumber", { number: npc.seatNumber })
     : t("game.roster.standing");
   if (!npc.placed || npc.motion === "unplaced") return prefix;
-  if (npc.motion === "waiting")
-    return `${prefix} · ${t(
-      npc.calledByViewer ? "workspace.status.waitingForMe" : "workspace.status.waitingForOther",
-    )}`;
-  if (npc.motion === "moving") return `${prefix} · ${t("workspace.status.moving")}`;
+  const motion =
+    npc.motion === "waiting"
+      ? t(npc.calledByViewer ? "workspace.status.waitingForMe" : "workspace.status.waitingForOther")
+      : npc.motion === "moving"
+        ? t("workspace.status.moving")
+        : null;
   if (npc.states) {
+    // Walking over or waiting for a call is where the employee is, not what they are in — the states still
+    // follow it, or a blocked or unknown employee would read as simply "moving".
     const labels = npc.states.map((state) => stateLabel(npc, state, t));
-    return labels.length > 0
-      ? [prefix, ...labels].join(" · ")
-      : npc.role
-        ? `${prefix} · ${npc.role} · ${t("workspace.status.available")}`
-        : `${prefix} · ${t("workspace.status.available")}`;
+    if (motion || labels.length > 0)
+      return [prefix, ...(motion ? [motion] : []), ...labels].join(" · ");
+    return npc.role
+      ? `${prefix} · ${npc.role} · ${t("workspace.status.available")}`
+      : `${prefix} · ${t("workspace.status.available")}`;
   }
+  if (motion) return `${prefix} · ${motion}`;
   if (npc.response === "queued") return `${prefix} · ${t("workspace.status.queued")}`;
   if (npc.response === "thinking") return `${prefix} · ${t("workspace.status.thinking")}`;
   if (npc.response === "streaming") return `${prefix} · ${t("workspace.status.streaming")}`;
