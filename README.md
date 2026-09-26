@@ -24,7 +24,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.926.2` — Security fix: only a gateway's owner can change or delete its employees (a user the gateway was shared with could edit their token or name, or delete them from every office). Also: sharing and diagnostics get their own pages, the kanban metrics count rework, meeting minutes use your Hermes timezone, the Needs you inbox shows one row per failing cron, and `deskrpg db backups` lists and prunes old migration backup tables. Requires plugin 0.20.0 and the policy-aware Hermes core described below.
+- Version: `v2026.926.3` — Employees can ask you a question with choices in 1:1 chat and wait for your answer, also from Needs you. The office shows each employee's real state — awaiting approval, stuck after repeated failures, unreachable gateway — on name tags and in poses. Results show how they were made and which pages and files the session read. Cards list their runs as attempts with a cause. Import a profile that already exists in Hermes. Only a gateway's owner changes an employee's persona or model. Requires plugin 0.24.4 and the policy-aware Hermes core described below.
 
 ## What You Can Do
 
