@@ -76,6 +76,7 @@ describe("HermesAdapter", () => {
         command: "rm -r /tmp/x",
         description: "",
         kind: "command",
+        patternKey: "recursive delete",
         choices: ["once", "session", "deny"],
       },
     ]);
