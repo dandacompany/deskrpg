@@ -1929,6 +1929,26 @@ test("mixed approval: the legacy swarm capability does not enable the new creati
   }
 });
 
+test("the swarm button comes back with the policy-aware swarm contract", async () => {
+  const f = await mount((url) =>
+    url.includes("/automation/status")
+      ? json(
+          status({
+            capabilities: ["kanban", "swarm", "kanban_review_policy_v1", "swarm_review_policy"],
+          }),
+        )
+      : json(board()),
+  );
+  try {
+    assert.equal(
+      [...f.host.querySelectorAll("button")].some((b) => b.textContent?.trim() === "스웜"),
+      true,
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("a protected card's human-judgment screen shows the approval target's result instead of the AI review opinion", async () => {
   const f = await mount(
     (url) => {
