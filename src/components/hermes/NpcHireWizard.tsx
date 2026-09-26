@@ -505,11 +505,13 @@ export default function NpcHireWizard({
     }
   }, [applyIdentityPayload, profileBase, t]);
 
+  // A failed load leaves no payload and nothing loading — without the error guard this effect
+  // fires again at once and hammers the gateway (the config and catalog loads guard the same way).
   useEffect(() => {
-    if (current === "identity" && !identityPayload && !identityLoading) {
+    if (current === "identity" && !identityPayload && !identityLoading && !identityError) {
       void loadIdentity();
     }
-  }, [current, identityPayload, identityLoading, loadIdentity]);
+  }, [current, identityPayload, identityLoading, identityError, loadIdentity]);
 
   // I-1: a **dedicated** refetch for when `revision_conflict`/`revision_mismatch` is hit
   // (defect 8 — the code the plugin actually emits is the latter). `loadIdentity` isn't
@@ -1031,6 +1033,18 @@ export default function NpcHireWizard({
         <div className="space-y-3">
           {identityLoading ? (
             <p className="text-sm text-text-muted">{t("hermes.wizard.identity.loading")}</p>
+          ) : identityError && !identityPayload ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm text-danger">{identityError}</p>
+              <button
+                type="button"
+                data-identity-retry
+                onClick={() => void loadIdentity()}
+                className="rounded bg-surface-raised px-3 py-1.5 text-xs font-semibold text-text hover:bg-surface-raised/80"
+              >
+                {t("common.retry")}
+              </button>
+            </div>
           ) : identityError ? (
             <p className="text-sm text-danger">{identityError}</p>
           ) : !identityPayload ? (
