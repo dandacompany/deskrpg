@@ -1,5 +1,5 @@
 import { detailSurfaces } from "./surface-detail";
-import { idleMotion } from "./idle-motion";
+import { idleMotion, isHeldPose, statePose } from "./idle-motion";
 import * as T from "three";
 import { round, sphere } from "./primitives";
 import type { OfficeLook } from "./office-looks";
@@ -368,25 +368,35 @@ export function createOfficeActor(id: string, look: OfficeLook, index: number) {
     update(t: number, walking: boolean, phase: ActorPhase, seated: boolean) {
       const sit = seated && !walking;
       const motion = idleMotion(t, index, walking, phase);
+      const pose = statePose(phase);
       head.rotation.y = motion.yaw;
       rig.position.y = sit
         ? -0.12
-        : Math.sin(t * (look.stance === "bright" ? 2.2 : 1.7) + index) * 0.008;
+        : isHeldPose(phase)
+          ? 0
+          : Math.sin(t * (look.stance === "bright" ? 2.2 : 1.7) + index) * 0.008;
       torso.rotation.z = phase === "thinking" ? Math.sin(t * 1.4) * 0.025 : motion.sway;
-      head.rotation.x = phase === "thinking" ? 0.1 : motion.nod;
-      head.rotation.z = look.stance === "relaxed" ? 0.04 : Math.sin(t * 1.4 + index) * 0.015;
+      head.rotation.x = (phase === "thinking" ? 0.1 : motion.nod) + pose.headDown;
+      head.rotation.z =
+        look.stance === "relaxed"
+          ? 0.04
+          : isHeldPose(phase)
+            ? 0
+            : Math.sin(t * 1.4 + index) * 0.015;
       arms.forEach((a, i) => {
         a.rotation.x = walking
           ? Math.sin(t * 8 + i * Math.PI) * 0.4
-          : phase === "thinking" && i === 0
-            ? -1.8
-            : phase === "streaming"
-              ? -0.4 + Math.sin(t * 4 + i) * 0.2
-              : sit
-                ? -0.6
-                : i === 1
-                  ? -motion.hand * 0.75
-                  : 0;
+          : pose.raiseArm && i === 0
+            ? pose.raiseArm
+            : phase === "thinking" && i === 0
+              ? -1.8
+              : phase === "streaming"
+                ? -0.4 + Math.sin(t * 4 + i) * 0.2
+                : sit
+                  ? -0.6
+                  : i === 1
+                    ? -motion.hand * 0.75
+                    : 0;
         a.rotation.z = walking
           ? 0
           : (i === 0 ? -1 : 1) * (look.stance === "relaxed" ? 0.09 : 0.035);

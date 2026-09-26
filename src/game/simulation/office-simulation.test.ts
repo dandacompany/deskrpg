@@ -732,3 +732,26 @@ test("the meeting screen can ask how many seats and standing spots the meeting r
     sim.dispose();
   }
 });
+
+test("npc:states replaces the state lists and labels the snapshot carries", async () => {
+  setPendingChannelData({ channelId: "ch", mapData: legacyMap });
+  const sim = new OfficeSimulation() as Runtime;
+  try {
+    await withFetch({ npcs: [] }, async () => {
+      sim["boot"](pendingChannelData!);
+      await settle();
+    });
+    EventBus.emit("npc:states", {
+      states: { n1: ["awaiting_approval", "working"] },
+      labels: { n1: "Awaiting approval" },
+    });
+    assert.deepEqual(sim["npcStateLists"], { n1: ["awaiting_approval", "working"] });
+    assert.deepEqual(sim["npcStateLabels"], { n1: "Awaiting approval" });
+
+    EventBus.emit("npc:states", { states: {} });
+    assert.deepEqual(sim["npcStateLists"], {});
+    assert.deepEqual(sim["npcStateLabels"], {});
+  } finally {
+    sim.dispose();
+  }
+});

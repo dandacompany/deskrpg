@@ -173,6 +173,7 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
           title: task.title,
           at: ms === null ? null : new Date(ms).toISOString(),
           failures: task.consecutive_failures,
+          assignee: task.assignee ?? null,
         });
       }
   }

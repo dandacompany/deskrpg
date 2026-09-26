@@ -234,3 +234,43 @@ test("no conversation history means no DM row", async () => {
   );
   assert.deepEqual(rows, []);
 });
+
+test("an employee row lists every state that applies, and an idle one still reads available", async () => {
+  const busy: NavigatorNpc = {
+    id: "iris",
+    name: "아이리스",
+    active: true,
+    placed: true,
+    motion: "idle",
+    calledByViewer: false,
+    seatNumber: 3,
+    states: ["awaiting_approval", "stopped_after_failures", "working"],
+    workingCount: 2,
+  };
+  const idle: NavigatorNpc = {
+    id: "noah",
+    name: "노아",
+    active: true,
+    placed: true,
+    motion: "idle",
+    calledByViewer: false,
+    seatNumber: 4,
+    states: [],
+  };
+  const unknown: NavigatorNpc = {
+    id: "mina",
+    name: "미나",
+    active: true,
+    placed: true,
+    motion: "idle",
+    calledByViewer: false,
+    seatNumber: 5,
+    states: ["unknown"],
+  };
+
+  const { element } = await mount(true, [busy, idle, unknown]);
+  const text = element.textContent ?? "";
+  assert.match(text, /아이리스[\s\S]*3번 자리 · 승인 대기 · 반복 실패로 멈춤 · 작업 중 2/);
+  assert.match(text, /노아[\s\S]*4번 자리 · 대화 가능/);
+  assert.match(text, /미나[\s\S]*5번 자리 · 상태 확인 불가/);
+});

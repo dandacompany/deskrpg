@@ -377,3 +377,19 @@ test("a DM summons the employee on send, not on open", () => {
     "DM 을 보낼 때 직원을 호출하지 않습니다 — 목록에서 연 대화는 아무도 대답하지 않습니다.",
   );
 });
+
+// D08: the poller's reachability verdict is one more channel event, kept out of the automation sink on purpose —
+// it is not a Hermes event but the poller's own observation. One name, sent on change and once on join.
+test("gateway:health is the only event the health module sends, and player:join sends its snapshot", () => {
+  const health = readFileSync(path.join(repoRoot, "src/server/gateway-health.ts"), "utf8");
+  assert.deepEqual(
+    [...new Set([...health.matchAll(/"([a-z]+:[a-z-]+)"/g)].map((m) => m[1]))],
+    ["gateway:health"],
+  );
+  const src = readFileSync(path.join(repoRoot, "src/server/socket-handlers.ts"), "utf8");
+  const start = src.indexOf('"player:join"');
+  const end = src.indexOf('"player:move"');
+  assert.match(src.slice(start, end), /getGatewayHealth\(data\.mapId\)/);
+  const poller = readFileSync(path.join(repoRoot, "src/server/automation-poller.ts"), "utf8");
+  assert.match(poller, /recordGatewayHealth\(channelId, healthFromPollOutcome\(outcome\)/);
+});

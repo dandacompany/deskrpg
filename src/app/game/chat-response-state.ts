@@ -177,6 +177,23 @@ export function upsertLegacyNpcChunk(
 export { isActive as isActiveChatResponse };
 
 /** Latest record per request, then strongest active phase across rooms and DM. */
+/**
+ * Employees whose **latest** response failed. A new request replaces it as the latest, so the mark clears the
+ * moment the person tries again — no separate acknowledgement to keep in sync.
+ */
+export function npcResponseFailures(state: ChatResponseState): Set<string> {
+  const latestByNpc = new Map<string, ChatResponse>();
+  for (const responses of [...Object.values(state.rooms), ...Object.values(state.npcs)])
+    for (const response of responses) {
+      const prior = latestByNpc.get(response.npcId);
+      if (!prior || response.updatedAt >= prior.updatedAt)
+        latestByNpc.set(response.npcId, response);
+    }
+  const failed = new Set<string>();
+  for (const [npcId, response] of latestByNpc) if (response.status === "failed") failed.add(npcId);
+  return failed;
+}
+
 export function npcPresentationPhases(state: ChatResponseState) {
   const latest = new Map<string, ChatResponse>();
   for (const responses of [...Object.values(state.rooms), ...Object.values(state.npcs)])

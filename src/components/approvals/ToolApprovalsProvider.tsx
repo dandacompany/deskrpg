@@ -2,6 +2,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 import {
+  pendingApprovalsByNpc,
   pendingApprovalsByRoom,
   useToolApprovals,
   type ToolApprovalSocket,
@@ -39,6 +40,17 @@ const NO_COUNTS: Record<string, number> = {};
 /**
  * Pending approvals per chat room, for the navigator's room badges. Empty without a provider.
  */
+/** Pending tool approvals per NPC across DMs, meetings and rooms — for the office state map (D08). */
+export function useNpcApprovalCounts(): Record<string, number> {
+  const shared = useContext(ToolApprovalsContext);
+  const cards = shared?.cards;
+  const waiting = shared?.waiting;
+  return useMemo(
+    () => (cards && waiting ? pendingApprovalsByNpc(cards, waiting) : NO_COUNTS),
+    [cards, waiting],
+  );
+}
+
 export function useRoomApprovalCounts(): Record<string, number> {
   const shared = useContext(ToolApprovalsContext);
   const cards = shared?.cards;

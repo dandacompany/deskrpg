@@ -53,6 +53,8 @@ type AttentionRowBase = {
    * failed runs and only runs again once someone fixes the cause and unblocks it.
    */
   failures?: number;
+  /** On a card row: the Hermes profile the card is assigned to, when it has one. */
+  assignee?: string;
 };
 
 export type AttentionRow =
@@ -68,6 +70,8 @@ export type AttentionInboxInput = {
     at?: string | null;
     /** `consecutive_failures` from the board (plugin 0.21.0+); absent on older plugins. */
     failures?: number;
+    /** The card's assignee (Hermes profile). */
+    assignee?: string | null;
   }[];
   approvals: readonly {
     id: string;
@@ -116,6 +120,7 @@ export function buildAttentionInbox(input: AttentionInboxInput): AttentionRow[] 
         requestedBy: null,
         count: 1,
         ...(card.failures && card.failures > 0 ? { failures: card.failures } : {}),
+        ...(card.assignee ? { assignee: card.assignee } : {}),
       });
     else if (card.status === "review")
       rows.push({
@@ -125,6 +130,7 @@ export function buildAttentionInbox(input: AttentionInboxInput): AttentionRow[] 
         at: card.at ?? null,
         requestedBy: null,
         count: 1,
+        ...(card.assignee ? { assignee: card.assignee } : {}),
       });
   }
   for (const cron of input.cronFailures)

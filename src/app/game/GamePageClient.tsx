@@ -98,6 +98,9 @@ import ConversationPane from "@/components/conversation/ConversationPane";
 import ConversationWorkspace from "@/components/conversation/ConversationWorkspace";
 import MeetingWorkspace from "@/components/conversation/MeetingWorkspace";
 import { ToolApprovalsProvider } from "@/components/approvals/ToolApprovalsProvider";
+import NpcStatesBridge, { type NpcStatesById } from "./NpcStatesBridge";
+import { useAttentionRows } from "./use-attention-rows";
+import type { NpcConnection } from "@/lib/npc-state-map";
 import { useMeetingEntry } from "@/components/meeting-room/use-meeting-entry";
 import "@/components/meeting-room/meeting-mode.css";
 import { buildDmThreadEntries, needsCallBeforeDmSend, type DmThread } from "@/lib/dm-threads";
@@ -154,6 +157,7 @@ import { resolveNpcResponseChunk, type NpcResponsePayload } from "@/lib/npc-resp
 import type { ChatResponse } from "@/lib/chat-response";
 import {
   npcPresentationPhases,
+  npcResponseFailures,
   initialChatResponseState,
   reconcileNpcResponseMessages,
   reduceChatResponseState,
@@ -336,6 +340,11 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const [npcArtifactChips, setNpcArtifactChips] = useState<ArtifactChip[]>([]);
   // The map's "working" state (R27). Holds only the socket's `npc:working` — no optimistic updates (R26).
   const [npcWorking, setNpcWorking] = useState<NpcWorkingMap>(EMPTY_NPC_WORKING);
+  // D08: whether the channel's gateway answered the poller's last tick (`gateway:health`), and every employee's
+  // state list computed inside the approvals provider (`NpcStatesBridge`).
+  const [gatewayHealth, setGatewayHealth] = useState<NpcConnection>(null);
+  const [npcStatesById, setNpcStatesById] = useState<NpcStatesById>({});
+  const socketEverConnected = useRef(false);
   const meetingEntry = useMeetingEntry(socket, channelId);
   const mode = ["joining", "joined"].includes(meetingEntry.state.status) ? "meeting" : "office";
   // Map rendering needs only placed NPC identity and appearance.
@@ -674,6 +683,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       setSocketConnected(socketInstance.connected);
 
       socketInstance.on("connect", () => {
+        socketEverConnected.current = true;
         setSocketConnected(true);
         setIsNpcStreaming(false);
         if (channelId) {
@@ -2183,6 +2193,26 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
    * `npc:working` (R27) — arrives only when the value changes, plus one snapshot on connect. Cleared when the channel
    * changes: the snapshot arrives again for the new channel, so the old channel's display does not linger.
    */
+  // `gateway:health` — sent on change and once on join. Cleared per channel: an old channel's verdict must not linger.
+  useEffect(() => {
+    setGatewayHealth(null);
+    if (!socket || !channelId) return;
+    const onHealth = (raw: unknown) => {
+      const state = (raw as { state?: unknown } | null)?.state;
+      if (
+        state === "ok" ||
+        state === "unreachable" ||
+        state === "unauthorized" ||
+        state === "unknown"
+      )
+        setGatewayHealth(state);
+    };
+    socket.on("gateway:health", onHealth);
+    return () => {
+      socket.off("gateway:health", onHealth);
+    };
+  }, [socket, channelId]);
+
   useEffect(() => {
     setNpcWorking(EMPTY_NPC_WORKING);
     if (!socket || !channelId) return;
@@ -2235,6 +2265,15 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         acknowledged: reportAck,
       }),
     [roomState.rooms, roomState.messages, rosterNpcs, reportAck],
+  );
+  // D08 inputs that only this page knows: who waits on a person (inbox rows), whose last reply failed, who is
+  // walking over to report.
+  const attentionRows = useAttentionRows(channelId, socket);
+  const npcResponseFailed = useMemo(() => npcResponseFailures(chatResponses), [chatResponses]);
+  const npcReporting = useMemo(() => new Set(reportQueue.map((item) => item.npcId)), [reportQueue]);
+  const stateRoster = useMemo(
+    () => rosterNpcs.map((npc) => ({ id: npc.id, profileName: npc.profile?.profileName ?? null })),
+    [rosterNpcs],
   );
 
   // Room notice links (R29, R30) → open the matching modal at that item.
@@ -2722,6 +2761,11 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   );
 
   const npcResponsePhases = npcPresentationPhases(chatResponses);
+  const npcWorkingCounts = workingNpcCounts(npcWorking);
+  // While this screen's own socket is down nothing about the office is known; before the first connect nothing is
+  // claimed either way.
+  const npcConnection: NpcConnection =
+    socketEverConnected.current && !socketConnected ? "socket_down" : gatewayHealth;
   // NPC candidates for the cron screen — only active ones from the roster, names are profile display names (the roster already has them).
   const cronNpcs = rosterNpcs
     .filter((npc) => npc.active)
@@ -2748,6 +2792,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       motion: navigatorMotion({ active: npc.active, placed: npc.placed, phase: motion.phase }),
       response: npcResponsePhases[npc.id],
       calledByViewer: motion.caller === socket?.id,
+      states: npcStatesById[npc.id],
+      workingCount: npcWorkingCounts[npc.id],
     };
   });
 
@@ -3957,6 +4003,16 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           onLeave={meetingEntry.cancel}
         />
       )}
+      <NpcStatesBridge
+        npcs={stateRoster}
+        connection={npcConnection}
+        attentionRows={attentionRows}
+        workingCounts={npcWorkingCounts}
+        responding={npcResponsePhases}
+        responseFailed={npcResponseFailed}
+        reporting={npcReporting}
+        onStates={setNpcStatesById}
+      />
     </div>
   );
   // Approval cards outlive whichever chat is shown — see ToolApprovalsProvider.

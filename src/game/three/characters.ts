@@ -1,7 +1,7 @@
 import { createGltfActor } from "./gltf-actor";
 import type { DistanceWalkOptions, DistanceWalkFrame } from "./commute-walk";
 import { officeLookAssetUrl } from "./office-look-assets";
-import { idleMotion } from "./idle-motion";
+import { idleMotion, isHeldPose, statePose } from "./idle-motion";
 import type { ActorGait } from "./gait";
 import * as T from "three";
 import { round, sphere } from "./primitives";
@@ -9,7 +9,18 @@ export { round, sphere, cylinder } from "./primitives";
 import type { OfficeLook } from "./office-looks";
 const mat = (color: string) => new T.MeshStandardMaterial({ color, roughness: 0.8 });
 export type ActorPhase =
-  "idle" | "walking" | "seated" | "queued" | "thinking" | "streaming" | "done" | "attention";
+  | "idle"
+  | "walking"
+  | "seated"
+  | "queued"
+  | "thinking"
+  | "streaming"
+  | "done"
+  | "attention"
+  // D08 state poses: waiting on a person (hand up), stopped after failures (head down), unknown (still).
+  | "awaiting"
+  | "failing"
+  | "still";
 export function createActor(
   id: string,
   color: string,
@@ -103,29 +114,33 @@ export function createActor(
       // When running, speed up the step cycle to match the speed — left as is, the feet slide.
       const cycle = t * 9 * (run ? pace!.cadence : 1);
       const motion = idleMotion(t, index, walking, phase);
+      const pose = statePose(phase);
       head.rotation.y = motion.yaw;
       rig.position.y = sit
         ? 0.04
         : walking
           ? -0.14 + Math.abs(Math.sin(cycle)) * (run ? 0.07 : 0.035)
-          : -0.14 + Math.sin(t * 2.3 + index) * 0.012;
+          : -0.14 + (isHeldPose(phase) ? 0 : Math.sin(t * 2.3 + index) * 0.012);
       torso.rotation.z = phase === "thinking" ? Math.sin(t * 1.4) * 0.035 : motion.sway;
       // The whole body leans from the ankles — head, arms and legs are siblings of the torso, so leaning only the torso is wrong.
       rig.rotation.x = run ? 0.18 : 0;
-      head.rotation.x = phase === "thinking" ? 0.12 : motion.nod;
-      head.rotation.z = phase === "thinking" ? 0.12 : Math.sin(t * 1.8 + index) * 0.025;
+      head.rotation.x = (phase === "thinking" ? 0.12 : motion.nod) + pose.headDown;
+      head.rotation.z =
+        phase === "thinking" ? 0.12 : isHeldPose(phase) ? 0 : Math.sin(t * 1.8 + index) * 0.025;
       arms.forEach((a, i) => {
         a.rotation.x = walking
           ? Math.sin(cycle + i * Math.PI) * (run ? 0.9 : 0.55)
-          : phase === "thinking" && i === 0
-            ? -1.7
-            : phase === "streaming"
-              ? -0.45 + Math.sin(t * 4 + i) * 0.2
-              : sit
-                ? -0.5
-                : i === 1
-                  ? -motion.hand * 0.75
-                  : 0;
+          : pose.raiseArm && i === 0
+            ? pose.raiseArm
+            : phase === "thinking" && i === 0
+              ? -1.7
+              : phase === "streaming"
+                ? -0.45 + Math.sin(t * 4 + i) * 0.2
+                : sit
+                  ? -0.5
+                  : i === 1
+                    ? -motion.hand * 0.75
+                    : 0;
         a.rotation.z = phase === "streaming" ? Math.sin(t * 3 + i) * 0.15 : 0;
       });
       legs.forEach(

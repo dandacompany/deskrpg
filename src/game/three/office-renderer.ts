@@ -56,6 +56,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createActor, round, sphere, cylinder } from "./characters";
 import {
   actorIndicator,
+  actorPosePhase,
+  actorStateUnknown,
   actorPresentationPhase,
   speechActorId,
   pixelToWorld,
@@ -91,6 +93,10 @@ function rendererText(key: keyof typeof RENDERER_TEXT, lang: string): string {
 
 /** Glyphs next to name tags — three conversation responses + working (R27). `actorIndicator` decides priority. */
 const INDICATOR_GLYPH: Record<NonNullable<ReturnType<typeof actorIndicator>> | "none", string> = {
+  unknown: "❔",
+  awaiting_approval: "✋",
+  stopped_after_failures: "⚠️",
+  response_failed: "❗",
   queued: "⏳",
   thinking: "💭",
   streaming: "💬",
@@ -1584,14 +1590,7 @@ export class OfficeRenderer {
           actor.walking && !seat,
         );
         rendered.previous = { x: p.x, z: p.z, time, direction: actor.direction };
-        model.update(
-          time / 1000,
-          actor.walking,
-          actorPresentationPhase(actor),
-          !!seat,
-          undefined,
-          pace,
-        );
+        model.update(time / 1000, actor.walking, actorPosePhase(actor), !!seat, undefined, pace);
         label.dataset.running = String(pace.running);
         label.dataset.assetStatus = model.root.userData.assetStatus ?? "procedural";
         label.dataset.modelStyle = model.root.userData.modelStyle ?? "legacy";
@@ -1604,6 +1603,11 @@ export class OfficeRenderer {
         }
         const phase = actorPresentationPhase(actor);
         label.dataset.phase = phase;
+        // D08: the tag carries the leading state; an unknown one is dimmed via CSS.
+        label.dataset.state = actor.states?.[0] ?? "";
+        label.dataset.unknown = String(actorStateUnknown(actor));
+        if (actor.stateLabel) bubble.title = actor.stateLabel;
+        else bubble.removeAttribute("title");
         label.dataset.hovered = String(actor.id === this.hoveredActorId);
         if (actor.id === this.hoveredActorId || phase === "attention")
           model.ring.material.opacity = 0.65;

@@ -1,6 +1,6 @@
 import * as T from "three";
 import type { ActorPhase } from "./characters";
-import { idleMotion } from "./idle-motion";
+import { idleMotion, statePose } from "./idle-motion";
 
 type Joint = { bone: T.Object3D; base: T.Quaternion };
 
@@ -49,9 +49,14 @@ export function createGltfGestures(model: T.Object3D, seed: number) {
         return;
       }
       const motion = idleMotion(time, seed, false, phase);
+      const pose = statePose(phase);
       rotate(head, 0, 1, motion.yaw * 0.7);
-      rotate(head, 1, 0, motion.nod * 0.7 + (phase === "thinking" ? 0.06 : 0));
-      if (phase === "thinking") {
+      rotate(head, 1, 0, motion.nod * 0.7 + (phase === "thinking" ? 0.06 : 0) + pose.headDown);
+      if (pose.raiseArm) {
+        // Hand up: the upper arm forward and up, the forearm straightened a little so the hand is above the head.
+        rotate(right, 1, 0, pose.raiseArm);
+        rotate(forearm, 1, 0, -0.3);
+      } else if (phase === "thinking") {
         rotate(right, 1, 0, -0.2);
         rotate(forearm, 1, 0, -0.25);
       } else if (phase === "streaming") {

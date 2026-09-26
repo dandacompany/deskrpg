@@ -4,6 +4,7 @@ import test from "node:test";
 import type { ChatResponse } from "@/lib/chat-response";
 import {
   npcPresentationPhases,
+  npcResponseFailures,
   initialChatResponseState,
   reconcileNpcResponseMessages,
   reduceChatResponseState,
@@ -260,4 +261,23 @@ test("map phases merge concurrent requests and discard stale duplicate active re
     ),
     {},
   );
+});
+
+test("an employee is marked failed only while their latest response is the failed one", () => {
+  let state = initialChatResponseState;
+  const put = (over: Partial<ChatResponse> & Pick<ChatResponse, "requestId">) => {
+    state = reduceChatResponseState(state, {
+      type: "state",
+      scope: "npc",
+      scopeId: over.npcId ?? "npc-1",
+      response: response(over),
+    });
+  };
+  put({ requestId: "r1", status: "failed", updatedAt: 1 });
+  put({ requestId: "r2", npcId: "npc-2", status: "complete", updatedAt: 1 });
+  assert.deepEqual([...npcResponseFailures(state)], ["npc-1"]);
+
+  // Trying again replaces the failure as the latest response.
+  put({ requestId: "r3", status: "queued", updatedAt: 2 });
+  assert.deepEqual([...npcResponseFailures(state)], []);
 });
