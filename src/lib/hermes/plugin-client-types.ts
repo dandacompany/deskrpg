@@ -6,6 +6,7 @@ import type {
   ArtifactPage,
   ArtifactVersion,
   WorkerPluginCreateResult,
+  SessionSources,
 } from "./deskrpg-plugin-types";
 
 export type PluginResponse<T> =
@@ -805,4 +806,10 @@ export type ProfilePluginClient = {
   mcp: McpAdminApi;
   /** 0.18.0 `profile_approval_policy` — with an old plugin the call comes back 404. */
   approvals: ApprovalPolicyApi;
+  /** `session_sources` — with an old plugin the call comes back 404 (not `session_not_found`). */
+  sessions: SessionApi;
+};
+
+export type SessionApi = {
+  sources(sessionId: string): Promise<PluginResponse<SessionSources>>;
 };

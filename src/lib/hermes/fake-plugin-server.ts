@@ -39,6 +39,7 @@ import type {
   OrchestrationSettings,
   PluginEvent,
   PluginInfo,
+  SessionSources,
   WorkerLog,
 } from "./deskrpg-plugin-types";
 import { KANBAN_TASK_STATUSES } from "./deskrpg-plugin-types";
@@ -132,6 +133,9 @@ export type FakePluginServer = {
   mcp(profile: string): FakeMcpState;
   /** That profile's 0.18.0 approval policy state (`fake-approval-policy-routes.ts`). Creates a default if absent. */
   approvalPolicy(profile: string): FakeApprovalPolicyState;
+  /** What a profile's session read (`session_sources`). `null` removes it — the route then answers
+   * 404 `session_not_found`, like a session Hermes has deleted. */
+  setSessionSources(profile: string, sessionId: string, body: SessionSources | null): void;
 };
 
 // ---------------------------------------------------------------------------
@@ -248,6 +252,7 @@ export async function startFakePluginServer(
   let skillStates = new Map<string, FakeSkillState>();
   let mcpStates = new Map<string, FakeMcpState>();
   let approvalPolicyStates = new Map<string, FakeApprovalPolicyState>();
+  let sessionSources = new Map<string, SessionSources>();
   let seq = 0;
 
   const nextId = (prefix: string) => `${prefix}_${(seq += 1).toString(36).padStart(4, "0")}`;
@@ -266,6 +271,7 @@ export async function startFakePluginServer(
     skillStates = new Map();
     mcpStates = new Map();
     approvalPolicyStates = new Map();
+    sessionSources = new Map();
     seq = 0;
   }
 
@@ -1768,6 +1774,12 @@ export async function startFakePluginServer(
     if (mcpReply) return mcpReply;
     const policyReply = routeApprovalPolicy(approvalPolicyFor(profile), req);
     if (policyReply) return policyReply;
+    const sourcesMatch = /^\/deskrpg\/sessions\/([^/]+)\/sources$/.exec(req.pathname);
+    if (sourcesMatch && req.method === "GET" && info.capabilities.includes("session_sources")) {
+      const body = sessionSources.get(`${profile}|${decodeURIComponent(sourcesMatch[1])}`);
+      if (!body) throw new HttpError(404, { error: "session_not_found" });
+      return { status: 200, body };
+    }
     const { method, pathname, params, json } = req;
     const state = cronFor(profile);
     const rest = pathname.replace(/^\/deskrpg\/cron/, "");
@@ -1960,6 +1972,10 @@ export async function startFakePluginServer(
     skills: skillsFor,
     mcp: mcpFor,
     approvalPolicy: approvalPolicyFor,
+    setSessionSources: (profile, sessionId, body) => {
+      if (body) sessionSources.set(`${profile}|${sessionId}`, body);
+      else sessionSources.delete(`${profile}|${sessionId}`);
+    },
     seedCardProposal: (proposalId) => {
       cardProposals.set(proposalId, {
         resolvedAt: null,
