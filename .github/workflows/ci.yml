@@ -161,6 +161,21 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # The image must run its own CLI, not just the server: create-user and reset-password require
+      # modules (bcryptjs) that Next's standalone tracing does not place in node_modules. Load the same
+      # build (cache hit) and run both commands against a real SQLite runtime home.
+      - name: 스모크용 이미지 적재
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: deskrpg-ci:smoke
+          cache-from: type=gha
+
+      - name: 컨테이너 안 CLI 스모크 (create-user · reset-password)
+        run: bash scripts/docker-cli-smoke.sh deskrpg-ci:smoke
+
       - name: 운영 후보 익명 pull 확인
         if: github.event_name == 'push'
         run: |
