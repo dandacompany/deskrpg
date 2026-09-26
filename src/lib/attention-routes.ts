@@ -20,6 +20,15 @@ import { countNeedsAttention } from "@/lib/needs-attention";
 import { taskTimeMs } from "@/lib/plugin-time";
 import { resolveKanbanChannelContext } from "@/lib/kanban-access";
 
+/**
+ * A row time as ISO 8601. PG hands back a `Date` (and `String(Date)` is "Sun Sep 20 2026 …"),
+ * SQLite the ISO text it stored; both leave here in the same shape the card rows use.
+ */
+export function attentionTime(value: unknown): string {
+  const ms = value instanceof Date ? value.getTime() : Date.parse(String(value));
+  return Number.isNaN(ms) ? String(value) : new Date(ms).toISOString();
+}
+
 export type ChannelParams = { params: Promise<{ id: string }> };
 
 /**
@@ -58,7 +67,7 @@ async function recentCronFailures(channelId: string) {
       messageId: row.id,
       jobId: notice.jobId,
       jobName: notice.jobName,
-      createdAt: String(row.createdAt),
+      createdAt: attentionTime(row.createdAt),
     });
   }
   return out;
@@ -96,7 +105,7 @@ async function recentBlockedRuns(
     if (notice.resolved) continue;
     out.push({
       title: notice.jobName ?? notice.taskTitle ?? notice.jobId ?? notice.taskId ?? notice.tool,
-      createdAt: String(row.createdAt),
+      createdAt: attentionTime(row.createdAt),
       detail: {
         messageId: row.id,
         npcId: notice.npcId,
@@ -179,7 +188,7 @@ export async function getAttentionInbox(req: NextRequest, channelId: string) {
       id: a.id,
       title: a.title,
       requestedBy: a.requestedBy,
-      createdAt: String(a.createdAt),
+      createdAt: attentionTime(a.createdAt),
       taskIds: targets.get(a.id) ?? [],
     })),
     cronFailures: await recentCronFailures(channelId),
