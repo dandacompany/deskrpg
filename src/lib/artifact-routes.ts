@@ -24,6 +24,7 @@ import { compareSemver } from "@/lib/hermes/plugin-capability";
 import { getUserId } from "@/lib/internal-rpc";
 import { taskTimeMs } from "@/lib/plugin-time";
 import { readSessionSources } from "@/lib/session-sources";
+import { artifactSourcesUntilMs } from "@/lib/session-sources-window";
 import { and, eq } from "drizzle-orm";
 
 import { db, hermesProfiles } from "@/db";
@@ -175,6 +176,8 @@ export async function getArtifactSources(
     capabilities: ctx.capabilities,
     profileName: artifact.profile,
     sessionId: artifact.session_id,
+    // A DM session can go on to read more after this artifact was saved; that is not its source.
+    window: { toMs: artifactSourcesUntilMs(loaded.detail) },
   });
   return read.ok ? NextResponse.json(read.view) : read.response;
 }

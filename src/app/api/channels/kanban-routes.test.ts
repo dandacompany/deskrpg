@@ -1853,9 +1853,17 @@ test("a run's sources are read from its worker session with that profile's key",
   assert.deepEqual((await sourcesOf(runId)).body, { status: "none" });
 
   server.setRunMetadata(seed.boardSlug, taskId, runId, { worker_session_id: "sess_w1" });
+  const startedSec = Number(detail.runs[0].started_at);
+  const iso = (offsetSec: number) =>
+    new Date((startedSec + offsetSec) * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
   server.setSessionSources("sophie", "sess_w1", {
     session_id: "sess_w1",
-    sources: [{ kind: "file", ref: "brief.md", title: null, via: "read_file", at: null }],
+    sources: [
+      { kind: "file", ref: "brief.md", title: null, via: "read_file", at: null },
+      // Read in an earlier run of the same session — not this run's source.
+      { kind: "file", ref: "earlier.md", title: null, via: "read_file", at: iso(-600) },
+      { kind: "file", ref: "during.md", title: null, via: "read_file", at: iso(5) },
+    ],
     outside_workdir_files: 0,
     truncated: false,
   });
@@ -1864,7 +1872,7 @@ test("a run's sources are read from its worker session with that profile's key",
   assert.equal(ok.body.status, "ok");
   assert.deepEqual(
     ok.body.sources.map((s: { ref: string }) => s.ref),
-    ["brief.md"],
+    ["brief.md", "during.md"],
   );
   assert.equal(server.lastRequest()!.path, "/p/sophie/deskrpg/sessions/sess_w1/sources");
 

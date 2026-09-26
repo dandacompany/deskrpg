@@ -48,6 +48,7 @@ import { pluginUpgradeRequired } from "@/lib/hermes/plugin-errors";
 import { rawFailureResponse, streamProxyResponse } from "@/lib/hermes/stream-proxy";
 import { getUserId } from "@/lib/internal-rpc";
 import { readSessionSources } from "@/lib/session-sources";
+import { taskTimeMs } from "@/lib/plugin-time";
 import {
   AUTOMATION_MIN_PLUGIN_VERSION,
   attachmentsUnsupportedResponse,
@@ -711,6 +712,8 @@ export async function getRunSources(
     capabilities: ctx.info.capabilities,
     profileName: run.profile,
     sessionId: typeof sessionId === "string" ? sessionId : null,
+    // Only what was read while this run was going (an open run has no end yet).
+    window: { fromMs: taskTimeMs(run.started_at), toMs: taskTimeMs(run.ended_at) },
   });
   return read.ok ? NextResponse.json(read.view) : read.response;
 }
