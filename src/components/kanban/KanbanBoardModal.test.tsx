@@ -1354,6 +1354,55 @@ test("the owner sets the open project's target date and the project list reloads
   }
 });
 
+test("the target date follows the project chosen in the picker, not the channel's default board", async () => {
+  const patched: string[] = [];
+  const f = await mount(
+    (url, init) => {
+      if (init?.method === "PATCH" && /\/projects\/p\d$/.test(url)) {
+        patched.push(url.slice(url.lastIndexOf("/") + 1));
+        return json({ project: SIDE_PROJECT });
+      }
+      // The status route is channel-wide: it always names the default board.
+      if (url.includes("/automation/status")) return json(status({ boardSlug: "deskrpg-main" }));
+      return json(board());
+    },
+    {
+      projects: [
+        { ...MAIN_PROJECT, targetDate: null },
+        { ...SIDE_PROJECT, targetDate: "2026-12-01" },
+      ],
+      canManageProjects: true,
+    },
+  );
+  try {
+    const select = f.host.querySelector<HTMLSelectElement>("[data-project-picker]");
+    assert.ok(select);
+    await act(async () => {
+      select.value = "deskrpg-side";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const input = f.host.querySelector<HTMLInputElement>("[data-project-target-date]");
+    assert.ok(input);
+    assert.equal(input.value, "2026-12-01", "shows the chosen project's date");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        input,
+        "2026-12-24",
+      );
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    assert.deepEqual(patched, ["p2"], "saves onto the chosen project");
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("a member sees no target date input", async () => {
   const f = await mount(
     (url) =>
