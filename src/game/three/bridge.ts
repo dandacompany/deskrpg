@@ -149,6 +149,21 @@ export function indicatorCountLabel(
 }
 
 /**
+ * The phase the **character model** is posed with. The D08 states that call for a person get a fixed pose —
+ * hand up while waiting on a person, head down after repeated failures, still while nothing can be known —
+ * and everything else keeps the reply phase. Walking still wins inside each actor (a pose is not held mid-walk).
+ */
+export function actorPosePhase(
+  actor: Pick<ActorSnapshot, "phase" | "active" | "bubble" | "states">,
+): ReturnType<typeof actorPresentationPhase> | "awaiting" | "failing" | "still" {
+  const first = actor.states?.[0];
+  if (first === "unknown") return "still";
+  if (first === "awaiting_approval") return "awaiting";
+  if (first === "stopped_after_failures") return "failing";
+  return actorPresentationPhase(actor);
+}
+
+/**
  * Nothing about this employee can be known right now (gateway unreachable, or this screen offline). The tag is
  * dimmed so the last known pose and bubble aren't read as the current state.
  */

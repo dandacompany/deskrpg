@@ -2,7 +2,7 @@ import * as T from "three";
 import type { ActorGait } from "./gait";
 import { miniatureDistancePose } from "./commute-walk";
 import { sphere, round } from "./primitives";
-import { idleMotion } from "./idle-motion";
+import { idleMotion, isHeldPose, statePose } from "./idle-motion";
 import type { OfficeLook } from "./office-looks";
 import type { ActorPhase } from "./characters";
 
@@ -255,14 +255,17 @@ export function createMiniatureActor(id: string, look: OfficeLook, index: number
       const run = walking && !!pace?.running;
       const gait = walkPhase ?? t * 7 * (run ? pace!.cadence : 1);
       const sit = seated && !walking,
-        motion = idleMotion(t, index, walking, phase);
+        motion = idleMotion(t, index, walking, phase),
+        pose = statePose(phase);
       rig.position.y = sit
         ? -0.21
         : walking
           ? Math.abs(Math.sin(gait)) * (run ? 0.03 : 0.009)
-          : Math.sin(t * 1.6 + index) * 0.003;
+          : isHeldPose(phase)
+            ? 0
+            : Math.sin(t * 1.6 + index) * 0.003;
       // Raise the head by as much as the lean so the gaze points forward.
-      head.rotation.set(motion.nod * 0.6 - (run ? 0.12 : 0), motion.yaw * 0.7, 0);
+      head.rotation.set(motion.nod * 0.6 - (run ? 0.12 : 0) + pose.headDown, motion.yaw * 0.7, 0);
       torso.rotation.z = motion.sway * 0.4;
       // When running, the whole body leans from the ankles. Head, arms and legs are siblings of the torso, not children, so leaning
       // only the torso tilts just the torso mesh while the head stands straight (the first implementation did that).
@@ -270,13 +273,15 @@ export function createMiniatureActor(id: string, look: OfficeLook, index: number
       arms.forEach((a, i) => {
         a.rotation.x = walking
           ? Math.sin(gait + i * Math.PI) * (run ? 0.62 : 0.28)
-          : sit
-            ? -0.34
-            : phase === "thinking" && i === 0
-              ? -0.8
-              : phase === "streaming"
-                ? -0.2 + Math.sin(t * 3 + i) * 0.1
-                : 0;
+          : pose.raiseArm && i === 0
+            ? pose.raiseArm
+            : sit
+              ? -0.34
+              : phase === "thinking" && i === 0
+                ? -0.8
+                : phase === "streaming"
+                  ? -0.2 + Math.sin(t * 3 + i) * 0.1
+                  : 0;
         a.rotation.z = (i === 0 ? -1 : 1) * 0.045;
       });
       elbows.forEach((a) => (a.rotation.x = sit ? -0.85 : run ? -1.05 : -0.12));

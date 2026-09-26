@@ -31,3 +31,13 @@ test("material detail shares textures inside a tree and disposes them once", () 
   assert.equal(disposals, 1);
   assert.equal(root.children.length, 0);
 });
+test("state poses are fixed offsets; still and failing employees do not fidget", async () => {
+  const { statePose } = await import("./idle-motion");
+  assert.deepEqual(statePose("awaiting"), { raiseArm: -2.6, headDown: 0 });
+  assert.deepEqual(statePose("failing"), { raiseArm: 0, headDown: 0.32 });
+  assert.deepEqual(statePose("idle"), { raiseArm: 0, headDown: 0 });
+  for (const t of [0.5, 3, 11]) {
+    assert.deepEqual(idleMotion(t, 2, false, "still"), { yaw: 0, nod: 0, hand: 0, sway: 0 });
+    assert.deepEqual(idleMotion(t, 2, false, "failing"), { yaw: 0, nod: 0, hand: 0, sway: 0 });
+  }
+});

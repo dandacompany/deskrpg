@@ -56,6 +56,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createActor, round, sphere, cylinder } from "./characters";
 import {
   actorIndicator,
+  actorPosePhase,
   actorStateUnknown,
   actorPresentationPhase,
   speechActorId,
@@ -1589,14 +1590,7 @@ export class OfficeRenderer {
           actor.walking && !seat,
         );
         rendered.previous = { x: p.x, z: p.z, time, direction: actor.direction };
-        model.update(
-          time / 1000,
-          actor.walking,
-          actorPresentationPhase(actor),
-          !!seat,
-          undefined,
-          pace,
-        );
+        model.update(time / 1000, actor.walking, actorPosePhase(actor), !!seat, undefined, pace);
         label.dataset.running = String(pace.running);
         label.dataset.assetStatus = model.root.userData.assetStatus ?? "procedural";
         label.dataset.modelStyle = model.root.userData.modelStyle ?? "legacy";

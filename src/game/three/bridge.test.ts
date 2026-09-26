@@ -172,3 +172,12 @@ test("an unknown state hides the frozen working badge instead of stacking on it"
 test("without a state list the old phase/working rule still applies", () => {
   assert.equal(actorIndicator({ phase: undefined, active: false, working: true }), "working");
 });
+
+test("the character pose follows the leading state; other states keep the reply phase", async () => {
+  const { actorPosePhase } = await import("./bridge");
+  assert.equal(actorPosePhase({ states: ["unknown", "awaiting_approval"] }), "still");
+  assert.equal(actorPosePhase({ states: ["awaiting_approval"] }), "awaiting");
+  assert.equal(actorPosePhase({ states: ["stopped_after_failures", "working"] }), "failing");
+  assert.equal(actorPosePhase({ phase: "streaming", states: ["responding"] }), "streaming");
+  assert.equal(actorPosePhase({ phase: undefined, active: false }), "idle");
+});
