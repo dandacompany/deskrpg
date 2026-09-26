@@ -322,6 +322,13 @@ export type TargetMarker =
    */
   | { kind: "outside"; atMs: number; side: "before" | "after"; daysFromNow: number };
 
+/** Local midnight of the day containing `ms`. */
+function localMidnight(ms: number): number {
+  const day = new Date(ms);
+  day.setHours(0, 0, 0, 0);
+  return day.getTime();
+}
+
 /**
  * Resolves a project target date relative to the window.
  *
@@ -329,12 +336,6 @@ export type TargetMarker =
  * due through the **end** of that day — if the target is September 30, the deadline runs through
  * 23:59 on the 30th; using 00:00 would lose a day.
  */
-function localMidnight(ms: number): number {
-  const day = new Date(ms);
-  day.setHours(0, 0, 0, 0);
-  return day.getTime();
-}
-
 export function targetMarker(
   targetDate: string | null | undefined,
   win: TimelineWindow,
