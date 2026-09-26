@@ -394,3 +394,14 @@ test("only a Windows client's ssh executor fetches files, and it goes through sc
     /^Error: host_operation_failed$/,
   );
 });
+
+test("scpSource brackets an IPv6 literal so scp does not read its first colon as the host end", () => {
+  assert.equal(
+    scpSource("2001:db8::1", "/tmp/deskrpg-spill-a/f"),
+    "[2001:db8::1]:/tmp/deskrpg-spill-a/f",
+  );
+  assert.equal(
+    scpSource("[2001:db8::1]", "/tmp/deskrpg-spill-a/f"),
+    "[2001:db8::1]:/tmp/deskrpg-spill-a/f",
+  );
+});

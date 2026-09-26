@@ -451,7 +451,9 @@ export function scpArgs(args: string[]): string[] {
 /** `host:path` for scp. A Windows path is given as `/C:/...`, the form Win32-OpenSSH's sftp server expects. */
 export function scpSource(dest: string, remotePath: string): string {
   const windows = /^[A-Za-z]:\\/.test(remotePath);
-  return `${dest}:${windows ? "/" + remotePath.replace(/\\/g, "/") : remotePath}`;
+  // An IPv6 literal is bracketed, or scp reads its first colon as the end of the host.
+  const host = dest.includes(":") && !dest.startsWith("[") ? `[${dest}]` : dest;
+  return `${host}:${windows ? "/" + remotePath.replace(/\\/g, "/") : remotePath}`;
 }
 
 export function sshExecutor(

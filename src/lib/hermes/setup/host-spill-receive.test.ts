@@ -140,3 +140,49 @@ test("a cancelled fetch still removes the spill on the host", async () => {
   );
   assert.deepEqual(cleanupRequests(calls), [REMOTE]);
 });
+
+test("a pointer larger than the spill cap is not fetched, but the host copy is still removed", async () => {
+  const { execute, calls } = transport({ first: pointer({ bytes: 262145 }) });
+  await assert.rejects(discoverHost(execute, "linux"), /^Error: host_operation_failed$/);
+  assert.deepEqual(calls.fetched, []);
+  assert.deepEqual(cleanupRequests(calls), [REMOTE]);
+});
+
+test("a spill path with characters an old scp would pass to a shell is refused", async () => {
+  const spill = "/tmp/with space/deskrpg-spill-x/" + "a".repeat(32);
+  const { execute, calls } = transport({ first: pointer({ spill }) });
+  await assert.rejects(discoverHost(execute, "linux"), /^Error: host_operation_failed$/);
+  assert.deepEqual(calls.fetched, []);
+});
+
+test("cancelled before the pointer is read, the host copy is removed without fetching it", async () => {
+  const controller = new AbortController();
+  const calls: Record<string, unknown>[] = [];
+  let fetched = false;
+  const execute = Object.assign(
+    async (_c: string, _a: string[], opts?: { input?: string }) => {
+      const input = JSON.parse(opts?.input ?? "{}") as Record<string, unknown>;
+      calls.push(input);
+      if ("cleanup_spill" in input) return { code: 0, stdout: '{"cleaned": true}', stderr: "" };
+      controller.abort(); // the user cancels while the helper is still answering
+      return { code: 0, stdout: JSON.stringify(pointer()), stderr: "" };
+    },
+    {
+      stdoutLimit: 65536,
+      fetchFile: async () => {
+        fetched = true;
+      },
+    },
+  ) as HostExecutor;
+  // check-model never throws; what matters is that nothing was fetched and the host copy went.
+  const { checkModelHost } = await import("./host");
+  assert.equal(
+    await checkModelHost(execute, "a".repeat(64), controller.signal, "linux"),
+    "unknown",
+  );
+  assert.equal(fetched, false);
+  assert.deepEqual(
+    calls.filter((input) => "cleanup_spill" in input).map((input) => input.cleanup_spill),
+    [REMOTE],
+  );
+});

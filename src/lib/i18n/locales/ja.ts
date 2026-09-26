@@ -480,7 +480,7 @@ const ja: Record<string, string> = {
   "hermes.wizard.error.hostOutputTooLarge":
     "ホストの応答が Windows 標準の SSH クライアントが一度に受け取れるサイズ(64KiB)を超えました。社員(プロファイル)が多いホストで起こります。DeskRPG をそのホスト上で直接実行するか、Windows 以外のコンピューターから SSH で接続してください。",
   "hermes.wizard.error.hostSpillCleanupFailed":
-    "ホストの応答は受け取りましたが、ホストに残した一時ファイルを削除できませんでした。そのファイルにはトークンが含まれている可能性があります。再試行すると 15 分以上経った一時ファイルは自動的に削除されます。続く場合はホストの一時フォルダーで deskrpg-spill- で始まるフォルダーを手動で削除してください。",
+    "ホストの応答は受け取りましたが、ホストに残した一時ファイルを削除できませんでした。そのファイルにはトークンが含まれている可能性があります。DeskRPG が次にこのホストで作業するとき、15 分以上経った一時ファイルを自動的に削除します。急ぐ場合はホストの一時フォルダーで deskrpg-spill- で始まるフォルダーを手動で削除してください。",
   "hermes.wizard.error.timezoneInvalid":
     "タイムゾーン名がIANA形式ではありません。Asia/Tokyoのような正しい名前を使うか、タイムゾーン設定をオフにして進めてください。",
   "hermes.wizard.error.timezoneWriteFailed":

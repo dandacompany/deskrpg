@@ -469,7 +469,7 @@ const ko: Record<string, string> = {
   "hermes.wizard.error.hostOutputTooLarge":
     "호스트의 응답이 Windows 기본 SSH 클라이언트가 한 번에 받을 수 있는 크기(64KiB)를 넘었습니다. 직원(프로필)이 많은 호스트에서 생깁니다. DeskRPG 를 그 호스트에서 직접 실행하거나 Windows 가 아닌 컴퓨터에서 SSH 로 연결하세요.",
   "hermes.wizard.error.hostSpillCleanupFailed":
-    "호스트의 응답을 받은 뒤 호스트에 남긴 임시 파일을 지우지 못했습니다. 그 파일에는 토큰이 들어 있을 수 있습니다. 다시 시도하면 15분 넘게 지난 임시 파일은 자동으로 지워집니다. 계속되면 호스트의 임시 폴더에서 deskrpg-spill- 로 시작하는 폴더를 직접 지우세요.",
+    "호스트의 응답을 받은 뒤 호스트에 남긴 임시 파일을 지우지 못했습니다. 그 파일에는 토큰이 들어 있을 수 있습니다. DeskRPG 가 다음에 이 호스트에서 작업할 때 15분 넘게 지난 임시 파일을 자동으로 지웁니다. 급하면 호스트의 임시 폴더에서 deskrpg-spill- 로 시작하는 폴더를 직접 지우세요.",
   "hermes.wizard.error.timezoneInvalid":
     "시간대 이름이 IANA 형식이 아닙니다. Asia/Seoul 처럼 올바른 이름을 쓰거나 시간대 설정을 끄고 진행하세요.",
   "hermes.wizard.error.timezoneWriteFailed":
