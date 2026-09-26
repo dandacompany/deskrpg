@@ -22,7 +22,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { localExecutor, secureStdioDir } from "./executor";
+import {
+  icaclsHarden,
+  isOwnerOnlyAcl,
+  localExecutor,
+  secureStdioDir,
+  setAclHarden,
+} from "./executor";
 import { HOST_BOOTSTRAP, hostLaunch } from "./host-helper";
 import { createDefaultScan } from "./ssh-hosts";
 
@@ -100,7 +106,19 @@ test(
   "the ssh stdio directory grants only the current user — the ACL is really narrowed",
   { skip },
   () => {
-    const dir = secureStdioDir("win32");
+    // Every read-back is kept for the failure message: CI showed only "acl_not_narrowed" once, and
+    // the runner's actual icacls output is the evidence (runner accounts only — nothing secret).
+    const seen: string[] = [];
+    let dir: string;
+    try {
+      dir = secureStdioDir("win32", undefined, undefined, (d) => {
+        const out = execFileSync("icacls", [d], { encoding: "utf8" });
+        seen.push(out);
+        return out;
+      });
+    } catch (error) {
+      assert.fail(`${String(error)}\n--- icacls read-backs ---\n${seen.join("\n---\n")}`);
+    }
     try {
       const file = path.join(dir, "stdout.out");
       writeFileSync(file, "token");
@@ -108,7 +126,7 @@ test(
       const principals = acl
         .split(/\r?\n/)
         .map((line) => line.replace(file, "").trim())
-        .filter((line) => line.includes(":("))
+        .filter((line) => line.includes(":(") && !/Mandatory Label\\/i.test(line))
         .map((line) => line.slice(0, line.indexOf(":(")).toLowerCase());
       assert.deepEqual(
         [...new Set(principals)].map((p) => p.split("\\").pop()),
@@ -120,6 +138,39 @@ test(
     }
   },
 );
+
+test("Set-Acl alone narrows the ssh stdio directory — read back", { skip }, () => {
+  const dir = tempDir("deskrpg-acl-way-");
+  try {
+    let error = "";
+    try {
+      setAclHarden(dir);
+    } catch (e) {
+      error = String(e);
+    }
+    const acl = execFileSync("icacls", [dir], { encoding: "utf8" });
+    assert.ok(isOwnerOnlyAcl(acl), `Set-Acl did not narrow${error ? ` (${error})` : ""}:\n${acl}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Not an assertion: icacls does not narrow on every host (windows-latest keeps explicit entries), and
+// secureStdioDir falls back to Set-Acl there. Its outcome is kept in the log for comparison.
+test("icacls alone — outcome recorded, not required", { skip }, (t) => {
+  const dir = tempDir("deskrpg-acl-way-");
+  try {
+    try {
+      icaclsHarden(dir);
+    } catch (e) {
+      t.diagnostic(`icacls threw: ${String(e)}`);
+    }
+    const acl = execFileSync("icacls", [dir], { encoding: "utf8" });
+    t.diagnostic(`icacls narrowed: ${isOwnerOnlyAcl(acl)}\n${acl}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test(
   "start -d on Windows creates the server outside this process tree, through WMI",
