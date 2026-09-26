@@ -76,6 +76,7 @@ type Routes = {
   archive: typeof import("./[id]/kanban/tasks/[taskId]/archive/route");
   specify: typeof import("./[id]/kanban/tasks/[taskId]/specify/route");
   log: typeof import("./[id]/kanban/tasks/[taskId]/log/route");
+  runSources: typeof import("./[id]/kanban/tasks/[taskId]/runs/[runId]/sources/route");
   taskAttachments: typeof import("./[id]/kanban/tasks/[taskId]/attachments/route");
   attachment: typeof import("./[id]/kanban/attachments/[attachmentId]/route");
   links: typeof import("./[id]/kanban/links/route");
@@ -99,6 +100,7 @@ async function loadRoutes(): Promise<Routes> {
     archive: await import("./[id]/kanban/tasks/[taskId]/archive/route"),
     specify: await import("./[id]/kanban/tasks/[taskId]/specify/route"),
     log: await import("./[id]/kanban/tasks/[taskId]/log/route"),
+    runSources: await import("./[id]/kanban/tasks/[taskId]/runs/[runId]/sources/route"),
     taskAttachments: await import("./[id]/kanban/tasks/[taskId]/attachments/route"),
     attachment: await import("./[id]/kanban/attachments/[attachmentId]/route"),
     links: await import("./[id]/kanban/links/route"),
@@ -1802,4 +1804,72 @@ test("mixed approval: the approving user and the submission come only from serve
     (await commentAuthorFor(seed.ownerId)).slice("deskrpg:".length),
   );
   assert.deepEqual(sent.json, { submission_id: "s-current", request_id: "attempt-1" });
+});
+
+test("a run's sources are read from its worker session with that profile's key", async () => {
+  server.reset();
+  server.setInfo({
+    capabilities: [
+      "kanban",
+      "cron",
+      "events",
+      "kanban_views",
+      "initial_status",
+      "kanban_review_policy_v1",
+      "session_sources",
+    ],
+  });
+  const routes = await loadRoutes();
+  const seed = await seedKanbanChannel();
+  const created = await createTask(routes, seed.ownerId, seed.channelId, { assignee: seed.npcId });
+  assert.equal(created.status, 201);
+  const taskId = created.body.task.id as string;
+  const readied = await routes.task.PATCH(
+    req(seed.ownerId, "PATCH", `${base(seed.channelId)}/tasks/${taskId}`, { status: "ready" }),
+    ctx(seed.channelId, taskId),
+  );
+  assert.equal(readied.status, 200);
+  const dispatched = await routes.dispatch.POST(
+    req(seed.ownerId, "POST", `${base(seed.channelId)}/dispatch`),
+    ctx(seed.channelId),
+  );
+  assert.equal(dispatched.status, 200);
+  const detail = await (
+    await routes.task.GET(
+      req(seed.ownerId, "GET", `${base(seed.channelId)}/tasks/${taskId}`),
+      ctx(seed.channelId, taskId),
+    )
+  ).json();
+  const runId = String(detail.runs[0].id);
+  const sourcesOf = async (rid: string) => {
+    const res = await routes.runSources.GET(
+      req(seed.ownerId, "GET", `${base(seed.channelId)}/tasks/${taskId}/runs/${rid}/sources`),
+      { params: Promise.resolve({ id: seed.channelId, taskId, runId: rid }) },
+    );
+    return { status: res.status, body: await res.json() };
+  };
+
+  // No worker session on the run yet.
+  assert.deepEqual((await sourcesOf(runId)).body, { status: "none" });
+
+  server.setRunMetadata(seed.boardSlug, taskId, runId, { worker_session_id: "sess_w1" });
+  server.setSessionSources("sophie", "sess_w1", {
+    session_id: "sess_w1",
+    sources: [{ kind: "file", ref: "brief.md", title: null, via: "read_file", at: null }],
+    outside_workdir_files: 0,
+    truncated: false,
+  });
+  const ok = await sourcesOf(runId);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.status, "ok");
+  assert.deepEqual(
+    ok.body.sources.map((s: { ref: string }) => s.ref),
+    ["brief.md"],
+  );
+  assert.equal(server.lastRequest()!.path, "/p/sophie/deskrpg/sessions/sess_w1/sources");
+
+  const missing = await sourcesOf("no-such-run");
+  assert.equal(missing.status, 404);
+  assert.equal(missing.body.code, "run_not_found");
+  server.reset();
 });

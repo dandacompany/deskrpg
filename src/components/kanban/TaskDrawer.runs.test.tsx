@@ -12,8 +12,8 @@ import TaskDrawer from "./TaskDrawer";
 
 // `I18nProvider` defaults to English.
 
-async function renderDrawer(detail: KanbanTaskDetail) {
-  const api = { taskDetail: async () => detail } as unknown as KanbanApi;
+async function renderDrawer(detail: KanbanTaskDetail, extra: Partial<KanbanApi> = {}) {
+  const api = { taskDetail: async () => detail, ...extra } as unknown as KanbanApi;
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
@@ -235,6 +235,61 @@ test("an attempt shows what the worker reported about how it made the result", a
     assert.equal(
       made!.querySelector('[data-run-provenance="other"]')?.textContent,
       "Other notes from the worker: 1",
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("an attempt with a worker session offers its sources, loaded only when opened", async () => {
+  const asked: string[] = [];
+  const f = await renderDrawer(
+    detail({
+      task: { id: "t1", title: "card", status: "done" },
+      runs: [
+        {
+          id: "7",
+          status: "done",
+          outcome: "completed",
+          started_at: 100,
+          ended_at: 110,
+          metadata: { worker_session_id: "sess_w" },
+        },
+        { id: "8", status: "done", outcome: "completed", started_at: 200, ended_at: 210 },
+      ],
+    }),
+    {
+      runSources: async (taskId: string, runId: string) => {
+        asked.push(`${taskId}/${runId}`);
+        return {
+          status: "ok" as const,
+          sources: [
+            {
+              kind: "web" as const,
+              ref: "https://a.example/",
+              title: "A",
+              via: "web_extract",
+              at: null,
+            },
+          ],
+          outsideWorkdirFiles: 0,
+          truncated: false,
+        };
+      },
+    },
+  );
+  try {
+    const [newest, oldest] = [...f.host.querySelectorAll("[data-attempt]")];
+    assert.equal(newest.querySelector("[data-session-sources]") === null, true);
+    const summary = oldest.querySelector("[data-session-sources] > summary") as HTMLElement | null;
+    assert.equal(summary !== null, true);
+    assert.deepEqual(asked, []);
+    await act(async () => summary!.click());
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    assert.deepEqual(asked, ["t1/7"]);
+    assert.equal(
+      oldest.querySelector('[data-session-sources] a[href="https://a.example/"]') !== null,
+      true,
     );
   } finally {
     await f.cleanup();

@@ -47,6 +47,7 @@ import type { KanbanTaskActionInput } from "@/lib/hermes/plugin-client-types";
 import { pluginUpgradeRequired } from "@/lib/hermes/plugin-errors";
 import { rawFailureResponse, streamProxyResponse } from "@/lib/hermes/stream-proxy";
 import { getUserId } from "@/lib/internal-rpc";
+import { readSessionSources } from "@/lib/session-sources";
 import {
   AUTOMATION_MIN_PLUGIN_VERSION,
   attachmentsUnsupportedResponse,
@@ -65,6 +66,7 @@ import { readJsonObject } from "@/lib/api-body";
 
 export type ChannelParams = { params: Promise<{ id: string }> };
 export type TaskParams = { params: Promise<{ id: string; taskId: string }> };
+export type RunParams = { params: Promise<{ id: string; taskId: string; runId: string }> };
 export type AttachmentParams = { params: Promise<{ id: string; attachmentId: string }> };
 
 // ---------------------------------------------------------------------------
@@ -683,6 +685,34 @@ export async function getTaskLog(req: NextRequest, channelId: string, taskId: st
   });
   if (!res.ok) return pluginFailureResponse(res);
   return NextResponse.json(res.data);
+}
+
+/**
+ * What one run's worker session read. The run names its session in `metadata.worker_session_id`
+ * (set by Hermes when the worker completes or asks for review) and its profile in `profile`; the
+ * sources are read with that profile's own key. Expected states are 200 views.
+ */
+export async function getRunSources(
+  req: NextRequest,
+  channelId: string,
+  taskId: string,
+  runId: string,
+) {
+  const resolved = await resolve(req, channelId);
+  if (!resolved.ok) return resolved.response;
+  const { ctx } = resolved;
+  const res = await ctx.client.kanban.getTask(ctx.boardSlug, taskId);
+  if (!res.ok) return pluginFailureResponse(res);
+  const run = (res.data.runs ?? []).find((r) => String(r.id) === runId);
+  if (!run) return cronError(404, "run_not_found", "run not found on this card");
+  const sessionId = run.metadata?.worker_session_id;
+  const read = await readSessionSources({
+    gateway: { id: ctx.gateway.id, baseUrl: ctx.gateway.baseUrl },
+    capabilities: ctx.info.capabilities,
+    profileName: run.profile,
+    sessionId: typeof sessionId === "string" ? sessionId : null,
+  });
+  return read.ok ? NextResponse.json(read.view) : read.response;
 }
 
 // ---------------------------------------------------------------------------

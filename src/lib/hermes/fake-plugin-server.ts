@@ -88,6 +88,13 @@ export type FakePluginServer = {
   /** Pushes an event into the unified event stream (the server fills id and ts). */
   pushEvent(event: Omit<PluginEvent, "id" | "ts"> & { ts?: number }): PluginEvent;
   setTaskLog(board: string, taskId: string, content: string): void;
+  /** Replaces one run's `metadata` (what a worker leaves on `kanban_complete`). */
+  setRunMetadata(
+    board: string,
+    taskId: string,
+    runId: string,
+    metadata: Record<string, unknown>,
+  ): void;
   setDeliveryTargets(profile: string, targets: CronDeliveryTarget[]): void;
   setBlueprints(profile: string, blueprints: AutomationBlueprint[]): void;
   /** Seeds one artifact into state (version 1). Defaults: kind `document`, mime `text/markdown`,
@@ -1960,6 +1967,14 @@ export async function startFakePluginServer(
       const board = boards.get(slug);
       if (!board) throw new Error(`unknown board: ${slug}`);
       board.logs.set(taskId, content);
+    },
+    setRunMetadata: (slug, taskId, runId, metadata) => {
+      const run = boards
+        .get(slug)
+        ?.tasks.get(taskId)
+        ?.runs.find((r) => String(r.id) === runId);
+      if (!run) throw new Error(`unknown run: ${slug}/${taskId}/${runId}`);
+      run.metadata = metadata;
     },
     setDeliveryTargets: (profile, targets) => {
       cronFor(profile).deliveryTargets = targets;

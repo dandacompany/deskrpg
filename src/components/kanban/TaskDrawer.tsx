@@ -16,11 +16,13 @@ import {
 import { taskTimeMs } from "@/lib/plugin-time";
 import { cardRunState, runAttempts, type RunAttempt } from "@/lib/kanban-run-history";
 import { hasRunProvenance, runProvenance } from "@/lib/kanban-run-provenance";
+import type { SessionSourcesView } from "@/lib/session-sources-types";
 import type { RunFailureCause } from "@/lib/run-failure-cause";
 import GateChecklistModal from "@/components/gateway/GateChecklistModal";
 import { classifyGateFailure, isSetupBlocker, type GateBlocker } from "@/lib/gate-failure";
 
 import { KindIcon } from "../artifacts/ArtifactList";
+import SessionSourcesList from "../artifacts/SessionSourcesList";
 import { ArtifactsApiError } from "../artifacts/artifacts-api";
 
 import { toFailure, type KanbanApi } from "./kanban-api";
@@ -830,6 +832,7 @@ export default function TaskDrawer({
                         key={attempt.run.id}
                         attempt={attempt}
                         workspace={task?.workspace_path ?? null}
+                        loadSources={() => api.runSources(taskId, String(attempt.run.id))}
                         formatDate={formatDate}
                       />
                     ))}
@@ -1027,10 +1030,12 @@ function endLabel(t: ReturnType<typeof useT>, end: string): string {
 function AttemptItem({
   attempt,
   workspace,
+  loadSources,
   formatDate,
 }: {
   attempt: RunAttempt;
   workspace: string | null;
+  loadSources: () => Promise<SessionSourcesView>;
   formatDate: (value?: PluginTime) => string;
 }) {
   const t = useT();
@@ -1055,6 +1060,11 @@ function AttemptItem({
       )}
       {run.summary && <div className="mt-1 text-text-secondary break-words">{run.summary}</div>}
       {hasRunProvenance(made) && <RunProvenanceList made={made} />}
+      {made.workerSessionId && (
+        <div className="mt-1">
+          <SessionSourcesList load={loadSources} />
+        </div>
+      )}
       {hasDetails && (
         <details className="mt-1">
           <summary className="cursor-pointer text-[10px] text-text-dim">
