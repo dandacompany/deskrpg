@@ -24,7 +24,7 @@ DeskRPG does not bundle an agent runtime. It attaches to the Hermes gateway you 
 
 - Website: [https://deskrpg.com](https://deskrpg.com) (live)
 - Source code: `https://github.com/dandacompany/deskrpg`
-- Version: `v2026.924.1` — Manage each employee's skills: install from the official list, Skills Hub or a URL, edit, turn on or off, delete, and run the curator. Product text, NPC small talk, meeting summaries and CLI output follow your language (English, Korean, Japanese, Chinese). Linking the plugin into every employee is opt-in and disclosed in the setup wizard. Requires plugin 0.16.0 and the policy-aware Hermes core described below.
+- Version: `v2026.926.1` — Give each employee MCP connectors (add, test, OAuth, copy between employees) and decide what unattended runs may do: approval cards in chat and meetings, a run policy, and blocked runs collected under Needs you. Stop an NPC's reply mid-way. Cron templates, schedules and run history read in your language. Archive a project's board and set its target date. Failed replies say why (expired provider sign-in, usage limit, model), and Windows hosts are sturdier. Requires plugin 0.19.0 and the policy-aware Hermes core described below.
 
 ## What You Can Do
 
