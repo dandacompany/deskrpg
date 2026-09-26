@@ -991,3 +991,93 @@ test("an old plugin's run start without an assignee matches nobody", async () =>
   );
   assert.equal(h.emitted.filter((e) => e.event === "npc:working").length, 0);
 });
+
+// A run that ends in human review, a change request or a block reaches the stream only as a status change —
+// no `task.run.finished` — so leaving `running` must clear the card from the employee's work.
+test("npc:working turns off when a running card moves to another status without a run.finished", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  const started = ev({
+    kind: "task.run.started",
+    task_id: "t-review",
+    run_id: "r1",
+    payload: { assignee: "sophie" },
+  });
+  await ingest(CHANNEL, [started], h.deps);
+  await ingest(
+    CHANNEL,
+    [ev({ kind: "task.status", task_id: "t-review", payload: { from: "running", to: "review" } })],
+    h.deps,
+  );
+  const working = h.emitted
+    .filter((e) => e.event === "npc:working")
+    .map((e) => (e.payload as { working: boolean }).working);
+  assert.deepEqual(working, [true, false]);
+});
+
+test("a status change with an unknown from still clears a card that is no longer running", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  await ingest(
+    CHANNEL,
+    [
+      ev({
+        kind: "task.run.started",
+        task_id: "t-x",
+        run_id: "r1",
+        payload: { assignee: "sophie" },
+      }),
+    ],
+    h.deps,
+  );
+  await ingest(
+    CHANNEL,
+    [ev({ kind: "task.status", task_id: "t-x", payload: { from: null, to: "blocked" } })],
+    h.deps,
+  );
+  const last = h.emitted.filter((e) => e.event === "npc:working").at(-1);
+  assert.equal((last?.payload as { working: boolean }).working, false);
+});
+
+test("a status change into running, or on another card, leaves the work as it is", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  await ingest(
+    CHANNEL,
+    [
+      ev({
+        kind: "task.run.started",
+        task_id: "t-a",
+        run_id: "r1",
+        payload: { assignee: "sophie" },
+      }),
+    ],
+    h.deps,
+  );
+  await ingest(
+    CHANNEL,
+    [
+      ev({ kind: "task.status", task_id: "t-a", payload: { from: "ready", to: "running" } }),
+      ev({ kind: "task.status", task_id: "t-other", payload: { from: "running", to: "done" } }),
+    ],
+    h.deps,
+  );
+  const working = h.emitted.filter((e) => e.event === "npc:working");
+  assert.equal(working.length, 1, "no change was broadcast");
+});
+
+test("deleting a running card clears it from the employee's work", async () => {
+  const h = harness({ npcs: { sophie: SOPHIE_ACTIVE } });
+  await ingest(
+    CHANNEL,
+    [
+      ev({
+        kind: "task.run.started",
+        task_id: "t-del",
+        run_id: "r1",
+        payload: { assignee: "sophie" },
+      }),
+    ],
+    h.deps,
+  );
+  await ingest(CHANNEL, [ev({ kind: "task.deleted", task_id: "t-del" })], h.deps);
+  const last = h.emitted.filter((e) => e.event === "npc:working").at(-1);
+  assert.equal((last?.payload as { working: boolean }).working, false);
+});

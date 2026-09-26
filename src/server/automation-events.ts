@@ -399,6 +399,19 @@ async function updateWorking(
     case "task.run.finished":
       remove("runningCards", cardKey);
       break;
+    // A run can end without a `task.run.finished`: the plugin reports a run that ends in human review
+    // (`review_requested`), a change request or a block only as a status change, so the card left "running"
+    // and the employee stayed "working" until a restart. A card that is no longer running has no live run —
+    // Hermes keeps the card `running` for as long as its run lives — so leaving `running` clears it. `to`
+    // alone decides: `from` is null when the plugin can't tell the earlier status. A deleted card clears too.
+    case "task.status": {
+      const to = (event.payload as Partial<TaskStatusEventPayload>).to;
+      if (typeof to === "string" && to !== "running") remove("runningCards", cardKey);
+      break;
+    }
+    case "task.deleted":
+      remove("runningCards", cardKey);
+      break;
     case "cron.run.started":
       await add("cronRuns", cronRunKey(event));
       break;
