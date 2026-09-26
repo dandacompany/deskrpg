@@ -8,6 +8,7 @@ import {
   readPlayerDestination,
   type PlayerDestination,
 } from "./player-resume-state";
+import { getChannelTimeZone } from "../lib/channel-timezone";
 import { setNpcActive } from "../lib/npc-roster";
 import { getMyCharacter, isMyCharacter, type MyCharacter } from "../lib/my-character";
 import { createNpcCoordination } from "./npc-coordination";
@@ -1995,6 +1996,8 @@ export function setupSocketHandlers(io: Server) {
         // Carry the protocol in the UI language of whoever opened the meeting.
         getNpcConfigsForChannel: (channelId: string) =>
           getNpcConfigsForChannel(channelId, socketLocale(socket)),
+        // Minutes are written in the channel's Hermes timezone (cached plugin info, no request).
+        resolveTimeZone: getChannelTimeZone,
         canControlMeeting: async (channelId, userId) => {
           const access = await getSocketChannelParticipationAccess(channelId, userId);
           return (

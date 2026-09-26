@@ -72,7 +72,7 @@ test("the transcript time follows the locale outside Korean", () => {
     participants,
     "ja",
   );
-  assert.ok(transcript.includes(`(${new Date(0).toLocaleTimeString("ja")})`));
+  assert.ok(transcript.includes(`(${new Date(0).toLocaleTimeString("ja", { timeZone: "UTC" })})`));
 });
 
 test("passing ko explicitly matches the default Korean output", () => {

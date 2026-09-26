@@ -81,8 +81,9 @@ test("the Korean meeting transcript is unchanged", () => {
     ],
     [{ displayName: "A", role: "Lead" }],
   );
-  const expected = TRANSCRIPT_KO.replace("<DATE>", new Date().toISOString().split("T")[0])
-    .replace("<T0>", new Date(0).toLocaleTimeString("ko-KR"))
-    .replace("<T1>", new Date(60_000).toLocaleTimeString("ko-KR"));
+  // No timezone given: the meeting day and times are written in UTC and the zone is named.
+  const expected = TRANSCRIPT_KO.replace("<DATE>", "1970-01-01 (UTC)")
+    .replace("<T0>", new Date(0).toLocaleTimeString("ko-KR", { timeZone: "UTC" }))
+    .replace("<T1>", new Date(60_000).toLocaleTimeString("ko-KR", { timeZone: "UTC" }));
   assert.equal(transcript, expected);
 });
