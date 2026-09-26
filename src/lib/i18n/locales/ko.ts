@@ -738,6 +738,8 @@ const ko: Record<string, string> = {
   "hermes.wizard.error.unauthorized": "인증이 필요합니다.",
   "hermes.wizard.error.upstreamError": "게이트웨이가 오류를 보고했습니다.",
   "hermes.wizard.error.gatewayAuthFailed": "게이트웨이 키가 거부되었습니다. 키를 확인하세요.",
+  "hermes.wizard.error.profileNotServed":
+    "Hermes 가 이 직원(프로필)을 서빙하지 않습니다. 프로필 이름과 게이트웨이의 서빙 목록을 확인하세요.",
   "hermes.wizard.error.keyMissingAfterIssue":
     "플러그인이 키가 발급됐다고 보고했지만 키 값을 받지 못했습니다.",
   "hermes.wizard.error.keyStoreForbidden":

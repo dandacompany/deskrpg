@@ -757,6 +757,8 @@ const ja: Record<string, string> = {
   "hermes.wizard.error.upstreamError": "ゲートウェイがエラーを報告しました。",
   "hermes.wizard.error.gatewayAuthFailed":
     "ゲートウェイキーが拒否されました。キーを確認してください。",
+  "hermes.wizard.error.profileNotServed":
+    "Hermes がこの社員（プロファイル）を提供していません。プロファイル名とゲートウェイの提供リストを確認してください。",
   "hermes.wizard.error.keyMissingAfterIssue":
     "プラグインはキーが発行されたと報告しましたが、キーの値を受け取れませんでした。",
   "hermes.wizard.error.keyStoreForbidden":

@@ -56,6 +56,8 @@ export const WIZARD_ERROR_CODES = [
   "unauthorized",
   "upstream_error",
   "gateway_auth_failed",
+  // Hermes answered 404 "Unknown or unconfigured profile" — it does not serve this profile.
+  "profile_not_found",
   "key_missing_after_issue",
   "key_store_forbidden",
   // Codes emitted by T9/T10 automation (cron/Kanban) routes — `cron-access.ts`/`cron-routes.ts`
@@ -93,6 +95,7 @@ export const WIZARD_ERROR_MESSAGE_KEYS: Record<WizardErrorCode, string> = {
   unauthorized: "hermes.wizard.error.unauthorized",
   upstream_error: "hermes.wizard.error.upstreamError",
   gateway_auth_failed: "hermes.wizard.error.gatewayAuthFailed",
+  profile_not_found: "hermes.wizard.error.profileNotServed",
   key_missing_after_issue: "hermes.wizard.error.keyMissingAfterIssue",
   key_store_forbidden: "hermes.wizard.error.keyStoreForbidden",
   plugin_upgrade_required: "hermes.wizard.error.pluginUpgradeRequired",

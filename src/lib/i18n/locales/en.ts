@@ -746,6 +746,8 @@ const en: Record<string, string> = {
   "hermes.wizard.error.upstreamError": "The gateway reported an error.",
   "hermes.wizard.error.gatewayAuthFailed":
     "The gateway rejected the key. Check that it is correct.",
+  "hermes.wizard.error.profileNotServed":
+    "Hermes does not serve this employee (profile). Check the profile name and the gateway's served profiles.",
   "hermes.wizard.error.keyMissingAfterIssue":
     "The plugin reported that a key was issued, but no key value was received.",
   "hermes.wizard.error.keyStoreForbidden":
