@@ -975,3 +975,58 @@ test("no notice when the worker was applied, or on an old plugin (no workerPlugi
     globalThis.fetch = originalFetch;
   }
 });
+
+test("a failed persona load is not retried in a loop", async () => {
+  // The identity auto-load ran whenever there was no payload and nothing loading — a failure
+  // leaves exactly that state, so the effect fired again at once and hammered the gateway
+  // (~4,000 requests a second while the gateway was down).
+  const calls: FetchCall[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = stubFetch(calls, {
+    "/identity": { errorCode: "unreachable", error: "gateway unreachable", blocksEditor: true },
+    "/config": { model: "gpt-5", provider: "openai-codex", toolsets: null, reasoning_effort: null },
+    "/catalog": { providers: [], models: {}, reasoningEfforts: [] },
+  }) as typeof fetch;
+  try {
+    const { root, el } = await mount(
+      <I18nProvider initialLocale="ko">
+        <NpcHireWizard
+          gatewayId="gw-1"
+          pluginStatus="plugin_ready"
+          localDiscovery={false}
+          existingProfiles={["oliver"]}
+          initialProfile="oliver"
+          onDone={() => {}}
+        />
+      </I18nProvider>,
+    );
+    const personaTab = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("②"));
+    assert.ok(personaTab, "② 인격 탭을 찾지 못했다");
+    await act(async () => {
+      personaTab.click();
+    });
+    for (let i = 0; i < 20; i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+    const identityCalls = calls.filter((c) => c.url.endsWith("/identity")).length;
+    assert.ok(identityCalls <= 1, `identity was requested ${identityCalls} times`);
+    // The user can still ask again, once per click.
+    const retry = el.querySelector<HTMLButtonElement>("[data-identity-retry]");
+    assert.ok(retry, "a failed load offers a retry");
+    await act(async () => {
+      retry.click();
+    });
+    for (let i = 0; i < 5; i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+    assert.equal(calls.filter((c) => c.url.endsWith("/identity")).length, identityCalls + 1);
+    root.unmount();
+    el.remove();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
