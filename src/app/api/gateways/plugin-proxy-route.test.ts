@@ -390,8 +390,8 @@ describe("plugin proxy — failure responses carry upstreamStatus (fix round 1)"
       assert.equal(res.status, 200, "실패도 200 규약을 유지한다");
       assert.equal(
         body.errorCode,
-        "plugin_error",
-        "구조화 error 필드가 없으면 여전히 뭉뚱그려진다",
+        "gateway_auth_failed",
+        "a 401 without a structured error still reads as a refused key",
       );
       assert.equal(body.upstreamStatus, 401, "그러나 원 상태 코드는 그대로 살아남는다");
     } finally {
