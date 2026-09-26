@@ -437,8 +437,8 @@ PROVIDER = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$')
 RESERVED = {'hermes','test','tmp','root','sudo'}
 # Excluded from names the wizard can newly create or issue keys for. 'default' is handled by configure.
 RESERVED_PROFILE = RESERVED | {'default'}
-PIN = '4ce077644d9efb3241de1876b5c0c43db4a1e23c'
-PLUGIN_VERSION = '0.22.0'
+PIN = '699c11f47141a0dbb19723818489ba26883d6955'
+PLUGIN_VERSION = '0.23.0'
 HERMES_MIN = '0.21.1'
 SOURCE = 'https://github.com/dandacompany/deskrpg-hermes-plugin'
 TIMEZONE = re.compile(r'^[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-.]+)*$')
