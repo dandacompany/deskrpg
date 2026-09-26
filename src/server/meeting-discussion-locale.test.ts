@@ -168,3 +168,79 @@ test("the default broker runs every participant through wrapAdapter (live tool a
   assert.ok(wrapped.includes("execute:npc-1"), "turns go through the wrapped adapter");
   assert.ok(adapter.prompts.length > 0);
 });
+
+for (const [label, resolveTimeZone, expected] of [
+  ["the channel's Hermes timezone", async () => "Asia/Seoul", "Asia/Seoul"],
+  ["no timezone when the lookup fails", async () => Promise.reject(new Error("db down")), null],
+] as const) {
+  test(`a meeting captures ${label} for its minutes`, async () => {
+    const registry = new AdapterRegistry();
+    registry.register(recordingAdapter("ok") as never);
+    const configs: Parameters<BrokerFactory>[0][] = [];
+    const asked: string[] = [];
+    const socket = fakeSocket();
+    registerMeetingDiscussionHandlers({
+      io: fakeIo as never,
+      socket: socket as never,
+      deps: {
+        activeBrokers: new Map<string, MeetingBrokerLike>(),
+        discussionInitiators: new Map(),
+        meetingRooms: new Map([["a", { participants: new Set(["socket-1"]), messages: [] }]]),
+        players: new Map(),
+        user: { userId: "u1" },
+        adapterRegistry: registry,
+        canControlMeeting: () => true,
+        getNpcConfigsForChannel: async () => [npcConfig()],
+        resolveTimeZone: (channelId) => {
+          asked.push(channelId);
+          return resolveTimeZone();
+        },
+        createMeetingBroker: (config) => {
+          configs.push(config);
+          return {
+            config: { participants: [{ npcId: "npc-1", displayName: "Analyst" }] },
+            turns: [],
+            isRunning: () => true,
+            stop: () => {},
+            run: () => Promise.resolve(),
+          } as unknown as MeetingBrokerLike;
+        },
+        generateMeetingSummary: async () => ({ keyTopics: [], conclusions: null }),
+        persistMeetingMinutes: async () => null,
+      },
+    });
+    await socket.trigger("meeting:start-discussion", { channelId: "a", topic: "Roadmap" });
+    assert.deepEqual(asked, ["a"]);
+    assert.equal(configs.length, 1, "the meeting still starts");
+    assert.equal(configs[0].timeZone, expected);
+  });
+}
+
+test("the default broker writes its minutes in the configured timezone", async () => {
+  const adapter = recordingAdapter("PASS");
+  const registry = new AdapterRegistry();
+  registry.register(adapter as never);
+  let transcript = "";
+  const broker = await defaultCreateMeetingBroker(
+    {
+      topic: "Roadmap",
+      npcs: [npcConfig()],
+      userId: "u1",
+      channelId: "c1",
+      adapterRegistry: registry,
+      sessionKeyPrefix: "sess-1",
+      meetingId: "meet-1",
+      settings: {},
+      quota: { maxTotalTurns: 2 },
+      locale: "en",
+      timeZone: "Asia/Seoul",
+    } as unknown as Parameters<typeof defaultCreateMeetingBroker>[0],
+    {
+      onMeetingEnd: (text) => {
+        transcript = text;
+      },
+    },
+  );
+  await broker.run();
+  assert.match(transcript, /- \*\*Date\*\*: \d{4}-\d{2}-\d{2} \(Asia\/Seoul\)/);
+});

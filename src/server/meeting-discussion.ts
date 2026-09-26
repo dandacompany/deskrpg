@@ -116,6 +116,8 @@ type MeetingBrokerConfig = {
   };
   /** The meeting opener's language — turn prompts and minutes follow it. Omitted means Korean. */
   locale?: string | null;
+  /** IANA timezone the minutes are written in (the channel's Hermes). Omitted means UTC, named as such. */
+  timeZone?: string | null;
   /** Wraps each participant's adapter (live tool approvals). Omitted means the adapter is used as is. */
   wrapAdapter?: (npcId: string, adapter: NpcAdapter) => NpcAdapter;
 };
@@ -201,6 +203,8 @@ type RegisterMeetingDiscussionHandlersArgs = {
      * turn prompts, minutes and the summary. Omitted means Korean, as before locales existed. */
     locale?: string | null;
     getNpcConfigsForChannel: (channelId: string) => Promise<MeetingNpcConfig[]>;
+    /** The channel's Hermes timezone for the minutes. A failed or missing lookup writes UTC. */
+    resolveTimeZone?: (channelId: string) => Promise<string | null>;
     canControlMeeting: (channelId: string, userId: string) => Promise<boolean> | boolean;
     spatial?: MeetingSpatialCoordinator;
     /**
@@ -491,6 +495,7 @@ export async function defaultCreateMeetingBroker(
             role: participant.role,
           })),
           config.locale,
+          config.timeZone,
         );
         const durationSeconds = Math.floor((Date.now() - startedAt) / 1000);
         void callbacks.onMeetingEnd?.(transcript, durationSeconds);
@@ -665,6 +670,11 @@ export function registerMeetingDiscussionHandlers({
     const meetingId = `meet-${Date.now()}`;
     // Captured once at start: the whole meeting keeps the opener's language.
     const meetingLocale = deps.locale;
+    // Minutes are stored as text, so their times are fixed in this zone. A lookup failure must
+    // not stop the meeting — the minutes then say UTC.
+    const meetingTimeZone = deps.resolveTimeZone
+      ? await deps.resolveTimeZone(channelId).catch(() => null)
+      : null;
     const sessionKeyPrefix = candidateNpcs[0].sessionKeyPrefix || channelId.slice(0, 8);
 
     // The summary adapter is resolved once, **separately** from meeting participants. The broker's config.participants
@@ -693,6 +703,7 @@ export function registerMeetingDiscussionHandlers({
           maxTotalTurns: settings?.maxTotalTurns || 50,
         },
         locale: meetingLocale,
+        timeZone: meetingTimeZone,
         ...(deps.wrapParticipantAdapter
           ? {
               wrapAdapter: (npcId: string, adapter: NpcAdapter) =>
