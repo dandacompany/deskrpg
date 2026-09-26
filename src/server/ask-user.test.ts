@@ -107,3 +107,35 @@ test("a failed registration or session lookup never breaks the chat", async () =
   const result = await withAskUser(fakeAdapter([ASK_USER_TOOL]), ROUTE, d).execute(opts());
   assert.equal(result.response, "ok");
 });
+
+test("a capable gateway gets the ask_user guidance on every run's instructions", async () => {
+  const { d } = deps();
+  const seen: Array<string | undefined> = [];
+  const adapter = {
+    execute: async (options: AdapterExecuteOptions) => {
+      seen.push(options.instructions);
+      return { response: "ok", session: { sessionRef: "k" } };
+    },
+  } as unknown as NpcAdapter;
+  await withAskUser(adapter, ROUTE, d).execute(opts({ instructions: "You are Noah." }));
+  await withAskUser(adapter, ROUTE, d).execute(opts());
+  assert.ok(seen[0]?.startsWith("You are Noah.\n\n"), seen[0]);
+  for (const text of seen) {
+    assert.ok(text?.includes(ASK_USER_TOOL), "names the tool");
+    assert.ok(text?.includes("tool_search"), "says how to reach it when deferred");
+  }
+});
+
+test("without ask_user the instructions pass through untouched", async () => {
+  const { d } = deps({ canAsk: async () => false });
+  const seen: Array<string | undefined> = [];
+  const adapter = {
+    execute: async (options: AdapterExecuteOptions) => {
+      seen.push(options.instructions);
+      return { response: "ok", session: { sessionRef: "k" } };
+    },
+  } as unknown as NpcAdapter;
+  await withAskUser(adapter, ROUTE, d).execute(opts({ instructions: "You are Noah." }));
+  await withAskUser(adapter, ROUTE, d).execute(opts());
+  assert.deepEqual(seen, ["You are Noah.", undefined]);
+});

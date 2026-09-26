@@ -19,6 +19,18 @@ export const NPC_QUESTION_EVENTS = {
   answered: "npc:question-answered",
 } as const;
 
+/**
+ * Sent on every 1:1 run's instructions. Hermes freezes plugin prompt sections into a session's stored
+ * system prompt, and a 1:1 session lives forever — so the plugin's own section never reaches a
+ * conversation that began before it. Instructions are injected per call and never cached.
+ */
+export const ASK_USER_INSTRUCTIONS = `## Asking the user with choices
+
+When you need information only the user has, and the answer can be narrowed to 2-4 choices, call
+\`${ASK_USER_TOOL}\` with the question and the choices, then wait for the answer it returns and continue.
+If it is not among your listed tools, find it with tool_search and call it through the tool-call bridge.
+Ask open questions (ones without a short list of answers) in plain text instead. One question per call.`;
+
 /** `tool.started` arrives before the tool has stored its question; look a few times. */
 const POLL_ATTEMPTS = 20;
 const DEFAULT_POLL_INTERVAL_MS = 300;
@@ -40,6 +52,8 @@ export function withAskUser(
 ): NpcAdapter {
   const interval = deps.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const execute: NpcAdapter["execute"] = async (options: AdapterExecuteOptions) => {
+    // Without ask_user the run is untouched: no guidance, no registration, no polling.
+    if (!(await deps.canAsk(route.npcId).catch(() => false))) return adapter.execute(options);
     let session: Promise<string | null> = Promise.resolve(null);
     const shown = new Set<string>();
     const polls: Promise<void>[] = [];
@@ -63,10 +77,10 @@ export function withAskUser(
     try {
       return await adapter.execute({
         ...options,
+        instructions: [options.instructions, ASK_USER_INSTRUCTIONS].filter(Boolean).join("\n\n"),
         onRunStarted: (runId: string) => {
           options.onRunStarted?.(runId);
           session = (async () => {
-            if (!(await deps.canAsk(route.npcId))) return null;
             const sessionId = await deps.sessionIdOf(route.npcId, runId);
             if (!sessionId) return null;
             return (await deps.register({ ...route, sessionId })) ? sessionId : null;
