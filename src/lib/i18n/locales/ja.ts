@@ -3234,6 +3234,7 @@ const ja: Record<string, string> = {
   "kanban.review.swarmUnsupported":
     "チーム業務の作成は承認ポリシー対応準備中です。個別に登録してください。",
   "kanban.review.legacy": "従来の承認方式",
+  "kanban.card.swarmRoot": "分担のまとめ — チーム作業の開始（成果ではない）",
   "kanban.review.round": "AIレビュー回数",
   "kanban.review.approvedBy": "承認者",
   "kanban.review.submission": "承認した提出",

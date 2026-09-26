@@ -310,3 +310,19 @@ test("without transitions the rework metric is unknown, not zero", () => {
     cards: 0,
   });
 });
+
+test("a swarm root's instant completion is structure, not throughput or success", () => {
+  const metrics = computeOperationalMetrics(
+    [
+      run({ metadata: { kind: "kanban_swarm_v1", goal: "g" } }),
+      // The timeline route can pass the sqlite JSON text through.
+      run({ metadata: '{"kind": "kanban_swarm_v1"}' } as unknown as Partial<KanbanTimelineRun>),
+      run(),
+    ],
+    [],
+    NO_APPROVALS,
+    WIN,
+  );
+  assert.equal(metrics.throughput, 1);
+  assert.equal(metrics.terminalRuns, 1);
+});

@@ -1060,6 +1060,38 @@ test("blackboard JSON does not show up as a comment on the swarm root card", asy
   }
 });
 
+test("a swarm root card reads as a work split, not as an approval-free done card", async () => {
+  const f = await mount((url) =>
+    url.includes("/automation/status")
+      ? json(status())
+      : json(
+          board({
+            columns: [
+              {
+                name: "done",
+                tasks: [
+                  {
+                    id: "t-root",
+                    title: "Swarm: 뉴스레터",
+                    status: "done",
+                    body: "Kanban Swarm v1 planning/root card. This card is completed immediately…",
+                  },
+                  { id: "t-done", title: "끝난 카드", status: "done" },
+                ],
+              },
+            ],
+          }),
+        ),
+  );
+  try {
+    const labels = [...f.host.querySelectorAll("[data-card-structure]")];
+    assert.equal(labels.length, 1);
+    assert.equal(labels[0].textContent, "분업 묶음 — 팀 업무 시작 표시(결과 아님)");
+  } finally {
+    await f.cleanup();
+  }
+});
+
 const detailHandler =
   (detailReads: Map<string, number>): Handler =>
   (url) => {

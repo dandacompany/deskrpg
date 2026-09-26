@@ -3203,6 +3203,7 @@ const ko: Record<string, string> = {
   "kanban.review.swarmUnsupported":
     "팀 업무 생성은 승인 정책 지원을 준비 중입니다. 개별 업무로 등록해 주세요.",
   "kanban.review.legacy": "기존 승인 방식",
+  "kanban.card.swarmRoot": "분업 묶음 — 팀 업무 시작 표시(결과 아님)",
   "kanban.review.round": "AI 검토 회차",
   "kanban.review.approvedBy": "승인자",
   "kanban.review.submission": "승인한 제출",
