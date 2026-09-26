@@ -15,6 +15,7 @@ import type {
   ArtifactVersion,
 } from "@/lib/hermes/deskrpg-plugin-types";
 import type { ArtifactProvenance } from "@/lib/artifact-provenance";
+import type { SessionSourcesView } from "@/lib/session-sources-types";
 
 export class ArtifactsApiError extends Error {
   readonly status: number;
@@ -125,6 +126,8 @@ export function createArtifactsApi(channelId: string, fetchImpl?: FetchLike) {
       return request<ArtifactPage>(f, `${root}${suffix}`);
     },
     get: (id: string) => request<ArtifactDetailView>(f, artifact(id)),
+    /** What the session that made the artifact read. */
+    sources: (id: string) => request<SessionSourcesView>(f, `${artifact(id)}/sources`),
     contentUrl: (id: string, version: number, download?: boolean): string => {
       const suffix = download ? "?download=1" : "";
       return `${artifact(id)}/versions/${version}/content${suffix}`;

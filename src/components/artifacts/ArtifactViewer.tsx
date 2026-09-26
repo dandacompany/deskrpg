@@ -17,6 +17,7 @@ import MarkdownContent from "@/components/ui/MarkdownContent";
 import { useT } from "@/lib/i18n";
 import ArtifactEditor, { type ArtifactEditorHandle } from "./ArtifactEditor";
 import ArtifactProvenance from "./ArtifactProvenance";
+import SessionSourcesList from "./SessionSourcesList";
 import type { ArtifactDetailView, ArtifactsApi } from "./artifacts-api";
 import {
   codeLanguageFor,
@@ -439,6 +440,11 @@ export default function ArtifactViewer({
           provenance={detail.provenance}
           onOpenCard={(taskId) => onOpenSource({ type: "kanban", taskId })}
         />
+      )}
+      {!editing && artifact.session_id && (
+        <div className="px-4 py-2 border-b border-border">
+          <SessionSourcesList key={artifactId} load={() => api.sources(artifactId)} />
+        </div>
       )}
       {error && (
         <p className="px-4 py-2 text-xs text-danger border-b border-border break-words">

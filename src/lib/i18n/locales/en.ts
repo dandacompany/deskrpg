@@ -3329,6 +3329,16 @@ const en: Record<string, string> = {
   "artifacts.edit.saved": "Saved as a new version",
   "artifacts.edit.linkHint": "Only http(s) addresses can be saved",
   "artifacts.goToSource": "Go to source",
+  "sources.title": "Sources it read",
+  "sources.expired":
+    "The record has passed Hermes's retention period, so its sources can no longer be shown.",
+  "sources.none": "This work has no session record to read sources from.",
+  "sources.pluginUpgrade": "Update the DeskRPG plugin on the gateway ({version}+) to see sources.",
+  "sources.noProfileKey":
+    "This employee's key is not on this gateway, so its sources cannot be read.",
+  "sources.empty": "No web pages or files were read.",
+  "sources.outside": "{count} file(s) outside the working folder (not named)",
+  "sources.truncated": "Only the first part of the list is shown.",
   "artifacts.made.card": "Made in card",
   "artifacts.made.parents": "Built on",
   "artifacts.made.moreParents": "+{count} more",

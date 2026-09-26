@@ -401,6 +401,89 @@ test("an artifact without provenance shows no provenance block", async () => {
   assert.equal(container.querySelector("[data-artifact-provenance]") === null, true);
 });
 
+async function openSources() {
+  const summaryEl = container.querySelector(
+    "[data-session-sources] > summary",
+  ) as HTMLElement | null;
+  assert.equal(summaryEl !== null, true);
+  await click(summaryEl!);
+}
+
+test("sources load only when opened and list pages as safe links and files as paths", async () => {
+  const calls = mockFetch({
+    [LIST]: { artifacts: [summary()], cursor: "", has_more: false },
+    "GET /api/channels/ch-1/artifacts/a1": { artifact: summary(), versions: [version(1)] },
+    "GET /api/channels/ch-1/artifacts/a1/versions/1/content": { text: "x" },
+    "GET /api/channels/ch-1/artifacts/a1/sources": {
+      status: "ok",
+      sources: [
+        {
+          kind: "web",
+          ref: "https://news.example/a",
+          title: "기사 A",
+          via: "web_extract",
+          at: null,
+        },
+        { kind: "web", ref: "javascript:alert(1)", title: "bad", via: "web_extract", at: null },
+        { kind: "file", ref: "notes/plan.md", title: null, via: "read_file", at: null },
+      ],
+      outsideWorkdirFiles: 3,
+      truncated: false,
+    },
+  });
+  await render();
+  await click(byText("주간 보고"));
+  assert.equal(calls.includes("GET /api/channels/ch-1/artifacts/a1/sources"), false);
+  await openSources();
+  assert.equal(calls.includes("GET /api/channels/ch-1/artifacts/a1/sources"), true);
+  const links = [...container.querySelectorAll<HTMLAnchorElement>("[data-session-sources] a")];
+  assert.deepEqual(
+    links.map((a) => [a.textContent, a.getAttribute("href"), a.rel]),
+    [["기사 A", "https://news.example/a", "noopener noreferrer"]],
+  );
+  const text = container.querySelector("[data-session-sources]")?.textContent ?? "";
+  assert.equal(text.includes("notes/plan.md"), true);
+  assert.equal(text.includes("javascript:alert(1)"), true);
+  assert.equal(
+    (container.querySelector("[data-sources-outside]")?.textContent ?? "").includes("3"),
+    true,
+  );
+});
+
+test("an expired session says the sources passed the retention period", async () => {
+  mockFetch({
+    [LIST]: { artifacts: [summary()], cursor: "", has_more: false },
+    "GET /api/channels/ch-1/artifacts/a1": { artifact: summary(), versions: [version(1)] },
+    "GET /api/channels/ch-1/artifacts/a1/versions/1/content": { text: "x" },
+    "GET /api/channels/ch-1/artifacts/a1/sources": { status: "expired" },
+  });
+  await render();
+  await click(byText("주간 보고"));
+  await openSources();
+  assert.equal(
+    container.querySelector('[data-sources-state="expired"]')?.textContent,
+    "기록 보관 기간이 지나 출처를 볼 수 없습니다.",
+  );
+});
+
+test("an old plugin shows the update notice instead of a list", async () => {
+  mockFetch({
+    [LIST]: { artifacts: [summary()], cursor: "", has_more: false },
+    "GET /api/channels/ch-1/artifacts/a1": { artifact: summary(), versions: [version(1)] },
+    "GET /api/channels/ch-1/artifacts/a1/versions/1/content": { text: "x" },
+    "GET /api/channels/ch-1/artifacts/a1/sources": {
+      status: "unavailable",
+      reason: "plugin_upgrade_required",
+      minVersion: "0.23.0",
+    },
+  });
+  await render();
+  await click(byText("주간 보고"));
+  await openSources();
+  const notice = container.querySelector('[data-sources-state="plugin_upgrade_required"]');
+  assert.equal((notice?.textContent ?? "").includes("0.23.0"), true);
+});
+
 test("edit -> save calls addVersion and moves on to the new version", async () => {
   const a = summary({ current_version: 1 });
   const calls = mockFetch({
