@@ -113,6 +113,7 @@ import { registerMeetingHooks } from "@/lib/meeting-registry";
 import { prefixReportFormat } from "@/lib/report-format";
 import { prefixUserContext, type UserContext } from "@/lib/user-context";
 import { AdapterRegistry } from "../lib/adapters/types.js";
+import { createApprovalSummarizer, runApprovalSummaryAsNpc } from "./tool-approval-summary";
 import {
   classifyNpcDispatch,
   clearHermesRun,
@@ -1091,6 +1092,17 @@ export function setupSocketHandlers(io: Server) {
       io.to(`meeting-${channelId}`).emit(event, payload),
     emitToRoom: (roomId, event, payload) => io.to(roomSocketRoom(roomId)).emit(event, payload),
     clientFor: (npcId) => getProfileClientForNpc(npcId),
+    summarize: createApprovalSummarizer({
+      run: runApprovalSummaryAsNpc,
+      localeOf: (userId) => {
+        // Any open tab of the approver will do — they share the locale cookie.
+        for (const socketId of io.sockets.adapter.rooms.get(userRoom(userId)) ?? []) {
+          const socket = io.sockets.sockets.get(socketId);
+          if (socket) return socketLocale(socket);
+        }
+        return null;
+      },
+    }),
   });
   const loadMotionLayout = async (channelId: string) => {
     const [[channel], channelNpcs] = await Promise.all([

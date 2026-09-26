@@ -5,6 +5,8 @@
  * its own timeout. The approver — whoever ordered the work — is the only one who may decide; the
  * check happens here, not in the browser.
  */
+import crypto from "node:crypto";
+
 import { eq } from "drizzle-orm";
 
 import { db, gatewayResources, hermesProfiles, npcs } from "@/db";
@@ -23,18 +25,31 @@ import {
   type ToolApprovalRequest,
   type ToolApprovalResolved,
   type ToolApprovalStatus,
+  type ToolApprovalSummary,
 } from "@/lib/tool-approval-types";
 
 /** Shown when the plugin cannot tell us Hermes' `approvals.timeout` (plugin < 0.18.0, unreachable). */
 export const DEFAULT_APPROVAL_TIMEOUT_SECONDS = 300;
 const TIMEOUT_CACHE_MS = 10 * 60 * 1000;
+/**
+ * How long a group remembers its count and last decision. There is no meeting or chat id at this
+ * layer, so "the same conversation" means the same channel, context, room and approver within an
+ * hour of the last request.
+ */
+export const APPROVAL_GROUP_WINDOW_MS = 60 * 60 * 1000;
 
 export type DecideResult = "ok" | "not_approver" | "closed" | "invalid_choice" | "failed";
 
-export type PendingApproval = ToolApprovalRequest & {
+/** What a route hands the registry; grouping and the summary are the registry's to fill in. */
+export type PendingApproval = Omit<ToolApprovalRequest, "groupKey" | "repeat" | "summary"> & {
   approverUserId: string;
   approverName: string;
+  /** Hermes' `pattern_key`. */
+  patternKey?: string | null;
 };
+
+type StoredApproval = PendingApproval &
+  Pick<ToolApprovalRequest, "groupKey" | "repeat" | "summary">;
 
 type RunApprovalClient = {
   resolveRunApproval(
@@ -53,19 +68,67 @@ export type ToolApprovalRegistryDeps = {
   emitToRoom?: (roomId: string, event: string, payload: unknown) => void;
   /** The profile-key Hermes client of an NPC — null when the NPC lost its profile. */
   clientFor: (npcId: string) => Promise<RunApprovalClient | null>;
+  /**
+   * A plain-language line for the approver, already redacted. null means none could be made; the
+   * card then shows Hermes' own text. Absent means summaries are off.
+   */
+  summarize?: (req: PendingApproval) => Promise<string | null>;
 };
 
 export type ToolApprovalRegistry = ReturnType<typeof createToolApprovalRegistry>;
+
+/** One Hermes request waiting behind a card. */
+type Member = { key: string; runId: string; requestId: string | null };
+
+type Entry = {
+  req: StoredApproval;
+  /** Every Hermes request this card answers — the same request can arrive again from another run. */
+  members: Member[];
+  timer: unknown;
+  deciding: boolean;
+};
+
+export function approvalGroupKey(req: PendingApproval): string {
+  const parts = [
+    req.context,
+    req.channelId,
+    req.roomId ?? "",
+    req.approverUserId,
+    req.npcId,
+    req.patternKey ?? req.kind,
+    req.command,
+  ];
+  return crypto.createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 16);
+}
 
 export function createToolApprovalRegistry(deps: ToolApprovalRegistryDeps) {
   const now = deps.now ?? Date.now;
   const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
   const clearTimer = deps.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
-  const entries = new Map<string, { req: PendingApproval; timer: unknown; deciding: boolean }>();
+  const entries = new Map<string, Entry>();
+  /** Hermes request key → the card that answers it. */
+  const memberOf = new Map<string, string>();
+  /** Group → its open card. */
+  const openCard = new Map<string, string>();
+  const history = new Map<
+    string,
+    { count: number; last: ToolApprovalStatus | null; at: number; summary?: string }
+  >();
 
-  function publicView(req: PendingApproval): ToolApprovalRequest {
-    const { approverUserId: _u, approverName: _n, ...view } = req;
+  function publicView(req: StoredApproval): ToolApprovalRequest {
+    const { approverUserId: _u, approverName: _n, patternKey: _p, ...view } = req;
     return view;
+  }
+
+  function sendCard(entry: Entry) {
+    deps.emitToUser(entry.req.approverUserId, TOOL_APPROVAL_EVENTS.request, publicView(entry.req));
+  }
+
+  function forgetOldGroups() {
+    const cutoff = now() - APPROVAL_GROUP_WINDOW_MS;
+    for (const [group, seen] of history) {
+      if (seen.at < cutoff && !openCard.has(group)) history.delete(group);
+    }
   }
 
   function close(key: string, status: ToolApprovalStatus) {
@@ -73,6 +136,10 @@ export function createToolApprovalRegistry(deps: ToolApprovalRegistryDeps) {
     if (!entry) return;
     entries.delete(key);
     clearTimer(entry.timer);
+    for (const member of entry.members) memberOf.delete(member.key);
+    openCard.delete(entry.req.groupKey);
+    const seen = history.get(entry.req.groupKey);
+    if (seen) history.set(entry.req.groupKey, { ...seen, last: status, at: now() });
     const resolved: ToolApprovalResolved = { key, status };
     deps.emitToUser(entry.req.approverUserId, TOOL_APPROVAL_EVENTS.resolved, resolved);
     const cleared: ToolApprovalPending = { key, cleared: true };
@@ -87,20 +154,71 @@ export function createToolApprovalRegistry(deps: ToolApprovalRegistryDeps) {
       deps.emitToRoom?.(req.roomId, TOOL_APPROVAL_EVENTS.pending, payload);
   }
 
+  function summarizeInto(key: string, req: PendingApproval) {
+    if (!deps.summarize) return;
+    void deps
+      .summarize(req)
+      .catch(() => null)
+      .then((text) => {
+        const entry = entries.get(key);
+        if (!entry) return;
+        const seen = history.get(entry.req.groupKey);
+        if (text && seen) history.set(entry.req.groupKey, { ...seen, summary: text });
+        entry.req = {
+          ...entry.req,
+          summary: text ? { state: "ready", text } : { state: "unavailable" },
+        };
+        sendCard(entry);
+      });
+  }
+
   return {
     add(req: PendingApproval) {
-      if (entries.has(req.key)) return;
+      if (memberOf.has(req.key)) return;
+      forgetOldGroups();
+      const groupKey = approvalGroupKey(req);
+      const seen = history.get(groupKey);
+      const count = (seen?.count ?? 0) + 1;
+      history.set(groupKey, { count, last: seen?.last ?? null, at: now(), summary: seen?.summary });
+      const member: Member = { key: req.key, runId: req.runId, requestId: req.requestId };
+
+      const openKey = openCard.get(groupKey);
+      const open = openKey ? entries.get(openKey) : undefined;
+      if (open && !open.deciding) {
+        // The same request is already on screen: one card answers both.
+        open.members.push(member);
+        memberOf.set(req.key, open.req.key);
+        open.req = { ...open.req, repeat: { ...open.req.repeat, count } };
+        sendCard(open);
+        return;
+      }
+
       const choices = req.choices.filter((c) => TOOL_APPROVAL_CHOICES.includes(c));
-      const stored = { ...req, choices };
+      const summary: ToolApprovalSummary = seen?.summary
+        ? { state: "ready", text: seen.summary }
+        : deps.summarize
+          ? { state: "pending" }
+          : { state: "unavailable" };
+      const stored: StoredApproval = {
+        ...req,
+        choices,
+        groupKey,
+        repeat: { count, lastStatus: seen?.last ?? null },
+        summary,
+      };
       const timer = setTimer(() => close(req.key, "expired"), Math.max(0, req.expiresAt - now()));
-      entries.set(req.key, { req: stored, timer, deciding: false });
-      deps.emitToUser(req.approverUserId, TOOL_APPROVAL_EVENTS.request, publicView(stored));
+      const entry: Entry = { req: stored, members: [member], timer, deciding: false };
+      entries.set(req.key, entry);
+      memberOf.set(req.key, req.key);
+      openCard.set(groupKey, req.key);
+      sendCard(entry);
       emitPending(req, {
         key: req.key,
         npcId: req.npcId,
         approverName: req.approverName,
         ...(req.roomId ? { roomId: req.roomId } : {}),
       });
+      if (summary.state === "pending") summarizeInto(req.key, req);
     },
 
     async decide(userId: string, key: unknown, choice: unknown): Promise<DecideResult> {
@@ -112,38 +230,50 @@ export function createToolApprovalRegistry(deps: ToolApprovalRegistryDeps) {
       const picked = choice as ToolApprovalChoice;
       if (!entry.req.choices.includes(picked)) return "invalid_choice";
       entry.deciding = true;
-      const { runId, requestId, npcId } = entry.req;
-      try {
-        const client = await deps.clientFor(npcId);
-        if (!client) {
-          close(entry.req.key, "failed");
-          return "failed";
-        }
-        const res = await client.resolveRunApproval(runId, {
-          choice: picked,
-          ...(requestId ? { request_id: requestId } : {}),
-        });
-        if (res.resolved < 1) {
-          // Hermes had nothing waiting — it already timed out or the run ended.
-          close(entry.req.key, "expired");
-          return "closed";
-        }
-        close(entry.req.key, statusForChoice(picked));
-        return "ok";
-      } catch (err) {
-        if (err instanceof HermesError && (err.status === 404 || err.status === 409)) {
-          close(entry.req.key, "expired");
-          return "closed";
-        }
-        close(entry.req.key, "failed");
+      const cardKey = entry.req.key;
+      const client = await deps.clientFor(entry.req.npcId).catch(() => null);
+      if (!client) {
+        close(cardKey, "failed");
         return "failed";
       }
+      // Hermes keeps one approval session per run, so every request behind the card gets its own answer.
+      let answered = 0;
+      let failure: unknown = null;
+      for (const member of [...entry.members]) {
+        try {
+          const res = await client.resolveRunApproval(member.runId, {
+            choice: picked,
+            ...(member.requestId ? { request_id: member.requestId } : {}),
+          });
+          if (res.resolved >= 1) answered += 1;
+        } catch (err) {
+          failure = err;
+        }
+      }
+      if (answered > 0) {
+        close(cardKey, statusForChoice(picked));
+        return "ok";
+      }
+      if (
+        failure === null ||
+        (failure instanceof HermesError && (failure.status === 404 || failure.status === 409))
+      ) {
+        // Hermes had nothing waiting — it already timed out or the run ended.
+        close(cardKey, "expired");
+        return "closed";
+      }
+      close(cardKey, "failed");
+      return "failed";
     },
 
-    /** The run ended (answered, stopped, or failed) — anything still waiting on it is expired. */
+    /** The run ended (answered, stopped, or failed) — its requests are no longer waiting. */
     expireRun(runId: string) {
       for (const [key, entry] of [...entries]) {
-        if (entry.req.runId === runId) close(key, "expired");
+        const left = entry.members.filter((m) => m.runId !== runId);
+        if (left.length === entry.members.length) continue;
+        for (const m of entry.members) if (m.runId === runId) memberOf.delete(m.key);
+        entry.members = left;
+        if (left.length === 0) close(key, "expired");
       }
     },
 
@@ -214,6 +344,7 @@ export function withToolApprovals(
           context: route.context,
           ...(route.roomId ? { roomId: route.roomId } : {}),
           kind: event.kind,
+          patternKey: event.patternKey,
           command: event.command,
           description: event.description,
           choices: event.choices,

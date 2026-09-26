@@ -6,6 +6,8 @@ export type ParsedApprovalEvent = {
   command: string;
   description: string;
   kind: "mcp" | "command";
+  /** Hermes' `pattern_key` (which rule flagged it) — groups repeats of the same request. */
+  patternKey: string | null;
   choices: ToolApprovalChoice[];
 };
 
@@ -27,6 +29,10 @@ export function parseApprovalEvent(data: Record<string, unknown>): ParsedApprova
     command: typeof data.command === "string" ? data.command.slice(0, 500) : "",
     description: typeof data.description === "string" ? data.description.slice(0, 500) : "",
     kind: data.pattern_key === "mcp_elicitation" ? "mcp" : "command",
+    patternKey:
+      typeof data.pattern_key === "string" && data.pattern_key
+        ? data.pattern_key.slice(0, 200)
+        : null,
     choices: choices.length ? [...choices] : ["once", "deny"],
   };
 }

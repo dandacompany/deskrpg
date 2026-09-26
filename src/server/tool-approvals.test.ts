@@ -15,7 +15,13 @@ import {
 
 type Emit = { to: string; event: string; payload: unknown };
 
-function harness(opts: { resolved?: number; throws?: unknown } = {}) {
+function harness(
+  opts: {
+    resolved?: number;
+    throws?: unknown;
+    summarize?: (req: PendingApproval) => Promise<string | null>;
+  } = {},
+) {
   const userEmits: Emit[] = [];
   const meetingEmits: Emit[] = [];
   const calls: { npcId: string; runId: string; body: unknown }[] = [];
@@ -40,6 +46,7 @@ function harness(opts: { resolved?: number; throws?: unknown } = {}) {
         return { resolved: opts.resolved ?? 1 };
       },
     }),
+    ...(opts.summarize ? { summarize: opts.summarize } : {}),
   });
   return {
     registry,
@@ -143,13 +150,149 @@ test("a second decision on the same card is refused", async () => {
 test("two requests in one run are independent cards", async () => {
   const h = harness();
   h.registry.add(req({ requestId: "req_1" }));
-  h.registry.add(req({ requestId: "req_2" }));
+  h.registry.add(req({ requestId: "req_2", command: "rm -rf build" }));
   assert.equal(await h.registry.decide("user-dante", "run_1:req_1", "deny"), "ok");
   const left = h.registry.pendingFor("user-dante");
   assert.deepEqual(
     left.map((r) => r.key),
     ["run_1:req_2"],
   );
+});
+
+test("a repeat of a request already answered in this conversation carries the count and the last decision", async () => {
+  const h = harness();
+  h.registry.add(req({ runId: "run_1" }));
+  const first = h.userEmits[0].payload as { repeat: unknown; groupKey: string };
+  assert.deepEqual(first.repeat, { count: 1, lastStatus: null });
+  await h.registry.decide("user-dante", "run_1:req_1", "deny");
+  // The next turn is a new Hermes run: its request must be answered on its own.
+  h.registry.add(req({ runId: "run_2" }));
+  const second = h.userEmits.at(-1)?.payload as { key: string; repeat: unknown; groupKey: string };
+  assert.equal(second.key, "run_2:req_1");
+  assert.equal(second.groupKey, first.groupKey);
+  assert.deepEqual(second.repeat, { count: 2, lastStatus: "denied" });
+});
+
+test("a different NPC, command or conversation is a different group", () => {
+  const h = harness();
+  h.registry.add(req({ runId: "r1" }));
+  h.registry.add(req({ runId: "r2", npcId: "npc-other" }));
+  h.registry.add(req({ runId: "r3", command: "another tool" }));
+  h.registry.add(req({ runId: "r4", channelId: "ch-2" }));
+  const keys = h.userEmits.map((e) => (e.payload as { groupKey: string }).groupKey);
+  assert.equal(new Set(keys).size, 4);
+  for (const e of h.userEmits)
+    assert.deepEqual((e.payload as { repeat: unknown }).repeat, { count: 1, lastStatus: null });
+});
+
+test("the same request pending twice is one card, and one decision answers each Hermes request", async () => {
+  const h = harness();
+  h.registry.add(req({ runId: "run_1", requestId: "a" }));
+  h.registry.add(req({ runId: "run_2", requestId: "b" }));
+  assert.deepEqual(
+    h.registry.pendingFor("user-dante").map((r) => [r.key, r.repeat.count]),
+    [["run_1:a", 2]],
+  );
+  const cardKeys = new Set(h.userEmits.map((e) => (e.payload as { key: string }).key));
+  assert.deepEqual([...cardKeys], ["run_1:a"], "the second request updates the first card");
+  assert.equal(await h.registry.decide("user-dante", "run_1:a", "deny"), "ok");
+  assert.deepEqual(h.calls, [
+    { npcId: "npc-sophie", runId: "run_1", body: { choice: "deny", request_id: "a" } },
+    { npcId: "npc-sophie", runId: "run_2", body: { choice: "deny", request_id: "b" } },
+  ]);
+  assert.deepEqual(h.userEmits.at(-1)?.payload, { key: "run_1:a", status: "denied" });
+});
+
+test("a merged card stays open while another of its requests is still waiting", () => {
+  const h = harness();
+  h.registry.add(req({ runId: "run_1", requestId: "a" }));
+  h.registry.add(req({ runId: "run_2", requestId: "b" }));
+  h.registry.expireRun("run_1");
+  assert.deepEqual(
+    h.registry.pendingFor("user-dante").map((r) => r.key),
+    ["run_1:a"],
+  );
+  h.registry.expireRun("run_2");
+  assert.deepEqual(h.registry.pendingFor("user-dante"), []);
+  assert.deepEqual(h.userEmits.at(-1)?.payload, { key: "run_1:a", status: "expired" });
+});
+
+test("repeats older than the conversation window start a fresh count", async () => {
+  const h = harness();
+  h.registry.add(req({ runId: "run_1" }));
+  await h.registry.decide("user-dante", "run_1:req_1", "deny");
+  h.tick(61 * 60 * 1000);
+  h.registry.add(req({ runId: "run_2", expiresAt: 10_000_000 }));
+  assert.deepEqual((h.userEmits.at(-1)?.payload as { repeat: unknown }).repeat, {
+    count: 1,
+    lastStatus: null,
+  });
+});
+
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test("without a summarizer the card says so and shows Hermes' text", () => {
+  const h = harness();
+  h.registry.add(req());
+  assert.deepEqual((h.userEmits[0].payload as { summary: unknown }).summary, {
+    state: "unavailable",
+  });
+});
+
+test("the summary arrives on the same card: pending first, then the text", async () => {
+  const h = harness({ summarize: async () => "Sophie wants to save a note on the probe server." });
+  h.registry.add(req());
+  const cards = () => h.userEmits.filter((e) => e.event === "tool-approval:request");
+  assert.deepEqual((cards()[0].payload as { summary: unknown }).summary, { state: "pending" });
+  await flush();
+  const last = cards().at(-1)?.payload as { key: string; summary: unknown };
+  assert.equal(last.key, "run_1:req_1");
+  assert.deepEqual(last.summary, {
+    state: "ready",
+    text: "Sophie wants to save a note on the probe server.",
+  });
+});
+
+test("a failed or empty summary falls back to Hermes' text", async () => {
+  for (const summarize of [async () => null, async () => Promise.reject(new Error("x"))]) {
+    const h = harness({ summarize });
+    h.registry.add(req());
+    await flush();
+    assert.deepEqual((h.userEmits.at(-1)?.payload as { summary: unknown }).summary, {
+      state: "unavailable",
+    });
+  }
+});
+
+test("a repeat reuses the group's summary instead of asking again", async () => {
+  let asked = 0;
+  const h = harness({
+    summarize: async () => {
+      asked += 1;
+      return "Save a note.";
+    },
+  });
+  h.registry.add(req({ runId: "run_1" }));
+  await flush();
+  await h.registry.decide("user-dante", "run_1:req_1", "deny");
+  h.registry.add(req({ runId: "run_2" }));
+  await flush();
+  assert.equal(asked, 1);
+  assert.deepEqual((h.userEmits.at(-1)?.payload as { summary: unknown }).summary, {
+    state: "ready",
+    text: "Save a note.",
+  });
+});
+
+test("a summary that arrives after the card closed is dropped", async () => {
+  let finish: (text: string) => void = () => {};
+  const h = harness({ summarize: () => new Promise((resolve) => (finish = resolve)) });
+  h.registry.add(req());
+  await h.registry.decide("user-dante", "run_1:req_1", "deny");
+  const before = h.userEmits.length;
+  finish("late");
+  await flush();
+  assert.equal(h.userEmits.length, before);
 });
 
 test("the approval times out on its own timer", () => {
@@ -162,9 +305,9 @@ test("the approval times out on its own timer", () => {
 
 test("expireRun closes every card of that run and nothing else", () => {
   const h = harness();
-  h.registry.add(req({ runId: "run_1", requestId: "a" }));
-  h.registry.add(req({ runId: "run_1", requestId: "b" }));
-  h.registry.add(req({ runId: "run_2", requestId: "a" }));
+  h.registry.add(req({ runId: "run_1", requestId: "a", command: "one" }));
+  h.registry.add(req({ runId: "run_1", requestId: "b", command: "two" }));
+  h.registry.add(req({ runId: "run_2", requestId: "a", command: "three" }));
   h.registry.expireRun("run_1");
   assert.deepEqual(
     h.registry.pendingFor("user-dante").map((r) => r.key),
@@ -249,6 +392,7 @@ const EVENT: ParsedApprovalEvent = {
   command: "rm -r /tmp/probe",
   description: "recursive delete",
   kind: "command",
+  patternKey: null,
   choices: ["once", "session", "deny"],
 };
 

@@ -38,17 +38,38 @@ type Action =
   | { type: "undecided"; key: string }
   | { type: "remove"; key: string };
 
-/** Keeps cards in arrival order. A repeated request (the server resends on reconnect) never duplicates or reopens a card. */
+/**
+ * Keeps cards in arrival order. The server sends a card again with the same key when its summary
+ * arrives or a repeat joins it (and on reconnect): that updates the card in place and never reopens
+ * or duplicates it. A new card of a group replaces the group's finished card, so a request asked
+ * again shows as one card with its count.
+ */
 export function approvalsReducer(state: State, action: Action): State {
   switch (action.type) {
     case "request": {
-      if (state.cards.some((c) => c.request.key === action.request.key)) return state;
       // Defensive: only the three contract choices are ever drawn — `always` never reaches a button.
       const choices = TOOL_APPROVAL_CHOICES.filter((c) => action.request.choices.includes(c));
-      const request = { ...action.request, choices: choices.length ? choices : ["deny" as const] };
+      // A payload without the grouping or summary fields (an older server) still draws a plain card.
+      const incoming = action.request as Partial<ToolApprovalRequest> & ToolApprovalRequest;
+      const request: ToolApprovalRequest = {
+        ...incoming,
+        choices: choices.length ? choices : ["deny" as const],
+        groupKey: incoming.groupKey ?? incoming.key,
+        repeat: incoming.repeat ?? { count: 1, lastStatus: null },
+        summary: incoming.summary ?? { state: "unavailable" },
+      };
+      if (state.cards.some((c) => c.request.key === request.key)) {
+        return {
+          ...state,
+          cards: state.cards.map((c) => (c.request.key === request.key ? { ...c, request } : c)),
+        };
+      }
+      const kept = state.cards.filter(
+        (c) => c.request.groupKey !== request.groupKey || c.status === "pending",
+      );
       return {
         ...state,
-        cards: [...state.cards, { request, status: "pending", deciding: false }],
+        cards: [...kept, { request, status: "pending", deciding: false }],
       };
     }
     case "resolved":

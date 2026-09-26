@@ -540,6 +540,7 @@ describe("ConversationEngine — turn timeout", () => {
           command: "mcp_probe_write_note",
           description: "write-capable MCP tool",
           kind: "mcp",
+          patternKey: null,
           choices: ["once", "session", "deny"],
         });
         await new Promise((r) => setTimeout(r, 60));
