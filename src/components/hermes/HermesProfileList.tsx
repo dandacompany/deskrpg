@@ -17,6 +17,7 @@ import type { CharacterAppearance } from "@/game/three/office-appearance";
 
 import { employeeDetailHref, hirePageHref } from "@/app/profiles/hire-navigation";
 import RosterAvatar from "../RosterAvatar";
+import HermesProfileImport from "./HermesProfileImport";
 import { profileStatusLabel } from "./profile-status";
 import { PROFILE_STATUS_BADGE_CLASS } from "./profile-status-style";
 
@@ -200,6 +201,16 @@ export default function HermesProfileList({
             );
           })}
         </div>
+      )}
+
+      {canRegister && (
+        <HermesProfileImport
+          gatewayId={gatewayId}
+          onImported={() => {
+            void loadProfiles();
+            onCreated?.();
+          }}
+        />
       )}
 
       {canRegister ? (
