@@ -33,9 +33,12 @@ const mark = (value: boolean) => (value ? "✓" : "✗");
 
 export default function DiagnosticsPanel({
   open = true,
+  expanded = false,
   onAvailable,
 }: {
   open?: boolean;
+  /** Start with the report unfolded — `/gateways/diagnostics` has nothing else to show. */
+  expanded?: boolean;
   onAvailable?: (available: boolean) => void;
 } = {}) {
   const t = useT();
@@ -70,6 +73,7 @@ export default function DiagnosticsPanel({
 
   return (
     <details
+      open={expanded}
       data-testid="diagnostics-panel"
       className="rounded-xl border border-border bg-surface p-5"
     >
