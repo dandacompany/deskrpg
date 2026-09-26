@@ -20,6 +20,7 @@ import type {
   KanbanTaskAction,
   KanbanLinksPage,
   KanbanRunsPage,
+  KanbanStatusTransitionsPage,
   KanbanTaskDetail,
   OrchestrationSettings,
   SwarmCreated,
@@ -224,6 +225,21 @@ export function createKanbanApi(channelId: string, fetchImpl?: FetchLike, boardS
         if (typeof value === "number") qs.set(key, String(value));
       }
       return request<KanbanRunsPage>(f, `${root}/runs${qs.size > 0 ? `?${qs}` : ""}`);
+    },
+    /**
+     * Status transitions within a window (rework metric). Fails with 404 if the plugin lacks
+     * `kanban_task_events`. `from`/`to` are epoch seconds; if omitted, the plugin gives the last 7 days.
+     */
+    statusTransitions: (opts?: { from?: number; to?: number; limit?: number }) => {
+      const qs = new URLSearchParams();
+      for (const key of ["from", "to", "limit"] as const) {
+        const value = opts?.[key];
+        if (typeof value === "number") qs.set(key, String(value));
+      }
+      return request<KanbanStatusTransitionsPage>(
+        f,
+        `${root}/events${qs.size > 0 ? `?${qs}` : ""}`,
+      );
     },
     createTask: (body: Record<string, unknown>) =>
       request<CreateTaskResponse>(f, `${root}/tasks`, json("POST", body)),

@@ -2943,6 +2943,8 @@ const zh: Record<string, string> = {
   "kanban.metrics.attention.blocked": "受阻 {count}",
   "kanban.metrics.throughput": "已完成卡片",
   "kanban.metrics.handedOff": "已转交审核的卡片",
+  "kanban.metrics.rework": "返工",
+  "kanban.metrics.rework.cards": "{count} 张卡片",
   "kanban.metrics.successRate": "成功率",
   "kanban.metrics.median": "耗时中位数",
   "kanban.metrics.openRuns": "进行中",

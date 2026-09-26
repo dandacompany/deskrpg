@@ -10,7 +10,7 @@
  * **did it finish · why did it fail · does it need attention right now.**
  */
 
-import type { KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
+import type { KanbanStatusTransition, KanbanTimelineRun } from "@/lib/hermes/deskrpg-plugin-types";
 import { countNeedsAttention, type AttentionCounts } from "@/lib/needs-attention";
 import { taskTimeMs } from "@/lib/plugin-time";
 
@@ -42,6 +42,21 @@ export type DurationStats = {
   samples: number;
 };
 
+/**
+ * Rework — a result sent back from review. Counted as `review` → `todo`/`ready` transitions that
+ * **happened inside the window**, the same rule as finished runs: a return that happened earlier
+ * belongs to an earlier window even if the card is still being reworked now.
+ */
+export type ReworkStats = {
+  /** Number of returns. A card sent back twice counts twice — each one is a round of human review. */
+  returns: number;
+  /** Number of distinct cards sent back at least once. */
+  cards: number;
+};
+
+/** The statuses a returned card lands in (Hermes `_landing_status_after_parents`). */
+const REWORK_LANDING: ReadonlySet<string> = new Set(["todo", "ready"]);
+
 export type OperationalMetrics = {
   window: { fromMs: number; toMs: number };
   /** **Number of cards** with at least one completed run in this window. The same card counts once even if it ran several times. */
@@ -64,6 +79,11 @@ export type OperationalMetrics = {
   duration: DurationStats;
   /** Cards needing attention. Counted with the **same function** as the judgment aggregate. */
   attention: AttentionCounts;
+  /**
+   * null when the transitions couldn't be asked for (a plugin without `kanban_task_events`, or the
+   * request failed). The screen then hides the cell — writing 0 would claim nothing was sent back.
+   */
+  rework: ReworkStats | null;
 };
 
 /** Has the run finished? If `ended_at` is missing, it's still running. */
@@ -83,11 +103,28 @@ function endedInWindow(run: KanbanTimelineRun, fromMs: number, toMs: number): bo
   return ended !== null && ended >= fromMs && ended <= toMs;
 }
 
+export function countRework(
+  transitions: readonly KanbanStatusTransition[],
+  window: { fromMs: number; toMs: number },
+): ReworkStats {
+  const cards = new Set<string>();
+  let returns = 0;
+  for (const transition of transitions) {
+    if (transition.from !== "review" || !REWORK_LANDING.has(transition.to)) continue;
+    const at = taskTimeMs(transition.created_at);
+    if (at === null || at < window.fromMs || at > window.toMs) continue;
+    returns += 1;
+    cards.add(transition.task_id);
+  }
+  return { returns, cards: cards.size };
+}
+
 export function computeOperationalMetrics(
   runs: readonly KanbanTimelineRun[],
   cards: readonly { id: string; status: string }[],
   pendingApprovalTaskIds: ReadonlySet<string>,
   window: { fromMs: number; toMs: number },
+  transitions: readonly KanbanStatusTransition[] | null = null,
 ): OperationalMetrics {
   const completedTasks = new Set<string>();
   const reviewTasks = new Set<string>();
@@ -131,6 +168,7 @@ export function computeOperationalMetrics(
       .sort((a, b) => b.count - a.count || a.outcome.localeCompare(b.outcome)),
     duration: median(durations),
     attention: countNeedsAttention(cards, pendingApprovalTaskIds),
+    rework: transitions === null ? null : countRework(transitions, window),
   };
 }
 

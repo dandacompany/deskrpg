@@ -57,6 +57,7 @@ describe("owner client — info", () => {
       "events",
       "swarm",
       "kanban_views",
+      "kanban_task_events",
       "initial_status",
       "kanban_review_policy_v1",
       "event_cursor_handoff",

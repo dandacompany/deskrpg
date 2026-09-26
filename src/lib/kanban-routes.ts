@@ -269,6 +269,33 @@ export async function listRuns(req: NextRequest, channelId: string) {
   return NextResponse.json(res.data);
 }
 
+/**
+ * `GET /api/channels/:id/kanban/events?from=&to=&limit=` — status transitions within a window.
+ *
+ * Same pass-through as `listRuns`: the plugin validates the query. Only `kind=status` exists, so the
+ * route pins it rather than forwarding whatever the browser sends. A plugin without
+ * `kanban_task_events` answers 404, which propagates — the screen hides the rework metric instead of
+ * showing 0.
+ */
+export async function listStatusTransitions(req: NextRequest, channelId: string) {
+  const resolved = await resolve(req, channelId);
+  if (!resolved.ok) return resolved.response;
+  const q = req.nextUrl.searchParams;
+  const num = (key: string) => {
+    const raw = q.get(key);
+    if (raw === null || raw === "") return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : Number.NaN;
+  };
+  const res = await resolved.ctx.client.kanban.listStatusTransitions(resolved.ctx.boardSlug, {
+    from: num("from"),
+    to: num("to"),
+    limit: num("limit"),
+  });
+  if (!res.ok) return pluginFailureResponse(res);
+  return NextResponse.json(res.data);
+}
+
 export async function getTask(req: NextRequest, channelId: string, taskId: string) {
   const resolved = await resolve(req, channelId);
   if (!resolved.ok) return resolved.response;
