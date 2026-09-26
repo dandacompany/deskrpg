@@ -177,9 +177,12 @@ export function setAclHarden(dir: string): void {
  * Node's `chmodSync` only touches the read-only attribute on Windows and is ineffective, so it is not used.
  * On failure it throws and aborts the operation (fail-closed) — tokens are never written without narrowed permissions.
  *
- * Every attempt is read back. On the windows-latest runner (CI 2026-09-26) icacls exited 0 yet the
- * directory was not narrowed — a success code alone proves nothing. icacls goes first, then .NET
- * (`setAclHarden`); if neither leaves a narrowed ACL the directory is removed and the call fails.
+ * Every attempt is read back. On the windows-latest runner (Windows Server 2025, CI 2026-09-26)
+ * `icacls /inheritance:r` exited 0 but kept SYSTEM, Administrators and the user as **explicit**
+ * `(OI)(CI)(F)` entries — it behaved like `/inheritance:d` (copy), so files inside still granted
+ * SYSTEM and Administrators. A success code alone proves nothing. icacls goes first (it narrows on
+ * other hosts, WinServer included), then a .NET DACL (`setAclHarden`), which narrowed on the runner;
+ * if neither leaves a narrowed ACL the directory is removed and the call fails.
  */
 export function secureStdioDir(
   platform: string,

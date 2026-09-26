@@ -139,29 +139,38 @@ test(
   },
 );
 
-for (const [name, harden] of [
-  ["icacls", icaclsHarden],
-  ["Set-Acl", setAclHarden],
-] as const) {
-  test(`${name} alone narrows the ssh stdio directory — each way, read back`, { skip }, () => {
-    const dir = tempDir("deskrpg-acl-way-");
+test("Set-Acl alone narrows the ssh stdio directory — read back", { skip }, () => {
+  const dir = tempDir("deskrpg-acl-way-");
+  try {
+    let error = "";
     try {
-      let error = "";
-      try {
-        harden(dir);
-      } catch (e) {
-        error = String(e);
-      }
-      const acl = execFileSync("icacls", [dir], { encoding: "utf8" });
-      assert.ok(
-        isOwnerOnlyAcl(acl),
-        `${name} did not narrow${error ? ` (${error})` : ""}:\n${acl}`,
-      );
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
+      setAclHarden(dir);
+    } catch (e) {
+      error = String(e);
     }
-  });
-}
+    const acl = execFileSync("icacls", [dir], { encoding: "utf8" });
+    assert.ok(isOwnerOnlyAcl(acl), `Set-Acl did not narrow${error ? ` (${error})` : ""}:\n${acl}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Not an assertion: icacls does not narrow on every host (windows-latest keeps explicit entries), and
+// secureStdioDir falls back to Set-Acl there. Its outcome is kept in the log for comparison.
+test("icacls alone — outcome recorded, not required", { skip }, (t) => {
+  const dir = tempDir("deskrpg-acl-way-");
+  try {
+    try {
+      icaclsHarden(dir);
+    } catch (e) {
+      t.diagnostic(`icacls threw: ${String(e)}`);
+    }
+    const acl = execFileSync("icacls", [dir], { encoding: "utf8" });
+    t.diagnostic(`icacls narrowed: ${isOwnerOnlyAcl(acl)}\n${acl}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test(
   "start -d on Windows creates the server outside this process tree, through WMI",
