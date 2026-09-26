@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { count, eq, inArray } from "drizzle-orm";
 import { db, npcs, hermesProfiles, gatewayResources } from "@/db";
 import { parseDbJson } from "./db-json";
 
@@ -88,6 +88,25 @@ export async function selectChannelNpcs(
   const all = await joined(eq(npcs.channelId, channelId));
   if (!opts.roster) return filterForMap(all);
   return opts.includeDormant === false ? all.filter((n) => n.active) : all;
+}
+
+/**
+ * Roster size per channel in one query — the same rows `selectChannelNpcs(id, { roster: true })`
+ * returns (same joins, dormant and unplaced included), so a count shown next to a channel matches
+ * its roster. Channels with no NPCs are absent from the map.
+ */
+export async function countRosterNpcsByChannel(
+  channelIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (channelIds.length === 0) return new Map();
+  const rows = await db
+    .select({ channelId: npcs.channelId, value: count() })
+    .from(npcs)
+    .innerJoin(hermesProfiles, eq(hermesProfiles.id, npcs.hermesProfileId))
+    .innerJoin(gatewayResources, eq(gatewayResources.id, hermesProfiles.gatewayId))
+    .where(inArray(npcs.channelId, [...channelIds]))
+    .groupBy(npcs.channelId);
+  return new Map(rows.map((r) => [r.channelId, Number(r.value)]));
 }
 
 export async function selectNpcById(npcId: string): Promise<ProjectedNpc | null> {
