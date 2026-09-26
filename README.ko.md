@@ -216,7 +216,7 @@ DeskRPG에 연결하는 절차는 네 단계입니다.
 [`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin) 이 필요합니다.
 
 ```bash
-hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref cf794d23b8057f04a60dfb93eaf8b92b8530cca5
+hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref 318dc92355bb6b1f029ee17d71c5a9797e280e12
 hermes plugins enable deskrpg
 # 게이트웨이 재시작 — 라우트는 기동할 때만 붙습니다
 ```
@@ -224,7 +224,7 @@ hermes plugins enable deskrpg
 `enable` 은 선택이 아닙니다. 설치만 하고 건너뛰면 모든 플러그인 라우트가 404를 냅니다.
 DeskRPG는 플러그인이 없거나 낡았다고 판단하면 보드·일정 화면에 같은 명령을 그대로 보여줍니다.
 
-**새 카드 생성에는 Hermes의 승인 정책 지원이 필요합니다.** 플러그인 0.13.1은 [단테랩스 Hermes 호환 패치](https://github.com/dandacompany/hermes-agent/tree/deskrpg/mixed-approval-v1) `622a2f793f`(본가 `e2f8a0731bf2` 기반)의 전체 계약이 있을 때만 `kanban_review_policy_v1`을 제공합니다. 본가 공식 릴리스가 아닙니다. core 변경 전 [플러그인의 호환성·백업 안내](https://github.com/dandacompany/deskrpg-hermes-plugin#task-approval-compatibility)를 따르세요. 패치가 없는 환경은 기존 카드와 조회를 유지하지만 새 카드는 만들 수 없습니다. 기존 카드·전역 설정은 자동 변경하지 않습니다. 새 스웜 생성은 native 승인 계약 지원 전까지 일시 중단됩니다.
+**새 카드 생성에는 Hermes의 승인 정책 지원이 필요합니다.** 플러그인은 0.13.1부터 [단테랩스 Hermes 호환 패치](https://github.com/dandacompany/hermes-agent/tree/deskrpg/mixed-approval-v1) `622a2f793f`(본가 `e2f8a0731bf2` 기반)의 전체 계약이 있을 때만 `kanban_review_policy_v1`을 제공합니다. 본가 공식 릴리스가 아닙니다. core 변경 전 [플러그인의 호환성·백업 안내](https://github.com/dandacompany/deskrpg-hermes-plugin#task-approval-compatibility)를 따르세요. 패치가 없는 환경은 기존 카드와 조회를 유지하지만 새 카드는 만들 수 없습니다. 기존 카드·전역 설정은 자동 변경하지 않습니다. 같은 core에 플러그인 0.25.0 이상을 올리면 승인 정책 보드에서도 새 스웜을 만들 수 있습니다(`swarm_review_policy`). 이 기능이 없는 게이트웨이는 새 스웜을 거부합니다.
 
 이제 NPC를 고용할 수 있습니다. NPC는 고용 시점에 Hermes 프로필 하나에 바인딩되며,
 해고하지 않고 나중에 다른 프로필로 다시 연결할 수 있습니다.

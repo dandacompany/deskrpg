@@ -217,7 +217,7 @@ Conversations work without it. Kanban boards, the event stream and cron need
 [`deskrpg-hermes-plugin`](https://github.com/dandacompany/deskrpg-hermes-plugin) on the gateway host:
 
 ```bash
-hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref cf794d23b8057f04a60dfb93eaf8b92b8530cca5
+hermes plugins install https://github.com/dandacompany/deskrpg-hermes-plugin --ref 318dc92355bb6b1f029ee17d71c5a9797e280e12
 hermes plugins enable deskrpg
 # restart the gateway — routes are attached only at startup
 ```
@@ -226,7 +226,7 @@ hermes plugins enable deskrpg
 succeeded. DeskRPG shows the same command in the board and schedule screens when it detects the
 plugin is missing or out of date.
 
-**New task creation requires native approval support.** Plugin 0.13.1 exposes `kanban_review_policy_v1` only with the tested [Dante Labs Hermes compatibility patch](https://github.com/dandacompany/hermes-agent/tree/deskrpg/mixed-approval-v1), commit `622a2f793f`, based on upstream `e2f8a0731bf2`. This is not an upstream Hermes release. Follow the [plugin compatibility and backup guidance](https://github.com/dandacompany/deskrpg-hermes-plugin#task-approval-compatibility) before changing core. Unpatched gateways retain legacy cards and reads, but new cards are blocked. Existing cards and global settings are not converted. New swarm creation is temporarily unavailable until its native approval contract is supported.
+**New task creation requires native approval support.** Since 0.13.1 the plugin exposes `kanban_review_policy_v1` only with the tested [Dante Labs Hermes compatibility patch](https://github.com/dandacompany/hermes-agent/tree/deskrpg/mixed-approval-v1), commit `622a2f793f`, based on upstream `e2f8a0731bf2`. This is not an upstream Hermes release. Follow the [plugin compatibility and backup guidance](https://github.com/dandacompany/deskrpg-hermes-plugin#task-approval-compatibility) before changing core. Unpatched gateways retain legacy cards and reads, but new cards are blocked. Existing cards and global settings are not converted. With plugin 0.25.0 or later on that core, new swarms can also be created on approval-policy boards (`swarm_review_policy`); a gateway that lacks it refuses them.
 
 Now you can hire NPCs. Each NPC is bound to one Hermes profile at hire time, and you can rebind it
 later without firing it.
