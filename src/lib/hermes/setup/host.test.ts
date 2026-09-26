@@ -2412,9 +2412,9 @@ test("the Windows branch uses only the same ownership warning codes", () => {
     );
 });
 
-test("HOST_BOOTSTRAP contains only ASCII — it is the only host script passed as a command-line argument", () => {
-  // Other host scripts (HELPER, INSTALLER) go as a JSON payload on stdin, but the bootstrap alone
-  // goes as the **argv** of `python3 -c <code>`. Python decodes argv with the locale encoding, so
+test("HOST_BOOTSTRAP contains only ASCII — it is passed as a command-line argument", () => {
+  // HOST_HELPER goes as a JSON payload on stdin, but the bootstrap goes as the **argv** of
+  // `python3 -c <code>` (so does HOST_INSTALLER, for an install). Python decodes argv with the locale encoding, so
   // even a single Korean comment line makes it, on a host with a C/POSIX locale + UTF-8 mode off,
   // **fail to even start** with "Unable to decode the command from the command line".
   // macOS always reads argv as UTF-8, so it doesn't show up locally — Linux CI caught it (2026-09-20).
@@ -2426,6 +2426,28 @@ test("HOST_BOOTSTRAP contains only ASCII — it is the only host script passed a
     [],
     "부트스트랩의 주석·문자열은 영문으로 쓴다",
   );
+});
+
+test("the scripts the launcher passes as `python -c <code>` contain no double quote", () => {
+  // On Windows HOST_LAUNCHER_PS runs `& $exe -c $code`, and Windows PowerShell 5.1 does not escape
+  // embedded double quotes when it passes an argument to a native program: each one is dropped.
+  // `SET_ACL = "; ".join(...)` reached Python as `SET_ACL = ; .join(...)` — a SyntaxError that broke
+  // every local host helper run on Windows (CI windows-runtime, 2026-09-26). Use single quotes, and
+  // \\x27 for a single quote inside one.
+  for (const [name, code] of [
+    ["HOST_BOOTSTRAP", HOST_BOOTSTRAP],
+    ["HOST_INSTALLER", HOST_INSTALLER],
+  ] as const) {
+    const offenders = code
+      .split("\n")
+      .map((line, index) => ({ line, number: index + 1 }))
+      .filter(({ line }) => line.includes('"'));
+    assert.deepEqual(
+      offenders.map(({ number, line }) => `${number}: ${line.trim()}`),
+      [],
+      `${name} must not contain a double quote`,
+    );
+  }
 });
 
 test("HOST_BOOTSTRAP round-trips a Korean payload even under a non-UTF-8 locale", () => {
