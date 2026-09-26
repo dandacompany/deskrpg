@@ -333,3 +333,47 @@ test("a blocked row after repeated failures says so; a plain blocked row does no
   assert.equal(host.querySelector('[data-row-id="t2"] [data-repeated-failure]') !== null, false);
   await cleanup();
 });
+
+test("an NPC question row answers through the inbox and reloads", async () => {
+  const questionRow = {
+    kind: "question",
+    id: "q1",
+    title: "어떤 형식으로 만들까요?",
+    at: "2026-09-26T00:00:01.000Z",
+    requestedBy: "Noah",
+    count: 1,
+    npcId: "npc-1",
+    choices: ["요약", "표"],
+    allowOther: false,
+  } as AttentionRow;
+  const answered: unknown[] = [];
+  let loads = 0;
+  const client = {
+    async load() {
+      loads += 1;
+      return { rows: loads === 1 ? [questionRow] : [], counts: EMPTY_COUNTS };
+    },
+    async decide() {
+      return {};
+    },
+    async answerQuestion(questionId: string, npcId: string, response: string) {
+      answered.push([questionId, npcId, response]);
+      return { answered: true };
+    },
+  } as never;
+  const f = await render(<AttentionInboxPanel channelId="ch-1" api={client} />);
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  assert.match(f.host.textContent ?? "", /Noah의 질문/);
+  const button = [...f.host.querySelectorAll("button")].find((b) => b.textContent === "표");
+  assert.ok(button);
+  await act(async () => button.click());
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  assert.deepEqual(answered, [["q1", "npc-1", "표"]]);
+  assert.equal(loads, 2, "the inbox reloads after answering");
+  assert.ok(!f.host.querySelector("[data-attention-row=question]"));
+  await f.cleanup();
+});

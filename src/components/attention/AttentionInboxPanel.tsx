@@ -16,7 +16,8 @@ import {
   createApprovalPolicyApi,
   type ApprovalPolicyClientApi,
 } from "../approvals/approval-policy-api";
-import { createAttentionApi, type AttentionInbox } from "./attention-api";
+import QuestionChoices, { type QuestionAnswerOutcome } from "../npc-question/QuestionChoices";
+import { AttentionApiError, createAttentionApi, type AttentionInbox } from "./attention-api";
 
 /**
  * The fields of an `approval_blocked` row — an unattended cron/kanban run that the NPC's run
@@ -123,6 +124,22 @@ export default function AttentionInboxPanel({
     [load],
   );
 
+  const answer = useCallback(
+    async (row: AttentionRow & { kind: "question" }, response: string) => {
+      let outcome: QuestionAnswerOutcome = "answered";
+      try {
+        await client.current.answerQuestion(row.id, row.npcId, response);
+      } catch (e) {
+        const status = e instanceof AttentionApiError ? e.status : 0;
+        outcome = status === 404 ? "not_found" : status === 400 ? "invalid" : "failed";
+      }
+      // The answered question leaves the plugin's list, so the row goes on the next load.
+      if (outcome === "answered" || outcome === "not_found") void load();
+      return outcome;
+    },
+    [load],
+  );
+
   if (error)
     return (
       <div className="p-4 text-body text-text-secondary" data-attention-error>
@@ -156,6 +173,7 @@ export default function AttentionInboxPanel({
           onOpenCronJob={onOpenCronJob}
           onOpenApprovalPolicy={onOpenApprovalPolicy}
           policyFor={policyFor}
+          onAnswer={answer}
         />
       ))}
     </div>
@@ -170,6 +188,7 @@ function AttentionRowView({
   onOpenCronJob,
   onOpenApprovalPolicy,
   policyFor,
+  onAnswer,
 }: {
   row: AttentionRow;
   busy: boolean;
@@ -178,8 +197,32 @@ function AttentionRowView({
   onOpenCronJob?: (jobId: string) => void;
   onOpenApprovalPolicy?: (npcId: string) => void;
   policyFor: (npcId: string) => ApprovalPolicyClientApi;
+  onAnswer: (
+    row: AttentionRow & { kind: "question" },
+    response: string,
+  ) => Promise<QuestionAnswerOutcome>;
 }) {
   const t = useT();
+  if (row.kind === "question")
+    return (
+      <div
+        className="rounded-lg border border-border bg-surface-raised px-3 py-2"
+        data-attention-row="question"
+        data-row-id={row.id}
+      >
+        <div className="text-caption font-semibold text-text-muted">
+          {row.requestedBy
+            ? t("npcQuestion.from", { name: row.requestedBy })
+            : t("attention.kind.question")}
+        </div>
+        <div className="mt-0.5 mb-1.5 break-words text-body text-text">{row.title}</div>
+        <QuestionChoices
+          choices={row.choices}
+          allowOther={row.allowOther}
+          onAnswer={(response) => onAnswer(row, response)}
+        />
+      </div>
+    );
   const blocked = approvalBlockedFields(row);
   if (blocked) {
     return (

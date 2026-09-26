@@ -49,5 +49,15 @@ export function createAttentionApi(channelId: string) {
         }),
       );
     },
+    /** Answers an NPC's question (only its own user may). Throws the server's `{code}` on failure. */
+    async answerQuestion(questionId: string, npcId: string, response: string): Promise<unknown> {
+      return unwrap(
+        await fetch(`${base}/attention/questions/${encodeURIComponent(questionId)}/answer`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ npcId, response }),
+        }),
+      );
+    },
   };
 }
