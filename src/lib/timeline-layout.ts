@@ -329,6 +329,12 @@ export type TargetMarker =
  * due through the **end** of that day — if the target is September 30, the deadline runs through
  * 23:59 on the 30th; using 00:00 would lose a day.
  */
+function localMidnight(ms: number): number {
+  const day = new Date(ms);
+  day.setHours(0, 0, 0, 0);
+  return day.getTime();
+}
+
 export function targetMarker(
   targetDate: string | null | undefined,
   win: TimelineWindow,
@@ -346,8 +352,10 @@ export function targetMarker(
     kind: "outside",
     atMs,
     side: atMs < win.fromMs ? "before" : "after",
-    // A past target date comes out negative — the screen needs to be able to say "past due."
-    daysFromNow: Math.ceil((atMs - nowMs) / (24 * 3600_000)),
+    // Local calendar days from today: 0 is today, negative is overdue. Counting the hours left
+    // until 23:59 and rounding up turned yesterday into -0 ("0 days left") and today into 1.
+    // Rounding the midnight-to-midnight gap absorbs a 23- or 25-hour DST day.
+    daysFromNow: Math.round((dayStart - localMidnight(nowMs)) / (24 * 3600_000)),
   };
 }
 
