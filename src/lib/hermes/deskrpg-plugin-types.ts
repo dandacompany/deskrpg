@@ -674,7 +674,16 @@ export type SwarmRequest = {
   tenant?: string | null;
   priority?: number;
   idempotency_key?: string;
+  /** The workers' approval policy (`swarm_review_policy`). The verifier and the synthesizer are always human. */
+  review_policy?: KanbanReviewPolicy;
 };
+
+/**
+ * New swarms on approval-policy boards: the plugin assembles the swarm so every result card carries its policy
+ * and the structure root carries none. Without it DeskRPG refuses new swarms (existing swarms stay readable).
+ */
+export const SWARM_REVIEW_POLICY_CAPABILITY = "swarm_review_policy";
+export const SWARM_REVIEW_POLICY_MIN_VERSION = "0.25.0";
 
 /** Hermes `SwarmCreated.as_dict()` as-is. Key names are not changed. */
 export type SwarmCreated = {

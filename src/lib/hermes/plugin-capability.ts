@@ -19,6 +19,7 @@
 
 import { parseWorkerPluginReport } from "./worker-plugin";
 import type { PluginInfo } from "./deskrpg-plugin-types";
+import { SWARM_REVIEW_POLICY_CAPABILITY } from "./deskrpg-plugin-types";
 import { PLUGIN_VERSION } from "./setup/pin";
 
 export type PluginStatus = "plugin_ready" | "plugin_unauthorized" | "plugin_absent" | "unknown";
@@ -499,6 +500,11 @@ export async function probeDeskrpgPluginWithInfo(input: ProbeInput): Promise<Plu
   return "failure" in raw
     ? { capability: { status: "unknown", version: null }, info: null, failure: raw.failure }
     : classifyPluginProbeWithInfo(raw);
+}
+
+/** New swarms whose result cards carry approval policies (the plugin assembles them in one transaction). */
+export function supportsSwarmReviewPolicy(info: PluginInfo | null): boolean {
+  return info?.capabilities.includes(SWARM_REVIEW_POLICY_CAPABILITY) ?? false;
 }
 
 /** The contract that enforces the completion policy for new tasks in core. */
