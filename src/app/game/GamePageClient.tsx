@@ -56,6 +56,7 @@ import {
 import type { Socket } from "socket.io-client";
 import { EventBus, setPendingChannelData, type PendingChannelData } from "@/game/EventBus";
 import { decideChatError } from "./chat-error-dispatch";
+import { retryAfter } from "./retry";
 import { shouldToastAccessDenied } from "./access-denied-toast";
 import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
 import {
@@ -264,6 +265,8 @@ function withoutNpc(set: ReadonlySet<string>, npcId: string): ReadonlySet<string
   next.delete(npcId);
   return next;
 }
+
+const NPC_LIST_RETRY_DELAYS_MS = [1_000, 3_000];
 
 function GamePageInner({ onFatal }: GamePageClientProps) {
   const searchParams = useSearchParams();
@@ -1907,14 +1910,19 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const refreshNpcLists = useCallback(async () => {
     if (!channelId) return;
     try {
-      const [mapRes, rosterRes] = await Promise.all([
-        fetch(`/api/npcs?channelId=${channelId}`),
-        fetch(`/api/npcs?channelId=${channelId}&roster=1`),
-      ]);
-      if (!mapRes.ok) {
-        const errorData = await mapRes.json().catch(() => ({}));
-        throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToFetchNpcs"));
-      }
+      // A dropped read would leave the lists stale until the next roster event — including the
+      // meeting picker, which would still offer an NPC who just clocked out.
+      const [mapRes, rosterRes] = await retryAfter(async () => {
+        const pair = await Promise.all([
+          fetch(`/api/npcs?channelId=${channelId}`),
+          fetch(`/api/npcs?channelId=${channelId}&roster=1`),
+        ]);
+        if (!pair[0].ok) {
+          const errorData = await pair[0].json().catch(() => ({}));
+          throw new Error(getLocalizedErrorMessage(t, errorData, "errors.failedToFetchNpcs"));
+        }
+        return pair;
+      }, NPC_LIST_RETRY_DELAYS_MS);
       const mapData = await mapRes.json();
       if (mapData.npcs) setChannelNpcs(mapData.npcs);
       if (rosterRes.ok) {
