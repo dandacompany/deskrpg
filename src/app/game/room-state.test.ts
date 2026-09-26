@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
-import { initialRoomState, lastRoomKey, reduceRoomState } from "./room-state";
+import { initialRoomState, lastRoomKey, reduceRoomState, totalRoomUnread } from "./room-state";
 
 // The brief's literal was `as const`, but then `members` becomes a readonly tuple and
 // is not assignable to RoomSummary (tsc goes red). Keep the meaning and only add a type.
@@ -229,4 +229,77 @@ test("the list preview keeps a cron result's kind and status so an empty body ca
     kind: "cron_result",
     status: "error",
   });
+});
+
+const line = (id: string, over: Partial<RoomMessage> = {}): RoomMessage => ({
+  id,
+  roomId: "g1",
+  senderKind: "npc",
+  senderId: "npc-1",
+  senderName: "소피",
+  content: "소식",
+  createdAt: "2026-09-26T10:00:00.000Z",
+  ...over,
+});
+
+function listed(rooms: RoomSummary[]) {
+  return reduceRoomState(initialRoomState, {
+    type: "list",
+    rooms,
+    preferRoomId: "o",
+    viewerUserId: "me",
+  });
+}
+
+test("a line nobody is looking at adds one unread; a seen line, my own line or a repeat does not", () => {
+  let s = listed([office, { ...g1, unread: 2 }]);
+  s = reduceRoomState(s, { type: "message", roomId: "g1", message: line("m1"), seen: false });
+  assert.equal(s.rooms.find((r) => r.id === "g1")?.unread, 3);
+  s = reduceRoomState(s, { type: "message", roomId: "g1", message: line("m1"), seen: false });
+  s = reduceRoomState(s, { type: "message", roomId: "g1", message: line("m2"), seen: true });
+  s = reduceRoomState(s, {
+    type: "message",
+    roomId: "g1",
+    message: line("m3", { senderKind: "user", senderId: "me" }),
+    seen: false,
+  });
+  assert.equal(s.rooms.find((r) => r.id === "g1")?.unread, 3);
+});
+
+test("activity from a room not open updates its preview and unread count once per line", () => {
+  let s = listed([office, g1]);
+  s = reduceRoomState(s, { type: "activity", roomId: "g1", message: line("m1") });
+  s = reduceRoomState(s, { type: "activity", roomId: "g1", message: line("m1") });
+  const room = s.rooms.find((r) => r.id === "g1");
+  assert.equal(room?.unread, 1);
+  assert.equal(room?.lastMessage?.content, "소식");
+  assert.equal(room?.lastMessageAt, "2026-09-26T10:00:00.000Z");
+});
+
+test("read clears the count and keeps the point; updates from others keep my read state", () => {
+  let s = listed([office, { ...g1, unread: 4, readAt: "2026-09-26T09:00:00.000Z" }]);
+  s = reduceRoomState(s, { type: "read", roomId: "g1", readAt: "2026-09-26T10:00:00.000Z" });
+  assert.deepEqual(
+    (({ unread, readAt }) => ({ unread, readAt }))(s.rooms.find((r) => r.id === "g1")!),
+    { unread: 0, readAt: "2026-09-26T10:00:00.000Z" },
+  );
+  s = reduceRoomState(s, {
+    type: "message",
+    roomId: "g1",
+    message: line("m9"),
+    seen: false,
+  });
+  s = reduceRoomState(s, { type: "updated", room: { ...g1, name: "기획2" }, enter: false });
+  const room = s.rooms.find((r) => r.id === "g1");
+  assert.equal(room?.name, "기획2");
+  assert.equal(room?.unread, 1);
+  assert.equal(room?.readAt, "2026-09-26T10:00:00.000Z");
+});
+
+test("the unread total sums every room", () => {
+  const s = listed([
+    { ...office, unread: 2 },
+    { ...g1, unread: 3 },
+  ]);
+  assert.equal(totalRoomUnread(s), 5);
 });

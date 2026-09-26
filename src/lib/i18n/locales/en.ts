@@ -1972,6 +1972,7 @@ const en: Record<string, string> = {
   "workspace.spaces": "Spaces",
   "workspace.conversations": "Conversations",
   "workspace.dmLabel": "Chat with {name}",
+  "workspace.unread": "{n} unread",
   "workspace.people": "People",
   "workspace.status.available": "Available to chat",
   "workspace.state.unknown": "Status unknown",

@@ -86,6 +86,8 @@ import {
   type ReportItem,
 } from "@/game/report-queue";
 import { decideContextInvite } from "./context-invite-decision";
+import { isLookingAt, needsReadMark } from "./read-marks";
+import { CONVERSATION_READ_EVENT } from "@/lib/read-mark";
 import type { RoomMessage, RoomSummary } from "@/lib/chat-rooms-policy";
 import {
   buildPlacementRequest,
@@ -528,7 +530,10 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
   const npcMoveStatesRef = useRef<Record<string, string>>({});
   // The scene looks at "which room is visible now" — null if the panel is closed or there is no room.
   // Whenever either value changes the latest combination must always be sent, so emit from one effect.
+  // The room the viewer is looking at right now — a line arriving there is read, not unread.
+  const visibleRoomRef = useRef<string | null>(null);
   useEffect(() => {
+    visibleRoomRef.current = channelChatVisible ? currentRoomId : null;
     EventBus.emit("room:visible", { roomId: channelChatVisible ? currentRoomId : null });
   }, [channelChatVisible, currentRoomId]);
   useEffect(() => {
@@ -830,6 +835,27 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         dispatchRoom({ type: "updated", room: data.room, enter: false });
       });
 
+      // A group room's line while another room is open — only its preview and unread count move.
+      socketInstance.on("room:activity", (data: { roomId: string; message: RoomMessage }) => {
+        if (openedRoomRef.current === data.roomId) return;
+        dispatchRoom({ type: "activity", roomId: data.roomId, message: data.message });
+      });
+
+      // The read point moved — in this tab or another of mine.
+      socketInstance.on(
+        CONVERSATION_READ_EVENT,
+        (data: { kind: "room" | "dm"; id: string; readAt: string }) => {
+          if (data.kind === "room")
+            dispatchRoom({ type: "read", roomId: data.id, readAt: data.readAt });
+          else
+            setDmThreads((previous) =>
+              previous.map((thread) =>
+                thread.npcId === data.id ? { ...thread, unread: 0, readAt: data.readAt } : thread,
+              ),
+            );
+        },
+      );
+
       socketInstance.on("room:deleted", (data: { roomId: string }) => {
         if (openedRoomRef.current === data.roomId) openedRoomRef.current = null;
         dispatchRoom({ type: "deleted", roomId: data.roomId });
@@ -856,7 +882,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       // Room messages
       socketInstance.on("room:message", (data: { roomId: string; message: RoomMessage }) => {
         const msg = data.message;
-        dispatchRoom({ type: "message", roomId: data.roomId, message: msg });
+        dispatchRoom({
+          type: "message",
+          roomId: data.roomId,
+          message: msg,
+          seen: isLookingAt(visibleRoomRef.current, data.roomId),
+        });
         if (msg.senderKind === "system") return;
         // Show speech bubble on map
         if (msg.senderId) {
@@ -909,6 +940,12 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
           scopeId: data.response.npcId,
           response: data.response,
         });
+        if (
+          data.response.status === "complete" &&
+          dialogNpcRef.current?.npcId !== data.response.npcId
+        )
+          // A reply landed in a DM that isn't open — ask for the list again so its badge counts it.
+          socketInstance?.emit("npc:dm-threads");
         if (dialogNpcRef.current?.npcId === data.response.npcId) {
           setNpcMessages((previous) => reconcileNpcResponseMessages(previous, [data.response]));
           if (
@@ -1193,6 +1230,8 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
         socketInstance.off("room:list-response");
         socketInstance.off("room:history");
         socketInstance.off("room:message");
+        socketInstance.off("room:activity");
+        socketInstance.off(CONVERSATION_READ_EVENT);
         socketInstance.off("room:response-state");
         socketInstance.off("room:response-snapshot");
         socketInstance.off("npc:response-state");
@@ -1617,6 +1656,7 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       // Update the list preview first without a server round trip — the list is asked again on close.
       setDmThreads((previous) => [
         {
+          ...previous.find((thread) => thread.npcId === dialogNpc.npcId),
           npcId: dialogNpc.npcId,
           lastMessage: { role: "player" as const, content: message },
           lastAt: Date.now(),
@@ -2226,6 +2266,46 @@ function GamePageInner({ onFatal }: GamePageClientProps) {
       socket.off("npc:working", onWorking);
     };
   }, [socket, channelId]);
+
+  // Whether this browser tab is in front — a conversation on screen in a background tab isn't read.
+  const [pageVisible, setPageVisible] = useState(true);
+  useEffect(() => {
+    const update = () => setPageVisible(document.visibilityState === "visible");
+    update();
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
+
+  // The room on screen is read up to its last line. Runs again whenever a line lands there.
+  const visibleRoom = channelChatVisible
+    ? roomState.rooms.find((room) => room.id === currentRoomId)
+    : undefined;
+  const visibleRoomMark = visibleRoom
+    ? needsReadMark({
+        unread: visibleRoom.unread,
+        lastAt: visibleRoom.lastMessageAt,
+        readAt: visibleRoom.readAt,
+      })
+    : false;
+  useEffect(() => {
+    if (!socket || !socketConnected || !pageVisible || !visibleRoom || !visibleRoomMark) return;
+    const at = visibleRoom.lastMessageAt ?? new Date().toISOString();
+    socket.emit(CONVERSATION_READ_EVENT, { kind: "room", id: visibleRoom.id, at });
+    dispatchRoom({ type: "read", roomId: visibleRoom.id, readAt: at });
+  }, [socket, socketConnected, pageVisible, visibleRoom, visibleRoomMark]);
+
+  // The open DM is read whenever a line arrives in it while the tab is in front.
+  const openDmLines = npcMessages.length;
+  useEffect(() => {
+    if (!socket || !socketConnected || !pageVisible || !dialogNpcId) return;
+    const at = new Date().toISOString();
+    socket.emit(CONVERSATION_READ_EVENT, { kind: "dm", id: dialogNpcId, at });
+    setDmThreads((previous) =>
+      previous.map((thread) =>
+        thread.npcId === dialogNpcId ? { ...thread, unread: 0, readAt: at } : thread,
+      ),
+    );
+  }, [socket, socketConnected, pageVisible, dialogNpcId, openDmLines]);
 
   // The acknowledgment record lives on the server (so every device shows the same count). What an older
   // version left in this browser is imported once and then removed. If the server can't be reached the

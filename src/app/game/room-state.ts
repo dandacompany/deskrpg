@@ -22,6 +22,8 @@ export type RoomState = {
   messages: Record<string, RoomMessage[]>;
   view: "list" | "room" | "compose";
   compose?: { presetNpcIds: string[]; inviteTo?: string };
+  /** The last line counted per room — `room:activity` can repeat a line, and it must count once. */
+  lastLineId?: Record<string, string>;
 };
 
 export type RoomAction =
@@ -32,7 +34,12 @@ export type RoomAction =
       viewerUserId?: string | null;
     }
   | { type: "history"; roomId: string; messages: RoomMessage[] }
-  | { type: "message"; roomId: string; message: RoomMessage }
+  /** `seen`: the viewer is looking at this room right now, so the line doesn't count as unread. */
+  | { type: "message"; roomId: string; message: RoomMessage; seen?: boolean }
+  /** A group room's new line while another room is open (`room:activity`). Never seen. */
+  | { type: "activity"; roomId: string; message: RoomMessage }
+  /** The viewer's read point moved (this tab or another). */
+  | { type: "read"; roomId: string; readAt: string }
   | { type: "created" | "updated"; room: RoomSummary; enter: boolean }
   | { type: "deleted"; roomId: string }
   | { type: "open"; roomId: string }
@@ -50,6 +57,27 @@ export const initialRoomState: RoomState = {
 /** The fallback room: office if present, otherwise the first room after sorting. */
 function fallbackRoomId(rooms: RoomSummary[]): string | null {
   return (rooms.find((room) => room.kind === "office") ?? rooms[0])?.id ?? null;
+}
+
+/** Sum of the viewer's unread lines across their rooms — the conversation list's total. */
+export function totalRoomUnread(state: RoomState): number {
+  return state.rooms.reduce((sum, room) => sum + (room.unread ?? 0), 0);
+}
+
+function isOwnLine(message: RoomMessage, viewerUserId: string | null): boolean {
+  return (
+    message.senderKind === "user" && viewerUserId !== null && message.senderId === viewerUserId
+  );
+}
+
+/** The room's preview moves to this line, and it counts as unread unless seen or mine. */
+function withLine(room: RoomSummary, message: RoomMessage, counts: boolean): RoomSummary {
+  return {
+    ...room,
+    lastMessageAt: message.createdAt,
+    lastMessage: toRoomPreview(message),
+    ...(counts ? { unread: (room.unread ?? 0) + 1 } : {}),
+  };
 }
 
 export function lastRoomKey(channelId: string): string {
@@ -102,21 +130,43 @@ export function reduceRoomState(state: RoomState, action: RoomAction): RoomState
           },
         };
       }
+      const counts = action.seen === false && !isOwnLine(action.message, state.viewerUserId);
       const rooms = sortRooms(
         state.rooms.map((room) =>
-          room.id === action.roomId
-            ? {
-                ...room,
-                lastMessageAt: action.message.createdAt,
-                lastMessage: toRoomPreview(action.message),
-              }
-            : room,
+          room.id === action.roomId ? withLine(room, action.message, counts) : room,
         ),
       );
       return {
         ...state,
         rooms,
         messages: { ...state.messages, [action.roomId]: [...previous, action.message] },
+        lastLineId: { ...state.lastLineId, [action.roomId]: action.message.id },
+      };
+    }
+
+    case "activity": {
+      const known =
+        state.lastLineId?.[action.roomId] === action.message.id ||
+        (state.messages[action.roomId] ?? []).some((m) => m.id === action.message.id);
+      if (known) return state;
+      const counts = !isOwnLine(action.message, state.viewerUserId);
+      return {
+        ...state,
+        rooms: sortRooms(
+          state.rooms.map((room) =>
+            room.id === action.roomId ? withLine(room, action.message, counts) : room,
+          ),
+        ),
+        lastLineId: { ...state.lastLineId, [action.roomId]: action.message.id },
+      };
+    }
+
+    case "read": {
+      return {
+        ...state,
+        rooms: state.rooms.map((room) =>
+          room.id === action.roomId ? { ...room, unread: 0, readAt: action.readAt } : room,
+        ),
       };
     }
 
@@ -125,7 +175,12 @@ export function reduceRoomState(state: RoomState, action: RoomAction): RoomState
       const known = state.rooms.some((room) => room.id === action.room.id);
       const rooms = sortRooms(
         known
-          ? state.rooms.map((room) => (room.id === action.room.id ? action.room : room))
+          ? state.rooms.map((room) =>
+              // A shared update carries no read state — keep the viewer's own.
+              room.id === action.room.id
+                ? { ...action.room, unread: room.unread, readAt: room.readAt }
+                : room,
+            )
           : [...state.rooms, action.room],
       );
       if (!action.enter) return { ...state, rooms };

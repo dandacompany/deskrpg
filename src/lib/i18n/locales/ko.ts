@@ -1966,6 +1966,7 @@ const ko: Record<string, string> = {
   "workspace.spaces": "공간",
   "workspace.conversations": "대화",
   "workspace.dmLabel": "{name} 대화",
+  "workspace.unread": "읽지 않은 메시지 {n}개",
   "workspace.people": "함께하는 사람",
   "workspace.status.available": "대화 가능",
   "workspace.state.unknown": "상태 확인 불가",

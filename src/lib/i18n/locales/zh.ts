@@ -1900,6 +1900,7 @@ const zh: Record<string, string> = {
   "workspace.spaces": "空间",
   "workspace.conversations": "对话",
   "workspace.dmLabel": "与{name}的对话",
+  "workspace.unread": "{n} 条未读",
   "workspace.people": "一起工作的人",
   "workspace.status.available": "可以对话",
   "workspace.state.unknown": "无法确认状态",
