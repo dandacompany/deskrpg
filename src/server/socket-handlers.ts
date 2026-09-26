@@ -29,6 +29,14 @@ import {
   type ToolApprovalRegistry,
 } from "./tool-approvals";
 import { getProfileClientForNpc } from "@/lib/hermes-profiles";
+import {
+  answerNpcQuestion,
+  npcCanAskUser,
+  registerAskUserSession,
+  sessionQuestions,
+  type AskUserContext,
+} from "@/lib/npc-questions";
+import { NPC_QUESTION_EVENTS, withAskUser } from "./ask-user";
 import { roomSocketRoom, userSocketRoom } from "./room-broadcast";
 import { jwtVerify } from "jose";
 import { eq, and } from "drizzle-orm";
@@ -249,6 +257,23 @@ export function routeToolApprovals(adapter: NpcAdapter, route: ApprovalRoute): N
   return withToolApprovals(adapter, route, {
     registry: toolApprovals,
     timeoutFor: approvalTimeoutFor,
+  });
+}
+
+// NPC questions (deskrpg_ask_user) — set up by setupSocketHandlers; until then 1:1 runs are unwrapped.
+let emitToUserFn: ((userId: string, event: string, payload: unknown) => void) | null = null;
+
+/** Registers a 1:1 run's session so the NPC can ask its user, and shows the questions it asks. */
+export function routeAskUser(adapter: NpcAdapter, route: AskUserContext): NpcAdapter {
+  const emitToUser = emitToUserFn;
+  if (!emitToUser) return adapter;
+  return withAskUser(adapter, route, {
+    canAsk: npcCanAskUser,
+    sessionIdOf: async (npcId, runId) =>
+      (await getProfileClientForNpc(npcId))?.getRunSessionId(runId) ?? null,
+    register: registerAskUserSession,
+    questions: sessionQuestions,
+    emit: (event, payload) => emitToUser(route.userId, event, payload),
   });
 }
 
@@ -602,13 +627,16 @@ async function streamNpcResponse(
       emitNpcSystemResponse(socket, npcId, "npc_unbound");
       return "";
     }
-    // The approver of a 1:1 run is the user who talked to the NPC.
-    const adapter = routeToolApprovals(hermesAdapter, {
+    // The approver of a 1:1 run is the user who talked to the NPC — and the one its questions go to.
+    const approvals = routeToolApprovals(hermesAdapter, {
       npcId,
       channelId: _channelId,
       context: "dm",
       approver: () => ({ userId, name: userContextOf(socket)?.name ?? playerNameOf(userId) }),
     });
+    const adapter = sessionKeyOverride
+      ? approvals
+      : routeAskUser(approvals, { npcId, userId, channelId: _channelId });
 
     if (attachments?.some((a) => a.type === "image")) {
       socket.emit(responseEvent, {
@@ -1086,6 +1114,7 @@ async function isChannelOwner(channelId: string, userId: string): Promise<boolea
 // ---------------------------------------------------------------------------
 
 export function setupSocketHandlers(io: Server) {
+  emitToUserFn = (userId, event, payload) => io.to(userRoom(userId)).emit(event, payload);
   toolApprovals = createToolApprovalRegistry({
     emitToUser: (userId, event, payload) => io.to(userRoom(userId)).emit(event, payload),
     emitToMeeting: (channelId, event, payload) =>
@@ -2052,6 +2081,25 @@ export function setupSocketHandlers(io: Server) {
       const result = toolApprovals
         ? await toolApprovals.decide(user.userId, key, choice)
         : ("closed" as const);
+      if (typeof ack === "function") ack({ result });
+    });
+
+    // ----- npc:answer ----- only the user the question was put to may answer; npc-questions checks it.
+    socket.on("npc:answer", async (data: unknown, ack?: unknown) => {
+      const { npcId, questionId, response } = (data ?? {}) as Record<string, unknown>;
+      const valid =
+        typeof npcId === "string" && typeof questionId === "string" && typeof response === "string";
+      const result = valid
+        ? await answerNpcQuestion({ userId: user.userId, npcId, questionId, response }).catch(
+            () => "failed" as const,
+          )
+        : ("invalid" as const);
+      if (result === "answered")
+        io.to(userRoom(user.userId)).emit(NPC_QUESTION_EVENTS.answered, {
+          npcId,
+          questionId,
+          response,
+        });
       if (typeof ack === "function") ack({ result });
     });
 
