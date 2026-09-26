@@ -11,9 +11,9 @@ import { pluginUpgradeRequired, type PluginFailure } from "./plugin-errors";
 /**
  * The 404 body the Hermes multiplex middleware returns for an unknown `/p/{profile}` (gateway/platforms/api_server.py
  * `profile_prefix_middleware`, 0.21.3 ~line 1513: `{"error":"Unknown or unconfigured profile"}`).
- * It is a response issued before reaching any plugin route, so it has no code, and `mapPluginFailure` folds it into
- * `upstream_error` + a sentence — recognize it by the sentence. Reading it as "no route" would tell the user to
- * "upgrade the plugin" when the profile is missing.
+ * It is a response issued before reaching any plugin route, so it has no code. `mapPluginFailure` now names it
+ * `profile_not_found` itself; this check still catches a failure folded into `upstream_error` + that sentence
+ * elsewhere. Reading it as "no route" would tell the user to "upgrade the plugin" when the profile is missing.
  */
 const HERMES_UNKNOWN_PROFILE_RE = /^unknown or unconfigured profile$/i;
 

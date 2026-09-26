@@ -195,10 +195,11 @@ describe("profile_has_service guidance", () => {
 
 describe("three shapes of record.error (fix round 2 — live measurement, MiniPC gateway, Hermes v0.21.0)", () => {
   it("404 — when error is a plain sentence, the sentence does not leak into the code slot", () => {
-    // Exactly as measured: { "error": "Unknown or unconfigured profile" }
+    // Hermes' own unserved-profile sentence now maps to `profile_not_found` (see the cause tests
+    // below); any other sentence still stays out of the code slot.
     const got = mapPluginFailure({
       status: 404,
-      body: { error: "Unknown or unconfigured profile" },
+      body: { error: "No such route here" },
     });
     assert.ok(got);
     assert.equal(
@@ -206,11 +207,7 @@ describe("three shapes of record.error (fix round 2 — live measurement, MiniPC
       "upstream_error",
       "문장은 wizard-error-codes 사전에 없는 값이라 코드로 쓰면 안 된다",
     );
-    assert.equal(
-      got.message,
-      "Unknown or unconfigured profile",
-      "문장 자체는 잃지 않고 message 에 보존한다",
-    );
+    assert.equal(got.message, "No such route here", "문장 자체는 잃지 않고 message 에 보존한다");
   });
 
   it("401 — when error is an object, extract the real code inside", () => {
@@ -270,7 +267,7 @@ describe("isCodeLikeString boundaries (fix round 3 I-4 — reviewer evidence)", 
     // The old regex (`i` flag) passed this as a code — then it became an unregistered code
     // (the UI shows "알 수 없는 오류"), and with no reason, message was "" too, so the original text vanished entirely.
     for (const sentence of ["Unauthorized", "Forbidden"]) {
-      const got = mapPluginFailure({ status: 401, body: { error: sentence } });
+      const got = mapPluginFailure({ status: 400, body: { error: sentence } });
       assert.ok(got);
       assert.equal(got.code, "upstream_error", `${sentence} 는 코드가 아니다`);
       assert.equal(got.message, sentence, `${sentence} 자체가 message 에 남아야 한다`);
@@ -426,5 +423,42 @@ describe("mapPluginFailure — native transition rejection reasons", () => {
       })?.message,
       "invalid_transition",
     );
+  });
+});
+
+describe("mapPluginFailure — telling the cause apart for the employee editor", () => {
+  it("a key refusal (401/403) reads as gateway_auth_failed even when the body is a plain sentence", () => {
+    for (const status of [401, 403]) {
+      for (const body of [{ error: "Unauthorized" }, { error: "Forbidden" }, "Unauthorized", {}]) {
+        const got = mapPluginFailure({ status, body });
+        assert.ok(got);
+        assert.equal(got.code, "gateway_auth_failed", `${status} ${JSON.stringify(body)}`);
+      }
+    }
+  });
+
+  it("Hermes' own 401 shape still carries its nested code", () => {
+    const got = mapPluginFailure({
+      status: 401,
+      body: {
+        error: {
+          message: "Invalid gateway API key (API_SERVER_KEY)",
+          type: "gateway_auth_error",
+          code: "gateway_auth_failed",
+        },
+      },
+    });
+    assert.equal(got?.code, "gateway_auth_failed");
+  });
+
+  it("Hermes' 404 for a profile it does not serve reads as profile_not_found", () => {
+    // Live: GET /p/<name>/deskrpg/identity for a name Hermes does not serve answers
+    // 404 {"error": "Unknown or unconfigured profile"} (staging, 2026-09-26).
+    const got = mapPluginFailure({
+      status: 404,
+      body: { error: "Unknown or unconfigured profile" },
+    });
+    assert.equal(got?.code, "profile_not_found");
+    assert.equal(got?.message, "Unknown or unconfigured profile");
   });
 });
