@@ -176,11 +176,13 @@ test("secureStdioDir: win32 applies the ACL once to an empty directory", () => {
   const result = secureStdioDir(
     "win32",
     () => dir,
-    (d) => {
-      calls.push(d);
-      // The directory must be empty when permissions are narrowed — a token file must not exist first.
-      assert.deepEqual(readdirSync(d), []);
-    },
+    [
+      (d) => {
+        calls.push(d);
+        // The directory must be empty when permissions are narrowed — a token file must not exist first.
+        assert.deepEqual(readdirSync(d), []);
+      },
+    ],
     () => NARROWED,
   );
   assert.equal(result, dir);
@@ -194,9 +196,12 @@ test("secureStdioDir: ACL failure is fail-closed — throws and leaves no direct
     secureStdioDir(
       "win32",
       () => dir,
-      () => {
-        throw new Error("icacls_failed");
-      },
+      [
+        () => {
+          throw new Error("icacls_failed");
+        },
+      ],
+      () => STILL_INHERITED,
     ),
   );
   assert.equal(existsSync(dir), false, "실패하면 디렉터리를 지운다");
@@ -210,9 +215,11 @@ test(
     const dir = secureStdioDir(
       "linux",
       () => mkdtempSync(path.join(os.tmpdir(), "deskrpg-acl-posix-")),
-      () => {
-        hardened = true;
-      },
+      [
+        () => {
+          hardened = true;
+        },
+      ],
     );
     assert.equal(hardened, false);
     assert.equal(statSync(dir).mode & 0o777, 0o700);
@@ -302,10 +309,38 @@ test("secureStdioDir: a directory icacls did not really narrow is fail-closed", 
       secureStdioDir(
         "win32",
         () => (made = mkdtempSync(path.join(os.tmpdir(), "deskrpg-acl-"))),
-        () => {},
+        [() => {}, () => {}],
         () => STILL_INHERITED,
       ),
     /acl_not_narrowed/,
   );
   assert.equal(existsSync(made), false, "the unprotected directory was left behind");
+});
+
+test("isOwnerOnlyAcl: an integrity label on the directory is not an access entry", () => {
+  const labelled =
+    "C:\\Temp\\deskrpg-ssh-x runnervm\\runneradmin:(OI)(CI)(F)\r\n" +
+    "                   Mandatory Label\\High Mandatory Level:(OI)(NP)(IO)(NW)\r\n";
+  assert.equal(isOwnerOnlyAcl(labelled), true);
+});
+
+test("secureStdioDir: when icacls does not narrow, the .NET way is tried and read back", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "deskrpg-acl-fallback-"));
+  const order: string[] = [];
+  let state = STILL_INHERITED;
+  const result = secureStdioDir(
+    "win32",
+    () => dir,
+    [
+      () => order.push("icacls"),
+      () => {
+        order.push("set-acl");
+        state = NARROWED;
+      },
+    ],
+    () => state,
+  );
+  assert.equal(result, dir);
+  assert.deepEqual(order, ["icacls", "set-acl"]);
+  rmSync(dir, { recursive: true, force: true });
 });

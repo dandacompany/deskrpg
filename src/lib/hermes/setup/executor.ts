@@ -125,8 +125,43 @@ export function killProcessTree(
  * icacls prints names in the console code page, and the grant target is ours anyway.
  */
 export function isOwnerOnlyAcl(icaclsOutput: string): boolean {
-  const entries = icaclsOutput.split(/\r?\n/).filter((line) => line.includes(":("));
+  const entries = icaclsOutput
+    .split(/\r?\n/)
+    .filter((line) => line.includes(":("))
+    // An integrity label (`Mandatory Label\High Mandatory Level:(NW)`) is not an access entry;
+    // an elevated process may get one on what it creates.
+    .filter((line) => !/Mandatory Label\\|\((NW|NR|NX)\)/i.test(line));
   return entries.length === 1 && !entries[0].includes("(I)");
+}
+
+/** Narrows with icacls: grant the user with inheritance to children, then drop inherited entries. */
+export function icaclsHarden(dir: string): void {
+  execFileSync("icacls", [dir, "/grant:r", `${userInfo().username}:(OI)(CI)F`], {
+    stdio: "ignore",
+  });
+  execFileSync("icacls", [dir, "/inheritance:r"], { stdio: "ignore" });
+}
+
+/**
+ * Narrows through .NET instead: a fresh, protected DACL holding only the current user's SID, inherited
+ * by files and folders inside. The path travels in the environment, so no quoting is involved.
+ */
+const SET_ACL_SCRIPT = [
+  "$ErrorActionPreference = 'Stop'",
+  "$item = Get-Item -LiteralPath $env:DESKRPG_ACL_DIR",
+  "$acl = New-Object System.Security.AccessControl.DirectorySecurity",
+  "$acl.SetAccessRuleProtection($true, $false)",
+  "$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User",
+  "$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($user, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')",
+  "$acl.AddAccessRule($rule)",
+  "$item.SetAccessControl($acl)",
+].join("; ");
+
+export function setAclHarden(dir: string): void {
+  execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", SET_ACL_SCRIPT], {
+    stdio: "ignore",
+    env: { ...process.env, DESKRPG_ACL_DIR: dir },
+  });
 }
 
 /**
@@ -142,27 +177,32 @@ export function isOwnerOnlyAcl(icaclsOutput: string): boolean {
  * Node's `chmodSync` only touches the read-only attribute on Windows and is ineffective, so it is not used.
  * On failure it throws and aborts the operation (fail-closed) — tokens are never written without narrowed permissions.
  *
- * The grant and the inheritance removal are two icacls calls, and the result is read back. On the
- * windows-latest runner (CI 2026-09-26) the single combined call exited 0 yet left the inherited
- * %TEMP% entries in place, so files inside inherited SYSTEM·Administrators — a success code alone
- * does not prove the directory was narrowed.
+ * Every attempt is read back. On the windows-latest runner (CI 2026-09-26) icacls exited 0 yet the
+ * directory was not narrowed — a success code alone proves nothing. icacls goes first, then .NET
+ * (`setAclHarden`); if neither leaves a narrowed ACL the directory is removed and the call fails.
  */
 export function secureStdioDir(
   platform: string,
   make: () => string = () => mkdtempSync(path.join(tmpdir(), "deskrpg-ssh-")),
-  harden: (dir: string) => void = (dir) => {
-    execFileSync("icacls", [dir, "/grant:r", `${userInfo().username}:(OI)(CI)F`], {
-      stdio: "ignore",
-    });
-    execFileSync("icacls", [dir, "/inheritance:r"], { stdio: "ignore" });
-  },
+  hardeners: Array<(dir: string) => void> = [icaclsHarden, setAclHarden],
   readAcl: (dir: string) => string = (dir) => execFileSync("icacls", [dir], { encoding: "utf8" }),
 ): string {
   const dir = make();
   try {
     if (isWindows(platform)) {
-      harden(dir);
-      if (!isOwnerOnlyAcl(readAcl(dir))) throw new Error("acl_not_narrowed");
+      let narrowed = false;
+      for (const harden of hardeners) {
+        try {
+          harden(dir);
+        } catch {
+          // The next way may still work; the read-back below is what decides.
+        }
+        if (isOwnerOnlyAcl(readAcl(dir))) {
+          narrowed = true;
+          break;
+        }
+      }
+      if (!narrowed) throw new Error("acl_not_narrowed");
     } else chmodSync(dir, 0o700);
   } catch (error) {
     try {
