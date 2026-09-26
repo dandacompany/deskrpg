@@ -359,6 +359,48 @@ test("go-to-source passes sourceTarget", async () => {
   assert.deepEqual(seen, [{ type: "kanban", taskId: "t-7" }]);
 });
 
+test("a board artifact shows the card it was made in and the cards it built on, each opening that card", async () => {
+  const card = summary({ source_kind: "kanban", task_id: "t-7", board: "b" });
+  mockFetch({
+    [LIST]: { artifacts: [card], cursor: "", has_more: false },
+    "GET /api/channels/ch-1/artifacts/a1": {
+      artifact: card,
+      versions: [version(1)],
+      provenance: {
+        task: { id: "t-7", title: "뉴스레터 초안", status: "done", assignee: "sophie" },
+        run: { profile: "sophie", outcome: "completed", started_at: 100, ended_at: 200 },
+        parents: [{ id: "t-3", title: "자료 조사", status: "done" }],
+        moreParents: 2,
+      },
+    },
+    "GET /api/channels/ch-1/artifacts/a1/versions/1/content": { text: "x" },
+  });
+  const seen: unknown[] = [];
+  await render({ onOpenSource: (target) => seen.push(target) });
+  await click(byText("주간 보고"));
+  const block = container.querySelector("[data-artifact-provenance]");
+  assert.equal(block !== null, true);
+  assert.equal((block?.textContent ?? "").includes("sophie"), true);
+  assert.equal((block?.textContent ?? "").includes("외 2장"), true);
+  await click(byText("자료 조사"));
+  await click(byText("뉴스레터 초안"));
+  assert.deepEqual(seen, [
+    { type: "kanban", taskId: "t-3" },
+    { type: "kanban", taskId: "t-7" },
+  ]);
+});
+
+test("an artifact without provenance shows no provenance block", async () => {
+  mockFetch({
+    [LIST]: { artifacts: [summary()], cursor: "", has_more: false },
+    "GET /api/channels/ch-1/artifacts/a1": { artifact: summary(), versions: [version(1)] },
+    "GET /api/channels/ch-1/artifacts/a1/versions/1/content": { text: "x" },
+  });
+  await render();
+  await click(byText("주간 보고"));
+  assert.equal(container.querySelector("[data-artifact-provenance]") === null, true);
+});
+
 test("edit -> save calls addVersion and moves on to the new version", async () => {
   const a = summary({ current_version: 1 });
   const calls = mockFetch({

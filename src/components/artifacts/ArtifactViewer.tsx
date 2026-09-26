@@ -16,6 +16,7 @@ import { ArrowUpRight, Copy, Download, Pencil, Trash2, X } from "lucide-react";
 import MarkdownContent from "@/components/ui/MarkdownContent";
 import { useT } from "@/lib/i18n";
 import ArtifactEditor, { type ArtifactEditorHandle } from "./ArtifactEditor";
+import ArtifactProvenance from "./ArtifactProvenance";
 import type { ArtifactDetailView, ArtifactsApi } from "./artifacts-api";
 import {
   codeLanguageFor,
@@ -432,6 +433,12 @@ export default function ArtifactViewer({
             {t("artifacts.deleteCancel")}
           </button>
         </div>
+      )}
+      {!editing && detail?.provenance && (
+        <ArtifactProvenance
+          provenance={detail.provenance}
+          onOpenCard={(taskId) => onOpenSource({ type: "kanban", taskId })}
+        />
       )}
       {error && (
         <p className="px-4 py-2 text-xs text-danger border-b border-border break-words">

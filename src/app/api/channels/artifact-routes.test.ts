@@ -451,3 +451,84 @@ test("F4: a plugin detail response without artifact is treated as 404", async ()
     assert.equal((await loaded.response.json()).code, "artifact_not_found");
   }
 });
+
+async function ownerPost(path: string, body: unknown): Promise<Record<string, unknown>> {
+  const res = await fetch(`${server.baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      authorization: "Bearer gateway-owner-key-1234567890",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  assert.equal(res.ok, true, `${path} → ${res.status}`);
+  return (await res.json()) as Record<string, unknown>;
+}
+
+test("a board artifact's detail carries the card it came from and that card's parents", async () => {
+  const { owner, channel, boardSlug } = await seedArtifactChannel();
+  await ownerPost("/deskrpg/kanban/boards", { slug: boardSlug, name: "b" });
+  const q = `?board=${encodeURIComponent(boardSlug)}`;
+  const parent = (await ownerPost(`/deskrpg/kanban/tasks${q}`, { title: "Research" })).task as {
+    id: string;
+  };
+  const child = (
+    await ownerPost(`/deskrpg/kanban/tasks${q}`, {
+      title: "Newsletter draft",
+      assignee: "sophie",
+      parents: [parent.id],
+    })
+  ).task as { id: string };
+  server.seedArtifact({
+    id: "made",
+    title: "draft",
+    profile: "sophie",
+    board: boardSlug,
+    task_id: child.id,
+    source_kind: "kanban",
+    body: "x",
+  });
+  server.seedArtifact({ id: "chatty", title: "chat", profile: "sophie", body: "x" });
+
+  const res = await routes.item.GET(
+    req(owner.id, "GET", `${base(channel.id)}/made`),
+    ctx(channel.id, "made"),
+  );
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.provenance.task.id, child.id);
+  assert.equal(body.provenance.task.title, "Newsletter draft");
+  assert.equal(body.provenance.task.assignee, "sophie");
+  assert.deepEqual(
+    body.provenance.parents.map((p: { id: string; title: string }) => [p.id, p.title]),
+    [[parent.id, "Research"]],
+  );
+  assert.equal(body.provenance.moreParents, 0);
+
+  const chat = await routes.item.GET(
+    req(owner.id, "GET", `${base(channel.id)}/chatty`),
+    ctx(channel.id, "chatty"),
+  );
+  assert.equal("provenance" in (await chat.json()), false);
+});
+
+test("an unreadable source card leaves the provenance out but the detail still opens", async () => {
+  const { owner, channel, boardSlug } = await seedArtifactChannel();
+  server.seedArtifact({
+    id: "orphan",
+    title: "orphan",
+    profile: "sophie",
+    board: boardSlug,
+    task_id: "t_gone",
+    source_kind: "kanban",
+    body: "x",
+  });
+  const res = await routes.item.GET(
+    req(owner.id, "GET", `${base(channel.id)}/orphan`),
+    ctx(channel.id, "orphan"),
+  );
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.artifact.id, "orphan");
+  assert.equal("provenance" in body, false);
+});

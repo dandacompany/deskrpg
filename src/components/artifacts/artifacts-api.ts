@@ -14,6 +14,7 @@ import type {
   ArtifactSource,
   ArtifactVersion,
 } from "@/lib/hermes/deskrpg-plugin-types";
+import type { ArtifactProvenance } from "@/lib/artifact-provenance";
 
 export class ArtifactsApiError extends Error {
   readonly status: number;
@@ -37,6 +38,8 @@ export class ArtifactsApiError extends Error {
 export type ArtifactDetailView = ArtifactDetail & {
   modifiable?: boolean;
   sourceInChannel?: boolean;
+  /** The card, run and parent cards a board artifact of this channel came from. */
+  provenance?: ArtifactProvenance;
 };
 
 export type ArtifactListFilter = {
