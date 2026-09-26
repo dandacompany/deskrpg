@@ -88,14 +88,47 @@ test(
       const probe =
         "const fs=require('fs');" +
         "const kind=(fd)=>{const s=fs.fstatSync(fd);return s.isFile()?'file':s.isFIFO()?'pipe':'other'};" +
-        "process.stdout.write(JSON.stringify({stdin:kind(0),stdout:kind(1),echo:fs.readFileSync(0,'utf8')}))";
+        "process.stdout.write(JSON.stringify({stdin:kind(0),stdout:kind(1),stderr:kind(2),echo:fs.readFileSync(0,'utf8')}))";
       const result = await localExecutor("ssh", ["-e", probe], {
         input: KOREAN,
         timeoutMs: 30_000,
         env: { PATH: `${bin};${process.env.PATH ?? ""}` },
       });
       assert.equal(result.code, 0, result.stderr);
-      assert.deepEqual(JSON.parse(result.stdout), { stdin: "file", stdout: "file", echo: KOREAN });
+      assert.deepEqual(JSON.parse(result.stdout), {
+        stdin: "file",
+        stdout: "file",
+        stderr: "file",
+        echo: KOREAN,
+      });
+    } finally {
+      rmSync(bin, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "what ssh writes to stderr comes back, and the call ends — no stall on a stderr pipe",
+  { skip, timeout: 60_000 },
+  async () => {
+    // ssh.exe blocks on its first stderr write when stderr is a pipe: a new host's
+    // "Permanently added ... to known hosts" or a host-key/auth error then ran into command_timeout
+    // (measured with OpenSSH_for_Windows_9.5p2). The fake writes to stderr and exits non-zero.
+    const bin = tempDir("deskrpg-win-ssh-err-");
+    try {
+      copyFileSync(process.execPath, path.join(bin, "ssh.exe"));
+      const probe =
+        "process.stderr.write('Warning: Permanently added host to the list of known hosts.\\n');" +
+        "process.exit(255)";
+      const started = Date.now();
+      const result = await localExecutor("ssh", ["-e", probe], {
+        input: "{}",
+        timeoutMs: 30_000,
+        env: { PATH: `${bin};${process.env.PATH ?? ""}` },
+      });
+      assert.equal(result.code, 255);
+      assert.match(result.stderr, /Permanently added/);
+      assert.ok(Date.now() - started < 15_000, "the call waited on stderr");
     } finally {
       rmSync(bin, { recursive: true, force: true });
     }

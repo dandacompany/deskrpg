@@ -243,13 +243,17 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
       throw new Error("setup_invalid_request");
     if (options.signal?.aborted) throw new Error("setup_cancelled");
     return new Promise((resolve, reject) => {
-      // Windows ssh stalls on stdout/stdin pipes, so we use temp files instead.
-      const useFileStdio = isWindows(process.platform) && command === "ssh";
+      // Windows ssh.exe stalls on pipes — stdout/stdin, and stderr too: its first stderr write (a new
+      // host's "Permanently added", a host-key or auth error) blocks until the call times out
+      // (OpenSSH_for_Windows 9.5p2). All three go through temp files; scp.exe gets the same treatment.
+      const useFileStdio = isWindows(process.platform) && (command === "ssh" || command === "scp");
       let stdioDir: string | undefined;
       let stdinFile: string | undefined;
       let stdinFd: number | undefined;
       let stdoutFile: string | undefined;
       let stdoutFd: number | undefined;
+      let stderrFile: string | undefined;
+      let stderrFd: number | undefined;
       /**
        * Temp-file cleanup removes the whole directory. Safe to call twice; returns `false` on failure.
        * On Windows, if the child is still alive and holding the `stdin.in`·`stdout.out` handles, deletion
@@ -280,9 +284,12 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
           }
           stdoutFile = path.join(stdioDir, "stdout.out");
           stdoutFd = openSync(stdoutFile, "w");
+          stderrFile = path.join(stdioDir, "stderr.err");
+          stderrFd = openSync(stderrFile, "w");
         } catch {
           if (stdinFd !== undefined) closeSync(stdinFd);
           if (stdoutFd !== undefined) closeSync(stdoutFd);
+          if (stderrFd !== undefined) closeSync(stderrFd);
           removeStdioDir();
           reject(new Error("command_failed"));
           return;
@@ -294,8 +301,12 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
       // the checks miss the dereference — this work actually let one defect through that way.
       let child: ChildProcess;
       try {
-        if (useFileStdio && stdoutFd !== undefined) {
-          const stdio: StdioOptions = [stdinFd !== undefined ? stdinFd : "pipe", stdoutFd, "pipe"];
+        if (useFileStdio && stdoutFd !== undefined && stderrFd !== undefined) {
+          const stdio: StdioOptions = [
+            stdinFd !== undefined ? stdinFd : "pipe",
+            stdoutFd,
+            stderrFd,
+          ];
           child = spawn(command, args, {
             stdio,
             shell: false,
@@ -308,6 +319,7 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
       } catch {
         if (stdinFd !== undefined) closeSync(stdinFd);
         if (stdoutFd !== undefined) closeSync(stdoutFd);
+        if (stderrFd !== undefined) closeSync(stderrFd);
         removeStdioDir();
         reject(new Error("command_failed"));
         return;
@@ -338,6 +350,18 @@ export function createExecutor(spawnImpl: SpawnCommand = spawnCommand): HostExec
             if (!error) {
               stdout = readFileSync(stdoutFile, "utf-8");
             }
+          } catch {
+            // Keep going even if reading the file fails
+          }
+        }
+        // stderr only feeds error classification (sshFailureCode); a large one is cut, not fatal.
+        if (useFileStdio && stderrFile) {
+          try {
+            if (stderrFd !== undefined) {
+              closeSync(stderrFd);
+              stderrFd = undefined;
+            }
+            stderr = readFileSync(stderrFile, "utf-8").slice(0, 64 * 1024);
           } catch {
             // Keep going even if reading the file fails
           }
