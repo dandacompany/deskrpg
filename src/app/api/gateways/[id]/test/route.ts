@@ -9,6 +9,7 @@ import {
   decryptGatewayToken,
   getAccessibleGatewayResource,
   persistGatewayValidationState,
+  resolveGatewayToken,
 } from "@/lib/gateway-resources";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import {
@@ -55,12 +56,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // All that can be checked at the gateway level is reachability — Hermes auth is profile-
   // scoped, so token validation belongs to the profile test. The probe used to fall back to OpenClaw's
   // WS handshake when it could not identify hermes, but that backend has been removed.
-  let token: string | undefined;
-  try {
-    token = decryptGatewayToken(accessible.resource.tokenEncrypted);
-  } catch {
-    // ignore
+  const resolved = resolveGatewayToken(accessible.resource.tokenEncrypted);
+  if (!resolved.ok) {
+    await persistGatewayValidationState(id, {
+      status: "invalid",
+      error: "gateway_token_decryption_failed",
+    });
+    return NextResponse.json(
+      {
+        reachable: false,
+        error: "gateway_token_decryption_failed",
+        errorCode: "gateway_token_decryption_failed",
+      },
+      { status: 400 },
+    );
   }
+  const token = resolved.token;
   const probe = await probeHermesGateway(accessible.resource.baseUrl, { token });
 
   if (probe.kind === "hermes") {
@@ -72,7 +83,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       fetchImpl: transportFetch,
       baseUrl: accessible.resource.baseUrl,
       // deskrpg-allow-token-arg: an argument the server uses to call Hermes, not a response.
-      token: decryptGatewayToken(accessible.resource.tokenEncrypted),
+      token,
     });
     const plugin = probed.capability;
     await db

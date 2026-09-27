@@ -166,12 +166,16 @@ test("probeHermesGateway", async (t) => {
 
   await t.test("when token is provided, includes authorization header on /v1/models", async () => {
     let modelsAuthHeader: string | null = null;
+    let healthAuthHeader: string | null = null;
     const result = await probeHermesGateway("http://127.0.0.1:8642", {
       token: "secret-test-token",
       fetchImpl: ((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url.endsWith("/health")) return Promise.resolve(new Response("ok", { status: 200 }));
         const headers = new Headers(init?.headers);
+        if (url.endsWith("/health")) {
+          healthAuthHeader = headers.get("authorization");
+          return Promise.resolve(new Response("ok", { status: 200 }));
+        }
         modelsAuthHeader = headers.get("authorization");
         return Promise.resolve(
           new Response(JSON.stringify({ data: [] }), {
@@ -182,6 +186,27 @@ test("probeHermesGateway", async (t) => {
       }) as unknown as typeof fetch,
     });
     assert.deepEqual(result, { kind: "hermes", status: 200 });
+    assert.equal(healthAuthHeader, null);
     assert.equal(modelsAuthHeader, "Bearer secret-test-token");
+  });
+
+  await t.test("when token is omitted, sends no authorization header on /health or /v1/models", async () => {
+    const authHeaders: (string | null)[] = [];
+    const result = await probeHermesGateway("http://127.0.0.1:8642", {
+      fetchImpl: ((input: RequestInfo | URL, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        authHeaders.push(headers.get("authorization"));
+        const url = String(input);
+        if (url.endsWith("/health")) return Promise.resolve(new Response("ok", { status: 200 }));
+        return Promise.resolve(
+          new Response(JSON.stringify({ data: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }) as unknown as typeof fetch,
+    });
+    assert.deepEqual(result, { kind: "hermes", status: 200 });
+    assert.deepEqual(authHeaders, [null, null]);
   });
 });
