@@ -2526,6 +2526,7 @@ const ja: Record<string, string> = {
     "Hermes の Web 画面に接続しました。API サーバーではありません — ポートを確認してください（ダッシュボードは通常 9119、API サーバーは 8643）",
   "errors.gatewayLoopbackInContainer":
     "DeskRPG はコンテナ内で動作しています。ここでの 127.0.0.1 は Hermes ではなくコンテナ自身を指します — ホストの実際の IP を使用してください",
+  "errors.gatewayTokenDecryptionFailed": "ゲートウェイトークンの復号に失敗しました。トークンを再入力してください",
   "errors.gatewayInUseByChannels":
     "このゲートウェイを使用中のチャンネルがあるため削除できません。先にチャンネルの接続を解除してください",
   "errors.gatewayAccessDenied": "このゲートウェイにアクセスする権限がありません",

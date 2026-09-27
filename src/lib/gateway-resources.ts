@@ -622,12 +622,12 @@ export async function getGatewayRuntimeStateForChannel(
   const resolved = resolveGatewayToken(binding.resource.tokenEncrypted);
   if (!resolved.ok) {
     await persistGatewayValidationState(binding.resource.id, {
-      status: "invalid",
+      status: "error",
       error: "gateway_token_decryption_failed",
     });
     return {
       ...setGatewayRuntimeState(binding.resource.id, {
-        status: "invalid",
+        status: "error",
         error: "gateway_token_decryption_failed",
       }),
       gateway: binding,

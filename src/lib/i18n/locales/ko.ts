@@ -2496,6 +2496,7 @@ const ko: Record<string, string> = {
     "Hermes 웹 화면에 연결됐습니다. API 서버가 아닙니다 — 포트를 확인하세요(대시보드는 보통 9119, API 서버는 8643)",
   "errors.gatewayLoopbackInContainer":
     "DeskRPG 는 컨테이너 안에서 실행 중입니다. 여기서 127.0.0.1 은 Hermes 가 아니라 컨테이너 자신을 가리킵니다 — 호스트의 실제 IP 를 쓰세요",
+  "errors.gatewayTokenDecryptionFailed": "게이트웨이 토큰 복호화에 실패했습니다. 토큰을 다시 입력하세요",
   "errors.gatewayInUseByChannels":
     "이 게이트웨이를 사용 중인 오피스이 있어 삭제할 수 없습니다. 오피스에서 연결을 먼저 해제하세요",
   "errors.gatewayAccessDenied": "이 게이트웨이에 접근할 권한이 없습니다",

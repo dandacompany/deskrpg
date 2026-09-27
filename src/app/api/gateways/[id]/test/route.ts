@@ -6,7 +6,6 @@ import { eq } from "drizzle-orm";
 
 import { db, gatewayResources } from "@/db";
 import {
-  decryptGatewayToken,
   getAccessibleGatewayResource,
   persistGatewayValidationState,
   resolveGatewayToken,
@@ -59,16 +58,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const resolved = resolveGatewayToken(accessible.resource.tokenEncrypted);
   if (!resolved.ok) {
     await persistGatewayValidationState(id, {
-      status: "invalid",
+      status: "error",
       error: "gateway_token_decryption_failed",
     });
     return NextResponse.json(
       {
-        reachable: false,
-        error: "gateway_token_decryption_failed",
+        ok: false,
         errorCode: "gateway_token_decryption_failed",
+        error: "Gateway token decryption failed",
       },
-      { status: 400 },
+      PROBE_RESULT_INIT("gateway_token_decryption_failed"),
     );
   }
   const token = resolved.token;
@@ -83,7 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       fetchImpl: transportFetch,
       baseUrl: accessible.resource.baseUrl,
       // deskrpg-allow-token-arg: an argument the server uses to call Hermes, not a response.
-      token,
+      token: token ?? "",
     });
     const plugin = probed.capability;
     await db

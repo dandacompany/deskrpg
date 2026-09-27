@@ -51,6 +51,7 @@ export type ErrorCode =
   | "not_a_hermes_gateway"
   | "gateway_is_not_api_server"
   | "gateway_loopback_in_container"
+  | "gateway_token_decryption_failed"
   | "gateway_in_use_by_channels"
   | "gateway_access_denied"
   | "local_discovery_unavailable"
@@ -283,6 +284,7 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   not_a_hermes_gateway: "errors.notAHermesGateway",
   gateway_is_not_api_server: "errors.gatewayIsNotApiServer",
   gateway_loopback_in_container: "errors.gatewayLoopbackInContainer",
+  gateway_token_decryption_failed: "errors.gatewayTokenDecryptionFailed",
   gateway_in_use_by_channels: "errors.gatewayInUseByChannels",
   gateway_access_denied: "errors.gatewayAccessDenied",
   local_discovery_unavailable: "errors.localDiscoveryUnavailable",
