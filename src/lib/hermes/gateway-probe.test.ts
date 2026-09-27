@@ -163,4 +163,25 @@ test("probeHermesGateway", async (t) => {
     });
     assert.equal(result.kind, "unreachable");
   });
+
+  await t.test("when token is provided, includes authorization header on /v1/models", async () => {
+    let modelsAuthHeader: string | null = null;
+    const result = await probeHermesGateway("http://127.0.0.1:8642", {
+      token: "secret-test-token",
+      fetchImpl: ((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/health")) return Promise.resolve(new Response("ok", { status: 200 }));
+        const headers = new Headers(init?.headers);
+        modelsAuthHeader = headers.get("authorization");
+        return Promise.resolve(
+          new Response(JSON.stringify({ data: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }) as unknown as typeof fetch,
+    });
+    assert.deepEqual(result, { kind: "hermes", status: 200 });
+    assert.equal(modelsAuthHeader, "Bearer secret-test-token");
+  });
 });

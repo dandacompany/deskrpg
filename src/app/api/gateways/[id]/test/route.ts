@@ -55,7 +55,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // All that can be checked at the gateway level is reachability — Hermes auth is profile-
   // scoped, so token validation belongs to the profile test. The probe used to fall back to OpenClaw's
   // WS handshake when it could not identify hermes, but that backend has been removed.
-  const probe = await probeHermesGateway(accessible.resource.baseUrl);
+  let token: string | undefined;
+  try {
+    token = decryptGatewayToken(accessible.resource.tokenEncrypted);
+  } catch {
+    // ignore
+  }
+  const probe = await probeHermesGateway(accessible.resource.baseUrl, { token });
 
   if (probe.kind === "hermes") {
     // Probe the plugin only after it is confirmed to be Hermes — no reason to send our

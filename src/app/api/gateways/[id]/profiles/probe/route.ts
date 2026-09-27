@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getAccessibleGatewayResource } from "@/lib/gateway-resources";
+import { decryptGatewayToken, getAccessibleGatewayResource } from "@/lib/gateway-resources";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import { isValidProfileName } from "@/lib/hermes/profile-name";
 import { getUserId } from "@/lib/internal-rpc";
@@ -35,8 +35,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!isValidProfileName(profileName)) {
     return NextResponse.json({ status: "not_found" });
   }
+  let token: string | undefined;
+  try {
+    token = decryptGatewayToken(accessible.resource.tokenEncrypted);
+  } catch {
+    // ignore
+  }
   const probe = await probeHermesGateway(accessible.resource.baseUrl, {
     profile: profileName,
+    token,
   });
   // Do not merge the three states — "no such profile" and "the gateway is dead" are different problems.
   const status =

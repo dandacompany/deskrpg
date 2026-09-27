@@ -602,7 +602,13 @@ export async function getGatewayRuntimeStateForChannel(
   // client retries and hangs for over 20 seconds. This function also sits on the NPC list
   // path (GET /api/npcs → measured 25s), so meanwhile the screen renders "0 employees".
   // The same probe used in /api/gateways/[id]/test is placed here too.
-  const probe = await probeHermesGateway(binding.resource.baseUrl);
+  let token: string | undefined;
+  try {
+    token = decryptGatewayToken(binding.resource.tokenEncrypted);
+  } catch {
+    // token decryption failure or empty token is non-fatal for reachability probe
+  }
+  const probe = await probeHermesGateway(binding.resource.baseUrl, { token });
   if (probe.kind === "hermes") {
     await persistGatewayValidationState(binding.resource.id, { status: "valid" });
     return {
