@@ -35,7 +35,7 @@ const DEFAULT_TIMEOUT_MS = 25000;
 
 export async function probeHermesGateway(
   baseUrl: string,
-  opts: { fetchImpl?: typeof fetch; timeoutMs?: number; profile?: string } = {},
+  opts: { fetchImpl?: typeof fetch; timeoutMs?: number; profile?: string; token?: string } = {},
 ): Promise<GatewayProbeResult> {
   const fetchImpl = opts.fetchImpl ?? transportFetch;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -52,8 +52,13 @@ export async function probeHermesGateway(
     if (!health.ok) return { kind: "not-hermes", status: health.status };
 
     // From here is where the dashboard and the API Server are told apart (see comment above).
+    const modelsHeaders: Record<string, string> = {};
+    if (opts.token) {
+      modelsHeaders["authorization"] = `Bearer ${opts.token}`;
+    }
     const models = await fetchImpl(`${prefix}/v1/models`, {
       method: "GET",
+      headers: modelsHeaders,
       signal: controller.signal,
     });
     const contentType = models.headers.get("content-type") ?? "";

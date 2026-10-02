@@ -87,6 +87,23 @@ export function decryptGatewayToken(payload: string) {
   ]).toString("utf8");
 }
 
+export function resolveGatewayToken(payload?: string | null):
+  | { ok: true; token?: string }
+  | { ok: false; error: string } {
+  if (!payload) return { ok: true, token: undefined };
+  const parts = payload.split(":");
+  if (parts.length === 4 && parts[0] === "v1" && !parts[3]) {
+    // Unauthenticated gateway: empty ciphertext was stored
+    return { ok: true, token: undefined };
+  }
+  try {
+    const token = decryptGatewayToken(payload);
+    return { ok: true, token: token || undefined };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 function buildDefaultGatewayDisplayName(baseUrl: string) {
   try {
     return new URL(baseUrl).host;
@@ -614,7 +631,21 @@ export async function getGatewayRuntimeStateForChannel(
   // client retries and hangs for over 20 seconds. This function also sits on the NPC list
   // path (GET /api/npcs → measured 25s), so meanwhile the screen renders "0 employees".
   // The same probe used in /api/gateways/[id]/test is placed here too.
-  const probe = await probeHermesGateway(binding.resource.baseUrl);
+  const resolved = resolveGatewayToken(binding.resource.tokenEncrypted);
+  if (!resolved.ok) {
+    await persistGatewayValidationState(binding.resource.id, {
+      status: "error",
+      error: "gateway_token_decryption_failed",
+    });
+    return {
+      ...setGatewayRuntimeState(binding.resource.id, {
+        status: "error",
+        error: "gateway_token_decryption_failed",
+      }),
+      gateway: binding,
+    };
+  }
+  const probe = await probeHermesGateway(binding.resource.baseUrl, { token: resolved.token });
   if (probe.kind === "hermes") {
     await persistGatewayValidationState(binding.resource.id, { status: "valid" });
     return {

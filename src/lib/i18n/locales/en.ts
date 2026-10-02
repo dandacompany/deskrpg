@@ -2614,6 +2614,7 @@ const en: Record<string, string> = {
     "Reached the Hermes web UI, not the API Server — check the port (dashboard is usually 9119, API Server 8643)",
   "errors.gatewayLoopbackInContainer":
     "DeskRPG runs inside a container, where 127.0.0.1 points at the container itself, not at Hermes — use the host's real IP address",
+  "errors.gatewayTokenDecryptionFailed": "Failed to decrypt the gateway token. Re-enter the token",
   "errors.gatewayInUseByChannels":
     "Cannot delete: a channel is still using this gateway. Disconnect it from the channel first",
   "errors.gatewayAccessDenied": "You do not have access to this gateway",
