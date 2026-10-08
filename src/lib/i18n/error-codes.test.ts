@@ -198,6 +198,7 @@ const TEST_CODES: Partial<Record<ErrorCode, string>> = {
   nickname_taken: "errors.nicknameTaken",
   gateway_url_required: "errors.gatewayUrlRequired",
   invalid_gateway_url: "errors.invalidGatewayUrl",
+  gateway_token_decryption_failed: "errors.gatewayTokenDecryptionFailed",
   gateway_config_validated: "errors.gatewayConfigValidated",
   channel_name_required: "errors.channelNameRequired",
   map_template_required: "errors.mapTemplateRequired",

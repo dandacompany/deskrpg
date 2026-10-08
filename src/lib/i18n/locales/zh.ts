@@ -2506,6 +2506,7 @@ const zh: Record<string, string> = {
     "连接到的是 Hermes 网页界面，而不是 API 服务器 — 请检查端口（仪表板通常为 9119，API 服务器为 8643）",
   "errors.gatewayLoopbackInContainer":
     "DeskRPG 运行在容器内，这里的 127.0.0.1 指向容器本身而不是 Hermes — 请使用宿主机的实际 IP 地址",
+  "errors.gatewayTokenDecryptionFailed": "网关令牌解密失败，请重新输入令牌",
   "errors.gatewayInUseByChannels": "有频道正在使用此网关，无法删除。请先在频道中断开连接",
   "errors.gatewayAccessDenied": "您无权访问此网关",
   "errors.localDiscoveryUnavailable": "无法使用本地配置文件发现",

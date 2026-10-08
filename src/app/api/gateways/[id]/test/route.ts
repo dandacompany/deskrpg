@@ -6,9 +6,9 @@ import { eq } from "drizzle-orm";
 
 import { db, gatewayResources } from "@/db";
 import {
-  decryptGatewayToken,
   getAccessibleGatewayResource,
   persistGatewayValidationState,
+  resolveGatewayToken,
 } from "@/lib/gateway-resources";
 import { probeHermesGateway } from "@/lib/hermes/gateway-probe";
 import {
@@ -55,7 +55,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // All that can be checked at the gateway level is reachability — Hermes auth is profile-
   // scoped, so token validation belongs to the profile test. The probe used to fall back to OpenClaw's
   // WS handshake when it could not identify hermes, but that backend has been removed.
-  const probe = await probeHermesGateway(accessible.resource.baseUrl);
+  const resolved = resolveGatewayToken(accessible.resource.tokenEncrypted);
+  if (!resolved.ok) {
+    await persistGatewayValidationState(id, {
+      status: "error",
+      error: "gateway_token_decryption_failed",
+    });
+    return NextResponse.json(
+      {
+        ok: false,
+        errorCode: "gateway_token_decryption_failed",
+        error: "Gateway token decryption failed",
+      },
+      PROBE_RESULT_INIT("gateway_token_decryption_failed"),
+    );
+  }
+  const token = resolved.token;
+  const probe = await probeHermesGateway(accessible.resource.baseUrl, { token });
 
   if (probe.kind === "hermes") {
     // Probe the plugin only after it is confirmed to be Hermes — no reason to send our
@@ -66,7 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       fetchImpl: transportFetch,
       baseUrl: accessible.resource.baseUrl,
       // deskrpg-allow-token-arg: an argument the server uses to call Hermes, not a response.
-      token: decryptGatewayToken(accessible.resource.tokenEncrypted),
+      token: token ?? "",
     });
     const plugin = probed.capability;
     await db
