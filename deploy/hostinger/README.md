@@ -58,6 +58,7 @@ The **Environment** box is pre-filled from `.env.example` with every variable th
 
 ```
 HERMES_API_KEY=<output of: openssl rand -hex 32>
+DESKRPG_EDUCATION_WORKFLOW_TOKEN=<a different output of: openssl rand -hex 32>
 TRAEFIK_HOST=srvNNNNNN.hstgr.cloud   # the name in the hPanel breadcrumb: VPS › srvNNNNNN.hstgr.cloud › Docker Manager
 ```
 
@@ -65,6 +66,7 @@ TRAEFIK_HOST=srvNNNNNN.hstgr.cloud   # the name in the hPanel breadcrumb: VPS �
 - `JWT_SECRET` — leave the placeholder. The app generates a real key into the `deskrpg-data` volume and reuses it across restarts and Update. A value you set always wins.
 - `OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` — optional; see step 4-1 for which one to fill, or leave all empty to log in with ChatGPT.
 - `HERMES_DASHBOARD_PASSWORD` — optional. Set it to open the Hermes dashboard at `https://deskrpg-hermes.<TRAEFIK_HOST>` (user `admin`). Empty keeps the dashboard off: Hermes refuses an unauthenticated public dashboard, so the compose only starts it when a password exists.
+- `DESKRPG_EDUCATION_WORKFLOW_TOKEN` — required for the shared education workflow. Generate a separate random value with `openssl rand -hex 32`. The same secret is passed to DeskRPG and Hermes; it authorizes only the internal education-workflow API route. Hermes reaches DeskRPG at `http://deskrpg:3000`, while Slack links use `https://deskrpg.<TRAEFIK_HOST>`. Do not put this value in Slack messages or source control.
 
 ## 3. Your HTTPS URL
 
@@ -133,7 +135,7 @@ DeskRPG reads the Hermes profile list, kanban, cron and events through [`deskrpg
 
 The pin comes from the image, not from this compose, because Update never re-reads the compose: a commit written here would freeze at the day you imported it. With the image as the source, **Update** and a rollback through `DESKRPG_IMAGE` (step 7) bring the matching plugin along, and a new pin also restarts Hermes so it serves the reinstalled plugin (measured 2026-09-27: 2026.927.1 → 2026.926.3 → 2026.927.1 served 0.28.2 → 0.24.4 → 0.28.2).
 
-`hermes-plugins` gets the same `API_SERVER_KEY` as `hermes`. Without it the image generates a random key into the volume's `.env`, which then overrides `HERMES_API_KEY` and DeskRPG gets 401 — found while testing this service (2026-09-17). Verify from the project folder:
+`hermes-plugins` gets the same `API_SERVER_KEY` as `hermes`. Without it the image generates a random key into the volume's `.env`, which then overrides `HERMES_API_KEY` and DeskRPG gets 401 — found while testing this service (2026-09-17). It also stores the education workflow token and endpoint URLs in Hermes' `/opt/data/.env` so only the narrow training workflow tools can reach the shared record. Verify the existing gateway connection from the project folder:
 
 ```bash
 docker compose exec hermes sh -lc 'curl -s -H "Authorization: Bearer $API_SERVER_KEY" http://127.0.0.1:8642/deskrpg/info'

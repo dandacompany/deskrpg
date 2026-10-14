@@ -745,3 +745,39 @@ export const conversationReads = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.kind, t.targetId] })],
 );
+
+// Shared education/presentation workflows: DeskRPG is canonical; Slack is another client.
+export const educationWorkflows = pgTable(
+  "education_workflows",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    title: varchar("title", { length: 200 }).notNull(),
+    requestText: text("request_text").notNull(),
+    stage: varchar("stage", { length: 40 }).notNull().default("topic_recommendation"),
+    status: varchar("status", { length: 24 }).notNull().default("active"),
+    version: integer("version").notNull().default(0),
+    stateJson: text("state_json").notNull().default("{}"),
+    source: varchar("source", { length: 16 }).notNull(),
+    externalSessionId: varchar("external_session_id", { length: 255 }),
+    idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull().unique(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("education_workflows_updated_idx").on(t.updatedAt)],
+);
+
+export const educationWorkflowEvents = pgTable(
+  "education_workflow_events",
+  {
+    id: uuid("id").primaryKey(),
+    workflowId: uuid("workflow_id").notNull().references(() => educationWorkflows.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    action: varchar("action", { length: 40 }).notNull(),
+    actor: varchar("actor", { length: 120 }).notNull(),
+    source: varchar("source", { length: 16 }).notNull(),
+    payloadJson: text("payload_json").notNull().default("{}"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("education_workflow_events_workflow_version_idx").on(t.workflowId, t.version)],
+);

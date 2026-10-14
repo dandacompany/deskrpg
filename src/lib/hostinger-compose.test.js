@@ -63,7 +63,7 @@ test("the plugin step writes non-empty provider keys into /opt/data/.env — Her
     );
   }
   assert.match(block, /touch \/opt\/data\/\.env/);
-  assert.match(block, /for v in OPENROUTER_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY; do/);
+  assert.match(block, /for v in OPENROUTER_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY DESKRPG_EDUCATION_WORKFLOW_TOKEN DESKRPG_EDUCATION_WORKFLOW_API_URL DESKRPG_EDUCATION_WORKFLOW_URL; do/);
   // Only non-empty values are written: an empty variable must not erase a key set in the dashboard.
   assert.match(block, /\[ -n "\$\$val" \] \|\| continue/);
   // Upsert: drop the old line for that key, then append the new one.
@@ -93,6 +93,7 @@ test(".env.example pre-populates every field the Hostinger environment panel nee
   assert.deepEqual(keys, [
     "JWT_SECRET",
     "HERMES_API_KEY",
+    "DESKRPG_EDUCATION_WORKFLOW_TOKEN",
     "OPENROUTER_API_KEY",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",

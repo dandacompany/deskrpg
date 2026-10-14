@@ -3,12 +3,12 @@ import test from "node:test";
 
 import { WORKSPACE_NAV, employeesHref } from "./workspace-navigation";
 
-test("sidebar has four items in onboarding order — my character first", () => {
+test("sidebar has the setup items first and a direct education-workflow entry", () => {
   // Without a character, the office screen redirects to the character screen. Making "me"
   // first is the real order, and if it's out of order the user has to guess what's next.
   assert.deepEqual(
     WORKSPACE_NAV.map((item) => item.href),
-    ["/characters", "/gateways", "/profiles", "/channels"],
+    ["/characters", "/gateways", "/profiles", "/channels", "/workflows/education"],
   );
 });
 

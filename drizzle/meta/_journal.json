@@ -162,6 +162,13 @@
       "when": 1790423350178,
       "tag": "0022_conversation_reads",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791943760008,
+      "tag": "0023_education_workflows",
+      "breakpoints": true
     }
   ]
 }

@@ -821,3 +821,38 @@ export const conversationReads = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.kind, t.targetId] })],
 );
+
+export const educationWorkflows = sqliteTable(
+  "education_workflows",
+  {
+    id: text("id").primaryKey(),
+    title: text("title").notNull(),
+    requestText: text("request_text").notNull(),
+    stage: text("stage").notNull().default("topic_recommendation"),
+    status: text("status").notNull().default("active"),
+    version: integer("version").notNull().default(0),
+    stateJson: text("state_json").notNull().default("{}"),
+    source: text("source").notNull(),
+    externalSessionId: text("external_session_id"),
+    idempotencyKey: text("idempotency_key").notNull().unique(),
+    createdByUserId: text("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [index("education_workflows_updated_idx").on(t.updatedAt)],
+);
+
+export const educationWorkflowEvents = sqliteTable(
+  "education_workflow_events",
+  {
+    id: text("id").primaryKey(),
+    workflowId: text("workflow_id").notNull().references(() => educationWorkflows.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    action: text("action").notNull(),
+    actor: text("actor").notNull(),
+    source: text("source").notNull(),
+    payloadJson: text("payload_json").notNull().default("{}"),
+    createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [index("education_workflow_events_workflow_version_idx").on(t.workflowId, t.version)],
+);
