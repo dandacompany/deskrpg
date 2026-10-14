@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyJWT } from "@/lib/jwt";
 
-const PUBLIC_PATHS = ["/", "/auth", "/api/auth", "/api/health", "/robots.txt", "/sitemap.xml"];
+const PUBLIC_PATHS = ["/", "/auth", "/api/auth", "/api/health", "/api/internal/education-workflows", "/robots.txt", "/sitemap.xml"];
 
 /** Set only by this proxy from a verified token — never trusted from the client. */
 const IDENTITY_HEADERS = ["x-user-id", "x-user-nickname"];

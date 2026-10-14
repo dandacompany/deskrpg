@@ -1,12 +1,4 @@
-# DeskRPG + Hermes on one VPS (Hostinger). Why, update/pin/rollback: deploy/hostinger/README.md.
-#
-# - Keep at REPO ROOT, <= 8192 chars (Docker Manager); .env.example stays comment-free
-#   (copied verbatim into the Environment box).
-# - Deploy this, then Traefik from the hPanel banner, then set TRAEFIK_HOST.
-# - Never declare `traefik-proxy`: `traefik-connect` joins it at runtime (both Traefik
-#   shapes). Run `docker compose up -d` without a service name so it runs again.
-#
-# Required: HERMES_API_KEY, TRAEFIK_HOST; all variables: README step 2-1.
+# Hostinger compose: keep in repo root and under Docker Manager's 8192-byte limit.
 
 services:
   deskrpg:
@@ -21,6 +13,7 @@ services:
       DESKRPG_HOME: /app/data/home
       # No default: a shared default would be a public signing key.
       JWT_SECRET: ${JWT_SECRET:-}
+      DESKRPG_EDUCATION_WORKFLOW_TOKEN: ${DESKRPG_EDUCATION_WORKFLOW_TOKEN:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       INTERNAL_HOSTNAME: 0.0.0.0
       # Web UI host setup: admins by default, 0 turns it off.
@@ -45,8 +38,6 @@ services:
       - traefik.http.routers.${COMPOSE_PROJECT_NAME:-deskrpg}.service=${COMPOSE_PROJECT_NAME:-deskrpg}
       - traefik.http.services.${COMPOSE_PROJECT_NAME:-deskrpg}.loadbalancer.server.port=3000
 
-  # One-shot: join deskrpg + hermes to a bridge-mode Traefik's `traefik-proxy`.
-  # Read-write socket (host-root equivalent); runs once and exits.
   traefik-connect:
     image: docker:29-cli
     restart: "no"
@@ -69,8 +60,6 @@ services:
           done
         done
 
-  # One-shots before Hermes: plugin-pin reads this image's plugin commit (new: restarts Hermes);
-  # hermes-plugins disables, reinstalls, enables it; a failure keeps the old one.
   plugin-pin:
     image: ${DESKRPG_IMAGE:-ghcr.io/dandacompany/deskrpg:latest}
     restart: "no"
@@ -87,7 +76,6 @@ services:
     depends_on:
       plugin-pin:
         condition: service_completed_successfully
-    # Same key as hermes, or the image writes its own into .env and DeskRPG gets 401.
     environment:
       HERMES_UID: ${HERMES_UID:-10000}
       HERMES_GID: ${HERMES_GID:-10000}
@@ -95,17 +83,19 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DESKRPG_EDUCATION_WORKFLOW_TOKEN: ${DESKRPG_EDUCATION_WORKFLOW_TOKEN:-}
+      DESKRPG_EDUCATION_WORKFLOW_API_URL: http://deskrpg:3000
+      DESKRPG_EDUCATION_WORKFLOW_URL: https://${COMPOSE_PROJECT_NAME:-deskrpg}.${TRAEFIK_HOST:-localhost}
     volumes:
       - hermes-data:/opt/data
       - plugin-pin:/pin:ro
-    # Hermes reads provider keys only from /opt/data/.env: copy the non-empty ones.
     command:
       - sh
       - -c
       - |
         set -e
         touch /opt/data/.env
-        for v in OPENROUTER_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY; do
+        for v in OPENROUTER_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY DESKRPG_EDUCATION_WORKFLOW_TOKEN DESKRPG_EDUCATION_WORKFLOW_API_URL DESKRPG_EDUCATION_WORKFLOW_URL; do
           val=$$(printenv "$$v" || true)
           [ -n "$$val" ] || continue
           grep -v "^$$v=" /opt/data/.env > /tmp/env.next || true
@@ -120,7 +110,6 @@ services:
         elif [ ! -d $$d ]; then $$p install $$u --no-enable; fi
         $$p enable deskrpg || { [ -n "$$h" ] && $$p install $$u --ref "$$h" --force --no-deps && $$p enable deskrpg; }
 
-  # API at http://hermes:8642 (internal); dashboard only with a password.
   hermes:
     image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
     restart: unless-stopped
@@ -141,6 +130,9 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DESKRPG_EDUCATION_WORKFLOW_TOKEN: ${DESKRPG_EDUCATION_WORKFLOW_TOKEN:-}
+      DESKRPG_EDUCATION_WORKFLOW_API_URL: http://deskrpg:3000
+      DESKRPG_EDUCATION_WORKFLOW_URL: https://${COMPOSE_PROJECT_NAME:-deskrpg}.${TRAEFIK_HOST:-localhost}
       HERMES_DASHBOARD: ${HERMES_DASHBOARD_PASSWORD:+true}
       HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${HERMES_DASHBOARD_USER:-admin}
       HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_PASSWORD:-}
