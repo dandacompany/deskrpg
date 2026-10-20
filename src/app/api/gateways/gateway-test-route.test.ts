@@ -36,7 +36,13 @@ const sqlitePath = path.join(os.tmpdir(), `gateway-test-route-test-${crypto.rand
 process.env.DESKRPG_HOME = os.tmpdir();
 process.env.SQLITE_PATH = sqlitePath;
 for (const ext of ["", "-wal", "-shm"]) {
-  process.on("exit", () => fs.rmSync(`${sqlitePath}${ext}`, { force: true }));
+  process.on("exit", () => {
+    try {
+      fs.rmSync(`${sqlitePath}${ext}`, { force: true });
+    } catch {
+      // ignore on Windows if lock held
+    }
+  });
 }
 
 async function loadDb() {
@@ -56,7 +62,7 @@ async function seedUser() {
   return user;
 }
 
-async function seedGateway(ownerId: string, baseUrl: string) {
+async function seedGateway(ownerId: string, baseUrl: string, customTokenEncrypted?: string) {
   const { db, gatewayResources } = await loadDb();
   const { encryptGatewayToken } = await import("@/lib/gateway-resources");
   const [gateway] = await db
@@ -65,7 +71,7 @@ async function seedGateway(ownerId: string, baseUrl: string) {
       ownerUserId: ownerId,
       displayName: "Test Gateway",
       baseUrl,
-      tokenEncrypted: encryptGatewayToken("gateway-default-key-1234567890"),
+      tokenEncrypted: customTokenEncrypted ?? encryptGatewayToken("gateway-default-key-1234567890"),
     })
     .returning();
   return gateway;
@@ -75,11 +81,19 @@ function postReq(url: string, userId: string): NextRequest {
   return new NextRequest(url, { method: "POST", headers: { "x-user-id": userId } });
 }
 
+interface RecordedRequest {
+  url: string;
+  headers: http.IncomingHttpHeaders;
+}
+
 // For probeHermesGateway to judge it an API Server, /health must be 2xx and /v1/models must have a
 // JSON content-type (see the gateway-probe.ts comment — the dashboard serves
 // text/html). Then probeDeskrpgPlugin probes /deskrpg/info.
-function startStubHermesServer(pluginVersion: string) {
+function startStubHermesServer(pluginVersion: string, requests?: RecordedRequest[]) {
   const server = http.createServer((req, res) => {
+    if (requests && req.url) {
+      requests.push({ url: req.url, headers: req.headers });
+    }
     if (req.url === "/health") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ status: "ok" }));
@@ -103,7 +117,8 @@ function startStubHermesServer(pluginVersion: string) {
 
 describe("gateway test route — actually writes the plugin cache (Task 9)", () => {
   test("once judged Hermes, POST updates gatewayResources' plugin_* columns with freshly made values", async () => {
-    const server = startStubHermesServer("0.4.2");
+    const recordedRequests: RecordedRequest[] = [];
+    const server = startStubHermesServer("0.4.2", recordedRequests);
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("failed to bind stub server");
@@ -127,6 +142,11 @@ describe("gateway test route — actually writes the plugin cache (Task 9)", () 
       const body = await res.json();
       assert.equal(body.ok, true);
       assert.deepEqual(body.plugin, { status: "plugin_ready", version: "0.4.2" });
+
+      const modelsReq = recordedRequests.find((r) => r.url === "/v1/models");
+      assert.equal(modelsReq?.headers.authorization, "Bearer gateway-default-key-1234567890");
+      const pluginReq = recordedRequests.find((r) => r.url === "/deskrpg/info");
+      assert.equal(pluginReq?.headers.authorization, "Bearer gateway-default-key-1234567890");
 
       const { db, gatewayResources } = await loadDb();
       const { eq } = await import("drizzle-orm");
@@ -156,6 +176,52 @@ describe("gateway test route — actually writes the plugin cache (Task 9)", () 
         checkedAtMs >= beforeCall && checkedAtMs <= afterCall,
         `plugin_checked_at 이 호출 구간 안의 시각이어야 한다 (${row.pluginCheckedAt})`,
       );
+    } finally {
+      server.close();
+    }
+  });
+
+  test("corrupt ciphertext returns HTTP 200 with diagnostic error contract and without outbound probe", async () => {
+    const recordedRequests: RecordedRequest[] = [];
+    const server = startStubHermesServer("0.4.2", recordedRequests);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("failed to bind stub server");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    try {
+      const owner = await seedUser();
+      const gateway = await seedGateway(owner.id, baseUrl, "v1:corrupt:bad:ciphertext");
+
+      const { POST } = await import("./[id]/test/route");
+      const res = await POST(
+        postReq(`http://localhost/api/gateways/${gateway.id}/test`, owner.id),
+        {
+          params: Promise.resolve({ id: gateway.id }),
+        },
+      );
+
+      assert.equal(res.status, 200);
+      assert.equal(res.headers.get("x-deskrpg-error-code"), "gateway_token_decryption_failed");
+      const body = await res.json();
+      assert.equal(body.ok, false);
+      assert.equal(body.errorCode, "gateway_token_decryption_failed");
+      assert.equal(body.error, "Gateway token decryption failed");
+      assert.equal(body.reachable, undefined, "must not claim reachable: false when no probe ran");
+
+      // Verify no outbound HTTP request was made
+      assert.equal(recordedRequests.length, 0);
+
+      // Verify DB validation state
+      const { db, gatewayResources } = await loadDb();
+      const { eq } = await import("drizzle-orm");
+      const [row] = await db
+        .select()
+        .from(gatewayResources)
+        .where(eq(gatewayResources.id, gateway.id));
+
+      assert.equal(row.lastValidationStatus, "error");
+      assert.equal(row.lastValidationError, "gateway_token_decryption_failed");
     } finally {
       server.close();
     }
