@@ -149,6 +149,13 @@ export const OFFICE_ENVIRONMENTS = Object.freeze([
 
 export type OfficeEnvironmentId = (typeof OFFICE_ENVIRONMENTS)[number]["id"];
 
+/** Guard for values that arrive from a request body or from the database. */
+export function isOfficeEnvironmentId(value: unknown): value is OfficeEnvironmentId {
+  return (
+    typeof value === "string" && OFFICE_ENVIRONMENTS.some((environment) => environment.id === value)
+  );
+}
+
 type OfficeEnvironment = (typeof OFFICE_ENVIRONMENTS)[number];
 export type EnvironmentLabel = { name: string; description: string };
 

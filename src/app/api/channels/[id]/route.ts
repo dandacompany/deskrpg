@@ -9,7 +9,7 @@ import { backupChannelMap } from "@/lib/channel-map-backup";
 import { requestMapRefresh } from "@/lib/channel-map-refresh";
 import { normalizeNpcMotionConfig } from "@/lib/npc-motion-config";
 import { db, isPostgres, jsonForDb } from "@/db";
-import { channels, channelMembers, groupMembers, groups } from "@/db";
+import { channels, channelMembers, groupMembers, groups, npcs } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
@@ -27,6 +27,13 @@ import { isChannelPasswordValid } from "@/lib/security-policy";
 import { seatingMapFor } from "@/lib/seat-assignment";
 import internalTransport from "@/lib/internal-transport.js";
 import { invalidJsonBody, readJsonObject } from "@/lib/api-body";
+import {
+  buildOfficeEnvironment,
+  isOfficeEnvironmentId,
+  type OfficeEnvironmentId,
+} from "@/game/three/office-environments";
+import { detectOfficeEnvironmentId } from "@/lib/channel-list-summary";
+import { effectiveMapSpawn } from "@/lib/effective-map-spawn";
 
 const { buildInternalAuthHeaders, getInternalSocketBaseUrl } = internalTransport as {
   buildInternalAuthHeaders: () => Record<string, string>;
@@ -188,6 +195,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         mapConfig: parsedMapConfig,
         // Default when empty — fold it here so the client does not interpret empty values separately.
         motionConfig: normalizeNpcMotionConfig(parseDbJson(channel.motionConfig)),
+        // Channels do not store an environment id; derive it from the map so the layout picker can
+        // show the current room without an extra request.
+        environmentId: detectOfficeEnvironmentId(channel.mapData),
         isOwner,
         isMember,
         canView: true,
@@ -232,6 +242,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         isPublic: channels.isPublic,
         name: channels.name,
         mapConfig: channels.mapConfig,
+        mapData: channels.mapData,
       })
       .from(channels)
       .where(eq(channels.id, id))
@@ -267,6 +278,60 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       updates.description = body.description?.trim() || null;
     }
     if (body.maxPlayers !== undefined) updates.maxPlayers = body.maxPlayers;
+    // Office layout switch: the client sends only the environment id. The server rebuilds the map
+    // from that environment, re-seats every AI coworker and asks connected clients to reload the room.
+    let environmentSwitch: { seats: { col: number; row: number }[] } | null = null;
+    if (body.environmentId !== undefined) {
+      if (!isOfficeEnvironmentId(body.environmentId)) {
+        return NextResponse.json(
+          { errorCode: "invalid_environment", error: "Unknown office environment" },
+          { status: 400 },
+        );
+      }
+      const requestedEnvironment: OfficeEnvironmentId = body.environmentId;
+      const currentEnvironment = detectOfficeEnvironmentId(parseDbJson(rows[0].mapData));
+      if (requestedEnvironment !== currentEnvironment) {
+        try {
+          // The new room needs its own map config (size + spawn). Carrying the old one over leaves
+          // the spawn point inside a wall, and the meeting map rejects the room as unreachable.
+          const environmentMap = buildOfficeEnvironment(requestedEnvironment);
+          const spawn = effectiveMapSpawn(environmentMap);
+          if (!spawn) {
+            return NextResponse.json(
+              { errorCode: "environment_unknown", error: "Office environment has no spawn" },
+              { status: 400 },
+            );
+          }
+          const nextMapConfig = {
+            cols: environmentMap.width,
+            rows: environmentMap.height,
+            spawnCol: spawn.col,
+            spawnRow: spawn.row,
+          };
+          const normalizedEnvironmentMap = normalizeMeetingMap(
+            environmentMap,
+            nextMapConfig,
+          ).mapData;
+          const seating = seatingMapFor({
+            mapData: normalizedEnvironmentMap,
+            mapConfig: nextMapConfig,
+          });
+          if (!seating || seating.seats.length === 0) {
+            return NextResponse.json(
+              { errorCode: "map_has_no_desk_seats", error: "Map needs at least one desk chair" },
+              { status: 400 },
+            );
+          }
+          environmentSwitch = {
+            seats: seating.seats.map((seat) => ({ col: seat.col, row: seat.row })),
+          };
+          updates.mapData = jsonForDb(normalizedEnvironmentMap);
+          updates.mapConfig = jsonForDb(nextMapConfig);
+        } catch (error) {
+          return meetingMapErrorResponse(error);
+        }
+      }
+    }
     if (body.mapData !== undefined) {
       try {
         const normalizedMap = normalizeMeetingMap(
@@ -315,6 +380,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     updates.updatedAt = (isPostgres ? new Date() : new Date().toISOString()) as unknown as Date;
 
+    // Tell connected clients to pause the room while the new layout is written.
+    let mapRefreshLease: string | null = null;
+    if (environmentSwitch) {
+      try {
+        mapRefreshLease = await requestMapRefresh("begin", id);
+      } catch (err) {
+        console.warn(`[channels] map refresh begin failed for ${id}:`, err);
+      }
+    }
+
     const [updated] = await db.update(channels).set(updates).where(eq(channels.id, id)).returning({
       id: channels.id,
       name: channels.name,
@@ -328,6 +403,33 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       createdAt: channels.createdAt,
       updatedAt: channels.updatedAt,
     });
+
+    // The new layout has different desks. Put every AI coworker on a valid seat instead of leaving
+    // them inside a wall, then let the clients in: order by creation so the assignment is stable.
+    if (environmentSwitch) {
+      try {
+        const seated = await db
+          .select({ id: npcs.id })
+          .from(npcs)
+          .where(eq(npcs.channelId, id))
+          .orderBy(npcs.createdAt);
+        for (let index = 0; index < seated.length; index += 1) {
+          const seat = environmentSwitch.seats[index % environmentSwitch.seats.length];
+          await db
+            .update(npcs)
+            .set({ positionX: seat.col, positionY: seat.row, direction: "down" })
+            .where(eq(npcs.id, seated[index].id));
+        }
+      } catch (err) {
+        // The layout already changed; a coworker off-seat is recoverable by hand, a failed PUT is not.
+        console.warn(`[channels] failed to re-seat NPCs for ${id}:`, err);
+      }
+      try {
+        await requestMapRefresh("finish", id, mapRefreshLease ?? undefined);
+      } catch (err) {
+        console.warn(`[channels] map refresh finish failed for ${id}:`, err);
+      }
+    }
 
     // If the name actually changed and a board link row exists, match the board display name too (R2).
     // The rename already succeeded even if this fails — swallow and log; the next poll retries.
@@ -368,7 +470,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       console.warn("Failed to emit channel:updated socket event");
     }
 
-    return NextResponse.json({ channel: updated });
+    return NextResponse.json({
+      channel: {
+        ...updated,
+        environmentId: detectOfficeEnvironmentId(parseDbJson(updated.mapData)),
+      },
+    });
   } catch (err) {
     console.error("Failed to update channel:", err);
     return NextResponse.json(

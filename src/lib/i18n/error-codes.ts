@@ -174,6 +174,7 @@ export type ErrorCode =
   | "unsupported_npc_field"
   | "not_a_desk_seat"
   | "map_has_no_desk_seats"
+  | "invalid_environment"
   | "internal_server_error"
   | "failed_to_fetch_projects"
   | "project_name_required"
@@ -296,7 +297,6 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   map_template_not_found: "errors.mapTemplateNotFound",
   // Channel creation takes an environment ID. Reuses an existing key instead of a new message (locale files are touched by a different task).
   environment_required: "errors.missingRequiredFields",
-  environment_unknown: "errors.environmentUnknown",
   map_template_removed: "errors.mapTemplateRemoved",
   meeting_map_invalid: "errors.meetingMapInvalid",
   template_not_found: "errors.mapTemplateNotFound",
@@ -429,6 +429,8 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   unsupported_npc_field: "errors.unsupportedNpcField",
   not_a_desk_seat: "errors.notADeskSeat",
   map_has_no_desk_seats: "errors.mapHasNoDeskSeats",
+  invalid_environment: "errors.invalidEnvironment",
+  environment_unknown: "errors.environmentUnknown",
   internal_server_error: "errors.internalServerError",
   failed_to_fetch_projects: "errors.failedToFetchProjects",
   project_name_required: "errors.projectNameRequired",
