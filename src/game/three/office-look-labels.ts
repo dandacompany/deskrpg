@@ -5,10 +5,143 @@ export type LookLabel = { name: string; subtitle: string };
 type LookCategoryId = (typeof LOOK_CATEGORIES)[number]["id"];
 
 /**
- * ja/zh display labels by look id. ko and en live on the look itself (`name`/`subtitle`, `nameEn`/`subtitleEn`).
+ * pt/ja/zh display labels by look id. ko and en live on the look itself (`name`/`subtitle`, `nameEn`/`subtitleEn`).
  * Chinese keeps the romanized name: the characters are Korean given names with no fixed hanzi.
  */
-const LOOK_LABELS: Record<"ja" | "zh", Record<string, LookLabel>> = {
+const LOOK_LABELS: Record<"pt" | "ja" | "zh", Record<string, LookLabel>> = {
+  pt: {
+    "office-jun": { name: "Jun", subtitle: "Primeiro dia · terno azul-marinho e crachá" },
+    "office-tae": { name: "Tae", subtitle: "Colega experiente · mangas dobradas e gravata frouxa" },
+    "office-seo": {
+      name: "Seorin",
+      subtitle: "Confiança discreta · terno cinza-carvão e rabo de cavalo",
+    },
+    "office-min": {
+      name: "Minjae",
+      subtitle: "Detalhes pensados · terno xadrez e óculos redondos",
+    },
+    "office-do": { name: "Doyun", subtitle: "Presença constante · colete de tricô e camisa" },
+    "office-yun": {
+      name: "Yunseo",
+      subtitle: "Liderança com os pés no chão · jaqueta azul-marinho e calça ampla",
+    },
+    "office-ha": { name: "Hakyung", subtitle: "Ideias vivas · tricô mostarda e calça ampla" },
+    "office-jin": { name: "Jinwoo", subtitle: "Olhar editorial · sobretudo camelo e gola alta" },
+    "office-eun": {
+      name: "Eunchae",
+      subtitle: "Foco acolhedor · cardigã e saia longa plissada",
+    },
+    "office-hyeon": {
+      name: "Hyeonjin",
+      subtitle: "Experiência serena · cabelos prateados e terno de três peças",
+    },
+    "office-nari": {
+      name: "Nari",
+      subtitle: "Planejadora de contas · blusa de laço e saia na altura do joelho",
+    },
+    "office-roan": {
+      name: "Roan",
+      subtitle: "Diretor de arte · gola alta preta e sobretudo xadrez",
+    },
+    "office-soi": {
+      name: "Soi",
+      subtitle: "Estrategista de marca · coque e jaqueta trespassada",
+    },
+    "office-yul": { name: "Yul", subtitle: "Redator publicitário · cachos e colete de tricô" },
+    "office-bomi": { name: "Bomi", subtitle: "Produtora de conteúdo · tranças e saia longa" },
+    "office-jiho": { name: "Jiho", subtitle: "Diretor de produção · camisa e fone de gravação" },
+    "office-dami": { name: "Dami", subtitle: "Gerente de campanhas · lenço e chanel curto" },
+    "office-seul": {
+      name: "Seula",
+      subtitle: "Pesquisadora de design · cabelos longos e tricô amplo",
+    },
+    "office-kyu": {
+      name: "Kyumin",
+      subtitle: "Parceiro de clientes · terno de risca de giz e gravata",
+    },
+    "office-ara": {
+      name: "Ara",
+      subtitle: "Diretora de eventos · rabo de cavalo e colete prático",
+    },
+    "office-ian": { name: "Ian", subtitle: "Engenheiro de backend · óculos e moletom com capuz" },
+    "office-rumi": {
+      name: "Rumi",
+      subtitle: "Engenheira de frontend · tranças e moletom com capuz",
+    },
+    "office-gonu": { name: "Gonu", subtitle: "Engenheiro de QA · camisa xadrez e caderno" },
+    "office-haena": { name: "Haena", subtitle: "Cientista de dados · jaleco e coque" },
+    "office-woojin": { name: "Woojin", subtitle: "Especialista de TI · cachos e calça ampla" },
+    "office-jua": {
+      name: "Jua",
+      subtitle: "Designer de UX · ondas e cardigã com laço no pescoço",
+    },
+    "office-taemin": { name: "Taemin", subtitle: "Scrum master · colete de tricô e crachá" },
+    "office-sera": {
+      name: "Sera",
+      subtitle: "Engenheira de segurança · cabelos longos e sobretudo de gola alta",
+    },
+    "office-hosu": { name: "Hosu", subtitle: "Pesquisador de robótica · cabelo curto e jaleco" },
+    "office-yena": { name: "Yena", subtitle: "Gerente de comunidade · chanel e moletom amplo" },
+    "office-sungho": {
+      name: "Sungho",
+      subtitle: "Diretor de operações · repartido prateado e terno trespassado",
+    },
+    "office-hyejin": { name: "Hyejin", subtitle: "Diretora financeira · coque e lenço discreto" },
+    "office-jungwon": {
+      name: "Jungwon",
+      subtitle: "Diretora de pessoas · chanel prateado e tricô longo",
+    },
+    "office-seok": {
+      name: "Seokhyun",
+      subtitle: "Presidente de negócios · ondas e terno xadrez",
+    },
+    "office-mira": {
+      name: "Mira",
+      subtitle: "Diretora de criação · cabelos longos e jaqueta trespassada",
+    },
+    "office-kyung": {
+      name: "Kyungsu",
+      subtitle: "Diretor jurídico · corte alinhado e colete sob medida",
+    },
+    "office-yeon": {
+      name: "Yeonhwa",
+      subtitle: "Presidente do conselho · coque prateado e sobretudo",
+    },
+    "office-dohun": { name: "Dohun", subtitle: "Fundador · cachos e moletom prático" },
+    "office-suhye": {
+      name: "Suhye",
+      subtitle: "Diretora comercial · rabo de cavalo e terno marcante",
+    },
+    "office-jaewon": {
+      name: "Jaewon",
+      subtitle: "Consultor de estratégia · ondas prateadas e gola alta",
+    },
+    "office-daeun": { name: "Daeun", subtitle: "Editora de ficção · cabelos longos e saia longa" },
+    "office-jiseok": { name: "Jiseok", subtitle: "Editor de tradução · cachos e colete xadrez" },
+    "office-seona": { name: "Seona", subtitle: "Designer de livros · tranças e jaleco de ateliê" },
+    "office-haram": {
+      name: "Haram",
+      subtitle: "Agente de direitos estrangeiros · lenço e terno trespassado",
+    },
+    "office-chan": {
+      name: "Chanyoung",
+      subtitle: "Produção gráfica · camisa de trabalho e crachá",
+    },
+    "office-eunsol": {
+      name: "Eunsol",
+      subtitle: "Preparadora de textos · coque e cardigã de tricô",
+    },
+    "office-sejin": { name: "Sejin", subtitle: "Negociador · repartido lateral e risca de giz" },
+    "office-hyo": { name: "Hyoju", subtitle: "Vendas em livraria · chanel curto e colete leve" },
+    "office-yumin": {
+      name: "Yumin",
+      subtitle: "Gerente de parcerias · ondas e terno de colarinho aberto",
+    },
+    "office-garam": {
+      name: "Garam",
+      subtitle: "Relações com autores · rabo de cavalo e sobretudo amplo",
+    },
+  },
   ja: {
     "office-jun": { name: "ソジュン", subtitle: "初出勤の高揚 · ネイビースーツと社員証" },
     "office-tae": { name: "テオ", subtitle: "現場を知るベテラン · シャツと緩めたネクタイ" },
@@ -154,7 +287,14 @@ const LOOK_LABELS: Record<"ja" | "zh", Record<string, LookLabel>> = {
   },
 };
 
-const CATEGORY_LABELS: Record<"ja" | "zh", Record<LookCategoryId, string>> = {
+const CATEGORY_LABELS: Record<"pt" | "ja" | "zh", Record<LookCategoryId, string>> = {
+  pt: {
+    all: "Todos",
+    classic: "Ternos clássicos",
+    casual: "Casual de escritório",
+    creative: "Criativo",
+    leadership: "Liderança",
+  },
   ja: {
     all: "すべて",
     classic: "クラシックスーツ",
@@ -193,10 +333,10 @@ export function lookCategoryLabel(id: LookCategoryId, locale: string | null | un
   return CATEGORY_LABELS[lang][id];
 }
 
-/** Search text across all four languages, so a name typed in any language finds the look on any screen. */
+/** Search text across all languages, so a name typed in any language finds the look on any screen. */
 export function lookSearchText(look: OfficeLook): string {
   const parts = [look.name, look.subtitle, look.nameEn, look.subtitleEn];
-  for (const lang of ["ja", "zh"] as const) {
+  for (const lang of ["pt", "ja", "zh"] as const) {
     const label = LOOK_LABELS[lang][look.id];
     if (label) parts.push(label.name, label.subtitle);
   }

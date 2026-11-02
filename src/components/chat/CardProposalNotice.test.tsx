@@ -22,7 +22,7 @@ const base: Proposal = {
   npcName: "소피",
 };
 
-const LOCALES: Locale[] = ["ko", "en", "ja", "zh"];
+const LOCALES: Locale[] = ["ko", "en", "ja", "zh", "pt"];
 
 async function render(
   node: React.ReactElement,

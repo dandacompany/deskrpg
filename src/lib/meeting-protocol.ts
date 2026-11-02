@@ -138,6 +138,7 @@ const RESPONSE_LANGUAGE_SECTION_TITLES = [
   "응답 언어 계약",
   "応答言語ルール",
   "回复语言约束",
+  "Contrato de idioma da resposta",
 ];
 
 const RESPONSE_LANGUAGE_SECTION: Record<ServerLocale, { title: string; lines: string[] }> = {
@@ -167,6 +168,13 @@ const RESPONSE_LANGUAGE_SECTION: Record<ServerLocale, { title: string; lines: st
     lines: [
       "所有直接聊天、会议轮次、任务汇报、总结和追问都必须使用中文。",
       "除非人类明确用其他语言重写这些人格文档，否则把这条规则视为强约束。",
+    ],
+  },
+  pt: {
+    title: "Contrato de idioma da resposta",
+    lines: [
+      "Todas as conversas diretas, falas em reunião, relatórios de tarefas, resumos e perguntas de acompanhamento devem ser escritos em português do Brasil.",
+      "Trate isso como regra fixa da área de trabalho, a menos que a pessoa reescreva os arquivos de persona em outro idioma de propósito.",
     ],
   },
 };

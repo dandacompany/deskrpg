@@ -10,11 +10,15 @@ export function promptLocale(locale: string | null | undefined): PromptLocale {
   return normalizeLocale(locale) === "ko" ? "ko" : "en";
 }
 
-const LANGUAGE_NAMES: Record<ServerLocale, "Korean" | "English" | "Japanese" | "Chinese"> = {
+const LANGUAGE_NAMES: Record<
+  ServerLocale,
+  "Korean" | "English" | "Japanese" | "Chinese" | "Portuguese"
+> = {
   ko: "Korean",
   en: "English",
   ja: "Japanese",
   zh: "Chinese",
+  pt: "Portuguese",
 };
 
 /** English name of the language, for directives such as "Write every string value in Japanese." */

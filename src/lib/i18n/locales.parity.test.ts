@@ -11,10 +11,11 @@ import en from "./locales/en";
 import ja from "./locales/ja";
 import ko from "./locales/ko";
 import zh from "./locales/zh";
+import pt from "./locales/pt";
 
-const LOCALES: Record<string, Record<string, string>> = { ko, en, ja, zh };
+const LOCALES: Record<string, Record<string, string>> = { ko, en, ja, zh, pt };
 
-test("all four locale files share an identical key set", () => {
+test("all locale files share an identical key set", () => {
   const reference = Object.keys(LOCALES.en).sort();
   for (const [name, map] of Object.entries(LOCALES)) {
     const keys = Object.keys(map).sort();
