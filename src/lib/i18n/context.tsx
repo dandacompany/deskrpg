@@ -4,18 +4,20 @@ import en from "./locales/en";
 import ko from "./locales/ko";
 import zh from "./locales/zh";
 import ja from "./locales/ja";
+import pt from "./locales/pt";
 import { LOCALE_COOKIE_MAX_AGE, LOCALE_COOKIE_NAME, LOCALE_STORAGE_KEY } from "./constants";
 
-export type Locale = "en" | "ko" | "zh" | "ja";
+export type Locale = "en" | "pt" | "ko" | "zh" | "ja";
 export const LOCALES: { code: Locale; label: string }[] = [
   { code: "en", label: "English" },
+  { code: "pt", label: "Português (Brasil)" },
   { code: "ko", label: "한국어" },
   { code: "zh", label: "中文" },
   { code: "ja", label: "日本語" },
 ];
 
 type TranslationMap = Record<string, string>;
-const translations: Record<Locale, TranslationMap> = { en, ko, zh, ja };
+const translations: Record<Locale, TranslationMap> = { en, pt, ko, zh, ja };
 
 interface I18nContextValue {
   locale: Locale;
@@ -56,6 +58,7 @@ function detectLocale(initialLocale: Locale): Locale {
   const cookieLocale = readCookieLocale();
   if (cookieLocale) return cookieLocale;
   const lang = navigator.language.slice(0, 2);
+  if (lang === "pt") return "pt";
   if (lang === "ko") return "ko";
   if (lang === "zh") return "zh";
   if (lang === "ja") return "ja";

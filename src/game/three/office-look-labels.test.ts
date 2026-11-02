@@ -10,7 +10,7 @@ import {
 
 const jun = OFFICE_LOOKS.find((l) => l.id === "office-jun")!;
 
-test("every look has ja and zh labels", () => {
+test("every look has pt, ja and zh labels", () => {
   assert.deepEqual(looksMissingLabels(), []);
 });
 
@@ -21,9 +21,9 @@ test("lookLabel keeps ko and en from the look and falls back to en", () => {
   assert.equal(lookLabel(jun, "ja").name, "ソジュン");
 });
 
-test("ja and zh labels keep the 'role · outfit' shape and contain no Hangul", () => {
+test("pt, ja and zh labels keep the 'role · outfit' shape and contain no Hangul", () => {
   for (const look of OFFICE_LOOKS) {
-    for (const locale of ["ja", "zh"]) {
+    for (const locale of ["pt", "ja", "zh"]) {
       const { name, subtitle } = lookLabel(look, locale);
       assert.doesNotMatch(`${name} ${subtitle}`, /[가-힣]/, look.id);
       assert.equal(subtitle.split(" · ").length, look.subtitle.split(" · ").length, look.id);
@@ -32,8 +32,8 @@ test("ja and zh labels keep the 'role · outfit' shape and contain no Hangul", (
   assert.equal(lookCategoryLabel("classic", "zh"), "经典西装");
 });
 
-test("search text covers all four languages", () => {
+test("search text covers all five languages", () => {
   const text = lookSearchText(jun);
-  for (const needle of ["서준", "jun", "ソジュン", "藏青"])
+  for (const needle of ["서준", "jun", "ソジュン", "藏青", "terno"])
     assert.ok(text.includes(needle), needle);
 });

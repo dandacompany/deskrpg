@@ -7,6 +7,11 @@ GitHub Releases will be written later at actual release time.
 
 ## [Unreleased]
 
+### Added
+
+- Brazilian Portuguese (`pt`) locale, including the office renderer strings, room and environment labels,
+  NPC smalltalk lines and the meeting protocol response-language contract.
+
 ## [2026.1019.1] - 2026-10-19
 
 ### Added

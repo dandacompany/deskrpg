@@ -8,7 +8,7 @@ import {
   setupStep,
 } from "./setup-copy";
 
-test("host remediation is present in all four locales without raw error codes", () => {
+test("host remediation is present in all five locales without raw error codes", () => {
   for (const code of [
     "managed_service_required",
     "windows_scheduled_task_missing",
@@ -33,7 +33,7 @@ test("host remediation is present in all four locales without raw error codes", 
     "invalid_host_config",
     "invalid_candidate",
   ]) {
-    for (const locale of ["ko", "en", "ja", "zh"] as const) {
+    for (const locale of ["ko", "en", "ja", "zh", "pt"] as const) {
       const message = setupHostError(locale, code);
       assert.ok(message && message.length > 20, `${locale}: ${code}`);
       assert.ok(!message.includes(code));
@@ -42,7 +42,7 @@ test("host remediation is present in all four locales without raw error codes", 
 });
 test("an unrecognized service definition tells the user how to refresh it", () => {
   for (const code of ["service_identity_mismatch", "service_identity_ambiguous"]) {
-    for (const locale of ["ko", "en", "ja", "zh"] as const) {
+    for (const locale of ["ko", "en", "ja", "zh", "pt"] as const) {
       const message = setupHostError(locale, code) ?? "";
       const update = message.indexOf("`hermes update`");
       const restart = message.indexOf("`hermes gateway restart`");
@@ -74,12 +74,12 @@ test("only known repairable warning states allow preparation", () => {
 
 test("host_busy uses localized retry guidance", async () => {
   const { setupCopy, setupError } = await import("./setup-copy");
-  for (const locale of ["ko", "en", "ja", "zh"] as const) {
+  for (const locale of ["ko", "en", "ja", "zh", "pt"] as const) {
     assert.equal(setupError(setupCopy[locale], "host_busy"), setupCopy[locale].busy);
   }
 });
 
-test("a new error code returns guidance text in all four languages without the raw code", async () => {
+test("a new error code returns guidance text in all five languages without the raw code", async () => {
   const { setupCopy, setupError } = await import("./setup-copy");
   for (const code of [
     "hermes_version_unsupported",
@@ -89,7 +89,7 @@ test("a new error code returns guidance text in all four languages without the r
     "timezone_invalid",
     "timezone_write_failed",
   ]) {
-    for (const locale of ["ko", "en", "ja", "zh"] as const) {
+    for (const locale of ["ko", "en", "ja", "zh", "pt"] as const) {
       const message = setupHostError(locale, code);
       assert.ok(message && message.length > 20, `${locale}: ${code}`);
       assert.ok(!message.includes(code));
@@ -100,9 +100,9 @@ test("a new error code returns guidance text in all four languages without the r
   assert.match(setupHostError("ko", "hermes_version_unsupported")!, /0\.21\.1/);
 });
 
-test("new progress steps have a unique label in all four languages", async () => {
+test("new progress steps have a unique label in all five languages", async () => {
   const { setupCopy, setupStep } = await import("./setup-copy");
-  for (const locale of ["ko", "en", "ja", "zh"] as const) {
+  for (const locale of ["ko", "en", "ja", "zh", "pt"] as const) {
     const copy = setupCopy[locale];
     const labels = ["installing_service", "updating_plugin", "setting_timezone"].map((code) =>
       setupStep(copy, code),
@@ -116,7 +116,7 @@ test("new progress steps have a unique label in all four languages", async () =>
   }
 });
 
-test("contract 2's new error codes also return guidance in all four languages without the raw code", async () => {
+test("contract 2's new error codes also return guidance in all five languages without the raw code", async () => {
   const { setupCopy, setupError } = await import("./setup-copy");
   for (const code of [
     "profile_name_invalid",
@@ -130,7 +130,7 @@ test("contract 2's new error codes also return guidance in all four languages wi
     "hermes_install_failed",
     "hermes_installer_unavailable",
   ]) {
-    for (const locale of ["ko", "en", "ja", "zh"] as const) {
+    for (const locale of ["ko", "en", "ja", "zh", "pt"] as const) {
       const message = setupHostError(locale, code);
       assert.ok(message && message.length > 20, `${locale}: ${code}`);
       assert.ok(!message.includes(code));
@@ -139,10 +139,10 @@ test("contract 2's new error codes also return guidance in all four languages wi
   }
 });
 
-test("warnings return guidance in all four languages, and an unknown code is not rendered", async () => {
+test("warnings return guidance in all five languages, and an unknown code is not rendered", async () => {
   const { setupWarning } = await import("./setup-copy");
   for (const code of ["profile_not_served", "model_provider_required"]) {
-    for (const locale of ["ko", "en", "ja", "zh"] as const) {
+    for (const locale of ["ko", "en", "ja", "zh", "pt"] as const) {
       const message = setupWarning(locale, code);
       assert.ok(message && message.length > 20, `${locale}: ${code}`);
       assert.ok(!message.includes(code));
@@ -154,9 +154,9 @@ test("warnings return guidance in all four languages, and an unknown code is not
   assert.equal(setupWarning("ko", undefined), undefined);
 });
 
-test("contract 2's new progress steps have a unique label in all four languages", async () => {
+test("contract 2's new progress steps have a unique label in all five languages", async () => {
   const { setupCopy, setupStep } = await import("./setup-copy");
-  for (const locale of ["ko", "en", "ja", "zh"] as const) {
+  for (const locale of ["ko", "en", "ja", "zh", "pt"] as const) {
     const copy = setupCopy[locale];
     const labels = ["installing_hermes", "creating_profile", "provisioning_keys"].map((code) =>
       setupStep(copy, code),
@@ -166,9 +166,9 @@ test("contract 2's new progress steps have a unique label in all four languages"
   }
 });
 
-test("install milestones exist in all four locales, and an unknown code returns nothing", () => {
+test("install milestones exist in all five locales, and an unknown code returns nothing", () => {
   for (const code of ["deps", "clone", "venv", "node_modules", "skills", "done"]) {
-    for (const locale of ["ko", "en", "ja", "zh"] as const) {
+    for (const locale of ["ko", "en", "ja", "zh", "pt"] as const) {
       const message = setupProgress(locale, code);
       assert.ok(message && message.length > 2, `${locale}: ${code}`);
     }
@@ -176,8 +176,8 @@ test("install milestones exist in all four locales, and an unknown code returns 
   for (const code of [undefined, null, 42, "", "raw output line", "installing python 3.12"])
     assert.equal(setupProgress("ko", code), undefined);
 });
-test("the model-check step shows as text, not the raw code, in all four locales", () => {
-  for (const locale of ["ko", "en", "ja", "zh"] as const) {
+test("the model-check step shows as text, not the raw code, in all five locales", () => {
+  for (const locale of ["ko", "en", "ja", "zh", "pt"] as const) {
     const label = setupStep(setupCopy[locale], "checking_model");
     assert.ok(label && label.length > 2, locale);
     assert.ok(!label.includes("checking_model"));
@@ -185,9 +185,9 @@ test("the model-check step shows as text, not the raw code, in all four locales"
   }
 });
 
-test("update-only errors also state a reason in all four languages — never exposing the raw code on screen", async () => {
+test("update-only errors also state a reason in all five languages — never exposing the raw code on screen", async () => {
   for (const code of ["plugin_update_unsupported_host", "plugin_update_candidate_not_found"]) {
-    for (const locale of ["ko", "en", "ja", "zh"] as const) {
+    for (const locale of ["ko", "en", "ja", "zh", "pt"] as const) {
       const message = setupHostError(locale, code);
       assert.ok(message && message.length > 20, `${locale}: ${code}`);
       assert.ok(!message.includes(code));
@@ -196,7 +196,7 @@ test("update-only errors also state a reason in all four languages — never exp
 });
 
 test("the Windows scheduled-task copy names the missing task and where to check, unlike the generic service copy", () => {
-  for (const locale of ["ko", "en", "ja", "zh"] as const) {
+  for (const locale of ["ko", "en", "ja", "zh", "pt"] as const) {
     const windows = setupHostError(locale, "windows_scheduled_task_missing");
     assert.ok(windows && windows.includes("hermes gateway install"), locale);
     assert.notEqual(windows, setupHostError(locale, "managed_service_required"), locale);

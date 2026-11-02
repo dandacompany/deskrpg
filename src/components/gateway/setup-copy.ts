@@ -1,9 +1,10 @@
 import type { Locale } from "../../lib/i18n/context";
-// The wizard's newer copy lives in the shared locale maps so the four languages stay in one
+// The wizard's newer copy lives in the shared locale maps so the five languages stay in one
 // place; older entries below predate that and are kept as-is.
 import enText from "../../lib/i18n/locales/en";
 import jaText from "../../lib/i18n/locales/ja";
 import koText from "../../lib/i18n/locales/ko";
+import ptText from "../../lib/i18n/locales/pt";
 import zhText from "../../lib/i18n/locales/zh";
 
 const ko = {
@@ -386,7 +387,105 @@ Object.assign(zh, {
   provisioning_keys: zhText["hermes.wizard.step.provisioningKeys"],
   checking_model: zhText["hermes.wizard.step.checkingModel"],
 });
-export const setupCopy: Record<Locale, Copy> = { ko, en, ja, zh };
+const pt: Copy = {
+  title: "Conectar a um gateway do Hermes",
+  selectProfiles: "Perfis existentes para importar",
+  selectedProfiles: "Perfis selecionados",
+  profileNeedsToken: "Configure uma credencial de API antes de importar este perfil.",
+  profileProvisionToken: "Uma credencial de API será criada durante a conexão.",
+  noSelectedProfiles:
+    "Nenhum perfil selecionado. O gateway será conectado; registre os perfis separadamente depois.",
+  intro: "Onde o Hermes está em execução?",
+  local: "Conexão local",
+  remote: "Conexão remota",
+  localHelp:
+    "Local significa o host que executa o servidor do DeskRPG, que pode ser diferente do computador deste navegador.",
+  remoteHelp: "Conecte ao Hermes em outro servidor.",
+  unavailable:
+    "O acesso ao host não está disponível nesta instância. Peça a um administrador para habilitar a configuração do host ou conecte pelo endereço do gateway.",
+  ssh: "Conectar por SSH",
+  url: "Conectar pelo endereço do gateway",
+  sshHelp:
+    "Encontre o Hermes em um host SSH registrado. Registre hosts com sua configuração SSH (~/.ssh/config, ssh-agent) ou com uma chave do DeskRPG.",
+  urlHelp: "Use um endereço e uma credencial de API existentes.",
+  host: "Host SSH",
+  chooseHost: "Escolher um host",
+  discover: "Localizar instalações",
+  discovering: "Procurando instalações do Hermes…",
+  empty: "Nenhuma instalação do Hermes foi encontrada.",
+  inspect: "Conectar",
+  startAndConnect: "Iniciar e conectar",
+  stateRunning: "Em execução",
+  stateStopped: "Parado — conectar iniciará o gateway",
+  stateProfileGateways:
+    "Gateways de perfis estão em execução separadamente. Pare estes serviços e procure novamente:",
+  profilesIncluded: "Perfis",
+  noProfiles: "Nenhum perfil adicional",
+  review: "Revisar configuração",
+  service: "Serviço de gateway de destino",
+  changes: "Alterações planejadas",
+  noChanges: "Verifique a conexão sem alterar as configurações.",
+  prepare: "Instalar e conectar",
+  verify: "Verificar e conectar",
+  back: "Voltar",
+  retry: "Verificar novamente",
+  cancel: "Cancelar",
+  cancelling: "Aguardando a operação atual terminar com segurança…",
+  cancelHelp:
+    "O cancelamento interrompe antes da próxima etapa depois que a operação atual terminar com segurança. Instalações ou configurações concluídas não são desfeitas.",
+  running: "Preparando o gateway",
+  failed: "Não foi possível concluir a conexão.",
+  cancelled: "A configuração foi cancelada.",
+  connected: "Gateway conectado.",
+  profiles: "Ver perfis",
+  name: "Nome de exibição",
+  address: "Endereço do gateway",
+  token: "Credencial de API",
+  connect: "Conectar endereço",
+  loading: "Verificando…",
+  absent:
+    "A conexão de API foi salva, mas ainda não está pronta porque o plugin do DeskRPG está ausente. Instale por SSH ou siga o guia de instalação.",
+  guide: "Guia de instalação do plugin",
+  installSsh: "Instalar por SSH",
+  ready: "Conexão do plugin verificada",
+  pluginAbsent: "Plugin não instalado",
+  disabled: "Plugin desativado",
+  pending: "Reinício do serviço necessário",
+  unauthorized:
+    "Verifique a credencial de API. Uma falha de autenticação não significa que o plugin está ausente.",
+  unreachable: "Não é possível alcançar o gateway. Verifique o serviço e a rede.",
+  unknown: "Não foi possível determinar o status do plugin.",
+  permission:
+    "A configuração do host não é permitida. Verifique as configurações do administrador.",
+  busy: "A configuração já está em andamento para este destino. Verifique novamente em instantes.",
+  invalid: "Verifique o endereço e o destino selecionado.",
+  hostKey:
+    "Não foi possível verificar a identidade do host SSH. Peça ao administrador para verificar os hosts conhecidos.",
+  inspecting: "Inspecionar instalação",
+  installing_plugin: "Instalar o plugin do DeskRPG",
+  enabling_plugin: "Ativar plugin",
+  configuring_api: "Configurar API",
+  restarting_gateway: "Iniciar ou reiniciar o serviço de gateway selecionado",
+  verifying_gateway: "Verificar API e plugin em execução",
+  importing_profiles: "Importar perfis",
+  saving_gateway: "Salvar gateway",
+  step: "Etapa de configuração em andamento",
+  pluginRevision: "Revisão fixa do plugin",
+  installing_service: ptText["hermes.wizard.step.installingService"],
+  updating_plugin: ptText["hermes.wizard.step.updatingPlugin"],
+  setting_timezone: ptText["hermes.wizard.step.settingTimezone"],
+  setting_worker_propagation: ptText["hermes.wizard.step.settingWorkerPropagation"],
+  setting_worker_launch: ptText["hermes.wizard.step.settingWorkerLaunch"],
+  applying_worker_plugin: ptText["hermes.wizard.step.applyingWorkerPlugin"],
+  setting_port: ptText["hermes.wizard.step.settingPort"],
+  pluginVersion: ptText["hermes.wizard.review.pluginVersion"],
+  reviewTimezoneToggle: ptText["hermes.wizard.review.timezoneToggle"],
+  installing_hermes: ptText["hermes.wizard.step.installingHermes"],
+  creating_profile: ptText["hermes.wizard.step.creatingProfile"],
+  provisioning_keys: ptText["hermes.wizard.step.provisioningKeys"],
+  checking_model: ptText["hermes.wizard.step.checkingModel"],
+};
+export const setupCopy: Record<Locale, Copy> = { ko, en, ja, zh, pt };
 export function setupError(copy: Copy, code: unknown): string {
   if (typeof code !== "string") return copy.failed;
   if (/unauthorized/.test(code)) return copy.unauthorized;
@@ -613,6 +712,75 @@ const hostRemediation: Record<Locale, Record<string, string>> = {
     hermesInstaller: enText["hermes.wizard.error.hermesInstallerUnavailable"],
     resumeUnavailable: enText["hermes.wizard.error.resumeUnavailable"],
   },
+  pt: {
+    sshAuth:
+      "O servidor foi alcançado, mas a chave do DeskRPG foi recusada. Verifique se você executou o comando de chave pública da etapa 1 no servidor de destino, como o usuário registrado (~/.ssh/authorized_keys). Você pode reabri-lo em '+ Registrar um novo host SSH'.",
+    securityReview:
+      "A verificação de segurança do Hermes bloqueou a instalação. Um administrador precisa revisar os resultados e o código desta versão. Este assistente nunca ignora o bloqueio.",
+    sourceUnavailable:
+      "O repositório de origem do plugin não está disponível. Peça ao administrador para verificar a URL de distribuição e o acesso à rede.",
+    service:
+      "Nenhum serviço de gateway gerenciado foi encontrado. Peça ao administrador para registrar o serviço do Hermes e verificar seu estado, depois verifique novamente.",
+    serviceIdentity:
+      "A definição do serviço de gateway difere daquela que esta instalação do Hermes grava. Isso é comum quando o serviço ainda tem uma definição antiga após uma atualização do Hermes. No servidor, execute `hermes update` e depois `hermes gateway restart` para atualizar a definição do serviço, então verifique novamente. Se continuar igual, peça ao administrador para verificar o caminho e o perfil do Hermes no serviço.",
+    identity:
+      "Não foi possível associar com segurança a instalação selecionada ao gateway em execução. Peça ao administrador para verificar o caminho do Hermes, o perfil e a porta da API, depois procure as instalações novamente.",
+    secret:
+      "Um provedor externo de segredos gerencia a credencial de API. Configure a credencial por esse provedor e verifique novamente. As configurações existentes do provedor serão preservadas.",
+    credential:
+      "A credencial de API do host é inválida. Peça ao administrador para corrigir as configurações de autenticação do Hermes e verifique novamente.",
+    multiplex:
+      "As configurações de porta da API dos perfis conflitam com as configurações de multiplex do gateway. Peça ao administrador para conciliar o perfil proprietário do listener e as portas por perfil, depois verifique novamente.",
+    port: "Outro processo está usando a porta da API selecionada. Peça ao administrador para identificar o processo que escuta na porta e resolver o conflito de portas do Hermes, depois verifique novamente.",
+    pluginIdentity:
+      "A instalação do plugin do DeskRPG está ambígua. Peça ao administrador para verificar plugins duplicados ou de outras origens, depois tente novamente.",
+    install:
+      "A instalação do plugin falhou. Peça ao administrador para verificar o acesso à rede do host e as permissões de instalação, depois verifique novamente.",
+    restart:
+      "Não foi possível iniciar ou reiniciar o serviço de gateway selecionado. Peça ao administrador para verificar o status e os logs desse serviço, depois verifique novamente.",
+    verify:
+      "Não foi possível verificar a API de gateway ou o plugin em execução após a configuração. Peça ao administrador para verificar o serviço e a autenticação da API, depois verifique novamente.",
+    profile:
+      "Não foi possível concluir a autenticação ou a importação do perfil. Peça ao administrador para verificar as credenciais de API de cada perfil, depois tente novamente.",
+    host: "A operação no host não foi concluída. Peça ao administrador para verificar o host e sua configuração, depois tente novamente.",
+    config:
+      "Foi encontrado um caminho de host inseguro ou uma configuração inválida. Peça ao administrador para verificar o caminho de instalação do Hermes, as permissões de arquivo e o formato da configuração.",
+    missing:
+      "O executável do Hermes não foi encontrado. Peça ao administrador para verificar a instalação e o caminho do executável do Hermes no host, depois procure novamente.",
+    ssh: "Não é possível conectar ao host SSH aprovado. Peça ao administrador para verificar o alias, a rede e a autenticação por chave, depois tente novamente.",
+    timeout: ptText["hermes.wizard.error.commandTimeout"],
+    hermesVersion: ptText["hermes.wizard.error.hermesVersionUnsupported"],
+    pluginUpdate: ptText["hermes.wizard.error.pluginUpdateFailed"],
+    pluginUpdateHost: ptText["hermes.wizard.error.pluginUpdateUnsupportedHost"],
+    pluginUpdateCandidate: ptText["hermes.wizard.error.pluginUpdateCandidateNotFound"],
+    serviceInstall: ptText["hermes.wizard.error.serviceInstallFailed"],
+    containerRefused: ptText["hermes.wizard.error.serviceContainerRefused"],
+    windowsTask: ptText["hermes.wizard.error.windowsScheduledTaskMissing"],
+    pluginDependencies: ptText["hermes.wizard.error.pluginDependenciesMissing"],
+    remoteWindows: ptText["hermes.wizard.error.remoteWindows"],
+    outputTooLarge: ptText["hermes.wizard.error.hostOutputTooLarge"],
+    spillCleanup: ptText["hermes.wizard.error.hostSpillCleanupFailed"],
+    timezoneInvalid: ptText["hermes.wizard.error.timezoneInvalid"],
+    timezoneWrite: ptText["hermes.wizard.error.timezoneWriteFailed"],
+    workerPropagationWrite: ptText["hermes.wizard.error.workerPropagationWriteFailed"],
+    workerLaunchWrite: ptText["hermes.wizard.error.workerLaunchWriteFailed"],
+    portWrite: ptText["hermes.wizard.error.portWriteFailed"],
+    profileName: ptText["hermes.wizard.error.profileNameInvalid"],
+    profileExists: ptText["hermes.wizard.error.profileExists"],
+    profileCreate: ptText["hermes.wizard.error.profileCreateFailed"],
+    profileKey: ptText["hermes.wizard.error.profileKeyFailed"],
+    profileProvision: ptText["hermes.wizard.error.profileProvisionForbidden"],
+    profileVerify: ptText["hermes.wizard.error.profileVerifyFailed"],
+    hermesInstalled: ptText["hermes.wizard.error.hermesAlreadyInstalled"],
+    hermesInstallForbidden: ptText["hermes.wizard.error.hermesInstallForbidden"],
+    hermesInstallFailed: ptText["hermes.wizard.error.hermesInstallFailed"],
+    curlMissing: ptText["hermes.wizard.error.curlMissing"],
+    systemPackages: ptText["hermes.wizard.error.systemPackages"],
+    gitMissing: ptText["hermes.wizard.error.gitMissing"],
+    pythonBootstrap: ptText["hermes.wizard.error.pythonBootstrap"],
+    hermesInstaller: ptText["hermes.wizard.error.hermesInstallerUnavailable"],
+    resumeUnavailable: ptText["hermes.wizard.error.resumeUnavailable"],
+  },
   ja: {
     sshAuth:
       "サーバーには届きましたが DeskRPG のキーが拒否されました。手順 1 の公開鍵コマンドを 接続先サーバーで、登録したユーザーとして 実行したか確認してください（~/.ssh/authorized_keys）。「+ 新しい SSH ホストを登録」から再表示できます。",
@@ -757,12 +925,19 @@ const warningKeys: Record<string, string> = {
   logon_required: "hermes.wizard.warn.logonRequired",
   worker_plugin_apply_failed: "hermes.wizard.warn.workerPluginApplyFailed",
 };
+const localeTexts: Record<Locale, Record<string, string>> = {
+  ko: koText,
+  en: enText,
+  ja: jaText,
+  zh: zhText,
+  pt: ptText,
+};
 export function setupWarning(locale: Locale, code: unknown): string | undefined {
   if (typeof code !== "string") return undefined;
   const key = warningKeys[code];
   if (!key) return undefined;
-  const text = { ko: koText, en: enText, ja: jaText, zh: zhText }[locale];
-  return text[key as keyof typeof text] ?? enText[key as keyof typeof enText];
+  const text = localeTexts[locale] ?? enText;
+  return text[key] ?? enText[key];
 }
 
 /**
@@ -781,8 +956,8 @@ export function setupProgress(locale: Locale, code: unknown): string | undefined
   if (typeof code !== "string") return undefined;
   const key = progressKeys[code];
   if (!key) return undefined;
-  const text = { ko: koText, en: enText, ja: jaText, zh: zhText }[locale];
-  return text[key as keyof typeof text] ?? enText[key as keyof typeof enText];
+  const text = localeTexts[locale] ?? enText;
+  return text[key] ?? enText[key];
 }
 
 const repairableWarnings = new Set([

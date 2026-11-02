@@ -3,11 +3,13 @@ import en from "./locales/en";
 import ja from "./locales/ja";
 import ko from "./locales/ko";
 import zh from "./locales/zh";
+import pt from "./locales/pt";
 
-export type ServerLocale = "en" | "ko" | "ja" | "zh";
+export type ServerLocale = "en" | "pt" | "ko" | "ja" | "zh";
 
 const translations: Record<ServerLocale, Record<string, string>> = {
   en,
+  pt,
   ko,
   ja,
   zh,
@@ -15,7 +17,7 @@ const translations: Record<ServerLocale, Record<string, string>> = {
 
 export function normalizeLocale(locale: string | null | undefined): ServerLocale {
   const base = locale?.toLowerCase().slice(0, 2);
-  if (base === "ko" || base === "ja" || base === "zh") return base;
+  if (base === "ko" || base === "ja" || base === "zh" || base === "pt") return base;
   return "en";
 }
 

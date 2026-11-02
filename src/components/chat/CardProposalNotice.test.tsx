@@ -22,7 +22,7 @@ const base: Proposal = {
   npcName: "소피",
 };
 
-const LOCALES: Locale[] = ["ko", "en", "ja", "zh"];
+const LOCALES: Locale[] = ["ko", "en", "ja", "zh", "pt"];
 
 async function render(
   node: React.ReactElement,
@@ -124,7 +124,7 @@ test("when there is an error, it shows the reason and keeps the buttons", async 
   await cleanup();
 });
 
-test("all four locales show button labels in their own language", async () => {
+test("all five locales show button labels in their own language", async () => {
   const seen = new Set<string>();
   for (const locale of LOCALES) {
     const { host, cleanup } = await render(

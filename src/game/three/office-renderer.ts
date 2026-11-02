@@ -78,12 +78,14 @@ const RENDERER_TEXT = {
     en: "Conversations in view",
     ja: "表示中の会話",
     zh: "当前画面中的对话",
+    pt: "Conversas na tela",
   },
   kanbanBoard: {
     ko: "Kanban · 클릭하여 이동",
     en: "Kanban · click to walk over",
     ja: "Kanban · クリックして移動",
     zh: "Kanban · 点击前往",
+    pt: "Kanban · clique para ir até lá",
   },
 } as const;
 

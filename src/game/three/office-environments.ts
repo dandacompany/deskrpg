@@ -153,7 +153,36 @@ type OfficeEnvironment = (typeof OFFICE_ENVIRONMENTS)[number];
 export type EnvironmentLabel = { name: string; description: string };
 
 /** ja/zh display labels. ko and en live on the environment itself. */
-const ENVIRONMENT_LABELS: Record<"ja" | "zh", Record<OfficeEnvironmentId, EnvironmentLabel>> = {
+const ENVIRONMENT_LABELS_PT: Record<OfficeEnvironmentId, EnvironmentLabel> = {
+  trading: {
+    name: "Empresa de trading",
+    description: "Escritório clássico com ilhas de mesas, mesa da diretoria e espaço de reunião",
+  },
+  agency: {
+    name: "Estúdio criativo",
+    description: "Estúdio aberto onde fotografia, ideação, produção e lounge se conectam",
+  },
+  tech: {
+    name: "Startup de tecnologia",
+    description:
+      "Escritório de uma equipe de desenvolvimento com estações de foco e espaço para reuniões de sprint",
+  },
+  executive: {
+    name: "Escritório da diretoria",
+    description:
+      "Sala da diretoria com mesa de nogueira, mesa redonda para reuniões e lounge de recepção",
+  },
+  publishing: {
+    name: "Editora",
+    description: "Mesas de edição entre estantes e uma mesa para ler originais juntos",
+  },
+};
+
+const ENVIRONMENT_LABELS: Record<
+  "pt" | "ja" | "zh",
+  Record<OfficeEnvironmentId, EnvironmentLabel>
+> = {
+  pt: ENVIRONMENT_LABELS_PT,
   ja: {
     trading: {
       name: "総合商社",

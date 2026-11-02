@@ -1,5 +1,5 @@
 /**
- * The four locales' key sets must be identical. `t()` falls back to en, then to the key
+ * All locales' key sets must be identical. `t()` falls back to en, then to the key
  * string itself, for a missing key — so a key missing from one locale silently shows up on
  * screen in another language (or as the key name). This test catches that. Work that adds UI
  * must keep this test green.
@@ -11,10 +11,11 @@ import en from "./locales/en";
 import ja from "./locales/ja";
 import ko from "./locales/ko";
 import zh from "./locales/zh";
+import pt from "./locales/pt";
 
-const LOCALES: Record<string, Record<string, string>> = { ko, en, ja, zh };
+const LOCALES: Record<string, Record<string, string>> = { ko, en, ja, zh, pt };
 
-test("all four locale files share an identical key set", () => {
+test("all locale files share an identical key set", () => {
   const reference = Object.keys(LOCALES.en).sort();
   for (const [name, map] of Object.entries(LOCALES)) {
     const keys = Object.keys(map).sort();
