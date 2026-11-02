@@ -10,7 +10,12 @@ import {
   type NpcMotionConfig,
 } from "@/lib/npc-motion-config";
 import Link from "next/link";
-import { useT } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
+import {
+  OFFICE_ENVIRONMENTS,
+  environmentLabel,
+  type OfficeEnvironmentId,
+} from "@/game/three/office-environments";
 import { getLocalizedErrorMessage } from "@/lib/i18n/error-codes";
 import GatewayStatusCard, { type GatewayStatus } from "@/components/gateway/GatewayStatusCard";
 
@@ -75,9 +80,16 @@ export default function ChannelSettingsModal({
   onUpdated,
 }: ChannelSettingsModalProps) {
   const t = useT();
+  const { locale } = useLocale();
   const [tab, setTab] = useState<ChannelSettingsTab>(initialTab);
   const [name, setName] = useState(channelName);
   const [description, setDescription] = useState(channelDescription || "");
+  // The channel does not store an environment id (it is derived from the map), so the picker asks
+  // the API once for the current room instead of trusting a prop that may be stale.
+  const [environmentId, setEnvironmentId] = useState<OfficeEnvironmentId | null>(null);
+  const [initialEnvironmentId, setInitialEnvironmentId] = useState<OfficeEnvironmentId | null>(
+    null,
+  );
   const [visibility, setVisibility] = useState(isPublic);
   const initialMotion = normalizeNpcMotionConfig(motionConfig);
   const [motion, setMotion] = useState<NpcMotionConfig>(initialMotion);
@@ -185,6 +197,27 @@ export default function ChannelSettingsModal({
   }, [channelId]);
 
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/channels/${channelId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const current = data?.channel?.environmentId;
+        if (!cancelled && typeof current === "string") {
+          setEnvironmentId(current as OfficeEnvironmentId);
+          setInitialEnvironmentId(current as OfficeEnvironmentId);
+        }
+      } catch {
+        // Leave the picker disabled; every other setting still saves.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [channelId]);
+
+  useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     if (tab === "members") {
       timer = setTimeout(() => {
@@ -212,6 +245,8 @@ export default function ChannelSettingsModal({
       updates.description = description.trim() || null;
     if (visibility !== isPublic) updates.isPublic = visibility;
     if (!visibility && password) updates.password = password;
+    if (environmentId && initialEnvironmentId && environmentId !== initialEnvironmentId)
+      updates.environmentId = environmentId;
     if (NPC_MOTION_KINDS.some((kind) => motion[kind] !== initialMotion[kind]))
       updates.motionConfig = motion;
 
@@ -485,6 +520,25 @@ export default function ChannelSettingsModal({
                   rows={2}
                   className="w-full px-3 py-2 bg-bg border border-border rounded text-text focus:outline-none focus:border-primary-light resize-none"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-text-secondary mb-1">
+                  {t("settings.environment")}
+                </label>
+                <select
+                  value={environmentId ?? ""}
+                  onChange={(event) => setEnvironmentId(event.target.value as OfficeEnvironmentId)}
+                  disabled={!environmentId}
+                  className="w-full px-3 py-2 bg-bg border border-border rounded text-text focus:outline-none focus:border-primary-light disabled:opacity-60"
+                >
+                  {environmentId === null ? <option value="">{t("common.loading")}</option> : null}
+                  {OFFICE_ENVIRONMENTS.map((environment) => (
+                    <option key={environment.id} value={environment.id}>
+                      {environmentLabel(environment, locale).name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-text-secondary mt-1">{t("settings.environmentHint")}</p>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-text-secondary mb-1">

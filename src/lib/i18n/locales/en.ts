@@ -2381,6 +2381,9 @@ const en: Record<string, string> = {
   "settings.npcMotion.running": "running",
   "settings.npcMotion.reset": "Reset walking speeds",
   "settings.members": "Members",
+  "settings.environment": "Office layout",
+  "settings.environmentHint":
+    "Rebuilds the whole office and re-seats every AI coworker on the new desks.",
   "settings.channelName": "Channel Name",
   "settings.description": "Description",
   "settings.visibility": "Visibility",
@@ -2769,6 +2772,7 @@ const en: Record<string, string> = {
   "errors.maxNpcsPerChannel": "Maximum 10 NPCs per channel",
   "errors.tileAlreadyOccupied": "This tile is already occupied",
   "errors.notADeskSeat": "Only desk chairs can be assigned as seats",
+  "errors.invalidEnvironment": "That office layout does not exist.",
   "errors.mapHasNoDeskSeats": "The map needs at least one desk chair",
   "errors.failedToCreateNpc": "Failed to create NPC",
   "errors.npcNotFound": "NPC not found",
