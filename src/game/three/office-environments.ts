@@ -165,11 +165,12 @@ const ENVIRONMENT_LABELS_PT: Record<OfficeEnvironmentId, EnvironmentLabel> = {
   tech: {
     name: "Startup de tecnologia",
     description:
-      "Escritório de time de desenvolvimento com estações de foco e espaço para reuniões de sprint",
+      "Escritório de uma equipe de desenvolvimento com estações de foco e espaço para reuniões de sprint",
   },
   executive: {
     name: "Escritório da diretoria",
-    description: "Sala da diretoria com mesa de nogueira, reunião redonda e lounge de recepção",
+    description:
+      "Sala da diretoria com mesa de nogueira, mesa redonda para reuniões e lounge de recepção",
   },
   publishing: {
     name: "Editora",

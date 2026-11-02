@@ -12,13 +12,13 @@ export function promptLocale(locale: string | null | undefined): PromptLocale {
 
 const LANGUAGE_NAMES: Record<
   ServerLocale,
-  "Korean" | "English" | "Japanese" | "Chinese" | "Portuguese"
+  "Korean" | "English" | "Japanese" | "Chinese" | "Brazilian Portuguese"
 > = {
   ko: "Korean",
   en: "English",
   ja: "Japanese",
   zh: "Chinese",
-  pt: "Portuguese",
+  pt: "Brazilian Portuguese",
 };
 
 /** English name of the language, for directives such as "Write every string value in Japanese." */

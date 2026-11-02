@@ -343,9 +343,9 @@ export function lookSearchText(look: OfficeLook): string {
   return parts.join(" ").toLowerCase();
 }
 
-/** Ids without ja/zh labels. Exported for the completeness test. */
+/** Ids without pt/ja/zh labels. Exported for the completeness test. */
 export function looksMissingLabels(): string[] {
-  return OFFICE_LOOKS.filter((l) => !LOOK_LABELS.ja[l.id] || !LOOK_LABELS.zh[l.id]).map(
-    (l) => l.id,
-  );
+  return OFFICE_LOOKS.filter(
+    (l) => !LOOK_LABELS.pt[l.id] || !LOOK_LABELS.ja[l.id] || !LOOK_LABELS.zh[l.id],
+  ).map((l) => l.id);
 }

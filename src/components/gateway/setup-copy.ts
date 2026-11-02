@@ -1,5 +1,5 @@
 import type { Locale } from "../../lib/i18n/context";
-// The wizard's newer copy lives in the shared locale maps so the four languages stay in one
+// The wizard's newer copy lives in the shared locale maps so the five languages stay in one
 // place; older entries below predate that and are kept as-is.
 import enText from "../../lib/i18n/locales/en";
 import jaText from "../../lib/i18n/locales/ja";

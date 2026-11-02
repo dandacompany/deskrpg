@@ -1,5 +1,5 @@
 /**
- * The four locales' key sets must be identical. `t()` falls back to en, then to the key
+ * All locales' key sets must be identical. `t()` falls back to en, then to the key
  * string itself, for a missing key — so a key missing from one locale silently shows up on
  * screen in another language (or as the key name). This test catches that. Work that adds UI
  * must keep this test green.

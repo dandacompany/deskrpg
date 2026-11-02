@@ -72,5 +72,8 @@ export function roomLabel(label: string, locale: string | null | undefined): str
 
 /** Korean labels with no translation. Exported for the completeness test. */
 export function untranslatedRoomLabels(labels: readonly string[]): string[] {
-  return labels.filter((label) => !ROOM_LABELS[label]);
+  return labels.filter((label) => {
+    const translations = ROOM_LABELS[label];
+    return !translations?.en || !translations.pt || !translations.ja || !translations.zh;
+  });
 }
